@@ -70,9 +70,13 @@ describe("the operation catalog", () => {
         "approval_requests.list_mine  GET /api/v1/approval-requests/mine",
         "approval_requests.revert  POST /api/v1/approval-requests/:requestId/revert",
         "approval_requests.withdraw  POST /api/v1/approval-requests/:requestId/withdraw",
+        "apps.create_from_page  POST /api/v1/apps",
+        "apps.preview  POST /api/v1/apps/:app/preview",
         "assets.delete  POST /api/v1/assets/:kind/:name/delete",
+        "assets.discard_draft  POST /api/v1/assets/:kind/:name/discard-draft",
         "assets.get  GET /api/v1/assets/:kind/:name",
         "assets.list  GET /api/v1/assets/:kind",
+        "assets.publish  POST /api/v1/assets/:kind/:name/publish",
         "assets.put  PUT /api/v1/assets/:kind/:name",
         "assets.revert  POST /api/v1/assets/:kind/:name/revert",
         "assets.revisions.list  GET /api/v1/assets/:kind/:name/revisions",
@@ -222,6 +226,7 @@ describe("the operation catalog", () => {
     const scopes = new Set(versioned.map((name) => descriptor(name).path.split("/")[3]));
     expect([...scopes].sort()).toEqual([
       "approval-requests",
+      "apps",
       "assets",
       "auth",
       "connection-tools",
@@ -397,7 +402,11 @@ describe("a running instance", () => {
       "pages.preview",
       "connections.get",
       "connections.test",
-      "connections.list_tools"
+      "connections.list_tools",
+      "assets.publish",
+      "assets.discard_draft",
+      "apps.create_from_page",
+      "apps.preview"
     ];
     // The export, import and validation of a release went when the CLI moved to `assets.sync`.
     const removed = 3;

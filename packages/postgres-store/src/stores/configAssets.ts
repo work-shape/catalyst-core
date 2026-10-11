@@ -15,6 +15,11 @@ import {
   listConfigAssetRevisions as listPostgresConfigAssetRevisions,
   setAgentAvailability as setPostgresAgentAvailability
 } from "../postgres-config-asset-operations";
+import {
+  discardConfigAssetDraft as discardPostgresConfigAssetDraft,
+  publishConfigAssetRevision as publishPostgresConfigAssetRevision,
+  removeConfigAsset as removePostgresConfigAsset
+} from "../postgres-config-asset-pointers";
 import type { PostgresConnection } from "../postgres-database";
 export function createPostgresConfigAssetsStore(db: PostgresConnection): ConfigAssetStore {
   return {
@@ -53,6 +58,9 @@ export function createPostgresConfigAssetsStore(db: PostgresConnection): ConfigA
     ): Promise<{ version: number }> {
       return applyPostgresConfigAssetMutations(db, input);
     },
+    publishConfigAssetRevision: (input) => publishPostgresConfigAssetRevision(db, input),
+    discardConfigAssetDraft: (input) => discardPostgresConfigAssetDraft(db, input),
+    removeConfigAsset: (input) => removePostgresConfigAsset(db, input),
     async listAgentAvailability(
       input: Parameters<ConfigAssetStore["listAgentAvailability"]>[0]
     ): ReturnType<ConfigAssetStore["listAgentAvailability"]> {

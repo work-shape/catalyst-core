@@ -45,8 +45,10 @@ describe("the released OpenAPI document", () => {
       listed.filter((entry) => /^(?:assets\.|platform\.context\.get )/u.test(entry)).sort()
     ).toEqual([
       "assets.delete  POST /api/v1/assets/{kind}/{name}/delete",
+      "assets.discard_draft  POST /api/v1/assets/{kind}/{name}/discard-draft",
       "assets.get  GET /api/v1/assets/{kind}/{name}",
       "assets.list  GET /api/v1/assets/{kind}",
+      "assets.publish  POST /api/v1/assets/{kind}/{name}/publish",
       "assets.put  PUT /api/v1/assets/{kind}/{name}",
       "assets.revert  POST /api/v1/assets/{kind}/{name}/revert",
       "assets.revisions.list  GET /api/v1/assets/{kind}/{name}/revisions",

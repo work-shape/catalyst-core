@@ -29,6 +29,7 @@ import {
   registerPageRoutes
 } from "./routes/page-routes";
 import { registerCollaborationWorkspaceRoutes } from "./routes/collaboration-workspace-routes";
+import { registerAppRoutes } from "./routes/app-routes";
 import { registerAssetRoutes } from "./routes/asset-routes";
 import { registerConnectionRoutes } from "./routes/connection-routes";
 import { registerConversationFileRoutes } from "./routes/conversation-file-routes";
@@ -103,6 +104,7 @@ export {
 } from "./app-content";
 export { storePageFileSet } from "./page-file-sets";
 export {
+  APP_BUILD_WAIT_MS,
   createPageBuildClient,
   createPageBundleJobs,
   PAGE_BUILD_BUSY_MESSAGE,
@@ -198,6 +200,7 @@ export async function createChatServer(input: ChatServerOptions): Promise<HttpRu
   registerPageRoutes(route, options);
   registerCollaborationWorkspaceRoutes(route, options);
   registerAssetRoutes(route, options);
+  registerAppRoutes(route, options);
   registerConnectionRoutes(route, options);
   registerApprovalRequestRoutes(route, options);
   registerUserAccountRoutes(route, options);
@@ -234,6 +237,16 @@ export type { ConfigAssetWriterOptions } from "./config-asset-writer";
 export { createAgentAssetKind } from "./asset-kinds/agent";
 export type { AgentAssetKindOptions } from "./asset-kinds/agent";
 export { createSkillAssetKind } from "./asset-kinds/skill";
+export {
+  APP_ACTIONS,
+  APP_ASSET_KIND,
+  APP_NAME_MAX_LENGTH,
+  APP_NAME_PATTERN,
+  APP_TITLE_MAX_CHARS,
+  appConfigOf,
+  createAppAssetKind
+} from "./apps/app-kind";
+export { ASSET_PUT_BODY_LIMIT_BYTES } from "./asset-files";
 export { createConnectionAssetKind } from "./asset-kinds/connection";
 export type { ConnectionAssetKindOptions } from "./asset-kinds/connection";
 export type {

@@ -14,11 +14,15 @@ const kinds = [
   {
     kind: "agent",
     plural: "agents",
+    lifecycle: "active",
+    representation: "config",
     actions: { read: "agent.read", write: "agent.write", delete: "agent.delete" }
   },
   {
     kind: "skill",
     plural: "skills",
+    lifecycle: "active",
+    representation: "config",
     actions: { read: "skill.read", write: "skill.write", delete: "skill.delete" }
   }
 ];

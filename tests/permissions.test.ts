@@ -29,6 +29,11 @@ describe("permissions", () => {
       "connection.write",
       "connection.delete",
       "connection.approve",
+      "app.read",
+      "app.write",
+      "app.publish",
+      "app.delete",
+      "app.use",
       "operations.approve",
       "users.manage",
       "usage.view",
@@ -37,11 +42,12 @@ describe("permissions", () => {
       "agent_models.manage",
       "assets.release"
     ]);
-    // A Connection right came after the legacy keys: no key names one, so nobody holds one
-    // through the legacy column.
-    const keyed = ACTIONS.filter((action) => !action.startsWith("connection."));
+    // The rights of a Connection and of an App came after the legacy keys: no key names one,
+    // so nobody holds one through the legacy column.
+    const unkeyed = (action: string) => /^(?:connection|app)\./u.test(action);
+    const keyed = ACTIONS.filter((action) => !unkeyed(action));
     expect(keyed).toHaveLength(14);
-    for (const action of ACTIONS.filter((candidate) => candidate.startsWith("connection."))) {
+    for (const action of ACTIONS.filter(unkeyed)) {
       expect(() => legacyPermissionFor(action), action).toThrow("No legacy permission");
     }
     expect(Object.keys(LEGACY_PERMISSION_ACTIONS).sort()).toEqual([...PERMISSIONS].sort());
@@ -101,6 +107,11 @@ describe("permissions", () => {
       "connection.write",
       "connection.delete",
       "connection.approve",
+      "app.read",
+      "app.write",
+      "app.publish",
+      "app.delete",
+      "app.use",
       "operations.approve",
       "users.manage",
       "usage.view",
@@ -122,11 +133,11 @@ describe("permissions", () => {
       PERMISSIONS.filter((permission) => permission !== "config_assets.release")
     );
     for (const role of ["user", "admin", "superadmin"] as const) {
-      // The legacy keys of a role name what they named: a Connection right has no key.
+      // The legacy keys of a role name what they named: a Connection or App right has no key.
       expect(
         new Set(
           ROLE_DEFAULT_ACTIONS[role]
-            .filter((action) => !action.startsWith("connection."))
+            .filter((action) => !/^(?:connection|app)\./u.test(action))
             .map(legacyPermissionFor)
         )
       ).toEqual(new Set(ROLE_DEFAULT_PERMISSIONS[role]));

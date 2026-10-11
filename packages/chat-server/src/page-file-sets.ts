@@ -3,9 +3,9 @@ import {
   AppError,
   createFileSetId,
   fileSetContentType,
+  fileSetFileObjectKey,
+  fileSetObjectPrefix,
   normalizePageName,
-  pageFileObjectKey,
-  pageFileSetObjectPrefix,
   pageObjectPrefix,
   pageRefusal,
   readObjectBytes,
@@ -13,7 +13,11 @@ import {
   type ConversationId,
   type FileSet,
   type FileSetFile,
+  type FileSetId,
+  type FileSetOwner,
   type JsonObject,
+  type NewFileSet,
+  type ObjectStorage,
   type Page,
   type PlatformStores,
   type UserId
@@ -21,8 +25,9 @@ import {
 import { isHtmlContentType } from "./app-content";
 import type { ChatServerOptions } from "./types";
 
-// Storing, reading and removing the file sets of Pages. A file set is stored once, under an id
-// made here, and nothing in this file writes to a stored one again.
+// Storing, reading and removing file sets, of Pages and of assets whose revisions hold files.
+// A file set is stored once, under an id made for it, and nothing in this file writes to a
+// stored one again.
 
 type PagesContext = Pick<ChatServerOptions, "clientInstanceId" | "stores" | "pages">;
 
@@ -81,22 +86,7 @@ export async function storePageFileSet(
   if (input.kitVersion.trim() === "") {
     throw new AppError("VALIDATION_FAILED", "A file set names the kit version it was built with");
   }
-  const parts = [
-    ...input.sourceFiles.map((file) => ({ part: "src" as const, file })),
-    ...input.builtFiles.map((file) => ({ part: "dist" as const, file }))
-  ];
-  requireFileSetWithinLimits(
-    parts.map(({ part, file }) => ({ part, path: file.path, bytes: file.bytes.byteLength }))
-  );
-  for (const file of input.builtFiles) {
-    if (holdsDeclarativeShadowTree(file)) {
-      throw pageRefusal(
-        "file_set_invalid",
-        `The file '${file.path}' declares a shadow tree in its markup ('shadowrootmode'). A Page attaches shadow trees with a script.`,
-        { file: file.path }
-      );
-    }
-  }
+  const parts = requireStorableFileSet(input);
   const conversation = await options.stores.conversations.getConversation(
     options.clientInstanceId,
     input.conversationId
@@ -112,36 +102,17 @@ export async function storePageFileSet(
     createdAt
   });
   const fileSetId = createFileSetId();
-  const prefix = pageFileSetObjectPrefix(page.id, fileSetId);
+  const owner: FileSetOwner = { kind: "page", id: page.id };
+  const prefix = fileSetObjectPrefix(owner, fileSetId);
   try {
-    const pending = [...parts];
-    await Promise.all(
-      Array.from({ length: FILE_SET_WRITE_CONCURRENCY }, async () => {
-        for (let next = pending.shift(); next; next = pending.shift()) {
-          input.signal?.throwIfAborted();
-          await objects.put(
-            pageFileObjectKey(page.id, fileSetId, next.part, next.file.path),
-            next.file.bytes,
-            { contentType: fileSetContentType(next.file.path) }
-          );
-        }
-      })
-    );
+    await writeFileSetObjects(objects, owner, fileSetId, parts, input.signal);
     input.signal?.throwIfAborted();
     const fileSet = await commit(
       (stores) =>
         stores.pages.createPageFileSet({
           clientInstanceId: options.clientInstanceId,
           pageId: page.id,
-          fileSet: {
-            id: fileSetId,
-            kitVersion: input.kitVersion,
-            manifest: input.manifest,
-            sourceFiles: input.sourceFiles.map(indexEntry),
-            builtFiles: input.builtFiles.map(indexEntry),
-            ...(input.createdByUserId ? { createdByUserId: input.createdByUserId } : {}),
-            createdAt
-          }
+          fileSet: newFileSet(fileSetId, input, createdAt)
         }),
       page
     );
@@ -156,6 +127,121 @@ export async function storePageFileSet(
     }
     throw error;
   }
+}
+
+type FileSetPart = { part: "src" | "dist"; file: PageFileInput };
+
+type FileSetContent = Pick<
+  StorePageFileSetInput,
+  "kitVersion" | "manifest" | "sourceFiles" | "builtFiles" | "createdByUserId"
+>;
+
+/**
+ * The files of a file set as they are stored, once they hold: within the limits of a file
+ * set, and no built file with a shadow tree in its markup.
+ */
+function requireStorableFileSet(
+  input: Pick<FileSetContent, "sourceFiles" | "builtFiles">
+): FileSetPart[] {
+  const parts: FileSetPart[] = [
+    ...input.sourceFiles.map((file) => ({ part: "src" as const, file })),
+    ...input.builtFiles.map((file) => ({ part: "dist" as const, file }))
+  ];
+  requireFileSetWithinLimits(
+    parts.map(({ part, file }) => ({ part, path: file.path, bytes: file.bytes.byteLength }))
+  );
+  for (const file of input.builtFiles) {
+    if (holdsDeclarativeShadowTree(file)) {
+      throw pageRefusal(
+        "file_set_invalid",
+        `The file '${file.path}' declares a shadow tree in its markup ('shadowrootmode'). A Page attaches shadow trees with a script.`,
+        { file: file.path }
+      );
+    }
+  }
+  return parts;
+}
+
+/** Writes the objects of a file set below the prefix of its owner, a few at a time. */
+export async function writeFileSetObjects(
+  objects: ObjectStorage,
+  owner: FileSetOwner,
+  fileSetId: FileSetId,
+  parts: readonly FileSetPart[],
+  signal?: AbortSignal
+): Promise<void> {
+  const pending = [...parts];
+  await Promise.all(
+    Array.from({ length: FILE_SET_WRITE_CONCURRENCY }, async () => {
+      for (let next = pending.shift(); next; next = pending.shift()) {
+        signal?.throwIfAborted();
+        await objects.put(
+          fileSetFileObjectKey(owner, fileSetId, next.part, next.file.path),
+          next.file.bytes,
+          { contentType: fileSetContentType(next.file.path) }
+        );
+      }
+    })
+  );
+}
+
+function newFileSet(fileSetId: FileSetId, input: FileSetContent, createdAt: string): NewFileSet {
+  return {
+    id: fileSetId,
+    kitVersion: input.kitVersion,
+    manifest: input.manifest,
+    sourceFiles: input.sourceFiles.map(fileSetIndexEntry),
+    builtFiles: input.builtFiles.map(fileSetIndexEntry),
+    ...(input.createdByUserId ? { createdByUserId: input.createdByUserId } : {}),
+    createdAt
+  };
+}
+
+export interface StoreAssetFileSetInput extends FileSetContent {
+  /** The id of the asset's row. The row need not exist yet. */
+  assetId: string;
+  /** Made by the caller, which may have written the source files below it already. */
+  fileSetId: FileSetId;
+  /** The parts whose bytes this call writes. A part left out lies in the store already. */
+  writes: readonly ("src" | "dist")[];
+  signal?: AbortSignal;
+}
+
+/** As `CommitPageFileSet`, for the file set of an asset. */
+export type CommitAssetFileSet = (
+  create: (stores: Pick<PlatformStores, "pages">) => Promise<FileSet>
+) => Promise<FileSet>;
+
+/**
+ * Stores one file set of an asset: the bytes first, then the row that names them. It removes
+ * nothing when it fails: the caller made the id, owns the prefix and removes it.
+ */
+export async function storeAssetFileSet(
+  options: PagesContext,
+  input: StoreAssetFileSetInput,
+  commit: CommitAssetFileSet = (create) => create(options.stores)
+): Promise<FileSet> {
+  const { objects } = requirePages(options);
+  if (input.kitVersion.trim() === "") {
+    throw new AppError("VALIDATION_FAILED", "A file set names the kit version it was built with");
+  }
+  const parts = requireStorableFileSet(input);
+  await writeFileSetObjects(
+    objects,
+    { kind: "asset", id: input.assetId },
+    input.fileSetId,
+    parts.filter(({ part }) => input.writes.includes(part)),
+    input.signal
+  );
+  input.signal?.throwIfAborted();
+  const createdAt = new Date().toISOString();
+  return commit((stores) =>
+    stores.pages.createAssetFileSet({
+      clientInstanceId: options.clientInstanceId,
+      assetId: input.assetId,
+      fileSet: newFileSet(input.fileSetId, input, createdAt)
+    })
+  );
 }
 
 async function removePageWithoutFileSets(options: PagesContext, page: Page): Promise<void> {
@@ -179,7 +265,8 @@ function holdsDeclarativeShadowTree(file: PageFileInput): boolean {
   );
 }
 
-function indexEntry(file: PageFileInput): FileSetFile {
+/** One file as the row of its file set names it. */
+function fileSetIndexEntry(file: PageFileInput): FileSetFile {
   return {
     path: file.path,
     sha256: sha256(file.bytes),
@@ -205,10 +292,10 @@ export async function readFileSetFile(
   const { objects } = requirePages(options);
   const bytes = await readObjectBytes(
     objects,
-    pageFileObjectKey(fileSet.owner.id, fileSet.id, part, file.path)
+    fileSetFileObjectKey(fileSet.owner, fileSet.id, part, file.path)
   );
   if (bytes.byteLength !== file.bytes || sha256(bytes) !== file.sha256) {
-    throw new AppError("INTERNAL", "A stored file of a Page does not match its file set", {
+    throw new AppError("INTERNAL", "A stored file does not match its file set", {
       fileSetId: fileSet.id
     });
   }

@@ -393,6 +393,13 @@
       "when": 1791702192513,
       "tag": "0055_connection_secrets",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1791746196762,
+      "tag": "0056_app_assets",
+      "breakpoints": true
     }
   ]
 }

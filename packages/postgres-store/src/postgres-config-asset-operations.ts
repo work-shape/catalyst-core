@@ -1,9 +1,11 @@
 import { containsPattern } from "./like-pattern";
 import { keysetFilter } from "./paging";
-import { and, asc, desc, eq, ilike, inArray, like, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, like, max, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import {
   AppError,
   INSTANCE_ASSET_SCOPE,
+  asClientInstanceId,
   assertConfigAssetBases,
   assetScopesEqual,
   createPlatformId,
@@ -28,8 +30,17 @@ import {
   configAssets,
   configAssetState,
   configAssetWorkspaceAvailability,
+  fileSets,
   permissionGrants
 } from "./schema";
+
+/** The revision the published pointer of an asset names, joined beside the active one. */
+const publishedRevisions = alias(configAssetRevisions, "published_revisions");
+const publishedColumns = {
+  id: publishedRevisions.id,
+  revision: publishedRevisions.revision,
+  fileSetId: publishedRevisions.fileSetId
+};
 
 export async function getConfigAssetState(
   db: PostgresConnection,
@@ -136,14 +147,15 @@ export async function listConfigAssetPage(
     return [];
   }
   const rows = await db
-    .select({ asset: configAssets, revision: configAssetRevisions })
+    .select({ asset: configAssets, revision: configAssetRevisions, published: publishedColumns })
     .from(configAssets)
     .innerJoin(configAssetRevisions, eq(configAssetRevisions.id, configAssets.activeRevisionId))
+    .leftJoin(publishedRevisions, eq(publishedRevisions.id, configAssets.publishedRevisionId))
     .where(and(inArray(configAssets.id, ids), eq(configAssets.status, "active")));
   const byId = new Map(rows.map((row) => [row.asset.id, row]));
   return ids.flatMap((id) => {
     const row = byId.get(id);
-    return row ? [mapConfigAsset(row.asset, row.revision)] : [];
+    return row ? [mapConfigAsset(row.asset, row.revision, row.published)] : [];
   });
 }
 
@@ -152,9 +164,10 @@ export async function getConfigAsset(
   input: Parameters<ConfigAssetStore["getConfigAsset"]>[0]
 ): Promise<ConfigAssetRecord | undefined> {
   const read = db
-    .select({ asset: configAssets, revision: configAssetRevisions })
+    .select({ asset: configAssets, revision: configAssetRevisions, published: publishedColumns })
     .from(configAssets)
     .innerJoin(configAssetRevisions, eq(configAssetRevisions.id, configAssets.activeRevisionId))
+    .leftJoin(publishedRevisions, eq(publishedRevisions.id, configAssets.publishedRevisionId))
     .where(
       and(
         eq(configAssets.clientInstanceId, input.clientInstanceId),
@@ -165,7 +178,7 @@ export async function getConfigAsset(
     .limit(1);
   // Every write of an asset updates its row, so a shared lock on that row makes it wait.
   const [row] = await (input.lock === "share" ? read.for("share", { of: configAssets }) : read);
-  return row ? mapConfigAsset(row.asset, row.revision) : undefined;
+  return row ? mapConfigAsset(row.asset, row.revision, row.published) : undefined;
 }
 
 export async function listConfigAssetRevisions(
@@ -314,7 +327,12 @@ export async function applyConfigAssetMutations(
         updatedAt: now
       });
 
-    const version = state.version + 1;
+    // A batch of draft writes alone leaves the set the runtime reads as it is, so its version
+    // stays: a draft is no part of the runtime snapshot.
+    const draftsOnly =
+      input.mutations.length > 0 &&
+      input.mutations.every((mutation) => mutation.type === "upsert" && mutation.draft === true);
+    const version = draftsOnly ? state.version : state.version + 1;
     let defaultAgentName = state.defaultAgentName ?? undefined;
     for (const mutation of input.mutations) {
       if (mutation.type === "setDefaultAgent") {
@@ -370,8 +388,15 @@ export async function applyConfigAssetMutations(
         continue;
       }
 
+      if (asset && mutation.assetId !== undefined && mutation.assetId !== asset.id) {
+        throw new AppError(
+          "CONFLICT",
+          `Config ${mutation.kind} '${mutation.name}' exists under another id`,
+          { kind: mutation.kind, name: mutation.name }
+        );
+      }
       if (!asset) {
-        const assetId = createPlatformId("cfga");
+        const assetId = mutation.assetId ?? createPlatformId("cfga");
         const revisionId = createPlatformId("cfgr");
         await tx.insert(configAssets).values({
           id: assetId,
@@ -392,6 +417,7 @@ export async function applyConfigAssetMutations(
           revision: 1,
           operation: mutation.operation ?? "create",
           config: mutation.config,
+          fileSetId: mutation.fileSetId ?? null,
           actor: input.actor ?? null,
           origin: input.origin ?? null,
           globalVersion: version,
@@ -407,6 +433,7 @@ export async function applyConfigAssetMutations(
         asset,
         operation: mutation.operation ?? (asset.status === "deleted" ? "create" : "update"),
         config: mutation.config,
+        fileSetId: mutation.fileSetId,
         actor: input.actor,
         origin: input.origin,
         globalVersion: version,
@@ -443,14 +470,16 @@ export async function applyConfigAssetMutations(
       }
     }
 
-    await tx
-      .update(configAssetState)
-      .set({
-        version,
-        defaultAgentName: defaultAgentName ?? null,
-        updatedAt: now
-      })
-      .where(eq(configAssetState.clientInstanceId, input.clientInstanceId));
+    if (!draftsOnly) {
+      await tx
+        .update(configAssetState)
+        .set({
+          version,
+          defaultAgentName: defaultAgentName ?? null,
+          updatedAt: now
+        })
+        .where(eq(configAssetState.clientInstanceId, input.clientInstanceId));
+    }
     return { version };
   });
 }
@@ -684,16 +713,27 @@ export async function deleteWorkspaceOwnedAssets(
     .delete(configAssets)
     .where(owned)
     .returning({ id: configAssets.id, kind: configAssets.kind, name: configAssets.name });
-  await tx.delete(permissionGrants).where(
-    and(
-      eq(permissionGrants.clientInstanceId, input.clientInstanceId),
-      eq(permissionGrants.scopeKind, "asset"),
-      inArray(
-        permissionGrants.scopeId,
-        removed.map((asset) => asset.id)
+  const removedIds = removed.map((asset) => asset.id);
+  await tx
+    .delete(permissionGrants)
+    .where(
+      and(
+        eq(permissionGrants.clientInstanceId, input.clientInstanceId),
+        eq(permissionGrants.scopeKind, "asset"),
+        inArray(permissionGrants.scopeId, removedIds)
       )
-    )
-  );
+    );
+  // The rows of the file sets go with their owners. The stored objects of an asset lie below
+  // its own prefix and are removed by whoever removes the workspace's stored data.
+  await tx
+    .delete(fileSets)
+    .where(
+      and(
+        eq(fileSets.clientInstanceId, asClientInstanceId(input.clientInstanceId)),
+        eq(fileSets.ownerKind, "asset"),
+        inArray(fileSets.ownerId, removedIds)
+      )
+    );
   if (!state) {
     return;
   }
@@ -739,6 +779,7 @@ async function appendAndActivateRevision(
     asset: ConfigAssetRow;
     operation: ConfigAssetRevisionRecord["operation"];
     config: ConfigAssetRevisionRecord["config"];
+    fileSetId?: ConfigAssetRevisionRecord["fileSetId"];
     actor: Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0]["actor"];
     origin: ConfigAssetRevisionRecord["origin"];
     globalVersion: number;
@@ -746,11 +787,13 @@ async function appendAndActivateRevision(
     status: ConfigAssetRecord["status"];
   }
 ): Promise<void> {
-  const [activeRevision] = await tx
-    .select({ revision: configAssetRevisions.revision })
+  // The highest number, not the active one: after a discarded draft the active revision is an
+  // older one, and a number is never used twice.
+  const [newest] = await tx
+    .select({ revision: max(configAssetRevisions.revision) })
     .from(configAssetRevisions)
-    .where(eq(configAssetRevisions.id, input.asset.activeRevisionId))
-    .limit(1);
+    .where(eq(configAssetRevisions.assetId, input.asset.id));
+  const activeRevision = newest?.revision == null ? undefined : { revision: newest.revision };
   if (!activeRevision) {
     throw new AppError("INTERNAL", "Config asset active revision is missing");
   }
@@ -762,6 +805,7 @@ async function appendAndActivateRevision(
     revision: activeRevision.revision + 1,
     operation: input.operation,
     config: input.config,
+    fileSetId: input.fileSetId ?? null,
     actor: input.actor ?? null,
     origin: input.origin ?? null,
     globalVersion: input.globalVersion,

@@ -451,6 +451,18 @@ export interface CheckableAsset {
   name: string;
 }
 
+/**
+ * The source of an allowed action as the check names it. A membership allows nothing on the
+ * kinds checked here: it is the right to open what a workspace published, so it reads as the
+ * grant it stands in for.
+ */
+function checkedReason(
+  source: "role" | "legacy" | "legacy_ref" | "grant" | "membership"
+): "role" | "legacy" | "grant" {
+  if (source === "legacy_ref") return "legacy";
+  return source === "membership" ? "grant" : source;
+}
+
 /** What one action on the checked asset comes to, and what says so. */
 export interface CheckedAction {
   verb: AccessVerb;
@@ -512,7 +524,7 @@ export function checkAsset(
       return {
         verb,
         allowed: true,
-        reason: decision.source === "legacy_ref" ? "legacy" : decision.source,
+        reason: checkedReason(decision.source),
         ...(entry ? { entry } : {})
       };
     }

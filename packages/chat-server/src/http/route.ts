@@ -334,6 +334,7 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
     app.route({
       method: operation.method,
       url: operation.path,
+      ...(binding.bodyLimitBytes === undefined ? {} : { bodyLimit: binding.bodyLimitBytes }),
       handler: async (request, reply) => {
         const { correlationId, caller, params } = await admit(operation, request, reply);
         if (!caller.identity) {

@@ -1,6 +1,7 @@
 import type {
   ActorAccess,
   ConfigAssetKind,
+  JsonObject,
   Namespace,
   RegisteredAssetKind
 } from "@vivd-catalyst/core";
@@ -65,6 +66,16 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
   assertStoredWritable?(input: { current: unknown }): void;
   /** Throws `FORBIDDEN` when the instance's editing policy refuses an interactive delete. */
   assertInteractiveDeleteAllowed(): void;
+  /**
+   * The config a revision holds, made from the manifest its build validated. A kind whose
+   * revisions hold files brings it: only the kind knows what its config is beside the manifest.
+   */
+  configOfFiles?(input: {
+    name: string;
+    manifest: JsonObject;
+    /** The config of the draft the write replaces, where there is one. */
+    current?: JsonObject;
+  }): Record<string, unknown>;
 }
 
 export function readDefinitionField(definition: unknown, field: string): unknown {

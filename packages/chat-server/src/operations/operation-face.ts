@@ -50,6 +50,11 @@ export interface AssembledOperationBinding {
   events?: OperationDefinition["events"];
   module?: string;
   timeoutMs?: number;
+  /**
+   * How large the body of a call may be, where the server's own limit is too small for what
+   * the operation takes. The HTTP route reads it; the registry knows nothing of bodies.
+   */
+  bodyLimitBytes?: number;
   /** Records every call of a reading operation. See `recordsEveryCall` of the definition. */
   recordsEveryCall?: true;
   /**
@@ -216,9 +221,12 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
         case "denied":
           throw operationDenialError(result.reason);
         case "failed":
-          // The run recorded what the error envelope lets out, so this tells nothing more.
+          // The run recorded what the error envelope lets out, so this tells nothing more:
+          // the message it kept is one that may be said, whatever the status of its code.
           throw isAppErrorCode(result.error.code)
-            ? new AppError(result.error.code, result.error.message, result.error.details)
+            ? new AppError(result.error.code, result.error.message, result.error.details, {
+                exposeMessage: true
+              })
             : new AppError("INTERNAL", "The operation failed");
         case "expired":
           throw new AppError(

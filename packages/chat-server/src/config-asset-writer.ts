@@ -1,4 +1,9 @@
-import { AppError, type AssetScope, type ConfigAssetStore } from "@vivd-catalyst/core";
+import {
+  AppError,
+  type AssetScope,
+  type ConfigAssetStore,
+  type RegisteredAssetKind
+} from "@vivd-catalyst/core";
 import { assetSetOf, validateAssetSet, withDefaultAgentName, type AssetSet } from "./asset-set";
 import { readDefinitionName } from "./asset-kinds/shared";
 import type { ChatServerOptions } from "./types";
@@ -8,13 +13,27 @@ export type ConfigAssetWriterOptions = Pick<
   "config" | "configAssets" | "clientInstanceId"
 >;
 
-/** No registered kind is owned by a workspace yet. The first one that is lifts this. */
-export function assertScopeCanOwn(kind: string, scope: AssetScope): void {
+/**
+ * Whether the owner a write names can own an asset of the kind. A kind says who may own it;
+ * without a word of its own that is the instance alone.
+ */
+export function assertScopeCanOwn(
+  kind: Pick<RegisteredAssetKind, "kind" | "owners">,
+  scope: AssetScope
+): void {
+  if (kind.owners.includes(scope.kind)) {
+    return;
+  }
   if (scope.kind === "workspace") {
-    throw new AppError("VALIDATION_FAILED", `A ${kind} cannot be owned by a workspace`, {
+    throw new AppError("VALIDATION_FAILED", `A ${kind.kind} cannot be owned by a workspace`, {
       reason: "invalid_scope"
     });
   }
+  throw new AppError(
+    "VALIDATION_FAILED",
+    `A ${kind.kind} belongs to one workspace. Name it as 'workspaceId'`,
+    { reason: "scope_unavailable" }
+  );
 }
 
 /** Shared write path. Callers own authorization; all writes validate the resulting bundle. */
@@ -27,9 +46,9 @@ export async function applyValidatedConfigAssetMutations(
     if (mutation.type === "setDefaultAgent") {
       continue;
     }
-    kinds.require(mutation.kind);
+    const kind = kinds.require(mutation.kind);
     if (mutation.type === "upsert" && mutation.scope) {
-      assertScopeCanOwn(mutation.kind, mutation.scope);
+      assertScopeCanOwn(kind, mutation.scope);
     }
   }
   const [state, assets] = await Promise.all([

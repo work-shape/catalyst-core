@@ -640,10 +640,15 @@ export function mapAssetScope(row: Pick<ConfigAssetRow, "scopeKind" | "scopeId">
 
 export function mapConfigAsset(
   row: ConfigAssetRow | undefined,
-  revision: ConfigAssetRevisionRow | undefined
+  revision: ConfigAssetRevisionRow | undefined,
+  /** The revision the published pointer names, where the reader joined it. */
+  published?: Pick<ConfigAssetRevisionRow, "id" | "revision" | "fileSetId"> | null
 ): ConfigAssetRecord {
   if (!row || !revision || revision.id !== row.activeRevisionId) {
     throw new AppError("INTERNAL", "Expected config asset with its active revision");
+  }
+  if (published && published.id !== row.publishedRevisionId) {
+    throw new AppError("INTERNAL", "Expected config asset with its published revision");
   }
   return {
     id: row.id,
@@ -655,6 +660,14 @@ export function mapConfigAsset(
     activeRevisionId: row.activeRevisionId,
     revision: revision.revision,
     config: revision.config,
+    ...(revision.fileSetId ? { fileSetId: revision.fileSetId } : {}),
+    ...(row.publishedRevisionId ? { publishedRevisionId: row.publishedRevisionId } : {}),
+    ...(published
+      ? {
+          publishedRevision: published.revision,
+          ...(published.fileSetId ? { publishedFileSetId: published.fileSetId } : {})
+        }
+      : {}),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()
   };
@@ -673,6 +686,7 @@ export function mapConfigAssetRevision(
     revision: row.revision,
     operation: row.operation,
     config: row.config,
+    ...(row.fileSetId ? { fileSetId: row.fileSetId } : {}),
     actor: row.actor,
     origin: row.origin ?? undefined,
     globalVersion: row.globalVersion,

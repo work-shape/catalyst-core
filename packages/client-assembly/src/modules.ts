@@ -28,6 +28,8 @@ const assetManagementModule = defineModule({
     "assets.put",
     "assets.delete",
     "assets.revert",
+    "assets.publish",
+    "assets.discard_draft",
     "assets.set_default",
     "assets.set_availability"
   ],
@@ -56,8 +58,11 @@ const appsModule = defineModule({
     "pages.files.list",
     "pages.preview",
     "app_content.files.get",
-    "app_kit.files.get"
+    "app_kit.files.get",
+    "apps.create_from_page",
+    "apps.preview"
   ],
+  kinds: ["app"],
   tools: ["page.save"],
   jobKinds: ["page.bundle"],
   commandWorkerJobKinds: ["page.bundle"]

@@ -1,11 +1,13 @@
-import { and, asc, count, desc, eq, isNull, lt, max, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, isNull, lt, max, or, sql } from "drizzle-orm";
 import {
   CONVERSATION_MAX_PAGES,
   PAGE_BUILD_KEEP_MS,
   PAGE_MAX_FILE_SETS,
   createPageId,
+  isPageId,
   pageRefusal,
   type FileSet,
+  type FileSetOwner,
   type FileSetSummary,
   type Page,
   type PageBuild,
@@ -14,6 +16,7 @@ import {
   type ServedFileSet
 } from "@vivd-catalyst/core";
 import type { PostgresConnection } from "./postgres-database";
+import { configAssetRevisions, configAssets } from "./schema/configAssets";
 import { conversations } from "./schema/conversations";
 import { fileSets, pageBuilds, pages } from "./schema/pages";
 
@@ -113,31 +116,110 @@ export async function createPageFileSet(
         { limit: PAGE_MAX_FILE_SETS }
       );
     }
-    const files = [...fileSet.sourceFiles, ...fileSet.builtFiles];
-    const [row] = await tx
-      .insert(fileSets)
-      .values({
-        id: fileSet.id,
-        clientInstanceId: input.clientInstanceId,
-        ownerKind: "page",
-        ownerId: input.pageId,
-        number: (held?.newest ?? 0) + 1,
-        kitVersion: fileSet.kitVersion,
-        manifest: fileSet.manifest,
-        sourceFiles: fileSet.sourceFiles,
-        builtFiles: fileSet.builtFiles,
-        sourceFileCount: fileSet.sourceFiles.length,
-        builtFileCount: fileSet.builtFiles.length,
-        totalBytes: files.reduce((total, file) => total + file.bytes, 0),
-        createdByUserId: fileSet.createdByUserId,
-        createdAt: new Date(fileSet.createdAt)
-      })
-      .returning();
-    if (!row) {
-      throw new Error("The file set was not stored");
-    }
-    return mapFileSet(row, input.pageId);
+    const row = await insertFileSet(tx, {
+      clientInstanceId: input.clientInstanceId,
+      owner: { kind: "page", id: input.pageId },
+      number: (held?.newest ?? 0) + 1,
+      fileSet
+    });
+    return mapFileSet(row);
   });
+}
+
+async function insertFileSet(
+  tx: PostgresConnection,
+  input: {
+    clientInstanceId: FileSet["clientInstanceId"];
+    owner: FileSetOwner;
+    number: number;
+    fileSet: Input<"createPageFileSet">["fileSet"];
+  }
+): Promise<FileSetRow> {
+  const { fileSet } = input;
+  const files = [...fileSet.sourceFiles, ...fileSet.builtFiles];
+  const [row] = await tx
+    .insert(fileSets)
+    .values({
+      id: fileSet.id,
+      clientInstanceId: input.clientInstanceId,
+      ownerKind: input.owner.kind,
+      ownerId: input.owner.id,
+      number: input.number,
+      kitVersion: fileSet.kitVersion,
+      manifest: fileSet.manifest,
+      sourceFiles: fileSet.sourceFiles,
+      builtFiles: fileSet.builtFiles,
+      sourceFileCount: fileSet.sourceFiles.length,
+      builtFileCount: fileSet.builtFiles.length,
+      totalBytes: files.reduce((total, file) => total + file.bytes, 0),
+      createdByUserId: fileSet.createdByUserId,
+      createdAt: new Date(fileSet.createdAt)
+    })
+    .returning();
+  if (!row) {
+    throw new Error("The file set was not stored");
+  }
+  return row;
+}
+
+function ownedByAsset(assetId: string) {
+  return and(eq(fileSets.ownerKind, "asset"), eq(fileSets.ownerId, assetId));
+}
+
+export async function createAssetFileSet(
+  db: PostgresConnection,
+  input: Input<"createAssetFileSet">
+): Promise<FileSet> {
+  return db.transaction(async (tx) => {
+    // The asset's row may not exist yet, so the numbering is held by a lock of its id alone.
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${`file-sets:asset:${input.assetId}`}, 0))`
+    );
+    const [held] = await tx
+      .select({ newest: max(fileSets.number) })
+      .from(fileSets)
+      .where(ownedByAsset(input.assetId));
+    const row = await insertFileSet(tx, {
+      clientInstanceId: input.clientInstanceId,
+      owner: { kind: "asset", id: input.assetId },
+      number: (held?.newest ?? 0) + 1,
+      fileSet: input.fileSet
+    });
+    return mapFileSet(row);
+  });
+}
+
+export async function getAssetFileSet(
+  db: PostgresConnection,
+  input: Input<"getAssetFileSet">
+): Promise<FileSet | undefined> {
+  const [row] = await db
+    .select()
+    .from(fileSets)
+    .where(
+      and(
+        eq(fileSets.clientInstanceId, input.clientInstanceId),
+        ownedByAsset(input.assetId),
+        eq(fileSets.id, input.fileSetId)
+      )
+    )
+    .limit(1);
+  return row ? mapFileSet(row) : undefined;
+}
+
+export async function deleteAssetFileSet(
+  db: PostgresConnection,
+  input: Input<"deleteAssetFileSet">
+): Promise<void> {
+  await db
+    .delete(fileSets)
+    .where(
+      and(
+        eq(fileSets.clientInstanceId, input.clientInstanceId),
+        ownedByAsset(input.assetId),
+        eq(fileSets.id, input.fileSetId)
+      )
+    );
 }
 
 export async function listPages(
@@ -185,7 +267,7 @@ export async function listPageFileSets(
     .from(fileSets)
     .where(and(eq(fileSets.clientInstanceId, input.clientInstanceId), ownedByPage(input.pageId)))
     .orderBy(desc(fileSets.number));
-  return rows.map((row) => mapSummary(row, input.pageId));
+  return rows.map((row) => mapSummary({ ...row, ownerKind: "page" }));
 }
 
 export async function getPageFileSet(
@@ -204,10 +286,82 @@ export async function getPageFileSet(
     )
     .orderBy(desc(fileSets.number))
     .limit(1);
-  return row ? mapFileSet(row, input.pageId) : undefined;
+  return row ? mapFileSet(row) : undefined;
 }
 
 export async function getServedFileSet(
+  db: PostgresConnection,
+  input: Input<"getServedFileSet">
+): Promise<ServedFileSet | undefined> {
+  const [fileSet] = await db
+    .select()
+    .from(fileSets)
+    .where(
+      and(eq(fileSets.id, input.fileSetId), eq(fileSets.clientInstanceId, input.clientInstanceId))
+    )
+    .limit(1);
+  if (!fileSet) {
+    return undefined;
+  }
+  return fileSet.ownerKind === "asset"
+    ? getServedAssetFileSet(db, fileSet)
+    : getServedPageFileSet(db, input);
+}
+
+/** The file set with the asset that owns it, while that asset is active. */
+async function getServedAssetFileSet(
+  db: PostgresConnection,
+  fileSet: FileSetRow
+): Promise<ServedFileSet | undefined> {
+  // The asset with whichever of its two pointers names a revision of this file set: one
+  // read by the asset's key that reaches at most two revisions by theirs.
+  const rows = await db
+    .select({
+      id: configAssets.id,
+      kind: configAssets.kind,
+      name: configAssets.name,
+      scopeId: configAssets.scopeId,
+      activeRevisionId: configAssets.activeRevisionId,
+      publishedRevisionId: configAssets.publishedRevisionId,
+      revisionId: configAssetRevisions.id
+    })
+    .from(configAssets)
+    .leftJoin(
+      configAssetRevisions,
+      and(
+        or(
+          eq(configAssetRevisions.id, configAssets.activeRevisionId),
+          eq(configAssetRevisions.id, configAssets.publishedRevisionId)
+        ),
+        eq(configAssetRevisions.fileSetId, fileSet.id)
+      )
+    )
+    .where(
+      and(
+        eq(configAssets.id, fileSet.ownerId),
+        eq(configAssets.clientInstanceId, fileSet.clientInstanceId),
+        eq(configAssets.status, "active")
+      )
+    );
+  const [asset] = rows;
+  if (!asset) {
+    return undefined;
+  }
+  return {
+    ...mapFileSet(fileSet),
+    asset: {
+      id: asset.id,
+      kind: asset.kind,
+      name: asset.name,
+      ...(asset.scopeId ? { workspaceId: asset.scopeId } : {}),
+      activeRevisionId: asset.activeRevisionId,
+      ...(asset.publishedRevisionId ? { publishedRevisionId: asset.publishedRevisionId } : {}),
+      revisionIds: rows.flatMap((row) => row.revisionId ?? [])
+    }
+  };
+}
+
+async function getServedPageFileSet(
   db: PostgresConnection,
   input: Input<"getServedFileSet">
 ): Promise<ServedFileSet | undefined> {
@@ -234,9 +388,7 @@ export async function getServedFileSet(
       )
     )
     .limit(1);
-  return row
-    ? { ...mapFileSet(row.fileSet, row.pageId), conversationId: row.conversationId }
-    : undefined;
+  return row ? { ...mapFileSet(row.fileSet), conversationId: row.conversationId } : undefined;
 }
 
 export async function listConversationPageIds(
@@ -277,13 +429,16 @@ export async function createPageBuild(
   input: Input<"createPageBuild">
 ): Promise<PageBuild> {
   const createdAt = new Date(input.createdAt);
-  // What an earlier save of this conversation left behind and never read.
+  // What an earlier save of this conversation left behind and never read, or, for the build
+  // of an asset's files, what an earlier write of any asset left.
   await db
     .delete(pageBuilds)
     .where(
       and(
         eq(pageBuilds.clientInstanceId, input.clientInstanceId),
-        eq(pageBuilds.conversationId, input.conversationId),
+        input.conversationId === undefined
+          ? isNull(pageBuilds.conversationId)
+          : eq(pageBuilds.conversationId, input.conversationId),
         lt(pageBuilds.createdAt, new Date(createdAt.getTime() - PAGE_BUILD_KEEP_MS))
       )
     );
@@ -350,7 +505,7 @@ function mapPageBuild(row: typeof pageBuilds.$inferSelect): PageBuild {
   return {
     id: row.id,
     clientInstanceId: row.clientInstanceId,
-    conversationId: row.conversationId,
+    ...(row.conversationId ? { conversationId: row.conversationId } : {}),
     request: row.request,
     ...(row.result ? { result: row.result } : {}),
     createdAt: row.createdAt.toISOString(),
@@ -372,13 +527,22 @@ function mapPage(row: PageRow): Page {
   };
 }
 
+function ownerOf(row: Pick<FileSetRow, "ownerKind" | "ownerId">): FileSetOwner {
+  if (row.ownerKind === "asset") {
+    return { kind: "asset", id: row.ownerId };
+  }
+  if (!isPageId(row.ownerId)) {
+    throw new Error(`File set owner '${row.ownerId}' is no Page`);
+  }
+  return { kind: "page", id: row.ownerId };
+}
+
 function mapSummary(
-  row: Pick<FileSetRow, keyof typeof summaryColumns>,
-  pageId: PageId
+  row: Pick<FileSetRow, keyof typeof summaryColumns | "ownerKind">
 ): FileSetSummary {
   return {
     id: row.id,
-    owner: { kind: "page", id: pageId },
+    owner: ownerOf(row),
     number: row.number,
     kitVersion: row.kitVersion,
     sourceFileCount: row.sourceFileCount,
@@ -389,9 +553,9 @@ function mapSummary(
   };
 }
 
-function mapFileSet(row: FileSetRow, pageId: PageId): FileSet {
+function mapFileSet(row: FileSetRow): FileSet {
   return {
-    ...mapSummary(row, pageId),
+    ...mapSummary(row),
     clientInstanceId: row.clientInstanceId,
     manifest: row.manifest,
     sourceFiles: row.sourceFiles,

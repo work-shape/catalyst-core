@@ -74,8 +74,17 @@ export const PAGE_NAME_MAX_CHARS = 120;
  */
 export const FILE_SET_RESERVED_SEGMENT = "__catalyst";
 
-/** Who a file set belongs to. S3-40 adds the owner `asset`. */
-export type FileSetOwner = { kind: "page"; id: PageId };
+/**
+ * How many decoded bytes of files one `assets.put` carries. A write hands over the whole
+ * source set in one JSON call, so this bounds the call beside the limits of a file set.
+ */
+export const ASSET_PUT_FILES_MAX_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Who a file set belongs to: a Page of a conversation, or an asset whose revisions hold files,
+ * named by the id of its row.
+ */
+export type FileSetOwner = { kind: "page"; id: PageId } | { kind: "asset"; id: string };
 
 /** One file of a file set as its row holds it. The bytes are in the object store. */
 export interface FileSetFile {
@@ -118,10 +127,27 @@ export interface FileSet extends FileSetSummary {
   builtFiles: FileSetFile[];
 }
 
-/** A file set as the content route reads it: with the conversation its Page belongs to. */
-export interface ServedFileSet extends FileSet {
-  conversationId: ConversationId;
+/** The asset a served file set belongs to, with what decides who is served it. */
+export interface ServedFileSetAsset {
+  id: string;
+  kind: string;
+  name: string;
+  workspaceId?: string;
+  activeRevisionId: string;
+  publishedRevisionId?: string;
+  /** The revisions of the asset that hold this file set. */
+  revisionIds: string[];
 }
+
+/**
+ * A file set as the content route reads it: with the conversation its Page belongs to, or
+ * with the asset that owns it.
+ */
+export type ServedFileSet = FileSet &
+  (
+    | { conversationId: ConversationId; asset?: undefined }
+    | { asset: ServedFileSetAsset; conversationId?: undefined }
+  );
 
 /** What a caller hands over to store a file set. The store assigns the number. */
 export interface NewFileSet {
@@ -152,6 +178,12 @@ export interface PageBuildRequest {
   directory: string;
   files: PageBuildSourceFile[];
   requestedByUserId?: UserId;
+  /**
+   * Set for the build of an asset's files. The source files then lie in the `files` store,
+   * below the prefix of the file set named here, and the build stores that file set for the
+   * asset instead of a revision of a Page.
+   */
+  asset?: { assetId: string; fileSetId: FileSetId };
 }
 
 /** One thing an author has to change before a Page builds. */
@@ -177,15 +209,35 @@ export interface PageBuildIssue {
 export type PageSaveOutcome =
   | { status: "saved"; pageId: PageId; fileSetId: FileSetId; number: number }
   | { status: "errors"; errors: PageBuildIssue[] }
-  | { status: "failed"; message: string };
+  | PageBuildFailure;
+
+/**
+ * A build that gave no result. `reason` says why where the wait itself ended it: the time
+ * limit passed, no worker takes builds, or the caller stopped waiting.
+ */
+export interface PageBuildFailure {
+  status: "failed";
+  message: string;
+  reason?: "timeout" | "no_worker" | "stopped";
+}
+
+/** How the build of an asset's files ended. `stored`: the file set of the asset exists. */
+export type AssetBuildOutcome =
+  | { status: "stored"; fileSetId: FileSetId }
+  | { status: "errors"; errors: PageBuildIssue[] }
+  | PageBuildFailure;
+
+/** What the row of a build holds once it ended. */
+export type PageBuildResult = PageSaveOutcome | AssetBuildOutcome;
 
 export interface PageBuild {
   id: PageBuildId;
   clientInstanceId: ClientInstanceId;
-  conversationId: ConversationId;
+  /** The conversation of the Page. The build of an asset's files has none. */
+  conversationId?: ConversationId;
   request: PageBuildRequest;
   /** Missing while the build is queued or running. */
-  result?: PageSaveOutcome;
+  result?: PageBuildResult;
   createdAt: string;
   finishedAt?: string;
 }
@@ -204,6 +256,21 @@ export interface PageBuildClient {
     /** Passing it ends the wait in the same way. */
     deadline?: Date;
   }): Promise<PageSaveOutcome>;
+}
+
+/**
+ * How an asset write has its files built: it hands over where the source files lie and waits
+ * for how the build ended. Builds of one asset run one at a time, in the order asked for.
+ */
+export interface AssetBuildClient {
+  buildAsset(input: {
+    clientInstanceId: ClientInstanceId;
+    request: PageBuildRequest & { asset: NonNullable<PageBuildRequest["asset"]> };
+    /** Aborting it ends the wait; the build is told to store nothing. */
+    signal?: AbortSignal;
+    /** Passing it ends the wait with the reason `timeout`. */
+    deadline?: Date;
+  }): Promise<AssetBuildOutcome>;
 }
 
 /**
@@ -259,15 +326,36 @@ export interface PagesStore {
     fileSetId?: FileSetId;
   }): Promise<FileSet | undefined>;
   /**
-   * A file set by its id alone, for the content route, which knows nothing else. Only a file
-   * set whose conversation is active is found: a deleted or expired conversation serves
-   * nothing, also before its cleanup ran. The conversation is named, because who may still be
-   * served is decided by who may read it.
+   * A file set by its id alone, for the content route, which knows nothing else. A file set
+   * of a Page is found only while its conversation is active: a deleted or expired
+   * conversation serves nothing, also before its cleanup ran. The conversation is named,
+   * because who may still be served is decided by who may read it. A file set of an asset is
+   * found while the asset is active, with the pointers that decide who is served it.
    */
   getServedFileSet(input: {
     clientInstanceId: ClientInstanceId;
     fileSetId: FileSetId;
   }): Promise<ServedFileSet | undefined>;
+  /**
+   * Stores the row of a file set an asset owns and gives it the next number of that asset.
+   * The asset's row need not exist yet: a write that creates an asset stores its files first.
+   */
+  createAssetFileSet(input: {
+    clientInstanceId: ClientInstanceId;
+    assetId: string;
+    fileSet: NewFileSet;
+  }): Promise<FileSet>;
+  getAssetFileSet(input: {
+    clientInstanceId: ClientInstanceId;
+    assetId: string;
+    fileSetId: FileSetId;
+  }): Promise<FileSet | undefined>;
+  /** Removes the row of one file set of an asset, for a write that stored it and then failed. */
+  deleteAssetFileSet(input: {
+    clientInstanceId: ClientInstanceId;
+    assetId: string;
+    fileSetId: FileSetId;
+  }): Promise<void>;
   /** The Pages of a conversation whose rows are still there, for its cleanup. */
   listConversationPageIds(input: {
     clientInstanceId: ClientInstanceId;
@@ -286,7 +374,8 @@ export interface PagesStore {
   createPageBuild(input: {
     clientInstanceId: ClientInstanceId;
     id: PageBuildId;
-    conversationId: ConversationId;
+    /** Left out for the build of an asset's files. */
+    conversationId?: ConversationId;
     request: PageBuildRequest;
     createdAt: string;
   }): Promise<PageBuild>;
@@ -301,7 +390,7 @@ export interface PagesStore {
   finishPageBuild(input: {
     clientInstanceId: ClientInstanceId;
     buildId: PageBuildId;
-    result: PageSaveOutcome;
+    result: PageBuildResult;
     finishedAt: string;
   }): Promise<boolean>;
   deletePageBuild(input: {
@@ -324,6 +413,28 @@ export function pageRefusal(
   details: JsonObject = {}
 ): AppError {
   return new AppError("VALIDATION_FAILED", message, { reason, ...details });
+}
+
+/** The object store prefix of everything an asset holds. */
+export function assetObjectPrefix(assetId: string): string {
+  return `assets/${assetId}/`;
+}
+
+/** The object store prefix of one file set, below the prefix of its owner. */
+export function fileSetObjectPrefix(owner: FileSetOwner, fileSetId: FileSetId): string {
+  return owner.kind === "page"
+    ? pageFileSetObjectPrefix(owner.id, fileSetId)
+    : `${assetObjectPrefix(owner.id)}${fileSetId}/`;
+}
+
+/** Where the bytes of one file of a file set are, whoever owns it. */
+export function fileSetFileObjectKey(
+  owner: FileSetOwner,
+  fileSetId: FileSetId,
+  part: "src" | "dist",
+  path: string
+): string {
+  return `${fileSetObjectPrefix(owner, fileSetId)}${part}/${path}`;
 }
 
 /** The object store prefix of everything a Page holds. */

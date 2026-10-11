@@ -39,9 +39,23 @@ export interface AssetKindActions {
   read: string;
   write: string;
   delete: string;
-  /** Where using an asset of the kind is a right of its own, as calling through a Connection is. */
+  /** Moves the published pointer. Only a `draft_published` kind names it. */
+  publish?: string;
+  /**
+   * Where using an asset of the kind is a right of its own: calling through a Connection, or
+   * opening the published revision of a kind with users of its own.
+   */
   use?: string;
 }
+
+/**
+ * Which revision of an asset is live. `active`: the newest write is. `draft_published`: a
+ * write moves a draft pointer, and a publish moves the pointer its users are served from.
+ */
+export type AssetLifecycle = "active" | "draft_published";
+
+/** What a revision holds: its config alone, or a config with an immutable file set. */
+export type AssetRepresentation = "config" | "files";
 
 /** What a validator may look up besides the definitions it checks. */
 export interface AssetValidationContext {
@@ -74,6 +88,14 @@ export interface AssetKindDefinition<Definition, Kind extends string = string> {
   schema: AssetKindSchema<Definition>;
   nameRule: AssetNameRule;
   actions: AssetKindActions;
+  /** `active` when left out. */
+  lifecycle?: AssetLifecycle;
+  /** `config` when left out. */
+  representation?: AssetRepresentation;
+  /** The file of a `files` kind that holds its manifest, such as `app.yaml`. */
+  manifestFile?: string;
+  /** Who may own an asset of the kind. The instance alone when left out. */
+  owners?: readonly AssetScope["kind"][];
   /**
    * Reference and cross-asset checks of this kind's definitions the schema accepted. All of
    * them are handed over at once, so a kind decides the order of its issues across them.
@@ -125,6 +147,10 @@ export interface RegisteredAssetKind<Kind extends string = string> {
   readonly plural: string;
   readonly nameRule: AssetNameRule;
   readonly actions: Readonly<AssetKindActions>;
+  readonly lifecycle: AssetLifecycle;
+  readonly representation: AssetRepresentation;
+  readonly manifestFile?: string;
+  readonly owners: readonly AssetScope["kind"][];
   /** Reads definitions: the schema first, then the name rule. The checks follow on the reading. */
   read(definitions: readonly unknown[]): AssetKindReading;
   /** Throws `VALIDATION_FAILED` for a definition the schema refuses. */
@@ -157,12 +183,30 @@ export function defineAssetKind<Definition, Kind extends string>(
       );
     }
   }
+  const lifecycle = definition.lifecycle ?? "active";
+  const representation = definition.representation ?? "config";
+  if (lifecycle === "draft_published" && definition.actions.publish === undefined) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `Asset kind '${definition.kind}' has a published revision and names no publish action`
+    );
+  }
+  if (representation === "files" && definition.manifestFile === undefined) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `Asset kind '${definition.kind}' holds files and names no manifest file`
+    );
+  }
   const nameRule = Object.freeze({ ...definition.nameRule });
   return Object.freeze({
     kind: definition.kind,
     plural: definition.plural,
     nameRule,
     actions: Object.freeze({ ...definition.actions }),
+    lifecycle,
+    representation,
+    ...(definition.manifestFile === undefined ? {} : { manifestFile: definition.manifestFile }),
+    owners: Object.freeze([...(definition.owners ?? ["instance"])]),
     read(inputs: readonly unknown[]): AssetKindReading {
       const accepted: Definition[] = [];
       const refused: RefusedAssetDefinition[] = [];
@@ -212,6 +256,19 @@ function readName(input: unknown): string | undefined {
     return undefined;
   }
   return typeof input.name === "string" ? input.name : undefined;
+}
+
+/**
+ * The revision of an asset its users are served: the active one of an `active` kind, the
+ * published one of a `draft_published` kind, and nothing before the first publish. Every
+ * reader that serves an asset's content to its users asks here, so none of them returns a
+ * draft.
+ */
+export function liveRevisionId(
+  asset: { activeRevisionId: string; publishedRevisionId?: string },
+  kind: Pick<RegisteredAssetKind, "lifecycle">
+): string | undefined {
+  return kind.lifecycle === "draft_published" ? asset.publishedRevisionId : asset.activeRevisionId;
 }
 
 /** The kinds this build ships, in registration order. */

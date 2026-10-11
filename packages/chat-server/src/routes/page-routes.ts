@@ -32,6 +32,7 @@ import {
   isHtmlContentType,
   mintAppContentToken
 } from "../app-content";
+import { mayOpenAssetFileSet } from "../asset-access";
 import { ConversationWorkflow } from "../conversations/conversation-workflow";
 import type { Route } from "../http/route";
 import { fileSetEntryPath, readFileSetFile } from "../page-file-sets";
@@ -81,8 +82,9 @@ export function registerPageRoutes(route: Route, options: ResolvedChatServerOpti
   const viewerChecks = createAppContentViewerChecks();
 
   /**
-   * Whether the user a content token names may read the Page's conversation now: the account
-   * is active and the conversation is one this user reads, by the rule of every other route.
+   * Whether the user a content token names may be served the file set now: the account is
+   * active and, for a Page, the conversation is one this user reads, by the rule of every
+   * other route.
    */
   async function viewerMayRead(viewerId: string, fileSet: ServedFileSet): Promise<boolean> {
     const viewer = await options.stores.users.getUser({
@@ -92,14 +94,26 @@ export function registerPageRoutes(route: Route, options: ResolvedChatServerOpti
     if (!viewer || viewer.status !== "active") {
       return false;
     }
-    try {
-      await conversations.requireConversationAccess(
-        fileSet.conversationId,
-        authenticatedUserFromRecord({
-          user: viewer,
-          identity: viewer.identities[0] ?? { authSource: "app-content", externalUserId: viewer.id }
-        })
+    const identity = authenticatedUserFromRecord({
+      user: viewer,
+      identity: viewer.identities[0] ?? { authSource: "app-content", externalUserId: viewer.id }
+    });
+    if (fileSet.asset) {
+      // A file set of an asset: its users are served the published revision, its writers every
+      // one. The rights are loaded as for a call of this viewer, so a membership that ended
+      // or a pointer that moved ends the serving at the next check.
+      const { asset } = fileSet;
+      if (options.modules.offModuleOf("kind", asset.kind) !== undefined) {
+        return false;
+      }
+      return mayOpenAssetFileSet(
+        options.configAssets.kinds.get(asset.kind),
+        await options.authorizer.forActor(identity),
+        asset
       );
+    }
+    try {
+      await conversations.requireConversationAccess(fileSet.conversationId, identity);
       return true;
     } catch (error) {
       if (isAppError(error) && error.code === "NOT_FOUND") {

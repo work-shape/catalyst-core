@@ -9,6 +9,7 @@ import {
   getSubjectUserId,
   isAppError,
   isAuthenticatedServicePrincipal,
+  liveRevisionId,
   type AccessResource,
   type AuthenticatedIdentity,
   type ActorAccess,
@@ -17,6 +18,7 @@ import {
   type ConfigAssetMutation,
   type ConfigAssetRecord,
   type ConfigAssetStore,
+  type FileSet,
   type JsonObject,
   type Namespace,
   type OperationAuthorization,
@@ -24,6 +26,8 @@ import {
   type StorePage
 } from "@vivd-catalyst/core";
 import { z } from "zod";
+import { AssetDraftWorkflow } from "./asset-draft-workflow";
+import type { AssetFileInput } from "./asset-files";
 import { readDefinitionName, type WorkflowAssetKind } from "./asset-kinds/shared";
 import {
   INVALID_ASSET_SET_MESSAGE,
@@ -70,31 +74,21 @@ import {
   setsInitialDefault,
   toJsonObject
 } from "./asset-write-rules";
-import { applyValidatedConfigAssetMutations, assertScopeCanOwn } from "./config-asset-writer";
+import {
+  assertStoredWritable,
+  notFound,
+  recordAssetEvent,
+  requireActive,
+  requireExpectedRevision,
+  requireOwnScope,
+  type AssetAddress,
+  type AssetTarget
+} from "./asset-target";
+import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
 import type { ChatServerOptions } from "./types";
 
 /** How many assets a list reads where its caller names no page. */
 const DEFAULT_ASSET_LIST_LIMIT = 51;
-
-/** One asset as a call names it. Without a workspace it is one of the instance's own. */
-export interface AssetAddress {
-  kind: string;
-  name: string;
-  workspaceId?: string;
-}
-
-/** What a call's address comes to once the store is read. */
-interface AssetTarget {
-  kind: WorkflowAssetKind;
-  name: string;
-  scope: AssetScope;
-  /** The row that carries the name in the addressed scope, a deleted one included. */
-  asset?: ConfigAssetRecord;
-  /** An asset of another scope carries the name. The call never reads or writes it. */
-  elsewhere: boolean;
-  /** What the caller's right is decided on. */
-  resource: AccessResource;
-}
 
 type MutationBatch = Omit<
   Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0],
@@ -114,9 +108,16 @@ const conflictDetailsSchema = z.object({
  */
 export class AssetWorkflow {
   private readonly options: ChatServerOptions;
+  /** The writes of a kind with a draft or with files. */
+  readonly drafts: AssetDraftWorkflow;
 
   constructor(options: ChatServerOptions) {
     this.options = options;
+    this.drafts = new AssetDraftWorkflow(options, {
+      target: (address) => this.target(address),
+      upsert: (call, target, config, write) => this.upsert(call, target, config, write),
+      authorizeEditing: (call, surface) => this.authorizeEditing(call, surface)
+    });
   }
 
   async authorizeRead(access: ActorAccess, address: AssetAddress): Promise<OperationAuthorization> {
@@ -130,6 +131,19 @@ export class AssetWorkflow {
   ): Promise<OperationAuthorization> {
     const target = await this.target(address);
     return decide(access, target.kind.actions.write, target.resource);
+  }
+
+  /**
+   * The publish right of the kind. A kind without a published revision names none, and a call
+   * on it passes here to be refused for that by the operation itself.
+   */
+  async authorizePublish(
+    access: ActorAccess,
+    address: AssetAddress
+  ): Promise<OperationAuthorization> {
+    const target = await this.target(address);
+    const { publish } = target.kind.actions;
+    return publish === undefined ? { allowed: true } : decide(access, publish, target.resource);
   }
 
   async authorizeDelete(
@@ -229,6 +243,7 @@ export class AssetWorkflow {
         scope: record.scope,
         ...(namespace ? { namespace: namespace.prefix } : {}),
         revision: record.revision,
+        ...pointersOf(kind, record),
         ...(record.name === defaultName ? { isDefault: true as const } : {}),
         updatedAt: record.updatedAt
       };
@@ -252,6 +267,7 @@ export class AssetWorkflow {
       scope: asset.scope,
       ...(namespace ? { namespace: namespace.prefix } : {}),
       revision: asset.revision,
+      ...pointersOf(target.kind, asset),
       config: asset.config,
       ...(asset.name === defaultName ? { isDefault: true as const } : {}),
       ...(availability ? { availability } : {}),
@@ -290,13 +306,27 @@ export class AssetWorkflow {
    */
   async put(
     call: AssetCall,
-    input: AssetAddress & { config: Record<string, unknown>; expectedRevision?: number }
+    input: AssetAddress & {
+      config?: Record<string, unknown>;
+      files?: readonly AssetFileInput[];
+      expectedRevision?: number;
+    }
   ) {
     const target = await this.target(input);
     const { kind } = target;
     call.access.require(kind.actions.write, target.resource);
     await this.authorizeEditing(call, "put");
     assertStoredWritable(target);
+    if (kind.representation === "files") {
+      return this.drafts.putFiles(call, target, input);
+    }
+    if (input.config === undefined || input.files !== undefined) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `A ${kind.kind} is written as its config. It holds no files`,
+        { reason: "config_required" }
+      );
+    }
     requireMatchingConfigName(input.config, input.name);
     requireOwnScope(target);
     requireExpectedRevision(target, input.expectedRevision ?? null);
@@ -314,6 +344,13 @@ export class AssetWorkflow {
     const target = await this.target(input);
     call.access.require(target.kind.actions.write, target.resource);
     await this.authorizeEditing(call, "revert");
+    if (target.kind.lifecycle === "draft_published") {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `A ${target.kind.kind} has a published revision: publish the earlier revision by its number with 'assets.publish'`,
+        { reason: "use_publish" }
+      );
+    }
     assertStoredWritable(target);
     requireOwnScope(target);
     if (!target.asset) {
@@ -355,6 +392,9 @@ export class AssetWorkflow {
     const asset = requireActive(target);
     if (asset.revision !== input.expectedRevision) {
       throw conflict(kind.kind, name, asset.revision);
+    }
+    if (kind.representation === "files") {
+      return this.drafts.remove(call, target, input.expectedRevision);
     }
     const stored = await loadStoredAssets(this.options);
     const clearsDefault = clearsLastDefault(stored.set, kind, name);
@@ -470,6 +510,8 @@ export class AssetWorkflow {
       expectedRevision: number | null;
       operation?: "revert";
       audit: "config_asset.updated" | "config_asset.reverted";
+      /** The stored file set of the revision, with the id its asset has or gets. */
+      fileSet?: { assetId: string; fileSetId: FileSet["id"] };
     }
   ) {
     const { kind, name } = target;
@@ -513,7 +555,10 @@ export class AssetWorkflow {
         name,
         config: toJsonObject(next),
         scope: target.scope,
-        ...(write.operation ? { operation: write.operation } : {})
+        ...(write.operation ? { operation: write.operation } : {}),
+        // A kind with a published revision moves its draft with a write and nothing else.
+        ...(kind.lifecycle === "draft_published" ? { draft: true as const } : {}),
+        ...(write.fileSet ?? {})
       }
     ];
     if (setsDefault) {
@@ -591,16 +636,8 @@ export class AssetWorkflow {
     }
   }
 
-  private async record(call: AssetCall, type: string, metadata: JsonObject): Promise<void> {
-    // The recorder of the Operation Run: the row names the run that wrote it.
-    const auditRecorder = call.audit;
-    await auditRecorder.record({
-      type,
-      status: "success",
-      actor: auditActorFromIdentity(call.actor),
-      correlationId: call.correlationId,
-      metadata
-    });
+  private record(call: AssetCall, type: string, metadata: JsonObject): Promise<void> {
+    return recordAssetEvent(call, type, metadata);
   }
 
   /** A kind of a module that is off does not exist here, whatever the store still holds. */
@@ -697,63 +734,28 @@ export class AssetWorkflow {
       scope,
       ...(asset ? { asset } : {}),
       elsewhere: row !== undefined && asset === undefined,
-      resource: accessResource(kind.kind, address.name, scope, asset?.id)
+      resource: accessResource(kind.kind, address.name, scope, asset?.id),
+      address
     };
   }
+}
+
+/** The two pointers of an asset of a kind with a published revision, as revision numbers. */
+function pointersOf(kind: WorkflowAssetKind, asset: ConfigAssetRecord) {
+  if (kind.lifecycle !== "draft_published") {
+    return {};
+  }
+  const published = liveRevisionId(asset, kind) === undefined ? undefined : asset.publishedRevision;
+  return {
+    draftRevision: asset.revision,
+    ...(published === undefined ? {} : { publishedRevision: published })
+  };
 }
 
 function scopeOf(workspaceId: string | undefined): AssetScope {
   return workspaceId === undefined
     ? INSTANCE_ASSET_SCOPE
     : { kind: "workspace", workspaceId: asCollaborationWorkspaceId(workspaceId) };
-}
-
-function requireActive(target: AssetTarget): ConfigAssetRecord & { config: JsonObject } {
-  const { asset } = target;
-  if (!asset || asset.status !== "active" || asset.config === null) {
-    throw notFound(target);
-  }
-  return { ...asset, config: asset.config };
-}
-
-function notFound(target: Pick<AssetTarget, "kind" | "name">): AppError {
-  return new AppError("NOT_FOUND", `Config ${target.kind.kind} '${target.name}' was not found`);
-}
-
-/**
- * A name belongs to one owner. A write that means another one is refused, never moved. Whether
- * the owner the call names can own the kind at all is asked first, so that refusal is the same
- * whether or not another owner holds the name: it tells nothing of an asset the caller may not
- * read.
- */
-function requireOwnScope(target: AssetTarget): void {
-  assertScopeCanOwn(target.kind.kind, target.scope);
-  if (target.elsewhere) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      `Config ${target.kind.kind} '${target.name}' belongs to another scope`,
-      { reason: "invalid_scope" }
-    );
-  }
-}
-
-/** `null` expects no active asset of the name: the call creates it. */
-function requireExpectedRevision(target: AssetTarget, expected: number | null): void {
-  const current = target.asset?.status === "active" ? target.asset.revision : null;
-  if (current !== expected) {
-    throw conflict(target.kind.kind, target.name, current);
-  }
-}
-
-/**
- * Asks the kind whether the stored asset takes a write at all. It runs once the caller holds
- * the right and before the write is read, so a stale revision or a config that would not
- * validate answers the same refusal.
- */
-function assertStoredWritable(target: AssetTarget): void {
-  if (target.asset?.status === "active") {
-    target.kind.assertStoredWritable?.({ current: target.asset.config });
-  }
 }
 
 /** What the kind refuses a write of the stored asset for, whatever the write says. */

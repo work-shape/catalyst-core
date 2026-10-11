@@ -427,6 +427,8 @@ describe("a Connection through the asset operations", () => {
     expect(context.kinds.find((kind) => kind.kind === "connection")).toEqual({
       kind: "connection",
       plural: "connections",
+      lifecycle: "active",
+      representation: "config",
       actions: {
         read: "connection.read",
         // Using a Connection is a right of its own, and the Check tab asks for it by this name.

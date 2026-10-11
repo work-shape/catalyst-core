@@ -156,6 +156,7 @@
     "approval_requests.list_mine": "own",
     "approval_requests.revert": "own",
     "approval_requests.withdraw": "own",
+    "apps.preview": "asset_right",
     "branding.get": "public",
     "captured_mail.list": "public",
     "config.get": "own",

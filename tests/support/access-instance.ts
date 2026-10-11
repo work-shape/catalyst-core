@@ -84,7 +84,7 @@ export const SCOPES_HEADER = "x-test-scopes";
  * included: the real sign-in turns a disabled user away, and these tests prove the evaluator
  * does so too.
  */
-function recordAuthAdapter(stores: TestStore): AuthAdapter {
+export function recordAuthAdapter(stores: TestStore): AuthAdapter {
   return {
     id: "test-record",
     credentialMode: "ambient",

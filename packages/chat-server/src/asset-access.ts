@@ -1,11 +1,15 @@
 import {
   AppError,
+  asCollaborationWorkspaceId,
+  INSTANCE_ASSET_SCOPE,
+  liveRevisionId,
   type AccessResource,
   type ActorAccess,
   type AssetScope,
   type AuditRecorder,
   type AuthenticatedIdentity,
-  type OperationAuthorization
+  type OperationAuthorization,
+  type ServedFileSetAsset
 } from "@vivd-catalyst/core";
 import { z } from "zod";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
@@ -62,6 +66,39 @@ export function deleteDecision(
     }
   }
   return { allowed: true };
+}
+
+/**
+ * Whether a holder is served a file set of an asset. Whoever writes the asset is served every
+ * revision of it. Its users are served the one revision `liveRevisionId` names and no other:
+ * a draft, and a revision that was published once, are for its writers alone.
+ */
+export function mayOpenAssetFileSet(
+  kind: WorkflowAssetKind | undefined,
+  access: ActorAccess,
+  asset: ServedFileSetAsset
+): boolean {
+  if (!kind) {
+    return false;
+  }
+  const resource = accessResource(
+    kind.kind,
+    asset.name,
+    asset.workspaceId === undefined
+      ? INSTANCE_ASSET_SCOPE
+      : { kind: "workspace", workspaceId: asCollaborationWorkspaceId(asset.workspaceId) },
+    asset.id
+  );
+  if (access.authorize(kind.actions.write, resource).allowed) {
+    return true;
+  }
+  const live = liveRevisionId(asset, kind);
+  return (
+    live !== undefined &&
+    asset.revisionIds.includes(live) &&
+    kind.actions.use !== undefined &&
+    access.authorize(kind.actions.use, resource).allowed
+  );
 }
 
 /** The refusal of a write that was made against another revision than the current one. */

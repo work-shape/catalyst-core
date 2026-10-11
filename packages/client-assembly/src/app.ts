@@ -15,6 +15,7 @@ import {
 import {
   createSkillChangeApprovalHandler,
   createAgentAssetKind,
+  createAppAssetKind,
   createConnectionAssetKind,
   createChatServer,
   createChatServerJobs,
@@ -363,15 +364,12 @@ export async function createClientInstanceExecutionAssembly(
     source: assetSource,
     // Every asset kind of this build. A later kind is one more registration in this list.
     kinds: createAssetKindRegistry([
-      createAgentAssetKind({
-        config,
-        validationRefs,
-        validateAgents
-      }),
+      createAgentAssetKind({ config, validationRefs, validateAgents }),
       createSkillAssetKind({ config }),
       ...(connections
         ? [createConnectionAssetKind({ connectorTypes: connections.connectorTypes })]
-        : [])
+        : []),
+      ...(modules.isEnabled("apps") ? [createAppAssetKind()] : [])
     ]),
     validationRefs
   };

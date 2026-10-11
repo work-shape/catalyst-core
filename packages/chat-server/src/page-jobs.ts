@@ -7,6 +7,7 @@ import {
   FILE_SET_MAX_FILE_BYTES,
   FILE_SET_MAX_FILES,
   FILE_SET_MAX_TOTAL_BYTES,
+  fileSetObjectPrefix,
   isAppError,
   isPageBuildId,
   readObjectBytes,
@@ -17,17 +18,20 @@ import {
   type JobControl,
   type Logger,
   type ObjectStorage,
+  type AssetBuildClient,
+  type AssetBuildOutcome,
   type PageBuild,
   type PageBuildClient,
+  type PageBuildFailure,
   type PageBuildId,
+  type PageBuildResult,
   type PageBuildSourceFile,
-  type PageSaveOutcome,
   type PlatformStores,
   type RegisteredJobHandler
 } from "@vivd-catalyst/core";
 import { z } from "zod";
 import type { PageBuildRunner } from "./page-build-sandbox";
-import { storePageFileSet } from "./page-file-sets";
+import { storeAssetFileSet, storePageFileSet } from "./page-file-sets";
 import type { ChatServerOptions } from "./types";
 
 // Building a Page when it is saved. The save writes a row with the snapshot of the folder and
@@ -35,6 +39,10 @@ import type { ChatServerOptions } from "./types";
 // sandbox (`createSandboxPageBuild`), stores the file set and writes the result on the row,
 // where the save reads it. The handler never loads a file of the Page as code. The process that
 // serves the kind is the workspace command worker, the one process that reaches the sandbox.
+//
+// A write of an asset whose revisions hold files builds through the same job. Its source files
+// lie in the `files` store, below the prefix of the file set the write named, and the build
+// stores that file set for the asset. The write itself makes the revision.
 
 /**
  * The lease of a running build. A worker that was killed is noticed after this long, and the
@@ -59,6 +67,12 @@ export const PAGE_BUILD_POLL_INTERVAL_MS = 250;
  * told to store nothing.
  */
 export const PAGE_BUILD_WAIT_MS = 5 * 60 * 1000;
+/**
+ * How long a write of an asset's files waits for its build. The write is one HTTP call, so the
+ * wait is shorter than a save's: past it the call answers `build_timeout`, which its caller
+ * repeats, and the build is told to store nothing.
+ */
+export const APP_BUILD_WAIT_MS = 60_000;
 /**
  * How long a build may be due before the save asks whether any worker takes builds, and the
  * window in which a worker must have shown itself: by running a build now, or by having
@@ -125,7 +139,7 @@ export function createPageBundleJobs(options: PageBundleJobsOptions): {
   handlers: RegisteredJobHandler[];
 } {
   const { build, limits } = options;
-  const finish = (control: JobControl, buildId: PageBuildId, result: PageSaveOutcome) =>
+  const finish = (control: JobControl, buildId: PageBuildId, result: PageBuildResult) =>
     control.transaction((stores) =>
       stores.pages.finishPageBuild({
         clientInstanceId: options.clientInstanceId,
@@ -162,12 +176,16 @@ export function createPageBundleJobs(options: PageBundleJobsOptions): {
           if (!row) {
             return;
           }
-          if (job.concurrencyKey !== row.conversationId) {
+          const { asset } = row.request;
+          const { conversationId } = row;
+          const key = asset ? asset.assetId : conversationId;
+          if (key === undefined || job.concurrencyKey !== key) {
             control.logger.warn({ jobId: job.id }, "A Page build job is queued for another key");
             return;
           }
+          // The files of an asset's write lie in the `files` store, where the write put them.
           const snapshot = await readSnapshot(
-            options.workspaceObjects,
+            asset ? options.pages.objects : options.workspaceObjects,
             row.request.files,
             control.signal
           );
@@ -197,20 +215,63 @@ export function createPageBundleJobs(options: PageBundleJobsOptions): {
           if (!isJsonObject(manifest) || !(await unfinished(buildId))) {
             return;
           }
+          const content = {
+            kitVersion: outcome.kitVersion,
+            manifest,
+            sourceFiles: snapshot.files,
+            builtFiles: outcome.files,
+            signal: control.signal,
+            ...(row.request.requestedByUserId
+              ? { createdByUserId: row.request.requestedByUserId }
+              : {})
+          };
           try {
+            if (asset) {
+              // The source files are where the write put them: only the built ones are written.
+              // The file set and the result of the build are one write, as below.
+              await storeAssetFileSet(
+                options,
+                {
+                  ...content,
+                  assetId: asset.assetId,
+                  fileSetId: asset.fileSetId,
+                  writes: ["dist"]
+                },
+                (create) =>
+                  control.transaction(async (stores) => {
+                    const fileSet = await create(stores);
+                    const written = await stores.pages.finishPageBuild({
+                      clientInstanceId: options.clientInstanceId,
+                      buildId,
+                      result: { status: "stored", fileSetId: fileSet.id },
+                      finishedAt: new Date().toISOString()
+                    });
+                    if (!written) {
+                      throw new BuildAlreadyAnswered();
+                    }
+                    return fileSet;
+                  })
+              ).catch(async (error: unknown) => {
+                // The write that asked for this build gave up or was refused: nothing names
+                // the file set, so what this build wrote of it goes.
+                await options.pages.objects
+                  .deletePrefix(
+                    fileSetObjectPrefix({ kind: "asset", id: asset.assetId }, asset.fileSetId)
+                  )
+                  .catch(() => undefined);
+                throw error;
+              });
+              return;
+            }
+            if (conversationId === undefined) {
+              return;
+            }
             await storePageFileSet(
               options,
               {
-                conversationId: row.conversationId,
+                conversationId,
                 pageName: row.request.pageName,
-                kitVersion: outcome.kitVersion,
-                manifest,
-                sourceFiles: snapshot.files,
-                builtFiles: outcome.files,
-                signal: control.signal,
-                ...(row.request.requestedByUserId
-                  ? { createdByUserId: row.request.requestedByUserId }
-                  : {})
+                ...content
               },
               // The revision and the result of the build are one write. It happens while this
               // attempt holds the job, and only when the build has no result yet: a save that
@@ -267,8 +328,9 @@ export function createPageBundleJobs(options: PageBundleJobsOptions): {
   };
 }
 
-type Snapshot =
-  { status: "read"; files: PageFile[] } | { status: "refused"; result: PageSaveOutcome };
+type BuildRefusal = Extract<PageBuildResult, { status: "errors" | "failed" }>;
+
+type Snapshot = { status: "read"; files: PageFile[] } | { status: "refused"; result: BuildRefusal };
 
 /**
  * Reads the files of a snapshot. The limits of a file set are checked on the sizes the snapshot
@@ -283,7 +345,7 @@ async function readSnapshot(
   if (!objects) {
     return {
       status: "refused",
-      result: { status: "failed", message: "This instance has no store of workspace files." }
+      result: { status: "failed", message: "This instance has no store of the files to build." }
     };
   }
   const total = files.reduce((sum, file) => sum + file.byteSize, 0);
@@ -336,7 +398,7 @@ async function readSnapshot(
 }
 
 /** What the store said when it refused a built Page, as the result of the save. */
-function storeRefusal(error: unknown): PageSaveOutcome | undefined {
+function storeRefusal(error: unknown): BuildRefusal | undefined {
   if (!isAppError(error)) {
     return undefined;
   }
@@ -362,6 +424,8 @@ function storeRefusal(error: unknown): PageSaveOutcome | undefined {
 export interface PageBuildClientOptions {
   stores: Pick<PlatformStores, "pages" | "jobs" | "transaction">;
   waitMs?: number;
+  /** Replaces `APP_BUILD_WAIT_MS`, the wait of the build of an asset's files. For tests. */
+  assetWaitMs?: number;
   /** Replaces `PAGE_BUILD_UNCLAIMED_MS`. For tests. */
   unclaimedMs?: number;
   /** Replaces `PAGE_BUILD_WORKER_CHECK_INTERVAL_MS`. For tests. */
@@ -374,8 +438,11 @@ export interface PageBuildClientOptions {
  * Queues a build as its row and the `page.bundle` job, in one transaction, and polls the row
  * for the result. The row is removed when the save has its answer.
  */
-export function createPageBuildClient(options: PageBuildClientOptions): PageBuildClient {
+export function createPageBuildClient(
+  options: PageBuildClientOptions
+): PageBuildClient & AssetBuildClient {
   const waitMs = options.waitMs ?? PAGE_BUILD_WAIT_MS;
+  const assetWaitMs = options.assetWaitMs ?? APP_BUILD_WAIT_MS;
   const pollIntervalMs = options.pollIntervalMs ?? PAGE_BUILD_POLL_INTERVAL_MS;
   const now = options.now ?? (() => new Date());
   const unclaimedMs = options.unclaimedMs ?? PAGE_BUILD_UNCLAIMED_MS;
@@ -408,15 +475,24 @@ export function createPageBuildClient(options: PageBuildClientOptions): PageBuil
       [job.startedAt, job.finishedAt].some((at) => at !== undefined && Date.parse(at) >= since)
     );
   };
-  return {
-    async build(input) {
+  /** Queues one build and waits for how it ended. `key` orders the builds of one owner. */
+  const run = async (input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId?: PageBuild["conversationId"];
+    key: string;
+    request: PageBuild["request"];
+    waitMs: number;
+    signal?: AbortSignal;
+    deadline?: Date;
+  }): Promise<PageBuildResult> => {
+    {
       const buildId = createPageBuildId();
       const address = { clientInstanceId: input.clientInstanceId, buildId };
       await options.stores.transaction(async (tx) => {
         await tx.pages.createPageBuild({
           clientInstanceId: input.clientInstanceId,
           id: buildId,
-          conversationId: input.conversationId,
+          ...(input.conversationId ? { conversationId: input.conversationId } : {}),
           request: input.request,
           createdAt: now().toISOString()
         });
@@ -427,12 +503,12 @@ export function createPageBuildClient(options: PageBuildClientOptions): PageBuil
             clientInstanceId: input.clientInstanceId,
             subject: buildId,
             dedupeKey: subjectDedupeKey(pageBundleJob.kind, buildId),
-            concurrencyKey: input.conversationId
+            concurrencyKey: input.key
           }
         );
       });
       const deadline = Math.min(
-        Date.now() + waitMs,
+        Date.now() + input.waitMs,
         input.deadline?.getTime() ?? Number.POSITIVE_INFINITY
       );
       let nextWorkerCheck = Date.now() + unclaimedMs;
@@ -440,7 +516,7 @@ export function createPageBuildClient(options: PageBuildClientOptions): PageBuil
         for (;;) {
           const row = await options.stores.pages.getPageBuild(address);
           if (!row) {
-            return { status: "failed", message: "The conversation of the Page is not available." };
+            return { status: "failed", message: "The build is not available any more." };
           }
           if (row.result) {
             return row.result;
@@ -451,14 +527,15 @@ export function createPageBuildClient(options: PageBuildClientOptions): PageBuil
             noWorker = await noWorkerTakesBuilds(input.clientInstanceId).catch(() => false);
           }
           if (noWorker || input.signal?.aborted || Date.now() >= deadline) {
-            const gaveUp: PageSaveOutcome = {
-              status: "failed",
-              message: input.signal?.aborted
-                ? "The save was stopped before the Page was built."
-                : noWorker
-                  ? PAGE_BUILD_NO_WORKER_MESSAGE
-                  : PAGE_BUILD_BUSY_MESSAGE
-            };
+            const gaveUp: PageBuildFailure = input.signal?.aborted
+              ? {
+                  status: "failed",
+                  reason: "stopped",
+                  message: "The save was stopped before the Page was built."
+                }
+              : noWorker
+                ? { status: "failed", reason: "no_worker", message: PAGE_BUILD_NO_WORKER_MESSAGE }
+                : { status: "failed", reason: "timeout", message: PAGE_BUILD_BUSY_MESSAGE };
             // The build finds a result on its row and stores nothing. When it was faster, its
             // result is the answer.
             const written = await options.stores.pages.finishPageBuild({
@@ -467,6 +544,14 @@ export function createPageBuildClient(options: PageBuildClientOptions): PageBuil
               finishedAt: now().toISOString()
             });
             if (written) {
+              // A build no worker claimed yet is taken out of the queue. One that runs finds
+              // the result on its row and stores nothing.
+              await options.stores.jobs
+                .withdraw(pageBundleJob, {
+                  clientInstanceId: input.clientInstanceId,
+                  dedupeKey: subjectDedupeKey(pageBundleJob.kind, buildId)
+                })
+                .catch(() => undefined);
               return gaveUp;
             }
             continue;
@@ -476,6 +561,29 @@ export function createPageBuildClient(options: PageBuildClientOptions): PageBuil
       } finally {
         await options.stores.pages.deletePageBuild(address).catch(() => undefined);
       }
+    }
+  };
+  /** A build row holds the result of its own kind of build. Another one is no result. */
+  const foreign: PageBuildFailure = {
+    status: "failed",
+    message: "The build ended with a result of another kind of build."
+  };
+  return {
+    async build(input) {
+      const result = await run({
+        ...input,
+        key: input.conversationId,
+        waitMs
+      });
+      return result.status === "stored" ? foreign : result;
+    },
+    async buildAsset(input): Promise<AssetBuildOutcome> {
+      const result = await run({
+        ...input,
+        key: input.request.asset.assetId,
+        waitMs: assetWaitMs
+      });
+      return result.status === "saved" ? foreign : result;
     }
   };
 }

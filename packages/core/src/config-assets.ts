@@ -5,6 +5,7 @@ import type { AgentConfig, SkillConfig } from "./config";
 import type { CollaborationWorkspaceKind } from "./collaboration-workspace";
 import type { ClientInstanceId, CollaborationWorkspaceId } from "./ids";
 import type { JsonObject } from "./json";
+import type { FileSetId } from "./pages";
 
 /**
  * The id of a registered asset kind, such as `agent`. The registry of the instance says which
@@ -80,6 +81,16 @@ export interface ConfigAssetRecord {
   activeRevisionId: string;
   revision: number;
   config: JsonObject | null;
+  /** The file set of the active revision, for a kind whose revisions hold files. */
+  fileSetId?: FileSetId;
+  /**
+   * The published pointer of a `draft_published` kind, with the number and the file set of
+   * the revision it names. Absent before the first publish and on every `active` kind, where
+   * `activeRevisionId` is the live one. Ask `liveRevisionId` which one serves.
+   */
+  publishedRevisionId?: string;
+  publishedRevision?: number;
+  publishedFileSetId?: FileSetId;
   createdAt: string;
   updatedAt: string;
 }
@@ -91,6 +102,8 @@ export interface ConfigAssetRevisionRecord {
   revision: number;
   operation: "create" | "update" | "delete" | "revert";
   config: JsonObject | null;
+  /** The immutable file set of the revision, for a kind whose revisions hold files. */
+  fileSetId?: FileSetId;
   actor: AuditActor | null;
   origin?: { kind: "approval_request"; requestId: string; summary: string };
   globalVersion: number;
@@ -114,6 +127,18 @@ export type ConfigAssetMutation =
        * scope: a write that means another one is refused with `invalid_scope`.
        */
       scope?: AssetScope;
+      /**
+       * The write of a `draft_published` kind: it moves the draft pointer and nothing else. A
+       * batch of such writes alone leaves the version of the instance's asset set as it is.
+       */
+      draft?: true;
+      /** The file set of the revision, stored before the write, for a `files` kind. */
+      fileSetId?: FileSetId;
+      /**
+       * The id a new asset gets, where its caller stored something under it before the write.
+       * An asset that exists keeps its id, and a write that names another one is refused.
+       */
+      assetId?: string;
     }
   | {
       type: "delete";
@@ -196,6 +221,44 @@ export interface ConfigAssetStore {
     initialAgentAvailability?: InitialAgentAvailability;
     mutations: ConfigAssetMutation[];
   }): Promise<{ version: number }>;
+  /**
+   * Moves the published pointer of one asset to the revision of that number, in one
+   * transaction. Refuses a number the asset has no content for with `NOT_FOUND`.
+   */
+  publishConfigAssetRevision(input: {
+    clientInstanceId: ClientInstanceId;
+    kind: ConfigAssetKind;
+    name: string;
+    revision: number;
+  }): Promise<{
+    assetId: string;
+    revision: number;
+    /** The number the pointer named before, absent on the first publish. */
+    replacedRevision?: number;
+    fileSetId?: FileSetId;
+  }>;
+  /**
+   * Moves the draft pointer back to the published revision. Refuses with `CONFLICT` when the
+   * draft is not at `expectedRevision`, and with `nothing_published` before the first publish.
+   */
+  discardConfigAssetDraft(input: {
+    clientInstanceId: ClientInstanceId;
+    kind: ConfigAssetKind;
+    name: string;
+    expectedRevision: number;
+  }): Promise<{ revision: number }>;
+  /**
+   * Removes one asset for good: its row, its revisions, the grant rows that name it and the
+   * rows of its file sets, in one transaction. Answers the id whose stored objects the caller
+   * removes after it. The version of the instance's asset set stays: only a kind outside the
+   * runtime snapshot is removed this way.
+   */
+  removeConfigAsset(input: {
+    clientInstanceId: ClientInstanceId;
+    kind: ConfigAssetKind;
+    name: string;
+    expectedRevision: number;
+  }): Promise<{ assetId: string; fileSetCount: number }>;
   /** Availability of every active agent that has a record, keyed by agent name. */
   listAgentAvailability(input: {
     clientInstanceId: ClientInstanceId;

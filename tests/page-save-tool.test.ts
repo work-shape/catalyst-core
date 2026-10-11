@@ -256,7 +256,10 @@ async function createSaveHarness(
             });
           await deliver(run, buildId);
           const row = await store.pages.getPageBuild({ clientInstanceId, buildId });
-          return row?.result ?? { status: "failed", message: "The build has no result." };
+          // `stored` is the result of an asset's build, which this client never queues.
+          return row?.result && row.result.status !== "stored"
+            ? row.result
+            : { status: "failed", message: "The build has no result." };
         }
       };
     },

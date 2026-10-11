@@ -1,6 +1,10 @@
 import { RELEASE_VERSION, apiOperations } from "@vivd-catalyst/api-contract";
 import {
   AppError,
+  ASSET_PUT_FILES_MAX_BYTES,
+  FILE_SET_MAX_FILE_BYTES,
+  FILE_SET_MAX_FILES,
+  FILE_SET_MAX_TOTAL_BYTES,
   hasAuthScope,
   type ActorAccess,
   type AssetKindActions,
@@ -11,15 +15,18 @@ import { configAssetReferences } from "../config-asset-workflow";
 import type { Route } from "../http/route";
 import type { ChatServerOptions } from "../types";
 
-/** The rights of a kind that decide what a caller does with its definitions. */
-const VERBS = ["read", "write", "delete"] as const satisfies readonly (keyof AssetKindActions)[];
-
-/** The scope a credential must carry before its holder can use each of those rights. */
+/**
+ * The scope a credential must carry before its holder can use each right of a kind. `use` is
+ * not among them: it is held on what one workspace owns and never on the instance as a whole.
+ */
 const SCOPE_OF_VERB = {
   read: "config_assets:read",
   write: "config_assets:write",
-  delete: "config_assets:write"
-} as const satisfies Record<(typeof VERBS)[number], OperationScope>;
+  delete: "config_assets:write",
+  publish: "config_assets:publish"
+} as const satisfies Partial<Record<keyof AssetKindActions, OperationScope>>;
+
+const VERBS = ["read", "write", "delete", "publish"] as const;
 
 /**
  * The actions of the registered kinds a caller can use: the ones its grants allow on what
@@ -34,7 +41,7 @@ function usableActions(
   const usable = VERBS.filter((verb) => hasAuthScope(caller.actor, SCOPE_OF_VERB[verb]));
   return options.configAssets.kinds.kinds.flatMap((kind) =>
     usable
-      .map((verb) => kind.actions[verb])
+      .flatMap((verb) => kind.actions[verb] ?? [])
       .filter(
         (action) =>
           caller.access.authorize(action, {
@@ -85,7 +92,20 @@ export function registerPlatformRoutes(route: Route, options: ChatServerOptions)
         kinds: kinds.map((kind) => ({
           kind: kind.kind,
           plural: kind.plural,
-          actions: { ...kind.actions }
+          lifecycle: kind.lifecycle,
+          representation: kind.representation,
+          actions: { ...kind.actions },
+          ...(kind.representation === "files"
+            ? {
+                ...(kind.manifestFile === undefined ? {} : { manifestFile: kind.manifestFile }),
+                limits: {
+                  FILE_SET_MAX_FILES,
+                  FILE_SET_MAX_FILE_BYTES,
+                  FILE_SET_MAX_TOTAL_BYTES,
+                  ASSET_PUT_FILES_MAX_BYTES
+                }
+              }
+            : {})
         })),
         actions: usableActions(options, { access, actor }),
         assetActions: readActionsOnSingleAssets(options, { access, actor }),

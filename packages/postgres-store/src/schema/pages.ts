@@ -8,7 +8,7 @@ import type {
   JsonObject,
   PageBuildId,
   PageBuildRequest,
-  PageSaveOutcome,
+  PageBuildResult,
   PageId,
   UserId
 } from "@vivd-catalyst/core";
@@ -41,8 +41,8 @@ export const pages = pgTable(
 
 /**
  * One immutable file set. Nothing updates a row: a save inserts a new one with a new id. The
- * owner has no foreign key, because S3-40 adds a second kind of owner; whoever deletes an
- * owner deletes its file sets in the same transaction.
+ * owner is a Page or an asset and has no foreign key; whoever deletes an owner deletes its
+ * file sets in the same transaction.
  */
 export const fileSets = pgTable(
   "file_sets",
@@ -80,12 +80,12 @@ export const pageBuilds = pgTable(
   {
     id: text("id").$type<PageBuildId>().primaryKey(),
     clientInstanceId: text("client_instance_id").$type<ClientInstanceId>().notNull(),
+    // Empty for the build of an asset's files, which belongs to no conversation.
     conversationId: text("conversation_id")
       .$type<ConversationId>()
-      .notNull()
       .references(() => conversations.id, { onDelete: "cascade" }),
     request: jsonb("request").$type<PageBuildRequest>().notNull(),
-    result: jsonb("result").$type<PageSaveOutcome>(),
+    result: jsonb("result").$type<PageBuildResult>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     finishedAt: timestamp("finished_at", { withTimezone: true })
   },

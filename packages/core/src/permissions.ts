@@ -37,6 +37,11 @@ export const ACTIONS = [
   "connection.write",
   "connection.delete",
   "connection.approve",
+  "app.read",
+  "app.write",
+  "app.publish",
+  "app.delete",
+  "app.use",
   "operations.approve",
   "users.manage",
   "usage.view",
@@ -130,13 +135,27 @@ export interface AccessResource {
   workspaceId?: string;
 }
 
+/**
+ * The actions a member of a workspace holds on what that workspace owns, by being a member.
+ * Opening a published App is one: it acts with its viewer's rights and shows nothing more.
+ */
+export const WORKSPACE_MEMBER_ACTIONS = ["app.use"] as const satisfies readonly PlatformAction[];
+
+export type AccessSource = "role" | "legacy" | "legacy_ref" | "grant" | "membership";
+
 export type AccessDecision =
-  | { allowed: true; source: "role" | "legacy" | "legacy_ref" | "grant" }
+  | { allowed: true; source: AccessSource }
   | { allowed: false; reason: "no_grant" | "denied" | "unknown_action" | "holder_inactive" };
 
 export interface PersistedAccess {
   holderActive: boolean;
   grants: PermissionGrant[];
+  /**
+   * The workspaces the holder is a member of. The evaluator reads a membership as the rights
+   * of `WORKSPACE_MEMBER_ACTIONS` on what the workspace owns, so no check of a membership
+   * runs beside it. A service principal is a member of none.
+   */
+  memberWorkspaceIds?: readonly string[];
 }
 
 export interface AccessStore {
@@ -234,7 +253,7 @@ export interface AccessEntry {
   scopeKind: PermissionGrant["scopeKind"];
   scopeId?: string;
   namespace?: string;
-  source: "role" | "legacy" | "legacy_ref" | "grant";
+  source: AccessSource;
 }
 
 /** An actor outside the closed union holds nothing: it is refused before any right is read. */
@@ -297,6 +316,17 @@ export function listAccessEntries(holder: AccessHolder, persisted: PersistedAcce
       scopeKind: "instance",
       source: "legacy_ref"
     });
+  }
+  for (const workspaceId of persisted.memberWorkspaceIds ?? []) {
+    for (const action of WORKSPACE_MEMBER_ACTIONS) {
+      entries.push({
+        action,
+        effect: "allow",
+        scopeKind: "workspace",
+        scopeId: workspaceId,
+        source: "membership"
+      });
+    }
   }
   for (const grant of persisted.grants) {
     // A row of another client instance or of another holder never applies. Rows held through a

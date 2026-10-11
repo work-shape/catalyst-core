@@ -311,7 +311,9 @@ async function checkBatch(
           kind: entry.kind.kind,
           name: entry.name,
           config: toJsonObject(acceptedByName(entry.kind.kind).get(entry.name)),
-          scope: INSTANCE_ASSET_SCOPE
+          scope: INSTANCE_ASSET_SCOPE,
+          // A kind with a published revision moves its draft with a write and nothing else.
+          ...(entry.kind.lifecycle === "draft_published" ? { draft: true as const } : {})
         }
   );
   if (defaultChange) {
@@ -647,6 +649,12 @@ function planItems(options: ChatServerOptions, input: AssetSyncInput): PlannedIt
     });
     if (!kind) {
       return refuse(`Asset kind '${item.kind}' is not registered`);
+    }
+    if (kind.representation === "files") {
+      // Its revision is a set of files that is built and stored per write, which no batch is.
+      return refuse(
+        `A ${kind.kind} holds files: it is written with 'assets.put' and deleted with 'assets.delete', one at a time`
+      );
     }
     if (name === undefined) {
       return refuse("Config asset must have a name");

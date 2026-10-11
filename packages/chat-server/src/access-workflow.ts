@@ -226,7 +226,17 @@ export class AccessWorkflow {
       clientInstanceId: this.options.clientInstanceId,
       holder: { kind: holder.kind, id: holder.id }
     });
-    return { holderActive: persisted.holderActive, items: listAccessEntries(holder, persisted) };
+    // A membership is a source of rights on what a workspace owns. It is listed where a kind
+    // of this instance names such a right, and left out where none does.
+    const kindActions = new Set<string>(
+      this.options.configAssets.kinds.kinds.flatMap((kind) => Object.values(kind.actions))
+    );
+    return {
+      holderActive: persisted.holderActive,
+      items: listAccessEntries(holder, persisted).filter(
+        (entry) => entry.source !== "membership" || kindActions.has(entry.action)
+      )
+    };
   }
 
   async createNamespace(

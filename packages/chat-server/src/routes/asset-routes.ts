@@ -1,5 +1,6 @@
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import { asCollaborationWorkspaceId, type OperationResource } from "@vivd-catalyst/core";
+import { ASSET_PUT_BODY_LIMIT_BYTES } from "../asset-files";
 import { readDefinitionName } from "../asset-kinds/shared";
 import { authorizeAssetPlacement, setAssetAvailability, setAssetDefault } from "../asset-placement";
 import { AssetWorkflow } from "../asset-workflow";
@@ -73,7 +74,26 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     policyTargets: (input) => workflow.policyTargets(input),
     changeClass: "reversible",
     module: ASSET_WRITE_MODULE,
+    bodyLimitBytes: ASSET_PUT_BODY_LIMIT_BYTES,
     execute: (input, context) => workflow.put(context, input)
+  });
+
+  route.operation(apiOperations["assets.publish"], {
+    authorize: (input, { access }) => workflow.authorizePublish(access, input),
+    resource: assetResource,
+    policyTargets: (input) => workflow.policyTargets(input),
+    changeClass: "reversible",
+    module: ASSET_WRITE_MODULE,
+    execute: (input, context) => workflow.drafts.publish(context, input)
+  });
+
+  route.operation(apiOperations["assets.discard_draft"], {
+    authorize: (input, { access }) => workflow.authorizeWrite(access, input),
+    resource: assetResource,
+    policyTargets: (input) => workflow.policyTargets(input),
+    changeClass: "reversible",
+    module: ASSET_WRITE_MODULE,
+    execute: (input, context) => workflow.drafts.discardDraft(context, input)
   });
 
   route.operation(apiOperations["assets.delete"], {

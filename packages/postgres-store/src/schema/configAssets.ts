@@ -20,6 +20,7 @@ import type {
   CollaborationWorkspace,
   ConfigAssetRecord,
   ConfigAssetRevisionRecord,
+  FileSetId,
   JsonObject
 } from "@vivd-catalyst/core";
 import { collaborationWorkspaces } from "./workspaces";
@@ -43,7 +44,11 @@ export const configAssets = pgTable(
     scopeKind: text("scope_kind").$type<AssetScope["kind"]>().notNull().default("instance"),
     scopeId: text("scope_id"),
     status: text("status").$type<ConfigAssetRecord["status"]>().notNull(),
+    // The draft pointer of a `draft_published` kind and the live pointer of every other.
     activeRevisionId: text("active_revision_id").notNull(),
+    // The pointer the users of a `draft_published` kind are served from. Empty before the
+    // first publish, and on every `active` kind.
+    publishedRevisionId: text("published_revision_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
   },
@@ -91,6 +96,9 @@ export const configAssetRevisions = pgTable(
     revision: integer("revision").notNull(),
     operation: text("operation").$type<ConfigAssetRevisionRecord["operation"]>().notNull(),
     config: jsonb("config").$type<JsonObject>(),
+    // The immutable file set of the revision, for a kind whose revisions hold files. No
+    // foreign key: whoever removes an asset removes its file sets in the same transaction.
+    fileSetId: text("file_set_id").$type<FileSetId>(),
     actor: jsonb("actor").$type<AuditActor>(),
     origin: jsonb("origin").$type<ConfigAssetRevisionRecord["origin"]>(),
     globalVersion: bigint("global_version", { mode: "number" }).notNull(),

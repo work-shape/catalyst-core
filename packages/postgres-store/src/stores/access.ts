@@ -34,7 +34,15 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
               .select({
                 // A user whose deletion was requested holds nothing any more.
                 status: sql<string>`case when ${productUsers.deletionRequestedAt} is null
-                  then ${productUsers.status} else 'deleting' end`
+                  then ${productUsers.status} else 'deleting' end`,
+                // The holder's memberships, read with the holder: one index range, and no
+                // statement of its own on a path every call takes.
+                memberWorkspaceIds: sql<string[]>`coalesce((
+                  select array_agg(membership.collaboration_workspace_id)
+                  from collaboration_workspace_memberships membership
+                  where membership.client_instance_id = ${input.clientInstanceId}
+                    and membership.user_id = ${input.holder.id}
+                ), '{}'::text[])`
               })
               .from(productUsers)
               .where(
@@ -45,7 +53,11 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
               )
               .limit(1)
           : db
-              .select({ status: servicePrincipals.status })
+              // A service principal is a member of no workspace.
+              .select({
+                status: servicePrincipals.status,
+                memberWorkspaceIds: sql<string[]>`'{}'::text[]`
+              })
               .from(servicePrincipals)
               .where(
                 and(
@@ -69,7 +81,8 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
         // A holder without a record here was vouched for by the sign-in alone and has no status
         // to read; only a record that says otherwise makes a holder inactive.
         holderActive: holder[0] === undefined || holder[0].status === "active",
-        grants: grantRows.map(mapGrant)
+        grants: grantRows.map(mapGrant),
+        memberWorkspaceIds: holder[0]?.memberWorkspaceIds ?? []
       };
     },
 

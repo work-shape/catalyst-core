@@ -6,6 +6,7 @@ import type {
 } from "@vivd-catalyst/auth";
 import type {
   AgentRuntime,
+  AssetBuildClient,
   AssetKindRegistry,
   ClientInstanceId,
   ConfigAssetSource,
@@ -131,6 +132,11 @@ export interface ChatServerOptions {
      * Present when the module `apps` is on, which needs it.
      */
     contentKey?: Uint8Array;
+    /**
+     * Builds the files of an asset write. Without one the server queues the build itself, as
+     * a save of a Page does. A test hands in one with a shorter wait.
+     */
+    assetBuilds?: AssetBuildClient;
   };
   /** What the server's own model calls go through, and what tells it what a model can do. */
   modelGateway: SystemModelGateway;

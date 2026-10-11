@@ -50,6 +50,7 @@ export const EVENTS = {
     name: "api_access.service_principals_viewed",
     subject: "api_access"
   },
+  "app.published": { ...LEGACY_AUDIT, name: "app.published", subject: "config_asset" },
   "approval_request.created": {
     ...LEGACY_AUDIT,
     name: "approval_request.created",
@@ -154,6 +155,16 @@ export const EVENTS = {
   "config_asset.deleted": {
     ...LEGACY_AUDIT,
     name: "config_asset.deleted",
+    subject: "config_asset"
+  },
+  "config_asset.draft_discarded": {
+    ...LEGACY_AUDIT,
+    name: "config_asset.draft_discarded",
+    subject: "config_asset"
+  },
+  "config_asset.published": {
+    ...LEGACY_AUDIT,
+    name: "config_asset.published",
     subject: "config_asset"
   },
   "config_asset.reverted": {
