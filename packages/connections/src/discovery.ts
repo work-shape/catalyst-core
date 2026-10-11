@@ -27,9 +27,9 @@ import { compileJsonSchema } from "./json-schema";
 // by the accepted list and its fingerprint in `catalog.ts`, which this file only calls.
 
 /**
- * How long one discovery may take, from opening the context to the type's answer. A type
- * bounds its own listing below this. After it the discovery fails with `upstream_timeout`
- * and the stored catalog stays.
+ * How long one discovery may take: opening the context, the type's answer, and bounding,
+ * compiling and fingerprinting what was answered. A type bounds its own listing below this.
+ * After it the discovery fails with `upstream_timeout` and the stored catalog stays.
  */
 export const CONNECTION_DISCOVERY_TIMEOUT_MS = 60_000;
 
@@ -41,9 +41,11 @@ export const CONNECTION_DISCOVERY_TIMEOUT_MS = 60_000;
 export const CONNECTION_DISCOVERY_MAX_OPERATIONS = 500;
 
 /**
- * The largest catalog one discovery stores, in bytes of the JSON of its operations. It is the
- * size of the `catalog` value of one `connection_state` row, which every read of an agent's
- * Connection tools loads. An answer over it fails the discovery with `output_invalid`.
+ * The largest answer one discovery takes, in bytes of the JSON of its operations, counted
+ * over every listed operation before any schema is compiled. It bounds the `catalog` value
+ * of one `connection_state` row, which every read of an agent's Connection tools loads: the
+ * row adds a fingerprint of 64 characters per operation and one per pin, at most 64 KiB more.
+ * An answer over it fails the discovery with `output_invalid`.
  */
 export const CONNECTION_DISCOVERY_MAX_BYTES = 4 * 1024 * 1024;
 
@@ -77,6 +79,8 @@ export interface DiscoverConnectionInput {
   signal: AbortSignal;
   logger?: Logger;
   now?: () => Date;
+  /** Instead of `CONNECTION_DISCOVERY_TIMEOUT_MS`. For tests. */
+  timeoutMs?: number;
 }
 
 /** A resolver for a process without Secret Store keys: it has no credential to hand out. */
@@ -115,13 +119,102 @@ function boundedDescription(description: string): string {
   return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
 }
 
+/** The moment after which a discovery has taken too long, and the signal that says so. */
+interface DiscoveryDeadline {
+  readonly signal: AbortSignal;
+  /** Rejects when the deadline passes or the caller stops the discovery. */
+  readonly passed: Promise<never>;
+  /**
+   * Throws `upstream_timeout` once the deadline passed. It reads the clock, so work that
+   * does not give the timer a turn, such as compiling schemas, is ended by it too.
+   */
+  check(): void;
+  close(): void;
+}
+
+function openDeadline(outer: AbortSignal, timeoutMs: number): DiscoveryDeadline {
+  const controller = new AbortController();
+  const endsAt = performance.now() + timeoutMs;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const onOuterAbort = () => controller.abort();
+  if (outer.aborted) controller.abort();
+  else outer.addEventListener("abort", onOuterAbort, { once: true });
+  const passed = new Promise<never>((_resolve, reject) => {
+    const stop = () => reject(connectionCallError("upstream_timeout"));
+    if (controller.signal.aborted) stop();
+    else controller.signal.addEventListener("abort", stop, { once: true });
+  });
+  passed.catch(() => undefined);
+  return {
+    signal: controller.signal,
+    passed,
+    check() {
+      if (controller.signal.aborted || performance.now() > endsAt) {
+        throw connectionCallError("upstream_timeout");
+      }
+    },
+    close() {
+      clearTimeout(timer);
+      outer.removeEventListener("abort", onOuterAbort);
+      // Whatever the type still has open for this discovery is told to stop.
+      controller.abort();
+    }
+  };
+}
+
 /**
- * The operations of an answer that the catalog takes. One whose name cannot end an operation
- * name, whose text cannot be stored or whose schema the validator refuses is left out and the
- * others stay. Each schema passes the validator's bounds here, before anything fingerprints
- * it. Throws `output_invalid` for an answer over the bound of count or of bytes.
+ * The size of a value as JSON, counted until it passes `budget`: the bytes of its keys and
+ * texts and at least one byte for everything else. It walks without recursion and stops at
+ * the budget, so it costs no more than the budget allows whatever it is handed, and a value
+ * nested too deeply to serialize is measured like any other.
  */
-function boundedOperations(discovered: readonly ConnectorOperationDescriptor[]): {
+function jsonBytesWithin(value: JsonValue, budget: number): number {
+  let bytes = 0;
+  const pending: JsonValue[] = [value];
+  while (pending.length > 0 && bytes <= budget) {
+    const next = pending.pop();
+    if (next === undefined) break;
+    if (typeof next === "string") {
+      bytes += Buffer.byteLength(next, "utf8") + 2;
+    } else if (typeof next !== "object" || next === null) {
+      bytes += 4;
+    } else if (Array.isArray(next)) {
+      bytes += 2;
+      for (const child of next) {
+        bytes += 1;
+        if (bytes > budget) break;
+        pending.push(child);
+      }
+    } else {
+      bytes += 2;
+      for (const key in next) {
+        if (!Object.hasOwn(next, key)) continue;
+        bytes += Buffer.byteLength(key, "utf8") + 4;
+        if (bytes > budget) break;
+        const child = next[key];
+        if (child !== undefined) pending.push(child);
+      }
+    }
+  }
+  return bytes;
+}
+
+/**
+ * The operations of an answer that the catalog takes. The order is fixed: first the count,
+ * then the size of each operation against what is left of the bound of bytes, and only then
+ * is a schema handed to the validator, which bounds and compiles it. So nothing is compiled
+ * or fingerprinted of an answer that is over a bound, and an answer over the bound of count
+ * or of bytes throws `output_invalid` whatever its schemas are. An operation whose name
+ * cannot end an operation name, whose text cannot be stored or whose schema the validator
+ * refuses is left out and the others stay. The deadline is asked before each operation.
+ *
+ * This bounds what is processed and stored. The answer is in memory when it arrives here:
+ * bounding what is received from the outside system is the Connector type's transport.
+ */
+function boundedOperations(
+  discovered: readonly ConnectorOperationDescriptor[],
+  deadline: DiscoveryDeadline
+): {
   operations: ConnectorOperationDescriptor[];
   leftOut: number;
 } {
@@ -132,30 +225,32 @@ function boundedOperations(discovered: readonly ConnectorOperationDescriptor[]):
   const names = new Set<string>();
   let bytes = 0;
   for (const descriptor of discovered) {
+    deadline.check();
     const { name, inputSchema, outputSchema, proposedEffect } = descriptor;
+    const description = boundedDescription(descriptor.description);
+    for (const part of [name, description, inputSchema, outputSchema]) {
+      if (part === undefined) continue;
+      bytes += jsonBytesWithin(part, CONNECTION_DISCOVERY_MAX_BYTES - bytes);
+      if (bytes > CONNECTION_DISCOVERY_MAX_BYTES) throw connectionCallError("output_invalid");
+    }
     if (
       name.length > CONNECTION_OPERATION_NAME_MAX_LENGTH ||
       !CONNECTION_OPERATION_NAME_PATTERN.test(name) ||
       names.has(name) ||
+      !storableText(description) ||
       !checkable(inputSchema) ||
       (outputSchema !== undefined && !checkable(outputSchema))
     ) {
       continue;
     }
-    const description = boundedDescription(descriptor.description);
-    if (!storableText(description)) continue;
-    const operation: ConnectorOperationDescriptor = {
+    names.add(name);
+    operations.push({
       name,
       description,
       inputSchema,
       ...(outputSchema === undefined ? {} : { outputSchema }),
       proposedEffect
-    };
-    // Both schemas are within the validator's bounds, so this serializes without surprise.
-    bytes += Buffer.byteLength(JSON.stringify(operation), "utf8");
-    if (bytes > CONNECTION_DISCOVERY_MAX_BYTES) throw connectionCallError("output_invalid");
-    names.add(name);
-    operations.push(operation);
+    });
   }
   return { operations, leftOut: discovered.length - operations.length };
 }
@@ -180,49 +275,33 @@ function healthOfFailure(
 
 /**
  * Asks the type, under the deadline and the caller's signal. A type that ignores the signal
- * does not hold the discovery open: the wait ends and its late answer is dropped.
+ * does not hold the discovery open: the wait ends and its late answer is dropped. What such
+ * a type still holds open or in memory after that is the type's to bound.
  */
 async function discoverOperations(
   input: DiscoverConnectionInput,
   connection: StoredConnection,
   discover: NonNullable<NonNullable<StoredConnection["type"]>["discover"]>,
-  type: NonNullable<StoredConnection["type"]>
+  type: NonNullable<StoredConnection["type"]>,
+  deadline: DiscoveryDeadline
 ): Promise<readonly ConnectorOperationDescriptor[]> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), CONNECTION_DISCOVERY_TIMEOUT_MS);
-  const onOuterAbort = () => controller.abort();
-  if (input.signal.aborted) controller.abort();
-  else input.signal.addEventListener("abort", onOuterAbort, { once: true });
-  const aborted = new Promise<never>((_resolve, reject) => {
-    const stop = () => reject(connectionCallError("upstream_timeout"));
-    if (controller.signal.aborted) stop();
-    else controller.signal.addEventListener("abort", stop, { once: true });
+  // The one way to a context: settings, then egress, then the credential.
+  const opening = openConnectorContext({
+    type,
+    connection: {
+      id: connection.assetId,
+      revision: connection.revision,
+      config: connection.config
+    },
+    egress: input.egress,
+    credentials: input.credentials ?? NO_CREDENTIALS,
+    signal: deadline.signal
   });
-  aborted.catch(() => undefined);
-  try {
-    // The one way to a context: settings, then egress, then the credential.
-    const opening = openConnectorContext({
-      type,
-      connection: {
-        id: connection.assetId,
-        revision: connection.revision,
-        config: connection.config
-      },
-      egress: input.egress,
-      credentials: input.credentials ?? NO_CREDENTIALS,
-      signal: controller.signal
-    });
-    opening.catch(() => undefined);
-    const context = await Promise.race([opening, aborted]);
-    const discovering = discover(context);
-    discovering.catch(() => undefined);
-    return await Promise.race([discovering, aborted]);
-  } finally {
-    clearTimeout(timer);
-    input.signal.removeEventListener("abort", onOuterAbort);
-    // Whatever the type still has open for this discovery is told to stop.
-    controller.abort();
-  }
+  opening.catch(() => undefined);
+  const context = await Promise.race([opening, deadline.passed]);
+  const discovering = discover(context);
+  discovering.catch(() => undefined);
+  return await Promise.race([discovering, deadline.passed]);
 }
 
 /**
@@ -242,9 +321,13 @@ export async function discoverConnection(
     return { status: "skipped" };
   }
   const discover = type.discover.bind(type);
+  // One deadline for the whole discovery: the wait for the answer, and bounding, compiling
+  // and fingerprinting it.
+  const deadline = openDeadline(input.signal, input.timeoutMs ?? CONNECTION_DISCOVERY_TIMEOUT_MS);
   try {
     const { operations, leftOut } = boundedOperations(
-      await discoverOperations(input, connection, discover, type)
+      await discoverOperations(input, connection, discover, type, deadline),
+      deadline
     );
     const catalog = buildConnectionCatalog({
       discovered: operations,
@@ -252,6 +335,7 @@ export async function discoverConnection(
       previous: connection.catalog,
       now: (input.now?.() ?? new Date()).toISOString()
     });
+    deadline.check();
     // A discovery that listed its tools reached the system with the credential.
     await stores.connections.putConnectionState({
       clientInstanceId,
@@ -286,5 +370,7 @@ export async function discoverConnection(
       lastErrorCode: reason ?? CONNECTION_DISCOVERY_FAILED_CODE
     });
     return { status: "failed", ...(reason === undefined ? {} : { reason }) };
+  } finally {
+    deadline.close();
   }
 }

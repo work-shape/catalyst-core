@@ -186,7 +186,8 @@ const auditEvents = async (instance: TestInstance) =>
 /** Discovers through the parts of an assembled process, as the job does. */
 async function discoverDirectly(
   w: ReturnType<typeof world>,
-  signal = new AbortController().signal
+  signal = new AbortController().signal,
+  further: Pick<Parameters<typeof discoverConnection>[0], "timeoutMs"> = {}
 ) {
   const execution = await createTestInstance({ execution: w.input() });
   try {
@@ -198,7 +199,8 @@ async function discoverDirectly(
       connectorTypes: connections.connectorTypes,
       egress: connections.egress,
       credentials: connections.credentials,
-      signal
+      signal,
+      ...further
     });
   } finally {
     await execution.close();
@@ -511,5 +513,52 @@ describe("what a discovery takes from an outside system", () => {
     expect(after.catalog).toEqual(before.catalog);
     expect(after.state).toMatchObject({ lastErrorCode: "output_invalid" });
     expect(await statuses(instance)).toEqual({ lookup: "ready", list: "ready" });
+  });
+
+  // Fails without the change: a schema was compiled, and left out where it did not compile,
+  // before the bytes of the answer were counted. Such an answer was stored as an empty catalog.
+  it("counts the bytes of an answer before it compiles a schema of it", async () => {
+    const w = world();
+    const instance = await w.start();
+    await runJobs(instance);
+    const before = await storedState(instance);
+
+    const uncompilable = {
+      $schema: "https://example.test/own-dialect",
+      description: "s".repeat(240 * 1024)
+    };
+    w.connector.discover = () =>
+      Promise.resolve(
+        Array.from({ length: 20 }, (_unused, index) =>
+          listedOperation(`heavy_${index}`, { inputSchema: uncompilable })
+        )
+      );
+    expect(await discoverDirectly(w)).toEqual({ status: "failed", reason: "output_invalid" });
+    expect((await storedState(instance)).catalog).toEqual(before.catalog);
+  });
+
+  // Fails without the change: the deadline ended with the type's answer, so an answer that
+  // arrived in time was worked on for as long as it took.
+  it("ends under its deadline while it works on an answer that arrived in time", async () => {
+    const w = world();
+    const instance = await w.start();
+    await runJobs(instance);
+    const before = await storedState(instance);
+
+    const slow = (name: string): ConnectorOperationDescriptor => ({
+      ...listedOperation(name),
+      // Reading the operation takes real time, as compiling a large schema does.
+      get description() {
+        const until = performance.now() + 700;
+        while (performance.now() < until);
+        return `Reads ${name}.`;
+      }
+    });
+    w.connector.discover = () => Promise.resolve([slow("lookup"), slow("list"), slow("third")]);
+    expect(await discoverDirectly(w, undefined, { timeoutMs: 1_000 })).toEqual({
+      status: "failed",
+      reason: "upstream_timeout"
+    });
+    expect((await storedState(instance)).catalog).toEqual(before.catalog);
   });
 });
