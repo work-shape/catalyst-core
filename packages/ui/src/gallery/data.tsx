@@ -2,6 +2,7 @@ import { Ellipsis, FileText, Search, SearchX } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../actions/button";
 import { IconButton } from "../actions/icon-button";
+import { CodeBlock } from "../data/code-block";
 import { FilterBar } from "../data/filter-bar";
 import { KeyValue, KeyValueList, type KeyValueLayout } from "../data/key-value";
 import { List, ListRow, type ListRowSize } from "../data/list-row";
@@ -23,6 +24,23 @@ import { EmptyState } from "../feedback/empty-state";
 import { Avatar } from "../status/avatar";
 import { chartGalleryEntry } from "./chart";
 import type { GalleryText } from "./text";
+
+/** A file as an agent writes it: long enough to scroll, with a line wider than the box. */
+const codeSample = [
+  'import { Chart, Table } from "@work-shape/catalyst-app-kit";',
+  "",
+  "export function Offers({ rows }: { rows: Offer[] }) {",
+  "  const total = rows.reduce((sum, row) => sum + row.price, 0);",
+  "  return (",
+  "    <section>",
+  '      <Chart type="bar" data={{ rows, category: "supplier", series: [{ field: "price", label: "Price" }] }} />',
+  "      <Table>{rows.map(renderRow)}</Table>",
+  "      <p>{total}</p>",
+  "    </section>",
+  "  );",
+  "}",
+  ""
+].join("\n");
 
 const rowSizes: readonly ListRowSize[] = ["default", "compact"];
 const keyValueLayouts: readonly KeyValueLayout[] = ["inline", "stacked"];
@@ -375,6 +393,20 @@ export const dataGallery: GalleryGroup = {
               </KeyValueList>
             </Samples>
           ))}
+        </div>
+      )
+    },
+    {
+      name: "CodeBlock",
+      components: ["CodeBlock"],
+      render: (text) => (
+        <div className="grid items-start gap-6 sm:grid-cols-2">
+          <Samples label={text.codeWhole}>
+            <CodeBlock className="w-full" label={text.codeFileName} code={codeSample} />
+          </Samples>
+          <Samples label={text.codeScrolling}>
+            <CodeBlock className="max-h-32 w-full" label={text.codeFileName} code={codeSample} />
+          </Samples>
         </div>
       )
     },

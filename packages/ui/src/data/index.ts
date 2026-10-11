@@ -9,6 +9,7 @@ export {
   type ChartSeries
 } from "./chart-data";
 export type { ChartType } from "./chart-engine";
+export { CodeBlock, type CodeBlockProps } from "./code-block";
 export { FilterBar, type FilterBarProps } from "./filter-bar";
 export {
   KeyValue,

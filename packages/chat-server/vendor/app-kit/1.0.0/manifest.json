@@ -23,13 +23,13 @@
     },
     {
       "file": "ui.css",
-      "bytes": 50421,
-      "sha256": "12822762ac678bf79fc3a635b3a72b381739753d19f8d61ce59e82ba3a0f4491"
+      "bytes": 52339,
+      "sha256": "fdae4fdef1ed9ac276cac572b757dfe16c9e2625176d4162d1b42d7b87f0fdca"
     },
     {
       "file": "ui.js",
-      "bytes": 237795,
-      "sha256": "e8788d33deea52d06aa2b69a86e7d19efa8804ee658145a2b3c020f77920829f"
+      "bytes": 238826,
+      "sha256": "ff8bf00913c4395c06cfa55c9f5f236f04490f4d14c7576d154a437da745179f"
     }
   ],
   "libraries": [

@@ -147,6 +147,9 @@ export interface LayoutGalleryText {
   keyPromptValue: string;
   keyInline: string;
   keyStacked: string;
+  codeFileName: string;
+  codeWhole: string;
+  codeScrolling: string;
   countPrimary: string;
   countMuted: string;
   countDot: string;
@@ -302,6 +305,9 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
       "Compare the three offers for the roof renovation, list what each one leaves out, and say which one you would take and why. Keep the answer short enough to read on a phone, name the page of each offer you quote from, and flag every price that is not fixed. If an offer misses the scaffolding, say so first.",
     keyInline: "Inline",
     keyStacked: "Stacked",
+    codeFileName: "src/routes/index.tsx",
+    codeWhole: "Whole file",
+    codeScrolling: "In a low box",
     countPrimary: "Needs you",
     countMuted: "Plain count",
     countDot: "Dot"
@@ -455,6 +461,9 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
       "Vergleiche die drei Angebote für die Dachsanierung, liste auf, was jedes auslässt, und sag, welches du nehmen würdest und warum. Halte die Antwort so kurz, dass sie auf einem Telefon lesbar ist, nenne die Seite jedes Angebots, aus dem du zitierst, und markiere jeden Preis, der nicht fest ist. Wenn einem Angebot das Gerüst fehlt, sag das zuerst.",
     keyInline: "Nebeneinander",
     keyStacked: "Gestapelt",
+    codeFileName: "src/routes/index.tsx",
+    codeWhole: "Ganze Datei",
+    codeScrolling: "In einem niedrigen Kasten",
     countPrimary: "Braucht dich",
     countMuted: "Einfache Anzahl",
     countDot: "Punkt"
