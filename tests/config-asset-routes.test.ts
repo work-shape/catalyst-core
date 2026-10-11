@@ -899,9 +899,10 @@ describe("config asset admin routes", () => {
     });
     const pushedDefault = await release(fixture.server, token, { defaultAgentName: "kai" });
     expect(pushedDefault.statusCode).toBe(422);
+    // The one availability change that was made moved the version; no refused call did.
     expect(
       (await request(fixture.server, token, "config_assets.get_overview", {})).json()
-    ).toMatchObject({ version: 1, defaultAgentName: "assistant" });
+    ).toMatchObject({ version: 2, defaultAgentName: "assistant" });
 
     // `all` clears the selection.
     const reopened = await setKai({
@@ -990,7 +991,7 @@ describe("config asset admin routes", () => {
 
     // A push that only adds an agent keeps the default.
     const added = await push({ agents: [agentConfig("Open", { name: "open" })] });
-    expect(added.json()).toMatchObject({ version: 2 });
+    expect(added.json()).toMatchObject({ version: 3 });
     expect(added.json()).not.toHaveProperty("hiddenAgentNames");
 
     const renamed = await push({
@@ -998,7 +999,7 @@ describe("config asset admin routes", () => {
       deleteAssets: [{ kind: "agent", name: "kai" }]
     });
     expect(renamed.statusCode).toBe(200);
-    expect(renamed.json()).toMatchObject({ version: 3, hiddenAgentNames: ["kai-tax"] });
+    expect(renamed.json()).toMatchObject({ version: 4, hiddenAgentNames: ["kai-tax"] });
     const availability = await fixture.store.configAssets.listAgentAvailability({
       clientInstanceId: fixture.clientInstanceId
     });
@@ -1022,7 +1023,7 @@ describe("config asset admin routes", () => {
       agents: [agentConfig("KAI", { name: "kai-law" })],
       deleteAssets: [{ kind: "agent", name: "kai-tax" }]
     });
-    expect(pruned.json()).toMatchObject({ version: 4, hiddenAgentNames: ["kai-law"] });
+    expect(pruned.json()).toMatchObject({ version: 6, hiddenAgentNames: ["kai-law"] });
   });
 
   it("requires the release right for a sync that names no Namespace", async () => {

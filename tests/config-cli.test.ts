@@ -773,7 +773,7 @@ skills:
 
     // Deleting the old name and adding the new one in one push is a rename.
     const hidden = await push("--prune");
-    expect(hidden).toContain("Pushed 2 agents, 0 skills, version 2.");
+    expect(hidden).toContain("Pushed 2 agents, 0 skills, version 3.");
     expect(hidden).toContain(
       "Hidden in every workspace until an instance admin sets their availability:\n  agent:kai-tax\n"
     );

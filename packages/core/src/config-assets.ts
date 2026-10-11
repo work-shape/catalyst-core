@@ -202,7 +202,10 @@ export interface ConfigAssetStore {
     /** Only this agent's record, for a read of one agent that must not load every other. */
     agentName?: string;
   }): Promise<Map<string, AgentAvailability>>;
-  /** Rejects hiding the instance default agent, which must stay `all`. */
+  /**
+   * Rejects hiding the instance default agent, which must stay `all`. Moves the version of the
+   * asset set in the same transaction, as every other change of what a run sees of it does.
+   */
   setAgentAvailability(input: {
     clientInstanceId: ClientInstanceId;
     agentName: string;

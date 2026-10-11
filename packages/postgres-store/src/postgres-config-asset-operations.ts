@@ -520,7 +520,8 @@ export async function setAgentAvailability(
   input: Parameters<ConfigAssetStore["setAgentAvailability"]>[0]
 ): Promise<AgentAvailability> {
   return db.transaction(async (tx) => {
-    // Serializes with default-agent changes, which lock the same row.
+    // Serializes with default-agent changes, which lock the same row. An active asset was
+    // written through `applyConfigAssetMutations`, which creates the row, so it is there.
     const [state] = await tx
       .select()
       .from(configAssetState)
@@ -572,6 +573,14 @@ export async function setAgentAvailability(
           collaborationWorkspaceId
         }))
       );
+    }
+    // Who is offered an asset is part of the asset set as a run sees it, so the set's version
+    // moves with it: whatever keeps the set by its version reads the change with the next run.
+    if (state) {
+      await tx
+        .update(configAssetState)
+        .set({ version: state.version + 1, updatedAt: now })
+        .where(eq(configAssetState.clientInstanceId, input.clientInstanceId));
     }
     return { ...input.availability, collaborationWorkspaceIds };
   });

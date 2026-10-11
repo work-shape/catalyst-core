@@ -693,12 +693,20 @@ function runConfigAssetStoreSuite(
         (await store.configAssets.listAgentAvailability({ clientInstanceId })).get("assistant")
           ?.mode
       ).toBe("all");
+      // A refused change leaves the version of the set where it was.
+      await expect(
+        store.configAssets.getConfigAssetState({ clientInstanceId })
+      ).resolves.toMatchObject({ version: 1 });
 
+      // A change of who is offered an asset moves the version of the set, as a write does.
       await store.configAssets.setAgentAvailability({
         clientInstanceId,
         agentName: "restricted",
         availability: restricted
       });
+      await expect(
+        store.configAssets.getConfigAssetState({ clientInstanceId })
+      ).resolves.toMatchObject({ version: 2 });
       await expect(
         store.configAssets.applyConfigAssetMutations({
           clientInstanceId,
@@ -709,7 +717,7 @@ function runConfigAssetStoreSuite(
         message: "Default agent 'restricted' must be available in all workspaces"
       });
       await expect(store.configAssets.getConfigAssetState({ clientInstanceId })).resolves.toEqual({
-        version: 1,
+        version: 2,
         defaultAgentName: "assistant"
       });
     });
