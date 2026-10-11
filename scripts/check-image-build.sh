@@ -12,6 +12,9 @@
 # The two worker images add a Docker client and system packages to the same two build stages.
 # The runner image, in which commands and Page builds run, is built too: it installs
 # `catalyst-page-build` from this repository and fails to build when the command does not run.
+#
+# With RUNNER_IMAGE_TAG set, the runner image is kept under that tag in the local engine, for
+# the tests that run commands in it. Whoever sets it removes the image.
 set -euo pipefail
 
 platform_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -64,6 +67,10 @@ awk '
 
 build() {
   local target="$1"
+  local output=(--output type=cacheonly)
+  if [[ "$target" == "workspace-command-runner" && -n "${RUNNER_IMAGE_TAG:-}" ]]; then
+    output=(--tag "$RUNNER_IMAGE_TAG" --load)
+  fi
   echo "==> Build the $target image of $client_package"
   docker buildx build \
     --file "$workspace/platform/docker/vivd-client.Dockerfile" \
@@ -76,7 +83,7 @@ build() {
     --build-arg "NGINX_CONFIG_PATH=platform/docker/nginx-spa.conf" \
     --build-arg "VITE_CHAT_API_URL=" \
     --build-arg "VITE_CHAT_API_PORT=" \
-    --output type=cacheonly \
+    "${output[@]}" \
     "$workspace"
 }
 

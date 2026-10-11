@@ -62,14 +62,59 @@ jobs:
   # workspace, where only the client and what it depends on is installed. A package that uses
   # something only this repository's root declares passes `pnpm check` and fails here.
   # Locally it is `pnpm check:images`.
+  #
+  # The runner image it builds is kept, and the tests that need a Docker engine and that image
+  # run against it: a command and a Page build in the container are not root, and the worker
+  # reads and removes what they wrote. They run twice. As the runner's own user, a worker that
+  # is not root runs commands as itself. Under sudo the worker is root, as in a deployment: it
+  # gives the workspace to the runner's fixed user and commands run as that user.
   images:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: public.ecr.aws/docker/library/postgres:17.6
+        env:
+          POSTGRES_USER: catalyst
+          POSTGRES_PASSWORD: local-check
+          POSTGRES_DB: catalyst_test
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U catalyst -d catalyst_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      POSTGRES_STORE_TEST_DATABASE_URL: postgresql://catalyst:local-check@localhost:5432/catalyst_test
+      RUNNER_IMAGE_TAG: catalyst-runner-under-test:${{ github.run_id }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
       - run: bash scripts/check-image-build.sh
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Commands in the runner image, worker not root
+        timeout-minutes: 5
+        env:
+          CATALYST_RUNNER_IMAGE: ${{ env.RUNNER_IMAGE_TAG }}
+          CATALYST_PAGE_BUILD_RUNNER_IMAGE: ${{ env.RUNNER_IMAGE_TAG }}
+        run: >-
+          pnpm exec vitest run
+          tests/docker-workspace-command-runner.test.ts tests/page-build-sandbox.test.ts
+          -t "in the runner image|gives the workspace"
+      - name: Commands in the runner image, worker root
+        timeout-minutes: 5
+        run: >-
+          sudo env "PATH=$PATH"
+          "POSTGRES_STORE_TEST_DATABASE_URL=$POSTGRES_STORE_TEST_DATABASE_URL"
+          "CATALYST_RUNNER_IMAGE=$RUNNER_IMAGE_TAG"
+          "CATALYST_PAGE_BUILD_RUNNER_IMAGE=$RUNNER_IMAGE_TAG"
+          pnpm exec vitest run
+          tests/docker-workspace-command-runner.test.ts tests/page-build-sandbox.test.ts
+          -t "in the runner image|gives the workspace"
   # The whole browser suite, beside the job above. It is not part of `pnpm check`, because it
   # needs a browser and ports of its own; locally it is `pnpm test:e2e`.
   browser:
