@@ -8,7 +8,7 @@ import {
 import { ArrowDown, CircleAlert, Lock } from "lucide-react";
 import { useLayoutEffect, useMemo, useRef, type RefObject } from "react";
 import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
-import { cn } from "@vivd-catalyst/ui";
+import { Banner, cn } from "@vivd-catalyst/ui";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
 import {
   agentChipDisplayFor,
@@ -219,13 +219,10 @@ export function AssistantThread({
             >
               <div ref={composerRef} className="relative z-10">
                 {notice ? (
-                  <div
-                    role="alert"
-                    className="mb-2 inline-flex w-fit max-w-full items-center gap-2 rounded-md border border-amber-300/70 bg-amber-50 px-3 py-2 text-sm text-amber-900 shadow-sm"
-                  >
-                    <CircleAlert size={17} className="shrink-0" aria-hidden="true" />
-                    <span>{notice}</span>
-                  </div>
+                  // Something went wrong with what was sent, so it is announced at once.
+                  <Banner tone="warning" role="alert" className="mb-2 w-fit max-w-full">
+                    {notice}
+                  </Banner>
                 ) : null}
                 {newConversationPrivate ? (
                   <p

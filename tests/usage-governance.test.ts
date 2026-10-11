@@ -6,6 +6,8 @@ import {
   asAgentRunId,
   asClientInstanceId,
   asConversationId,
+  isAppError,
+  runFailureCodeOf,
   type UsageRateCardConfig
 } from "@vivd-catalyst/core";
 
@@ -281,13 +283,17 @@ describe("model usage governance", () => {
   it("refuses a model without a price while a spend budget is set", async () => {
     const { governance, clientInstanceId } = await createGovernance({ dailySpendLimit: 50 });
 
-    await expect(
-      governance.admitModelCall({ ...admission(clientInstanceId), model: "gpt-unpriced" })
-    ).rejects.toMatchObject({
+    const refusal = await governance
+      .admitModelCall({ ...admission(clientInstanceId), model: "gpt-unpriced" })
+      .catch((error: unknown) => error);
+
+    expect(refusal).toMatchObject({
       code: "FORBIDDEN",
       message:
         "The model has no price on the rate card; the spend budget cannot be evaluated safely"
     });
+    // The run it ends carries a code of its own, which a client words for its reader.
+    expect(isAppError(refusal) && runFailureCodeOf(refusal)).toBe("MODEL_NOT_PRICED");
   });
 
   // Fails without the change: config validation asked no price of a deterministic provider,

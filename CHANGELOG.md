@@ -1316,6 +1316,13 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 - An open tool call in the work history shows an output that is only an error as wrapped text, so the whole sentence is readable: what happened, whether trying again helps and who can act. It was one line of JSON in a code box, cut at the right edge. The id of a tool call is no longer written into the page.
 
+- **Chat:** the message above the composer after a failed or refused reply is the library's
+  warning banner and follows the theme. It was a fixed pale yellow box with dark red text, which
+  glared on the dark page. A run that is refused because its model has no price on the customer
+  rate card now fails with the code `MODEL_NOT_PRICED` (it was `FORBIDDEN`; the message is
+  unchanged), and the chat words it for its reader in English and German: someone with
+  `usage.view` reads that the operator adds the price under `usage.costs` in release config,
+  anyone else reads to choose another model or ask an administrator.
 - **Connections:** a Connection whose host is on the egress list and does not resolve, as with
   a stopped service or a resolver that is down, no longer reads as refused by the list. A call
   answers `connection_unavailable` with "the host <host>:<port> did not resolve to an address"

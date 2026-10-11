@@ -1,5 +1,6 @@
 import {
   AppError,
+  runFailureCodeOf,
   type AgentRunFailureCategory,
   type AgentRunId,
   type AgentRunStatus,
@@ -34,7 +35,7 @@ export interface RunStateReasoningSummary {
 export function toRunFailureError(error: unknown): RunFailureError {
   const appError = error instanceof AppError ? error : undefined;
   return {
-    code: appError?.code ?? "INTERNAL",
+    code: appError ? runFailureCodeOf(appError) : "INTERNAL",
     message: appError && appError.code !== "INTERNAL" ? appError.message : "Agent run failed",
     category: categorizeRunFailure(error)
   };

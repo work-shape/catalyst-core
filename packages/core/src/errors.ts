@@ -71,6 +71,34 @@ export function isModelUsageLimitReached(error: unknown): error is ModelUsageLim
   return error instanceof ModelUsageLimitReachedError;
 }
 
+/**
+ * The code a run fails with when its model has no price on the customer rate card while a spend
+ * budget is set. A client reads it to say what to do in the reader's language.
+ */
+export const MODEL_NOT_PRICED_CODE = "MODEL_NOT_PRICED";
+
+/**
+ * A model call refused before it was sent because nothing bounds what it costs: a spend budget
+ * is set and the rate card has no price for the model.
+ */
+export class ModelNotPricedError extends AppError {
+  constructor() {
+    super(
+      "FORBIDDEN",
+      "The model has no price on the rate card; the spend budget cannot be evaluated safely",
+      { reason: MODEL_NOT_PRICED_CODE }
+    );
+  }
+}
+
+/**
+ * The code a failed run carries for an error: the error's own, or the narrower one of a
+ * refusal a client words itself.
+ */
+export function runFailureCodeOf(error: AppError): string {
+  return error instanceof ModelNotPricedError ? MODEL_NOT_PRICED_CODE : error.code;
+}
+
 export function isAppError(error: unknown): error is AppError {
   return error instanceof AppError;
 }

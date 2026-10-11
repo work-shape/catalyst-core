@@ -1,6 +1,6 @@
 import {
-  AppError,
   MODEL_CALL_RESERVED_OUTPUT_TOKENS,
+  ModelNotPricedError,
   ModelUsageLimitReachedError,
   type AdmittedModelCall,
   type ClientInstanceId,
@@ -394,10 +394,7 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
       costMicros === undefined &&
       (this.budget.dailySpendLimit || this.budget.monthlySpendLimit)
     ) {
-      throw new AppError(
-        "FORBIDDEN",
-        "The model has no price on the rate card; the spend budget cannot be evaluated safely"
-      );
+      throw new ModelNotPricedError();
     }
     return { tokens, costMicros: costMicros ?? 0 };
   }

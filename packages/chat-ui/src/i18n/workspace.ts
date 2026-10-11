@@ -12,6 +12,10 @@ export const workspace = defineTranslations({
     noConversations: "No conversations yet.",
     openSidebar: "Open sidebar",
     runInterrupted: "The reply was interrupted. Please send your message again.",
+    runModelNotPriced:
+      "This model cannot be used at the moment. Choose another model or ask an administrator.",
+    runModelNotPricedOperator:
+      "This model has no price on the rate card, so its cost cannot be counted against the spend budget. The operator adds the price in the release config under usage.costs. Until then, choose another model.",
     runNotStarted:
       "The reply could not be started because the service is busy or unavailable. Please send your message again.",
     runStopped: "The reply was stopped.",
@@ -40,6 +44,10 @@ export const workspace = defineTranslations({
     noConversations: "Noch keine Unterhaltungen.",
     openSidebar: "Seitenleiste öffnen",
     runInterrupted: "Die Antwort wurde unterbrochen. Bitte sende deine Nachricht erneut.",
+    runModelNotPriced:
+      "Dieses Modell kann gerade nicht verwendet werden. Wähle ein anderes Modell oder wende dich an einen Administrator.",
+    runModelNotPricedOperator:
+      "Für dieses Modell steht kein Preis in der Preisliste, deshalb lassen sich seine Kosten nicht auf das Budget anrechnen. Der Betreiber trägt den Preis in der Release-Konfiguration unter usage.costs ein. Wähle bis dahin ein anderes Modell.",
     runNotStarted:
       "Die Antwort konnte nicht gestartet werden, weil der Dienst ausgelastet oder nicht erreichbar ist. Bitte sende deine Nachricht erneut.",
     runStopped: "Die Antwort wurde gestoppt.",

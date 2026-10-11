@@ -48,6 +48,7 @@ import type { LocalUploadingAttachment } from "../assistant/assistant-composer";
 import type { ChatFileDropzoneController } from "../chat-file-dropzone";
 import type { ChatShellAdministration } from "../settings/page-definition";
 import { useControlPlaneModel, type ControlPlaneModel } from "../control-plane/control-plane-model";
+import { canViewUsageGovernance } from "../control-plane/governance";
 import { clearRunCursors } from "../conversation/run-connection-manager";
 import {
   isLiveRunStatus,
@@ -554,7 +555,8 @@ export function useWorkspaceChatModel({
   const activeLocale = useWorkspaceLocale(config?.localization.locale);
   const controllerTerminalNotice = terminalRunNotice(
     controller.error,
-    createTranslationContext(activeLocale).t
+    createTranslationContext(activeLocale).t,
+    { seesRateCard: canViewUsageGovernance(meQuery.data) }
   );
   const visibleNotice = notice ?? controllerTerminalNotice;
 
@@ -1086,17 +1088,26 @@ const NO_CONVERSATIONS: readonly ConversationListItem[] = [];
 // The code a run is failed with when no worker took it within its queue limit.
 const RUN_NOT_STARTED_CODE = "AGENT_RUN_NOT_STARTED";
 
+// The code a run is failed with when its model has no price on the rate card (`@vivd-catalyst/core`).
+const MODEL_NOT_PRICED_CODE = "MODEL_NOT_PRICED";
+
 /**
  * What the person reads above the composer when a run ended as failed or cancelled. The
  * reason of a cancellation and the message of an interruption are written for operators, so
- * the person reads a sentence in their language instead.
+ * the person reads a sentence in their language instead. A model without a price is named
+ * with its remedy to someone who sees the usage of the instance; anyone else reads what they
+ * can do themselves.
  */
 export function terminalRunNotice(
   error: ConversationControllerState["error"],
-  t: TranslationContextValue["t"]
+  t: TranslationContextValue["t"],
+  viewer: { seesRateCard: boolean } = { seesRateCard: false }
 ): string | undefined {
   if (error?.class === "run_cancelled") return t("runStopped");
   if (error?.class !== "run_failed") return undefined;
+  if (error.code === MODEL_NOT_PRICED_CODE) {
+    return t(viewer.seesRateCard ? "runModelNotPricedOperator" : "runModelNotPriced");
+  }
   if (error.category !== "runtime_interrupted") return error.message;
   return error.code === RUN_NOT_STARTED_CODE ? t("runNotStarted") : t("runInterrupted");
 }

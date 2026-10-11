@@ -171,6 +171,27 @@ describe("the notice of a run that ended as failed or cancelled", () => {
     );
   });
 
+  it("says what to do about a model without a price, to each reader what they can act on", () => {
+    const notPriced = {
+      class: "run_failed" as const,
+      message:
+        "The model has no price on the rate card; the spend budget cannot be evaluated safely",
+      category: "app_error",
+      code: "MODEL_NOT_PRICED"
+    };
+
+    expect(terminalRunNotice(notPriced, en)).toBe(
+      "This model cannot be used at the moment. Choose another model or ask an administrator."
+    );
+    expect(terminalRunNotice(notPriced, de)).toContain("Wähle ein anderes Modell");
+    expect(terminalRunNotice(notPriced, en, { seesRateCard: true })).toContain(
+      "release config under usage.costs"
+    );
+    expect(terminalRunNotice(notPriced, de, { seesRateCard: true })).toContain(
+      "Release-Konfiguration unter usage.costs"
+    );
+  });
+
   it("shows the message of any other failure, and nothing for an error that ended no run", () => {
     const failed = { ...interrupted, message: "Budget is used up", category: "app_error" };
 

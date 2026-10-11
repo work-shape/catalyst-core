@@ -12,6 +12,7 @@ import {
   createPlatformId,
   getSubjectUserId,
   readAssistantFinalMetadata,
+  runFailureCodeOf,
   type AgentRun,
   type AgentRunError,
   type AgentRunId,
@@ -620,7 +621,7 @@ function requireAuthorization(run: AgentRun, user: AuthenticatedUser) {
 function workerFailure(error: unknown): AgentRunError {
   if (error instanceof AppError) {
     return {
-      code: error.code,
+      code: runFailureCodeOf(error),
       message: error.code === "INTERNAL" ? "Agent run failed" : error.message,
       category: error.code === "INTERNAL" ? "internal_error" : "app_error"
     };

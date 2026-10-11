@@ -87,7 +87,7 @@ This has three consequences for how you set limits:
 
 - A call is refused when its reservation no longer fits, so a token or spend limit is reached slightly before it is used up.
 - A token limit at or below the 16,000 reserved output tokens would admit no call. The config is refused with a message that names the limit and the reservation.
-- With a spend budget, a model without a price on the customer rate card is refused. A `deterministic` provider needs no price: it bills nothing, and its calls reserve no cost.
+- With a spend budget, a model without a price on the customer rate card is refused. A `deterministic` provider needs no price: it bills nothing, and its calls reserve no cost. A run that is refused this way fails with the code `MODEL_NOT_PRICED`. The chat tells someone with `usage.view` that the price is missing and where it is set (`usage.costs` in release config), and anyone else to choose another model or ask an administrator. Startup validation asks a price of the models agents start on, of conversation titles and of approval checks; it does not ask one of a model an agent only offers for selection, so give every binding of a billed provider a price.
 
 The limits are protective safeguards, not exact caps. A call reserves a fixed amount at admission and settles its real usage when it ends, and the request sets no maximum for the answer, so a call can use more than it reserved. The most a limit can be passed by is the sum, over the calls in flight when it is reached, of what each used minus what it reserved. The reserved output is the constant `MODEL_CALL_RESERVED_OUTPUT_TOKENS` (16,000) in `@vivd-catalyst/core`. Set a limit with that margin in mind, and keep a provider-side budget as the hard stop.
 
