@@ -135,6 +135,10 @@
      gap to what follows. */
   --layout-page-head-start: 0rem;
   --layout-header-control: 2.5rem;
+  /* The empty space a page that scrolls ends with, below its last element. Page applies it
+     inside the content column, so a page that fits gets no scrollbar from it. Feature code
+     sets no bottom padding of its own. */
+  --layout-page-end: 6rem;
   --layout-sidebar: 17.5rem;
   --layout-sidebar-collapsed: 3rem;
   --layout-subrail: 14rem;
@@ -163,6 +167,7 @@
   :root,
   :host {
     --layout-gutter: 1rem;
+    --layout-page-end: 4rem;
   }
 }
 

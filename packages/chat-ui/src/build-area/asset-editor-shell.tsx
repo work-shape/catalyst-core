@@ -3,6 +3,7 @@ import {
   Banner,
   FormNotice,
   Page,
+  PageFooter,
   PageHeader,
   SaveBar,
   Section,
@@ -260,7 +261,7 @@ export function AssetEditorShell({
           ))}
         </AssetLanguageProvider>
         {notice || general.length > 0 || (canWrite && (dirty || saving)) ? (
-          <div className="sticky bottom-0 z-(--layer-sticky-header) grid gap-2 border-t bg-background py-3">
+          <PageFooter className="grid gap-2 py-3">
             {notice}
             {general.map((message) => (
               <FormNotice key={message} tone="error">
@@ -286,7 +287,7 @@ export function AssetEditorShell({
                 hint={t("configAppliesImmediately")}
               />
             ) : null}
-          </div>
+          </PageFooter>
         ) : null}
       </form>
     </Page>

@@ -7,6 +7,7 @@ import {
   NavGroup,
   NavItem,
   Page,
+  PageFooter,
   PageHeader,
   SaveBar,
   type SaveBarProps,
@@ -474,6 +475,49 @@ describe("navigation, page structure and data components", () => {
     // The default keeps the bar while clean, and a label without a handler draws no button.
     expect(bar({ dirty: false })).toContain("3 changes");
     expect(bar({ onDiscard: undefined })).not.toContain("Discard");
+  });
+});
+
+describe("the space a page ends with", () => {
+  const rail = () =>
+    createElement(SubRail, {
+      mode: "routes",
+      label: "Pages",
+      value: "a",
+      onValueChange: () => undefined,
+      groups: [{ id: "g", items: [{ id: "a", label: "A" }] }]
+    });
+  const head = () => createElement(PageHeader, { variant: "detail", title: "HEAD" });
+
+  it("is the page-end token on the content column of every layout, and nowhere else", () => {
+    // Fails with the three `pb-6` the layouts carried: no layout named the token.
+    const layouts = [
+      createElement(Page, null, "BODY"),
+      createElement(Page, { subRail: rail() }, "BODY"),
+      createElement(Page, { header: head() }, "BODY"),
+      createElement(Page, { header: head(), subRail: rail() }, "BODY")
+    ];
+    for (const layout of layouts) {
+      const markup = render(layout);
+      expect(markup.match(/pb-\(--layout-page-end\)/gu)).toHaveLength(1);
+      // The token is on the element that holds the content, so a rail's row does not end early.
+      expect(markup).toMatch(/class="[^"]*pb-\(--layout-page-end\)[^"]*">BODY</u);
+      expect(markup).not.toMatch(/\bpb-6\b/u);
+    }
+  });
+
+  it("is above a footer that stays at the lower edge", () => {
+    const classes = render(createElement(PageFooter, null, "SAVE"))
+      .match(/data-page-footer="" class="([^"]*)"/u)?.[1]
+      ?.split(" ");
+    expect(classes).toEqual(
+      expect.arrayContaining([
+        "sticky",
+        "bottom-0",
+        "mt-(--layout-page-end)",
+        "-mb-(--layout-page-end)"
+      ])
+    );
   });
 });
 

@@ -182,7 +182,7 @@ export function PageFilesView({
         <nav
           aria-label={t("pages.filesList")}
           className={cn(
-            "min-h-0 overflow-y-auto bg-card p-2 [scrollbar-width:thin] @lg:block @lg:border-r",
+            "min-h-0 overflow-y-auto bg-card p-2 pb-(--layout-page-end) [scrollbar-width:thin] @lg:block @lg:border-r",
             !listShown && "hidden"
           )}
         >

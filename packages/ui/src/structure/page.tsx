@@ -34,6 +34,7 @@ export interface PageProps extends ComponentProps<"div"> {
  * pins at the top edge and the sub-rail directly below it. Where the area says the floating
  * control stands beside the head, the head has no room above it and starts at the top edge.
  *
+ * A page ends with `--layout-page-end` of empty space below its last element.
  * The space under the page belongs to the content column. On the row it would end the rail's
  * room early and push a rail as tall as the scroll area up at the end of the page.
  */
@@ -57,14 +58,19 @@ export function Page({
         {header}
         {subRail === undefined ? (
           <div
-            className={cn("mx-auto w-full min-w-0 px-(--layout-gutter) pb-6", contentWidths[width])}
+            className={cn(
+              "mx-auto w-full min-w-0 px-(--layout-gutter) pb-(--layout-page-end)",
+              contentWidths[width]
+            )}
           >
             {children}
           </div>
         ) : (
           <div className="flex min-w-0 flex-col gap-x-(--layout-gutter) px-(--layout-gutter) @subrail/page:flex-row">
             {subRail}
-            <div className={cn("min-w-0 flex-1 pb-6", contentWidths[width])}>{children}</div>
+            <div className={cn("min-w-0 flex-1 pb-(--layout-page-end)", contentWidths[width])}>
+              {children}
+            </div>
           </div>
         )}
       </div>
@@ -74,7 +80,7 @@ export function Page({
     return (
       <div
         className={cn(
-          "mx-auto w-full min-w-0 px-(--layout-gutter) pt-[calc(var(--layout-page-inset)+var(--spacing)*6)] pb-6",
+          "mx-auto w-full min-w-0 px-(--layout-gutter) pt-[calc(var(--layout-page-inset)+var(--spacing)*6)] pb-(--layout-page-end)",
           contentWidths[width],
           className
         )}
@@ -93,8 +99,28 @@ export function Page({
       {/* The top padding is the sub-rail's pinned position: the rail rests there from the start. */}
       <div className="flex min-w-0 flex-col gap-x-(--layout-gutter) gap-y-2 pt-(--layout-page-inset) @subrail/page:flex-row @subrail/page:pt-[calc(var(--layout-page-inset)+var(--spacing)*6)]">
         {subRail}
-        <div className={cn("min-w-0 flex-1 pb-6", contentWidths[width])}>{children}</div>
+        <div className={cn("min-w-0 flex-1 pb-(--layout-page-end)", contentWidths[width])}>
+          {children}
+        </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * What stays at the lower edge of a scrolling `Page`, inside its content: a save row and the
+ * notices that belong to it. The page's end space is above it, not below: at the end of the
+ * page it rests on the lower edge.
+ */
+export function PageFooter({ className, ...props }: ComponentProps<"div">) {
+  return (
+    <div
+      data-page-footer=""
+      className={cn(
+        "sticky bottom-0 z-(--layer-sticky-header) mt-(--layout-page-end) -mb-(--layout-page-end) border-t bg-background",
+        className
+      )}
+      {...props}
+    />
   );
 }
