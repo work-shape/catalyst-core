@@ -91,20 +91,41 @@ export const operations = defineTranslations({
     "operations.callApprove": "Approve",
     "operations.callDecline": "Decline",
     "operations.callSubject": "{operation} for {actor}",
+    "operations.callHeadlineChanging": "{actor} wants to run a changing action.",
+    "operations.callHeadlineReading": "{actor} wants to run a reading action.",
     "operations.callEffect":
-      "Approving runs this call once, as {actor}. If you decline, nothing runs.",
+      "If you approve, it runs once as {actor}. If you decline, nothing runs.",
+    "operations.callAssetCreateIn":
+      "{actor} wants to create {kind} “{title}” in the Namespace {namespace}.",
+    "operations.callAssetCreate": "{actor} wants to create {kind} “{title}”.",
+    "operations.callAssetChangeIn":
+      "{actor} wants to change {kind} “{title}” in the Namespace {namespace}.",
+    "operations.callAssetChange": "{actor} wants to change {kind} “{title}”.",
+    "operations.callAssetKindSkill": "the skill",
+    "operations.callAssetKindAgent": "the agent",
+    "operations.callAssetKindConnection": "the Connection",
+    "operations.callAssetKindOther": "the asset",
+    "operations.callAssetEffect":
+      "If you approve, it is saved as {actor}. If you decline, nothing changes.",
+    "operations.callWhySkillRule":
+      "Needs a decision because this instance holds new and changed skills for approval.",
+    "operations.callWhy": "Needs a decision before it runs.",
+    "operations.callSkillTitle": "Title",
+    "operations.callSkillDescription": "Description",
+    "operations.callSkillRemovedResources": "Removed references",
+    "operations.callSkillSameText": "The text of the skill stays as it is.",
+    "operations.callSkillBeforeWithheld":
+      "You may not read this skill as it is now, so only the new text is shown and nothing is compared.",
+    "operations.callDetails": "Technical details",
+    "operations.callFullInput": "Full input",
     "operations.callCalledBy": "Called by",
     "operations.callInputs": "Input",
     "operations.callNoInputs": "This call has no input.",
     "operations.callTruncated": "Shortened. The call runs with the full value.",
     "operations.callTruncatedOf":
-      "Shortened: {shown} of {total} characters are shown here. The call runs with the full value, which the full input shows.",
+      "Shortened: {shown} of {total} characters are shown here. The call runs with the full value, which the technical details show.",
     "operations.callHiddenFields":
-      "This call has {total} input fields. The first {shown} are listed here. Open the full input to read all of them before you decide.",
-    "operations.callFullInputOpen": "Show full input",
-    "operations.callFullInputTitle": "Full input",
-    "operations.callFullInputDescription":
-      "Everything {operation} runs with, exactly as the call was frozen.",
+      "This call has {total} input fields. The first {shown} are listed here. Read all of them in the full input under the technical details before you decide.",
     "operations.callInputRemoved":
       "The input was removed when this request ended. The run keeps a hash of it.",
     "operations.callOutcomeQueued": "Approved. The call is being executed.",
@@ -210,20 +231,41 @@ export const operations = defineTranslations({
     "operations.callApprove": "Freigeben",
     "operations.callDecline": "Ablehnen",
     "operations.callSubject": "{operation} für {actor}",
+    "operations.callHeadlineChanging": "{actor} möchte eine ändernde Aktion ausführen.",
+    "operations.callHeadlineReading": "{actor} möchte eine lesende Aktion ausführen.",
     "operations.callEffect":
-      "Mit der Freigabe läuft dieser Aufruf einmal, als {actor}. Wenn du ablehnst, läuft nichts.",
+      "Wenn du freigibst, läuft sie einmal als {actor}. Wenn du ablehnst, läuft nichts.",
+    "operations.callAssetCreateIn":
+      "{actor} möchte {kind} „{title}“ im Namespace {namespace} anlegen.",
+    "operations.callAssetCreate": "{actor} möchte {kind} „{title}“ anlegen.",
+    "operations.callAssetChangeIn":
+      "{actor} möchte {kind} „{title}“ im Namespace {namespace} ändern.",
+    "operations.callAssetChange": "{actor} möchte {kind} „{title}“ ändern.",
+    "operations.callAssetKindSkill": "die Fähigkeit",
+    "operations.callAssetKindAgent": "den Agenten",
+    "operations.callAssetKindConnection": "die Connection",
+    "operations.callAssetKindOther": "das Asset",
+    "operations.callAssetEffect":
+      "Wenn du freigibst, wird das als {actor} gespeichert. Wenn du ablehnst, ändert sich nichts.",
+    "operations.callWhySkillRule":
+      "Braucht eine Entscheidung, weil diese Instanz neue und geänderte Fähigkeiten zur Freigabe vorlegt.",
+    "operations.callWhy": "Braucht eine Entscheidung, bevor es läuft.",
+    "operations.callSkillTitle": "Titel",
+    "operations.callSkillDescription": "Beschreibung",
+    "operations.callSkillRemovedResources": "Entfernte Referenzen",
+    "operations.callSkillSameText": "Der Text der Fähigkeit bleibt, wie er ist.",
+    "operations.callSkillBeforeWithheld":
+      "Du darfst diese Fähigkeit in ihrem jetzigen Stand nicht lesen. Deshalb steht hier nur der neue Text, und nichts wird verglichen.",
+    "operations.callDetails": "Technische Details",
+    "operations.callFullInput": "Vollständige Eingabe",
     "operations.callCalledBy": "Aufgerufen von",
     "operations.callInputs": "Eingabe",
     "operations.callNoInputs": "Dieser Aufruf hat keine Eingabe.",
     "operations.callTruncated": "Gekürzt. Der Aufruf läuft mit dem ganzen Wert.",
     "operations.callTruncatedOf":
-      "Gekürzt: Hier stehen {shown} von {total} Zeichen. Der Aufruf läuft mit dem ganzen Wert, den die vollständige Eingabe zeigt.",
+      "Gekürzt: Hier stehen {shown} von {total} Zeichen. Der Aufruf läuft mit dem ganzen Wert, den die technischen Details zeigen.",
     "operations.callHiddenFields":
-      "Dieser Aufruf hat {total} Eingabefelder. Hier stehen die ersten {shown}. Öffne die vollständige Eingabe und lies alle, bevor du entscheidest.",
-    "operations.callFullInputOpen": "Vollständige Eingabe anzeigen",
-    "operations.callFullInputTitle": "Vollständige Eingabe",
-    "operations.callFullInputDescription":
-      "Alles, womit {operation} läuft, genau so, wie der Aufruf festgehalten wurde.",
+      "Dieser Aufruf hat {total} Eingabefelder. Hier stehen die ersten {shown}. Lies alle in der vollständigen Eingabe unter den technischen Details, bevor du entscheidest.",
     "operations.callInputRemoved":
       "Die Eingabe wurde entfernt, als diese Anfrage endete. Der Lauf behält einen Hash davon.",
     "operations.callOutcomeQueued": "Freigegeben. Der Aufruf wird ausgeführt.",

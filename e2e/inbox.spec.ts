@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { requestWithOrigin } from "./request-with-origin";
+import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import type { Page, Response } from "@playwright/test";
 import { expect, test } from "./test";
 
@@ -273,8 +273,8 @@ test("an agent's tool call waits for approval, is approved in the Inbox, runs on
   await expect(memberPages.getByRole("button").first()).toBeVisible();
   await expect(memberPages.getByRole("button", { name: "Operations", exact: true })).toHaveCount(0);
 
-  // The approver finds the call in the Inbox, with who called, through which agent, and the
-  // input the call is frozen with.
+  // The approver finds the call in the Inbox. The item says in a sentence who wants what and
+  // shows the input the call is frozen with; where it came from is under the technical details.
   const context = await browser.newContext({
     baseURL,
     viewport: { width: 1280, height: 900 }
@@ -286,17 +286,23 @@ test("an agent's tool call waits for approval, is approved in the Inbox, runs on
   const inbox = approverPage.getByRole("region", { name: "Inbox", exact: true });
   const row = inbox.getByTestId("inbox-row").filter({ hasText: TOOL });
   await expect(row).toHaveCount(1);
+  await expect(row).toContainText("Action to approve");
+  await expect(row).toContainText(`E2E Inbox · ${TOOL}`);
   await row.getByRole("button").click();
   await expect(approverPage).toHaveURL(/\/inbox\/[^/]+$/u);
   const call = approverPage.getByTestId("operation-call");
   await expect(call).toBeVisible();
-  await expect(call.locator('[data-field="operation"]')).toContainText(TOOL);
-  await expect(call.locator('[data-field="actor"]')).toContainText("E2E Inbox");
-  await expect(call.locator('[data-field="origin"]')).toContainText(
-    "Agent, through agent Application Assistant"
+  await expect(call.getByTestId("operation-call-headline")).toHaveText(
+    "E2E Inbox wants to run a changing action."
   );
+  await expect(call).toContainText(
+    "If you approve, it runs once as E2E Inbox. If you decline, nothing runs."
+  );
+  await expect(call.getByTestId("operation-call-why")).toHaveText(
+    "Needs a decision before it runs."
+  );
+  await expect(call.locator('[data-field="operation"]')).toContainText(TOOL);
   await expect(call.locator('[data-input-key="text"]')).toContainText(NOTE);
-  await expect(call).toContainText("Approving runs this call once, as E2E Inbox.");
   const runId = await call.getAttribute("data-run-id");
   expect(runId).toBeTruthy();
 
@@ -305,27 +311,35 @@ test("an agent's tool call waits for approval, is approved in the Inbox, runs on
   expect(waiting.ok()).toBe(true);
   expect(await waiting.json()).toMatchObject({ status: "pending_approval", operation: TOOL });
 
-  await shoot(approverPage, "inbox-operation-call", async () => {
-    await expect(approverPage.getByTestId("operation-call")).toBeVisible();
-  });
+  await shoot(
+    approverPage,
+    "inbox-operation-call",
+    async () => {
+      await expect(approverPage.getByTestId("operation-call")).toBeVisible();
+    },
+    [1280, 1440, 390]
+  );
 
-  // The full view shows everything the call runs with, as it was frozen.
-  await approverPage.getByTestId("operation-call-full-input-open").click();
-  const fullInput = approverPage.getByRole("dialog", { name: "Full input" });
-  await expect(fullInput.getByTestId("operation-call-full-input")).toContainText(NOTE);
-  await approverPage.keyboard.press("Escape");
-  await expect(fullInput).toHaveCount(0);
-  // A reload closes the dialog, so each shot opens it again, and the reload below closes the
-  // last one. No Escape here: with no dialog open it would close the request itself.
-  await shoot(approverPage, "inbox-operation-call-full-input", async () => {
-    await approverPage.getByTestId("operation-call-full-input-open").click();
+  // The technical details are closed until asked for. They say where the call came from and
+  // show everything it runs with, as it was frozen.
+  await expect(call.getByTestId("operation-call-full-input")).toHaveCount(0);
+  await call.getByTestId("operation-call-details-open").click();
+  await expect(call.locator('[data-field="origin"]')).toContainText(
+    "Agent, through agent Application Assistant"
+  );
+  await expect(call.getByTestId("operation-call-full-input")).toContainText(NOTE);
+  // A reload closes the fold, so each shot opens it again.
+  await shoot(approverPage, "inbox-operation-call-details", async () => {
+    await approverPage.getByTestId("operation-call-details-open").click();
     await expect(approverPage.getByTestId("operation-call-full-input")).toBeVisible();
   });
 
   // In German the same item.
   await approverPage.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
   await approverPage.reload();
-  await expect(call).toContainText("Mit der Freigabe läuft dieser Aufruf einmal, als E2E Inbox.");
+  await expect(call.getByTestId("operation-call-headline")).toHaveText(
+    "E2E Inbox möchte eine ändernde Aktion ausführen."
+  );
   await expect(approverPage.locator('button[data-decision="approve"]')).toHaveText("Freigeben");
   await expect(approverPage.locator('button[data-decision="reject"]')).toHaveText("Ablehnen");
   await approverPage.evaluate(() => window.localStorage.removeItem("vivd-catalyst:locale"));
@@ -366,7 +380,9 @@ test("an agent's tool call waits for approval, is approved in the Inbox, runs on
   await expect(outcome).toHaveAttribute("data-outcome", "done");
   await expect(outcome).toContainText("Approved and executed.");
   await expect(approverPage.getByTestId("operation-call-input-removed")).toBeVisible();
-  await expect(approverPage.getByTestId("operation-call-full-input-open")).toHaveCount(0);
+  await approverPage.getByTestId("operation-call-details-open").click();
+  await expect(approverPage.locator('[data-field="origin"]')).toBeVisible();
+  await expect(approverPage.getByTestId("operation-call-full-input")).toHaveCount(0);
   await shoot(approverPage, "inbox-operation-call-executed", async () => {
     await expect(outcome).toBeVisible();
   });
@@ -460,24 +476,169 @@ test("an agent's tool call waits for approval, is approved in the Inbox, runs on
   expect(refused.status()).toBe(403);
 });
 
-/** The same view in both languages and both themes, 1280 wide. */
-async function shoot(page: Page, name: string, ready: () => Promise<void>): Promise<void> {
+const HELD_NAMESPACE = "e2ehold-";
+const HELD_SKILL = `${HELD_NAMESPACE}parental-leave`;
+const HELD_TITLE = "Parental leave: frequent questions";
+const heldSkillUrl = `${apiBaseUrl}/api/v1/assets/skill/${HELD_SKILL}`;
+const namespacesUrl = `${apiBaseUrl}/api/v1/instance/access/namespaces`;
+const KEPT_PARAGRAPH = "Ask the HR team for the form.";
+const OLD_PARAGRAPH = "Tell your team lead seven weeks before the leave starts.";
+const NEW_PARAGRAPH = "Tell your team lead and the HR team eight weeks before the leave starts.";
+const heldSkill = (paragraph: string) => ({
+  name: HELD_SKILL,
+  title: HELD_TITLE,
+  description: "Answers the questions people ask before they take parental leave.",
+  content: `# Parental leave\n\n${KEPT_PARAGRAPH}\n\n${paragraph}\n`
+});
+/** The widths the item of a held skill is pictured at: a desk and a phone. */
+const SKILL_SHOT_WIDTHS = [1440, 390];
+
+// Fails without the skill view of a held save: the row named the operation `assets.put`, and
+// the item showed the skill's definition as one escaped line under "Approving runs this call".
+test("a held skill save reads in the Inbox as the skill it creates, then as the paragraph it changes", async ({
+  page
+}) => {
+  test.setTimeout(shotsDir ? 240_000 : 90_000);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await signIn(page, reviewer);
+  const answerOf = (data: object) => requestWithOrigin(page, "put", heldSkillUrl, { data });
+  const openRow = async (heading: string) => {
+    await page.goto("/inbox");
+    const row = page
+      .getByRole("region", { name: "Inbox", exact: true })
+      .getByTestId("inbox-row")
+      .filter({ hasText: heading });
+    await expect(row).toHaveCount(1);
+    await expect(row).toContainText(`E2E Superadmin · ${HELD_NAMESPACE}`);
+    await shoot(
+      page,
+      `inbox-row-${heading.startsWith("New") ? "new-skill" : "skill-change"}`,
+      () => expect(row).toBeVisible(),
+      SKILL_SHOT_WIDTHS
+    );
+    await row.getByRole("button").click();
+    await expect(page).toHaveURL(/\/inbox\/[^/]+$/u);
+  };
+  const call = page.getByTestId("operation-call");
+  const headline = call.getByTestId("operation-call-headline");
+
+  const registered = await requestWithOrigin(page, "post", namespacesUrl, {
+    data: { prefix: HELD_NAMESPACE, displayName: "E2E held skills" }
+  });
+  expect(registered.ok()).toBe(true);
+  try {
+    // The instance holds a skill saved into this Namespace, the superadmin's own too.
+    expect((await answerOf({ config: heldSkill(OLD_PARAGRAPH) })).status()).toBe(202);
+
+    // A new skill: the row names it, and the item shows all of it with its line breaks.
+    await openRow(`New skill: ${HELD_TITLE}`);
+    await expect(headline).toHaveText(
+      `E2E Superadmin wants to create the skill “${HELD_TITLE}” in the Namespace ${HELD_NAMESPACE}.`
+    );
+    await expect(call).toContainText(
+      "If you approve, it is saved as E2E Superadmin. If you decline, nothing changes."
+    );
+    await expect(call.getByTestId("operation-call-why")).toHaveText(
+      "Needs a decision because this instance holds new and changed skills for approval."
+    );
+    const skill = call.getByTestId("operation-call-skill");
+    await expect(skill).toContainText(KEPT_PARAGRAPH);
+    await expect(skill).toContainText(OLD_PARAGRAPH);
+    await expect(call).not.toContainText("\\n");
+    // The operation's name is under the technical details, which are closed.
+    await expect(call).not.toContainText("assets.put");
+    await call.getByTestId("operation-call-details-open").click();
+    await expect(call.locator('[data-field="operation"]')).toHaveText("assets.put");
+    await shoot(page, "inbox-new-skill", () => expect(headline).toBeVisible(), SKILL_SHOT_WIDTHS);
+
+    await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
+    await page.reload();
+    await expect(headline).toHaveText(
+      `E2E Superadmin möchte die Fähigkeit „${HELD_TITLE}“ im Namespace ${HELD_NAMESPACE} anlegen.`
+    );
+    await page.evaluate(() => window.localStorage.removeItem("vivd-catalyst:locale"));
+    await page.reload();
+
+    // Approving saves the skill. A change of one paragraph is then held in the same way.
+    const runId = await call.getAttribute("data-run-id");
+    await page.locator('button[data-decision="approve"]').click();
+    await expect
+      .poll(async () => {
+        const run = await page.request.get(`${apiBaseUrl}/api/v1/operations/runs/${runId}`);
+        return (await run.json()).status;
+      })
+      .toBe("done");
+    const change = await answerOf({
+      config: heldSkill(NEW_PARAGRAPH),
+      expectedRevision: await assetRevision(page, heldSkillUrl)
+    });
+    expect(change.status()).toBe(202);
+
+    // A change: the item shows the paragraph before and after, and not the ones that stay.
+    await openRow(`Skill change: ${HELD_TITLE}`);
+    await expect(headline).toHaveText(
+      `E2E Superadmin wants to change the skill “${HELD_TITLE}” in the Namespace ${HELD_NAMESPACE}.`
+    );
+    await expect(skill).toContainText(OLD_PARAGRAPH);
+    await expect(skill).toContainText(NEW_PARAGRAPH);
+    await expect(skill).not.toContainText(KEPT_PARAGRAPH);
+    await shoot(
+      page,
+      "inbox-skill-change",
+      () => expect(headline).toBeVisible(),
+      SKILL_SHOT_WIDTHS
+    );
+
+    // Declined, nothing changes: the skill keeps its paragraph.
+    await page.locator('button[data-decision="reject"]').click();
+    await expect(page.locator('button[data-decision="reject"]')).toHaveCount(0);
+    const kept: unknown = await (await page.request.get(heldSkillUrl)).json();
+    expect(JSON.stringify(kept)).toContain(OLD_PARAGRAPH);
+  } finally {
+    const found = await page.request.get(heldSkillUrl);
+    if (found.ok()) {
+      await requestWithOrigin(page, "post", `${heldSkillUrl}/delete`, {
+        data: { expectedRevision: await assetRevision(page, heldSkillUrl) }
+      });
+    }
+    await requestWithOrigin(page, "delete", `${namespacesUrl}/${HELD_NAMESPACE}`);
+  }
+});
+
+/**
+ * The same view in both languages and both themes, 1280 wide unless the call names other
+ * widths. The page is left at the size it came with.
+ */
+async function shoot(
+  page: Page,
+  name: string,
+  ready: () => Promise<void>,
+  widths: number[] = [1280]
+): Promise<void> {
   if (!shotsDir) return;
   await mkdir(shotsDir, { recursive: true });
-  for (const locale of ["en", "de"] as const) {
-    for (const theme of ["light", "dark"] as const) {
-      await page.evaluate(
-        ([localeValue, themeValue]) => {
-          window.localStorage.setItem("vivd-catalyst:locale", localeValue);
-          window.localStorage.setItem("vivd-catalyst:theme", themeValue);
-        },
-        [locale, theme] as const
-      );
-      await page.reload();
-      await ready();
-      await page.screenshot({ path: join(shotsDir, `${name}-${theme}-${locale}-1280.png`) });
+  const size = page.viewportSize() ?? { width: 1280, height: 900 };
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: size.height });
+    for (const locale of ["en", "de"] as const) {
+      for (const theme of ["light", "dark"] as const) {
+        await page.evaluate(
+          ([localeValue, themeValue]) => {
+            window.localStorage.setItem("vivd-catalyst:locale", localeValue);
+            window.localStorage.setItem("vivd-catalyst:theme", themeValue);
+          },
+          [locale, theme] as const
+        );
+        await page.reload();
+        await ready();
+        await page.screenshot({
+          path: join(shotsDir, `${name}-${theme}-${locale}-${width}.png`),
+          fullPage: width < 600
+        });
+      }
     }
   }
+  await page.setViewportSize(size);
   await page.evaluate(() => {
     window.localStorage.removeItem("vivd-catalyst:locale");
     window.localStorage.removeItem("vivd-catalyst:theme");

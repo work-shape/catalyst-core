@@ -15,7 +15,17 @@ import {
  * source, so comments, link definitions and raw HTML must stay visible to the reviewer.
  * Renders nothing for a preview it cannot read; the card's summary remains.
  */
-export function SkillChangeBody({ preview }: { preview: unknown }) {
+export function SkillChangeBody({
+  preview,
+  heading = true,
+  expanded = false
+}: {
+  preview: unknown;
+  /** The line that names the skill. Left out where the surroundings already name it. */
+  heading?: boolean;
+  /** Shows a whole new text at once. In a thread it stays one click away. */
+  expanded?: boolean;
+}) {
   const { t } = useTranslation();
   const change = parseSkillChangePreview(preview);
   if (!change) {
@@ -24,27 +34,35 @@ export function SkillChangeBody({ preview }: { preview: unknown }) {
 
   return (
     <div className="grid min-w-0 gap-3">
-      <p className="text-xs text-muted-foreground">
-        {change.isNewSkill
-          ? t("skillChangeNewSkill")
-          : t("skillChangeConcerns", { skill: change.skillTitle })}
-      </p>
-      {change.newSkill ? <NewSkill skill={change.newSkill} /> : null}
+      {heading ? (
+        <p className="text-xs text-muted-foreground">
+          {change.isNewSkill
+            ? t("skillChangeNewSkill")
+            : t("skillChangeConcerns", { skill: change.skillTitle })}
+        </p>
+      ) : null}
+      {change.newSkill ? <NewSkill skill={change.newSkill} expanded={expanded} /> : null}
       {change.changes.map((entry, index) => (
-        <SkillChange key={index} change={entry} />
+        <SkillChange key={index} change={entry} expanded={expanded} />
       ))}
     </div>
   );
 }
 
-function SkillChange({ change }: { change: SkillChangePreviewChange }) {
+function SkillChange({
+  change,
+  expanded
+}: {
+  change: SkillChangePreviewChange;
+  expanded: boolean;
+}) {
   const { t } = useTranslation();
   const resource = change.target === SKILL_ROOT_TARGET ? undefined : change.target;
 
   if (change.type === "new_resource") {
     return (
       <ChangeBlock label={t("skillChangeNewResource")} detail={resource} tone="new">
-        <CollapsedContent>{change.after}</CollapsedContent>
+        <FullContent expanded={expanded}>{change.after}</FullContent>
       </ChangeBlock>
     );
   }
@@ -84,7 +102,7 @@ function SkillChange({ change }: { change: SkillChangePreviewChange }) {
   );
 }
 
-function NewSkill({ skill }: { skill: SkillChangePreviewNewSkill }) {
+function NewSkill({ skill, expanded }: { skill: SkillChangePreviewNewSkill; expanded: boolean }) {
   return (
     <div className="grid min-w-0 gap-2 rounded-md border-l-2 border-primary bg-primary/5 px-3 py-2">
       <div className="grid min-w-0 gap-0.5">
@@ -93,7 +111,7 @@ function NewSkill({ skill }: { skill: SkillChangePreviewNewSkill }) {
           <span className="text-muted-foreground">{skill.description}</span>
         ) : null}
       </div>
-      <CollapsedContent>{skill.content}</CollapsedContent>
+      <FullContent expanded={expanded}>{skill.content}</FullContent>
     </div>
   );
 }
@@ -134,6 +152,14 @@ function SourceText({ children }: { children: string }) {
     <pre className="min-w-0 whitespace-pre-wrap font-mono text-[0.8125rem] leading-5 [overflow-wrap:anywhere]">
       {children}
     </pre>
+  );
+}
+
+function FullContent({ expanded, children }: { expanded: boolean; children: string }) {
+  return expanded ? (
+    <SourceText>{children}</SourceText>
+  ) : (
+    <CollapsedContent>{children}</CollapsedContent>
   );
 }
 

@@ -50,6 +50,33 @@ export function operationCallFullInput(payload: unknown): string | undefined {
   return typeof payload.input === "string" ? payload.input : JSON.stringify(payload.input, null, 2);
 }
 
+/** The kind of asset whose content the item shows. */
+export const SKILL_ASSET_KIND = "skill";
+
+/** The asset a held save writes, as the server describes it while the call waits. */
+export interface OperationCallAsset {
+  kind: string;
+  name: string;
+  title: string;
+  /** The registered prefix the asset's name starts with. */
+  namespace?: string;
+  /** Approving creates the asset. */
+  isNew: boolean;
+  /** A skill's text in the shape `SkillChangeBody` reads. An opened request has it, a row has not. */
+  content?: unknown;
+  /** A skill's description as the call saves it. */
+  description?: string;
+  /** The stored title and description, each where the call changes it. */
+  previous: { title?: string; description?: string };
+  /** The resources the stored skill has and the call leaves out. */
+  removedResources: string[];
+  /** The reader may not read the stored skill, so nothing is compared with it. */
+  beforeWithheld: boolean;
+}
+
+/** The values of `heldBy` that are a standing rule of the instance, not one finding. */
+const standingRules = ["instance_default", "declared_default", "central_setting"];
+
 export interface OperationCallPreview {
   runId: string;
   operation: string;
@@ -64,6 +91,10 @@ export interface OperationCallPreview {
   inputRemoved: boolean;
   /** After this moment the call expires unexecuted. */
   expiresAt?: string;
+  /** What the call saves, where it is a save of an asset that still waits. */
+  asset?: OperationCallAsset;
+  /** A setting or a default of the instance made the call wait. Unknown for an older request. */
+  heldByRule: boolean;
 }
 
 /**
@@ -87,6 +118,7 @@ export function parseOperationCallPreview(preview: unknown): OperationCallPrevie
   }
   const workspaceId = readText(preview.workspaceId);
   const expiresAt = readText(preview.expiresAt);
+  const asset = parseAsset(preview.asset);
   const inputs = Array.isArray(preview.inputs)
     ? preview.inputs.flatMap((input) => parseInput(input) ?? [])
     : [];
@@ -102,6 +134,8 @@ export function parseOperationCallPreview(preview: unknown): OperationCallPrevie
         ? Math.max(preview.inputFieldCount, inputs.length)
         : inputs.length,
     inputRemoved: preview.inputRemoved === true,
+    heldByRule: standingRules.includes(readText(preview.heldBy) ?? ""),
+    ...(asset ? { asset } : {}),
     ...(workspaceId ? { workspaceId } : {}),
     ...(expiresAt ? { expiresAt } : {})
   };
@@ -114,6 +148,39 @@ function parseActor(value: unknown): OperationCallPreview["actor"] | undefined {
   const id = readText(value.id);
   const label = readText(value.label) ?? id;
   return id && label ? { kind: value.kind, id, label } : undefined;
+}
+
+function parseAsset(value: unknown): OperationCallAsset | undefined {
+  if (!isRecord(value) || typeof value.isNew !== "boolean") {
+    return undefined;
+  }
+  const kind = readText(value.kind);
+  const name = readText(value.name);
+  if (!kind || !name) {
+    return undefined;
+  }
+  const namespace = readText(value.namespace);
+  const previous = isRecord(value.previous) ? value.previous : {};
+  const previousTitle = readText(previous.title);
+  const previousDescription = readText(previous.description);
+  const description = readText(value.description);
+  return {
+    kind,
+    name,
+    title: readText(value.title) ?? name,
+    isNew: value.isNew,
+    previous: {
+      ...(previousTitle ? { title: previousTitle } : {}),
+      ...(previousDescription ? { description: previousDescription } : {})
+    },
+    removedResources: Array.isArray(value.removedResources)
+      ? value.removedResources.flatMap((path) => readText(path) ?? [])
+      : [],
+    beforeWithheld: value.beforeWithheld === true,
+    ...(namespace ? { namespace } : {}),
+    ...(description ? { description } : {}),
+    ...(value.content === undefined ? {} : { content: value.content })
+  };
 }
 
 function parseOrigin(value: unknown): OperationCallPreview["origin"] | undefined {

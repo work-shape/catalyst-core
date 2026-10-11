@@ -4,12 +4,15 @@ import { z } from "zod";
 import { demoTools } from "../tools";
 
 // The API the browser suite runs against: the demo, with one changing tool and the central
-// policy setting that sends its calls to another person for approval. No screen sets a
-// central setting before Instance > Policies exists (OP-2), so the suite's server names it.
+// policy setting that sends its calls to another person for approval. A second setting holds
+// a skill saved into the Namespace `e2ehold-`, which one test registers and removes; it holds
+// nothing while that Namespace is not registered. No screen sets a central setting before
+// Instance > Policies exists (OP-2), so the suite's server names both.
 // It also names the one Connector type of the suite, which reaches nothing.
 // `pnpm dev:demo` and the demo's own server do not load this file.
 
 const HELD_TOOL = "e2e.record_note";
+const HELD_NAMESPACE = "e2ehold-";
 
 const recordNote = defineTool({
   name: HELD_TOOL,
@@ -78,7 +81,12 @@ const client = defineClientInstance({
 });
 
 const app = await client.listen({
-  operations: { centralPolicySettings: () => [{ operation: HELD_TOOL, value: "approval" }] }
+  operations: {
+    centralPolicySettings: () => [
+      { operation: HELD_TOOL, value: "approval" },
+      { operation: "assets.put", assetKind: "skill", namespace: HELD_NAMESPACE, value: "approval" }
+    ]
+  }
 });
 
 // A second API of one spec shares the suite's database and is stopped when that spec ends. It

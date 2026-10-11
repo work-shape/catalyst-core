@@ -21,8 +21,8 @@ export type InboxListState =
   | { status: "ready"; items: readonly ApprovalRequestView[] };
 
 /**
- * One list of the Inbox. A row says what is asked, who asked through which agent, how it
- * stands and how long ago. It opens the item; nothing is decided from the row.
+ * One list of the Inbox. A row says what is asked, who asked through which agent and, where
+ * the kind says so, where it lands, how it stands and how long ago. It opens the item; nothing is decided from the row.
  */
 export function InboxList({
   tab,
@@ -64,16 +64,23 @@ export function InboxList({
     <List data-testid="inbox-list" data-tab={tab}>
       {state.items.map((item) => {
         const kind = kindOf(item.kind);
-        const KindIcon = kind?.icon ?? CircleHelp;
+        const KindIcon = kind?.itemIcon?.(item) ?? kind?.icon ?? CircleHelp;
         const agentName = item.origin?.agentName;
         const requester = item.requestedBy.displayLabel;
+        const asked = agentName
+          ? `${requester} ${t("inbox.via", { agent: agentDisplayName?.(agentName) ?? agentName })}`
+          : requester;
+        const detail = kind?.rowDetail?.(item, t);
         return (
           <ListRow
             key={item.id}
             data-testid="inbox-row"
             data-item-id={item.id}
             leading={<KindIcon className="size-4 text-muted-foreground" aria-hidden="true" />}
-            title={item.summary.trim() || t(kind?.label ?? "inbox.kindUnknown")}
+            title={
+              kind?.heading?.(item, t) ??
+              (item.summary.trim() || t(kind?.label ?? "inbox.kindUnknown"))
+            }
             // The decided list mixes outcomes, and a person's own list mixes all states. In
             // To decide every row is pending, so the state would say nothing.
             chips={
@@ -86,11 +93,7 @@ export function InboxList({
               )
             }
             descriptionLeading={<Avatar kind="person" name={requester} size="xs" />}
-            description={
-              agentName
-                ? `${requester} ${t("inbox.via", { agent: agentDisplayName?.(agentName) ?? agentName })}`
-                : requester
-            }
+            description={detail ? `${asked} · ${detail}` : asked}
             time={
               <time dateTime={tab === "decided" ? item.updatedAt : item.createdAt}>
                 {formatInboxAge(tab === "decided" ? item.updatedAt : item.createdAt, locale, now)}

@@ -102,7 +102,7 @@ export function InboxItemView({
 
   const item = state.request;
   const kind = kindOf(item.kind);
-  const KindIcon = kind?.icon ?? CircleHelp;
+  const KindIcon = kind?.itemIcon?.(item) ?? kind?.icon ?? CircleHelp;
   const agentName = item.origin?.agentName;
   const checks = visibleApprovalChecks(item.checks);
 
@@ -112,7 +112,7 @@ export function InboxItemView({
         <div className="flex min-w-0 items-start gap-2">
           <KindIcon className="mt-1 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <h3 className="min-w-0 flex-1 text-heading break-words">
-            {item.summary.trim() || t("approvalFallbackTitle")}
+            {kind?.heading?.(item, t) ?? (item.summary.trim() || t("approvalFallbackTitle"))}
           </h3>
           <ApprovalStatusBadge status={item.status} applyResult={item.applyResult} />
         </div>

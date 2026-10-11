@@ -1,8 +1,12 @@
-import { FileText, Zap, type LucideIcon } from "lucide-react";
+import { BookOpen, FileText, Zap, type LucideIcon } from "lucide-react";
 import { createContext, createElement, useContext, type ComponentType } from "react";
 import type { ApprovalRequestView } from "@vivd-catalyst/api-client";
 import { OperationCallBody } from "../approvals/operation-call-body";
-import { parseOperationCallPreview } from "../approvals/operation-call-preview";
+import {
+  SKILL_ASSET_KIND,
+  parseOperationCallPreview,
+  type OperationCallAsset
+} from "../approvals/operation-call-preview";
 import { SkillChangeBody } from "../approvals/skill-change-body";
 import { parseSkillChangePreview } from "../approvals/skill-change-preview";
 import type { TranslationContextValue, TranslationKey } from "../i18n";
@@ -23,8 +27,19 @@ export interface InboxItemKind {
   kind: string;
   label: TranslationKey;
   icon: LucideIcon;
-  /** One line that says what the item is about, for the row and the surface subtitle. */
+  /** The icon of one item, where the item says more than its kind. */
+  itemIcon?(item: ApprovalRequestView): LucideIcon | undefined;
+  /** The surface's title for one item, where the item says more than the kind's label. */
+  title?(item: ApprovalRequestView, t: Translate): string | undefined;
+  /** One line that says what the item is about, for the surface subtitle. */
   subject?(item: ApprovalRequestView, t: Translate): string | undefined;
+  /**
+   * What the row and the item are headed with. A kind without one is headed with the summary
+   * the request was filed with.
+   */
+  heading?(item: ApprovalRequestView, t: Translate): string | undefined;
+  /** What the row says after who asked, such as the Namespace of what is asked. */
+  rowDetail?(item: ApprovalRequestView, t: Translate): string | undefined;
   /**
    * The middle of the item. It reads `item.preview`, and from the item itself only what the
    * server recorded on the request.
@@ -62,19 +77,51 @@ const skillChange: InboxItemKind = {
   Body: ({ item }) => createElement(SkillChangeBody, { preview: item.preview })
 };
 
+/** The skill a held call saves, where it saves one. */
+function savedSkill(item: ApprovalRequestView): OperationCallAsset | undefined {
+  const asset = parseOperationCallPreview(item.preview)?.asset;
+  return asset?.kind === SKILL_ASSET_KIND ? asset : undefined;
+}
+
+function savedSkillTitle(skill: OperationCallAsset, t: Translate): string {
+  return t(skill.isNew ? "skillChangeNewSkill" : "inbox.kindSkillChange");
+}
+
 /**
- * An operation call that waits for another person's approval. The approver cannot edit the call,
- * so there is no request for changes: it runs as it is, or it does not run.
+ * An operation call that waits for another person's approval. A call that saves a skill is
+ * named as that skill, new or changed; every other call is an action to approve. The approver
+ * cannot edit the call, so there is no request for changes: it runs as it is, or it does not
+ * run.
  */
 const operationCall: InboxItemKind = {
   kind: "operation_call",
   label: "inbox.kindOperationCall",
   icon: Zap,
+  itemIcon: (item) => (savedSkill(item) ? BookOpen : undefined),
+  title(item, t) {
+    const skill = savedSkill(item);
+    return skill ? savedSkillTitle(skill, t) : undefined;
+  },
   subject(item, t) {
+    const skill = savedSkill(item);
+    if (skill) {
+      return skill.title;
+    }
     const call = parseOperationCallPreview(item.preview);
     return call
       ? t("operations.callSubject", { operation: call.operation, actor: call.actor.label })
       : undefined;
+  },
+  heading(item, t) {
+    const skill = savedSkill(item);
+    if (skill) {
+      return `${savedSkillTitle(skill, t)}: ${skill.title}`;
+    }
+    return parseOperationCallPreview(item.preview) ? t("inbox.kindOperationCall") : undefined;
+  },
+  rowDetail(item) {
+    const call = parseOperationCallPreview(item.preview);
+    return call?.asset ? call.asset.namespace : call?.operation;
   },
   Body: ({ item }) => createElement(OperationCallBody, { request: item }),
   decisions: [

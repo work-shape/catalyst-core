@@ -1,16 +1,29 @@
 import type { ApprovalRequestView } from "@vivd-catalyst/api-client";
-import { Banner, Button, Dialog, EmptyState, KeyValue, KeyValueList } from "@vivd-catalyst/ui";
-import { useState } from "react";
+import {
+  Banner,
+  CodeBlock,
+  Disclosure,
+  DisclosureContent,
+  DisclosureTrigger,
+  EmptyState,
+  KeyValue,
+  KeyValueList
+} from "@vivd-catalyst/ui";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { operationOriginLabelKeys } from "../operations/operations-model";
 import { formatApprovalDate } from "./approval-request-model";
 import { useApprovalRevisionHost } from "./approval-revision-host";
 import {
+  SKILL_ASSET_KIND,
   operationCallFullInput,
   operationCallOutcome,
   parseOperationCallPreview,
-  type OperationCallOutcome
+  type OperationCallAsset,
+  type OperationCallOutcome,
+  type OperationCallPreview
 } from "./operation-call-preview";
+import { SkillChangeBody } from "./skill-change-body";
+import { parseSkillChangePreview } from "./skill-change-preview";
 
 const OUTCOME: Record<
   OperationCallOutcome,
@@ -24,21 +37,37 @@ const OUTCOME: Record<
   expired: { label: "operations.callOutcomeExpired", tone: "warning" }
 };
 
+/** How a sentence names the kind of an asset. A kind without words of its own is "the asset". */
+const ASSET_KIND_PHRASE: Record<string, TranslationKey> = {
+  skill: "operations.callAssetKindSkill",
+  agent: "operations.callAssetKindAgent",
+  connection: "operations.callAssetKindConnection"
+};
+
+/** The sentence that says who wants what, by whether the asset is new and has a Namespace. */
+function assetSentenceKey(asset: OperationCallAsset): TranslationKey {
+  if (asset.isNew) {
+    return asset.namespace ? "operations.callAssetCreateIn" : "operations.callAssetCreate";
+  }
+  return asset.namespace ? "operations.callAssetChangeIn" : "operations.callAssetChange";
+}
+
 /**
- * An operation call that waits for another person's approval: what runs when it is approved, who
- * called it from where, and the input the call is frozen with. The rows are text the server
- * rendered; what a row or the list leaves out is counted in words, and the full view shows the
- * whole input the request keeps. Once the request is decided, the item says what became of the
- * call. A preview it cannot read shows a sentence instead of half a call.
+ * An operation call that waits for another person's approval. While it waits, the item leads
+ * with one sentence that says who wants what, what a decision does, and why one is needed. A
+ * saved skill then shows as the skill: all of a new one, before and after of a changed one.
+ * Every other call shows its operation and its input, a block per field. What a block or the
+ * list leaves out is counted in words. The operation's name, where the call came from, when it
+ * expires and the whole input as the request keeps it are in one fold at the end. Once the
+ * request is decided, the item says what became of the call. A preview it cannot read shows a
+ * sentence instead of half a call.
  */
 export function OperationCallBody({
   request
 }: {
   request: Pick<ApprovalRequestView, "preview" | "status" | "applyResult" | "payload">;
 }) {
-  const { locale, t } = useTranslation();
-  const host = useApprovalRevisionHost();
-  const [fullInputOpen, setFullInputOpen] = useState(false);
+  const { t } = useTranslation();
   const call = parseOperationCallPreview(request.preview);
   if (!call) {
     return (
@@ -47,24 +76,46 @@ export function OperationCallBody({
       </EmptyState>
     );
   }
-  const { agentName, toolName } = call.origin;
-  const origin = [
-    t(operationOriginLabelKeys[call.origin.kind]),
-    agentName
-      ? t("operations.throughAgent", { agent: host?.agentDisplayName(agentName) ?? agentName })
-      : undefined
-  ]
-    .filter(Boolean)
-    .join(", ");
 
   const pending = request.status === "pending";
   const outcome = pending ? undefined : operationCallOutcome(request);
-  const fullInput = operationCallFullInput(request.payload);
+  const { asset } = call;
+  const actor = call.actor.label;
+  // The skill's own view needs a text the server could read; without one the input shows.
+  const skill = asset?.kind === SKILL_ASSET_KIND && asset.content !== undefined ? asset : undefined;
   const hiddenFields = call.inputFieldCount - call.inputs.length;
 
   return (
     <div className="grid min-w-0 gap-4" data-testid="operation-call" data-run-id={call.runId}>
-      {pending ? <p>{t("operations.callEffect", { actor: call.actor.label })}</p> : null}
+      {pending ? (
+        <div className="grid min-w-0 gap-1.5">
+          <p className="font-medium text-foreground" data-testid="operation-call-headline">
+            {asset
+              ? t(assetSentenceKey(asset), {
+                  actor,
+                  kind: t(ASSET_KIND_PHRASE[asset.kind] ?? "operations.callAssetKindOther"),
+                  title: asset.title,
+                  namespace: asset.namespace ?? ""
+                })
+              : t(
+                  call.effect === "changing"
+                    ? "operations.callHeadlineChanging"
+                    : "operations.callHeadlineReading",
+                  { actor }
+                )}
+          </p>
+          <p className="text-caption text-muted-foreground">
+            {t(asset ? "operations.callAssetEffect" : "operations.callEffect", { actor })}
+          </p>
+          <Banner layout="line" role="note" data-testid="operation-call-why">
+            {t(
+              asset?.kind === SKILL_ASSET_KIND && call.heldByRule
+                ? "operations.callWhySkillRule"
+                : "operations.callWhy"
+            )}
+          </Banner>
+        </div>
+      ) : null}
       {outcome ? (
         <Banner
           tone={OUTCOME[outcome.outcome].tone}
@@ -79,102 +130,214 @@ export function OperationCallBody({
           ) : null}
         </Banner>
       ) : null}
-      <KeyValueList>
-        <KeyValue label={t("operations.operation")} data-field="operation">
-          <span className="font-mono text-code wrap-anywhere">{call.operation}</span>
-        </KeyValue>
-        <KeyValue label={t("operations.callCalledBy")} data-field="actor">
-          {call.actor.label}
-        </KeyValue>
-        <KeyValue label={t("operations.origin")} data-field="origin">
-          {origin}
-        </KeyValue>
-        {toolName ? (
-          <KeyValue label={t("operations.fieldToolName")} data-field="tool">
-            <span className="font-mono text-code wrap-anywhere">{toolName}</span>
-          </KeyValue>
-        ) : null}
-        {call.expiresAt && pending ? (
-          <KeyValue label={t("operations.callExpires")} data-field="expiresAt">
-            {formatApprovalDate(call.expiresAt, locale)}
-            <span className="block text-caption text-muted-foreground">
-              {t("operations.callExpiresHint")}
-            </span>
-          </KeyValue>
-        ) : null}
-      </KeyValueList>
-      <section className="grid min-w-0 gap-2" data-testid="operation-call-inputs">
-        <h4 className="text-label">{t("operations.callInputs")}</h4>
-        {call.inputRemoved ? (
-          <p className="text-muted-foreground" data-testid="operation-call-input-removed">
-            {t("operations.callInputRemoved")}
-          </p>
-        ) : call.inputs.length === 0 ? (
-          <p className="text-muted-foreground">{t("operations.callNoInputs")}</p>
-        ) : (
-          <KeyValueList layout="stacked" className="rounded-md border p-3">
-            {call.inputs.map((input) => (
-              <KeyValue
-                key={input.key}
-                label={<span className="font-mono">{input.key}</span>}
-                foldable
-                data-input-key={input.key}
-                data-truncated={input.truncated || undefined}
-              >
-                <span className="font-mono text-code wrap-anywhere whitespace-pre-wrap">
-                  {input.value}
-                </span>
-                {input.truncated ? (
-                  <span className="block text-caption text-muted-foreground">
-                    {input.length === undefined
-                      ? t("operations.callTruncated")
-                      : t("operations.callTruncatedOf", {
-                          shown: input.value.length,
-                          total: input.length
-                        })}
-                  </span>
-                ) : null}
+      {skill ? (
+        <SkillAsset asset={skill} />
+      ) : (
+        <>
+          <KeyValueList>
+            <KeyValue label={t("operations.operation")} data-field="operation">
+              <span className="font-mono text-code wrap-anywhere">{call.operation}</span>
+            </KeyValue>
+            {pending ? null : (
+              <KeyValue label={t("operations.callCalledBy")} data-field="actor">
+                {actor}
               </KeyValue>
-            ))}
+            )}
           </KeyValueList>
-        )}
-        {hiddenFields > 0 ? (
-          <p data-testid="operation-call-hidden-fields">
-            {t("operations.callHiddenFields", {
-              total: call.inputFieldCount,
-              shown: call.inputs.length
-            })}
-          </p>
-        ) : null}
-        {fullInput !== undefined && call.inputFieldCount > 0 ? (
-          <div>
-            <Button
-              variant="outline"
-              size="sm"
-              data-testid="operation-call-full-input-open"
-              onClick={() => setFullInputOpen(true)}
-            >
-              {t("operations.callFullInputOpen")}
-            </Button>
-          </div>
-        ) : null}
-      </section>
-      {fullInput !== undefined ? (
-        <Dialog
-          open={fullInputOpen}
-          size="lg"
-          title={t("operations.callFullInputTitle")}
-          description={t("operations.callFullInputDescription", { operation: call.operation })}
-          onClose={() => setFullInputOpen(false)}
-        >
-          <pre
-            className="whitespace-pre-wrap rounded-md bg-muted px-3 py-2 font-mono text-code wrap-anywhere"
-            data-testid="operation-call-full-input"
-          >
-            {fullInput}
-          </pre>
-        </Dialog>
-      ) : null}
+          <CallInputs call={call} hiddenFields={hiddenFields} />
+        </>
+      )}
+      <TechnicalDetails
+        call={call}
+        pending={pending}
+        showsOperation={skill !== undefined}
+        fullInput={operationCallFullInput(request.payload)}
+        // A reader who is told to read the rest finds it open.
+        defaultOpen={hiddenFields > 0}
+      />
     </div>
+  );
+}
+
+/** A saved skill as people read one: what else changes about it, then its text. */
+function SkillAsset({ asset }: { asset: OperationCallAsset }) {
+  const { t } = useTranslation();
+  const { previous, removedResources } = asset;
+  const hasText = parseSkillChangePreview(asset.content) !== undefined;
+  return (
+    <section className="grid min-w-0 gap-3" data-testid="operation-call-skill">
+      {asset.beforeWithheld ? (
+        <Banner layout="line" tone="warning" role="note" data-testid="operation-call-no-before">
+          {t("operations.callSkillBeforeWithheld")}
+        </Banner>
+      ) : null}
+      {previous.title || previous.description || removedResources.length > 0 ? (
+        <KeyValueList layout="stacked" data-testid="operation-call-skill-fields">
+          {previous.title ? (
+            <KeyValue label={t("operations.callSkillTitle")} data-field="title">
+              <BeforeAndNow before={previous.title} now={asset.title} />
+            </KeyValue>
+          ) : null}
+          {previous.description ? (
+            <KeyValue label={t("operations.callSkillDescription")} data-field="description">
+              <BeforeAndNow before={previous.description} now={asset.description} />
+            </KeyValue>
+          ) : null}
+          {removedResources.length > 0 ? (
+            <KeyValue label={t("operations.callSkillRemovedResources")}>
+              {removedResources.join(", ")}
+            </KeyValue>
+          ) : null}
+        </KeyValueList>
+      ) : null}
+      {hasText ? (
+        <SkillChangeBody preview={asset.content} heading={false} expanded />
+      ) : (
+        <p className="text-muted-foreground" data-testid="operation-call-skill-same-text">
+          {t("operations.callSkillSameText")}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function BeforeAndNow({ before, now }: { before: string; now: string | undefined }) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <span className="block text-muted-foreground">
+        {t("skillChangeBefore")}: {before}
+      </span>
+      {now === undefined ? null : (
+        <span className="block">
+          {t("skillChangeAfter")}: {now}
+        </span>
+      )}
+    </>
+  );
+}
+
+/** The input of a call, a block per field as the server rendered it. */
+function CallInputs({ call, hiddenFields }: { call: OperationCallPreview; hiddenFields: number }) {
+  const { t } = useTranslation();
+  return (
+    <section className="grid min-w-0 gap-2" data-testid="operation-call-inputs">
+      <h4 className="text-label">{t("operations.callInputs")}</h4>
+      {call.inputRemoved ? (
+        <p className="text-muted-foreground" data-testid="operation-call-input-removed">
+          {t("operations.callInputRemoved")}
+        </p>
+      ) : call.inputs.length === 0 ? (
+        <p className="text-muted-foreground">{t("operations.callNoInputs")}</p>
+      ) : (
+        <div className="grid min-w-0 gap-3">
+          {call.inputs.map((input) => (
+            <div
+              key={input.key}
+              className="grid min-w-0 gap-1"
+              data-input-key={input.key}
+              data-truncated={input.truncated || undefined}
+            >
+              <span className="font-mono text-caption text-muted-foreground wrap-anywhere">
+                {input.key}
+              </span>
+              <CodeBlock code={input.value} label={input.key} className="max-h-72" />
+              {input.truncated ? (
+                <span className="text-caption text-muted-foreground">
+                  {input.length === undefined
+                    ? t("operations.callTruncated")
+                    : t("operations.callTruncatedOf", {
+                        shown: input.value.length,
+                        total: input.length
+                      })}
+                </span>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+      {hiddenFields > 0 ? (
+        <p data-testid="operation-call-hidden-fields">
+          {t("operations.callHiddenFields", {
+            total: call.inputFieldCount,
+            shown: call.inputs.length
+          })}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+/** What few readers need to decide and some need to check, folded away under one line. */
+function TechnicalDetails({
+  call,
+  pending,
+  showsOperation,
+  fullInput,
+  defaultOpen
+}: {
+  call: OperationCallPreview;
+  pending: boolean;
+  showsOperation: boolean;
+  fullInput: string | undefined;
+  defaultOpen: boolean;
+}) {
+  const { locale, t } = useTranslation();
+  const host = useApprovalRevisionHost();
+  const { agentName, toolName } = call.origin;
+  const origin = [
+    t(operationOriginLabelKeys[call.origin.kind]),
+    agentName
+      ? t("operations.throughAgent", { agent: host?.agentDisplayName(agentName) ?? agentName })
+      : undefined
+  ]
+    .filter(Boolean)
+    .join(", ");
+  return (
+    <Disclosure defaultOpen={defaultOpen} data-testid="operation-call-details">
+      <DisclosureTrigger data-testid="operation-call-details-open">
+        {t("operations.callDetails")}
+      </DisclosureTrigger>
+      <DisclosureContent>
+        <div className="grid min-w-0 gap-3 pt-1">
+          <KeyValueList>
+            {showsOperation ? (
+              <KeyValue label={t("operations.operation")} data-field="operation">
+                <span className="font-mono text-code wrap-anywhere">{call.operation}</span>
+              </KeyValue>
+            ) : null}
+            <KeyValue label={t("operations.origin")} data-field="origin">
+              {origin}
+            </KeyValue>
+            {toolName ? (
+              <KeyValue label={t("operations.fieldToolName")} data-field="tool">
+                <span className="font-mono text-code wrap-anywhere">{toolName}</span>
+              </KeyValue>
+            ) : null}
+            {call.expiresAt && pending ? (
+              <KeyValue label={t("operations.callExpires")} data-field="expiresAt">
+                {formatApprovalDate(call.expiresAt, locale)}
+                <span className="block text-caption text-muted-foreground">
+                  {t("operations.callExpiresHint")}
+                </span>
+              </KeyValue>
+            ) : null}
+          </KeyValueList>
+          {fullInput === undefined ? null : (
+            <div className="grid min-w-0 gap-1">
+              <span className="text-caption text-muted-foreground">
+                {t("operations.callFullInput")}
+              </span>
+              <CodeBlock
+                code={fullInput}
+                label={t("operations.callFullInput")}
+                className="max-h-96"
+                data-testid="operation-call-full-input"
+              />
+            </div>
+          )}
+        </div>
+      </DisclosureContent>
+    </Disclosure>
   );
 }

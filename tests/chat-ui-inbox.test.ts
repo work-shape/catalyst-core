@@ -1,13 +1,14 @@
-import { createElement, type ReactNode } from "react";
+import { createElement } from "react";
 import { ApiError, type ApprovalRequestView } from "@vivd-catalyst/api-client";
 import { describe, expect, it } from "vitest";
 import { createTranslationContext } from "@vivd-catalyst/chat-ui";
 import {
   approvalActionFailure,
+  decision,
   formatInboxAge,
+  idleActions,
   InboxAreaView,
   inboxItemKinds,
-  InboxItemKindsProvider,
   inboxItemSurface,
   InboxItemView,
   InboxList,
@@ -16,95 +17,18 @@ import {
   inboxTabCount,
   inboxTabOfItem,
   inboxTabs,
+  item,
+  now,
   orderInboxItems,
+  render,
+  renderItem,
   type InboxCounts,
-  type InboxItemActions,
   type InboxItemKind,
   type InboxTab
-} from "../packages/chat-ui/src/inbox";
+} from "./chat-ui-inbox-harness";
 import { ToolDisplayPanelProvider } from "../packages/chat-ui/src/tool-display-panel";
-import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // Every test here fails without the Inbox frame: the modules it reads did not exist.
-
-const skillChangePreview = {
-  skillName: "payroll",
-  skillTitle: "Gehaltsabrechnungen prüfen",
-  isNewSkill: false,
-  changes: [
-    {
-      type: "replace",
-      target: "root",
-      before: "Prüfe den Bruttolohn.",
-      after: "Prüfe den Bruttolohn und die Steuerklasse."
-    }
-  ]
-};
-
-function item(overrides: Partial<ApprovalRequestView> = {}): ApprovalRequestView {
-  return {
-    id: "apr_1",
-    clientInstanceId: "client-1",
-    kind: "skill_change",
-    summary: "Bei Gehaltsabrechnungen auch die Steuerklasse prüfen.",
-    payload: {},
-    requestedBy: { id: "user-anna", displayLabel: "Anna Beispiel" },
-    origin: {
-      conversationId: "conv_1",
-      agentRunId: "run_1",
-      toolCallId: "call_1",
-      agentName: "payroll-agent"
-    },
-    status: "pending",
-    checks: [],
-    createdAt: "2026-10-05T08:00:00Z",
-    updatedAt: "2026-10-05T08:00:00Z",
-    preview: skillChangePreview,
-    canDecide: false,
-    canWithdraw: false,
-    canRevert: false,
-    ...overrides
-  };
-}
-
-const decision = {
-  approved: false,
-  decidedBy: "user-felix",
-  decidedByLabel: "Felix Pahlke",
-  decidedAt: "2026-10-05T09:00:00Z",
-  comment: "Bitte ohne Kundennamen."
-};
-
-const idleActions: InboxItemActions = {
-  pending: false,
-  decide: () => undefined,
-  withdraw: () => undefined,
-  revert: () => undefined
-};
-
-const now = new Date("2026-10-05T11:00:00Z");
-
-function render(node: ReactNode, locale: "de" | "en" = "de"): string {
-  return renderToStaticMarkup(createElement(TranslationProvider, { children: null, locale }, node));
-}
-
-function renderItem(
-  overrides: Partial<ApprovalRequestView> = {},
-  options: {
-    actions?: InboxItemActions;
-    locale?: "de" | "en";
-    kinds?: readonly InboxItemKind[];
-  } = {}
-): string {
-  const view = createElement(InboxItemView, {
-    state: { status: "ready", request: item(overrides) },
-    actions: options.actions ?? idleActions
-  });
-  return render(
-    options.kinds ? createElement(InboxItemKindsProvider, { value: options.kinds }, view) : view,
-    options.locale
-  );
-}
 
 /** A kind the platform does not have: its own words, its own body, two of the three decisions. */
 const [platformKind] = inboxItemKinds;
@@ -475,218 +399,6 @@ describe("inbox item", () => {
 });
 
 // Fails without the kind `operation_call`: the item was one the frame could not decide.
-describe("inbox item of an operation call", () => {
-  const callPreview = {
-    runId: "opr_1",
-    operation: "workspace.apply_patch",
-    effect: "changing",
-    actor: { kind: "user", id: "user-anna", label: "Anna Beispiel" },
-    origin: { kind: "agent", agentName: "payroll-agent", toolName: "workspace_apply_patch" },
-    workspaceId: "cw_team",
-    inputs: [
-      { key: "path", value: "docs/plan.md" },
-      { key: "patch", value: "+ Neue Zeile", truncated: true }
-    ],
-    expiresAt: "2026-10-12T08:00:00Z"
-  };
-  const call = (overrides: Partial<ApprovalRequestView> = {}, locale: "de" | "en" = "de") =>
-    renderItem(
-      {
-        kind: "operation_call",
-        summary: "workspace.apply_patch",
-        preview: callPreview,
-        canDecide: true,
-        ...overrides
-      },
-      { locale }
-    );
-
-  it("says what approving does and shows the call with its inputs", () => {
-    const markup = call();
-
-    expect(markup).toContain('data-testid="operation-call"');
-    expect(markup).toContain(
-      "Mit der Freigabe läuft dieser Aufruf einmal, als Anna Beispiel. Wenn du ablehnst, läuft nichts."
-    );
-    expect(markup).toMatch(/data-field="operation".*workspace\.apply_patch/u);
-    expect(markup).toMatch(/data-field="origin".*Agent, über Agent payroll-agent/u);
-    expect(markup).toMatch(/data-field="tool".*workspace_apply_patch/u);
-    expect(markup).toContain('data-field="expiresAt"');
-    expect(markup).toContain("Danach verfällt der Aufruf und läuft nicht.");
-    expect(markup).toMatch(/data-input-key="path".*docs\/plan\.md/u);
-    expect(markup).toMatch(
-      /data-input-key="patch" data-truncated="true".*\+ Neue Zeile.*Gekürzt\./u
-    );
-    expect(markup.match(/data-input-key=/gu)).toHaveLength(2);
-    const english = call({}, "en");
-    expect(english).toContain(
-      "Approving runs this call once, as Anna Beispiel. If you decline, nothing runs."
-    );
-    expect(english).toContain("Shortened. The call runs with the full value.");
-  });
-
-  // Fails before the fix: the preview ended at 50 fields and 2,000 characters without a word,
-  // and the item had no way to read the rest.
-  it("says in words what the rows leave out and offers the full input", () => {
-    const long = "x".repeat(2000);
-    const payload = { runId: "opr_1", input: { path: "docs/plan.md", patch: `${long}tail` } };
-    const markup = call({
-      payload,
-      preview: {
-        ...callPreview,
-        inputs: [
-          { key: "path", value: "docs/plan.md" },
-          { key: "patch", value: long, truncated: true, length: 2004 }
-        ],
-        inputFieldCount: 61
-      }
-    });
-
-    expect(markup).toContain(
-      "Gekürzt: Hier stehen 2000 von 2004 Zeichen. Der Aufruf läuft mit dem ganzen Wert, den die vollständige Eingabe zeigt."
-    );
-    expect(markup).toMatch(
-      /data-testid="operation-call-hidden-fields"[^>]*>Dieser Aufruf hat 61 Eingabefelder\. Hier stehen die ersten 2\. Öffne die vollständige Eingabe und lies alle, bevor du entscheidest\./u
-    );
-    expect(markup).toMatch(
-      /data-testid="operation-call-full-input-open"[^>]*>Vollständige Eingabe anzeigen<\/button>/u
-    );
-    // The full view opens from the request's own payload; the browser suite reads it there.
-
-    const english = call({ payload, preview: { ...callPreview, inputFieldCount: 61 } }, "en");
-    expect(english).toContain(
-      "This call has 61 input fields. The first 2 are listed here. Open the full input to read all of them before you decide."
-    );
-    expect(english).toContain("Show full input");
-    // Nothing is left out: no sentence about it.
-    expect(call({ payload })).not.toContain('data-testid="operation-call-hidden-fields"');
-  });
-
-  // Fails before the fix: a decided item read "Übernommen" whatever became of the call.
-  it("says what became of the call once the request is decided", () => {
-    const ended = (status: ApprovalRequestView["status"], applyResult: Record<string, unknown>) =>
-      call({
-        status,
-        canDecide: false,
-        applyResult,
-        payload: { runId: "opr_1", inputRemoved: true },
-        preview: { ...callPreview, inputs: [], inputFieldCount: 0, inputRemoved: true }
-      });
-    const outcomes = [
-      [
-        "approved",
-        { execution: "queued" },
-        "Freigegeben. Der Aufruf wird ausgeführt.",
-        "Freigegeben, läuft"
-      ],
-      [
-        "approved",
-        { execution: "done" },
-        "Freigegeben und ausgeführt.",
-        "Freigegeben und ausgeführt"
-      ],
-      [
-        "approved",
-        { execution: "failed", error: { message: "Revision 2 erwartet." } },
-        "Freigegeben, aber der Aufruf ist fehlgeschlagen. Er wird nicht erneut ausgeführt.",
-        "Freigegeben, fehlgeschlagen"
-      ],
-      [
-        "approved",
-        { execution: "interrupted" },
-        "Ob er etwas geändert hat, ist nicht bekannt.",
-        "Freigegeben, unterbrochen"
-      ],
-      [
-        "superseded",
-        { execution: "refused", error: { message: "Kein Mitglied mehr." } },
-        "Nicht ausgeführt. Als der Aufruf laufen sollte, war er nicht mehr erlaubt.",
-        "Nicht ausgeführt"
-      ],
-      [
-        "superseded",
-        { execution: "expired" },
-        "Abgelaufen, bevor entschieden wurde. Es wurde nichts ausgeführt.",
-        "Abgelaufen"
-      ]
-    ] as const;
-    for (const [status, applyResult, sentence, badge] of outcomes) {
-      const markup = ended(status, applyResult);
-      expect(markup).toContain(`data-outcome="${applyResult.execution}"`);
-      expect(markup).toContain(sentence);
-      expect(markup).toContain(badge);
-      expect(markup).not.toContain("Mit der Freigabe läuft dieser Aufruf einmal");
-      // The input is gone, and the item says so instead of "no input".
-      expect(markup).toContain(
-        "Die Eingabe wurde entfernt, als diese Anfrage endete. Der Lauf behält einen Hash davon."
-      );
-      expect(markup).not.toContain("Dieser Aufruf hat keine Eingabe.");
-      expect(markup).not.toContain('data-testid="operation-call-full-input-open"');
-    }
-    expect(ended("approved", outcomes[2][1])).toContain("Grund: Revision 2 erwartet.");
-    expect(ended("superseded", outcomes[4][1])).toContain("Grund: Kein Mitglied mehr.");
-  });
-
-  it("offers approve and decline and no request for changes", () => {
-    const markup = call();
-
-    expect(markup).toMatch(/data-decision="reject"[^>]*>Ablehnen<\/button>/u);
-    expect(markup).toMatch(/data-decision="approve"[^>]*>Freigeben<\/button>/u);
-    expect(markup).not.toContain('data-decision="request_changes"');
-    expect(markup.match(/data-decision=/gu)).toHaveLength(2);
-    const english = call({}, "en");
-    expect(english).toMatch(/data-decision="reject"[^>]*>Decline<\/button>/u);
-    expect(english).toMatch(/data-decision="approve"[^>]*>Approve<\/button>/u);
-  });
-
-  it("names the surface and the row by the operation and who called", () => {
-    const kindOf = (kind: string) => inboxItemKinds.find((entry) => entry.kind === kind);
-    const surface = (preview: ApprovalRequestView["preview"], locale: "de" | "en") =>
-      inboxItemSurface(
-        "apr_1",
-        item({ kind: "operation_call", preview }),
-        kindOf,
-        createTranslationContext(locale).t
-      );
-
-    expect(surface(callPreview, "de")).toMatchObject({
-      title: "Aufruf einer Operation",
-      subtitle: "workspace.apply_patch für Anna Beispiel"
-    });
-    expect(surface(callPreview, "en")).toMatchObject({
-      title: "Operation call",
-      subtitle: "workspace.apply_patch for Anna Beispiel"
-    });
-    expect(surface({ operation: "assets.put" }, "en").subtitle).toBeUndefined();
-  });
-
-  it("shows a sentence instead of half a call when the preview cannot be read", () => {
-    for (const preview of [
-      undefined,
-      { operation: "assets.put" },
-      { ...callPreview, origin: { kind: "carrier_pigeon" } },
-      { ...callPreview, actor: { kind: "user" } },
-      { ...callPreview, effect: "deleting" }
-    ]) {
-      const markup = call({ preview });
-      expect(markup).toContain('data-testid="operation-call-unreadable"');
-      expect(markup).toContain("Die Details dieses Aufrufs können nicht angezeigt werden.");
-      expect(markup).not.toContain('data-testid="operation-call"');
-    }
-    // An input that cannot be read is left out; the call still shows.
-    const partial = call({
-      preview: {
-        ...callPreview,
-        inputs: [{ key: "path", value: "a.md" }, { key: "n", value: 3 }, 7]
-      }
-    });
-    expect(partial.match(/data-input-key=/gu)).toHaveLength(1);
-    expect(call({ preview: { ...callPreview, inputs: [] } })).toContain(
-      "Dieser Aufruf hat keine Eingabe."
-    );
-  });
-});
-
 describe("inbox area", () => {
   function renderArea(
     counts: InboxCounts,
