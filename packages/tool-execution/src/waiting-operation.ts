@@ -26,6 +26,7 @@ import {
   type RunContext,
   type RunOperationDeps
 } from "./operation-execution";
+import { isDataToolName } from "./tool-registry";
 
 /** The frozen call of a run that waits for an approval, as its approval request keeps it. */
 export interface WaitingOperationCall {
@@ -178,6 +179,26 @@ async function admitAgain(
       : await readApprovedOperationEnd(run.id, deps)
   });
 
+  // A data tool's operation is read from its source. The agent's own list is asked before
+  // that read, as where the call was made: a tool that left the agent while its approval
+  // waited is refused here, and a source that is down is never asked about it.
+  const { origin } = waiting.call;
+  if (origin.kind === "agent" && isDataToolName(origin.toolName)) {
+    const listed = (await deps.agentToolNames?.(origin.agentName)) ?? [];
+    if (!listed.includes(origin.toolName)) {
+      const ended = await endWaiting(
+        deniedEnd(
+          { now },
+          {
+            kind: "forbidden",
+            action: `${AGENT_TOOL_ACTION_PREFIX}${origin.toolName}`,
+            reason: "no_grant"
+          }
+        )
+      );
+      return refused(ended, (denied) => denied.error ?? UNKNOWN_END);
+    }
+  }
   const found = await waitingContext(run, waiting, deps).catch((error: unknown) => {
     if (error instanceof AppError && error.code === "NOT_FOUND") {
       return { gone: { code: error.code, message: error.message } };
