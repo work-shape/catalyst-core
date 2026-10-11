@@ -42,7 +42,8 @@ export const build = defineTranslations({
     "build.pendingApproval":
       "This change waits for an approval. Nothing was changed yet and your text is still here.",
     "build.readOnly": "You can read this but not change it.",
-    "build.readOnlyInstance": "Instance asset. Editing needs Builder on the instance.",
+    "build.readOnlyInstance":
+      "Belongs to no Namespace. Only a person who may edit on the whole instance can change it.",
     "build.readOnlyNamespace":
       "Asset of Namespace {namespace}. Editing needs Builder in this Namespace.",
     "build.restored": "Revision {number} restored.",
@@ -136,7 +137,8 @@ export const build = defineTranslations({
     "build.pendingApproval":
       "Diese Änderung wartet auf eine Freigabe. Es wurde noch nichts geändert und Ihr Text ist noch da.",
     "build.readOnly": "Sie können dies lesen, aber nicht ändern.",
-    "build.readOnlyInstance": "Instanz-Asset. Zum Bearbeiten braucht es Builder auf Instanzebene.",
+    "build.readOnlyInstance":
+      "Gehört zu keinem Namespace. Ändern kann es nur, wer in der ganzen Instanz bearbeiten darf.",
     "build.readOnlyNamespace":
       "Asset des Namespace {namespace}. Zum Bearbeiten braucht es Builder in diesem Namespace.",
     "build.restored": "Version {number} wiederhergestellt.",

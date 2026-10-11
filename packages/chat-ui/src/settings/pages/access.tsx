@@ -18,6 +18,7 @@ import {
   useWorkspaceUsersQuery
 } from "../../api/workspace-queries";
 import { workspaceQueryKeys } from "../../api/workspace-query-keys";
+import { DocsReference } from "../../docs-links";
 import { useTranslation } from "../../i18n";
 import { useSettingsPage } from "../settings-page-context";
 
@@ -62,7 +63,14 @@ export function AccessPage() {
 
   return (
     <>
-      <PageHeader title={t("settings.access")} description={t("access.description")} />
+      <PageHeader
+        title={t("settings.access")}
+        description={
+          <>
+            {t("access.description")} <DocsReference to="accessPage" />
+          </>
+        }
+      />
       <Tabs defaultValue="namespaces">
         <TabsList label={t("access.tabs")}>
           <TabsTrigger value="namespaces" count={namespacesQuery.data?.length}>

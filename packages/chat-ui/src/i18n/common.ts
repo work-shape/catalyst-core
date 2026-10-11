@@ -9,6 +9,14 @@ export const common = defineTranslations({
     copied: "Copied",
     conversationRunning: "Running",
     deleting: "Deleting",
+    "docs.learnMore": "Learn more",
+    "docs.learnMoreDenyName": "Learn more about how a deny is decided, opens in a new tab",
+    "docs.learnMoreCheckName": "Learn more about how a right is decided, opens in a new tab",
+    "docs.learnMoreReadOnlyName": "Learn more about who may change this, opens in a new tab",
+    "docs.howRightsWork": "How rights work",
+    "docs.howRightsWorkName": "How rights work, opens in a new tab",
+    "docs.namespaceOrWorkspace": "Namespace or workspace?",
+    "docs.namespaceOrWorkspaceName": "Namespace or workspace, opens in a new tab",
     exitFullscreen: "Exit fullscreen",
     email: "Email",
     interfaceOutdatedBody:
@@ -36,6 +44,16 @@ export const common = defineTranslations({
     copied: "Kopiert",
     conversationRunning: "Läuft",
     deleting: "Löscht",
+    "docs.learnMore": "Mehr erfahren",
+    "docs.learnMoreDenyName":
+      "Mehr erfahren darüber, wie eine Verweigerung entschieden wird, öffnet in neuem Tab",
+    "docs.learnMoreCheckName":
+      "Mehr erfahren darüber, wie ein Recht entschieden wird, öffnet in neuem Tab",
+    "docs.learnMoreReadOnlyName": "Mehr erfahren darüber, wer das ändern darf, öffnet in neuem Tab",
+    "docs.howRightsWork": "So funktionieren Rechte",
+    "docs.howRightsWorkName": "So funktionieren Rechte, öffnet in neuem Tab",
+    "docs.namespaceOrWorkspace": "Namespace oder Arbeitsbereich?",
+    "docs.namespaceOrWorkspaceName": "Namespace oder Arbeitsbereich, öffnet in neuem Tab",
     exitFullscreen: "Vollbild schließen",
     email: "E-Mail",
     interfaceOutdatedBody:

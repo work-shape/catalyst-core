@@ -7,6 +7,15 @@ contain breaking changes; a patch version does not.
 
 ### Added
 
+- **Documentation links:** release config `ui.docsUrl` names where an instance's documentation
+  is read. With it the account menu has a "Documentation" item in a group of its own above
+  Sign out, and the Access page, the New right dialog, the rights check and the read-only
+  notice of a Build page end with a link into the page How rights work. All of them open a new
+  tab. The key has no default: an instance that leaves it out shows none of them. `null` clears
+  an inherited address, and anything but an `http` or `https` address stops the start. The
+  address reaches the interface as `docsUrl` in the branding and in `ui` of `GET /config`.
+  `@vivd-catalyst/ui` gains `DocsLink`, `DocsAddressProvider` and `useDocsLinkShown`, and
+  `DropdownMenuItem` takes `href` and `accessibleName` for an item that is a link.
 - **Connections, secrets and egress:** release config `connections` names the Connections of an
   instance, and the API process writes them into the store when it starts, in one transaction
   under one lock. Such a Connection has `origin: release` and is read-only on the instance:
@@ -411,6 +420,11 @@ id from config_assets where status = 'deleted')`.
 
 ### Changed
 
+- **Access wording:** in English a row of the Access page is a "right", as it already is in
+  German: "New right", "Create right" and the tab "Rights". The column of the place is "Where"
+  ("Wo"), as the dialog's field. The descriptions of the New right dialog, of Deny, of the
+  places and the read-only notice of an asset outside every Namespace say what they do in
+  plain words; the notice no longer names a "Builder".
 - **User administration (breaking for callers of the typed client):** `users.create`,
   `users.update`, `users.delete`, `users.identities.upsert`, `users.identities.delete`,
   `users.password.reset` and `users.invitation.send` are Operation Runs. They answer the

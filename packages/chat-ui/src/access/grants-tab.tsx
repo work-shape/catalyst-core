@@ -30,8 +30,10 @@ import {
   SkeletonList,
   Tooltip,
   TooltipContent,
-  TooltipTrigger
+  TooltipTrigger,
+  useDocsLinkShown
 } from "@vivd-catalyst/ui";
+import { DocsReference } from "../docs-links";
 import { useTranslation, type TranslationContextValue, type TranslationKey } from "../i18n";
 import {
   GRANT_KINDS,
@@ -98,9 +100,12 @@ const scopeChoiceKeys: Record<
   GrantScopeKind,
   (kind: GrantKind) => { label: TranslationKey; description: TranslationKey }
 > = {
-  namespace: () => ({
+  namespace: (kind) => ({
     label: "access.scopeInNamespace",
-    description: "access.scopeInNamespaceDescription"
+    description:
+      kind === "connection"
+        ? "access.scopeInNamespaceConnectionDescription"
+        : "access.scopeInNamespaceDescription"
   }),
   asset: (kind) =>
     kind === "connection"
@@ -520,6 +525,7 @@ function GrantDialog({
   | "onGrant"
 > & { onClose(): void }) {
   const { t } = useTranslation();
+  const docsLinkShown = useDocsLinkShown();
   const formId = useId();
   const [form, setForm] = useState<GrantForm>(emptyGrantForm);
   const [submitted, setSubmitted] = useState(false);
@@ -657,6 +663,7 @@ function GrantDialog({
           })}
           value={form.scopeKind}
           onValueChange={(scopeKind) => change({ scopeKind })}
+          hint={docsLinkShown ? <DocsReference to="rightPlace" /> : undefined}
         />
         {form.scopeKind === "namespace" ? (
           <Field
@@ -749,7 +756,11 @@ function GrantDialog({
             {
               value: "deny",
               label: t("access.effectDeny"),
-              description: t("access.effectDenyDescription")
+              description: (
+                <>
+                  {t("access.effectDenyDescription")} <DocsReference to="rightDenied" />
+                </>
+              )
             }
           ]}
           value={form.effect}

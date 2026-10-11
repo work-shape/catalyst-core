@@ -26,6 +26,7 @@ import {
   NamespacesTab,
   withGrantKind
 } from "@vivd-catalyst/chat-ui/access";
+import { DocsAddressProvider } from "@vivd-catalyst/ui";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
@@ -253,6 +254,27 @@ describe("Check tab", () => {
     expect(render(checkTab({ users: undefined, usersFailed: true }))).toContain(
       "The users could not be loaded."
     );
+  });
+
+  it("ends its description with one link to how a right is decided, and with none without a docs address", () => {
+    const withDocs = (locale: "en" | "de") =>
+      render(
+        createElement(DocsAddressProvider, {
+          address: "https://docs.workshape.ai/catalyst",
+          children: checkTab({})
+        }),
+        locale
+      );
+
+    expect(withDocs("en").match(/data-docs-link/gu)).toHaveLength(1);
+    expect(withDocs("en")).toMatch(
+      /<p class="text-body text-muted-foreground">[^<]+ <a href="https:\/\/docs\.workshape\.ai\/catalyst\/operate\/how-rights-work\/#do-you-hold-the-right-here" target="_blank" rel="noopener noreferrer" aria-label="Learn more about how a right is decided, opens in a new tab"[^>]*>Learn more</u
+    );
+    expect(withDocs("de")).toMatch(
+      /aria-label="Mehr erfahren darüber, wie ein Recht entschieden wird, öffnet in neuem Tab"[^>]*>Mehr erfahren</u
+    );
+    expect(render(checkTab({}))).not.toContain("data-docs-link");
+    expect(render(checkTab({}))).not.toContain("Learn more");
   });
 });
 

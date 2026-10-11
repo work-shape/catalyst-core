@@ -25,6 +25,7 @@ import {
   TableHeader,
   TableRow
 } from "@vivd-catalyst/ui";
+import { DocsReference } from "../docs-links";
 import { useTranslation, type TranslationContextValue, type TranslationKey } from "../i18n";
 import {
   ACCESS_ASSET_KINDS,
@@ -165,7 +166,9 @@ export function CheckTab({
 
   return (
     <div className="grid gap-6">
-      <p className="text-body text-muted-foreground">{t("access.checkDescription")}</p>
+      <p className="text-body text-muted-foreground">
+        {t("access.checkDescription")} <DocsReference to="rightsCheck" />
+      </p>
       <div className="grid gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <Field
           label={t("access.checkPerson")}

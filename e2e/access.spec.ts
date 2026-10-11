@@ -106,21 +106,33 @@ test("an administrator registers a Namespace, grants in it, checks, denies, revo
     }
   });
   expect(created.ok()).toBe(true);
-  const grantDialog = page.getByRole("dialog", { name: "New grant" });
+  const grantDialog = page.getByRole("dialog", { name: "New right" });
   const grantRows = page.getByTestId("grant-row");
   const namespaceGrants = grantRows.filter({ hasText: "Namespace kai-" });
   try {
     await page.reload();
 
+    // The page head links to how rights work, and the check to how one right is decided.
+    const rightsDocs = "https://docs.workshape.ai/catalyst/operate/how-rights-work/";
+    const headLink = page.getByRole("link", { name: "How rights work, opens in a new tab" });
+    await expect(headLink).toHaveAttribute("href", `${rightsDocs}#the-short-version`);
+    await expect(headLink).toHaveAttribute("target", "_blank");
+    await tab(page, "Check").click();
+    await expect(
+      page.getByRole("link", {
+        name: "Learn more about how a right is decided, opens in a new tab"
+      })
+    ).toHaveAttribute("href", `${rightsDocs}#do-you-hold-the-right-here`);
+
     // Grant E2E User reading and writing agents in kai-: one row, two actions.
-    await tab(page, "Grants").click();
+    await tab(page, "Rights").click();
     await expect(page.getByText("No grant yet.")).toBeVisible();
-    await page.getByRole("button", { name: "New grant" }).click();
+    await page.getByRole("button", { name: "New right" }).click();
     await pick(page, grantDialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
     await grantDialog.getByLabel("Read").check();
     await grantDialog.getByLabel("Write").check();
     await pick(page, grantDialog.getByRole("button", { name: /^Namespace: / }), /kai-/u);
-    await grantDialog.getByRole("button", { name: "Create grant" }).click();
+    await grantDialog.getByRole("button", { name: "Create right" }).click();
     await expect(grantDialog).toBeHidden();
     await expect(grantRows).toHaveCount(1);
     await expect(grantRows.first()).toContainText("E2E User");
@@ -130,13 +142,13 @@ test("an administrator registers a Namespace, grants in it, checks, denies, revo
     await expect(grantRows.first()).toContainText("E2E Admin");
 
     // The same form with one more action adds the missing row and says what it left alone.
-    await page.getByRole("button", { name: "New grant" }).click();
+    await page.getByRole("button", { name: "New right" }).click();
     await pick(page, grantDialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
     for (const verb of ["Read", "Write", "Delete"]) {
       await grantDialog.getByLabel(verb).check();
     }
     await pick(page, grantDialog.getByRole("button", { name: /^Namespace: / }), /kai-/u);
-    await grantDialog.getByRole("button", { name: "Create grant" }).click();
+    await grantDialog.getByRole("button", { name: "Create right" }).click();
     await expect(grantDialog).toBeHidden();
     await expect(page.getByText("1 added. 2 already there and left as they are.")).toBeVisible();
     await expect(grantRows).toHaveCount(1);
@@ -190,15 +202,30 @@ test("an administrator registers a Namespace, grants in it, checks, denies, revo
     await expect(page.getByTestId("check-namespace-limits")).toContainText("Tools: none allowed.");
 
     // A deny on the one agent wins over the grant in its Namespace.
-    await tab(page, "Grants").click();
-    await page.getByRole("button", { name: "New grant" }).click();
+    await tab(page, "Rights").click();
+    await page.getByRole("button", { name: "New right" }).click();
     await pick(page, grantDialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
     await grantDialog.getByLabel("Write").check();
     await grantDialog.getByRole("radio", { name: /On one asset/u }).check();
     await pick(page, grantDialog.getByRole("button", { name: /^Asset: / }), "kai-helper");
     await grantDialog.getByRole("radio", { name: /^Deny/u }).check();
-    await expect(grantDialog.getByText("Wins over grants and roles on this asset")).toBeVisible();
-    await grantDialog.getByRole("button", { name: "Create grant" }).click();
+    await expect(
+      grantDialog.getByText("Refuses the ticked actions here, even for an administrator.")
+    ).toBeVisible();
+    // The dialog has two ways into the documentation: under the places, and after the deny.
+    const rightsPage = "https://docs.workshape.ai/catalyst/operate/how-rights-work/";
+    await expect(grantDialog.locator("a[data-docs-link]")).toHaveCount(2);
+    await expect(
+      grantDialog.getByRole("link", { name: "Namespace or workspace, opens in a new tab" })
+    ).toHaveAttribute("href", `${rightsPage}#namespace-or-workspace`);
+    const denyLink = grantDialog.getByRole("link", {
+      name: "Learn more about how a deny is decided, opens in a new tab"
+    });
+    await expect(denyLink).toHaveText("Learn more");
+    await expect(denyLink).toHaveAttribute("href", `${rightsPage}#do-you-hold-the-right-here`);
+    await expect(denyLink).toHaveAttribute("target", "_blank");
+    await expect(denyLink).toHaveAttribute("rel", "noopener noreferrer");
+    await grantDialog.getByRole("button", { name: "Create right" }).click();
     await expect(grantDialog).toBeHidden();
     await expect(grantRows).toHaveCount(2);
     await expect(grantRows.locator('[data-effect="deny"]')).toHaveText("Denied: Write agents");
@@ -215,7 +242,7 @@ test("an administrator registers a Namespace, grants in it, checks, denies, revo
     await checkRow(page, "write").scrollIntoViewIfNeeded();
     await expect(checkRow(page, "write")).toBeInViewport();
     await expectNoSidewaysScroll(page);
-    await tab(page, "Grants").click();
+    await tab(page, "Rights").click();
     await expect(grantRows).toHaveCount(2);
     await expectNoSidewaysScroll(page);
     for (const row of await grantRows.all()) {
@@ -237,7 +264,7 @@ test("an administrator registers a Namespace, grants in it, checks, denies, revo
 
   // The deny outlives its asset: the list says so in text and still removes it.
   await page.reload();
-  await tab(page, "Grants").click();
+  await tab(page, "Rights").click();
   const orphanedDeny = grantRows.filter({ hasText: "Asset no longer exists" });
   await expect(orphanedDeny).toContainText("kai-helper");
   await expect(orphanedDeny).toContainText("This deny stays until you remove it.");

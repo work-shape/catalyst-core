@@ -235,9 +235,9 @@ test("an administrator sees Connections in Build and grants its rights; a read g
 
     await test.step("the Access page grants the use of the Connection", async () => {
       await page.goto("/settings/instance/access");
-      await page.getByRole("tab", { name: /^Grants/u }).click();
-      await page.getByRole("button", { name: "New grant" }).first().click();
-      const dialog = page.getByRole("dialog", { name: "New grant" });
+      await page.getByRole("tab", { name: /^Rights/u }).click();
+      await page.getByRole("button", { name: "New right" }).first().click();
+      const dialog = page.getByRole("dialog", { name: "New right" });
       await dialog.getByRole("button", { name: /^Person/u }).click();
       await page.getByRole("option", { name: /E2E Connections/u }).click();
       await expect(page.getByRole("listbox")).toHaveCount(0);
@@ -279,7 +279,7 @@ test("an administrator sees Connections in Build and grants its rights; a read g
         await page.screenshot({ path: join(shotsDir, "connections-grant-light-en-390.png") });
         await page.setViewportSize({ width: 1280, height: 800 });
       }
-      await dialog.getByRole("button", { name: "Create grant" }).click();
+      await dialog.getByRole("button", { name: "Create right" }).click();
       await expect(dialog).toBeHidden();
 
       const grantRow = page.getByTestId("grant-row").filter({ hasText: connection.name });

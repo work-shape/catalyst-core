@@ -11,6 +11,7 @@ import {
   SegmentedControlItem,
   SubRail
 } from "@vivd-catalyst/ui";
+import { DocsReference } from "../docs-links";
 import { useTranslation } from "../i18n";
 import { AssetLanguageProvider } from "./asset-form-fields";
 import { ASSET_LANGUAGES, type LocalizedPair } from "./asset-form-model";
@@ -207,7 +208,7 @@ export function AssetEditorShell({
       >
         {canWrite ? null : (
           <Banner tone="info" className="mb-3" data-build-read-only="">
-            {readOnlyReason ?? t("build.readOnly")}
+            {readOnlyReason ?? t("build.readOnly")} <DocsReference to="buildReadOnly" />
           </Banner>
         )}
         {missingTranslations ? (

@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import type { LocaleCode } from "@vivd-catalyst/api-client";
+import { DocsAddressProvider } from "@vivd-catalyst/ui";
 import {
   buildAssetKinds,
   BuildAssetKindsProvider,
@@ -137,25 +138,35 @@ function ready(loaded: BuildAsset): BuildAssetRead {
 
 function render(
   location: BuildLocation,
-  input: { source?: BuildSource; kinds?: readonly BuildKind[]; locale?: LocaleCode } = {}
+  input: {
+    source?: BuildSource;
+    kinds?: readonly BuildKind[];
+    locale?: LocaleCode;
+    /** Where the instance's documentation is read. Absent as on an instance that names none. */
+    docsAddress?: string;
+  } = {}
 ): string {
   return renderToStaticMarkup(
     createElement(
       TranslationProvider,
       { children: null, locale: input.locale ?? "en" },
       createElement(
-        BuildAssetKindsProvider,
-        { value: input.kinds ?? buildAssetKinds },
+        DocsAddressProvider,
+        { address: input.docsAddress, children: null },
         createElement(
-          BuildNavigationProvider,
-          {
-            value: {
-              location,
-              open: () => undefined,
-              href: (place) => `/build/${place.kindPath ?? ""}/${place.name ?? ""}`
-            }
-          },
-          createElement(BuildFrame, { source: input.source ?? source() })
+          BuildAssetKindsProvider,
+          { value: input.kinds ?? buildAssetKinds },
+          createElement(
+            BuildNavigationProvider,
+            {
+              value: {
+                location,
+                open: () => undefined,
+                href: (place) => `/build/${place.kindPath ?? ""}/${place.name ?? ""}`
+              }
+            },
+            createElement(BuildFrame, { source: input.source ?? source() })
+          )
         )
       )
     )
@@ -578,7 +589,39 @@ describe("Build asset page", () => {
       })
     );
 
-    expect(markup).toContain("Instance asset. Editing needs Builder on the instance.");
+    expect(markup).toContain(
+      "Belongs to no Namespace. Only a person who may edit on the whole instance can change it."
+    );
+  });
+
+  it("ends the read-only notice with one link into the documentation, and with none on an instance without a docs address", () => {
+    const from = source({ permissions: [], namespaces: [taxNamespace], assets: read });
+    const at = { kindPath: "skills", name: "tax-review" };
+    const notice = (markup: string) =>
+      /data-build-read-only=""[^>]*>(.*?)<\/div>\s*<\/div>/u.exec(markup)?.[1] ?? markup;
+    const linked = render(at, {
+      kinds: pageKinds,
+      source: from,
+      docsAddress: "https://docs.workshape.ai/catalyst/"
+    });
+    const german = render(at, {
+      kinds: pageKinds,
+      source: from,
+      locale: "de",
+      docsAddress: "https://docs.workshape.ai/catalyst"
+    });
+
+    expect(linked.match(/data-docs-link/gu)).toHaveLength(1);
+    expect(notice(linked)).toMatch(
+      /Editing needs[^<]*<a href="https:\/\/docs\.workshape\.ai\/catalyst\/operate\/how-rights-work\/#do-you-hold-the-right-here" target="_blank" rel="noopener noreferrer" aria-label="Learn more about who may change this, opens in a new tab"[^>]*>Learn more</u
+    );
+    expect(german).toMatch(
+      /aria-label="Mehr erfahren darüber, wer das ändern darf, öffnet in neuem Tab"[^>]*>Mehr erfahren</u
+    );
+    // Without an address the notice is the same sentence and no link.
+    expect(page(from)).toContain("Asset of Namespace Tax. Editing needs");
+    expect(page(from)).not.toContain("data-docs-link");
+    expect(page(from)).not.toContain("Learn more");
   });
 
   it("leaves the delete out where the instance does not let people delete the kind", () => {
