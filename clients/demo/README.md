@@ -11,6 +11,69 @@ pnpm dev
 
 The development stack starts Postgres, migrates the database with the one-shot `migrate` service, then starts the API, the UI, the artifact preview worker and the workspace command worker. The API listens on `http://127.0.0.1:4100`, and the UI listens on `http://127.0.0.1:5173`.
 
+## Test data
+
+One command fills a running local demo with a small invented company, Nordlicht Beratung, so that every administration screen has something to show. Three commands take an empty machine to a filled instance:
+
+```bash
+pnpm dev                          # up: Postgres, the migration, the API, the UI and the workers
+docker compose run --rm migrate   # migrate: only after pulling new migrations into a running stack
+pnpm demo:seed                    # seed: the test company
+```
+
+`pnpm dev` already runs the migration once when it starts, so the second command is for a stack that is already up. Run `pnpm demo:seed` in a second terminal once the API answers.
+
+The seed signs in as the demo superadmin of `config/app.yaml` and works only through the operations of the API and the config CLI. It writes no table itself. It can run any number of times: a second run creates nothing and changes nothing. It refuses every host that is not `localhost`, `127.0.0.1`, `[::1]` or a name ending in `.localhost` or `.test`. It seeds the instance of `catalyst.yaml`; `DEMO_SEED_URL` names another local instance.
+
+Every seeded person signs in with the address below and the password in `DEMO_SEED_PASSWORD`, see `.env.example`. The seed creates the service principal `Local config CLI` when it is missing and writes its key into the gitignored `.env` as `CATALYST_API_KEY` without printing it, the same way `pnpm config:local-key` does.
+
+### What it contains
+
+| Person         | Address                             | Role  | State                        | Rights beside the role                   |
+| -------------- | ----------------------------------- | ----- | ---------------------------- | ---------------------------------------- |
+| Mara Lindqvist | `mara.lindqvist@nordlicht-beratung.test`      | admin | active                       |                                          |
+| Jonas Brandt   | `jonas.brandt@nordlicht-beratung.test`     | admin | active                       | `api_access.manage`, `agent_models.manage` |
+| Tobias Keller  | `tobias.keller@nordlicht-beratung.test`    | user  | active                       |                                          |
+| Elif Aydin     | `elif.aydin@nordlicht-beratung.test`      | user  | active                       |                                          |
+| Sven Olsen     | `sven.olsen@nordlicht-beratung.test`      | user  | active                       | `config_assets.read`, `usage.view`       |
+| Lena Hoffmann  | `lena.hoffmann@nordlicht-beratung.test`      | user  | deactivated                  |                                          |
+| Noah Fischer   | `noah.fischer@nordlicht-beratung.test`      | user  | invited, never signed in     |                                          |
+
+The superadmin is the one of the demo's config, so the instance has eight people in three roles.
+
+- Three Namespaces: `tax-` (Steuern), `hr-` (Personal) and `sales-` (Vertrieb). `tax-` has a tool list (`read_skill`, `show_view`, `demo.workflow_summary`) and a model list (`primary`, `gpt56Luna`); the other two inherit everything.
+- Eight agents and seven skills from the working copy under `seed/`, pushed with the config CLI: two agents and two skills in each Namespace, and the agents `meeting-notes` and `travel-weather` and the skill `plain-language` outside every Namespace. The agent `tax-vat-checker` has two revisions: a draft Jonas Brandt saved in the interface's way, and the pushed definition over it.
+- Sixteen grant rows: allows in a Namespace, allows on one agent and one skill, a deny on one agent inside an allowed Namespace, and a deny in a Namespace against an admin.
+- One service principal, `Local config CLI`, with one key.
+- One approval waiting in the Inbox: Elif Aydin saved the skill `hr-parental-leave-faq`, and the demo holds every skill change in `hr-` for approval (`src/policy.ts`). Approve it as Mara Lindqvist or as the superadmin; Elif cannot approve her own request.
+
+### What to ask the Check tab
+
+Open Administration > Access > Check, pick the person and the asset, and compare.
+
+| Person         | Asset                            | Read | Write | Delete | Because                                                                                                   |
+| -------------- | -------------------------------- | ---- | ----- | ------ | --------------------------------------------------------------------------------------------------------- |
+| Mara Lindqvist | agent `sales-offer-writer`       | yes  | yes   | yes    | An admin may change every agent.                                                                          |
+| Mara Lindqvist | agent `hr-onboarding-guide`      | yes  | no    | no     | A deny on writing agents in `hr-` wins over her admin role, and whoever is denied writing does not delete. |
+| Tobias Keller  | agent `tax-deadline-planner`     | yes  | yes   | yes    | His rows in the Namespace `tax-` allow all three.                                                         |
+| Tobias Keller  | agent `tax-vat-checker`          | yes  | no    | no     | A deny on this one agent wins over the allow of its Namespace.                                            |
+| Sven Olsen     | agent `sales-offer-writer`       | yes  | yes   | no     | He reads through the right set on the Users page and writes through a row on this one agent.              |
+| Sven Olsen     | agent `sales-pitch-coach`        | yes  | no    | no     | His write row names another agent, and nothing covers this one.                                           |
+| Elif Aydin     | agent `hr-exit-interview`        | yes  | yes   | yes    | The agent does not exist yet. Her rows in `hr-` would let her create it.                                  |
+| Elif Aydin     | skill `tax-vat-rules`            | no   | no    | no     | Her rows end at the Namespace `hr-`.                                                                      |
+| Lena Hoffmann  | agent `sales-pitch-coach`        | no   | no    | no     | Her account is deactivated, so her rows in `sales-` allow nothing.                                        |
+
+The table is `checkQuestions` in `src/seed/company.ts`, and `tests/demo-seed.test.ts` asks the instance every row of it.
+
+### What it leaves out
+
+- A conversation with a Page. A Page is saved by an agent's `page.save` during a run, and a run needs a model call, which the seed does not make.
+- Connections. The demo has the module `connections` off, and the platform has no connector type and no Secret Store yet, so a seeded Connection would reach nothing. The seed looks for the module and the kind `connection` and says in its output what it found; the Connection, its secret and its grants are added behind that check.
+
+### Adding to it
+
+Every feature slice that adds a kind or a screen adds its test data here: the data in `src/seed/company.ts` or the working copy under `seed/`, the step in `src/seed/run.ts`, a count in `tests/demo-seed.test.ts`, and a line in this section.
+
 ## Execution Workspaces and Pages
 
 The demo runs with Execution Workspaces and the `apps` module on. Its agent reads and writes files in the workspace of a conversation, runs commands there and saves a Page with `page.save`.
