@@ -1,14 +1,10 @@
-import type {
-  BuildAsset,
-  ConnectionDetail,
-  ConnectionTestResult,
-  PlantedConnectionAnswers
-} from "@vivd-catalyst/chat-ui/build-area";
+import type { ConnectionDetail, ConnectionTestResult } from "@vivd-catalyst/api-client";
+import type { BuildAsset } from "@vivd-catalyst/chat-ui/build-area";
 
 // The answers of `connections.get` and `connections.test` the Connection page is built
-// against, one per state the page names. They are written from the contract, and the unit test
-// and the browser spec hand the page the same ones. When the instance answers the calls
-// itself, the browser spec reads the instance and these stay the unit test's.
+// against, one per state the page names. The unit test hands them to the page. The browser spec
+// reads the instance, and answers with these only where the suite's Connector type cannot
+// bring the state about.
 
 /** A handle as the Secret Store hands one out. It is in the revision and never on the page. */
 export const FIXTURE_SECRET_HANDLE = "secret_3f0c6a52-9d1b-4c7e-8a21-5b9e0d4c7f10";
@@ -143,16 +139,3 @@ export const recordedStates = {
   notConfigured: { health: "needs_configuration", secret: { state: "not_set" } },
   secretUnreadable: { health: "secret_unreadable", secret: { state: "unreadable" } }
 } satisfies Record<string, Partial<ConnectionDetail>>;
-
-/** What a browser test plants for one state after a test ran with the given answer. */
-export function plantedTest(
-  name: string,
-  status: ConnectionTestResult["status"],
-  recorded: Partial<ConnectionDetail>
-): PlantedConnectionAnswers {
-  return {
-    detail: connectionDetail(name),
-    test: testResult(status),
-    detailAfterTest: connectionDetail(name, recorded)
-  };
-}

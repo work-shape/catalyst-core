@@ -20,8 +20,6 @@ export type {
   ConnectionSource,
   ConnectionTestRun
 } from "./connection-source";
-export type { ConnectionDetail, ConnectionTestResult } from "../api/connections-client";
-export type { PlantedConnectionAnswers } from "../api/connections-client-fake";
 export { assetIdFromTitle, resolveBuildPlace, visibleBuildKinds } from "./build-model";
 export {
   PendingApprovalError,

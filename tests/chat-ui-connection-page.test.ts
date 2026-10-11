@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
-import type { LocaleCode } from "@vivd-catalyst/api-client";
+import type { ConnectionDetail, LocaleCode } from "@vivd-catalyst/api-client";
 import {
   buildAssetKinds,
   BuildAssetKindsProvider,
@@ -12,7 +12,6 @@ import {
   type BuildAssetRead,
   type BuildListedKind,
   type BuildSource,
-  type ConnectionDetail,
   type ConnectionDetailRead,
   type ConnectionSource,
   type ConnectionTestRun
@@ -263,13 +262,18 @@ describe("Connection page", () => {
       ],
       [
         "notConfigured",
-        "The operator supplies the credential in the instance's environment and restarts the instance.",
-        "Der Betreiber stellt die Zugangsdaten in der Umgebung der Instanz bereit und startet die Instanz neu."
+        "The operator supplies the credential in the instance's environment and restarts the instance. Then test again.",
+        "Der Betreiber stellt die Zugangsdaten in der Umgebung der Instanz bereit und startet die Instanz neu. Testen Sie danach erneut."
       ],
       [
         "secretUnreadable",
-        "The operator supplies the credential again in the instance's environment, or the Secret Store key it was stored with, and restarts the instance.",
-        "Der Betreiber stellt die Zugangsdaten in der Umgebung der Instanz erneut bereit oder den Secret-Store-Schlüssel, mit dem sie gespeichert wurden, und startet die Instanz neu."
+        "The operator restores the Secret Store key the credential was stored with, or supplies the credential again in the instance's environment, and restarts the instance. Then test again.",
+        "Der Betreiber stellt den Secret-Store-Schlüssel wieder her, mit dem die Zugangsdaten gespeichert wurden, oder stellt die Zugangsdaten in der Umgebung der Instanz erneut bereit, und startet die Instanz neu. Testen Sie danach erneut."
+      ],
+      [
+        "failedUnnamed",
+        "Test again. If it fails again, ask the operator.",
+        "Testen Sie erneut. Schlägt der Test wieder fehl, wenden Sie sich an den Betreiber."
       ]
     ];
     for (const [state, english, german] of steps) {
@@ -290,6 +294,13 @@ describe("Connection page", () => {
     expect(healthOf(renderPage({ detail: { health: "failed", lastTestedAt: undefined } }))).toBe(
       "failed"
     );
+    // Where the instance has no reason of its own it records the answer of the type's test.
+    for (const status of ["unauthorized", "network_denied", "unavailable"] as const) {
+      expect(
+        healthOf(renderPage({ detail: { health: "failed", lastErrorCode: status } })),
+        status
+      ).toBe(status);
+    }
     // A tested Connection says when; one never tested names no time.
     expect(renderPage({ detail: recordedStates.ready })).toContain("Last tested ");
     expect(renderPage()).not.toContain("Last tested ");
@@ -319,15 +330,31 @@ describe("Connection page", () => {
         })
       )
     ).toBe("network_denied");
-    // A test that only found the Connection unavailable does not hide why: no credential.
+    // A failed test does not hide why: the instance answers a missing or unreadable credential
+    // as unauthorized and records which of the two it is.
+    for (const status of ["unauthorized", "unavailable"] as const) {
+      expect(
+        healthOf(
+          renderPage({
+            detail: recordedStates.notConfigured,
+            run: { status: "done", result: testResult(status) }
+          })
+        ),
+        status
+      ).toBe("not_configured");
+    }
     expect(
       healthOf(
         renderPage({
-          detail: recordedStates.notConfigured,
-          run: { status: "done", result: testResult("unavailable") }
+          detail: recordedStates.secretUnreadable,
+          run: { status: "done", result: testResult("unauthorized") }
         })
       )
-    ).toBe("not_configured");
+    ).toBe("secret_unreadable");
+    // A test that waits for somebody's approval ran nothing, and the page says so.
+    expect(renderPage({ run: { status: "held" } })).toContain(
+      "The test waits for an approval. It has not run yet."
+    );
   });
 
   it("offers the test to whoever may run it and tells the others why not", () => {

@@ -7,13 +7,14 @@ export const connections = defineTranslations({
     "connections.disabled": "Disabled",
     "connections.empty": "No connections yet. A connection holds the access to an outside system.",
     "connections.healthFailed": "Failed",
+    "connections.healthFailedNext": "Test again. If it fails again, ask the operator.",
     "connections.healthFailedText": "The test failed for a reason the instance does not name.",
     "connections.healthNetworkDeniedNext":
       "The operator adds the host to egress.allow in the release config and restarts the instance. Then test again.",
     "connections.healthNotConfiguredNext":
-      "The operator supplies the credential in the instance's environment and restarts the instance.",
+      "The operator supplies the credential in the instance's environment and restarts the instance. Then test again.",
     "connections.healthSecretUnreadableNext":
-      "The operator supplies the credential again in the instance's environment, or the Secret Store key it was stored with, and restarts the instance.",
+      "The operator restores the Secret Store key the credential was stored with, or supplies the credential again in the instance's environment, and restarts the instance. Then test again.",
     "connections.healthUnauthorizedNext":
       "The operator sets a new credential in the instance's environment and restarts the instance. Then test again.",
     "connections.healthUnavailableNext":
@@ -99,6 +100,7 @@ export const connections = defineTranslations({
       "The outside system does not offer this operation. It cannot be called.",
     "connections.test": "Test connection",
     "connections.testFailed": "The test could not be run.",
+    "connections.testHeld": "The test waits for an approval. It has not run yet.",
     "connections.testNotAllowed":
       "You can read this connection. Testing it needs the right to change connections on the instance.",
     "connections.testRefused": "You may not test this connection. You can read it."
@@ -109,12 +111,14 @@ export const connections = defineTranslations({
     "connections.healthFailed": "Fehlgeschlagen",
     "connections.healthFailedText":
       "Der Test ist aus einem Grund fehlgeschlagen, den die Instanz nicht nennt.",
+    "connections.healthFailedNext":
+      "Testen Sie erneut. Schlägt der Test wieder fehl, wenden Sie sich an den Betreiber.",
     "connections.healthNetworkDeniedNext":
       "Der Betreiber trägt den Host in der Release-Konfiguration unter egress.allow ein und startet die Instanz neu. Testen Sie danach erneut.",
     "connections.healthNotConfiguredNext":
-      "Der Betreiber stellt die Zugangsdaten in der Umgebung der Instanz bereit und startet die Instanz neu.",
+      "Der Betreiber stellt die Zugangsdaten in der Umgebung der Instanz bereit und startet die Instanz neu. Testen Sie danach erneut.",
     "connections.healthSecretUnreadableNext":
-      "Der Betreiber stellt die Zugangsdaten in der Umgebung der Instanz erneut bereit oder den Secret-Store-Schlüssel, mit dem sie gespeichert wurden, und startet die Instanz neu.",
+      "Der Betreiber stellt den Secret-Store-Schlüssel wieder her, mit dem die Zugangsdaten gespeichert wurden, oder stellt die Zugangsdaten in der Umgebung der Instanz erneut bereit, und startet die Instanz neu. Testen Sie danach erneut.",
     "connections.healthUnauthorizedNext":
       "Der Betreiber setzt neue Zugangsdaten in der Umgebung der Instanz und startet die Instanz neu. Testen Sie danach erneut.",
     "connections.healthUnavailableNext":
@@ -203,6 +207,7 @@ export const connections = defineTranslations({
       "Das externe System bietet diese Operation nicht an. Sie kann nicht aufgerufen werden.",
     "connections.test": "Verbindung testen",
     "connections.testFailed": "Der Test konnte nicht ausgeführt werden.",
+    "connections.testHeld": "Der Test wartet auf eine Freigabe. Er ist noch nicht gelaufen.",
     "connections.testNotAllowed":
       "Sie können diese Verbindung lesen. Zum Testen brauchen Sie das Recht, Verbindungen der Instanz zu ändern.",
     "connections.testRefused": "Sie dürfen diese Verbindung nicht testen. Lesen können Sie sie."

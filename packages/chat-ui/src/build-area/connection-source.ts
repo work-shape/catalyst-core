@@ -1,14 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { plantedConnectionsClient } from "../api/connections-client-fake";
-import type {
-  ConnectionDetail,
-  ConnectionsClient,
-  ConnectionTestResult
-} from "../api/connections-client";
+import type { ConnectionDetail, ConnectionTestResult } from "@vivd-catalyst/api-client";
 import { usePlatformContextQuery } from "../api/workspace-queries";
 import { useSettingsPage } from "../settings/settings-page-context";
 import { apiErrorCode } from "../workspace-utils";
-import { instanceSentence } from "./build-refusals";
+import { instanceSentence, PendingApprovalError } from "./build-refusals";
 
 /** The action that lets a person test a Connection. */
 const CONNECTION_WRITE_ACTION = "connection.write";
@@ -27,6 +22,8 @@ export type ConnectionTestRun =
   | { status: "done"; result: ConnectionTestResult }
   /** The instance answered that this person may not test the Connection. */
   | { status: "refused" }
+  /** The instance accepted the test and did not run it: somebody else approves it first. */
+  | { status: "held" }
   | { status: "failed"; message: string | undefined };
 
 /**
@@ -45,13 +42,11 @@ export interface ConnectionSource {
 
 /**
  * The Connection page on the instance: `connections.get` answers the state and
- * `connections.test` runs the test. Until the instance answers them the calls go to the
- * planted answers of `connections-client-fake`; binding `calls` to `client.connections` is the
- * whole change.
+ * `connections.test` runs the test.
  */
 export function useConnectionSource(): ConnectionSource {
   const { apiBaseUrl, authScope, client } = useSettingsPage();
-  const calls: ConnectionsClient = plantedConnectionsClient;
+  const calls = client.connections;
   const queryClient = useQueryClient();
   const context = usePlatformContextQuery({ apiBaseUrl, authScope, client, enabled: true });
   const detailKey = (name: string) => ["connection-detail", apiBaseUrl, authScope, name];
@@ -85,7 +80,13 @@ export function useConnectionSource(): ConnectionSource {
     },
     useTest(name) {
       const test = useMutation({
-        mutationFn: () => calls.test({ params: { name } }),
+        mutationFn: async () => {
+          const outcome = await calls.test({ params: { name } });
+          if (outcome.status !== "done") {
+            throw new PendingApprovalError();
+          }
+          return outcome.output;
+        },
         // The test wrote the Connection's health: the page reads it again, also after a refusal.
         onSettled: () => queryClient.invalidateQueries({ queryKey: detailKey(name) })
       });
@@ -94,9 +95,11 @@ export function useConnectionSource(): ConnectionSource {
         : test.data
           ? { status: "done", result: test.data }
           : test.error
-            ? apiErrorCode(test.error) === "FORBIDDEN"
-              ? { status: "refused" }
-              : { status: "failed", message: instanceSentence(test.error) }
+            ? test.error instanceof PendingApprovalError
+              ? { status: "held" }
+              : apiErrorCode(test.error) === "FORBIDDEN"
+                ? { status: "refused" }
+                : { status: "failed", message: instanceSentence(test.error) }
             : { status: "idle" };
       return { run, start: () => test.mutate() };
     }

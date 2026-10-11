@@ -125,6 +125,11 @@ modules:
   # server names one connector type, `test`, which contacts nothing.
   connections:
     enabled: true
+# The one address a Connection of the suite may reach. Nothing listens there and the `test`
+# connector type contacts nothing: the entry is what lets a test of a Connection answer ready.
+egress:
+  allow:
+    - { protocol: https, host: 127.0.0.1, port: 8443, network: private, cidrs: [127.0.0.0/8] }
 executionWorkspaces:
   enabled: true
 infrastructure:

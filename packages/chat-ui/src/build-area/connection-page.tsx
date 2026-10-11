@@ -22,10 +22,8 @@ import {
 import type {
   ConnectionDetail,
   ConnectionOperationDetail,
-  ConnectionOperationExposure,
-  ConnectionOperationStatus,
-  ConnectionTestStatus
-} from "../api/connections-client";
+  ConnectionTestResult
+} from "@vivd-catalyst/api-client";
 import { formatDateTime } from "../control-plane/locale-format";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { agentKind } from "./agent-kind";
@@ -77,7 +75,8 @@ const HEALTH_VIEWS: Record<
   failed: {
     tone: "danger",
     label: "connections.healthFailed",
-    text: "connections.healthFailedText"
+    text: "connections.healthFailedText",
+    next: "connections.healthFailedNext"
   },
   not_configured: {
     tone: "warning",
@@ -98,15 +97,21 @@ const HEALTH_VIEWS: Record<
   }
 };
 
-/** The reasons a failed test or call records, as far as the page tells them apart. */
+/**
+ * What a failed test or call records, as far as the page tells it apart: the reason where the
+ * instance has one, else the answer of the Connector type's own test.
+ */
 const RECORDED_FAILURES: Record<string, HealthView> = {
   upstream_unauthorized: "unauthorized",
+  unauthorized: "unauthorized",
   egress_denied: "network_denied",
+  network_denied: "network_denied",
   connection_unavailable: "unavailable",
-  upstream_timeout: "unavailable"
+  upstream_timeout: "unavailable",
+  unavailable: "unavailable"
 };
 
-const TEST_RESULTS: Record<ConnectionTestStatus, HealthView> = {
+const TEST_RESULTS: Record<ConnectionTestResult["status"], HealthView> = {
   ready: "ready",
   unauthorized: "unauthorized",
   network_denied: "network_denied",
@@ -131,8 +136,8 @@ function recordedHealth(detail: ConnectionDetail): HealthView {
 
 /**
  * What the page says: a running test first, then the answer of the test just run, then what
- * the instance recorded. A test that only found the Connection unavailable does not hide the
- * recorded reason for it, a missing or unreadable credential.
+ * the instance recorded. A test that failed does not hide the recorded reason for it, a
+ * missing or unreadable credential: the instance answers such a test as unauthorized.
  */
 function healthOf(detail: ConnectionDetail, run: ConnectionTestRun): HealthView {
   if (run.status === "running") {
@@ -143,14 +148,13 @@ function healthOf(detail: ConnectionDetail, run: ConnectionTestRun): HealthView 
     return recorded;
   }
   const tested = TEST_RESULTS[run.result.status];
-  return tested === "unavailable" &&
-    (recorded === "not_configured" || recorded === "secret_unreadable")
+  return tested !== "ready" && (recorded === "not_configured" || recorded === "secret_unreadable")
     ? recorded
     : tested;
 }
 
 const OPERATION_STATUS: Record<
-  ConnectionOperationStatus,
+  ConnectionOperationDetail["status"],
   { tone: BadgeTone; label: TranslationKey; text?: TranslationKey }
 > = {
   ready: { tone: "success", label: "connections.statusReady" },
@@ -176,7 +180,7 @@ const OPERATION_STATUS: Record<
   }
 };
 
-const EXPOSURE_LABELS: Record<ConnectionOperationExposure, TranslationKey> = {
+const EXPOSURE_LABELS: Record<ConnectionOperationDetail["exposure"][number], TranslationKey> = {
   agent: "connections.exposureAgent",
   bridge: "connections.exposureBridge",
   workflow: "connections.exposureWorkflow"
@@ -426,6 +430,8 @@ function ConnectionStatus({
       </div>
       {run.status === "refused" ? (
         <FormNotice tone="error">{t("connections.testRefused")}</FormNotice>
+      ) : run.status === "held" ? (
+        <Banner layout="line">{t("connections.testHeld")}</Banner>
       ) : run.status === "failed" ? (
         <FormNotice tone="error">{run.message ?? t("connections.testFailed")}</FormNotice>
       ) : mayTest ? null : (

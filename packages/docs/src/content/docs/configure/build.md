@@ -18,7 +18,29 @@ A person with a grant in a Namespace sees the assets of that Namespace and nothi
 
 A grant on one single asset, or on what one workspace owns, is checked by the instance on every read and write. The interface learns only that the person may read some asset of the kind: a read grant gives the Build row and the list of the kind, which holds the assets the person may read. Such an asset opens read-only. A grant that allows another action and no reading gives no Build row.
 
-On an instance with the module [`connections`](/configure/modules/#connections) on, Build also lists Connections for a person who may read every Connection of the instance, which the administrator role allows, and for a person with a read grant in a Namespace, on one Connection or on the Connections of one workspace, who sees those Connections. A grant to use a Connection gives no entry in Build. A row shows the connector type, whether the instance or a workspace owns the Connection, and whether it is enabled. The list opens no page and starts no Connection in this release, and it shows no setting and no reference to a credential.
+On an instance with the module [`connections`](/configure/modules/#connections) on, Build also lists Connections for a person who may read every Connection of the instance, which the administrator role allows, and for a person with a read grant in a Namespace, on one Connection or on the Connections of one workspace, who sees those Connections. A grant to use a Connection gives no entry in Build. A row shows the connector type, whether the instance or a workspace owns the Connection, and whether it is enabled. A row opens the [page of the Connection](#the-page-of-a-connection). Build starts no Connection and changes none: Connections come from the release config.
+
+## The page of a Connection
+
+The page of a Connection shows it and changes nothing. It never shows a credential or a reference to one.
+
+- **Settings**: the connector type, the authentication scheme and the settings of the connector type, as the release config names them.
+- **Status**: whether the instance reaches the outside system, when it was last tested, and whether the credential is set, not set or unreadable. A Connection has one credential for everyone who may use it, and the page says so.
+- **Operations**: each accepted operation with its tool name `connection.<name>.<operation>`, whether it reads or changes, who may call it (agents, Apps, Workflows or nobody) and its status. Only an operation with the status **Ready** can be called. **Awaiting discovery** means the instance has not read it from the outside system yet, **Needs review** that the outside system describes it differently than was accepted, **Unknown** that the outside system does not offer it, and **Disabled** that the release config switches it off.
+- **Used by**: the agents that carry a tool of the Connection, of those the reader may read.
+
+**Test connection** asks the connector type to check the Connection and records the answer. It is offered to a person who may change Connections (`connection.write`); a person who may only read sees the recorded state.
+
+| Status | What it means | What to do |
+| --- | --- | --- |
+| Ready | The outside system answered the test. | Nothing. |
+| Not tested | Nobody has tested the Connection yet. | Test it. |
+| Unauthorized | The outside system refused the credential. | The operator sets a new credential in the instance's environment and restarts the instance. |
+| Network denied | The host is not in [`egress.allow`](/configure/release-config/#egress). | The operator adds the host to `egress.allow` and restarts the instance. |
+| Unavailable | The outside system did not answer. | Check the address under Settings. It is changed in the release config. |
+| Not configured | The credential is missing. | The operator supplies it in the instance's environment and restarts the instance. |
+| Credential unreadable | A credential is stored and the instance cannot read it. | The operator restores the Secret Store key it was stored with, or supplies the credential again, and restarts the instance. |
+| Failed | The test failed for a reason the instance does not name. | Test again, then ask the operator. |
 
 ## The list
 
