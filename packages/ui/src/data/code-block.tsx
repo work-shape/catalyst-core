@@ -11,6 +11,9 @@ export interface CodeBlockProps extends Omit<HTMLAttributes<HTMLDivElement>, "ch
 /** The width of the number column by the digits of the last line number, up to five. */
 const GUTTER_WIDTHS = ["before:w-8", "before:w-10", "before:w-12", "before:w-14", "before:w-16"];
 
+/** A line as it is copied: with the line break it ends on. */
+const lineWithBreak = (line: string) => `${line}\n`;
+
 /**
  * Text of a file, read-only: monospaced, one numbered line per line, scrolling in both
  * directions inside its own box. The numbers are drawn, not written, so a selection copies
@@ -47,7 +50,7 @@ export function CodeBlock({ className, code, label, ...props }: CodeBlockProps) 
                 GUTTER_WIDTHS[digits - 1]
               )}
             >
-              {`${line}\n`}
+              {lineWithBreak(line)}
             </span>
           ))}
         </code>

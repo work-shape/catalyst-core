@@ -201,6 +201,25 @@ function SurfaceFrameSamples({ text }: { text: GalleryText }) {
           </SurfaceFrame>
         </div>
       </Samples>
+      <Samples label={text.surfaceFlush}>
+        <div className="h-56 w-full overflow-hidden rounded-lg border">
+          <SurfaceFrame
+            title={text.surfaceTitle}
+            subtitle={text.surfaceSubtitle}
+            close={close}
+            flush
+          >
+            <div className="flex h-full flex-col">
+              <div className="min-h-0 flex-1 bg-card p-4 text-body text-muted-foreground">
+                {text.surfaceFlushBody}
+              </div>
+              <p className="border-t px-4 py-2 text-caption text-muted-foreground">
+                {text.surfaceFlushFoot}
+              </p>
+            </div>
+          </SurfaceFrame>
+        </div>
+      </Samples>
       <Samples label={text.surfaceCovering}>
         <div className="h-56 w-full max-w-md overflow-hidden rounded-lg border">
           <SurfaceFrame leading={showChat} title={text.surfaceTitle}>

@@ -102,6 +102,9 @@ export interface LayoutGalleryText {
   surfaceTitle: string;
   surfaceSubtitle: string;
   surfaceBody: string;
+  surfaceFlush: string;
+  surfaceFlushBody: string;
+  surfaceFlushFoot: string;
   surfaceDownload: string;
   surfaceShowChat: string;
   surfaceViewFullscreen: string;
@@ -259,6 +262,9 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     surfaceTitle: "Quarterly report.pdf",
     surfaceSubtitle: "PDF, 4 pages",
     surfaceBody: "The surface's content scrolls under its header.",
+    surfaceFlush: "Content to the edges",
+    surfaceFlushBody: "A preview fills the surface and lays out its own height.",
+    surfaceFlushFoot: "A line of its own stays at the foot.",
     surfaceDownload: "Download",
     surfaceShowChat: "Show chat",
     surfaceViewFullscreen: "View fullscreen",
@@ -415,6 +421,9 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     surfaceTitle: "Quartalsbericht.pdf",
     surfaceSubtitle: "PDF, 4 Seiten",
     surfaceBody: "Der Inhalt der Fläche scrollt unter ihrer Kopfzeile.",
+    surfaceFlush: "Inhalt bis an die Ränder",
+    surfaceFlushBody: "Eine Vorschau füllt die Fläche und teilt ihre Höhe selbst ein.",
+    surfaceFlushFoot: "Eine eigene Zeile bleibt am Fuß stehen.",
     surfaceDownload: "Herunterladen",
     surfaceShowChat: "Chat anzeigen",
     surfaceViewFullscreen: "Im Vollbild anzeigen",

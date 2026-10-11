@@ -14,6 +14,11 @@ export interface SurfaceFrameProps extends Omit<HTMLAttributes<HTMLDivElement>, 
   fullscreen?: ReactNode;
   /** The button that closes the surface, always last. */
   close?: ReactNode;
+  /**
+   * The content reaches the edges of the frame and lays out its own height, such as a preview
+   * that fills the surface. Without it the content has the frame's inset and scrolls.
+   */
+  flush?: boolean;
   /** What the surface shows. It scrolls under the header. */
   children?: ReactNode;
 }
@@ -31,6 +36,7 @@ export function SurfaceFrame({
   actions,
   fullscreen,
   close,
+  flush = false,
   children,
   ...props
 }: SurfaceFrameProps) {
@@ -55,7 +61,13 @@ export function SurfaceFrame({
         {fullscreen}
         {close}
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto bg-background p-4 [scrollbar-width:thin]">
+      <div
+        data-flush={flush ? "" : undefined}
+        className={cn(
+          "min-h-0 flex-1 bg-background",
+          flush ? "overflow-hidden" : "overflow-y-auto p-4 [scrollbar-width:thin]"
+        )}
+      >
         {children}
       </div>
     </div>

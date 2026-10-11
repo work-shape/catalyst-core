@@ -439,6 +439,20 @@ describe("SurfaceFrame", () => {
     expect(markup).toMatch(/<p class="[^"]*text-caption text-muted-foreground[^"]*">subtitle</u);
   });
 
+  it("gives its content the inset and the scrolling unless the content is flush", () => {
+    const body = (flush: boolean) =>
+      /<\/header><div(?: data-flush="")? class="([^"]*)"/u
+        .exec(
+          renderToStaticMarkup(createElement(library.SurfaceFrame, { title: "name", flush }, "c"))
+        )?.[1]
+        ?.split(" ");
+
+    expect(body(false)).toEqual(expect.arrayContaining(["p-4", "overflow-y-auto"]));
+    expect(body(true)).toContain("overflow-hidden");
+    expect(body(true)).not.toContain("p-4");
+    expect(body(true)).not.toContain("overflow-y-auto");
+  });
+
   it("takes product-owned props and no Radix type", () => {
     const source = readFileSync(
       fileURLToPath(new URL("../packages/ui/src/structure/surface-frame.tsx", import.meta.url)),
