@@ -183,8 +183,8 @@ async function buildInstanceConnections(
     toolSource: createConnectionToolSource(operations),
     management: {
       ...createConnectionManagement(operations),
-      discover: (connectionName, signal) =>
-        discoverConnection({ ...operations, connectionName, signal })
+      discover: (connectionName, attempt) =>
+        discoverConnection({ ...operations, connectionName, ...attempt })
     },
     async seed() {
       const result = await seedReleaseConnections({

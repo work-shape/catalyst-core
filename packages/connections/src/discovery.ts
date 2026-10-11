@@ -6,6 +6,7 @@ import {
   connectionCallReasonOf,
   type ClientInstanceId,
   type ConnectionCallReason,
+  type ConnectionCatalog,
   type ConnectionCredentialResolver,
   type ConnectionHealth,
   type ConnectorOperationDescriptor,
@@ -76,6 +77,11 @@ export interface ConnectionDiscoveryResult {
   leftOutCount?: number;
   /** How many of those were left out because they held the credential. Only with `discovered`. */
   rejectedCount?: number;
+  /**
+   * With `failed`: the caller stopped the discovery. Nothing was found out about the
+   * Connection and nothing was written.
+   */
+  stopped?: true;
 }
 
 export interface DiscoverConnectionInput {
@@ -87,6 +93,13 @@ export interface DiscoverConnectionInput {
   /** Missing while release config names no Connection: no credential can be resolved then. */
   credentials: ConnectionCredentialResolver | undefined;
   signal: AbortSignal;
+  /**
+   * What every write of the discovery goes through. A job hands in the transaction of its
+   * attempt, which refuses once the attempt lost its lease, so a discovery that was taken
+   * over writes nothing over what the newer attempt stored. Left out, a transaction of
+   * `stores`.
+   */
+  transaction?<Result>(write: (stores: PlatformStores) => Promise<Result>): Promise<Result>;
   logger?: Logger;
   now?: () => Date;
   /** Instead of `CONNECTION_DISCOVERY_TIMEOUT_MS`. For tests. */
@@ -332,8 +345,9 @@ async function discoverOperations(
  * Discovers one Connection and stores what was read as its catalog. A Connection that does
  * not exist, is off, or whose type has a static catalog or is not part of this build is
  * `skipped` and nothing is contacted. A failure writes its reason as `last_error_code` and
- * leaves the stored catalog as it is, so nothing that was accepted changes. Never throws for
- * anything the type or the outside system did.
+ * leaves the stored catalog as it is, so nothing that was accepted changes. A discovery its
+ * caller stopped writes nothing at all. Never throws for anything the type or the outside
+ * system did.
  */
 export async function discoverConnection(
   input: DiscoverConnectionInput
@@ -345,9 +359,13 @@ export async function discoverConnection(
     return { status: "skipped" };
   }
   const discover = type.discover.bind(type);
+  const write = <Result>(fn: (tx: PlatformStores) => Promise<Result>): Promise<Result> =>
+    input.transaction ? input.transaction(fn) : stores.transaction(fn);
   // One deadline for the whole discovery: the wait for the answer, and bounding, compiling
   // and fingerprinting it.
   const deadline = openDeadline(input.signal, input.timeoutMs ?? CONNECTION_DISCOVERY_TIMEOUT_MS);
+  let found: { catalog: ConnectionCatalog; leftOut: number; rejected: number } | undefined;
+  let reason: ConnectionCallReason | undefined;
   try {
     const answer = await discoverOperations(input, connection, discover, type, deadline);
     const { operations, leftOut, rejected } = boundedOperations(
@@ -362,8 +380,32 @@ export async function discoverConnection(
       now: (input.now?.() ?? new Date()).toISOString()
     });
     deadline.check();
-    // A discovery that listed its tools reached the system with the credential.
-    await stores.connections.putConnectionState({
+    found = { catalog, leftOut, rejected };
+  } catch (error) {
+    // Only the reason is read. The text of the error is the type's or the outside system's.
+    reason = connectionCallReasonOf(error);
+  } finally {
+    deadline.close();
+  }
+  // A discovery its caller stopped says nothing about the Connection: no failure is written.
+  if (input.signal.aborted) return { status: "failed", stopped: true };
+
+  // An error of a write is the store's or the job's and leaves as it is.
+  if (!found) {
+    await write((tx) =>
+      tx.connections.putConnectionState({
+        clientInstanceId,
+        connectionAssetId: connection.assetId,
+        health: healthOfFailure(reason, connection.state?.health),
+        lastErrorCode: reason ?? CONNECTION_DISCOVERY_FAILED_CODE
+      })
+    );
+    return { status: "failed", ...(reason === undefined ? {} : { reason }) };
+  }
+  const { catalog, leftOut, rejected } = found;
+  // A discovery that listed its tools reached the system with the credential.
+  await write((tx) =>
+    tx.connections.putConnectionState({
       clientInstanceId,
       connectionAssetId: connection.assetId,
       health: "ok",
@@ -374,30 +416,18 @@ export async function discoverConnection(
         entries: catalog.entries.map((entry) => ({ ...entry })),
         pinned: catalog.pinned
       }
-    });
-    if (leftOut > 0) {
-      input.logger?.warn(
-        { connection: connectionName, leftOut, rejected },
-        "A discovery listed operations that the catalog does not take"
-      );
-    }
-    return {
-      status: "discovered",
-      operationCount: catalog.entries.length,
-      leftOutCount: leftOut,
-      ...(rejected > 0 ? { rejectedCount: rejected } : {})
-    };
-  } catch (error) {
-    // Only the reason is read. The text of the error is the type's or the outside system's.
-    const reason = connectionCallReasonOf(error);
-    await stores.connections.putConnectionState({
-      clientInstanceId,
-      connectionAssetId: connection.assetId,
-      health: healthOfFailure(reason, connection.state?.health),
-      lastErrorCode: reason ?? CONNECTION_DISCOVERY_FAILED_CODE
-    });
-    return { status: "failed", ...(reason === undefined ? {} : { reason }) };
-  } finally {
-    deadline.close();
+    })
+  );
+  if (leftOut > 0) {
+    input.logger?.warn(
+      { connection: connectionName, leftOut, rejected },
+      "A discovery listed operations that the catalog does not take"
+    );
   }
+  return {
+    status: "discovered",
+    operationCount: catalog.entries.length,
+    leftOutCount: leftOut,
+    ...(rejected > 0 ? { rejectedCount: rejected } : {})
+  };
 }

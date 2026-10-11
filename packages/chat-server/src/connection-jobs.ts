@@ -113,10 +113,16 @@ export function createConnectionDiscoveryJobs(options: ConnectionDiscoveryJobOpt
         slots: CONNECTION_DISCOVERY_SLOTS,
         async run(job, control) {
           const { connectionName } = job.payload;
-          const outcome = await discover(connectionName, control.signal);
+          // Every write of the discovery is one of this attempt: an attempt that lost its
+          // lease stores nothing over what the attempt after it found.
+          const outcome = await discover(connectionName, {
+            signal: control.signal,
+            transaction: (write) => control.transaction(write)
+          });
           if (outcome.status === "skipped") return;
-          // The worker stops: the attempt is given back, and nothing was decided.
-          if (outcome.status === "failed" && control.signal.aborted) {
+          // The worker stops or the lease is gone: nothing was decided and nothing written.
+          // The attempt is given back.
+          if (outcome.stopped === true || (outcome.status === "failed" && control.signal.aborted)) {
             throw new AppError("CONFLICT", "The discovery of a Connection was stopped");
           }
           if (outcome.status === "discovered") {

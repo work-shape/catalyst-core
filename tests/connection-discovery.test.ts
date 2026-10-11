@@ -187,7 +187,7 @@ const auditEvents = async (instance: TestInstance) =>
 async function discoverDirectly(
   w: ReturnType<typeof world>,
   signal = new AbortController().signal,
-  further: Pick<Parameters<typeof discoverConnection>[0], "timeoutMs"> = {}
+  further: Pick<Parameters<typeof discoverConnection>[0], "timeoutMs" | "transaction"> = {}
 ) {
   const execution = await createTestInstance({ execution: w.input() });
   try {
@@ -377,16 +377,56 @@ describe("a discovery that fails", () => {
     expect((await storedState(instance)).state).toMatchObject({ lastErrorCode: "egress_denied" });
   });
 
-  it("ends when its caller stops it, although the type never answers", async () => {
+  // Fails without the change: a stopped discovery wrote `upstream_timeout` onto the Connection.
+  it("ends when its caller stops it, although the type never answers, and writes nothing", async () => {
     const w = world();
-    await w.start();
+    const instance = await w.start();
     w.connector.discover = () => new Promise(() => undefined);
     const controller = new AbortController();
     const discovering = discoverDirectly(w, controller.signal);
     // The type is waiting. Nothing but the signal ends it.
     await expect.poll(() => w.connector.discoveries, { timeout: 10_000 }).toBe(1);
     controller.abort();
-    expect(await discovering).toEqual({ status: "failed", reason: "upstream_timeout" });
+    expect(await discovering).toEqual({ status: "failed", stopped: true });
+    expect((await storedState(instance)).state?.lastErrorCode).toBeUndefined();
+  });
+
+  // Fails without the change: the stopped attempt wrote a failure and counted as an attempt.
+  it("gives its attempt back and writes nothing when the worker stops", async () => {
+    const w = world();
+    const instance = await w.start();
+    w.connector.discover = () => new Promise(() => undefined);
+    const jobs = getTestJobs(instance);
+    const pass = jobs.runDue();
+    await expect.poll(() => w.connector.discoveries, { timeout: 10_000 }).toBe(1);
+    await jobs.stop();
+    await pass;
+
+    expect(await discoveryJobs()).toMatchObject([{ status: "queued", attempts: 0 }]);
+    expect((await storedState(instance)).state?.lastErrorCode).toBeUndefined();
+    expect(await auditEvents(instance)).toEqual([]);
+  });
+
+  // Fails without the change: the result was written past the job, so an attempt that had
+  // lost its lease stored its catalog over the one of the attempt that took over.
+  it("stores nothing when the attempt that ran it no longer holds its lease", async () => {
+    const w = world();
+    const instance = await w.start();
+    const lost = new Error("The job is no longer leased to this attempt");
+    await expect(
+      discoverDirectly(w, undefined, { transaction: () => Promise.reject(lost) })
+    ).rejects.toBe(lost);
+    expect(w.connector.discoveries).toBe(1);
+    const { state, catalog } = await storedState(instance);
+    expect(catalog).toBeUndefined();
+    expect(state?.lastErrorCode).toBeUndefined();
+
+    // And the failure of a discovery goes the same way.
+    w.connector.discover = () => Promise.reject(connectionCallError("upstream_unauthorized"));
+    await expect(
+      discoverDirectly(w, undefined, { transaction: () => Promise.reject(lost) })
+    ).rejects.toBe(lost);
+    expect((await storedState(instance)).state).toMatchObject({ health: "unknown" });
   });
 });
 

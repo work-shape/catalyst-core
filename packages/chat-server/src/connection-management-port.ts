@@ -3,7 +3,7 @@ import type {
   ConnectionTestResult,
   ConnectionTools
 } from "@vivd-catalyst/api-contract";
-import type { AccessResource, OperationResource } from "@vivd-catalyst/core";
+import type { AccessResource, OperationResource, PlatformStores } from "@vivd-catalyst/core";
 
 /**
  * How one discovery of a Connection ended. `skipped` is a Connection that has nothing to
@@ -19,6 +19,19 @@ export interface ConnectionDiscoveryOutcome {
   leftOutCount?: number;
   /** How many of those were left out because they held the Connection's credential. */
   rejectedCount?: number;
+  /** The discovery was stopped through its signal. Nothing was decided or written. */
+  stopped?: boolean;
+}
+
+/** What a discovery runs under: the job attempt that asked for it. */
+export interface ConnectionDiscoveryAttempt {
+  /** Aborted when the attempt is stopped or lost its lease. The discovery then writes nothing. */
+  signal: AbortSignal;
+  /**
+   * What every write of the discovery goes through. It refuses once the attempt no longer
+   * holds its lease, so a discovery that was taken over stores nothing.
+   */
+  transaction<Result>(write: (stores: PlatformStores) => Promise<Result>): Promise<Result>;
 }
 
 /**
@@ -43,5 +56,5 @@ export interface ConnectionManagementPort {
    * answer and leaves the stored catalog. Missing where the assembly brings no discovery:
    * the job kind `connection.discover` is then not served.
    */
-  discover?(name: string, signal: AbortSignal): Promise<ConnectionDiscoveryOutcome>;
+  discover?(name: string, attempt: ConnectionDiscoveryAttempt): Promise<ConnectionDiscoveryOutcome>;
 }
