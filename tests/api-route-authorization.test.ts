@@ -298,19 +298,14 @@ describe("every operation of the catalog", () => {
 describe("a changing operation is registered or named as plain", () => {
   const readJson = (path: string): unknown =>
     JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
-  const classes = ["identity", "own_account", "decision", "conversation", "pending"] as const;
+  // There is no class for an operation that waits to be registered: a changing operation is an
+  // Operation Run, or it is plain for a reason that stays true.
+  const classes = ["identity", "own_account", "decision", "conversation"] as const;
   const list = z
     .strictObject({
       changing: z.record(
         z.string(),
-        z.union([
-          // A pending operation names the ticket that registers or deletes it.
-          z.strictObject({ class: z.literal("pending"), ticket: z.string().regex(/^CONV-\w+$/u) }),
-          z.strictObject({
-            class: z.enum(classes).exclude(["pending"]),
-            reason: z.string().trim().min(1)
-          })
-        ])
+        z.strictObject({ class: z.enum(classes), reason: z.string().trim().min(1) })
       ),
       rightDecidedBy: z.record(
         z.string(),
