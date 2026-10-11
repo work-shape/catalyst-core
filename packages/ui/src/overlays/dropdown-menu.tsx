@@ -101,6 +101,11 @@ export interface DropdownMenuItemProps {
    * pointer: use it when the reader has to act on the reason. `tooltip` is the default.
    */
   reasonPlacement?: "tooltip" | "line";
+  /**
+   * Leaves the menu open when the item is chosen, for an item that answers in place, such as
+   * a copy item whose label says for a moment that it copied.
+   */
+  keepOpen?: boolean;
   onSelect?(): void;
   /**
    * An address outside the product. The item is then a link that opens it in a new tab, and
@@ -123,6 +128,7 @@ export function DropdownMenuItem({
   disabled = false,
   disabledReason,
   reasonPlacement = "tooltip",
+  keepOpen = false,
   onSelect,
   href,
   accessibleName,
@@ -156,7 +162,18 @@ export function DropdownMenuItem({
   }
   if (disabledReason === undefined) {
     return (
-      <DropdownMenuPrimitive.Item className={classes} disabled={disabled} onSelect={onSelect}>
+      <DropdownMenuPrimitive.Item
+        className={classes}
+        disabled={disabled}
+        onSelect={
+          keepOpen
+            ? (event) => {
+                event.preventDefault();
+                onSelect?.();
+              }
+            : onSelect
+        }
+      >
         {content}
       </DropdownMenuPrimitive.Item>
     );
