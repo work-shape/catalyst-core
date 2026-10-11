@@ -212,7 +212,8 @@ describe("operation over HTTP: who checks the right", () => {
           require: (action) => {
             asked.push(action);
             throw new AppError("FORBIDDEN", "Refused by the test", { action, reason: "denied" });
-          }
+          },
+          holdsGrantAt: () => false
         })
     };
     const { server, executed } = await createServer({ authorizer });
