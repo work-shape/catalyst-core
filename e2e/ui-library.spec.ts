@@ -203,6 +203,18 @@ test("anchored overlays sit on the raised surface and answer the keyboard", asyn
   );
   await page.keyboard.press("Enter");
   await expect(menu).toBeVisible();
+  // An item that is a link takes the focus like any other, says that it opens a new tab and
+  // carries the address; its text stays the short one.
+  await page.keyboard.press("ArrowDown");
+  const documentation = menu.getByRole("menuitem", {
+    name: "Documentation, opens in a new tab",
+    exact: true
+  });
+  await expect(documentation).toBeFocused();
+  await expect(documentation).toHaveText("Documentation");
+  await expect(documentation).toHaveAttribute("href", "https://docs.example/catalyst");
+  await expect(documentation).toHaveAttribute("target", "_blank");
+  await expect(documentation).toHaveAttribute("rel", "noopener noreferrer");
   await page.keyboard.press("ArrowDown");
   await expect(menu.getByRole("menuitem", { name: "Delete" })).toBeFocused();
   await expect(menu.getByRole("menuitem").last()).toHaveText("Delete");
