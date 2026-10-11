@@ -182,6 +182,7 @@ async function seedPeople(
   const ids = new Map<PersonKey, string>();
   let created = 0;
   let invitationsSkipped = 0;
+  let invitationsRecovered = 0;
   for (const person of people) {
     const wanted = {
       displayLabel: person.displayLabel,
@@ -206,6 +207,16 @@ async function seedPeople(
       continue;
     }
     ids.set(person.key, found.id);
+    // A run that stopped between creating the person and mailing them left no invitation.
+    if (
+      person.invited &&
+      invitationsOn &&
+      found.lastAuthenticatedAt === undefined &&
+      !(await root.invitationWasSent(found.id))
+    ) {
+      await root.sendInvitation(found.id);
+      invitationsRecovered += 1;
+    }
     if (
       found.displayLabel !== wanted.displayLabel ||
       found.status !== wanted.status ||
@@ -222,7 +233,9 @@ async function seedPeople(
     existing: people.length - created,
     ...(invitationsSkipped
       ? { note: "No invitation was mailed: the module userInvitations is off on this instance." }
-      : {})
+      : invitationsRecovered
+        ? { note: "Mailed the invitation an earlier run created the person for and did not send." }
+        : {})
   });
   return ids;
 }

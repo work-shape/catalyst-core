@@ -3,7 +3,12 @@ import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll, beforeAll, expect } from "vitest";
-import { createApiClient, listAll, signInForSessionFetch } from "@vivd-catalyst/api-client";
+import {
+  createApiClient,
+  listAll,
+  signInForSessionFetch,
+  type ApiClient
+} from "@vivd-catalyst/api-client";
 import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
 import { checkAsset, checkedAssetId } from "@vivd-catalyst/chat-ui/access";
 import {
@@ -35,6 +40,8 @@ interface SeededInstanceInput {
   /** Tools the config enables beside the demo's own. */
   tools?: ToolAssemblyDefinition[];
   env?: Record<string, string>;
+  /** What is on the instance before the first run, put there as the superadmin. */
+  prepare?: (client: ApiClient) => Promise<void>;
 }
 
 type InstanceState = Awaited<ReturnType<typeof readInstance>>;
@@ -155,6 +162,7 @@ export function useSeededInstance(input: SeededInstanceInput): () => SeededInsta
         fetchImpl
       });
 
+    if (input.prepare) await input.prepare((await readInstance(input, fetchImpl)).client);
     const first = await seed({});
     const before = await readInstance(input, fetchImpl);
     // The second run finds the key where the first one wrote it, as `pnpm demo:seed` does.

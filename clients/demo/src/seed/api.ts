@@ -38,6 +38,11 @@ export interface SeedApi {
   createUser(input: SeedUserInput): Promise<AdministeredUser>;
   updateUser(userId: string, input: Omit<SeedUserInput, "email" | "password">): Promise<void>;
   sendInvitation(userId: string): Promise<void>;
+  /**
+   * Whether an invitation was ever mailed to the person. A user does not carry this; the
+   * audit events do, so this reads them from the newest back until it finds the mail.
+   */
+  invitationWasSent(userId: string): Promise<boolean>;
   listModules(): Promise<InstanceModule[]>;
   listNamespaces(): Promise<NamespaceWithUsage[]>;
   createNamespace(input: CreateNamespaceRequest): Promise<void>;
@@ -85,6 +90,23 @@ export function createSeedApi(client: ApiClient): SeedApi {
     },
     async sendInvitation(userId) {
       await client.users.invitation.send({ params: { userId } });
+    },
+    async invitationWasSent(userId) {
+      let cursor: string | undefined;
+      do {
+        const page = await client.audit_events.list({
+          query: { limit: 200, ...(cursor ? { cursor } : {}) }
+        });
+        const sent = page.items.some(
+          (event) =>
+            event.type === "user.invitation_sent" &&
+            event.subject === userId &&
+            event.status === "success"
+        );
+        if (sent) return true;
+        cursor = page.nextCursor;
+      } while (cursor);
+      return false;
     },
     listModules: async () => (await client.instance.modules.list()).items,
     listNamespaces: () => listAll((paging) => client.namespaces.list({ query: paging })),
