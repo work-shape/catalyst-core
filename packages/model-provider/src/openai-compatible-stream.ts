@@ -101,14 +101,29 @@ export async function* streamOpenAiCompatibleCompletion(
   let usage = noReportedUsage();
   let serviceTier: { providerServiceTier?: string } = {};
   let completed = false;
-  const toolCalls = new Map<number, Partial<OpenAiCompatibleStreamingToolCall>>();
+  const toolCalls = new Map<
+    number,
+    Partial<OpenAiCompatibleStreamingToolCall> & { repeatName: string }
+  >();
   const announcedToolCalls = new Set<number>();
   const completeToolNames = new Set<number>();
 
+  // Pieces alone cannot distinguish aa split as a, a from a repeated twice.
+  // The request's table settles this when only a or aa is offered. If both are offered,
+  // the repeat reading a wins. This needs a tool whose name is exactly another offered
+  // tool's name written twice and a provider that splits it exactly in the middle.
+  // The call is then still answered by a tool the agent was offered.
+  function settledWireName(toolCall: { name?: string; repeatName: string }): string {
+    if (toolNames.toolNameMap.has(toolCall.repeatName)) return toolCall.repeatName;
+    if (toolCall.name !== undefined && toolNames.toolNameMap.has(toolCall.name)) {
+      return toolCall.name;
+    }
+    return toolCall.repeatName;
+  }
+
   function* announceReadyToolCalls(): Iterable<ModelAdapterStreamEvent> {
     for (const [index, toolCall] of [...toolCalls].sort(([a], [b]) => a - b)) {
-      const productName =
-        toolCall.name === undefined ? undefined : toolNames.toolNameMap.get(toolCall.name);
+      const productName = toolNames.toolNameMap.get(settledWireName(toolCall));
       if (
         completeToolNames.has(index) &&
         toolCall.id &&
@@ -150,11 +165,16 @@ export async function* streamOpenAiCompatibleCompletion(
       }
 
       for (const toolCall of delta?.tool_calls ?? []) {
-        const existing = toolCalls.get(toolCall.index) ?? { arguments: "" };
+        const existing = toolCalls.get(toolCall.index) ?? { arguments: "", repeatName: "" };
+        const namePiece = toolCall.function?.name ?? "";
         const updated = {
           ...existing,
           id: toolCall.id ?? existing.id,
-          name: `${existing.name ?? ""}${toolCall.function?.name ?? ""}`,
+          name: `${existing.name ?? ""}${namePiece}`,
+          repeatName:
+            namePiece === existing.repeatName
+              ? existing.repeatName
+              : existing.repeatName + namePiece,
           arguments: `${existing.arguments ?? ""}${toolCall.function?.arguments ?? ""}`
         };
         toolCalls.set(toolCall.index, updated);
@@ -186,12 +206,13 @@ export async function* streamOpenAiCompatibleCompletion(
     completion: {
       text,
       toolCalls: [...toolCalls.values()]
-        .filter((toolCall): toolCall is OpenAiCompatibleStreamingToolCall =>
-          Boolean(toolCall.id && toolCall.name)
+        .filter(
+          (toolCall): toolCall is OpenAiCompatibleStreamingToolCall & { repeatName: string } =>
+            Boolean(toolCall.id && toolCall.name)
         )
         .map((toolCall) => ({
           toolCallId: toolCall.id,
-          toolName: toolNames.productNameFor(toolCall.name),
+          toolName: toolNames.productNameFor(settledWireName(toolCall)),
           ...parseToolInput(toolCall.arguments)
         })),
       sources: [],

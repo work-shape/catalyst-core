@@ -510,6 +510,115 @@ describe.each<Api>(["chat_completions", "responses"])("Readable tool names: %s",
 });
 
 describe("Fragmented chat completion tool names", () => {
+  it("announces a repeated whole name once and completes with its parsed input", async () => {
+    const provider = setupChatStream([
+      chatChunk([{ index: 0, id: "call_0", function: { name: "workspace_exec", arguments: "" } }]),
+      chatChunk([{ index: 0, function: { name: "workspace_exec", arguments: '{"command":' } }]),
+      chatChunk([{ index: 0, function: { name: "workspace_exec", arguments: '"pwd"}' } }])
+    ]);
+    const { completion, events } = await request(provider, ["workspace.exec"], undefined, true);
+    expect(events.slice(0, -1)).toEqual([
+      { type: "tool_call_preparing", toolCallId: "call_0", toolName: "workspace.exec" },
+      { type: "tool_call_input_delta", delta: '{"command":' },
+      { type: "tool_call_input_delta", delta: '"pwd"}' }
+    ]);
+    expect(completion.toolCalls).toEqual([
+      { toolCallId: "call_0", toolName: "workspace.exec", input: { command: "pwd" } }
+    ]);
+  });
+
+  it("announces parallel repeated names once in index order before their input deltas", async () => {
+    const provider = setupChatStream([
+      chatChunk([
+        { index: 0, id: "call_0", function: { name: "workspace_exec", arguments: "" } },
+        { index: 1, id: "call_1", function: { name: "storage_read", arguments: "" } }
+      ]),
+      chatChunk([
+        { index: 1, function: { name: "storage_read", arguments: '{"path":' } },
+        { index: 0, function: { name: "workspace_exec", arguments: '{"command":' } }
+      ]),
+      chatChunk([
+        { index: 0, function: { name: "workspace_exec", arguments: '"pwd"}' } },
+        { index: 1, function: { name: "storage_read", arguments: '"file"}' } }
+      ])
+    ]);
+    const { completion, events } = await request(
+      provider,
+      ["workspace.exec", "storage.read"],
+      undefined,
+      true
+    );
+    expect(events.slice(0, -1)).toEqual([
+      { type: "tool_call_preparing", toolCallId: "call_0", toolName: "workspace.exec" },
+      { type: "tool_call_preparing", toolCallId: "call_1", toolName: "storage.read" },
+      { type: "tool_call_input_delta", delta: '{"path":' },
+      { type: "tool_call_input_delta", delta: '{"command":' },
+      { type: "tool_call_input_delta", delta: '"pwd"}' },
+      { type: "tool_call_input_delta", delta: '"file"}' }
+    ]);
+    expect(completion.toolCalls).toEqual([
+      { toolCallId: "call_0", toolName: "workspace.exec", input: { command: "pwd" } },
+      { toolCallId: "call_1", toolName: "storage.read", input: { path: "file" } }
+    ]);
+  });
+
+  it.each([
+    { names: ["aa"], expectedName: "aa" },
+    { names: ["a"], expectedName: "a" },
+    { names: ["a", "aa"], expectedName: "a" }
+  ])("settles a, a as $expectedName with offers $names", async ({ names, expectedName }) => {
+    const provider = setupChatStream([
+      chatChunk([{ index: 0, id: "call_0", function: { name: "a", arguments: "" } }]),
+      chatChunk([{ index: 0, function: { name: "a" } }]),
+      chatChunk([{ index: 0, function: { arguments: '{"ok":true}' } }])
+    ]);
+    const { completion, events } = await request(provider, names, undefined, true);
+    expect(events.slice(0, -1)).toEqual([
+      { type: "tool_call_preparing", toolCallId: "call_0", toolName: expectedName },
+      { type: "tool_call_input_delta", delta: '{"ok":true}' }
+    ]);
+    expect(completion.toolCalls).toEqual([
+      { toolCallId: "call_0", toolName: expectedName, input: { ok: true } }
+    ]);
+  });
+
+  it.each([
+    { name: "abab", pieces: ["ab", "ab"] },
+    { name: "ababc", pieces: ["ab", "ab", "c"] }
+  ])(
+    "keeps equal fragments when only the joined name $name is offered",
+    async ({ name, pieces }) => {
+      const provider = setupChatStream([
+        ...pieces.map((piece, index) =>
+          chatChunk([
+            { index: 0, ...(index === 0 ? { id: "call_0" } : {}), function: { name: piece } }
+          ])
+        ),
+        chatChunk([{ index: 0, function: { arguments: '{"ok":true}' } }])
+      ]);
+      const { completion, events } = await request(provider, [name], undefined, true);
+      expect(events.slice(0, -1)).toEqual([
+        { type: "tool_call_preparing", toolCallId: "call_0", toolName: name },
+        { type: "tool_call_input_delta", delta: '{"ok":true}' }
+      ]);
+      expect(completion.toolCalls).toEqual([
+        { toolCallId: "call_0", toolName: name, input: { ok: true } }
+      ]);
+    }
+  );
+
+  it("marks an unknown repeated name once without announcing it", async () => {
+    const provider = setupChatStream([
+      chatChunk([{ index: 0, id: "call_0", function: { name: "zz", arguments: "" } }]),
+      chatChunk([{ index: 0, function: { name: "zz", arguments: '{"ok":true}' } }])
+    ]);
+    const { completion, events } = await request(provider, ["workspace.exec"], undefined, true);
+    expect(events.slice(0, -1)).toEqual([{ type: "tool_call_input_delta", delta: '{"ok":true}' }]);
+    expect(completion.toolCalls).toEqual([
+      { toolCallId: "call_0", toolName: "unknown:zz", input: { ok: true } }
+    ]);
+  });
+
   it.each([["workspace.exec"], ["workspace", "workspace.exec"]])(
     "waits for the complete name with offers %j",
     async (...names) => {
