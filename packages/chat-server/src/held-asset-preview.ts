@@ -47,7 +47,10 @@ interface HeldAssetPreview {
   title: string;
   /** The registered prefix the name starts with, for an asset of the instance's own. */
   namespace?: string;
-  /** No asset of the name exists: approving creates it. */
+  /**
+   * Approving creates the asset. For a reader who may read the target: no asset of the name
+   * exists. For every other reader: the call names no revision it replaces.
+   */
   isNew: boolean;
   /** A skill's text: all of it for a new one, otherwise what differs from the stored one. */
   content?: ReturnType<typeof createSkillRevisionPreview>;
@@ -57,7 +60,7 @@ interface HeldAssetPreview {
   previous?: { title?: string; description?: string };
   /** The resources the stored skill has and the call leaves out. */
   removedResources?: string[];
-  /** The reader may not read the stored skill, so the preview compares nothing with it. */
+  /** The call changes a skill whose stored text the reader is not shown: nothing is compared. */
   beforeWithheld?: true;
 }
 
@@ -76,10 +79,11 @@ export type HeldAssetPreviewer = (
  * names the revision it replaces. For one opened request: the Namespace records and the one
  * asset the call names.
  *
- * What it shows of the stored asset. Whether it exists, to everyone who sees the request. Its
- * text, title, description and resource names only to a reader the kind's read right allows
- * on that asset, asked of the same resolver with the same resource as `assets.get`. Everything
- * else in the preview comes from the input, which the request already carries.
+ * What it shows of the stored asset. Whether it exists, its text, title, description and
+ * resource names only to a reader the kind's read right allows on that asset, asked of the same
+ * resolver with the same resource as `assets.get`. Every other reader is shown what the input
+ * alone says, as a row of a list is: no field and no shape of the answer depends on the stored
+ * asset.
  */
 export function createHeldAssetPreviewer(options: HeldAssetPreviewOptions): HeldAssetPreviewer {
   const { clientInstanceId } = options;
@@ -118,25 +122,26 @@ export function createHeldAssetPreviewer(options: HeldAssetPreviewOptions): Held
       return { ...named, isNew: expectedRevision === undefined };
     }
 
+    // The right is asked before anything is told of the stored asset, with the resource
+    // `assets.get` asks it with: the row of this scope, deleted or not, carries the id.
     const row = await options.store.getConfigAsset({ clientInstanceId, kind: kind.kind, name });
-    const stored =
-      row && row.status === "active" && assetScopesEqual(row.scope, scope) ? row : undefined;
-    const next = kind.kind === SKILL_KIND ? skillConfigSchema.safeParse(config) : undefined;
-    if (!next?.success) return { ...named, isNew: stored === undefined };
-    const preview: HeldAssetPreview = {
-      ...named,
-      isNew: stored === undefined,
-      description: next.data.description
-    };
-    if (!stored) {
-      return { ...preview, content: createSkillRevisionPreview(undefined, next.data) };
-    }
-    const current = skillConfigSchema.safeParse(stored.config);
+    const inScope = row && assetScopesEqual(row.scope, scope) ? row : undefined;
     const mayRead = viewer.access.authorize(
       kind.actions.read,
-      accessResource(kind.kind, name, scope, stored.id)
+      accessResource(kind.kind, name, scope, inScope?.id)
     ).allowed;
-    if (!mayRead || !current.success) {
+    // A reader without the right is told what the call asks for and nothing of what is stored:
+    // not its text and not whether it exists.
+    const stored = mayRead && inScope?.status === "active" ? inScope : undefined;
+    const isNew = mayRead ? stored === undefined : expectedRevision === undefined;
+    const next = kind.kind === SKILL_KIND ? skillConfigSchema.safeParse(config) : undefined;
+    if (!next?.success) return { ...named, isNew };
+    const preview: HeldAssetPreview = { ...named, isNew, description: next.data.description };
+    if (isNew) {
+      return { ...preview, content: createSkillRevisionPreview(undefined, next.data) };
+    }
+    const current = stored ? skillConfigSchema.safeParse(stored.config) : undefined;
+    if (!current?.success) {
       return {
         ...preview,
         beforeWithheld: true,

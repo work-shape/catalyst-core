@@ -5,9 +5,9 @@ import type { CentralPolicySetting } from "@vivd-catalyst/core";
 import { agent, skill } from "./support/access-instance";
 import { setupNamespaceHolder } from "./support/asset-operations";
 
-// What the person who decides a held `assets.put` is shown of the asset it saves. Every test
-// here fails without the `asset` block of the preview: the preview named the operation and
-// listed the definition as one escaped line.
+// What the person who decides a held `assets.put` is shown of the asset it saves. The tests
+// that read an `asset` block fail without it: the preview named the operation and listed the
+// definition as one escaped line. The test of `assets.delete` holds what stays as it was.
 
 const OLD_PARAGRAPH = "Sick notes are due on the third day.";
 const NEW_PARAGRAPH = "Sick notes are due on the first day.";
@@ -145,6 +145,80 @@ describe("the preview of a held asset save", () => {
     expect(JSON.stringify(shown)).not.toContain(OLD_PARAGRAPH);
     // Kai may read the skill and is shown the paragraph it had.
     expect(JSON.stringify(await preview(t.kai.id, requestId))).toContain(OLD_PARAGRAPH);
+  });
+
+  // Fails before the fix of the review: an opened request said `isNew` and chose its shape
+  // from the stored row before it asked for the read right, so a person without the right
+  // learned whether the asset exists.
+  it("tells a reader without the read right what the call asks for, whatever is stored", async () => {
+    const { t, holding, hold, preview } = await setup();
+    await t.expectOk(t.kai.id, "assets.put", {
+      params: { kind: "skill", name: "kai-leave" },
+      payload: { config: skill("kai-leave", stored) }
+    });
+    await t.expectOk(t.kai.id, "assets.put", {
+      params: { kind: "skill", name: "kai-faq" },
+      payload: { config: skill("kai-faq", stored) }
+    });
+    await t.grant(t.admin.id, "skill.read", { namespace: "kai-" }, "deny");
+    await t.grant(t.kai.id, "skill.delete", { namespace: "kai-" });
+    holding("assets.put");
+    // A call that creates under a name that is taken, and a change of a skill that is then
+    // deleted while the request waits.
+    // Named as absent: the test's caller otherwise fills in the revision the asset is at.
+    const collision = await hold("assets.put", "skill", "kai-leave", {
+      config: skill("kai-leave", changed),
+      expectedRevision: undefined
+    });
+    const orphaned = await hold("assets.put", "skill", "kai-faq", {
+      config: skill("kai-faq", changed),
+      expectedRevision: 1
+    });
+    await t.expectOk(t.kai.id, "assets.delete", {
+      params: { kind: "skill", name: "kai-faq" },
+      payload: { expectedRevision: 1 }
+    });
+
+    // The answer is the one the input alone gives: a create is new and whole, a change is a
+    // change with nothing to compare.
+    expect((await preview(t.admin.id, collision)).asset).toEqual({
+      kind: "skill",
+      name: "kai-leave",
+      title: "kai-leave",
+      namespace: "kai-",
+      isNew: true,
+      description: "A skill",
+      content: {
+        skillName: "kai-leave",
+        skillTitle: "kai-leave",
+        isNewSkill: true,
+        changes: [],
+        newSkill: {
+          name: "kai-leave",
+          title: "kai-leave",
+          description: "A skill",
+          content: changed
+        }
+      }
+    });
+    expect((await preview(t.admin.id, orphaned)).asset).toEqual({
+      kind: "skill",
+      name: "kai-faq",
+      title: "kai-faq",
+      namespace: "kai-",
+      isNew: false,
+      description: "A skill",
+      beforeWithheld: true,
+      content: {
+        skillName: "kai-faq",
+        skillTitle: "kai-faq",
+        isNewSkill: false,
+        changes: [{ type: "replace", target: "root", after: changed }]
+      }
+    });
+    // Kai may read both and is shown what is stored: the first exists, the second is gone.
+    expect((await preview(t.kai.id, collision)).asset).toMatchObject({ isNew: false });
+    expect((await preview(t.kai.id, orphaned)).asset).toMatchObject({ isNew: true });
   });
 
   it("names an asset of another kind and shows no content for it", async () => {
