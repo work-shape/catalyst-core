@@ -160,6 +160,16 @@ interface OperationDefinitionBase<Input, Output> {
    * is there to be shown the answer.
    */
   secret?: true;
+  /**
+   * Set by an operation whose input can hold a secret, such as a password. For a call that
+   * holds one it answers the input with the secret replaced by a fixed mark; for a call that
+   * holds none it answers nothing. The run's hash of such a call is taken over what this
+   * answers: the hash is kept and shown with the run, and a fast hash of a password can be
+   * guessed. Such a call is treated as one that answers a secret: it keeps no answer and is
+   * never held for an approval, since a held call keeps its input and shows it to whoever
+   * decides.
+   */
+  inputWithoutSecrets?(input: Input): unknown;
   /** The scope a credential must carry; `null` asks for none. Checked where a credential arrives. */
   scope: OperationScope | null;
   /** `user` refuses service principals. */

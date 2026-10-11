@@ -57,10 +57,11 @@ export async function runOperation(
   runtime: OperationCallRuntime = {}
 ): Promise<OperationOutcome> {
   requireModuleOn(call, deps.modules);
-  const definition = await deps.registry.resolve(call.operation);
-  if (!definition) {
+  const registered = await deps.registry.resolve(call.operation);
+  if (!registered) {
     throw new AppError("NOT_FOUND", `Operation '${call.operation}' is not registered`);
   }
+  let definition = registered;
   assertOperationChecksRights(definition);
   if (definition.effect !== call.effect) {
     throw new AppError("INTERNAL", `Operation '${call.operation}' is ${definition.effect}`);
@@ -78,7 +79,14 @@ export async function runOperation(
     input,
     workspaceId: call.workspaceId ?? resource?.workspaceId
   };
-  const inputHash = hashInput(input);
+  // The hash is kept and shown with the run, so it is never taken over a secret of the input.
+  const withoutSecrets = definition.inputWithoutSecrets?.(input);
+  const inputHash = hashInput(withoutSecrets === undefined ? input : withoutSecrets);
+  if (withoutSecrets !== undefined && !definition.secret) {
+    // This call's input holds a secret. A held call would keep it, so the call is one that
+    // never waits and keeps no answer, like an operation whose answer is the secret.
+    definition = { ...definition, secret: true };
+  }
 
   for (let attempt = 0; attempt < IDEMPOTENCY_CLAIM_ATTEMPTS; attempt++) {
     const start: NewOperationRun = {

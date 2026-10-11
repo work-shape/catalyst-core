@@ -63,6 +63,8 @@ export interface AssembledOperationBinding {
   ): OperationAuthorization | Promise<OperationAuthorization>;
   /** What the call touches: what the right is checked on and the subject of its events. */
   resource?(input: unknown): OperationResource | undefined;
+  /** See `inputWithoutSecrets` of the definition: the marked input of a call that holds a password. */
+  inputWithoutSecrets?(input: unknown): unknown;
   /** What the policy is asked about, where the resource does not say it all. */
   policyTargets?(input: unknown): readonly PolicyTarget[] | Promise<readonly PolicyTarget[]>;
   execute(input: unknown, context: OperationBindingContext): unknown;
@@ -153,6 +155,9 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
         outputSchema: response.schema,
         resource: (input) => binding.resource?.(input),
         ...(binding.policyTargets ? { policyTargets: binding.policyTargets } : {}),
+        ...(binding.inputWithoutSecrets
+          ? { inputWithoutSecrets: binding.inputWithoutSecrets }
+          : {}),
         events: binding.events,
         http: { method: operation.method, path: operation.path },
         timeoutMs: binding.timeoutMs ?? DEFAULT_OPERATION_TIMEOUT_MS,

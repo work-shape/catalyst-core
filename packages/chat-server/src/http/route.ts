@@ -156,10 +156,11 @@ type RightsCheck<Op extends Operation> = Op["requires"] extends readonly [unknow
 /** What a registration adds to the descriptor: what the call touches and what it does. */
 type OperationBinding<Op extends Operation> = Omit<
   AssembledOperationBinding,
-  "resource" | "policyTargets" | "execute" | "authorize"
+  "resource" | "policyTargets" | "execute" | "authorize" | "inputWithoutSecrets"
 > &
   RightsCheck<Op> & {
     resource?(input: OperationInput<Op>): OperationResource | undefined;
+    inputWithoutSecrets?(input: OperationInput<Op>): OperationInput<Op> | undefined;
     policyTargets?(
       input: OperationInput<Op>
     ): readonly PolicyTarget[] | Promise<readonly PolicyTarget[]>;
