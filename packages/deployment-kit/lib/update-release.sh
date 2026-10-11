@@ -172,6 +172,12 @@ packages:
   - "capabilities/packages/*"
   - "$deployment_path"
 YAML
+# Platform's overrides (one zod) apply only when the root of the install names them. The
+# lockfile records them, and prepare-build-workspace.sh writes the same block for the build.
+if [[ -f "$scratch/platform/pnpm-workspace.yaml" ]]; then
+  awk '/^overrides:/ { block = 1; print; next } block && /^[^ ]/ { block = 0 } block && /^ /' \
+    "$scratch/platform/pnpm-workspace.yaml" >> "$scratch/pnpm-workspace.yaml"
+fi
 
 if [[ -f "$committed_lockfile" ]]; then
   cp "$committed_lockfile" "$scratch/pnpm-lock.yaml"

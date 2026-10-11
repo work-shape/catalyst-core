@@ -84,6 +84,12 @@ packages:
   - "capabilities/packages/*"
   - "$deployment_path"
 YAML
+  # The committed lockfile was resolved under platform's overrides, and a frozen install
+  # refuses a root that does not name the same ones.
+  if [[ -f platform/pnpm-workspace.yaml ]]; then
+    awk '/^overrides:/ { block = 1; print; next } block && /^[^ ]/ { block = 0 } block && /^ /' \
+      platform/pnpm-workspace.yaml >> pnpm-workspace.yaml
+  fi
 fi
 
 if [[ ! -f .dockerignore ]]; then

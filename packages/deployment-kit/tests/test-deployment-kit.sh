@@ -44,12 +44,19 @@ test_prepare_build_workspace() {
   printf '{"name":"fixture"}\n' > "$root/deployment.fixture/package.json"
   printf "lockfileVersion: '9.0'\n" \
     > "$root/deployment.fixture/deploy/workspace/pnpm-lock.yaml"
+  printf 'packages:\n  - "packages/*"\n\n# one zod\noverrides:\n  zod: 4.4.3\n  left-pad: 1.3.0\nallowBuilds:\n  esbuild: true\n' \
+    > "$root/platform/pnpm-workspace.yaml"
 
   "$kit_dir/lib/prepare-build-workspace.sh" \
     --workspace-root "$root" \
     --deployment-root deployment.fixture
 
   assert_contains "$root/pnpm-workspace.yaml" '  - "deployment.fixture"'
+  # A frozen install refuses a root whose overrides differ from the lockfile's, and the
+  # lockfile was resolved with platform's.
+  [[ "$(sed -n '/^overrides:/,$p' "$root/pnpm-workspace.yaml")" \
+    == $'overrides:\n  zod: 4.4.3\n  left-pad: 1.3.0' ]] \
+    || fail "prepare-build-workspace did not write platform's overrides into the root manifest"
   cmp -s "$root/pnpm-lock.yaml" \
     "$root/deployment.fixture/deploy/workspace/pnpm-lock.yaml" \
     || fail "prepare-build-workspace did not copy the committed lockfile"
@@ -82,6 +89,11 @@ test_update_release() {
   local deployment="$root/deployment.fixture"
   local fake_bin="$root/fake-bin"
   init_fixture_repo "$root/platform" platform-fixture
+  printf 'packages:\n  - "packages/*"\noverrides:\n  zod: 4.4.3\n' \
+    > "$root/platform/pnpm-workspace.yaml"
+  git -C "$root/platform" add pnpm-workspace.yaml
+  git -C "$root/platform" -c user.name=Fixture -c user.email=fixture@example.test \
+    commit -qm "overrides"
   init_fixture_repo "$root/capabilities" capabilities-fixture
   mkdir -p "$deployment/deploy/scripts" "$deployment/deploy/workspace" "$fake_bin"
   printf '{"name":"deployment-fixture","version":"1.0.0"}\n' \
@@ -100,6 +112,7 @@ deployment_package="$(find . -mindepth 2 -maxdepth 2 -path './deployment.*/packa
 checksum="$(cksum platform/package.json capabilities/package.json "$deployment_package" \
   | cksum | awk '{print $1}')"
 printf "lockfileVersion: '9.0'\nfixtureChecksum: '%s'\n" "$checksum" > pnpm-lock.yaml
+sed -n '/^overrides:/,$p' pnpm-workspace.yaml >> pnpm-lock.yaml
 SH
   chmod +x "$fake_bin/corepack"
 
@@ -108,6 +121,8 @@ SH
     --deployment-root "$deployment"
   [[ -s "$deployment/deploy/workspace/pnpm-lock.yaml" ]] \
     || fail "update-release did not create the committed lockfile"
+  # The lockfile is resolved under the overrides of the pinned platform tree.
+  assert_contains "$deployment/deploy/workspace/pnpm-lock.yaml" '  zod: 4.4.3'
   assert_contains "$deployment/deploy/release.refs" \
     "PLATFORM_REF=$(git -C "$root/platform" rev-parse HEAD)"
 
