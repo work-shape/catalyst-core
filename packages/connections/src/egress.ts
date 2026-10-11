@@ -19,7 +19,9 @@ import { isBlockedIpAddress, nodeWebFetchAddressResolver } from "@vivd-catalyst/
 // - The host is resolved when it is checked, and every answer is judged. One answer that is
 //   loopback, link-local, a metadata address or a private range refuses a public entry, also
 //   as an IPv4-mapped IPv6 address. An entry with `network: private` is the operator saying
-//   the target is inside: then every answer must lie in the entry's `cidrs`.
+//   the target is inside: then every answer must lie in the entry's `cidrs`. Loopback and
+//   private ranges are reachable that way. Link-local addresses are not, for any entry: a
+//   range that covers them stops startup.
 // - The check answers one address of those it judged. The connector connects to that address
 //   (`pinnedLookup`) and keeps the host as TLS and `Host` name, so the address used is the
 //   address checked and a second DNS answer changes nothing.
@@ -169,6 +171,15 @@ export function parseEgressCidr(
   return undefined;
 }
 
+/**
+ * Link-local addresses. On a cloud host they are where the metadata service answers, with
+ * the credentials of the machine. No entry reaches them, a `private` one included.
+ */
+const LINK_LOCAL = new BlockList();
+LINK_LOCAL.addSubnet("169.254.0.0", 16, "ipv4");
+LINK_LOCAL.addSubnet("fe80::", 10, "ipv6");
+const LINK_LOCAL_STARTS = { ipv4: "169.254.0.0", ipv6: "fe80::" } as const;
+
 interface ListedEntry {
   entry: EgressAllowEntry;
   host: string;
@@ -182,6 +193,18 @@ function listEntries(allow: readonly EgressAllowEntry[]): ListedEntry[] {
       const range = parseEgressCidr(cidr);
       if (!range) {
         throw new AppError("VALIDATION_FAILED", `egress.allow: '${cidr}' is not a CIDR range`);
+      }
+      const single = new BlockList();
+      single.addSubnet(range.network, range.prefix, range.family);
+      // A range inside link-local, or one wide enough to hold it.
+      if (
+        LINK_LOCAL.check(range.network, range.family) ||
+        single.check(LINK_LOCAL_STARTS[range.family], range.family)
+      ) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          `egress.allow: the range '${cidr}' of '${entry.host}' covers link-local addresses (169.254.0.0/16, fe80::/10). No Connection may reach them. Name a narrower range`
+        );
       }
       ranges.addSubnet(range.network, range.prefix, range.family);
     }
@@ -276,7 +299,11 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
       if (store.includes(answer.address)) {
         throw egressDenied(target);
       }
-      const inside = listed.ranges.check(answer.address, answer.family === 4 ? "ipv4" : "ipv6");
+      const family = answer.family === 4 ? "ipv4" : "ipv6";
+      if (LINK_LOCAL.check(answer.address, family)) {
+        throw egressDenied(target);
+      }
+      const inside = listed.ranges.check(answer.address, family);
       const allowed =
         listed.entry.network === "private" ? inside : !isBlockedIpAddress(answer.address);
       if (!allowed) {

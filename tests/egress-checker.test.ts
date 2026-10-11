@@ -235,6 +235,50 @@ describe("the egress checker", () => {
     }
   });
 
+  it("lets no private entry reach a link-local address, and stops startup on such a range", async () => {
+    // Fails without the change: a private entry whose range named 169.254.0.0/16 was
+    // granted the metadata address.
+    const entryWith = (cidrs: string[]): EgressAllowEntry => ({
+      protocol: "http",
+      host: "inside",
+      port: 80,
+      network: "private",
+      cidrs
+    });
+    for (const cidr of [
+      "169.254.0.0/16",
+      "169.254.169.254/32",
+      "169.254.169.0/24",
+      "169.0.0.0/8",
+      "0.0.0.0/0",
+      "fe80::/10",
+      "fe80::1/128",
+      "fe00::/7",
+      "::/0"
+    ]) {
+      expect(() => createEgressChecker({ allow: [entryWith(["10.0.0.0/8", cidr])] }), cidr).toThrow(
+        `egress.allow: the range '${cidr}' of 'inside' covers link-local addresses`
+      );
+    }
+    // Loopback and the private ranges stay the operator's to name.
+    const checker = createEgressChecker({
+      allow: [
+        entryWith([
+          "127.0.0.0/8",
+          "10.0.0.0/8",
+          "172.16.0.0/12",
+          "192.168.0.0/16",
+          "fd00::/8",
+          "::1/128"
+        ])
+      ],
+      resolve: () => Promise.resolve([{ address: "127.0.0.1", family: 4 }])
+    });
+    expect(await checker.check({ protocol: "http", host: "inside", port: 80 })).toMatchObject({
+      address: "127.0.0.1"
+    });
+  });
+
   it("takes plain http for a private entry only, and private ranges for no public entry", () => {
     const parse = (entry: Record<string, unknown>) =>
       egressConfigSchema.safeParse({ allow: [entry] }).success;
