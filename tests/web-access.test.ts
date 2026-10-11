@@ -28,6 +28,7 @@ import {
   nodeWebFetchHttpRequest,
   type WebFetchAddressResolver,
   type WebFetchHttpRequest,
+  isBlockedIpAddress,
   validateWebFetchUrl
 } from "../packages/web-access/src/index";
 
@@ -279,6 +280,49 @@ describe("web access URL safety", () => {
 });
 
 describe("web access app assembly", () => {
+  it("judges an IPv4 address carried in an IPv6 one by the IPv4 rules", async () => {
+    // Fails without the change: only `::ffff:` was unwrapped, and every other form below
+    // passed as a public IPv6 address.
+    const carried = (v4Hex: string) => [
+      `::ffff:${v4Hex}`,
+      `::${v4Hex}`,
+      `64:ff9b::${v4Hex}`,
+      `2002:${v4Hex}::1`
+    ];
+    const blocked = [
+      ...carried("a9fe:a9fe"), // 169.254.169.254
+      ...carried("7f00:1"), // 127.0.0.1
+      ...carried("a00:5"), // 10.0.0.5
+      ...carried("c0a8:101"), // 192.168.1.1
+      // Teredo: the client 10.0.0.5 inverted in the last four bytes, and a private server.
+      "2001:0:5db8:d822:0:0:f5ff:fffa",
+      "2001:0:a00:5::a2e7:27dd",
+      "::169.254.169.254",
+      "64:ff9b::10.0.0.5"
+    ];
+    for (const address of blocked) {
+      expect(isBlockedIpAddress(address), address).toBe(true);
+      await expect(validateWebFetchUrl(`https://[${address}]/`), address).rejects.toThrow(
+        /blocked/u
+      );
+      await expect(
+        validateWebFetchUrl("https://rebind.example.com/", {
+          resolver: () => Promise.resolve([{ address, family: 6 }])
+        }),
+        address
+      ).rejects.toThrow(/blocked/u);
+    }
+    // The same forms around a public IPv4 address, and plain public IPv6, stay reachable.
+    for (const address of [
+      ...carried("5db8:d822"), // 93.184.216.34
+      "2001:0:5db8:d822:0:0:a247:27dd", // Teredo, server and client public
+      "2606:2800:220:1::1",
+      "2001:4860:4860::8888"
+    ]) {
+      expect(isBlockedIpAddress(address), address).toBe(false);
+    }
+  });
+
   it("keeps web search disabled by default in release config", () => {
     const config = createTestConfig();
 

@@ -131,6 +131,14 @@ describe("the egress checker", () => {
       "::ffff:169.254.169.254",
       "::ffff:a9fe:a9fe",
       "0:0:0:0:0:ffff:10.0.0.1",
+      // An IPv4 address carried in another IPv6 form: IPv4-compatible, NAT64, 6to4, Teredo.
+      "::169.254.169.254",
+      "::a00:5",
+      "64:ff9b::a9fe:a9fe",
+      "64:ff9b::7f00:1",
+      "2002:a9fe:a9fe::1",
+      "2002:c0a8:101::1",
+      "2001:0:5db8:d822:0:0:f5ff:fffa",
       "not an address"
     ];
     for (const address of blocked) {
@@ -144,6 +152,16 @@ describe("the egress checker", () => {
         port: 443
       });
     }
+  });
+
+  it("grants a public IPv4 address carried in an IPv6 form, and pins it as answered", async () => {
+    const { checker } = checkerOf([{ host: "api.example.com" }], {
+      "api.example.com": ["64:ff9b::5db8:d822"]
+    });
+    expect(await checker.check(https("api.example.com"))).toMatchObject({
+      address: "64:ff9b::5db8:d822",
+      family: 6
+    });
   });
 
   it("refuses a host with one blocked answer among public ones, wherever it stands", async () => {

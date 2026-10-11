@@ -175,8 +175,9 @@ function isBlockedIpv6Address(address: string): boolean {
     return true;
   }
 
-  const mappedIpv4 = getIpv4MappedAddress(bytes);
-  if (mappedIpv4 && isBlockedIpv4Address(mappedIpv4)) {
+  // An IPv6 address that carries an IPv4 one reaches that IPv4 address, through the host
+  // itself or through a translator or relay. Each carried address is judged by the IPv4 rules.
+  if (embeddedIpv4Addresses(bytes).some(isBlockedIpv4Address)) {
     return true;
   }
 
@@ -196,13 +197,30 @@ function isBlockedIpv6Address(address: string): boolean {
   return false;
 }
 
-function getIpv4MappedAddress(bytes: number[]): string | undefined {
-  const isMapped =
-    bytes.slice(0, 10).every((byte) => byte === 0) && bytes[10] === 0xff && bytes[11] === 0xff;
-  if (!isMapped) {
-    return undefined;
-  }
-  return bytes.slice(12, 16).join(".");
+/**
+ * The IPv4 addresses an IPv6 address carries:
+ * - IPv4-mapped `::ffff:a.b.c.d` and IPv4-compatible `::a.b.c.d`, the last four bytes;
+ * - NAT64 `64:ff9b::/96`, the last four bytes;
+ * - 6to4 `2002::/16`, the four bytes after the prefix;
+ * - Teredo `2001:0::/32`, the server after the prefix and the client in the last four
+ *   bytes, which Teredo stores inverted.
+ */
+function embeddedIpv4Addresses(bytes: number[]): string[] {
+  const dotted = (start: number, invert = false) =>
+    bytes
+      .slice(start, start + 4)
+      .map((byte) => (invert ? byte ^ 0xff : byte))
+      .join(".");
+  const zero = (from: number, to: number) => bytes.slice(from, to).every((byte) => byte === 0);
+  const starts = (...prefix: number[]) => prefix.every((byte, index) => bytes[index] === byte);
+
+  if (zero(0, 10) && bytes[10] === 0xff && bytes[11] === 0xff) return [dotted(12)];
+  // `::` and `::1` are no carried address; they are refused as themselves.
+  if (zero(0, 12) && !(zero(12, 15) && (bytes[15] ?? 0) <= 1)) return [dotted(12)];
+  if (starts(0x00, 0x64, 0xff, 0x9b) && zero(4, 12)) return [dotted(12)];
+  if (starts(0x20, 0x02)) return [dotted(2)];
+  if (starts(0x20, 0x01, 0x00, 0x00)) return [dotted(4), dotted(12, true)];
+  return [];
 }
 
 function parseIpv6Bytes(address: string): number[] | undefined {
