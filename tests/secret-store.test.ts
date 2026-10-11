@@ -225,6 +225,51 @@ describe("the Secret Store", () => {
     });
   });
 
+  it("lets one of two writers at the same time win and tells the other of the conflict", async () => {
+    // Fails without the change: both writers computed the same next version, the store
+    // dropped one of them and both were told `changed: true`.
+    const store = storeWith();
+    await store.put({ binding: first, value: generateTestSecret(), source: "runtime" });
+    for (let round = 0; round < 5; round += 1) {
+      const before = required((await readRows())[0]).version;
+      const values = Array.from({ length: 6 }, () => generateTestSecret());
+      const results = await Promise.allSettled(
+        values.map((value) => store.put({ binding: first, value, source: "runtime" }))
+      );
+      const won = results.flatMap((result, index) =>
+        result.status === "fulfilled" ? [{ index, written: result.value }] : []
+      );
+      const lost = results.flatMap((result) =>
+        result.status === "rejected" ? [result.reason as unknown] : []
+      );
+      // Each success is its own version, and the stored value is the one of the last.
+      const versions = won.map(({ written }) => written.version);
+      expect(new Set(versions).size).toBe(versions.length);
+      expect(won.length).toBeGreaterThanOrEqual(1);
+      expect(won.length + lost.length).toBe(values.length);
+      for (const error of lost) {
+        expect(error).toMatchObject({
+          code: "CONFLICT",
+          details: { reason: "secret_write_conflict" }
+        });
+      }
+      const row = required((await readRows())[0]);
+      expect(row.version).toBe(before + won.length);
+      const last = required(won.find(({ written }) => written.version === row.version));
+      expect(await resolverWith().resolve({ handle: row.handle, binding: first })).toBe(
+        values[last.index]
+      );
+    }
+    // A first write against a first write: one row, one winner.
+    const fresh = await Promise.allSettled(
+      Array.from({ length: 4 }, () =>
+        store.put({ binding: second, value: generateTestSecret(), source: "runtime" })
+      )
+    );
+    expect(fresh.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(await store.status(second)).toMatchObject({ state: "set", version: 1 });
+  });
+
   it("hands the value to the resolver for the binding of the call and to nothing else", async () => {
     const store = storeWith();
     const value = generateTestSecret();

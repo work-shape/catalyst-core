@@ -80,7 +80,7 @@ export function createPostgresConnectionsStore(db: PostgresConnection): Connecti
         ciphertext: record.ciphertext,
         source: record.source
       };
-      await db
+      const written = await db
         .insert(secrets)
         .values({ ...values, createdAt: sql`now()`, updatedAt: sql`now()` })
         .onConflictDoUpdate({
@@ -93,9 +93,12 @@ export function createPostgresConnectionsStore(db: PostgresConnection): Connecti
             source: record.source,
             updatedAt: sql`now()`
           },
-          // Of two writers the later version stays: an older one never replaces it.
-          setWhere: sql`${secrets.version} < ${record.version}`
-        });
+          // One statement decides: the row is replaced only by the version that follows the
+          // stored one. Of two writers of the same next version one finds the row changed.
+          setWhere: sql`${secrets.version} = ${record.version} - 1`
+        })
+        .returning({ handle: secrets.handle });
+      return written.length > 0;
     },
     async deleteSecrets({ clientInstanceId, connectionAssetId, subject }) {
       await db

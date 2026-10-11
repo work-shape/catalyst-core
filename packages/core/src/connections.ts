@@ -220,6 +220,9 @@ export interface ConnectionCredential {
 }
 
 /** Why a credential is not handed out. No refusal carries a value. */
+/** A secret write that lost against another write of the same secret. Nothing was stored. */
+export const SECRET_WRITE_CONFLICT = "secret_write_conflict";
+
 export const CREDENTIAL_REFUSALS = {
   notConfigured: "connection_not_configured",
   unreadable: "secret_unreadable"
@@ -288,8 +291,12 @@ export interface ConnectionsStore {
     clientInstanceId: ClientInstanceId;
     binding: SecretBinding;
   }): Promise<StoredSecretRecord | undefined>;
-  /** Inserts the row, or replaces the one of the same Connection and subject. */
-  putSecret(record: StoredSecretRecord): Promise<void>;
+  /**
+   * Inserts version 1, or replaces the row of the same Connection and subject with the
+   * version that follows the stored one, in one statement. Answers `false` and writes
+   * nothing where the stored version is another: somebody else wrote in between.
+   */
+  putSecret(record: StoredSecretRecord): Promise<boolean>;
   deleteSecrets(input: {
     clientInstanceId: ClientInstanceId;
     connectionAssetId: string;

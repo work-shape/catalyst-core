@@ -9,6 +9,7 @@ import {
 import {
   AppError,
   CREDENTIAL_REFUSALS,
+  SECRET_WRITE_CONFLICT,
   SecretNotResolvedError,
   createConnectionSecretHandle,
   type ClientInstanceId,
@@ -260,7 +261,7 @@ export function createSecretStore(options: SecretStoreOptions): SecretStore {
           plaintext,
           associatedData: secretAssociatedData({ clientInstanceId, binding, version })
         });
-        await store.putSecret({
+        const written = await store.putSecret({
           handle,
           clientInstanceId,
           connectionAssetId: binding.connectionAssetId,
@@ -271,6 +272,15 @@ export function createSecretStore(options: SecretStoreOptions): SecretStore {
           ciphertext: sealed.ciphertext,
           source
         });
+        if (!written) {
+          // Another write of this secret landed between the read and the write. Which value
+          // stays is that writer's; this one is told, and stores nothing.
+          throw new AppError(
+            "CONFLICT",
+            `${SECRET_WRITE_CONFLICT}: the secret was written by somebody else at the same time. Nothing was stored; try again`,
+            { reason: SECRET_WRITE_CONFLICT }
+          );
+        }
         return { handle, version, changed: true };
       } finally {
         plaintext.fill(0);
