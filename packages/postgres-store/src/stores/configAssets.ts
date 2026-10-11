@@ -10,11 +10,13 @@ import {
   getConfigAssetState as getPostgresConfigAssetState,
   listActiveConfigAssets as listActivePostgresConfigAssets,
   listConfigAssetPage as listPostgresConfigAssetPage,
-  listAgentAvailability as listPostgresAgentAvailability,
   getConfigAssetRevision as getPostgresConfigAssetRevision,
-  listConfigAssetRevisions as listPostgresConfigAssetRevisions,
-  setAgentAvailability as setPostgresAgentAvailability
+  listConfigAssetRevisions as listPostgresConfigAssetRevisions
 } from "../postgres-config-asset-operations";
+import {
+  listAgentAvailability as listPostgresAgentAvailability,
+  setAgentAvailability as setPostgresAgentAvailability
+} from "../postgres-agent-availability";
 import {
   discardConfigAssetDraft as discardPostgresConfigAssetDraft,
   publishConfigAssetRevision as publishPostgresConfigAssetRevision,
