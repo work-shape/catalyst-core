@@ -3,6 +3,9 @@
   "version": "0.6.3",
   "private": true,
   "type": "module",
+  "exports": {
+    "./sample-mcp": "./sample-mcp/index.ts"
+  },
   "scripts": {
     "build": "tsup src/server.ts src/e2e-server.ts src/seed-auth.ts src/migrate.ts src/artifact-preview-worker.ts src/workspace-command-worker.ts src/sample-mcp-server.ts --format esm --out-dir dist && vite build",
     "build:server": "tsup src/server.ts src/e2e-server.ts src/seed-auth.ts src/migrate.ts src/artifact-preview-worker.ts src/workspace-command-worker.ts src/sample-mcp-server.ts --format esm --out-dir dist",

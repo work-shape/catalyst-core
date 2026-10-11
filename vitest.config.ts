@@ -33,6 +33,7 @@ const sourceAlias = {
   "@vivd-catalyst/client-assembly": "packages/client-assembly/src/index.ts",
   "@vivd-catalyst/config-schema": "packages/config-schema/src/index.ts",
   "@vivd-catalyst/data-source": "packages/data-source/src/index.ts",
+  "@vivd-catalyst/demo/sample-mcp": "clients/demo/sample-mcp/index.ts",
   "@vivd-catalyst/document-execution": "packages/document-execution/src/index.ts",
   "@vivd-catalyst/mail": "packages/mail/src/index.ts",
   "@vivd-catalyst/model-provider": "packages/model-provider/src/index.ts",
