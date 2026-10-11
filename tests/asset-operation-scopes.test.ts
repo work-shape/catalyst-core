@@ -230,21 +230,19 @@ describe("assets.validate", () => {
 });
 
 describe("the validation of a set of assets", () => {
-  it("names the issues of a set the registered kinds read in the order and words of the bundle check", async () => {
+  it("names the issues of a release in the order and words of the bundle check", async () => {
     const t = await setupNamespace();
-    // Everything at once: schema and name issues of both kinds, doubled names, a default that
-    // is no agent, and every reference an agent can miss.
+    // Everything a batch can carry at once: schema and name issues of both kinds, a default
+    // that is no agent, and every reference an agent can miss.
     const bundle = {
       agents: [
         agent("first", { toolNames: ["unknown.tool"], skillNames: ["missing"] }),
-        agent("first"),
         agent("second", { instructions: "" }),
         agent("third", { modelProviderId: "nowhere" }),
         agent("fourth", { modelProviderId: undefined, modelBindingId: "gone" }),
-        agent("fifth", { modelBindingId: "plain" }),
-        { displayName: "No name" }
+        agent("fifth", { modelBindingId: "plain" })
       ],
-      skills: [skill("guide"), skill("guide"), { ...skill("empty"), content: "" }, skill("1st")],
+      skills: [skill("guide"), { ...skill("empty"), content: "" }, skill("1st")],
       defaultAgentName: "nobody"
     };
     const issuesOf = (error: unknown) =>
@@ -256,6 +254,9 @@ describe("the validation of a set of assets", () => {
     try {
       validateConfigAssetBundle({
         ...bundle,
+        // The assets the instance holds beside the batch.
+        agents: [...bundle.agents, agent("assistant"), agent("kai-old")],
+        skills: [...bundle.skills, skill("kai-guide")],
         refs: {
           modelProviderIds: ["local"],
           modelBindingIds: ["plain", "other"],
@@ -266,16 +267,45 @@ describe("the validation of a set of assets", () => {
     } catch (error) {
       expected = issuesOf(error);
     }
-    expect(expected.length).toBeGreaterThan(10);
+    expect(expected.length).toBeGreaterThan(6);
 
-    // The release check is a service principal's call.
-    const refused = await t.instance.call("config_assets.validate", {
-      payload: bundle,
+    // The check of a release reads the same set through the registered kinds.
+    const response = await t.instance.call("assets.sync_check", {
+      payload: {
+        items: [
+          ...bundle.agents.map((config) => ({ type: "put", kind: "agent", config })),
+          ...bundle.skills.map((config) => ({ type: "put", kind: "skill", config }))
+        ],
+        defaultAgentName: bundle.defaultAgentName
+      },
       headers: { [SERVICE_HEADER]: "sp_test" }
     });
-    expect(refused.statusCode).toBe(422);
-    const error = errorSchema.parse(refused.json()).error;
-    expect(error.message).toBe("Config asset bundle is invalid");
-    expect(issuesOf(error)).toEqual(expected);
+    expect(response.statusCode, response.body).toBe(422);
+    const error = errorSchema.parse(response.json()).error;
+    // What is wrong with one definition refuses its item, and what is wrong with the set is
+    // an issue of the batch: together they are the bundle check's issues, in its order.
+    const refused = z
+      .object({
+        items: z.array(
+          z.object({
+            kind: z.string(),
+            name: z.string().optional(),
+            error: z.object({ message: z.string() }).optional()
+          })
+        )
+      })
+      .parse(error.details)
+      .items.flatMap((item) =>
+        item.error ? [`${item.kind} ${item.name}: ${item.error.message}`] : []
+      );
+    const ofOneAsset = expected.filter((issue) => "assetKind" in issue);
+    expect(refused).toEqual(
+      ofOneAsset.map(
+        (issue) =>
+          `${String(issue.assetKind)} ${String(issue.assetName)}: ${z.array(z.string()).parse(issue.path).join(".")}: ${String(issue.message)}`
+      )
+    );
+    expect(refused).toHaveLength(3);
+    expect(issuesOf(error)).toEqual(expected.filter((issue) => !("assetKind" in issue)));
   });
 });

@@ -27,7 +27,11 @@ catalyst config push        # merge changed local assets into the live instance
 
 A `catalyst.yaml` manifest in the working-copy root names instances and the asset file globs. The database is the live authoring source; the folder is a pulled working copy. `.catalyst-state.json` (gitignored) records each pulled asset's revision and content hash, plus the default agent. Skill hashes cover the root and all resources. YAML formatting and provenance comments do not count as edits.
 
-`push` sends only assets changed locally since their last pull. Unchanged files leave instance edits alone. Assets missing locally stay on the instance unless you use `--prune`, which explicitly deletes them. `--force` deliberately bypasses conflict protection and sends all selected local assets; it does not imply deletion.
+`push` sends only assets changed locally since their last pull, in one `assets.sync` call that is applied completely or not at all. Each asset names the revision of its last pull. Unchanged files leave instance edits alone. Assets missing locally stay on the instance unless you use `--prune`, which deletes them at the revision of the last pull; an asset that appeared on the instance since is reported as a conflict instead of being deleted.
+
+`--force` sends every selected local asset against the revision the instance holds at that moment, whatever changed there since the last pull, and needs no earlier pull. It does not imply deletion, and it is no bypass on the instance: a write that arrives between the CLI's read and its push still refuses the push.
+
+The CLI reads with `assets.list` and `assets.get` and writes with `assets.sync`, the operations under [The asset API](#the-asset-api). Each push is one Operation Run of the key's service principal. A push whose answer is lost on the way is sent again under the same idempotency key, so it is applied once. One push holds at most 2,000 assets and one megabyte; a larger release is pushed in parts with `--only`. `validate` asks `assets.sync_check` whether a push of the whole working copy would be accepted and writes nothing. On an instance whose policy holds a release for approval, `push` reports the waiting Operation Run and exits with 1; pull after the approval.
 
 If a touched asset was updated, deleted, or created on the instance since its baseline, the server rejects the **whole push** without applying anything. The CLI lists every conflicting asset with its current revision, last operation, actor, and timestamp, then prints a scoped pull command:
 
@@ -39,7 +43,9 @@ Commit or stash local edits in git before running that command: pull overwrites 
 
 `diff` labels assets **changed locally**, **remote newer**, or **conflict** when both sides changed. Remote-newer assets are not local updates. A full pull refreshes all written asset baselines and the manifest's default agent; `pull --only` refreshes only the selected assets. The default-agent pointer is guarded only when you change it locally. Resolving a default-agent conflict requires a full pull.
 
-State files from an older CLI remain readable, but their global version is not a per-asset baseline. Pull before a guarded push. Older CLIs keep their global-version guard against a newer server. This CLI refuses to push to a server that does not advertise per-asset conflict support, including with `--force`; upgrade the server first.
+State files from an older CLI remain readable, but their global version is not a per-asset baseline. Pull before a guarded push.
+
+CLI and server ship together. The addresses the CLI used before, `/api/v1/instance/config/export`, `/import` and `/validate`, are gone: an older CLI is answered `404` with the sentence to upgrade it. This CLI against an older server reports that the instance does not serve the asset operations it uses.
 
 The canonical skill package layout is:
 
@@ -201,6 +207,7 @@ Every asset is read and written at one address, `/api/v1/assets/{kind}/{name}`, 
 | `assets.revert`           | `POST /api/v1/assets/{kind}/{name}/revert`   | `<kind>.write`       |
 | `assets.validate`         | `POST /api/v1/assets/{kind}/validate`        | `<kind>.read`        |
 | `assets.sync`             | `POST /api/v1/assets/sync`                   | per item             |
+| `assets.sync_check`       | `POST /api/v1/assets/sync/check`             | per item             |
 | `platform.context.get`    | `GET /api/v1/context`                        | any signed-in caller |
 | `platform.references.get` | `GET /api/v1/context/references`             | a right on any kind  |
 
@@ -210,9 +217,15 @@ A write names the revision it was made against. `assets.put` with `expectedRevis
 
 `assets.sync` applies up to 200 puts and deletes for one registered Namespace, named by its prefix in `namespace`. Each item is checked like the single call: the right on that asset, its revision, its content. The batch is applied completely or not at all. When any item is refused the answer carries `details.items` with one entry per item, `refused` with its error or `not_applied`, and nothing is written. An item whose name does not start with the prefix is refused for every caller, an administrator included. The right on every item is decided before the instance's policy is asked, and a policy setting narrowed to a kind or to a Namespace applies to a batch that names an asset of that kind or in that Namespace.
 
+A holder of `config_assets.release` may leave `namespace` out. That batch is a release, which is what `catalyst config push` sends: it may name any agent or skill of the instance, holds up to 2,000 items, may carry `defaultAgentName` and `expectedDefaultAgentName`, is not bound by `editableAgentFields` or the right for model settings, and is checked against the whole stored set instead of what its key may read. A delete of an asset that is not there is answered `absent` and refuses nothing, unless the asset was created meanwhile. A release answers `hiddenAgentNames` for agents it wrote that no workspace offers.
+
+`assets.sync_check` takes the body of a sync, runs every check of it and writes nothing. It answers `{ "valid": true }` or the refusal the sync would answer.
+
+A request body over one megabyte is answered `400` with `details.reason` `body_too_large`.
+
 A definition is checked against what its caller may read. A reference to an asset the caller may not read, such as a skill of another Namespace, is answered like a reference to an asset that does not exist, by `assets.validate` and by a write. An asset may always refer to the assets beside it in its own Namespace, and a reference an asset already carries is kept when somebody edits it who may not read its target. A name with a NUL byte is refused with `422`.
 
-The writing operations and `assets.sync` belong to the module `assetManagement` and follow the same rules as edits in the admin panel: `editableAgentFields`, the lists of a Namespace, and the rights for the default agent and for model settings. `catalyst config push` keeps using the release import and is not affected.
+The writing operations and `assets.sync` belong to the module `assetManagement` and follow the same rules as edits in the admin panel: `editableAgentFields`, the lists of a Namespace, and the rights for the default agent and for model settings. Only a release, as described above, is exempt, so `catalyst config push` also works where interactive editing is narrowed or off.
 
 `platform.context.get` tells a caller where it is: the instance, its release, the asset kinds with their rights, and the Namespaces in which the caller may do something. It answers a person and a service principal. An action is named only when the credential's scopes allow it: `config_assets:read` for reading, `config_assets:write` for writing and deleting.
 
@@ -224,7 +237,7 @@ The writing operations and `assets.sync` belong to the module `assetManagement` 
 
 | Permission              | Grants                                                                       | Default roles              |
 | ----------------------- | ---------------------------------------------------------------------------- | -------------------------- |
-| `config_assets.read`    | View assets, revisions, and the export bundle                                | admin, superadmin          |
+| `config_assets.read`    | View assets and revisions                                                    | admin, superadmin          |
 | `config_assets.write`   | Interactive edits within `editableAgentFields`, skill editing, default agent | admin, superadmin          |
 | `config_assets.release` | Release synchronization via `catalyst config push`                           | none (service tokens only) |
 | `agent_models.manage`   | Interactive changes to an agent's model settings and user-selectable models  | superadmin                 |

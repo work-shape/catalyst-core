@@ -3,7 +3,6 @@ import { findDefaultAgentReferenceIssues, findDuplicates } from "@vivd-catalyst/
 import {
   configValuesEqual,
   readDefinitionName,
-  type ConfigAssetBundle,
   type WorkflowAssetKind
 } from "./asset-kinds/shared";
 
@@ -69,22 +68,6 @@ export function withDefaultAgentName(
 ): AssetSet {
   const { defaultAgentName: _replaced, ...rest } = set;
   return defaultAgentName === undefined ? rest : { ...rest, defaultAgentName };
-}
-
-/** What a release bundle carries, as a set. A kind without a bundle slot is left as `base` has it. */
-export function assetSetOfBundle(
-  kinds: readonly WorkflowAssetKind[],
-  bundle: ConfigAssetBundle,
-  base?: AssetSet
-): AssetSet {
-  const definitions = new Map<string, readonly unknown[]>(base?.definitions ?? []);
-  for (const kind of kinds) {
-    if (kind.bundle) definitions.set(kind.kind, kind.bundle.definitions(bundle));
-  }
-  return {
-    ...(bundle.defaultAgentName === undefined ? {} : { defaultAgentName: bundle.defaultAgentName }),
-    definitions
-  };
 }
 
 /** One issue of a set, with the asset it belongs to where it is one asset's. */
@@ -172,7 +155,7 @@ export function findAssetSetIssues(
 }
 
 /** Looks definitions up by name, reading each kind once and only when it is asked for. */
-function definitionsByName(set: AssetSet): (kind: string) => Map<string, unknown> {
+export function definitionsByName(set: AssetSet): (kind: string) => Map<string, unknown> {
   const byKind = new Map<string, Map<string, unknown>>();
   return (kind) => {
     let byName = byKind.get(kind);

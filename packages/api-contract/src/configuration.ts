@@ -258,18 +258,6 @@ export const configAssetsOverviewSchema = z.object({
   references: configAssetReferencesSchema
 });
 
-export const configAssetBundleSchema = z.object({
-  defaultAgentName: z.string().min(1).optional(),
-  agents: z.array(configAssetConfigSchema),
-  skills: z.array(configAssetConfigSchema)
-});
-
-export const exportConfigAssetsResponseSchema = configAssetBundleSchema.extend({
-  version: z.number().int().nonnegative(),
-  perAssetConcurrency: z.literal(true).optional(),
-  revisions: z.record(z.string(), z.number().int().positive()).optional()
-});
-
 export const configAssetMutationVersionResponseSchema = z.object({
   version: z.number().int().positive()
 });
@@ -277,23 +265,6 @@ export const configAssetMutationVersionResponseSchema = z.object({
 export const setDefaultConfigAgentRequestSchema = z.object({
   agentName: z.string().min(1).optional(),
   baseVersion: z.number().int().nonnegative().optional()
-});
-
-export const replaceConfigAssetsRequestSchema = configAssetBundleSchema.extend({
-  baseVersion: z.number().int().nonnegative().nullable(),
-  mode: z.enum(["mirror", "merge"]).optional(),
-  baseRevisions: z.record(z.string(), z.number().int().positive().nullable()).optional(),
-  baseDefaultAgentName: z.string().nullable().optional(),
-  deleteAssets: z.array(z.object({ kind: configAssetKindSchema, name: z.string() })).optional()
-});
-
-export const replaceConfigAssetsResponseSchema = configAssetMutationVersionResponseSchema.extend({
-  // Agents written by this push that are not available in any workspace afterwards.
-  hiddenAgentNames: z.array(z.string()).optional()
-});
-
-export const validateConfigAssetsResponseSchema = z.object({
-  valid: z.literal(true)
 });
 
 export type ClientBranding = z.infer<typeof clientBrandingSchema>;
@@ -309,7 +280,6 @@ export type CollaborationWorkspaceAgents = z.infer<typeof collaborationWorkspace
 export type AdministeredCollaborationWorkspace = z.infer<
   typeof administeredCollaborationWorkspaceSchema
 >;
-export type ConfigAssetBundle = z.infer<typeof configAssetBundleSchema>;
 
 export type UserModelPreference = z.infer<typeof userModelPreferenceSchema>;
 

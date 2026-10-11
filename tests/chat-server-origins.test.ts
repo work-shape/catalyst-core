@@ -153,7 +153,7 @@ describe("browser origin policy", () => {
   it("refuses invalid explicit credentials on the config-asset identity path", async () => {
     const app = await createCookieApp();
     try {
-      const response = await app.call("config_assets.validate", {
+      const response = await app.call("assets.sync_check", {
         headers: {
           cookie: "test-session=present",
           origin: foreignOrigin,

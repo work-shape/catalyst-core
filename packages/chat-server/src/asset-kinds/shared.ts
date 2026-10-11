@@ -5,16 +5,6 @@ import type {
   RegisteredAssetKind
 } from "@vivd-catalyst/core";
 
-/**
- * The agents and skills of an instance as the export and the release sync carry them. It is
- * the format of those two and of nothing else: every other path holds definitions by kind id.
- */
-export interface ConfigAssetBundle<Definition = unknown> {
-  defaultAgentName?: string;
-  agents: Definition[];
-  skills: Definition[];
-}
-
 /** What an agent or skill definition may refer to on this instance. */
 export interface ConfigAssetValidationRefs {
   modelProviderIds: string[];
@@ -31,16 +21,10 @@ export interface ConfigAssetValidationRefs {
  */
 export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> {
   /**
-   * Where the release sync's bundle carries this kind. A kind without a slot is not part of
-   * that bundle: it is read and written through the asset operations alone.
+   * A release carries this kind: the release holder writes it through a sync, and the overview
+   * of the instance lists it. A kind without it is read and written by its own rights alone.
    */
-  readonly bundle?: {
-    definitions<Definition>(bundle: ConfigAssetBundle<Definition>): Definition[];
-    withDefinitions<Definition>(
-      bundle: ConfigAssetBundle<Definition>,
-      definitions: Definition[]
-    ): ConfigAssetBundle<Definition>;
-  };
+  readonly inRelease?: true;
   /** The instance keeps one asset of this kind as its default: the first one, until changed. */
   readonly holdsInstanceDefault: boolean;
   /** An asset of this kind is usable only in the workspaces its availability names. */

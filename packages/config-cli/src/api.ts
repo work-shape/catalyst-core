@@ -1,5 +1,11 @@
-import { apiOperations } from "@vivd-catalyst/api-contract";
-import { ApiError, createApiClient } from "@vivd-catalyst/api-client";
+import { randomUUID } from "node:crypto";
+import {
+  MAX_LIST_LIMIT,
+  isUnknownOperationResponse,
+  type Asset,
+  type AssetSummary
+} from "@vivd-catalyst/api-contract";
+import { ApiError, createApiClient, type OperationInput } from "@vivd-catalyst/api-client";
 
 export class ConfigApiError extends Error {
   readonly status: number;
@@ -38,6 +44,8 @@ export interface ConfigApiOptions {
   baseUrl: string;
   apiKey: string;
   fetchImpl?: typeof fetch;
+  /** Waits between tries. Tests pass one that does not wait. */
+  sleep?: (milliseconds: number) => Promise<void>;
 }
 
 export async function createConfigApi(options: ConfigApiOptions) {
@@ -51,21 +59,133 @@ export async function createConfigApi(options: ConfigApiOptions) {
     fetchImpl
   });
 
+  const sleep = options.sleep ?? defaultSleep;
+
   return {
-    exportAssets: () => asConfigApiRequest(() => client.config_assets.export()),
-    replaceAssets: (input: unknown) =>
-      asConfigApiRequest(() =>
-        client.config_assets.replace({
-          body: apiOperations["config_assets.replace"].body.parse(input)
-        })
-      ),
-    validateAssets: (input: unknown) =>
-      asConfigApiRequest(() =>
-        client.config_assets.validate({
-          body: apiOperations["config_assets.validate"].body.parse(input)
-        })
-      )
+    /** The version of the instance's asset set and the name of its default agent. */
+    getOverview: async (): Promise<{ version: number; defaultAgentName?: string }> => {
+      const overview = await read(sleep, () => client.config_assets.get_overview());
+      return {
+        version: overview.version,
+        ...(overview.defaultAgentName === undefined
+          ? {}
+          : { defaultAgentName: overview.defaultAgentName })
+      };
+    },
+    /** Every asset of one kind the key may read, page by page, without its content. */
+    listAssets: async (kind: string): Promise<AssetSummary[]> => {
+      const assets: AssetSummary[] = [];
+      let cursor: string | undefined;
+      do {
+        const page = await read(sleep, () =>
+          client.assets.list({
+            params: { kind },
+            query: { limit: MAX_LIST_LIMIT, ...(cursor === undefined ? {} : { cursor }) }
+          })
+        );
+        assets.push(...page.items);
+        cursor = page.nextCursor;
+      } while (cursor !== undefined);
+      return assets;
+    },
+    /** One asset with its content, or nothing where the instance holds none of that name. */
+    getAsset: async (kind: string, name: string): Promise<Asset | undefined> => {
+      try {
+        return await read(sleep, () => client.assets.get({ params: { kind, name } }));
+      } catch (error) {
+        if (isMissingAsset(error)) return undefined;
+        throw error;
+      }
+    },
+    /** Who wrote the latest revision of one asset, a deleted one included. */
+    getLatestRevision: async (kind: string, name: string) => {
+      const page = await read(sleep, () =>
+        client.assets.revisions.list({ params: { kind, name }, query: { limit: 1 } })
+      );
+      return page.items[0];
+    },
+    /** Asks whether a sync of the batch would be applied. A refusal throws as the sync's. */
+    checkSync: (batch: SyncBatch) => read(sleep, () => client.assets.sync_check({ body: batch })),
+    /**
+     * Applies the batch, all of it or nothing. The call carries one key for all its tries: a
+     * try whose answer never arrived is sent again with it, and the instance answers what the
+     * first one did instead of writing twice.
+     */
+    syncAssets: async (batch: SyncBatch): Promise<SyncOutcome> => {
+      const idempotencyKey = randomUUID();
+      for (let attempt = 1; ; attempt += 1) {
+        try {
+          const outcome = await client.assets.sync({ body: batch, idempotencyKey });
+          return outcome.status === "done"
+            ? { status: "done", output: outcome.output }
+            : { status: "pending_approval", operationRunId: outcome.run.id };
+        } catch (error) {
+          if (isDroppedConnection(error) && attempt < SYNC_ATTEMPTS) {
+            await sleep(SYNC_RETRY_DELAY_MS * attempt);
+            continue;
+          }
+          if (isDroppedConnection(error)) {
+            throw new Error(
+              `The connection to the instance dropped ${SYNC_ATTEMPTS} times and the push has no answer. It may have been applied: run 'catalyst config diff' before pushing again.`,
+              { cause: error }
+            );
+          }
+          throw toConfigApiError(error);
+        }
+      }
+    }
   };
+}
+
+export type ConfigApi = Awaited<ReturnType<typeof createConfigApi>>;
+export type SyncBatch = OperationInput<"assets.sync">["body"];
+type SyncCall = Awaited<ReturnType<ReturnType<typeof createApiClient>["assets"]["sync"]>>;
+export type SyncOutput = Extract<SyncCall, { status: "done" }>["output"];
+export type SyncOutcome =
+  | { status: "done"; output: SyncOutput }
+  /** Nothing was written yet: the instance holds the push for another person's approval. */
+  | { status: "pending_approval"; operationRunId: string };
+
+/** How often one push is sent before a dropped connection is reported. */
+const SYNC_ATTEMPTS = 3;
+const SYNC_RETRY_DELAY_MS = 500;
+/** How often a read that is over the rate limit waits and asks again. */
+const READ_ATTEMPTS = 5;
+/** The longest one wait for the rate limit. A longer one is reported instead. */
+const MAX_RATE_LIMIT_WAIT_SECONDS = 60;
+
+function defaultSleep(milliseconds: number): Promise<void> {
+  return new Promise((resolveSleep) => setTimeout(resolveSleep, milliseconds));
+}
+
+/** A reading call. Over the rate limit it waits as long as the instance says and asks again. */
+async function read<Output>(
+  sleep: (milliseconds: number) => Promise<void>,
+  request: () => Promise<Output>
+): Promise<Output> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await request();
+    } catch (error) {
+      const wait = error instanceof ApiError ? error.retryAfterSeconds : undefined;
+      if (wait === undefined || wait > MAX_RATE_LIMIT_WAIT_SECONDS || attempt >= READ_ATTEMPTS) {
+        throw toConfigApiError(error);
+      }
+      await sleep(wait * 1000);
+    }
+  }
+}
+
+function isDroppedConnection(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 0;
+}
+
+function isMissingAsset(error: unknown): boolean {
+  return (
+    error instanceof ConfigApiError &&
+    error.status === 404 &&
+    !isUnknownOperationResponse({ error: { code: error.code, details: error.details } })
+  );
 }
 
 function assertSafeApiKeyExchangeUrl(url: string): void {
@@ -109,14 +229,6 @@ async function exchangeApiKey(
     return issued.accessToken;
   } catch (error) {
     throw new ApiKeyExchangeError(toConfigApiError(error), apiKey);
-  }
-}
-
-async function asConfigApiRequest<Output>(request: () => Promise<Output>): Promise<Output> {
-  try {
-    return await request();
-  } catch (error) {
-    throw toConfigApiError(error);
   }
 }
 

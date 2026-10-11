@@ -2,15 +2,10 @@ import { listQuerySchema } from "../shared";
 import {
   administeredCollaborationWorkspaceSchema,
   agentAvailabilitySchema,
-  configAssetBundleSchema,
   configAssetMutationVersionResponseSchema,
   configAssetsOverviewSchema,
-  exportConfigAssetsResponseSchema,
-  replaceConfigAssetsRequestSchema,
-  replaceConfigAssetsResponseSchema,
   setConfigAgentAvailabilityRequestSchema,
-  setDefaultConfigAgentRequestSchema,
-  validateConfigAssetsResponseSchema
+  setDefaultConfigAgentRequestSchema
 } from "../configuration";
 import { defineOperation, json, page } from "./define-operation";
 
@@ -71,50 +66,6 @@ export const configAssetOperations = {
     effect: "reading",
     query: listQuerySchema,
     response: page(administeredCollaborationWorkspaceSchema, ["createdAt", "id"], false),
-    errors: [],
-    rateClass: "read"
-  }),
-  "config_assets.export": defineOperation({
-    id: "config_assets.export",
-    method: "GET",
-    path: "/api/v1/instance/config/export",
-    summary: "Export every agent and skill as one bundle",
-    tag: "Config Assets",
-    auth: "principal",
-    scope: "config_assets:read",
-    requires: ["agent.read", "skill.read"],
-    effect: "reading",
-    response: json(exportConfigAssetsResponseSchema),
-    errors: [],
-    rateClass: "read"
-  }),
-  "config_assets.replace": defineOperation({
-    id: "config_assets.replace",
-    method: "POST",
-    path: "/api/v1/instance/config/import",
-    summary: "Apply a bundle of agents and skills from a release",
-    tag: "Config Assets",
-    auth: "principal",
-    scope: "config_assets:release",
-    requires: ["assets.release"],
-    effect: "changing",
-    body: replaceConfigAssetsRequestSchema,
-    response: json(replaceConfigAssetsResponseSchema),
-    errors: ["CONFLICT"],
-    rateClass: "write"
-  }),
-  "config_assets.validate": defineOperation({
-    id: "config_assets.validate",
-    method: "POST",
-    path: "/api/v1/instance/config/validate",
-    summary: "Check a bundle of agents and skills without applying it",
-    tag: "Config Assets",
-    auth: "principal",
-    scope: "config_assets:release",
-    requires: ["assets.release"],
-    effect: "reading",
-    body: configAssetBundleSchema,
-    response: json(validateConfigAssetsResponseSchema),
     errors: [],
     rateClass: "read"
   })

@@ -1,7 +1,12 @@
 import { loadNewerVersion } from "./build-fixtures";
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import { randomUUID } from "node:crypto";
-import { assetRevision, requestWithOrigin } from "./request-with-origin";
+import {
+  assetRevision,
+  readAssetSet,
+  requestWithOrigin,
+  restoreAssetSet
+} from "./request-with-origin";
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./test";
 import { z } from "zod";
@@ -3291,24 +3296,17 @@ test("superadmin manages config assets with validation and conflict protection",
 }) => {
   test.setTimeout(60_000);
   await signInViaApi(page, superadminUser);
-  const originalResponse = await page.request.get(`${apiBaseUrl}/api/v1/instance/config/export`);
-  expect(originalResponse.ok()).toBe(true);
-  const original = (await originalResponse.json()) as {
-    version: number;
-    defaultAgentName?: string;
-    agents: Array<Record<string, unknown>>;
-    skills: Array<Record<string, unknown>>;
-  };
-  const originalResearchAgent = original.agents.find(
-    (agent) => agent.name === "research_assistant"
-  );
+  const original = await readAssetSet(page, apiBaseUrl);
+  const originalResearchAgent = original.assets.find(
+    (asset) => asset.kind === "agent" && asset.name === "research_assistant"
+  )?.config;
   expect(originalResearchAgent).toBeDefined();
 
   // The page shows no version counter; the instance's own answer says whether a save went through.
   const expectVersion = async (version: number) => {
     await expect
       .poll(async () => {
-        const response = await page.request.get(`${apiBaseUrl}/api/v1/instance/config/export`);
+        const response = await page.request.get(`${apiBaseUrl}/api/v1/instance/config/assets`);
         const body: unknown = await response.json();
         return typeof body === "object" && body !== null && "version" in body
           ? body.version
@@ -3518,20 +3516,8 @@ test("superadmin manages config assets with validation and conflict protection",
     await expect(conflict).toHaveCount(0);
     await expect(instructions).toHaveValue(serverInstructions);
   } finally {
-    const restored = await requestWithOrigin(
-      page,
-      "post",
-      `${apiBaseUrl}/api/v1/instance/config/import`,
-      {
-        data: {
-          baseVersion: null,
-          defaultAgentName: original.defaultAgentName,
-          agents: original.agents,
-          skills: original.skills
-        }
-      }
-    );
-    expect(restored.ok()).toBe(true);
+    const restored = await restoreAssetSet(page, apiBaseUrl, original);
+    expect(restored.ok(), await restored.text()).toBe(true);
   }
 });
 

@@ -1,11 +1,18 @@
-import { createTestFetch, createTestInstance, type TestInstance } from "./support/test-instance";
+import {
+  callTestPath,
+  createTestFetch,
+  createTestInstance,
+  type TestInstance
+} from "./support/test-instance";
 import { testOperations } from "./support/operations";
+import { retiredReleasePaths } from "./support/retired-api-paths";
 
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { AUTH_MOUNT_PATH } from "@vivd-catalyst/api-client";
+import { UNKNOWN_OPERATION_REASON } from "@vivd-catalyst/api-contract";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -22,6 +29,7 @@ import {
   StoreBackedAuditRecorder,
   asClientInstanceId,
   type AgentRuntime,
+  type JsonObject,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
 
@@ -278,21 +286,25 @@ describe("config CLI command flows", () => {
       instances: { local: { lastPulledVersion: 0, assets: {}, defaultAgentName: null } }
     });
     const pushed: unknown[] = [];
+    const { fetchImpl } = await instanceHolding({ agents: [], skills: [] }, pushed);
     expect(
       await runConfigCommand("push", {
         cwd: directory,
         env: { CATALYST_API_KEY: "cat_package" },
-        fetchImpl: configApiFetch({ version: 0, agents: [], skills: [] }, pushed, 1)
+        fetchImpl
       })
     ).toBe(0);
-    expect(pushed.at(-1)).toMatchObject({ skills: local.skills });
+    expect(pushed.at(-1)).toMatchObject({
+      items: [{ type: "put", kind: "skill", config: local.skills[0] }]
+    });
 
     await writeFile(resolve(skillDirectory, "references", "stale.md"), "stale", "utf8");
     expect(
       await runConfigCommand("pull", {
         cwd: directory,
         env: { CATALYST_API_KEY: "cat_package" },
-        fetchImpl: configApiFetch({ version: 2, agents: [], skills: local.skills })
+        // The instance holds the package the push wrote.
+        fetchImpl
       })
     ).toBe(0);
     await expect(
@@ -333,7 +345,7 @@ describe("config CLI command flows", () => {
       await runConfigCommand("pull", {
         cwd: directory,
         env: { CATALYST_API_KEY: "cat_package_failure" },
-        fetchImpl: configApiFetch({ version: 2, agents: [], skills: [conflictingPackage] }),
+        fetchImpl: (await instanceHolding({ agents: [], skills: [conflictingPackage] })).fetchImpl,
         stderr: (text) => stderr.push(text)
       })
     ).toBe(1);
@@ -364,7 +376,7 @@ describe("config CLI command flows", () => {
       ]
     };
     await writeStateFile(resolve(directory, STATE_FILENAME), {
-      instances: { local: pulledBaseline(4, { agents: [], skills: [remoteSkill] }) }
+      instances: { local: pulledBaseline(1, { agents: [], skills: [remoteSkill] }) }
     });
     const stdout: string[] = [];
 
@@ -372,7 +384,7 @@ describe("config CLI command flows", () => {
       await runConfigCommand("push", {
         cwd: directory,
         env: { CATALYST_API_KEY: "cat_resource_plan" },
-        fetchImpl: configApiFetch({ version: 4, agents: [], skills: [remoteSkill] }),
+        fetchImpl: (await instanceHolding({ agents: [], skills: [remoteSkill] })).fetchImpl,
         stdout: (text) => stdout.push(text)
       })
     ).toBe(0);
@@ -380,7 +392,7 @@ describe("config CLI command flows", () => {
     expect(stdout.join("")).toContain("Unchanged: 0");
   });
 
-  it("prefers API-key exchange, then pulls, pushes, and reports a stale-version conflict", async () => {
+  it("prefers API-key exchange, then pulls, pushes, and reports a stale asset", async () => {
     const fixture = await createFixture();
     await fixture.store.configAssets.applyConfigAssetMutations({
       clientInstanceId: fixture.clientInstanceId,
@@ -440,7 +452,7 @@ skills:
       `Bearer ${fixture.apiKey}`
     );
     expect(requests[0]?.init?.body).toBeUndefined();
-    expect(requests[1]?.url).toBe(`${url}${testOperations["config_assets.export"].path}`);
+    expect(requests[1]?.url).toBe(`${url}${testOperations["config_assets.get_overview"].path}`);
     expect(new Headers(requests[1]?.init?.headers).get("authorization")).toMatch(/^Bearer /u);
     expect(new Headers(requests[1]?.init?.headers).get("authorization")).not.toBe(
       `Bearer ${fixture.apiKey}`
@@ -567,7 +579,7 @@ skills:
 
   it("prints merge and mirror push plans and names remote-only assets", async () => {
     const directory = await createTemporaryDirectory();
-    await writeMinimalManifest(directory, "https://catalyst.test");
+    await writeMinimalManifest(directory, "https://catalyst.test", "assistant");
     await mkdir(resolve(directory, "agents"), { recursive: true });
     await writeFile(
       resolve(directory, "agents", "assistant.agent.yaml"),
@@ -580,7 +592,6 @@ skills:
       "utf8"
     );
     const remote = {
-      version: 4,
       defaultAgentName: "assistant",
       agents: [
         agentConfig("Remote", { name: "assistant" }),
@@ -589,15 +600,16 @@ skills:
       skills: []
     };
     await writeStateFile(resolve(directory, STATE_FILENAME), {
-      instances: { local: pulledBaseline(4, remote) }
+      instances: { local: pulledBaseline(1, remote) }
     });
     const mergeRequests: unknown[] = [];
+    const { fetchImpl } = await instanceHolding(remote, mergeRequests);
     const mergeStdout: string[] = [];
     expect(
       await runConfigCommand("push", {
         cwd: directory,
         env: { CATALYST_API_KEY: "cat_plan" },
-        fetchImpl: configApiFetch(remote, mergeRequests, 5),
+        fetchImpl,
         stdout: (text) => mergeStdout.push(text)
       })
     ).toBe(0);
@@ -606,33 +618,44 @@ skills:
     );
     expect(mergeStdout.join("")).toContain("- agent:remote-only");
     expect(mergeStdout.join("")).toContain("Use --prune to delete them.");
-    expect(mergeRequests.at(-1)).toMatchObject({
-      mode: "merge",
-      baseVersion: null,
-      baseRevisions: { "agent:assistant": 1, "agent:new": null }
-    });
+    // One call: the changed asset against the revision of the last pull, the new one against
+    // none, and no delete of the asset the working copy does not hold.
+    expect(mergeRequests).toEqual([
+      {
+        items: [
+          {
+            type: "put",
+            kind: "agent",
+            config: canonicalizeAgentConfig(agentConfig("Local update")),
+            expectedRevision: 1
+          },
+          {
+            type: "put",
+            kind: "agent",
+            config: canonicalizeAgentConfig(agentConfig("New", { name: "new" }))
+          }
+        ]
+      }
+    ]);
 
-    await writeStateFile(resolve(directory, STATE_FILENAME), {
-      instances: { local: pulledBaseline(4, remote) }
-    });
-    const pruneRequests: unknown[] = [];
+    // The same working copy with --prune: the remote-only asset is deleted at the revision
+    // the last pull recorded, and nothing else is sent.
     const pruneStdout: string[] = [];
     expect(
       await runConfigCommand("push", {
         cwd: directory,
         prune: true,
         env: { CATALYST_API_KEY: "cat_plan" },
-        fetchImpl: configApiFetch(remote, pruneRequests, 5),
+        fetchImpl,
         stdout: (text) => pruneStdout.push(text)
       })
     ).toBe(0);
     expect(pruneStdout.join("")).toContain("Push plan (mirror):");
     expect(pruneStdout.join("")).toContain("Deleted: 1");
     expect(pruneStdout.join("")).toContain("Assets to delete:\n- agent:remote-only");
-    expect(pruneRequests.at(-1)).toMatchObject({
-      mode: "merge",
-      baseVersion: null,
-      deleteAssets: [{ kind: "agent", name: "remote-only" }]
+    expect(mergeRequests).toHaveLength(2);
+    expect(mergeRequests[1]).toEqual({
+      items: [{ type: "delete", kind: "agent", name: "remote-only", expectedRevision: 1 }]
     });
   });
 
@@ -657,28 +680,34 @@ skills:
       "utf8"
     );
     await writeStateFile(resolve(directory, STATE_FILENAME), {
-      instances: { local: pulledBaseline(3, { agents: [agentConfig("Remote")], skills: [] }) }
+      instances: { local: pulledBaseline(1, { agents: [agentConfig("Remote")], skills: [] }) }
     });
     const requests: unknown[] = [];
     expect(
       await runCli(["config", "push", "--only", "agent:assistant", "--only", "skill:review"], {
         cwd: directory,
         env: { CATALYST_API_KEY: "cat_scoped" },
-        fetchImpl: configApiFetch(
-          { version: 3, agents: [agentConfig("Remote")], skills: [] },
-          requests,
-          4
-        )
+        fetchImpl: (
+          await instanceHolding(
+            { defaultAgentName: "assistant", agents: [agentConfig("Remote")], skills: [] },
+            requests
+          )
+        ).fetchImpl
       })
     ).toBe(0);
-    expect(requests.at(-1)).toEqual({
-      agents: [canonicalizeAgentConfig(agentConfig("Selected"))],
-      skills: [skillConfig("review", "Review")],
-      baseVersion: null,
-      baseRevisions: { "agent:assistant": 1, "skill:review": null },
-      deleteAssets: [],
-      mode: "merge"
-    });
+    expect(requests).toEqual([
+      {
+        items: [
+          {
+            type: "put",
+            kind: "agent",
+            config: canonicalizeAgentConfig(agentConfig("Selected")),
+            expectedRevision: 1
+          },
+          { type: "put", kind: "skill", config: skillConfig("review", "Review") }
+        ]
+      }
+    ]);
 
     const stderr: string[] = [];
     expect(
@@ -692,44 +721,54 @@ skills:
 
   it("prints the agents a push left hidden in every workspace", async () => {
     const directory = await createTemporaryDirectory();
-    await writeMinimalManifest(directory, "https://catalyst.test");
+    await writeMinimalManifest(directory, "https://catalyst.test", "assistant");
     await mkdir(resolve(directory, "agents"), { recursive: true });
+    await writeFile(
+      resolve(directory, "agents", "assistant.agent.yaml"),
+      serializeAgentYaml(agentConfig("Default")),
+      "utf8"
+    );
     await writeFile(
       resolve(directory, "agents", "kai-tax.agent.yaml"),
       serializeAgentYaml(agentConfig("Tax", { name: "kai-tax" })),
       "utf8"
     );
-    await writeStateFile(resolve(directory, STATE_FILENAME), {
-      instances: { local: pulledBaseline(3, { agents: [], skills: [] }) }
+    // The instance holds the agent under its old name, placed in chosen workspaces.
+    const { fetchImpl, fixture } = await instanceHolding({
+      defaultAgentName: "assistant",
+      agents: [agentConfig("Default"), agentConfig("Tax", { name: "kai" })],
+      skills: []
     });
-    const remote = { version: 3, agents: [], skills: [] };
-    const push = async (hiddenAgentNames?: string[]) => {
+    await fixture.store.configAssets.setAgentAvailability({
+      clientInstanceId: fixture.clientInstanceId,
+      agentName: "kai",
+      availability: { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }
+    });
+    const push = async (...flags: string[]) => {
       const stdout: string[] = [];
-      const fallback = configApiFetch(remote, [], 4);
-      const exitCode = await runCli(["config", "push", "--force"], {
+      const exitCode = await runCli(["config", "push", "--force", ...flags], {
         cwd: directory,
         env: { CATALYST_API_KEY: "cat_hidden" },
         stdout: (text) => stdout.push(text),
-        fetchImpl: async (input, init) => {
-          const url = new URL(input instanceof Request ? input.url : String(input));
-          return hiddenAgentNames &&
-            url.pathname.endsWith(testOperations["config_assets.replace"].buildPath({}))
-            ? jsonResponse(200, { version: 4, hiddenAgentNames })
-            : fallback(input, init);
-        }
+        fetchImpl
       });
       expect(exitCode).toBe(0);
       return stdout.join("");
     };
 
-    const hidden = await push(["kai-tax"]);
-    expect(hidden).toContain("Pushed 1 agent, 0 skills, version 4.");
+    // Deleting the old name and adding the new one in one push is a rename.
+    const hidden = await push("--prune");
+    expect(hidden).toContain("Pushed 2 agents, 0 skills, version 2.");
     expect(hidden).toContain(
       "Hidden in every workspace until an instance admin sets their availability:\n  agent:kai-tax\n"
     );
-    // Servers without availability, and pushes that hide nothing, print no notice.
+    // Once an admin has placed the agent, a push of it prints no notice.
+    await fixture.store.configAssets.setAgentAvailability({
+      clientInstanceId: fixture.clientInstanceId,
+      agentName: "kai-tax",
+      availability: { mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] }
+    });
     expect(await push()).not.toContain("Hidden in every workspace");
-    expect(await push([])).not.toContain("Hidden in every workspace");
   });
 
   it("rewrites only selected pull files without changing the recorded version", async () => {
@@ -753,11 +792,12 @@ skills:
         cwd: directory,
         only: ["agent:assistant"],
         env: { CATALYST_API_KEY: "cat_pull" },
-        fetchImpl: configApiFetch({
-          version: 9,
-          agents: [agentConfig("New selected"), agentConfig("New other", { name: "other" })],
-          skills: []
-        }),
+        fetchImpl: (
+          await instanceHolding({
+            agents: [agentConfig("New selected"), agentConfig("New other", { name: "other" })],
+            skills: []
+          })
+        ).fetchImpl,
         stdout: (text) => stdout.push(text)
       })
     ).toBe(0);
@@ -787,12 +827,19 @@ skills:
     expect(errors.join("")).toContain("No per-asset baseline");
     expect(errors.join("")).toContain("catalyst config pull");
     const requests: string[] = [];
+    // A server from before the asset operations answers their addresses as unknown.
     const olderServerFetch: typeof fetch = async (input, init) => {
       const request = input instanceof Request ? input : new Request(input, init);
       requests.push(new URL(request.url).pathname);
       return new URL(request.url).pathname.endsWith("access-token")
         ? jsonResponse(200, { accessToken: "token", expiresAt: "2030-01-01T00:00:00.000Z" })
-        : jsonResponse(200, { version: 8, agents: [], skills: [] });
+        : jsonResponse(404, {
+            error: {
+              code: "NOT_FOUND",
+              message: "Not found",
+              details: { reason: UNKNOWN_OPERATION_REASON }
+            }
+          });
     };
     errors.length = 0;
     expect(
@@ -804,8 +851,10 @@ skills:
         stderr: (text) => errors.push(text)
       })
     ).toBe(1);
-    expect(errors.join("")).toContain("Upgrade the server before pushing");
-    expect(requests).not.toContain(testOperations["config_assets.replace"].buildPath({}));
+    expect(errors.join("")).toContain(
+      "This instance does not serve the asset operations this CLI uses. Upgrade the instance"
+    );
+    expect(requests).not.toContain(testOperations["assets.sync"].buildPath({}));
   });
 
   it("prints all conflicts and an exact scoped pull command with the selected instance and directory", async () => {
@@ -819,41 +868,38 @@ skills:
       serializeSkillMarkdown(skillConfig("review", "Local")),
       "utf8"
     );
+    await mkdir(resolve(directory, "agents"), { recursive: true });
+    await writeFile(
+      resolve(directory, "agents", "assistant.agent.yaml"),
+      serializeAgentYaml(agentConfig("Local")),
+      "utf8"
+    );
     await writeStateFile(resolve(directory, STATE_FILENAME), {
       instances: { local: { lastPulledVersion: 0, assets: {}, defaultAgentName: null } }
     });
-    const fetchImpl: typeof fetch = async (input, init) => {
-      const request = input instanceof Request ? input : new Request(input, init);
-      if (new URL(request.url).pathname.endsWith("/import")) {
-        return jsonResponse(409, {
-          error: {
-            code: "CONFLICT",
-            message: "Conflict",
-            details: {
-              conflicts: [
-                {
-                  kind: "skill",
-                  name: "review",
-                  currentRevision: 3,
-                  actorLabel: "Reviewer",
-                  timestamp: "2026-10-05T10:00:00Z",
-                  operation: "update"
-                },
-                {
-                  kind: "agent",
-                  name: "assistant",
-                  currentRevision: 2,
-                  actorLabel: "Admin",
-                  timestamp: "2026-10-05T11:00:00Z",
-                  operation: "revert"
-                }
-              ]
-            }
-          }
-        });
-      }
-      return configApiFetch({ version: 0, agents: [], skills: [] })(input, init);
-    };
+    // Both assets appeared on the instance since: the working copy pushes them as new.
+    const { fetchImpl, fixture } = await instanceHolding({ agents: [], skills: [] });
+    await fixture.store.configAssets.applyConfigAssetMutations({
+      clientInstanceId: fixture.clientInstanceId,
+      actor: { displayLabel: "Reviewer", roles: ["admin"] },
+      mutations: [
+        { type: "upsert", kind: "skill", name: "review", config: skillConfig("review", "One") }
+      ]
+    });
+    await fixture.store.configAssets.applyConfigAssetMutations({
+      clientInstanceId: fixture.clientInstanceId,
+      actor: { displayLabel: "Reviewer", roles: ["admin"] },
+      mutations: [
+        { type: "upsert", kind: "skill", name: "review", config: skillConfig("review", "Two") }
+      ]
+    });
+    await fixture.store.configAssets.applyConfigAssetMutations({
+      clientInstanceId: fixture.clientInstanceId,
+      actor: { displayLabel: "Admin", roles: ["admin"] },
+      mutations: [
+        { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("Remote") }
+      ]
+    });
     const errors: string[] = [];
     expect(
       await runConfigCommand("push", {
@@ -866,15 +912,24 @@ skills:
         stderr: (text) => errors.push(text)
       })
     ).toBe(1);
-    expect(errors.join("")).toContain(
-      "skill:review: revision 3, update by Reviewer at 2026-10-05T10:00:00Z"
+    expect(errors.join("")).toContain("Push conflict; nothing was applied.");
+    expect(errors.join("")).toMatch(
+      /- skill:review: revision 2, update by Reviewer at \d{4}-\d{2}-\d{2}T/u
+    );
+    expect(errors.join("")).toMatch(
+      /- agent:assistant: revision 1, create by Admin at \d{4}-\d{2}-\d{2}T/u
     );
     expect(errors.join("")).toContain(
-      "agent:assistant: revision 2, revert by Admin at 2026-10-05T11:00:00Z"
+      "catalyst config pull --dir 'working copy' --instance local --only agent:assistant --only skill:review"
     );
-    expect(errors.join("")).toContain(
-      "catalyst config pull --dir 'working copy' --instance local --only skill:review --only agent:assistant"
-    );
+    // Nothing of the push landed.
+    expect(
+      await fixture.store.configAssets.getConfigAsset({
+        clientInstanceId: fixture.clientInstanceId,
+        kind: "skill",
+        name: "review"
+      })
+    ).toMatchObject({ revision: 2, config: { content: "# Two" } });
     expect(errors.join("")).toContain("Commit or stash local edits in git first");
   });
 
@@ -1180,22 +1235,21 @@ skills:
       "utf8"
     );
     const remoteSkill = skillConfig("review", "Remote review");
-    const remote = {
-      version: 7,
+    const { fetchImpl } = await instanceHolding({
       agents: [agentConfig("Remote")],
       skills: [remoteSkill]
-    };
+    });
     const listOutput: string[] = [];
     expect(
       await runCli(["config", "list"], {
         cwd: directory,
         env: { CATALYST_API_KEY: "cat_list" },
-        fetchImpl: configApiFetch(remote),
+        fetchImpl,
         stdout: (text) => listOutput.push(text)
       })
     ).toBe(0);
-    expect(listOutput.join("")).toContain("agent\tassistant\t7\t-");
-    expect(listOutput.join("")).toContain("skill\treview\t7\tmissing locally");
+    expect(listOutput.join("")).toContain("agent\tassistant\t1\t-");
+    expect(listOutput.join("")).toContain("skill\treview\t1\tmissing locally");
     expect(listOutput.join("")).toContain("skill\tlocal-only\t-\tmissing remotely");
 
     const agentOutput: string[] = [];
@@ -1203,7 +1257,7 @@ skills:
       await runCli(["config", "show", "agent", "assistant"], {
         cwd: directory,
         env: { CATALYST_API_KEY: "cat_show" },
-        fetchImpl: configApiFetch(remote),
+        fetchImpl,
         stdout: (text) => agentOutput.push(text)
       })
     ).toBe(0);
@@ -1216,7 +1270,7 @@ skills:
       await runCli(["config", "show", "skill", "review"], {
         cwd: directory,
         env: { CATALYST_API_KEY: "cat_show" },
-        fetchImpl: configApiFetch(remote),
+        fetchImpl,
         stdout: (text) => skillOutput.push(text)
       })
     ).toBe(0);
@@ -1310,17 +1364,11 @@ skills:
   it("uses API-key auth with a direct --instance URL", async () => {
     const directory = await createTemporaryDirectory();
     await writeMinimalManifest(directory, "http://manifest-instance.test");
-    const requests: Array<{ url: string; init?: RequestInit }> = [];
-    const fetchImpl: typeof fetch = async (input, init) => {
-      const url = input instanceof Request ? input.url : String(input);
-      requests.push({ url, ...(init === undefined ? {} : { init }) });
-      return url.endsWith(testOperations["access_tokens.exchange"].buildPath({}))
-        ? jsonResponse(200, {
-            accessToken: "direct-url-access-token",
-            expiresAt: "2030-01-01T00:00:00.000Z"
-          })
-        : jsonResponse(200, { version: 0, agents: [], skills: [] });
-    };
+    const requests: string[] = [];
+    const fetchImpl = await emptyInstanceBehind(
+      "https://direct-instance.example.test/base",
+      requests
+    );
 
     expect(
       await runConfigCommand("pull", {
@@ -1330,9 +1378,11 @@ skills:
         fetchImpl
       })
     ).toBe(0);
-    expect(requests.map((request) => request.url)).toEqual([
+    expect(requests).toEqual([
       "https://direct-instance.example.test/base/api/v1/auth/access-token",
-      "https://direct-instance.example.test/base/api/v1/instance/config/export"
+      "https://direct-instance.example.test/base/api/v1/instance/config/assets",
+      "https://direct-instance.example.test/base/api/v1/assets/agent?limit=200",
+      "https://direct-instance.example.test/base/api/v1/assets/skill?limit=200"
     ]);
   });
 
@@ -1366,29 +1416,267 @@ skills:
       const directory = await createTemporaryDirectory();
       await writeMinimalManifest(directory, "https://manifest-instance.test");
       const requests: string[] = [];
+      const baseUrl = instance.replace(/\/$/u, "");
 
       expect(
         await runConfigCommand("pull", {
           cwd: directory,
           instance,
           env: { CATALYST_API_KEY: "cat_loopback_key" },
-          fetchImpl: async (input) => {
-            const url = input instanceof Request ? input.url : String(input);
-            requests.push(url);
-            return url.endsWith(testOperations["access_tokens.exchange"].buildPath({}))
-              ? jsonResponse(200, {
-                  accessToken: "loopback-access-token",
-                  expiresAt: "2030-01-01T00:00:00.000Z"
-                })
-              : jsonResponse(200, { version: 0, agents: [], skills: [] });
-          }
+          fetchImpl: await emptyInstanceBehind(baseUrl, requests)
         })
       ).toBe(0);
-      const baseUrl = instance.replace(/\/$/u, "");
-      expect(requests).toEqual([
+      expect(requests.slice(0, 2)).toEqual([
         `${baseUrl}${testOperations["access_tokens.exchange"].path}`,
-        `${baseUrl}${testOperations["config_assets.export"].path}`
+        `${baseUrl}${testOperations["config_assets.get_overview"].path}`
       ]);
+    }
+  );
+});
+
+describe("config CLI against an instance", () => {
+  const releasedAgents = [
+    {
+      ...agentConfig("Answer with the guides."),
+      toolNames: ["known.tool", "read_skill"],
+      skillNames: ["intake", "review"],
+      initialPrompts: [{ title: "Start", prompt: "What do you need?" }]
+    },
+    agentConfig("Help.", { name: "helper" }),
+    { ...agentConfig("Research.", { name: "researcher" }), reasoningEffort: "high" }
+  ];
+  const releasedSkills = [
+    skillConfig("intake", "Ask first."),
+    {
+      ...skillConfig("review", "Review with the checks."),
+      resources: [
+        { path: "references/checks.md", mediaType: "text/markdown", content: "# Checks\n" },
+        { path: "references/schema.json", mediaType: "application/json", content: '{"ok":true}\n' }
+      ]
+    }
+  ];
+
+  async function writeRelease(directory: string): Promise<void> {
+    await writeMinimalManifest(directory, "https://catalyst.test", "assistant");
+    await mkdir(resolve(directory, "agents"), { recursive: true });
+    for (const agent of releasedAgents) {
+      await writeFile(
+        resolve(directory, "agents", `${agent.name}.agent.yaml`),
+        serializeAgentYaml(canonicalizeAgentConfig(agent)),
+        "utf8"
+      );
+    }
+    for (const skill of releasedSkills) {
+      const { resources = [], ...root } = { resources: undefined, ...skill };
+      await mkdir(resolve(directory, "skills", skill.name, "references"), { recursive: true });
+      await writeFile(
+        resolve(directory, "skills", skill.name, "SKILL.md"),
+        serializeSkillMarkdown(root),
+        "utf8"
+      );
+      for (const resource of resources) {
+        await writeFile(resolve(directory, "skills", skill.name, resource.path), resource.content);
+      }
+    }
+  }
+
+  const workingCopy = async (directory: string) =>
+    readWorkingCopy(directory, await readManifest(directory));
+  const syncRuns = async (fixture: Awaited<ReturnType<typeof createFixture>>) =>
+    (await fixture.store.operationRuns.list({ clientInstanceId: fixture.clientInstanceId })).filter(
+      (run) => run.operation === "assets.sync"
+    );
+
+  it("pushes a whole release in one call and pulls it back unchanged", async () => {
+    const syncs: unknown[] = [];
+    const { fetchImpl, fixture } = await instanceHolding({ agents: [], skills: [] }, syncs);
+    const directory = await createTemporaryDirectory();
+    await writeRelease(directory);
+    const local = await workingCopy(directory);
+    const stdout: string[] = [];
+    const options = {
+      cwd: directory,
+      env: { CATALYST_API_KEY: "cat_release" },
+      fetchImpl,
+      stdout: (text: string) => stdout.push(text),
+      stderr: (text: string) => stdout.push(text)
+    };
+
+    // A working copy that never pulled pushes with --force.
+    expect(await runConfigCommand("push", { ...options, force: true }), stdout.join("")).toBe(0);
+    expect(stdout.join("")).toContain("Pushed 3 agents, 2 skills, version 1.");
+    // One call carries every asset and the default agent, and leaves one run of the CLI.
+    expect(syncs).toHaveLength(1);
+    expect(syncs[0]).toMatchObject({ defaultAgentName: "assistant" });
+    expect(syncs[0]).toHaveProperty("items.length", 5);
+    const runs = await syncRuns(fixture);
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({ origin: { kind: "cli" }, status: "done" });
+
+    // Another working copy pulls the release as it was pushed.
+    const other = await createTemporaryDirectory();
+    await writeMinimalManifest(other, "https://catalyst.test");
+    expect(await runConfigCommand("pull", { ...options, cwd: other })).toBe(0);
+    const pulled = await workingCopy(other);
+    expect(pulled).toEqual(local);
+    expect(canonicalBundleFiles(pulled)).toEqual(canonicalBundleFiles(local));
+
+    // The pushing one has nothing to pull, to show or to push again.
+    expect(await runConfigCommand("pull", options)).toBe(0);
+    expect(await workingCopy(directory)).toEqual(local);
+    stdout.length = 0;
+    expect(await runConfigCommand("diff", options)).toBe(0);
+    expect(stdout.join("")).toContain("No differences.");
+    expect(await runConfigCommand("push", options)).toBe(0);
+    expect(stdout.join("")).toContain("No local changes to push.");
+    expect(syncs).toHaveLength(1);
+    expect(await syncRuns(fixture)).toHaveLength(1);
+  });
+
+  it("sends a push whose answer was lost again under the same key, and the instance writes once", async () => {
+    const { fetchImpl, fixture } = await instanceHolding({
+      defaultAgentName: "assistant",
+      agents: [agentConfig("Remote")],
+      skills: []
+    });
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test", "assistant");
+    const options = { cwd: directory, env: { CATALYST_API_KEY: "cat_retry" }, stdout: () => {} };
+    expect(await runConfigCommand("pull", { ...options, fetchImpl })).toBe(0);
+    await writeFile(
+      resolve(directory, "agents", "assistant.agent.yaml"),
+      serializeAgentYaml(canonicalizeAgentConfig(agentConfig("Local"))),
+      "utf8"
+    );
+
+    const keys: Array<string | null> = [];
+    const dropping: typeof fetch = async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      const response = await fetchImpl(request);
+      if (new URL(request.url).pathname !== testOperations["assets.sync"].path) return response;
+      keys.push(request.headers.get("idempotency-key"));
+      // The instance applied the first call, and its answer never arrives.
+      if (keys.length === 1) throw new TypeError("fetch failed");
+      return response;
+    };
+    const waits: number[] = [];
+    expect(
+      await runConfigCommand("push", {
+        ...options,
+        fetchImpl: dropping,
+        sleep: async (milliseconds) => {
+          waits.push(milliseconds);
+        }
+      })
+    ).toBe(0);
+
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).toEqual(expect.any(String));
+    expect(keys[1]).toBe(keys[0]);
+    expect(waits).toHaveLength(1);
+    // One revision and one run, and the baseline is the revision the instance holds.
+    expect(
+      await fixture.store.configAssets.getConfigAsset({
+        clientInstanceId: fixture.clientInstanceId,
+        kind: "agent",
+        name: "assistant"
+      })
+    ).toMatchObject({ revision: 2, config: { instructions: "Local" } });
+    expect(await syncRuns(fixture)).toHaveLength(1);
+    expect(
+      (await readStateFile(resolve(directory, STATE_FILENAME))).instances.local?.assets?.[
+        "agent:assistant"
+      ]
+    ).toMatchObject({ revision: 2 });
+  });
+
+  it("validates the working copy as one set, a new skill a new agent names included, and writes nothing", async () => {
+    const { fetchImpl, fixture } = await instanceHolding({ agents: [], skills: [] });
+    const directory = await createTemporaryDirectory();
+    await writeRelease(directory);
+    const output: string[] = [];
+    const options = {
+      cwd: directory,
+      env: { CATALYST_API_KEY: "cat_validate" },
+      fetchImpl,
+      stdout: (text: string) => output.push(text),
+      stderr: (text: string) => output.push(text)
+    };
+
+    expect(await runConfigCommand("validate", options), output.join("")).toBe(0);
+    expect(output.join("")).toContain("Valid: 3 agents, 2 skills.");
+
+    // The instance says what it refuses, in the words of a push.
+    await rm(resolve(directory, "skills", "intake"), { recursive: true });
+    output.length = 0;
+    expect(await runConfigCommand("validate", options)).toBe(1);
+    expect(output.join("")).toContain("Validation failed:");
+    expect(output.join("")).toContain("Agent 'assistant' references missing skill 'intake'");
+
+    expect(
+      await fixture.store.configAssets.getConfigAssetState({
+        clientInstanceId: fixture.clientInstanceId
+      })
+    ).toMatchObject({ version: 0 });
+    expect(await syncRuns(fixture)).toEqual([]);
+  });
+
+  it("is told to push in parts where the release is larger than one request may be", async () => {
+    const { fetchImpl, fixture } = await instanceHolding({ agents: [], skills: [] });
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    // Twelve skills of 100 KiB are over the megabyte one request holds.
+    for (let index = 0; index < 12; index += 1) {
+      const name = `guide-${index}`;
+      await mkdir(resolve(directory, "skills", name), { recursive: true });
+      await writeFile(
+        resolve(directory, "skills", name, "SKILL.md"),
+        serializeSkillMarkdown(skillConfig(name, "x".repeat(100 * 1024))),
+        "utf8"
+      );
+    }
+    const errors: string[] = [];
+    const options = {
+      cwd: directory,
+      force: true,
+      env: { CATALYST_API_KEY: "cat_large" },
+      fetchImpl,
+      stdout: () => {},
+      stderr: (text: string) => errors.push(text)
+    };
+
+    expect(await runConfigCommand("push", options)).toBe(1);
+    expect(errors.join("")).toBe(
+      "The request is larger than the instance accepts in one call. Push in parts with --only.\n"
+    );
+    expect(
+      await fixture.store.configAssets.getConfigAssetState({
+        clientInstanceId: fixture.clientInstanceId
+      })
+    ).toMatchObject({ version: 0 });
+    // A part of it fits.
+    expect(
+      await runConfigCommand("push", { ...options, only: ["skill:guide-0", "skill:guide-1"] })
+    ).toBe(0);
+  });
+
+  it.each(retiredReleasePaths)(
+    "tells a CLI of an earlier release to upgrade at %s %s",
+    async (method, path) => {
+      const fixture = await createFixture();
+      const answer = await callTestPath(fixture.server, method, path, {
+        authorization: `Bearer ${fixture.apiKey}`
+      });
+      expect(answer.statusCode).toBe(404);
+      // The earlier CLI prints the code and this sentence.
+      expect(answer.json()).toMatchObject({
+        error: {
+          code: "NOT_FOUND",
+          message:
+            "This address is gone: config assets are read and written through /api/v1/assets. Upgrade the Catalyst CLI to the release of this server.",
+          details: { reason: UNKNOWN_OPERATION_REASON }
+        }
+      });
     }
   );
 });
@@ -1426,7 +1714,7 @@ describe("config CLI API transport", () => {
       }
     });
 
-    const failure = await api.exportAssets().catch((error: unknown) => error);
+    const failure = await api.getOverview().catch((error: unknown) => error);
     expect(failure).toMatchObject({
       message: "Catalyst API returned invalid JSON (HTTP 503)"
     });
@@ -1535,7 +1823,7 @@ async function createFixture() {
           modelBindings: [],
           fastModeModelBindingIds: [],
           reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
-          enabledToolNames: ["known.tool"]
+          enabledToolNames: ["known.tool", "read_skill"]
         }
       },
       agentRuntime: createUnusedAgentRuntime(),
@@ -1550,10 +1838,16 @@ async function createFixture() {
   return { clientInstanceId, server, store, apiKey: createdCredential.secret };
 }
 
-async function writeMinimalManifest(directory: string, url: string): Promise<void> {
+async function writeMinimalManifest(
+  directory: string,
+  url: string,
+  defaultAgentName?: string
+): Promise<void> {
+  const defaultAgent =
+    defaultAgentName === undefined ? "" : `defaultAgentName: ${defaultAgentName}\n`;
   await writeFile(
     resolve(directory, "catalyst.yaml"),
-    `instances:\n  local:\n    url: ${url}\ndefaultInstance: local\nagents:\n  - agents/*.agent.yaml\nskills:\n  - skills/*/SKILL.md\n`,
+    `instances:\n  local:\n    url: ${url}\ndefaultInstance: local\n${defaultAgent}agents:\n  - agents/*.agent.yaml\nskills:\n  - skills/*/SKILL.md\n`,
     "utf8"
   );
 }
@@ -1594,40 +1888,72 @@ function pulledBaseline(
   };
 }
 
-function configApiFetch(
-  remote: {
-    version: number;
-    defaultAgentName?: string;
-    agents: unknown[];
-    skills: unknown[];
-  },
-  requests: unknown[] = [],
-  pushedVersion = remote.version + 1
-): typeof fetch {
+interface HeldAssets {
+  defaultAgentName?: string;
+  agents: ReadonlyArray<JsonObject & { name: string }>;
+  skills: ReadonlyArray<JsonObject & { name: string }>;
+}
+
+/**
+ * A real instance that holds these assets, each at revision 1, behind a fetch for the CLI.
+ * The fetch signs in with the instance's key whatever key the command names, and records
+ * the body of every `assets.sync` the CLI sends.
+ */
+async function instanceHolding(remote: HeldAssets, syncs: unknown[] = []) {
+  const fixture = await createFixture();
+  const mutations = [
+    ...remote.agents.map((config) => ({
+      type: "upsert" as const,
+      kind: "agent",
+      name: config.name,
+      config
+    })),
+    ...remote.skills.map((config) => ({
+      type: "upsert" as const,
+      kind: "skill",
+      name: config.name,
+      config
+    })),
+    ...(remote.defaultAgentName === undefined
+      ? []
+      : [{ type: "setDefaultAgent" as const, agentName: remote.defaultAgentName }])
+  ];
+  if (mutations.length > 0) {
+    await fixture.store.configAssets.applyConfigAssetMutations({
+      clientInstanceId: fixture.clientInstanceId,
+      mutations
+    });
+  }
+  const serverFetch = createTestFetch(fixture.server);
+  const fetchImpl: typeof fetch = async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    const path = new URL(request.url).pathname;
+    if (path === testOperations["access_tokens.exchange"].path) {
+      return serverFetch(request.url, {
+        method: request.method,
+        headers: { authorization: `Bearer ${fixture.apiKey}` }
+      });
+    }
+    if (path === testOperations["assets.sync"].path) {
+      syncs.push(JSON.parse(await request.clone().text()));
+    }
+    return serverFetch(request);
+  };
+  return { fetchImpl, fixture };
+}
+
+/** An instance without assets, reached under another address. The addresses are recorded. */
+async function emptyInstanceBehind(baseUrl: string, requests: string[]): Promise<typeof fetch> {
+  const { fetchImpl } = await instanceHolding({ agents: [], skills: [] });
   return async (input, init) => {
     const request = input instanceof Request ? input : new Request(input, init);
-    const url = new URL(request.url);
-    if (url.pathname.endsWith(testOperations["access_tokens.exchange"].buildPath({}))) {
-      return jsonResponse(200, {
-        accessToken: "short-lived-access-token",
-        expiresAt: "2030-01-01T00:00:00.000Z"
-      });
-    }
-    if (url.pathname.endsWith(testOperations["config_assets.export"].buildPath({}))) {
-      return jsonResponse(200, {
-        ...remote,
-        perAssetConcurrency: true,
-        revisions: Object.fromEntries([
-          ...remote.agents.map((asset) => [`agent:${(asset as { name: string }).name}`, 1]),
-          ...remote.skills.map((asset) => [`skill:${(asset as { name: string }).name}`, 1])
-        ])
-      });
-    }
-    if (url.pathname.endsWith(testOperations["config_assets.replace"].buildPath({}))) {
-      requests.push(JSON.parse(await request.clone().text()));
-      return jsonResponse(200, { version: pushedVersion });
-    }
-    return jsonResponse(404, { error: { code: "NOT_FOUND", message: "Not found" } });
+    requests.push(request.url);
+    const body = request.body ? await request.clone().text() : undefined;
+    return fetchImpl(`https://catalyst.test${request.url.slice(baseUrl.length)}`, {
+      method: request.method,
+      headers: request.headers,
+      ...(body === undefined ? {} : { body })
+    });
   };
 }
 

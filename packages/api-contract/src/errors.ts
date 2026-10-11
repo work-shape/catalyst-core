@@ -78,6 +78,12 @@ const unknownOperationSchema = z.object({
   })
 });
 
+/**
+ * `details.reason` of the 400 a server answers for a request body over the size it accepts.
+ * The limit is the server's own and bounds every operation alike.
+ */
+export const BODY_TOO_LARGE_REASON = "body_too_large";
+
 export function isUnknownOperationResponse(payload: unknown): boolean {
   return unknownOperationSchema.safeParse(payload).success;
 }

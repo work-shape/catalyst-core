@@ -209,6 +209,9 @@ export const syncAssetsResponseSchema = z.object({
   warnings: z.array(assetWarningSchema)
 });
 
+/** The answer for a batch a sync would apply. One it would refuse answers the sync's error. */
+export const checkAssetSyncResponseSchema = z.object({ valid: z.literal(true) });
+
 /**
  * One item of a refused `assets.sync`, in `details.items` of the error. Nothing of the batch
  * was applied: `refused` names an item that stopped it and says why, `not_applied` an item

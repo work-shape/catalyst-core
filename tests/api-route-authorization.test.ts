@@ -43,8 +43,6 @@ const authenticated = names.flatMap((name) => {
 const acceptedBodies: Partial<Record<ApiOperationName, unknown>> = {
   "config_agents.set_default": { agentName: "agent" },
   "config_agents.set_availability": { mode: "all" },
-  "config_assets.replace": { agents: [], skills: [], baseVersion: null },
-  "config_assets.validate": { agents: [], skills: [] },
   "service_principals.create": { displayLabel: "Service" },
   "service_principals.update": { displayLabel: "Service" },
   "api_credentials.create": { name: "Credential" },
@@ -147,8 +145,10 @@ describe("every operation of the catalog", () => {
     async (entry) => {
       const { name } = entry;
       const { scope } = entry.operation;
-      // A key for release sync passes the scope of `assets.sync`, and of that operation alone.
-      const further = name === "assets.sync" ? ["config_assets:release"] : [];
+      // A key for release sync passes the scope of `assets.sync` and of its check, and of
+      // those two alone.
+      const further =
+        name === "assets.sync" || name === "assets.sync_check" ? ["config_assets:release"] : [];
       const scopes = FIRST_PARTY_AUTH_SCOPES.filter(
         (other) => other !== "*" && other !== scope && !further.includes(other)
       );
@@ -275,7 +275,7 @@ describe("every operation of the catalog", () => {
 
   it("guards the reading operations that are served by POST", () => {
     const readingByPost = guarded.filter(({ operation }) => operation.effect === "reading");
-    expect(readingByPost.map(({ name }) => name)).toContain("config_assets.validate");
+    expect(readingByPost.map(({ name }) => name)).toContain("assets.sync_check");
   });
 
   it.each(names.filter((name) => descriptor(name).auth === "serverCredential"))(

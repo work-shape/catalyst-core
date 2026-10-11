@@ -41,3 +41,54 @@ export async function atCurrentRevision(
     ? input
     : { ...input, payload: { ...payload.data, expectedRevision: revision } };
 }
+
+interface ReleaseContent {
+  agents?: ReadonlyArray<Record<string, unknown>>;
+  skills?: ReadonlyArray<Record<string, unknown>>;
+  deleteAssets?: ReadonlyArray<{ kind: string; name: string }>;
+  defaultAgentName?: string | null;
+}
+
+/**
+ * The body of the `assets.sync` a config push makes for this content by a caller who read
+ * the instance just before: every asset at the revision it is at, a new one without one.
+ */
+export async function releaseAtCurrentRevisions(
+  stores: Pick<TestStore, "configAssets">,
+  clientInstanceId: ClientInstanceId,
+  release: ReleaseContent
+) {
+  const revisionOf = async (kind: string, name: string) => {
+    const asset = await stores.configAssets.getConfigAsset({ clientInstanceId, kind, name });
+    return asset?.status === "active" ? asset.revision : undefined;
+  };
+  const items: Array<Record<string, unknown>> = [];
+  for (const [kind, configs] of [
+    ["agent", release.agents ?? []],
+    ["skill", release.skills ?? []]
+  ] as const) {
+    for (const config of configs) {
+      const expectedRevision = await revisionOf(kind, String(config.name));
+      items.push({
+        type: "put",
+        kind,
+        config,
+        ...(expectedRevision === undefined ? {} : { expectedRevision })
+      });
+    }
+  }
+  for (const { kind, name } of release.deleteAssets ?? []) {
+    items.push({
+      type: "delete",
+      kind,
+      name,
+      expectedRevision: (await revisionOf(kind, name)) ?? 1
+    });
+  }
+  return {
+    items,
+    ...(release.defaultAgentName === undefined
+      ? {}
+      : { defaultAgentName: release.defaultAgentName })
+  };
+}

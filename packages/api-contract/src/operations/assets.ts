@@ -3,6 +3,7 @@ import {
   assetScopeQuerySchema,
   assetSummarySchema,
   assetWriteResponseSchema,
+  checkAssetSyncResponseSchema,
   deleteAssetRequestSchema,
   listAssetsQuerySchema,
   putAssetRequestSchema,
@@ -50,6 +51,21 @@ export const assetOperations = {
     response: json(syncAssetsResponseSchema),
     errors: ["CONFLICT"],
     rateClass: "write"
+  }),
+  "assets.sync_check": defineRegisteredOperation({
+    id: "assets.sync_check",
+    method: "POST",
+    path: "/api/v1/assets/sync/check",
+    summary: "Check a batch as a sync would, without applying it",
+    tag: "Assets",
+    auth: "principal",
+    scope: "config_assets:write",
+    requires: [],
+    effect: "reading",
+    body: syncAssetsRequestSchema,
+    response: json(checkAssetSyncResponseSchema),
+    errors: ["CONFLICT"],
+    rateClass: "read"
   }),
   "assets.validate": defineRegisteredOperation({
     id: "assets.validate",

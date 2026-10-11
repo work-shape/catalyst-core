@@ -243,11 +243,7 @@ export type {
   ConnectionManagementPort
 } from "./connection-management-port";
 export { enqueueConnectionDiscovery } from "./connection-jobs";
-export type {
-  ConfigAssetBundle,
-  ConfigAssetValidationRefs,
-  WorkflowAssetKind
-} from "./asset-kinds/shared";
+export type { ConfigAssetValidationRefs, WorkflowAssetKind } from "./asset-kinds/shared";
 
 function adaptLogger(logger: Logger): FastifyInstance["log"] {
   return {

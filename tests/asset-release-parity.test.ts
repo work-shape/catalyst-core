@@ -3,7 +3,6 @@ import { z } from "zod";
 import { ASSET_RELEASE_SYNC_MAX_ITEMS, ASSET_SYNC_MAX_ITEMS } from "@vivd-catalyst/api-contract";
 import { defineAssetKind } from "@vivd-catalyst/core";
 import {
-  SERVICE_HEADER,
   agent,
   clientInstanceId,
   errorSchema,
@@ -19,27 +18,19 @@ import {
   releaseAsService,
   setupRelease as setup,
   syncAs,
-  syncAsService,
-  type Item
+  syncAsService
 } from "./support/asset-release";
 
-// A release through `assets.sync` does what the release path, `config_assets.replace`, does
-// with the same content: where its agents start, what it refuses, how it names the default
-// agent, what a delete of nothing is, and how much it holds. And nothing of that reaches a
-// caller who holds no release right, or another operation.
+// What a release through `assets.sync` does that no other write does, as the release path it
+// replaced did: where its agents start, what it refuses, how it names the default agent, what
+// a delete of nothing is, and how much it holds. And nothing of that reaches a caller who
+// holds no release right, or another operation.
 
 const availabilityOf = async (t: AccessInstance, name: string) =>
   (await t.stores.configAssets.listAgentAvailability({ clientInstanceId })).get(name);
 const defaultAgentOf = async (t: AccessInstance) =>
   (await t.stores.configAssets.getConfigAssetState({ clientInstanceId })).defaultAgentName;
 const hiddenSchema = z.object({ hiddenAgentNames: z.array(z.string()).optional() });
-
-/** The same content through the release path, as the CLI sends it today. */
-const replace = (t: AccessInstance, payload: Item) =>
-  t.instance.call("config_assets.replace", {
-    payload: { baseVersion: null, mode: "merge", agents: [], skills: [], ...payload },
-    headers: { [SERVICE_HEADER]: SERVICE }
-  });
 
 async function placeInChosenWorkspaces(t: AccessInstance, agentName: string) {
   await t.stores.configAssets.setAgentAvailability({
@@ -50,46 +41,25 @@ async function placeInChosenWorkspaces(t: AccessInstance, agentName: string) {
 }
 
 describe("where the agents of a release start", () => {
-  it("is where the release path starts them: everywhere, and hidden when the batch renames a placed agent", async () => {
+  it("is everywhere, and hidden when the batch renames a placed agent", async () => {
     const t = await setup();
-    // One agent for each path to rename, both placed in chosen workspaces.
-    await t.stores.configAssets.applyConfigAssetMutations({
-      clientInstanceId,
-      mutations: [{ type: "upsert", kind: "agent", name: "rel-older", config: agent("rel-older") }]
-    });
     await placeInChosenWorkspaces(t, "rel-old");
-    await placeInChosenWorkspaces(t, "rel-older");
 
     // A new agent beside the others is available everywhere.
     const added = await syncAsService(t, [putAgent("added")]);
-    const addedByReplace = await replace(t, { agents: [agent("added-by-replace")] });
     expect(added.statusCode, added.body).toBe(200);
-    expect(addedByReplace.statusCode, addedByReplace.body).toBe(200);
     expect(await availabilityOf(t, "added")).toMatchObject({ mode: "all" });
-    expect(await availabilityOf(t, "added")).toEqual(await availabilityOf(t, "added-by-replace"));
     expect(hiddenSchema.parse(added.json()).hiddenAgentNames).toBeUndefined();
-    expect(hiddenSchema.parse(addedByReplace.json()).hiddenAgentNames).toBeUndefined();
 
     // A batch that deletes an agent placed in chosen workspaces renames it: the new one is hidden.
     const renamed = await syncAsService(t, [putAgent("renamed"), deleteAgent("rel-old")]);
-    const renamedByReplace = await replace(t, {
-      agents: [agent("renamed-by-replace")],
-      deleteAssets: [{ kind: "agent", name: "rel-older" }]
-    });
     expect(renamed.statusCode, renamed.body).toBe(200);
-    expect(renamedByReplace.statusCode, renamedByReplace.body).toBe(200);
     expect(await availabilityOf(t, "renamed")).toEqual({
       mode: "selected",
       personalWorkspaces: false,
       collaborationWorkspaceIds: []
     });
-    expect(await availabilityOf(t, "renamed")).toEqual(
-      await availabilityOf(t, "renamed-by-replace")
-    );
     expect(hiddenSchema.parse(renamed.json()).hiddenAgentNames).toEqual(["renamed"]);
-    expect(hiddenSchema.parse(renamedByReplace.json()).hiddenAgentNames).toEqual([
-      "renamed-by-replace"
-    ]);
   });
 
   it("leaves an agent created or brought back by a put, a revert or another caller's sync where it always started", async () => {
@@ -142,14 +112,9 @@ describe("a definition in a release", () => {
     const fast = { modelProviderId: undefined, modelBindingId: "plain", fastMode: true };
 
     const refused = await syncAsService(t, [putAgent("rel-old", fast, 1)]);
-    const refusedByReplace = await replace(t, { agents: [agent("assistant", fast)] });
     expect(refused.statusCode).toBe(422);
-    expect(refusedByReplace.statusCode).toBe(422);
-    // Both name the setting, in the words of the one check of the set.
-    const issuesOf = (response: { json(): unknown }) =>
-      JSON.stringify(errorSchema.parse(response.json()).error.details);
-    expect(issuesOf(refused)).toContain("fast mode");
-    expect(issuesOf(refusedByReplace)).toContain("fast mode");
+    // The refusal names the setting, in the words of the one check of the set.
+    expect(JSON.stringify(errorSchema.parse(refused.json()).error.details)).toContain("fast mode");
     expect(await t.stored("agent", "rel-old")).toMatchObject({ revision: 1 });
 
     // The superadmin's save through the same operation is adjusted, as it always was.

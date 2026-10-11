@@ -35,7 +35,7 @@ const schemeNames = (id: keyof typeof apiOperations) =>
   documentedOperation(id).security.flatMap((requirement) => Object.keys(requirement));
 
 describe("the released OpenAPI document", () => {
-  it("lists the nine asset operations at their addresses and none of the five they replace", () => {
+  it("lists the ten asset operations at their addresses and none of the five they replace", () => {
     const listed = Object.entries(released.paths).flatMap(([path, methods]) =>
       Object.entries(methods).map(
         ([method, operation]) => `${operation.operationId}  ${method.toUpperCase()} ${path}`
@@ -51,6 +51,7 @@ describe("the released OpenAPI document", () => {
       "assets.revert  POST /api/v1/assets/{kind}/{name}/revert",
       "assets.revisions.list  GET /api/v1/assets/{kind}/{name}/revisions",
       "assets.sync  POST /api/v1/assets/sync",
+      "assets.sync_check  POST /api/v1/assets/sync/check",
       "assets.validate  POST /api/v1/assets/{kind}/validate",
       "platform.context.get  GET /api/v1/context"
     ]);
@@ -65,9 +66,6 @@ describe("the released OpenAPI document", () => {
     expect(ids).toEqual(
       expect.arrayContaining([
         "config_assets.get_overview",
-        "config_assets.export",
-        "config_assets.replace",
-        "config_assets.validate",
         "config_agents.set_default",
         "config_agents.set_availability"
       ])

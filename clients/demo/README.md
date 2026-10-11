@@ -156,7 +156,7 @@ pnpm config:push
 
 `pnpm config:local-key` signs in as the seeded demo superadmin, creates the service principal `Local config CLI` with `config_assets.read` and `config_assets.release` and a key limited to `config_assets:read` and `config_assets:release`, and writes the key into the gitignored `.env` as `CATALYST_API_KEY` without printing it. Run it again after every database reset. It works only against `localhost`, `127.0.0.1` or `::1` and only with a development config; on any other instance, create the principal and key by hand under Administration > API Access.
 
-`pnpm config:push` builds the config CLI and loads `.env`. The key is exchanged for a short-lived access token; it is not written to `catalyst.yaml` or `.catalyst-state.json`. It pushes with `--force`, so it replaces what was changed in the interface since the last push; `pnpm config:diff` shows the difference first.
+`pnpm config:push` builds the config CLI and loads `.env`. The key is exchanged for a short-lived access token; it is not written to `catalyst.yaml` or `.catalyst-state.json`. It pushes with `--force`, which sends every local asset over what the instance holds now, so it replaces what was changed in the interface since the last push; `pnpm config:diff` shows the difference first.
 
 The workflow assistant can propose changes to its shared instructions with
 `propose_skill_change`, including new instructions. Ask it to remember a general

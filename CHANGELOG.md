@@ -477,6 +477,32 @@ id from config_assets where status = 'deleted')`.
   request its descriptor declares it in. A query field the descriptor does not declare no longer
   replaces a field of the body; it is ignored, as on every other route.
 - **Build:** a Connection's row no longer shows where the Connection comes from.
+- **Config CLI (breaking API):** `catalyst config pull`, `diff`, `push`, `validate`, `list` and
+  `show` read with `assets.list` and `assets.get` and write with one `assets.sync` call per push.
+  The release path is removed: `GET /api/v1/instance/config/export`,
+  `POST /api/v1/instance/config/import` and `POST /api/v1/instance/config/validate`, the client
+  methods `config_assets.export`, `config_assets.replace` and `config_assets.validate`, the type
+  `ConfigAssetBundle`, and the audit events `config_assets.replaced` and
+  `governance.config_assets_release_authorized`. A push is now one Operation Run of the key's
+  service principal with the audit events of the asset operations. **Upgrade CLI and server
+  together.** A CLI of an earlier release is answered `404` at the three addresses with the
+  sentence to upgrade it; this CLI against an earlier server reports that the instance does not
+  serve the asset operations. The key needs what it needed: `config_assets.read` and
+  `config_assets.release` with the scopes `config_assets:read` and `config_assets:release`.
+  What changes at the terminal: `--force` sends every local asset against the revision the
+  instance holds now and no longer switches a check off on the server, so a write that arrives
+  during the push refuses it; `--prune` deletes at the revision of the last pull and reports an
+  asset it has not seen as a conflict; one push holds at most 2,000 assets, where the release
+  path had no count limit, and a request over one megabyte is answered `400` with
+  `details.reason` `body_too_large` instead of `500`, both with the advice to push in parts with
+  `--only`; a push that conflicts on assets and on the default agent names the assets first; a
+  push the instance holds for approval exits with 1 and names the waiting run; a push whose
+  answer is lost is sent again under the same idempotency key. The first pull of a working copy
+  reads each asset with one call.
+- **Asset API:** `POST /api/v1/assets/sync/check` (`assets.sync_check`) takes the body of
+  `assets.sync`, runs its checks and writes nothing. A release through `assets.sync` is checked
+  against the whole stored set instead of what its key may read, as the release path was, and
+  its delete of an absent asset is refused when the asset was created meanwhile.
 - **Document extraction (breaking config):** the extraction of the document processing
   capability calls its model through the model gateway. The block
   `capabilities.documentProcessing.extraction.provider` is gone, and startup of the API and of

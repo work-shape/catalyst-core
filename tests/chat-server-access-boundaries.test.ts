@@ -6,6 +6,7 @@ import {
   setupAccessInstance as setup,
   skill
 } from "./support/access-instance";
+import { releaseAtCurrentRevisions } from "./support/asset-revisions";
 
 // Ways around a deny, a Namespace list or the hiding of superadmins that a review found, each
 // beside the neighbouring call that stays allowed.
@@ -218,23 +219,20 @@ describe("a Namespace's model list and its writer", () => {
       userId: t.admin.id,
       permissions: ["config_assets.release"]
     });
-    const bundle = (modelBindingId: string) => ({
-      baseVersion: null,
-      defaultAgentName: "assistant",
-      agents: [agent("assistant"), bound("kai-new", modelBindingId)],
-      skills: []
+    // A release: a batch without a Namespace, of a holder of the release right.
+    const release = async (modelBindingId: string) => ({
+      payload: await releaseAtCurrentRevisions(t.stores, clientInstanceId, {
+        agents: [bound("kai-new", modelBindingId)]
+      })
     });
-    await t.expectRefused(
-      t.admin.id,
-      "config_assets.replace",
-      { payload: bundle("other") },
-      {
-        status: 403,
-        code: "FORBIDDEN",
-        details: { reason: "model_not_allowed", modelBindingId: "other", namespace: "kai-" }
-      }
+    const refused = await t.expectRefused(t.admin.id, "assets.sync", await release("other"), {
+      status: 403,
+      code: "FORBIDDEN"
+    });
+    expect(JSON.stringify(refused.details)).toContain(
+      "Model binding 'other' is not allowed in Namespace 'kai-'"
     );
-    await t.expectOk(t.admin.id, "config_assets.replace", { payload: bundle("plain") });
+    await t.expectOk(t.admin.id, "assets.sync", await release("plain"));
   });
 });
 

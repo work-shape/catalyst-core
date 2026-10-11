@@ -8,7 +8,12 @@ import {
   type AgentConfig,
   type SkillConfig
 } from "@vivd-catalyst/config-schema";
-import { ConfigApiError, createConfigApi } from "./api";
+import {
+  ASSET_RELEASE_SYNC_MAX_ITEMS,
+  BODY_TOO_LARGE_REASON,
+  UNKNOWN_OPERATION_REASON
+} from "@vivd-catalyst/api-contract";
+import { ConfigApiError, createConfigApi, type ConfigApi, type SyncBatch } from "./api";
 import { createUnifiedDiff } from "./diff";
 import { API_KEY_ENV_NAME, createLocalApiKey, writeApiKeyToEnvFile } from "./local-key";
 import {
@@ -54,6 +59,8 @@ export interface ConfigCommandOptions {
   /** `local-key`: the variable written. Default: the one the CLI reads. */
   envName?: string;
   fetchImpl?: typeof fetch;
+  /** Waits between tries of a call. Tests pass one that does not wait. */
+  sleep?: (milliseconds: number) => Promise<void>;
   env?: Readonly<Record<string, string | undefined>>;
   stdout?: (text: string) => void;
   stderr?: (text: string) => void;
@@ -112,15 +119,41 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
   const manifest = await readManifest(workingDir);
   const instance = resolveInstance(manifest, options.instance);
   const api = await connectApi(instance.url, options);
-  const exported = await api.exportAssets();
-  const remote = parseExportBundle(exported);
+  const overview = await api.getOverview();
+  const listing = await listRemoteAssets(api);
   const selectors = parseOnlySelectors(options.only);
-  const selected = selectBundle(remote, selectors, false);
-  const selectedKeys = new Set(assetEntries(selected).map((asset) => asset.key));
+  const wanted =
+    selectors.length === 0
+      ? [...listing.values()]
+      : selectors.flatMap((selector) => listing.get(selector.key) ?? []);
+  const baseline = (await readStateFile(resolve(workingDir, STATE_FILENAME))).instances[
+    instance.key
+  ];
+  const local = await readLocalAssetsIfValid(workingDir, manifest);
+  // An asset that is at the revision of the last pull, with a local file that still holds
+  // what was pulled, is not read again: the file is what the instance holds.
+  const pulled = await mapConcurrently(wanted, async (remote) => {
+    const base = baseline?.assets?.[remote.key];
+    const mine = local.get(remote.key);
+    if (
+      base &&
+      mine &&
+      base.revision === remote.revision &&
+      assetHash(mine.contents) === base.hash
+    ) {
+      return readDefinition(remote, mine.config);
+    }
+    // Deleted since it was listed: it is not on the instance.
+    return fetchRemoteAsset(api, remote.kind, remote.name);
+  });
+  const present = pulled.flatMap((asset) => (asset ? [asset] : []));
+  const selected = bundleOf(present);
+  const revisions = Object.fromEntries(present.map((asset) => [asset.key, asset.revision]));
+  const selectedKeys = new Set(present.map((asset) => asset.key));
   const absentSelectors = selectors.filter((selector) => !selectedKeys.has(selector.key));
   const agents = selected.agents.sort(byName);
   const skills = selected.skills.sort(byName);
-  const provenance = { instance: instance.key, version: exported.version };
+  const provenance = { instance: instance.key, version: overview.version };
   const agentTargets = agents.map((agent) => ({
     agent,
     path: agentAssetPath(workingDir, agent.name)
@@ -165,22 +198,22 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
     await removeStaleManifestAssets(workingDir, manifest, desiredPaths);
     await updateManifestDefaultAgent(
       resolve(workingDir, MANIFEST_FILENAME),
-      exported.defaultAgentName
+      overview.defaultAgentName
     );
   }
   await recordBaseline(
     workingDir,
     instance.key,
-    exported.version,
+    overview.version,
     selected,
-    exported.revisions,
+    revisions,
     selectors.length === 0,
-    selectors.length === 0 ? (exported.defaultAgentName ?? null) : undefined,
+    selectors.length === 0 ? (overview.defaultAgentName ?? null) : undefined,
     absentSelectors.map((selector) => selector.key)
   );
   writeOutput(
     options,
-    `Pulled ${formatCount(agents.length, "agent")}, ${formatCount(skills.length, "skill")}, version ${exported.version}.${selectors.length === 0 ? "" : " Scoped pull; selected asset baselines updated."}`
+    `Pulled ${formatCount(agents.length, "agent")}, ${formatCount(skills.length, "skill")}, version ${overview.version}.${selectors.length === 0 ? "" : " Scoped pull; selected asset baselines updated."}`
   );
   return 0;
 }
@@ -224,30 +257,14 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
     );
   }
   const api = await connectApi(instance.url, options);
-  const exported = await api.exportAssets();
-  if (exported.perAssetConcurrency !== true || exported.revisions === undefined) {
-    throw new Error(
-      "This server does not support per-asset config conflicts. Upgrade the server before pushing with this CLI."
-    );
-  }
-  const remote = parseExportBundle(exported);
-  const touchedKeys = new Set(
-    assetEntries(bundle)
-      .filter(
-        (asset) =>
-          options.force || baseline?.assets?.[asset.key]?.hash !== assetHash(asset.contents)
-      )
-      .map((asset) => asset.key)
+  const listing = await listRemoteAssets(api);
+  const touched = assetEntries(bundle).filter(
+    (asset) => options.force || baseline?.assets?.[asset.key]?.hash !== assetHash(asset.contents)
   );
-  const touched: WorkingCopyBundle = {
-    agents: bundle.agents.filter((asset) => touchedKeys.has(`agent:${asset.name}`)),
-    skills: bundle.skills.filter((asset) => touchedKeys.has(`skill:${asset.name}`))
-  };
+  const touchedKeys = new Set(touched.map((asset) => asset.key));
   const localKeys = new Set(assetEntries(local).map((asset) => asset.key));
   const deleteAssets = options.prune
-    ? assetEntries(remote)
-        .filter((asset) => !localKeys.has(asset.key))
-        .map(({ kind, name }) => ({ kind, name }))
+    ? [...listing.values()].filter((asset) => !localKeys.has(asset.key))
     : [];
   const changesDefault =
     selectors.length === 0 &&
@@ -257,64 +274,106 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
       "No default-agent baseline is recorded. Run 'catalyst config pull' before changing the default agent."
     );
   }
+  /**
+   * The revision an item is made against. A push names the revision of the last pull, so a
+   * change on the instance since then refuses it. With --force it names the revision the
+   * instance holds now: the local file wins over whatever is there, and only a write that
+   * arrives between this read and the push still refuses it.
+   */
+  const baseRevision = (key: string): number | undefined =>
+    options.force ? listing.get(key)?.revision : baseline?.assets?.[key]?.revision;
+  const selectedRemote = selectors.length
+    ? new Map(selectors.flatMap((selector) => listing.get(selector.key) ?? []).map(byKey))
+    : listing;
   writeOutput(
     options,
     formatPushPlan(
-      createPushPlan(bundle, selectBundle(remote, selectors, false), touchedKeys),
+      await createPushPlan(api, bundle, selectedRemote, touchedKeys, baseline),
       options.prune === true
     )
   );
-  if (!touchedKeys.size && !deleteAssets.length && !changesDefault) {
+  if (!touched.length && !deleteAssets.length && !changesDefault) {
     writeOutput(options, "No local changes to push.");
     return 0;
   }
-  const baseRevisions = Object.fromEntries(
-    [...touchedKeys, ...deleteAssets.map((asset) => `${asset.kind}:${asset.name}`)].map((key) => [
-      key,
-      baseline?.assets?.[key]?.revision ?? null
-    ])
-  );
-  try {
-    const result = await api.replaceAssets({
-      ...touched,
-      ...(changesDefault && bundle.defaultAgentName !== undefined
-        ? { defaultAgentName: bundle.defaultAgentName }
-        : {}),
-      baseVersion: null,
-      ...(!options.force ? { baseRevisions } : {}),
-      ...(changesDefault ? { baseDefaultAgentName: baseline?.defaultAgentName ?? null } : {}),
-      deleteAssets,
-      mode: "merge"
-    });
-    // Refresh only applied assets whose exported content still matches the local files.
-    // A concurrent change stays guarded by the revision this push applied.
-    const updated = await api.exportAssets();
-    const applied = parseExportBundle(updated);
-    const appliedContents = new Map(
-      assetEntries(applied).map((asset) => [asset.key, asset.contents])
+  // An asset to delete that no pull of this working copy has seen was created since. The
+  // instance is asked for nothing: a delete names the revision it was decided on.
+  const unseen = deleteAssets.filter((asset) => baseRevision(asset.key) === undefined);
+  if (unseen.length > 0) {
+    writeError(
+      options,
+      await formatPushConflict(
+        api,
+        unseen.map((asset) => ({ ...asset, currentRevision: asset.revision })),
+        false,
+        options
+      )
     );
-    const revisions: Record<string, number> = {};
-    for (const asset of assetEntries(touched)) {
-      const revision = updated.revisions?.[asset.key];
-      if (revision !== undefined && appliedContents.get(asset.key) === asset.contents) {
-        revisions[asset.key] = revision;
-      } else if (!options.force && baseRevisions[asset.key] !== null) {
-        revisions[asset.key] = (baseRevisions[asset.key] ?? 0) + 1;
-      }
+    return 1;
+  }
+  const items: SyncBatch["items"] = [
+    ...touched.map((asset) => {
+      const expectedRevision = baseRevision(asset.key);
+      return {
+        type: "put" as const,
+        kind: asset.kind,
+        config: { ...asset.config },
+        ...(expectedRevision === undefined ? {} : { expectedRevision })
+      };
+    }),
+    ...deleteAssets.map((asset) => ({
+      type: "delete" as const,
+      kind: asset.kind,
+      name: asset.name,
+      expectedRevision: baseRevision(asset.key) ?? asset.revision
+    }))
+  ];
+  if (items.length > ASSET_RELEASE_SYNC_MAX_ITEMS) {
+    throw new Error(
+      `This push changes ${items.length} assets, and one push holds at most ${ASSET_RELEASE_SYNC_MAX_ITEMS}. Push in parts with --only.`
+    );
+  }
+  try {
+    const outcome = await api.syncAssets({
+      items,
+      ...(changesDefault
+        ? {
+            defaultAgentName: bundle.defaultAgentName ?? null,
+            ...(options.force
+              ? {}
+              : { expectedDefaultAgentName: baseline?.defaultAgentName ?? null })
+          }
+        : {})
+    });
+    if (outcome.status === "pending_approval") {
+      writeError(
+        options,
+        `The push waits for an approval on the instance and nothing was applied yet (Operation Run ${outcome.operationRunId}). When it is approved, run 'catalyst config pull' to record the new revisions.`
+      );
+      return 1;
     }
+    const result = outcome.output;
+    const revisions = Object.fromEntries(
+      result.items.flatMap((item) =>
+        item.status === "applied" && item.type === "put"
+          ? [[`${item.kind}:${item.name}`, item.revision]]
+          : []
+      )
+    );
+    const pushed = bundleOf(touched);
     await recordBaseline(
       workingDir,
       instance.key,
       result.version,
-      touched,
+      pushed,
       revisions,
       false,
       changesDefault ? (bundle.defaultAgentName ?? null) : undefined,
-      deleteAssets.map((asset) => `${asset.kind}:${asset.name}`)
+      deleteAssets.map((asset) => asset.key)
     );
     writeOutput(
       options,
-      `Pushed ${formatCount(touched.agents.length, "agent")}, ${formatCount(touched.skills.length, "skill")}, version ${result.version}.`
+      `Pushed ${formatCount(pushed.agents.length, "agent")}, ${formatCount(pushed.skills.length, "skill")}, version ${result.version}.`
     );
     if (result.hiddenAgentNames?.length) {
       writeOutput(
@@ -327,15 +386,25 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
     }
     return 0;
   } catch (error) {
-    if (error instanceof ConfigApiError && error.status === 409) {
-      writeError(options, formatPushConflict(error, options));
+    const refusal = error instanceof ConfigApiError ? readRefusedBatch(error) : undefined;
+    if (!refusal) {
+      throw error;
+    }
+    if (refusal.conflicts.length > 0 || refusal.defaultAgentConflict) {
+      writeError(
+        options,
+        await formatPushConflict(api, refusal.conflicts, refusal.defaultAgentConflict, options)
+      );
       return 1;
     }
-    if (isValidationApiError(error)) {
-      writeError(options, formatValidationFailure(error));
-      return 1;
-    }
-    throw error;
+    writeError(
+      options,
+      formatRefusal(
+        refusal.validation ? "Validation failed" : "Push refused; nothing was applied",
+        refusal
+      )
+    );
+    return 1;
   }
 }
 
@@ -345,20 +414,19 @@ export async function diffConfig(options: ConfigCommandOptions): Promise<number>
   const instance = resolveInstance(manifest, options.instance);
   const local = await readWorkingCopy(workingDir, manifest);
   const api = await connectApi(instance.url, options);
-  const remoteExport = await api.exportAssets();
-  const remote = parseExportBundle(remoteExport);
+  const overview = await api.getOverview();
+  const remoteAssets = await listRemoteAssets(api);
   const baseline = (await readStateFile(resolve(workingDir, STATE_FILENAME))).instances[
     instance.key
   ];
-  if (baseline?.assets === undefined || remoteExport.revisions === undefined) {
+  if (baseline?.assets === undefined) {
     writeOutput(
       options,
       "No per-asset baseline is available. Run 'catalyst config pull' first; local and remote changes cannot yet be distinguished."
     );
     return 1;
   }
-  const localAssets = new Map(assetEntries(local).map((asset) => [asset.key, asset]));
-  const remoteAssets = new Map(assetEntries(remote).map((asset) => [asset.key, asset]));
+  const localAssets = new Map(assetEntries(local).map(byKey));
   const keys = [
     ...new Set([...localAssets.keys(), ...remoteAssets.keys(), ...Object.keys(baseline.assets)])
   ].sort();
@@ -370,7 +438,7 @@ export async function diffConfig(options: ConfigCommandOptions): Promise<number>
     const localChanged = localAsset
       ? assetHash(localAsset.contents) !== base?.hash
       : base !== undefined;
-    const remoteChanged = (remoteExport.revisions[key] ?? null) !== (base?.revision ?? null);
+    const remoteChanged = (remoteAsset?.revision ?? null) !== (base?.revision ?? null);
     if (!localChanged && !remoteChanged) {
       continue;
     }
@@ -378,26 +446,13 @@ export async function diffConfig(options: ConfigCommandOptions): Promise<number>
       `${key}: ${localChanged && remoteChanged ? "conflict" : remoteChanged ? "remote newer" : "changed locally"}`
     );
     if (localChanged && !remoteChanged) {
-      const localFiles = canonicalBundleFiles({
-        agents:
-          localAsset?.kind === "agent"
-            ? local.agents.filter((asset) => asset.name === localAsset.name)
-            : [],
-        skills:
-          localAsset?.kind === "skill"
-            ? local.skills.filter((asset) => asset.name === localAsset.name)
-            : []
-      });
-      const remoteFiles = canonicalBundleFiles({
-        agents:
-          remoteAsset?.kind === "agent"
-            ? remote.agents.filter((asset) => asset.name === remoteAsset.name)
-            : [],
-        skills:
-          remoteAsset?.kind === "skill"
-            ? remote.skills.filter((asset) => asset.name === remoteAsset.name)
-            : []
-      });
+      // The content of the instance's asset is read for the assets changed locally and for
+      // no other: the list answers revisions, which is all the rest of the comparison needs.
+      const fetched = remoteAsset
+        ? await fetchRemoteAsset(api, remoteAsset.kind, remoteAsset.name)
+        : undefined;
+      const localFiles = canonicalBundleFiles(bundleOf(localAsset ? [localAsset] : []));
+      const remoteFiles = canonicalBundleFiles(bundleOf(fetched ? [fetched] : []));
       for (const path of [...new Set([...localFiles.keys(), ...remoteFiles.keys()])].sort()) {
         const diff = createUnifiedDiff(
           { path, contents: remoteFiles.get(path) },
@@ -411,7 +466,7 @@ export async function diffConfig(options: ConfigCommandOptions): Promise<number>
   }
   if (baseline.defaultAgentName !== undefined) {
     const localChanged = (local.defaultAgentName ?? null) !== baseline.defaultAgentName;
-    const remoteChanged = (remote.defaultAgentName ?? null) !== baseline.defaultAgentName;
+    const remoteChanged = (overview.defaultAgentName ?? null) !== baseline.defaultAgentName;
     if (localChanged || remoteChanged) {
       output.push(
         `default agent: ${localChanged && remoteChanged ? "conflict" : remoteChanged ? "remote newer" : "changed locally"}`
@@ -428,19 +483,36 @@ export async function validateConfig(options: ConfigCommandOptions): Promise<num
   const instance = resolveInstance(manifest, options.instance);
   const bundle = await readWorkingCopy(workingDir, manifest);
   const api = await connectApi(instance.url, options);
+  const listing = await listRemoteAssets(api);
   try {
-    await api.validateAssets(bundle);
+    // The whole working copy, each asset against the revision the instance holds now: the
+    // check says whether a push of everything would be accepted, whatever was pulled last.
+    await api.checkSync({
+      items: assetEntries(bundle).map((asset) => {
+        const revision = listing.get(asset.key)?.revision;
+        return {
+          type: "put" as const,
+          kind: asset.kind,
+          config: { ...asset.config },
+          ...(revision === undefined ? {} : { expectedRevision: revision })
+        };
+      }),
+      ...(bundle.defaultAgentName === undefined
+        ? {}
+        : { defaultAgentName: bundle.defaultAgentName })
+    });
     writeOutput(
       options,
       `Valid: ${formatCount(bundle.agents.length, "agent")}, ${formatCount(bundle.skills.length, "skill")}.`
     );
     return 0;
   } catch (error) {
-    if (isValidationApiError(error)) {
-      writeError(options, formatValidationFailure(error));
-      return 1;
+    const refusal = error instanceof ConfigApiError ? readRefusedBatch(error) : undefined;
+    if (!refusal) {
+      throw error;
     }
-    throw error;
+    writeError(options, formatRefusal("Validation failed", refusal));
+    return 1;
   }
 }
 
@@ -450,18 +522,17 @@ export async function listConfig(options: ConfigCommandOptions): Promise<number>
   const instance = resolveInstance(manifest, options.instance);
   const local = await readWorkingCopy(workingDir, manifest);
   const api = await connectApi(instance.url, options);
-  const exported = await api.exportAssets();
-  const remote = parseExportBundle(exported);
+  const overview = await api.getOverview();
+  const remote = await listRemoteAssets(api);
   const localKeys = new Set(assetEntries(local).map((asset) => asset.key));
-  const remoteKeys = new Set(assetEntries(remote).map((asset) => asset.key));
   const rows = [
-    ...assetEntries(remote).map((asset) => ({
+    ...[...remote.values()].map((asset) => ({
       ...asset,
-      version: String(exported.version),
+      version: String(overview.version),
       status: localKeys.has(asset.key) ? "-" : "missing locally"
     })),
     ...assetEntries(local)
-      .filter((asset) => !remoteKeys.has(asset.key))
+      .filter((asset) => !remote.has(asset.key))
       .map((asset) => ({ ...asset, version: "-", status: "missing remotely" }))
   ].sort((left, right) => left.key.localeCompare(right.key));
   writeOutput(
@@ -482,18 +553,15 @@ export async function showConfig(options: ConfigCommandOptions): Promise<number>
   const manifest = await readManifest(workingDir);
   const instance = resolveInstance(manifest, options.instance);
   const api = await connectApi(instance.url, options);
-  const remote = parseExportBundle(await api.exportAssets());
-  const config = (options.assetKind === "agent" ? remote.agents : remote.skills).find(
-    (asset) => asset.name === options.assetName
-  );
-  if (!config) {
+  const remote = await fetchRemoteAsset(api, options.assetKind, options.assetName);
+  if (!remote) {
     throw new Error(`Remote ${options.assetKind} '${options.assetName}' was not found.`);
   }
   writeOutput(
     options,
-    (options.assetKind === "agent"
-      ? serializeAgentYaml(config)
-      : serializeSkillPackageForDisplay(config)
+    (remote.kind === "agent"
+      ? serializeAgentYaml(remote.config)
+      : serializeSkillPackageForDisplay(remote.config)
     ).trimEnd()
   );
   return 0;
@@ -532,18 +600,104 @@ interface PushPlan {
   remoteOnly: string[];
 }
 
-function parseExportBundle(exported: {
-  defaultAgentName?: string;
-  agents: unknown[];
-  skills: unknown[];
-}): WorkingCopyBundle {
+type AssetKindName = "agent" | "skill";
+
+/** The kinds a working copy holds. Kinds read from the instance come with a later release. */
+const ASSET_KINDS: readonly AssetKindName[] = ["agent", "skill"];
+
+/** How many assets are read from the instance side by side in one pull. */
+const PULL_CONCURRENCY = 8;
+
+type AssetDefinition =
+  { kind: "agent"; config: AgentConfig } | { kind: "skill"; config: SkillConfig };
+
+/** One asset as the instance lists it: its place and its revision, without its content. */
+interface RemoteAsset {
+  key: string;
+  kind: AssetKindName;
+  name: string;
+  revision: number;
+}
+
+type FetchedAsset = RemoteAsset & AssetDefinition;
+type LocalAsset = { key: string; name: string; contents: string } & AssetDefinition;
+
+async function listRemoteAssets(api: ConfigApi): Promise<Map<string, RemoteAsset>> {
+  const assets = new Map<string, RemoteAsset>();
+  for (const kind of ASSET_KINDS) {
+    for (const asset of await api.listAssets(kind)) {
+      const key = `${kind}:${asset.name}`;
+      assets.set(key, { key, kind, name: asset.name, revision: asset.revision });
+    }
+  }
+  return assets;
+}
+
+async function fetchRemoteAsset(
+  api: ConfigApi,
+  kind: AssetKindName,
+  name: string
+): Promise<FetchedAsset | undefined> {
+  const asset = await api.getAsset(kind, name);
+  return (
+    asset &&
+    readDefinition({ key: `${kind}:${name}`, kind, name, revision: asset.revision }, asset.config)
+  );
+}
+
+/** A definition read with the schema of its kind, at the place and revision it was found. */
+function readDefinition(remote: RemoteAsset, config: unknown): FetchedAsset {
+  const place = { key: remote.key, name: remote.name, revision: remote.revision };
+  return remote.kind === "agent"
+    ? { ...place, kind: "agent", config: agentConfigSchema.parse(config) }
+    : { ...place, kind: "skill", config: skillConfigSchema.parse(config) };
+}
+
+function bundleOf(assets: readonly AssetDefinition[]): WorkingCopyBundle {
   return {
-    ...(exported.defaultAgentName === undefined
-      ? {}
-      : { defaultAgentName: exported.defaultAgentName }),
-    agents: exported.agents.map((agent) => agentConfigSchema.parse(agent)),
-    skills: exported.skills.map((skill) => skillConfigSchema.parse(skill))
+    agents: assets.flatMap((asset) => (asset.kind === "agent" ? [asset.config] : [])),
+    skills: assets.flatMap((asset) => (asset.kind === "skill" ? [asset.config] : []))
   };
+}
+
+function byKey<Entry extends { key: string }>(entry: Entry): [string, Entry] {
+  return [entry.key, entry];
+}
+
+/** The local assets by key, or none where a local file cannot be read as its kind. */
+async function readLocalAssetsIfValid(
+  workingDir: string,
+  manifest: Awaited<ReturnType<typeof readManifest>>
+): Promise<Map<string, LocalAsset>> {
+  try {
+    return new Map(assetEntries(await readWorkingCopy(workingDir, manifest)).map(byKey));
+  } catch (error) {
+    if (error instanceof WorkingCopyValidationError) {
+      return new Map();
+    }
+    throw error;
+  }
+}
+
+/** Runs `work` for every item, a few at a time, and answers in the order of the items. */
+async function mapConcurrently<Item, Result>(
+  items: readonly Item[],
+  work: (item: Item) => Promise<Result>
+): Promise<Result[]> {
+  const results = new Array<Result>(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      const item = items[index];
+      if (item !== undefined) {
+        results[index] = await work(item);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(PULL_CONCURRENCY, items.length) }, worker));
+  return results;
 }
 
 function parseOnlySelectors(values: string[] | undefined): ConfigAssetSelector[] {
@@ -592,27 +746,34 @@ function selectBundle(
   return { agents, skills };
 }
 
-function assetEntries(bundle: WorkingCopyBundle): Array<{
-  key: string;
-  kind: "agent" | "skill";
-  name: string;
-  contents: string;
-}> {
+function assetEntries(bundle: WorkingCopyBundle): LocalAsset[] {
   return [
     ...bundle.agents.map((agent) => ({
       key: `agent:${agent.name}`,
       kind: "agent" as const,
       name: agent.name,
-      contents: serializeAgentYaml(agent)
+      contents: assetContents({ kind: "agent", config: agent }),
+      config: agent
     })),
     ...bundle.skills.map((skill) => ({
       key: `skill:${skill.name}`,
       kind: "skill" as const,
       name: skill.name,
-      // Match the root serializer/parser, which trims surrounding Markdown whitespace.
-      contents: JSON.stringify({ ...canonicalizeSkillConfig(skill), content: skill.content.trim() })
+      contents: assetContents({ kind: "skill", config: skill }),
+      config: skill
     }))
   ];
+}
+
+/** What an asset is compared and hashed as, whatever the formatting of its files. */
+function assetContents(asset: AssetDefinition): string {
+  return asset.kind === "agent"
+    ? serializeAgentYaml(asset.config)
+    : // Match the root serializer/parser, which trims surrounding Markdown whitespace.
+      JSON.stringify({
+        ...canonicalizeSkillConfig(asset.config),
+        content: asset.config.content.trim()
+      });
 }
 
 async function replaceSkillPackage(
@@ -705,33 +866,49 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
 }
 
-function createPushPlan(
+/**
+ * What a push would do to each local asset. Whether a touched asset differs from the
+ * instance's is read from the baseline where the instance still holds the pulled revision,
+ * and from the instance's content only where it does not.
+ */
+async function createPushPlan(
+  api: ConfigApi,
   local: WorkingCopyBundle,
-  remote: WorkingCopyBundle,
-  touchedKeys: Set<string>
-): PushPlan {
-  const localAssets = new Map(assetEntries(local).map((asset) => [asset.key, asset]));
-  const remoteAssets = new Map(assetEntries(remote).map((asset) => [asset.key, asset]));
+  remote: ReadonlyMap<string, RemoteAsset>,
+  touchedKeys: Set<string>,
+  baseline: InstanceBaseline | undefined
+): Promise<PushPlan> {
+  const localAssets = assetEntries(local);
+  const differs = await mapConcurrently(localAssets, async (asset) => {
+    const remoteAsset = remote.get(asset.key);
+    if (!touchedKeys.has(asset.key) || !remoteAsset) {
+      return false;
+    }
+    const base = baseline?.assets?.[asset.key];
+    if (base?.revision === remoteAsset.revision) {
+      return base.hash !== assetHash(asset.contents);
+    }
+    const fetched = await fetchRemoteAsset(api, remoteAsset.kind, remoteAsset.name);
+    return fetched === undefined || assetContents(fetched) !== asset.contents;
+  });
   let added = 0;
   let updated = 0;
   let unchanged = 0;
-  for (const [key, asset] of localAssets) {
-    const remoteAsset = remoteAssets.get(key);
-    if (!touchedKeys.has(key)) {
-      unchanged += 1;
-    } else if (!remoteAsset) {
+  localAssets.forEach((asset, index) => {
+    if (touchedKeys.has(asset.key) && !remote.has(asset.key)) {
       added += 1;
-    } else if (remoteAsset.contents === asset.contents) {
-      unchanged += 1;
-    } else {
+    } else if (differs[index]) {
       updated += 1;
+    } else {
+      unchanged += 1;
     }
-  }
+  });
+  const localKeys = new Set(localAssets.map((asset) => asset.key));
   return {
     added,
     updated,
     unchanged,
-    remoteOnly: [...remoteAssets.keys()].filter((key) => !localAssets.has(key)).sort()
+    remoteOnly: [...remote.keys()].filter((key) => !localKeys.has(key)).sort()
   };
 }
 
@@ -771,7 +948,8 @@ async function connectApi(url: string, options: ConfigCommandOptions) {
   return createConfigApi({
     baseUrl: url,
     apiKey,
-    ...(options.fetchImpl === undefined ? {} : { fetchImpl: options.fetchImpl })
+    ...(options.fetchImpl === undefined ? {} : { fetchImpl: options.fetchImpl }),
+    ...(options.sleep === undefined ? {} : { sleep: options.sleep })
   });
 }
 
@@ -816,34 +994,111 @@ async function recordBaseline(
   await writeStateFile(path, { instances: { ...state.instances, [instanceKey]: baseline } });
 }
 
-function formatPushConflict(error: ConfigApiError, options: ConfigCommandOptions): string {
+interface AssetConflict {
+  kind: string;
+  name: string;
+  /** The revision the instance holds, or null where it holds no such asset. */
+  currentRevision: number | null;
+}
+
+/** A batch the instance did not apply, as the command reports it. */
+interface RefusedBatch {
+  message: string;
+  /** The answer is about the definitions, not about rights or revisions. */
+  validation: boolean;
+  conflicts: AssetConflict[];
+  defaultAgentConflict: boolean;
+  /** One line per refused item and per issue of the set. */
+  lines: string[];
+}
+
+/** Reads the error of a refused sync or check. Any other error is not one. */
+function readRefusedBatch(error: ConfigApiError): RefusedBatch | undefined {
   const details = isRecord(error.details) ? error.details : {};
-  const conflicts = Array.isArray(details.conflicts) ? details.conflicts.filter(isRecord) : [];
-  const selectors = conflicts.map((asset) => `${String(asset.kind)}:${String(asset.name)}`);
+  const defaultAgentConflict =
+    error.code === "CONFLICT" && details.reason === "default_agent_changed";
+  if (details.reason !== "sync_refused" && !defaultAgentConflict && error.status !== 422) {
+    return undefined;
+  }
+  const refused = (Array.isArray(details.items) ? details.items : []).flatMap((item) =>
+    isRecord(item) && isRecord(item.error) ? [{ item, refusal: item.error }] : []
+  );
+  const label = (item: Record<string, unknown>) =>
+    `${String(item.kind)}${typeof item.name === "string" ? ` '${item.name}'` : typeof item.index === "number" ? ` #${item.index + 1}` : ""}`;
+  const issues = (Array.isArray(details.issues) ? details.issues : []).flatMap((issue) =>
+    isRecord(issue) && typeof issue.message === "string" ? [issue] : []
+  );
+  return {
+    message: error.message,
+    validation: error.status === 422,
+    defaultAgentConflict,
+    conflicts: refused.flatMap(({ item, refusal }) =>
+      refusal.code === "CONFLICT" && typeof item.name === "string"
+        ? [
+            {
+              kind: String(item.kind),
+              name: item.name,
+              currentRevision:
+                typeof refusal.currentRevision === "number" ? refusal.currentRevision : null
+            }
+          ]
+        : []
+    ),
+    lines: [
+      ...refused.map(({ item, refusal }) => `${label(item)}: ${String(refusal.message)}`),
+      ...issues.map((issue) => {
+        const path =
+          Array.isArray(issue.path) && issue.path.length > 0
+            ? ` (${issue.path.map(String).join(".")})`
+            : "";
+        return `config${path}: ${String(issue.message)}`;
+      })
+    ]
+  };
+}
+
+function formatRefusal(title: string, refusal: RefusedBatch): string {
+  if (refusal.lines.length === 0) {
+    // The instance bounds a batch by its caller. Where that refuses a push, parts fit.
+    const hint = /^A batch holds at most/u.test(refusal.message)
+      ? " Push in parts with --only."
+      : "";
+    return `${title}: ${refusal.message}${hint}`;
+  }
+  return `${title}:\n${refusal.lines.map((line) => `- ${line}`).join("\n")}`;
+}
+
+async function formatPushConflict(
+  api: ConfigApi,
+  conflicts: readonly AssetConflict[],
+  defaultAgentConflict: boolean,
+  options: ConfigCommandOptions
+): Promise<string> {
+  const selectors = conflicts.map((asset) => `${asset.kind}:${asset.name}`);
   const argumentsList = [
     "catalyst config pull",
     ...(options.dir ? ["--dir", shellQuote(options.dir)] : []),
     ...(options.instance ? ["--instance", shellQuote(options.instance)] : []),
-    ...selectors.flatMap((selector) => ["--only", shellQuote(selector)])
-  ];
-  if (details.defaultAgentConflict) {
     // A full pull refreshes the manifest's default-agent pointer as well as assets.
-    argumentsList.splice(
-      argumentsList.indexOf("--only") === -1
-        ? argumentsList.length
-        : argumentsList.indexOf("--only")
-    );
-  }
+    ...(defaultAgentConflict
+      ? []
+      : selectors.flatMap((selector) => ["--only", shellQuote(selector)]))
+  ];
+  // Who changed each asset is its latest revision, a delete included. A key that may not
+  // read it reports the conflict without the name.
+  const latest = await mapConcurrently(conflicts, (asset) =>
+    api.getLatestRevision(asset.kind, asset.name).catch(() => undefined)
+  );
   return [
     "Push conflict; nothing was applied.",
-    ...conflicts.map(
-      (asset) =>
-        `- ${String(asset.kind)}:${String(asset.name)}: revision ${String(asset.currentRevision ?? "absent")}, ${String(asset.operation ?? "unknown operation")} by ${String(asset.actorLabel ?? "unknown actor")} at ${String(asset.timestamp ?? "unknown time")}`
-    ),
-    ...(details.defaultAgentConflict
+    ...conflicts.map((asset, index) => {
+      const revision = latest[index];
+      return `- ${asset.kind}:${asset.name}: revision ${String(revision?.revision ?? asset.currentRevision ?? "absent")}, ${revision?.operation ?? "unknown operation"} by ${revision?.actor?.displayLabel ?? "unknown actor"} at ${revision?.createdAt ?? "unknown time"}`;
+    }),
+    ...(defaultAgentConflict
       ? ["- default agent changed on the instance; a full pull is required."]
       : []),
-    details.defaultAgentConflict
+    defaultAgentConflict
       ? "Commit or stash local edits in git first: a full pull overwrites the local working copy."
       : "Commit or stash local edits in git first: pull overwrites the local files for these assets.",
     argumentsList.join(" "),
@@ -874,39 +1129,6 @@ function formatCount(count: number, singular: string): string {
   return `${count} ${singular}${count === 1 ? "" : "s"}`;
 }
 
-function isValidationApiError(error: unknown): error is ConfigApiError {
-  return (
-    error instanceof ConfigApiError && (error.status === 422 || error.code === "VALIDATION_FAILED")
-  );
-}
-
-function formatValidationFailure(error: ConfigApiError): string {
-  const issues = readValidationIssues(error.details);
-  return issues.length === 0
-    ? `Validation failed: ${error.message}`
-    : `Validation failed:\n${issues.map((issue) => `- ${issue}`).join("\n")}`;
-}
-
-function readValidationIssues(details: unknown): string[] {
-  if (!isRecord(details) || !Array.isArray(details.issues)) {
-    return [];
-  }
-  return details.issues.flatMap((issue) => {
-    if (!isRecord(issue) || typeof issue.message !== "string") {
-      return [];
-    }
-    const asset =
-      typeof issue.assetKind === "string"
-        ? `${issue.assetKind}${typeof issue.assetName === "string" ? ` '${issue.assetName}'` : typeof issue.index === "number" ? ` #${issue.index + 1}` : ""}`
-        : "config";
-    const path =
-      Array.isArray(issue.path) && issue.path.length > 0
-        ? ` (${issue.path.map(String).join(".")})`
-        : "";
-    return [`${asset}${path}: ${issue.message}`];
-  });
-}
-
 function formatCommandError(error: unknown): string {
   if (error instanceof WorkingCopyValidationError) {
     return `Local validation failed:\n${error.issues
@@ -914,6 +1136,13 @@ function formatCommandError(error: unknown): string {
       .join("\n")}`;
   }
   if (error instanceof ConfigApiError) {
+    const reason = isRecord(error.details) ? error.details.reason : undefined;
+    if (reason === BODY_TOO_LARGE_REASON) {
+      return "The request is larger than the instance accepts in one call. Push in parts with --only.";
+    }
+    if (error.status === 404 && reason === UNKNOWN_OPERATION_REASON) {
+      return "This instance does not serve the asset operations this CLI uses. Upgrade the instance, or use the CLI of its release.";
+    }
     return `${error.code ? `${error.code}: ` : ""}${error.message}`;
   }
   return error instanceof Error ? error.message : String(error);

@@ -46,6 +46,7 @@ import {
 import {
   assetSyncPolicyTargets,
   authorizeAssetSync,
+  checkAssetSync,
   syncAssets,
   type AssetSyncInput
 } from "./asset-sync";
@@ -425,6 +426,11 @@ export class AssetWorkflow {
 
   sync(call: AssetCall, input: AssetSyncInput) {
     return syncAssets(this.options, call, input);
+  }
+
+  /** What `sync` would refuse the batch for, asked without writing anything. */
+  checkSync(call: AssetCall, input: AssetSyncInput) {
+    return checkAssetSync(this.options, call, input);
   }
 
   /** The instance's own rules, asked once the definitions themselves hold. */

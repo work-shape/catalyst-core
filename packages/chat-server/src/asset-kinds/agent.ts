@@ -72,10 +72,7 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
         };
       }
     }),
-    bundle: {
-      definitions: (bundle) => bundle.agents,
-      withDefinitions: (bundle, agents) => ({ ...bundle, agents })
-    },
+    inRelease: true,
     holdsInstanceDefault: true,
     hasWorkspaceAvailability: true,
 

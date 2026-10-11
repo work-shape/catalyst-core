@@ -35,7 +35,8 @@ Commands:
 Options:
   --instance <name-or-url>  Manifest instance name or direct URL
   --dir <working-copy-dir>  Directory containing catalyst.yaml (default: .)
-  --force                   Push without optimistic concurrency protection
+  --force                   Push every local asset over what the instance holds now,
+                            whatever changed there since the last pull
   --prune                   Mirror on push, deleting remote-only assets
   --only <agent:name|skill:name>
                             Sync selected assets; repeatable on push/pull

@@ -84,7 +84,7 @@ describe("api operation catalog", () => {
     expect(apiOperations["workspaces.update"].body.parse({})).toEqual({});
   });
 
-  it("describes agent availability and the config replacement answer", () => {
+  it("describes agent availability and the answer of a release", () => {
     expect(
       apiOperations["config_agents.set_availability"].body.parse({ mode: "selected" })
     ).toEqual({
@@ -93,15 +93,11 @@ describe("api operation catalog", () => {
     expect(() =>
       apiOperations["config_agents.set_availability"].body.parse({ mode: "some" })
     ).toThrow();
+    const synced = { version: 2, items: [], warnings: [] };
     expect(
-      apiOperations["config_assets.replace"].response.schema.parse({
-        version: 2,
-        hiddenAgentNames: ["a"]
-      })
-    ).toEqual({ version: 2, hiddenAgentNames: ["a"] });
-    expect(apiOperations["config_assets.replace"].response.schema.parse({ version: 2 })).toEqual({
-      version: 2
-    });
+      apiOperations["assets.sync"].response.schema.parse({ ...synced, hiddenAgentNames: ["a"] })
+    ).toEqual({ ...synced, hiddenAgentNames: ["a"] });
+    expect(apiOperations["assets.sync"].response.schema.parse(synced)).toEqual(synced);
   });
 
   it("carries conversation visibility through the workspace, conversation and move contracts", () => {

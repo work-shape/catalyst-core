@@ -1,5 +1,5 @@
 import { builtInModelCapabilities } from "./support/model-gateway";
-import { atCurrentRevision } from "./support/asset-revisions";
+import { atCurrentRevision, releaseAtCurrentRevisions } from "./support/asset-revisions";
 import type { TestOperationName, TestCallInput } from "./support/operations";
 
 import { createTestInstance, type TestInstance } from "./support/test-instance";
@@ -58,17 +58,15 @@ describe("config asset admin routes", () => {
     });
     const token = (exchange.json() as { accessToken: string }).accessToken;
 
-    const imported = await request(fixture.server, token, "config_assets.replace", {
-      payload: {
-        baseVersion: null,
-        defaultAgentName: "assistant",
-        agents: [agentConfig("Released by service principal")],
-        skills: []
-      }
+    const released = await release(fixture.server, token, {
+      defaultAgentName: "assistant",
+      agents: [agentConfig("Released by service principal")]
     });
-    expect(imported.statusCode).toBe(200);
-    const exported = await request(fixture.server, token, "config_assets.export", {});
-    expect(exported.statusCode).toBe(200);
+    expect(released.statusCode, released.body).toBe(200);
+    const listed = await request(fixture.server, token, "assets.list", {
+      params: { kind: "agent" }
+    });
+    expect(listed.statusCode).toBe(200);
 
     const humanRoute = await request(fixture.server, token, "conversations.list", {});
     expect(humanRoute.statusCode).toBe(403);
@@ -92,13 +90,13 @@ describe("config asset admin routes", () => {
       clientInstanceId: fixture.clientInstanceId,
       limit: 100
     });
-    expect(events.find((event) => event.type === "config_assets.replaced")?.actor).toMatchObject({
+    expect(events.find((event) => event.type === "config_asset.updated")?.actor).toMatchObject({
       principalKind: "service",
       credentialId: fixture.credentialId
     });
   });
 
-  it("mints a service token and supports CRUD, revisions, revert, and export/import", async () => {
+  it("mints a service token and supports CRUD, revisions, revert, and a release of what was read", async () => {
     const fixture = await createFixture();
     const token = await mintToken(fixture.server);
 
@@ -175,18 +173,11 @@ describe("config asset admin routes", () => {
       payload: { agentName: "assistant", baseVersion: 3 }
     });
     expect(defaultAgent.json()).toEqual({ version: 4 });
-    const exported = await request(fixture.server, token, "config_assets.export", {});
-    expect(exported.statusCode).toBe(200);
-    const bundle = exported.json() as {
-      defaultAgentName?: string;
-      agents: Array<Record<string, unknown>>;
-      skills: Array<Record<string, unknown>>;
-    };
-    expect(bundle).toMatchObject({
-      defaultAgentName: "assistant",
-      agents: [{ name: "assistant", instructions: "Original instructions" }],
-      skills: []
+    const read = await request(fixture.server, token, "assets.get", {
+      params: { kind: "agent", name: "assistant" }
     });
+    const original = (read.json() as { config: Record<string, unknown> }).config;
+    expect(original).toMatchObject({ name: "assistant", instructions: "Original instructions" });
 
     const deleted = await request(fixture.server, token, "assets.delete", {
       params: { kind: "agent", name: "assistant" },
@@ -194,22 +185,22 @@ describe("config asset admin routes", () => {
     });
     expect(deleted.json()).toEqual({ version: 5, revision: 4, warnings: [] });
 
-    const imported = await request(fixture.server, token, "config_assets.replace", {
-      payload: {
-        baseVersion: 5,
-        defaultAgentName: bundle.defaultAgentName,
-        agents: bundle.agents,
-        skills: bundle.skills
-      }
-    });
-    expect(imported.json()).toEqual({ version: 6 });
-    const roundTripped = await request(fixture.server, token, "config_assets.export", {});
-    expect(roundTripped.json()).toMatchObject({
-      version: 6,
+    // What was read is released again, with the default agent, in one write.
+    const released = await release(fixture.server, token, {
       defaultAgentName: "assistant",
-      agents: bundle.agents,
-      skills: bundle.skills
+      agents: [original]
     });
+    expect(released.json()).toMatchObject({
+      version: 6,
+      items: [{ type: "put", kind: "agent", name: "assistant", status: "applied", revision: 5 }]
+    });
+    const roundTripped = await request(fixture.server, token, "assets.get", {
+      params: { kind: "agent", name: "assistant" }
+    });
+    expect(roundTripped.json()).toMatchObject({ revision: 5, config: original });
+    expect(
+      (await request(fixture.server, token, "config_assets.get_overview", {})).json()
+    ).toMatchObject({ version: 6, defaultAgentName: "assistant" });
 
     const events = await fixture.store.audit.listAuditEvents({
       clientInstanceId: fixture.clientInstanceId,
@@ -220,65 +211,13 @@ describe("config asset admin routes", () => {
         "config_asset.updated",
         "config_asset.reverted",
         "config_asset.default_agent_set",
-        "config_asset.deleted",
-        "config_assets.replaced"
+        "config_asset.deleted"
       ])
     );
   });
 
-  it("merges provided assets when requested and defaults old clients to mirror mode", async () => {
-    const fixture = await createFixture();
-    const token = await mintToken(fixture.server);
-    const initial = await request(fixture.server, token, "config_assets.replace", {
-      payload: {
-        baseVersion: null,
-        defaultAgentName: "assistant",
-        agents: [
-          agentConfig("Initial", { name: "assistant" }),
-          agentConfig("Remote only", { name: "remote-only" })
-        ],
-        skills: []
-      }
-    });
-    expect(initial.json()).toEqual({ version: 1 });
-
-    const merged = await request(fixture.server, token, "config_assets.replace", {
-      payload: {
-        baseVersion: 1,
-        mode: "merge",
-        agents: [agentConfig("Merged", { name: "assistant" })],
-        skills: []
-      }
-    });
-    expect(merged.json()).toEqual({ version: 2 });
-    const afterMerge = await request(fixture.server, token, "config_assets.export", {});
-    expect(afterMerge.json()).toMatchObject({
-      version: 2,
-      defaultAgentName: "assistant",
-      agents: [
-        { name: "assistant", instructions: "Merged" },
-        { name: "remote-only", instructions: "Remote only" }
-      ]
-    });
-
-    const mirrored = await request(fixture.server, token, "config_assets.replace", {
-      payload: {
-        baseVersion: 2,
-        defaultAgentName: "assistant",
-        agents: [agentConfig("Mirrored", { name: "assistant" })],
-        skills: []
-      }
-    });
-    expect(mirrored.json()).toEqual({ version: 3 });
-    const afterMirror = await request(fixture.server, token, "config_assets.export", {});
-    expect(afterMirror.json()).toMatchObject({
-      version: 3,
-      agents: [{ name: "assistant", instructions: "Mirrored" }]
-    });
-  });
-
   it.each(["update", "delete", "create"] as const)(
-    "reports a remote %s and rejects the whole per-asset import",
+    "reports a remote %s and rejects the whole release",
     async (operation) => {
       const fixture = await createFixture();
       const token = await mintToken(fixture.server);
@@ -298,28 +237,36 @@ describe("config asset admin routes", () => {
             ? [{ type: "delete", kind: "skill", name: "research" }]
             : [{ type: "upsert", kind: "skill", name: "research", config: skillConfig("Remote") }]
       });
-      const response = await request(fixture.server, token, "config_assets.replace", {
+      const response = await request(fixture.server, token, "assets.sync", {
         payload: {
-          baseVersion: null,
-          mode: "merge",
-          baseRevisions: { "skill:research": operation === "create" ? null : 1, "skill:new": null },
-          agents: [],
-          skills: [skillConfig("Local"), { ...skillConfig("New"), name: "new" }]
+          items: [
+            {
+              type: "put",
+              kind: "skill",
+              config: skillConfig("Local"),
+              ...(operation === "create" ? {} : { expectedRevision: 1 })
+            },
+            { type: "put", kind: "skill", config: { ...skillConfig("New"), name: "new" } }
+          ]
         }
       });
       expect(response.statusCode).toBe(409);
       expect(response.json()).toMatchObject({
         error: {
           details: {
-            conflicts: [
+            items: [
               {
+                index: 0,
                 kind: "skill",
                 name: "research",
-                currentRevision: operation === "create" ? 1 : 2,
-                actorLabel: "Remote editor",
-                timestamp: expect.any(String),
-                operation
-              }
+                status: "refused",
+                // A deleted asset has no current revision.
+                error: {
+                  code: "CONFLICT",
+                  currentRevision: operation === "create" ? 1 : operation === "delete" ? null : 2
+                }
+              },
+              { index: 1, kind: "skill", name: "new", status: "not_applied" }
             ]
           }
         }
@@ -334,7 +281,7 @@ describe("config asset admin routes", () => {
     }
   );
 
-  it("advertises guards and preserves untouched remote assets and default agent", async () => {
+  it("leaves assets and the default agent a release does not name, and guards the default", async () => {
     const fixture = await createFixture();
     const token = await mintToken(fixture.server);
     await fixture.store.configAssets.applyConfigAssetMutations({
@@ -345,21 +292,10 @@ describe("config asset admin routes", () => {
         { type: "upsert", kind: "skill", name: "research", config: skillConfig("Remote") }
       ]
     });
-    const exported = await request(fixture.server, token, "config_assets.export", {});
-    expect(exported.json()).toMatchObject({
-      perAssetConcurrency: true,
-      revisions: { "agent:assistant": 1, "skill:research": 1 }
+    const response = await release(fixture.server, token, {
+      skills: [{ ...skillConfig("New"), name: "new" }]
     });
-    const response = await request(fixture.server, token, "config_assets.replace", {
-      payload: {
-        baseVersion: 0,
-        mode: "merge",
-        baseRevisions: { "skill:new": null },
-        agents: [],
-        skills: [{ ...skillConfig("New"), name: "new" }]
-      }
-    });
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode, response.body).toBe(200);
     expect(
       await fixture.store.configAssets.getConfigAsset({
         clientInstanceId: fixture.clientInstanceId,
@@ -367,29 +303,25 @@ describe("config asset admin routes", () => {
         name: "research"
       })
     ).toMatchObject({ revision: 1, config: skillConfig("Remote") });
-    const staleDefault = await request(fixture.server, token, "config_assets.replace", {
+    expect(
+      (await request(fixture.server, token, "config_assets.get_overview", {})).json()
+    ).toMatchObject({ version: 2, defaultAgentName: "assistant" });
+
+    // A release made against another default agent than the stored one is refused whole.
+    const staleDefault = await request(fixture.server, token, "assets.sync", {
       payload: {
-        baseVersion: null,
-        mode: "merge",
-        baseRevisions: {},
-        baseDefaultAgentName: null,
-        agents: [],
-        skills: []
+        items: [{ type: "put", kind: "skill", config: { ...skillConfig("Late"), name: "late" } }],
+        expectedDefaultAgentName: null
       }
     });
     expect(staleDefault.statusCode).toBe(409);
-    const oldRequest = await request(fixture.server, token, "config_assets.replace", {
-      payload: {
-        baseVersion: 0,
-        mode: "merge",
-        agents: [],
-        skills: []
-      }
-    });
-    expect(oldRequest.statusCode).toBe(409);
-    expect(oldRequest.json()).toMatchObject({
-      error: { details: { currentVersion: 2, baseVersion: 0 } }
-    });
+    expect(
+      await fixture.store.configAssets.getConfigAsset({
+        clientInstanceId: fixture.clientInstanceId,
+        kind: "skill",
+        name: "late"
+      })
+    ).toBeUndefined();
   });
 
   it("returns 409 with the current revision for a put made against another one", async () => {
@@ -520,15 +452,11 @@ describe("config asset admin routes", () => {
     });
     const token = await mintToken(fixture.server);
     const initial = agentConfig("Release-managed instructions");
-    const imported = await request(fixture.server, token, "config_assets.replace", {
-      payload: {
-        baseVersion: null,
-        defaultAgentName: "assistant",
-        agents: [initial],
-        skills: []
-      }
+    const imported = await release(fixture.server, token, {
+      defaultAgentName: "assistant",
+      agents: [initial]
     });
-    expect(imported.statusCode).toBe(200);
+    expect(imported.statusCode, imported.body).toBe(200);
 
     const displayNameUpdate = await request(fixture.server, token, "assets.put", {
       params: { kind: "agent", name: "assistant" },
@@ -565,10 +493,11 @@ describe("config asset admin routes", () => {
     });
     const initial = { ...boundAgentConfig("fast"), reasoningEffort: "low" };
     const releaseToken = await mintToken(fixture.server);
-    const imported = await request(fixture.server, releaseToken, "config_assets.replace", {
-      payload: { baseVersion: null, defaultAgentName: "assistant", agents: [initial], skills: [] }
+    const imported = await release(fixture.server, releaseToken, {
+      defaultAgentName: "assistant",
+      agents: [initial]
     });
-    expect(imported.statusCode).toBe(200);
+    expect(imported.statusCode, imported.body).toBe(200);
 
     const interactive = { scopes: ["config_assets:read", "config_assets:write"] };
     const adminToken = await mintToken(fixture.server, {
@@ -636,16 +565,11 @@ describe("config asset admin routes", () => {
     expect((await revert(superadminToken)).statusCode).toBe(200);
 
     // Release sync is unchanged: the service principal has no agent_models.manage.
-    const exported = await request(fixture.server, releaseToken, "config_assets.export", {});
-    const pushed = await request(fixture.server, releaseToken, "config_assets.replace", {
-      payload: {
-        baseVersion: exported.json().version,
-        defaultAgentName: "assistant",
-        agents: [{ ...initial, modelBindingId: "fast", reasoningEffort: "xhigh", fastMode: true }],
-        skills: []
-      }
+    const pushed = await release(fixture.server, releaseToken, {
+      defaultAgentName: "assistant",
+      agents: [{ ...initial, modelBindingId: "fast", reasoningEffort: "xhigh", fastMode: true }]
     });
-    expect(pushed.statusCode).toBe(200);
+    expect(pushed.statusCode, pushed.body).toBe(200);
   });
 
   it("accepts fast mode only on a supporting binding and clears it on a binding switch", async () => {
@@ -684,18 +608,13 @@ describe("config asset admin routes", () => {
       "Agent 'assistant' enables fastMode, but model binding 'plain' does not support fast mode"
     );
 
-    const exported = await request(fixture.server, token, "config_assets.export", {});
     for (const agent of [
       { ...boundAgentConfig("plain"), fastMode: true },
       { ...agentConfig("No binding"), fastMode: true }
     ]) {
-      const pushed = await request(fixture.server, token, "config_assets.replace", {
-        payload: {
-          baseVersion: exported.json().version,
-          defaultAgentName: "assistant",
-          agents: [agent],
-          skills: []
-        }
+      const pushed = await release(fixture.server, token, {
+        defaultAgentName: "assistant",
+        agents: [agent]
       });
       expect(pushed.statusCode).toBe(422);
       expect(JSON.stringify(pushed.json())).toContain("enables fastMode");
@@ -774,15 +693,7 @@ describe("config asset admin routes", () => {
         payload: { config }
       });
     const push = async (agent: Record<string, unknown>) =>
-      request(fixture.server, token, "config_assets.replace", {
-        payload: {
-          baseVersion: (await request(fixture.server, token, "config_assets.export", {})).json()
-            .version,
-          defaultAgentName: "assistant",
-          agents: [agent],
-          skills: []
-        }
-      });
+      release(fixture.server, token, { defaultAgentName: "assistant", agents: [agent] });
     const stored = async () =>
       (
         await request(fixture.server, token, "assets.get", {
@@ -902,15 +813,12 @@ describe("config asset admin routes", () => {
         })
       ).id
     });
-    const imported = await request(fixture.server, token, "config_assets.replace", {
-      payload: {
-        baseVersion: null,
-        defaultAgentName: "assistant",
-        agents: [agentConfig("Default"), agentConfig("KAI", { name: "kai" })],
-        skills: [skillConfig("Research")]
-      }
+    const imported = await release(fixture.server, token, {
+      defaultAgentName: "assistant",
+      agents: [agentConfig("Default"), agentConfig("KAI", { name: "kai" })],
+      skills: [skillConfig("Research")]
     });
-    expect(imported.json()).toEqual({ version: 1 });
+    expect(imported.json()).toMatchObject({ version: 1 });
     const everywhere = { mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] };
     const readAssets = async () =>
       (
@@ -989,9 +897,7 @@ describe("config asset admin routes", () => {
     expect(defaultToRestricted.json()).toMatchObject({
       error: { message: "Default agent 'kai' must be available in all workspaces" }
     });
-    const pushedDefault = await request(fixture.server, token, "config_assets.replace", {
-      payload: { baseVersion: null, mode: "merge", defaultAgentName: "kai", agents: [], skills: [] }
-    });
+    const pushedDefault = await release(fixture.server, token, { defaultAgentName: "kai" });
     expect(pushedDefault.statusCode).toBe(422);
     expect(
       (await request(fixture.server, token, "config_assets.get_overview", {})).json()
@@ -1009,13 +915,9 @@ describe("config asset admin routes", () => {
   it("requires the config write permission and scope for availability administration", async () => {
     const fixture = await createFixture();
     const token = await mintToken(fixture.server);
-    await request(fixture.server, token, "config_assets.replace", {
-      payload: {
-        baseVersion: null,
-        defaultAgentName: "assistant",
-        agents: [agentConfig("Default"), agentConfig("KAI", { name: "kai" })],
-        skills: []
-      }
+    await release(fixture.server, token, {
+      defaultAgentName: "assistant",
+      agents: [agentConfig("Default"), agentConfig("KAI", { name: "kai" })]
     });
     const denied = [
       await mintToken(fixture.server, {
@@ -1074,10 +976,8 @@ describe("config asset admin routes", () => {
   it("hides the agents of a push that renames a restricted agent and reports them", async () => {
     const fixture = await createFixture();
     const token = await mintToken(fixture.server);
-    const push = (payload: Record<string, unknown>) =>
-      request(fixture.server, token, "config_assets.replace", {
-        payload: { baseVersion: null, mode: "merge", skills: [], ...payload }
-      });
+    const push = (content: Parameters<typeof release>[2]) =>
+      release(fixture.server, token, content);
     await push({
       defaultAgentName: "assistant",
       agents: [agentConfig("Default"), agentConfig("KAI", { name: "kai" })]
@@ -1090,14 +990,15 @@ describe("config asset admin routes", () => {
 
     // A push that only adds an agent keeps the default.
     const added = await push({ agents: [agentConfig("Open", { name: "open" })] });
-    expect(added.json()).toEqual({ version: 2 });
+    expect(added.json()).toMatchObject({ version: 2 });
+    expect(added.json()).not.toHaveProperty("hiddenAgentNames");
 
     const renamed = await push({
       agents: [agentConfig("KAI", { name: "kai-tax" }), agentConfig("Default v2")],
       deleteAssets: [{ kind: "agent", name: "kai" }]
     });
     expect(renamed.statusCode).toBe(200);
-    expect(renamed.json()).toEqual({ version: 3, hiddenAgentNames: ["kai-tax"] });
+    expect(renamed.json()).toMatchObject({ version: 3, hiddenAgentNames: ["kai-tax"] });
     const availability = await fixture.store.configAssets.listAgentAvailability({
       clientInstanceId: fixture.clientInstanceId
     });
@@ -1110,36 +1011,41 @@ describe("config asset admin routes", () => {
     expect(availability.get("assistant")?.mode).toBe("all");
     expect(availability.get("open")?.mode).toBe("all");
 
-    // A mirror push that drops a restricted agent is the same rename.
+    // A pruning push that drops a restricted agent is the same rename.
     await fixture.store.configAssets.setAgentAvailability({
       clientInstanceId: fixture.clientInstanceId,
       agentName: "kai-tax",
       availability: { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }
     });
-    const mirrored = await push({
-      mode: "mirror",
+    const pruned = await push({
       defaultAgentName: "assistant",
-      agents: [
-        agentConfig("Default v2"),
-        agentConfig("Open", { name: "open" }),
-        agentConfig("KAI", { name: "kai-law" })
-      ]
+      agents: [agentConfig("KAI", { name: "kai-law" })],
+      deleteAssets: [{ kind: "agent", name: "kai-tax" }]
     });
-    expect(mirrored.json()).toEqual({ version: 4, hiddenAgentNames: ["kai-law"] });
+    expect(pruned.json()).toMatchObject({ version: 4, hiddenAgentNames: ["kai-law"] });
   });
 
-  it("requires the release-sync permission for bundle replacement", async () => {
+  it("requires the release right for a sync that names no Namespace", async () => {
     const fixture = await createFixture();
     const interactiveToken = await mintToken(fixture.server, {
       scopes: ["config_assets:read", "config_assets:write"],
       permissions: ["config_assets.read", "config_assets.write"]
     });
-    const response = await request(fixture.server, interactiveToken, "config_assets.replace", {
-      payload: { baseVersion: null, agents: [], skills: [] }
+    const response = await release(fixture.server, interactiveToken, {
+      agents: [agentConfig("Not a release")]
     });
 
-    expect(response.statusCode).toBe(403);
-    expect(response.json()).toMatchObject({ error: { code: "FORBIDDEN" } });
+    // Without the right the batch is no release: it has to name its Namespace, and nothing
+    // of it is written.
+    expect(response.statusCode).toBe(422);
+    expect(JSON.stringify(response.json())).toContain("names the Namespace");
+    expect(
+      await fixture.store.configAssets.getConfigAsset({
+        clientInstanceId: fixture.clientInstanceId,
+        kind: "agent",
+        name: "assistant"
+      })
+    ).toBeUndefined();
   });
 
   it("requires pricing for every non-deterministic agent model when spend budgets are enabled", async () => {
@@ -1252,28 +1158,20 @@ describe("config asset admin routes", () => {
     });
   });
 
-  it("rejects duplicate import names and a missing default agent", async () => {
+  it("rejects a release that names an asset twice or a missing default agent", async () => {
     const fixture = await createFixture();
     const token = await mintToken(fixture.server);
-    const duplicate = await request(fixture.server, token, "config_assets.replace", {
-      payload: {
-        baseVersion: null,
-        agents: [agentConfig("One"), agentConfig("Two")],
-        skills: []
-      }
+    const duplicate = await release(fixture.server, token, {
+      agents: [agentConfig("One"), agentConfig("Two")]
     });
     expect(duplicate.statusCode).toBe(422);
     expect(duplicate.json()).toMatchObject({
       error: { code: "VALIDATION_FAILED" }
     });
 
-    const missingDefault = await request(fixture.server, token, "config_assets.replace", {
-      payload: {
-        baseVersion: null,
-        defaultAgentName: "missing",
-        agents: [agentConfig("Valid")],
-        skills: []
-      }
+    const missingDefault = await release(fixture.server, token, {
+      defaultAgentName: "missing",
+      agents: [agentConfig("Valid")]
     });
     expect(missingDefault.statusCode).toBe(422);
     expect(missingDefault.json()).toMatchObject({
@@ -1605,6 +1503,18 @@ async function request(
 ) {
   return server.call(operation, {
     ...(await atCurrentRevision(server.stores, routesClientInstanceId, operation, input)),
+    headers: { authorization: `Bearer ${token}` }
+  });
+}
+
+/** A config push of this content, every asset at the revision the instance holds now. */
+async function release(
+  server: TestInstance,
+  token: string,
+  content: Parameters<typeof releaseAtCurrentRevisions>[2]
+) {
+  return server.call("assets.sync", {
+    payload: await releaseAtCurrentRevisions(server.stores, routesClientInstanceId, content),
     headers: { authorization: `Bearer ${token}` }
   });
 }

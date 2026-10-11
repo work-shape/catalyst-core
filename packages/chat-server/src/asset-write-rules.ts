@@ -267,11 +267,11 @@ export function maxSyncItems(access: ActorAccess): number {
 }
 
 /**
- * Whether a release carries the kind. A kind without a slot in the release bundle was never
- * written by a release, so the exemptions above do not reach it until it is given one.
+ * Whether a release carries the kind. A kind that is not marked so was never written by a
+ * release, so the exemptions above do not reach it until it is.
  */
 export function isReleasedKind(kind: WorkflowAssetKind): boolean {
-  return kind.bundle !== undefined;
+  return kind.inRelease === true;
 }
 
 /** An agent no workspace shows: it has no availability, or one that selects nothing. */
@@ -352,6 +352,14 @@ export async function authorizeInteractiveWrite(
     context,
     auditType: "governance.config_assets_write_authorized"
   });
+  requireInteractiveEditingOn(options, releaseSync);
+}
+
+/** Refuses everyone but a release where the instance has interactive editing off. */
+export function requireInteractiveEditingOn(
+  options: Pick<ChatServerOptions, "modules">,
+  releaseSync: boolean
+): void {
   if (!releaseSync && !options.modules.isEnabled(ASSET_MANAGEMENT_MODULE)) {
     throw new AppError("FORBIDDEN", "Interactive agent configuration is disabled");
   }
@@ -569,14 +577,6 @@ export function requireMatchingConfigName(config: unknown, expectedName: string)
   if (readDefinitionName(config) !== expectedName) {
     throw new AppError("VALIDATION_FAILED", "Config asset name must match the request path");
   }
-}
-
-export function requireConfigName(config: unknown): string {
-  const name = readDefinitionName(config);
-  if (name === undefined) {
-    throw new AppError("VALIDATION_FAILED", "Config asset must have a name");
-  }
-  return name;
 }
 
 export function toJsonObject(value: unknown): JsonObject {

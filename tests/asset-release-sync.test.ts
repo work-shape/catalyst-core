@@ -360,6 +360,112 @@ describe("a release through assets.sync", () => {
   });
 });
 
+describe("what a release is checked against", () => {
+  it("is the whole stored set: a skill its key may not read is still a skill an agent names", async () => {
+    const t = await setup({ furtherToolNames: ["read_skill"] });
+    await t.stores.access.createGrant({
+      clientInstanceId,
+      holderKind: "service_principal",
+      holderId: SERVICE,
+      action: "skill.read",
+      effect: "deny",
+      scopeKind: "asset",
+      scopeId: await t.assetId("skill", "rel-guide"),
+      grantedBy: t.admin.id
+    });
+    // The key cannot read the skill.
+    const read = await asService(t, "assets.get", { params: { kind: "skill", name: "rel-guide" } });
+    expect(read.statusCode).toBe(403);
+
+    // The batch does not carry the skill, and its agent names it.
+    const naming = (skillName: string) => ({ skillNames: [skillName], toolNames: ["read_skill"] });
+    const pushed = await syncAsService(t, [putAgent("rel-intake", naming("rel-guide"))]);
+    expect(pushed.statusCode, pushed.body).toBe(200);
+    expect(await t.stored("agent", "rel-intake")).toMatchObject({
+      config: { skillNames: ["rel-guide"] }
+    });
+    // A name that is no skill of the instance is refused as before.
+    const dangling = await syncAsService(t, [putAgent("rel-lost", naming("rel-none"))]);
+    expect(dangling.statusCode).toBe(422);
+  });
+
+  it("holds a delete of an absent asset to its absence: one created meanwhile refuses the batch", async () => {
+    const t = await setup();
+    const store = t.stores.configAssets;
+    const apply = store.applyConfigAssetMutations.bind(store);
+    let raced = false;
+    // Another writer creates the asset after the sync read the set and before it writes.
+    store.applyConfigAssetMutations = async (input) => {
+      if (!raced) {
+        raced = true;
+        await apply({
+          clientInstanceId,
+          mutations: [
+            { type: "upsert", kind: "agent", name: "rel-ghost", config: agent("rel-ghost") }
+          ]
+        });
+      }
+      return apply(input);
+    };
+    const refused = await syncAsService(t, [
+      deleteAgent("rel-ghost"),
+      putSkill("rel-guide", "Pushed.", 1)
+    ]);
+    store.applyConfigAssetMutations = apply;
+
+    expect(refused.statusCode, refused.body).toBe(409);
+    expect(refusedItems(refused).items).toEqual([
+      expect.objectContaining({ name: "rel-ghost", status: "refused", code: "CONFLICT" }),
+      { name: "rel-guide", status: "not_applied" }
+    ]);
+    // The created asset stands, and nothing of the batch was written.
+    expect(await t.stored("agent", "rel-ghost")).toMatchObject({ status: "active", revision: 1 });
+    expect(await t.stored("skill", "rel-guide")).toMatchObject({ revision: 1 });
+  });
+});
+
+describe("assets.sync_check", () => {
+  it("answers what the sync would and writes nothing", async () => {
+    const t = await setup({ furtherToolNames: ["read_skill"] });
+    const before = await t.version();
+    const check = (payload: Item, scopes?: string) =>
+      asService(t, "assets.sync_check", { payload }, scopes);
+    const naming = (skillName: string) => ({ skillNames: [skillName], toolNames: ["read_skill"] });
+
+    // A new agent that names a new skill of the same batch, and the default agent.
+    const valid = await check({
+      items: [putSkill("rel-new", "New."), putAgent("rel-intake", naming("rel-new"))],
+      defaultAgentName: "rel-intake"
+    });
+    expect(valid.statusCode, valid.body).toBe(200);
+    expect(valid.json()).toEqual({ valid: true });
+    expect(await t.version()).toBe(before);
+    expect(await t.stored("agent", "rel-intake")).toBeUndefined();
+    expect(await t.stored("skill", "rel-new")).toBeUndefined();
+
+    // A batch the sync refuses is refused the same way, item by item.
+    const stale = [putSkill("rel-guide", "Pushed.", 7), putAgent("rel-intake")];
+    const refused = await check({ items: stale });
+    expect(refused.statusCode).toBe(409);
+    expect(refusedItems(refused)).toEqual(refusedItems(await syncAsService(t, stale)));
+    const invalid = await check({ items: [putAgent("rel-lost", naming("rel-none"))] });
+    expect(invalid.statusCode).toBe(422);
+
+    // It is opened like the sync: by the release scope of a release holder, or the write scope.
+    expect((await check({ items: stale }, "config_assets:read")).statusCode).toBe(403);
+    expect(
+      (await check({ items: [putAgent("rel-intake")] }, "config_assets:read config_assets:release"))
+        .statusCode
+    ).toBe(200);
+    // Without the release right a batch names its Namespace, as in the sync.
+    const asAdmin = await t.call(t.admin.id, "assets.sync_check", {
+      payload: { items: [putAgent("rel-intake")] }
+    });
+    expect(asAdmin.statusCode).toBe(422);
+    expect(await t.version()).toBe(before);
+  });
+});
+
 describe("assets.sync without a Namespace", () => {
   it("is a release: every other caller names the one Namespace of the batch", async () => {
     const t = await setupNamespaceHolder();

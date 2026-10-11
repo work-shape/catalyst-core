@@ -23,16 +23,4 @@ export function registerConfigAssetRoutes(route: Route, options: ChatServerOptio
   );
 
   route(apiOperations["instance.workspaces.list"], () => workflow.listAdministeredWorkspaces());
-
-  route(apiOperations["config_assets.export"], ({ identity, context }) =>
-    workflow.exportAssets(identity, context)
-  );
-
-  route(apiOperations["config_assets.replace"], ({ identity, access, context, body }) =>
-    workflow.replaceAssets(identity, access, context, body)
-  );
-
-  route(apiOperations["config_assets.validate"], ({ identity, access, context, body }) =>
-    workflow.validateAssets(identity, access, context, body)
-  );
 }

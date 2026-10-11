@@ -96,7 +96,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unsafe-type-assertion",
       "scope": "e2e",
-      "count": 7,
+      "count": 6,
       "owner": "CB-1b"
     },
     {
@@ -187,7 +187,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unsafe-type-assertion",
       "scope": "tests",
-      "count": 76,
+      "count": 74,
       "owner": "CB-2"
     },
     {
@@ -607,7 +607,7 @@
       "target": "operations",
       "rule": "plain-changing",
       "scope": "pending",
-      "count": 13,
+      "count": 12,
       "owner": "CONV-1"
     },
     {

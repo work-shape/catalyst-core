@@ -152,7 +152,7 @@ describe("Namespace grants on agents and skills", () => {
     );
   });
 
-  it("opens no overview, export, default-agent or availability call", async () => {
+  it("opens no overview, default-agent or availability call, and no naming of the default", async () => {
     const t = await setup();
     await t.createNamespace("kai-");
     for (const action of ["agent.read", "agent.write", "agent.delete", "skill.read"]) {
@@ -168,12 +168,6 @@ describe("Namespace grants on agents and skills", () => {
     );
     await t.expectRefused(
       t.kai.id,
-      "config_assets.export",
-      {},
-      t.forbidden("agent.read", "no_grant")
-    );
-    await t.expectRefused(
-      t.kai.id,
       "config_agents.set_default",
       { payload: { agentName: "kai-helper" } },
       t.forbidden("agent.write", "no_grant")
@@ -184,10 +178,11 @@ describe("Namespace grants on agents and skills", () => {
       { params: { name: "kai-helper" }, payload: { mode: "all" } },
       t.forbidden("agent.write", "no_grant")
     );
+    // Naming the default agent with a batch is the release holder's.
     await t.expectRefused(
       t.kai.id,
-      "config_assets.replace",
-      { payload: { agents: [], skills: [], baseVersion: null } },
+      "assets.sync",
+      { payload: { namespace: "kai-", items: [], defaultAgentName: "kai-helper" } },
       t.forbidden("assets.release", "no_grant")
     );
     await t.expectOk(t.admin.id, "config_assets.get_overview");
@@ -554,19 +549,27 @@ describe("Namespace allowlists", () => {
       userId: t.root.id,
       permissions: ["config_assets.release"]
     });
-    const bundle = (toolNames: string[]) => ({
-      baseVersion: null,
-      defaultAgentName: "assistant",
-      agents: [agent("assistant"), agent("kai-helper", { toolNames })],
-      skills: []
+    // A release: a batch without a Namespace, of a holder of the release right.
+    const release = (toolNames: string[]) => ({
+      payload: {
+        items: [
+          {
+            type: "put",
+            kind: "agent",
+            config: agent("kai-helper", { toolNames }),
+            expectedRevision: 1
+          }
+        ]
+      }
     });
-    await t.expectRefused(
-      t.root.id,
-      "config_assets.replace",
-      { payload: bundle(["second.tool"]) },
-      { status: 403, code: "FORBIDDEN", details }
+    const refused = await t.expectRefused(t.root.id, "assets.sync", release(["second.tool"]), {
+      status: 403,
+      code: "FORBIDDEN"
+    });
+    expect(JSON.stringify(refused.details)).toContain(
+      "Tool 'second.tool' is not allowed in Namespace 'kai-'"
     );
-    await t.expectOk(t.root.id, "config_assets.replace", { payload: bundle(["known.tool"]) });
+    await t.expectOk(t.root.id, "assets.sync", release(["known.tool"]));
   });
 
   it("checks only an agent a write creates or changes", async () => {

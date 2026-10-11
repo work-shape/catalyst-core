@@ -128,17 +128,30 @@ async function startInstance(modules: Switches, restarted = false) {
 
 type Instance = Awaited<ReturnType<typeof startInstance>>["instance"];
 
-/** Replaces the asset bundle, as a config push does. */
+/** Writes the agents and skills as a release, as a config push does. */
 async function push(instance: Instance, agents: JsonObject[], skills: JsonObject[] = []) {
-  const overview = await instance.call("config_assets.get_overview", {});
-  return instance.call("config_assets.replace", {
-    payload: {
-      baseVersion: overview.json<{ version: number }>().version,
-      defaultAgentName: "test_agent",
-      agents,
-      skills
+  const items = [];
+  for (const [kind, configs] of [
+    ["agent", agents],
+    ["skill", skills]
+  ] as const) {
+    const listed = await instance.call("assets.list", { params: { kind } });
+    const revisions = new Map(
+      listed
+        .json<{ items: Array<{ name: string; revision: number }> }>()
+        .items.map((asset) => [asset.name, asset.revision])
+    );
+    for (const config of configs) {
+      const expectedRevision = revisions.get(String(config.name));
+      items.push({
+        type: "put",
+        kind,
+        config,
+        ...(expectedRevision === undefined ? {} : { expectedRevision })
+      });
     }
-  });
+  }
+  return instance.call("assets.sync", { payload: { items, defaultAgentName: "test_agent" } });
 }
 
 const skill = (content: string): JsonObject => ({
@@ -256,54 +269,28 @@ describe("a module that is off", () => {
     const { instance } = await startInstance({ resources: true, documents: false });
     const overview = await instance.call("config_assets.get_overview", {});
     expect(overview.statusCode).toBe(200);
-    const { version, references } = overview.json<{
-      version: number;
-      references: { enabledToolNames: string[] };
-    }>();
+    const { references } = overview.json<{ references: { enabledToolNames: string[] } }>();
     expect(references.enabledToolNames).not.toContain(TOOL);
 
-    const refused = await instance.call("config_assets.replace", {
-      payload: {
-        baseVersion: version,
-        defaultAgentName: "test_agent",
-        agents: [agent([TOOL])],
-        skills: []
-      }
-    });
+    // The stored agent names the tool already. A changed one that still names it is refused.
+    const refused = await push(instance, [{ ...agent([TOOL]), displayName: "Renamed" }]);
     expect(refused.statusCode).toBe(422);
     expect(JSON.stringify(refused.json<ErrorBody>().error.details)).toContain(
       `Agent 'test_agent' references tool '${TOOL}' of module 'documents', which is off`
     );
 
     // Without the tool the same agent is written.
-    const written = await instance.call("config_assets.replace", {
-      payload: {
-        baseVersion: version,
-        defaultAgentName: "test_agent",
-        agents: [agent([])],
-        skills: []
-      }
-    });
-    expect(written.statusCode).toBe(200);
+    const written = await push(instance, [agent([])]);
+    expect(written.statusCode, written.body).toBe(200);
   });
 
   it("accepts the same agent while the module is on", async () => {
     const { instance } = await startInstance({ resources: true, documents: true });
     const overview = await instance.call("config_assets.get_overview", {});
-    const { version, references } = overview.json<{
-      version: number;
-      references: { enabledToolNames: string[] };
-    }>();
+    const { references } = overview.json<{ references: { enabledToolNames: string[] } }>();
     expect(references.enabledToolNames).toContain(TOOL);
-    const written = await instance.call("config_assets.replace", {
-      payload: {
-        baseVersion: version,
-        defaultAgentName: "test_agent",
-        agents: [agent([TOOL])],
-        skills: []
-      }
-    });
-    expect(written.statusCode).toBe(200);
+    const written = await push(instance, [{ ...agent([TOOL]), displayName: "Renamed" }]);
+    expect(written.statusCode, written.body).toBe(200);
   });
 
   it("starts and serves after it is turned off under an agent that uses its tool", async () => {

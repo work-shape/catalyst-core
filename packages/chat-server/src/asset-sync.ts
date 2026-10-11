@@ -12,12 +12,10 @@ import {
 import { z } from "zod";
 import { readDefinitionName, type WorkflowAssetKind } from "./asset-kinds/shared";
 import {
+  definitionsByName,
   definitionsOf,
   findAssetSetIssues,
-  findDefinition,
   withDefaultAgentName,
-  withDefinition,
-  withoutDefinition,
   type AssetSet,
   type AssetSetIssue
 } from "./asset-set";
@@ -42,6 +40,7 @@ import {
   releaseInitialAvailability,
   requireAssetKindModuleOn,
   requireAssetManagementOn,
+  requireInteractiveEditingOn,
   requireNamespaceOrRelease,
   requireReleaseSync,
   toJsonObject
@@ -114,13 +113,45 @@ export async function syncAssets(
   call: AssetCall,
   input: AssetSyncInput
 ) {
+  const checked = await checkBatch(options, call, input, "apply");
+  return applyBatch(options, call, checked);
+}
+
+/**
+ * Says whether the batch would be applied, and writes nothing. It asks everything the sync
+ * asks, in the same order, and refuses with the same error. Only the store's own check under
+ * its lock is left out, which decides nothing but a write that arrives in the same moment.
+ */
+export async function checkAssetSync(
+  options: ChatServerOptions,
+  call: AssetCall,
+  input: AssetSyncInput
+): Promise<{ valid: true }> {
+  await checkBatch(options, call, input, "check");
+  return { valid: true };
+}
+
+/** A batch every check accepted, with what the store is asked to write for it. */
+interface CheckedBatch {
+  planned: PlannedItem[];
+  ready: ReadyItem[];
+  releaseSync: boolean;
+  storedDefault: string | null;
+  defaultChange: { agentName: string | undefined } | undefined;
+  mutations: ConfigAssetMutation[];
+}
+
+async function checkBatch(
+  options: ChatServerOptions,
+  call: AssetCall,
+  input: AssetSyncInput,
+  purpose: "apply" | "check"
+): Promise<CheckedBatch> {
   const kinds = options.configAssets.kinds;
   // The registry asked the same before the policy. It is asked again on the rows as they are
   // now: a call that waited for an approval runs later than it was authorized.
   const planned = await authorizeItems(options, call.access, input);
   const ready = () => planned.filter(isReady);
-  /** The items that write something. */
-  const writing = () => ready().filter((entry) => !entry.absent);
   const stopIfRefused = (issues?: AssetSetIssue[]) => {
     if (planned.some((entry) => entry.refusal) || issues?.length) {
       throw refusedBatch(planned, issues);
@@ -137,7 +168,11 @@ export async function syncAssets(
     throw new AppError("VALIDATION_FAILED", `Namespace '${input.namespace}' is not registered`);
   }
   const releaseSync = isReleaseSync(call.access, "sync");
-  await authorizeInteractiveWrite(options, call.actor, call, call.audit, releaseSync);
+  if (purpose === "apply") {
+    await authorizeInteractiveWrite(options, call.actor, call, call.audit, releaseSync);
+  } else {
+    requireInteractiveEditingOn(options, releaseSync);
+  }
   for (const entry of ready()) {
     const current = entry.asset?.status === "active" ? entry.asset.revision : null;
     if (entry.asset?.status === "active") {
@@ -175,8 +210,9 @@ export async function syncAssets(
   stopIfRefused();
 
   const stored = await loadStoredAssets(options);
+  const storedByName = definitionsByName(stored.set);
   /** The set as the batch would leave it. */
-  const withItems = (set: AssetSet) => leftByItems(call.access, stored.set, ready(), set);
+  const withItems = (set: AssetSet) => leftByItems(call.access, storedByName, ready(), set);
   let candidate = withItems(stored.set);
   const storedDefault = stored.state.defaultAgentName ?? null;
   if (
@@ -217,8 +253,10 @@ export async function syncAssets(
   stopIfRefused();
 
   // What the batch refers to and its caller may not read is refused as a reference to nothing.
-  const view = loadReferableAssets(options, call.access, stored);
-  if (!view.complete) {
+  // A release is checked against the whole set: it says what the instance holds, also where
+  // its key reads less than it writes.
+  const view = releaseSync ? undefined : loadReferableAssets(options, call.access, stored);
+  if (view && !view.complete) {
     const written = new Set(ready().map((entry) => assetKey(entry.kind.kind, entry.name)));
     const left = (set: AssetSet) =>
       defaultChange
@@ -246,40 +284,56 @@ export async function syncAssets(
     }
     entry.refusal ??= toRefusal(error);
   }
+  const acceptedByName = definitionsByName(found.accepted);
   for (const entry of ready()) {
     if (entry.item.type !== "put" || entry.refusal) continue;
     entry.refusal = refusalOf(() =>
       assertUpsertWithinLimits(call.access, "sync", entry.kind, {
         name: entry.name,
-        current: findDefinition(stored.set, entry.kind.kind, entry.name),
-        next: findDefinition(found.accepted, entry.kind.kind, entry.name),
+        current: storedByName(entry.kind.kind).get(entry.name),
+        next: acceptedByName(entry.kind.kind).get(entry.name),
         namespaces: changed.namespaces
       })
     );
   }
   stopIfRefused();
 
-  const mutations: ConfigAssetMutation[] = writing().map((entry) =>
+  // A delete of an asset that is not there writes nothing. It is handed to the store all the
+  // same, which checks under its lock that the asset is still not there.
+  const mutations: ConfigAssetMutation[] = ready().map((entry) =>
     entry.item.type === "delete"
       ? { type: "delete", kind: entry.kind.kind, name: entry.name, scope: INSTANCE_ASSET_SCOPE }
       : {
           type: "upsert",
           kind: entry.kind.kind,
           name: entry.name,
-          config: toJsonObject(findDefinition(found.accepted, entry.kind.kind, entry.name)),
+          config: toJsonObject(acceptedByName(entry.kind.kind).get(entry.name)),
           scope: INSTANCE_ASSET_SCOPE
         }
   );
   if (defaultChange) {
     mutations.push({ type: "setDefaultAgent", agentName: defaultChange.agentName });
   }
+  return {
+    planned,
+    ready: ready(),
+    releaseSync,
+    storedDefault,
+    defaultChange,
+    mutations
+  };
+}
+
+async function applyBatch(options: ChatServerOptions, call: AssetCall, checked: CheckedBatch) {
+  const { planned, ready, releaseSync, storedDefault, defaultChange, mutations } = checked;
+  const byKey = new Map(ready.map((entry) => [assetKey(entry.kind.kind, entry.name), entry]));
   const result = await applyValidatedConfigAssetMutations(options, {
     clientInstanceId: options.clientInstanceId,
     actor: auditActorFromIdentity(call.actor),
     baseRevisions: Object.fromEntries(
-      writing().map((entry) => [
-        assetKey(entry.kind.kind, entry.name),
-        entry.item.expectedRevision ?? null
+      [...byKey].map(([key, entry]) => [
+        key,
+        entry.absent ? null : (entry.item.expectedRevision ?? null)
       ])
     ),
     ...(defaultChange ? { baseDefaultAgentName: storedDefault } : {}),
@@ -293,10 +347,7 @@ export async function syncAssets(
         : undefined;
     if (!stale?.success) throw error;
     for (const conflict of stale.data.conflicts) {
-      const entry = ready().find(
-        (candidateEntry) =>
-          candidateEntry.kind.kind === conflict.kind && candidateEntry.name === conflict.name
-      );
+      const entry = byKey.get(assetKey(conflict.kind, conflict.name));
       if (entry) {
         entry.refusal = {
           code: "CONFLICT",
@@ -311,7 +362,7 @@ export async function syncAssets(
   // The recorder of the Operation Run: each row names the run that wrote it.
   const auditRecorder = call.audit;
   const items = [];
-  for (const entry of ready()) {
+  for (const entry of ready) {
     if (entry.absent) {
       items.push({
         type: "delete" as const,
@@ -342,7 +393,12 @@ export async function syncAssets(
   return {
     version: result.version,
     items,
-    ...(releaseSync ? await hiddenAgentNamesOf(options, writing()) : {}),
+    ...(releaseSync
+      ? await hiddenAgentNamesOf(
+          options,
+          ready.filter((entry) => !entry.absent)
+        )
+      : {}),
     warnings: []
   };
 }
@@ -451,12 +507,13 @@ async function requireFurtherRights(
     loadStoredAssets(options),
     options.stores.access.listNamespaceRecords({ clientInstanceId: options.clientInstanceId })
   ]);
+  const storedByName = definitionsByName(stored.set);
   const defaultChange =
     input.defaultAgentName === undefined && impliesDefaultChange(access)
       ? planDefaultChange(
           options.configAssets.kinds.kinds,
           stored.set,
-          leftByItems(access, stored.set, ready, stored.set),
+          leftByItems(access, storedByName, ready, stored.set),
           ready
         )
       : undefined;
@@ -465,7 +522,7 @@ async function requireFurtherRights(
   }
   for (const entry of ready) {
     if (entry.item.type !== "put" || entry.refusal) continue;
-    const current = findDefinition(stored.set, entry.kind.kind, entry.name);
+    const current = storedByName(entry.kind.kind).get(entry.name);
     const action = missingUpsertRightOf(access, "sync", entry.kind, {
       name: entry.name,
       current,
@@ -489,28 +546,45 @@ function defaultChangeRefusal(kind: WorkflowAssetKind): ItemRefusal {
   };
 }
 
-/** The set as the items would leave it. `stored` is what each put is prepared against. */
+/**
+ * The set as the items would leave it. `storedByName` is what each put is prepared against.
+ * Each name is looked up once and each kind's list is built once, so the cost grows with the
+ * items and the stored assets and not with their product.
+ */
 function leftByItems(
   access: ActorAccess,
-  stored: AssetSet,
+  storedByName: (kind: string) => Map<string, unknown>,
   entries: readonly ReadyItem[],
   set: AssetSet
 ): AssetSet {
-  return entries.reduce(
-    (left, entry) =>
+  /** Per kind: what the batch leaves under each name it carries, nothing for a delete. */
+  const carried = new Map<string, Map<string, { definition: unknown } | undefined>>();
+  for (const entry of entries) {
+    const ofKind = carried.get(entry.kind.kind) ?? new Map();
+    carried.set(entry.kind.kind, ofKind);
+    ofKind.set(
+      entry.name,
       entry.item.type === "delete"
-        ? withoutDefinition(left, entry.kind.kind, entry.name)
-        : withDefinition(
-            left,
-            entry.kind.kind,
-            entry.name,
-            preparedUpsert(access, "sync", entry.kind, {
-              current: findDefinition(stored, entry.kind.kind, entry.name),
+        ? undefined
+        : {
+            definition: preparedUpsert(access, "sync", entry.kind, {
+              current: storedByName(entry.kind.kind).get(entry.name),
               next: entry.item.config
             })
-          ),
-    set
-  );
+          }
+    );
+  }
+  const definitions = new Map(set.definitions);
+  for (const [kind, ofKind] of carried) {
+    definitions.set(kind, [
+      ...definitionsOf(set, kind).filter((candidate) => {
+        const name = readDefinitionName(candidate);
+        return name === undefined || !ofKind.has(name);
+      }),
+      ...[...ofKind.values()].flatMap((put) => (put ? [put.definition] : []))
+    ]);
+  }
+  return { ...set, definitions };
 }
 
 /**

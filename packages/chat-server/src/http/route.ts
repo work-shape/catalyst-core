@@ -366,14 +366,16 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
 
 /**
  * The scope that passes an operation's check beside its own, for a holder of one right on the
- * instance. A release is written through `assets.sync`, which asks for the scope of writing
- * assets: a key issued for release sync passes there when its principal holds the release
- * right, and on no other operation and for no other principal.
+ * instance. A release is written through `assets.sync` and checked through
+ * `assets.sync_check`, which ask for the scope of writing assets: a key issued for release
+ * sync passes there when its principal holds the release right, and on no other operation and
+ * for no other principal.
  */
 const FURTHER_SCOPE_OF_OPERATION: Partial<
   Record<string, { scope: OperationScope; heldWith: string }>
 > = {
-  "assets.sync": { scope: "config_assets:release", heldWith: "assets.release" }
+  "assets.sync": { scope: "config_assets:release", heldWith: "assets.release" },
+  "assets.sync_check": { scope: "config_assets:release", heldWith: "assets.release" }
 };
 
 async function requireOperationScope(

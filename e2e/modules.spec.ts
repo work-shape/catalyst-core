@@ -106,7 +106,7 @@ test("an operator reads the modules of the instance, in English and in German", 
 // and everything else is the product: the stored agent, the editor, the save, the job row.
 // tests/module-off.test.ts holds the server's side with a module that owns both.
 
-const exportSchema = z.object({ agents: z.array(z.record(z.string(), z.unknown())) });
+const templateSchema = z.object({ config: z.record(z.string(), z.unknown()) });
 const storedAgentSchema = z.object({ config: z.object({ toolNames: z.array(z.string()) }) });
 
 test("an admin removes a tool of a module that is off from an agent and saves", async ({
@@ -120,11 +120,9 @@ test("an admin removes a tool of a module that is off from an agent and saves", 
   const agentName = "modules_e2e_agent";
   const agentUrl = `${apiBaseUrl}/api/v1/assets/agent/${agentName}`;
   await signIn(page);
-  const exported = exportSchema.parse(
-    await (await page.request.get(`${apiBaseUrl}/api/v1/instance/config/export`)).json()
-  );
-  const template = exported.agents.find((candidate) => candidate.name === "research_assistant");
-  expect(template).toBeDefined();
+  const template = templateSchema.parse(
+    await (await page.request.get(`${apiBaseUrl}/api/v1/assets/agent/research_assistant`)).json()
+  ).config;
   // The agent names the tool, as it did before the module was turned off.
   const stored = await requestWithOrigin(page, "put", agentUrl, {
     data: {

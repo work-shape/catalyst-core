@@ -112,3 +112,13 @@ export const removedAssetPaths = [
   ["POST", "/api/v1/instance/config/assets/agent/assistant/revert"],
   ["GET", "/api/v1/instance/config/assets/agent/assistant/revisions"]
 ] as const satisfies readonly (readonly ["GET" | "POST" | "PUT", string])[];
+
+/**
+ * The release sync of the CLI before it moved to `assets.sync`. Nothing is served there, and
+ * the 404 tells the CLI that still asks to upgrade.
+ */
+export const retiredReleasePaths = [
+  ["GET", "/api/v1/instance/config/export"],
+  ["POST", "/api/v1/instance/config/import"],
+  ["POST", "/api/v1/instance/config/validate"]
+] as const satisfies readonly (readonly ["GET" | "POST", string])[];

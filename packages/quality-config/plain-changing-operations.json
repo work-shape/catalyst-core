@@ -24,10 +24,6 @@
       "class": "pending",
       "ticket": "CONV-5"
     },
-    "config_assets.replace": {
-      "class": "pending",
-      "ticket": "CONV-2b"
-    },
     "conversations.artifacts.retry_preview": {
       "class": "conversation",
       "reason": "The Agent Run is the record for this operation."

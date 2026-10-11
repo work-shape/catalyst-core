@@ -12,7 +12,7 @@ Existing instances that still define agents and skills in files must migrate whe
 3. **Trim the release config.** Remove `defaultAgentName`, `agentFiles`, `skillFiles` (and any inline `agents`/`skills`) from `app.yaml`. Turn on the module `assetManagement` and add the `administration.agentConfiguration` block to choose which fields admins may edit interactively.
 4. **Deploy the server first.** Run its committed database migrations, then start the API/UI build that accepts API-key exchange. The instance starts with zero assets and the chat UI shows "not configured" — deploy and push back-to-back to keep this window short.
 5. **Create CLI access.** Sign in as a superadmin and use **Administration → API Access** to create a `Catalyst CLI` service principal with `config_assets.read` and `config_assets.release`. Create a key restricted to `config_assets:read` and `config_assets:release`, copy its one-time secret, and set it as `CATALYST_API_KEY` only in the operator environment or CI secret store.
-6. **Push the assets with the new CLI.** `catalyst config push --force --dir <working copy> --instance <url>`. `--force` is required only for this first push (there is no pulled asset baseline yet).
+6. **Push the assets with the new CLI.** `catalyst config push --force --dir <working copy> --instance <url>`. `--force` is required only for this first push (there is no pulled asset baseline yet); it sends every local asset against what the instance holds now.
 7. **Verify parity.** `catalyst config diff` must report no differences. Then confirm in the chat UI that the agent list, welcome content, and a test conversation behave as before. The revision history in the admin Config tab should show one `create` revision per asset attributed to the service principal and credential.
 
 ## Rollback
@@ -23,10 +23,10 @@ The previous image ignores the new tables and still reads its file config, so ro
 
 Roll out in this order: database migrations; API/UI build with `SERVICE_ACCESS_TOKEN_SECRET`; service principal and API-key creation; CLI plus `CATALYST_API_KEY`; config push and verification. Do not distribute an API key before the exchange endpoint is deployed.
 
-The CLI signs in with an API key only, and CLI and server ship together: a CLI from this release needs a server that answers under `/api/v1`, and an older CLI cannot reach such a server. `CHAT_SERVER_CREDENTIAL` stays in deployments that issue embedded human chat sessions; the CLI never reads it.
+The CLI signs in with an API key only, and CLI and server ship together: a CLI from this release needs a server that answers the asset operations under `/api/v1/assets`, and an older CLI is told by such a server to upgrade. `CHAT_SERVER_CREDENTIAL` stays in deployments that issue embedded human chat sessions; the CLI never reads it.
 
 ## Existing CLI working copies
 
 After upgrading the CLI, pull before editing an existing working copy. Old state files containing only `lastPulledVersion` cannot guard individual assets. Commit or stash local edits before pulling, since it overwrites the working copy.
 
-A push merges only locally changed assets and rejects the whole batch if any touched asset changed on the instance. The conflict report identifies the assets, their last actor and operation, and a `pull --only` command for recovery. Unchanged local assets preserve instance edits. Deletion still requires `--prune`; deliberate overwrites require `--force`. See [Config Assets](/configure/config-assets/) for the complete workflow.
+A push merges only locally changed assets and rejects the whole batch if any touched asset changed on the instance. The conflict report identifies the assets, their last actor and operation, and a `pull --only` command for recovery. Unchanged local assets preserve instance edits. Deletion still requires `--prune`; deliberate overwrites require `--force`. One push holds at most 2,000 assets and one megabyte; push a larger working copy in parts with `--only`. See [Config Assets](/configure/config-assets/) for the complete workflow.

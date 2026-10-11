@@ -166,11 +166,6 @@ export const EVENTS = {
     name: "config_asset.updated",
     subject: "config_asset"
   },
-  "config_assets.replaced": {
-    ...LEGACY_AUDIT,
-    name: "config_assets.replaced",
-    subject: "config_assets"
-  },
   "connection.discovered": {
     ...LEGACY_AUDIT,
     name: "connection.discovered",
@@ -240,11 +235,6 @@ export const EVENTS = {
   "governance.audit_events_viewed": {
     ...LEGACY_AUDIT,
     name: "governance.audit_events_viewed",
-    subject: "instance"
-  },
-  "governance.config_assets_release_authorized": {
-    ...LEGACY_AUDIT,
-    name: "governance.config_assets_release_authorized",
     subject: "instance"
   },
   "governance.config_assets_viewed": {

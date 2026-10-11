@@ -77,6 +77,7 @@ describe("the operation catalog", () => {
         "assets.revert  POST /api/v1/assets/:kind/:name/revert",
         "assets.revisions.list  GET /api/v1/assets/:kind/:name/revisions",
         "assets.sync  POST /api/v1/assets/sync",
+        "assets.sync_check  POST /api/v1/assets/sync/check",
         "assets.validate  POST /api/v1/assets/:kind/validate",
         "audit_activities.list  GET /api/v1/instance/audit-activities",
         "audit_events.list  GET /api/v1/instance/audit-events",
@@ -85,10 +86,7 @@ describe("the operation catalog", () => {
         "config.get  GET /api/v1/instance/config",
         "config_agents.set_availability  PUT /api/v1/instance/config/agents/:name/availability",
         "config_agents.set_default  PUT /api/v1/instance/config/default-agent",
-        "config_assets.export  GET /api/v1/instance/config/export",
         "config_assets.get_overview  GET /api/v1/instance/config/assets",
-        "config_assets.replace  POST /api/v1/instance/config/import",
-        "config_assets.validate  POST /api/v1/instance/config/validate",
         "connections.get  GET /api/v1/connections/:name",
         "connections.list_tools  GET /api/v1/connection-tools",
         "connections.test  POST /api/v1/connections/:name/test",
@@ -365,7 +363,7 @@ describe("a running instance", () => {
     // and Namespaces came after it, then the background jobs, then a person's own Approval
     // Requests, then the list of modules, then the infrastructure and its check. The five
     // asset addresses moved once more, to `/api/v1/assets`, and the list, the check and the
-    // sync of assets came with them. Then the Pages of a conversation.
+    // sync of assets came with them. Then the Pages of a conversation, and the check of a sync.
     const added: readonly ApiOperationName[] = [
       "openapi.get",
       "docs.get",
@@ -391,6 +389,7 @@ describe("a running instance", () => {
       "assets.list",
       "assets.validate",
       "assets.sync",
+      "assets.sync_check",
       "pages.list",
       "pages.get",
       "pages.files.list",
@@ -400,7 +399,9 @@ describe("a running instance", () => {
       "connections.test",
       "connections.list_tools"
     ];
-    expect(retiredApiPaths.length).toBe(versioned.length - added.length + 2);
+    // The export, import and validation of a release went when the CLI moved to `assets.sync`.
+    const removed = 3;
+    expect(retiredApiPaths.length).toBe(versioned.length - added.length + 2 + removed);
   });
 });
 

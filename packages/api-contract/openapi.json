@@ -721,6 +721,83 @@
         "x-catalyst-rate-class": "write"
       }
     },
+    "/api/v1/assets/sync/check": {
+      "post": {
+        "operationId": "assets.sync_check",
+        "summary": "Check a batch as a sync would, without applying it",
+        "tags": [
+          "Assets"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:write"
+            ]
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncAssetsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckAssetSyncResponse"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/assets/{kind}": {
       "get": {
         "operationId": "assets.list",
@@ -6131,216 +6208,6 @@
           "agent.write"
         ],
         "x-catalyst-rate-class": "write"
-      }
-    },
-    "/api/v1/instance/config/export": {
-      "get": {
-        "operationId": "config_assets.export",
-        "summary": "Export every agent and skill as one bundle",
-        "tags": [
-          "Config Assets"
-        ],
-        "security": [
-          {
-            "sessionCookie": [
-              "config_assets:read"
-            ]
-          },
-          {
-            "sessionToken": [
-              "config_assets:read"
-            ]
-          },
-          {
-            "accessToken": [
-              "config_assets:read"
-            ]
-          }
-        ],
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "The result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExportConfigAssetsResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthenticated"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "422": {
-            "$ref": "#/components/responses/ValidationFailed"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/Internal"
-          }
-        },
-        "x-catalyst-effect": "reading",
-        "x-catalyst-requires": [
-          "agent.read",
-          "skill.read"
-        ],
-        "x-catalyst-rate-class": "read"
-      }
-    },
-    "/api/v1/instance/config/import": {
-      "post": {
-        "operationId": "config_assets.replace",
-        "summary": "Apply a bundle of agents and skills from a release",
-        "tags": [
-          "Config Assets"
-        ],
-        "security": [
-          {
-            "sessionCookie": [
-              "config_assets:release"
-            ]
-          },
-          {
-            "sessionToken": [
-              "config_assets:release"
-            ]
-          },
-          {
-            "accessToken": [
-              "config_assets:release"
-            ]
-          }
-        ],
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReplaceConfigAssetsRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReplaceConfigAssetsResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthenticated"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "409": {
-            "$ref": "#/components/responses/Conflict"
-          },
-          "422": {
-            "$ref": "#/components/responses/ValidationFailed"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/Internal"
-          }
-        },
-        "x-catalyst-effect": "changing",
-        "x-catalyst-requires": [
-          "assets.release"
-        ],
-        "x-catalyst-rate-class": "write"
-      }
-    },
-    "/api/v1/instance/config/validate": {
-      "post": {
-        "operationId": "config_assets.validate",
-        "summary": "Check a bundle of agents and skills without applying it",
-        "tags": [
-          "Config Assets"
-        ],
-        "security": [
-          {
-            "sessionCookie": [
-              "config_assets:release"
-            ]
-          },
-          {
-            "sessionToken": [
-              "config_assets:release"
-            ]
-          },
-          {
-            "accessToken": [
-              "config_assets:release"
-            ]
-          }
-        ],
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ConfigAssetBundle"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidateConfigAssetsResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthenticated"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "422": {
-            "$ref": "#/components/responses/ValidationFailed"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "500": {
-            "$ref": "#/components/responses/Internal"
-          }
-        },
-        "x-catalyst-effect": "reading",
-        "x-catalyst-requires": [
-          "assets.release"
-        ],
-        "x-catalyst-rate-class": "read"
       }
     },
     "/api/v1/instance/infrastructure": {
@@ -13310,6 +13177,18 @@
           "ok"
         ]
       },
+      "CheckAssetSyncResponse": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "valid"
+        ]
+      },
       "ClientBranding": {
         "type": "object",
         "properties": {
@@ -13810,31 +13689,6 @@
         },
         "required": [
           "ok"
-        ]
-      },
-      "ConfigAssetBundle": {
-        "type": "object",
-        "properties": {
-          "defaultAgentName": {
-            "type": "string",
-            "minLength": 1
-          },
-          "agents": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ConfigAssetConfig"
-            }
-          },
-          "skills": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ConfigAssetConfig"
-            }
-          }
-        },
-        "required": [
-          "agents",
-          "skills"
         ]
       },
       "ConfigAssetConfig": {
@@ -15268,52 +15122,6 @@
         "required": [
           "accessToken",
           "expiresAt"
-        ]
-      },
-      "ExportConfigAssetsResponse": {
-        "type": "object",
-        "properties": {
-          "defaultAgentName": {
-            "type": "string",
-            "minLength": 1
-          },
-          "agents": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ConfigAssetConfig"
-            }
-          },
-          "skills": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ConfigAssetConfig"
-            }
-          },
-          "version": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "perAssetConcurrency": {
-            "type": "boolean",
-            "const": true
-          },
-          "revisions": {
-            "type": "object",
-            "propertyNames": {
-              "type": "string"
-            },
-            "additionalProperties": {
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 9007199254740991
-            }
-          }
-        },
-        "required": [
-          "agents",
-          "skills",
-          "version"
         ]
       },
       "GrantEffect": {
@@ -17758,116 +17566,6 @@
           "title"
         ]
       },
-      "ReplaceConfigAssetsRequest": {
-        "type": "object",
-        "properties": {
-          "defaultAgentName": {
-            "type": "string",
-            "minLength": 1
-          },
-          "agents": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ConfigAssetConfig"
-            }
-          },
-          "skills": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ConfigAssetConfig"
-            }
-          },
-          "baseVersion": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 9007199254740991
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "mode": {
-            "type": "string",
-            "enum": [
-              "mirror",
-              "merge"
-            ]
-          },
-          "baseRevisions": {
-            "type": "object",
-            "propertyNames": {
-              "type": "string"
-            },
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "exclusiveMinimum": 0,
-                  "maximum": 9007199254740991
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            }
-          },
-          "baseDefaultAgentName": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "deleteAssets": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "kind": {
-                  "$ref": "#/components/schemas/ConfigAssetKind"
-                },
-                "name": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "kind",
-                "name"
-              ]
-            }
-          }
-        },
-        "required": [
-          "agents",
-          "skills",
-          "baseVersion"
-        ]
-      },
-      "ReplaceConfigAssetsResponse": {
-        "type": "object",
-        "properties": {
-          "version": {
-            "type": "integer",
-            "exclusiveMinimum": 0,
-            "maximum": 9007199254740991
-          },
-          "hiddenAgentNames": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "version"
-        ]
-      },
       "RequestPasswordResetRequest": {
         "type": "object",
         "properties": {
@@ -19392,18 +19090,6 @@
         "required": [
           "valid",
           "issues"
-        ]
-      },
-      "ValidateConfigAssetsResponse": {
-        "type": "object",
-        "properties": {
-          "valid": {
-            "type": "boolean",
-            "const": true
-          }
-        },
-        "required": [
-          "valid"
         ]
       },
       "WebSource": {
