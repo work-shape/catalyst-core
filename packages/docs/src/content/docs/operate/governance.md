@@ -138,7 +138,7 @@ Full message access should require:
 
 ## Inbox
 
-The Inbox is where a person finds what waits for a decision. It is a section of the sidebar, below Chat, at `/inbox`. The older address `/approvals` leads there.
+The Inbox is where a person finds what waits for a decision. It is a section of the sidebar, below Chat, at `/inbox`. The older address `/approvals` leads there. Issuing an API key never waits there, because the key is shown once to the person who asks: under an instance default of `approval` for changing operations the call runs on its caller's own word, and a policy setting for the operation or a guardrail that asks for an approval refuses it.
 
 The sidebar shows the Inbox to a person who may decide a kind of Approval Request, and to a person who has made a request. The number beside it counts the pending requests that person can decide. It does not count unread items.
 

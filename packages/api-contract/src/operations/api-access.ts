@@ -67,6 +67,8 @@ export const apiAccessOperations = {
     scope: "api_access:write",
     requires: [],
     effect: "changing",
+    // The answer is the key, shown once.
+    secret: true,
     body: createApiCredentialRequestSchema,
     response: json(createApiCredentialResponseSchema),
     errors: ["NOT_FOUND"],

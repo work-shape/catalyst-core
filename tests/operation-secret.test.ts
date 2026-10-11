@@ -10,16 +10,16 @@ import {
 import { registeredTestOperations as operations } from "./support/operations";
 import type { TestRoute } from "./support/test-instance";
 
-// An operation whose answer holds a secret that is shown once, such as a new key, registered
-// through the HTTP face with `secret: true`.
-// Without the `secret` flag the run keeps the answer and the second call reads it again, the
-// held call answers 202, and the registration with `approval` starts.
+// An operation whose descriptor declares its answer `secret`: a secret that is shown once, such
+// as a new key. Without the flag the run keeps the answer and the second call reads it again,
+// the held call answers 202, and the registration with `approval` starts.
+const secretChange = { ...operations.testRunChange, secret: true } as const;
+
 describe("operation over HTTP: an answer that holds a secret", () => {
   const registerSecret =
     (executed: string[], defaultPolicy?: "approval") =>
     (route: TestRoute): void =>
-      route.operation(operations.testRunChange, {
-        secret: true,
+      route.operation(secretChange, {
         ...(defaultPolicy ? { defaultPolicy } : {}),
         execute: (item) => {
           executed.push(item.name);
@@ -81,6 +81,40 @@ describe("operation over HTTP: an answer that holds a secret", () => {
       expect(executed).toEqual([]);
     }
   );
+
+  // Fails without the rule for an inherited approval: the call was refused with POLICY_DENIED,
+  // so an instance that sends every change to an approval could never issue a key.
+  it("runs on its caller's word where only the instance default asks for an approval", async () => {
+    const executed: string[] = [];
+    const { server, runs, approvalRequests } = await createServer({
+      changingDefault: "approval",
+      approvals: true,
+      register: registerSecret(executed)
+    });
+    const response = await server.call("testRunChange", change("issued"), person());
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ name: "issued", filler: secret });
+    const [run] = await runs();
+    expect(run).toMatchObject({ status: "done", decision: { mode: "direct" } });
+    expect(run?.output).toBeUndefined();
+    expect(approvalRequests).toEqual([]);
+    expect(executed).toEqual(["issued"]);
+  });
+
+  it("is still refused under that default where a setting for it asks for an approval", async () => {
+    const executed: string[] = [];
+    const { server, approvalRequests } = await createServer({
+      changingDefault: "approval",
+      settings: [{ operation: "testRunChange", value: "approval" }],
+      approvals: true,
+      register: registerSecret(executed)
+    });
+    const response = await server.call("testRunChange", change("held"), person());
+    expect(response.statusCode).toBe(403);
+    expect(errorOf(response).code).toBe("POLICY_DENIED");
+    expect(approvalRequests).toEqual([]);
+    expect(executed).toEqual([]);
+  });
 
   it("does not start with a secret operation whose own policy is approval", async () => {
     const start = createServer({ register: registerSecret([], "approval") }).then(({ server }) =>

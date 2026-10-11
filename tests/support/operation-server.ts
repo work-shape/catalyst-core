@@ -26,6 +26,8 @@ export const clientInstanceId = asClientInstanceId(config.clientInstance.id);
 export interface ServerInput {
   settings?: CentralPolicySetting[];
   readingDefault?: "allow" | "deny";
+  /** The instance default of changing operations, where a test sets one. */
+  changingDefault?: "allow" | "confirm" | "approval" | "deny";
   approvals?: boolean;
   /** The outcome the guardrails of this event answer with. */
   guardrail?: { event: PlatformEventName; outcome: "block" | "require_approval" };
@@ -85,7 +87,11 @@ export async function createServer(input: ServerInput = {}) {
       config: {
         ...config,
         policy: {
-          defaults: { ...config.policy.defaults, reading: input.readingDefault ?? "allow" }
+          defaults: {
+            ...config.policy.defaults,
+            reading: input.readingDefault ?? "allow",
+            ...(input.changingDefault ? { changing: input.changingDefault } : {})
+          }
         }
       },
       operations: {

@@ -267,6 +267,34 @@ describe("resolvePolicy: who can confirm and what can wait", () => {
     });
   });
 
+  // Fails without the rule: the inherited approval held the call, which a secret answer
+  // cannot be, so the operation was impossible on such an instance.
+  it("takes an inherited approval of an operation that answers a secret as a confirmation", () => {
+    const definition = { ...changing, secret: true } as const;
+    const instanceDefaults = { reading: "allow", changing: "approval" } as const;
+    expect(resolve({ definition, instanceDefaults })).toEqual({
+      value: "confirm",
+      next: "run",
+      decisionMode: "direct",
+      source: "instance_default"
+    });
+    // Nobody present made the call, so nobody confirmed it.
+    expect(resolve({ definition, instanceDefaults, callerCanConfirm: false })).toMatchObject({
+      next: "refuse"
+    });
+    // Whatever names the operation or asks at the call still asks for the approval.
+    const centralSettings = [{ operation: "items.*", value: "approval" }] as const;
+    expect(resolve({ definition, instanceDefaults, centralSettings })).toMatchObject({
+      next: "await_approval",
+      source: "central_setting"
+    });
+    expect(
+      resolve({ definition, instanceDefaults, guardrailOutcome: "require_approval" })
+    ).toMatchObject({ next: "await_approval", source: "guardrail" });
+    // An operation without a secret answer keeps the inherited approval.
+    expect(resolve({ instanceDefaults })).toMatchObject({ next: "await_approval" });
+  });
+
   it("reads who can confirm from the origin, not from one origin's name", () => {
     const origins: [OperationOrigin, boolean][] = [
       [{ kind: "user" }, true],

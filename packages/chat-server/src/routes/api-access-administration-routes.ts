@@ -38,9 +38,8 @@ export function registerApiAccessAdministrationRoutes(
   });
 
   route.operation(createCredential, {
-    // A key can be revoked. The answer holds it once, so the run keeps no output.
+    // A key can be revoked. Its descriptor declares the answer `secret`: the run keeps none.
     changeClass: "reversible",
-    secret: true,
     authorize: authorizeApiAccessChange(createCredential.id),
     resource: ({ servicePrincipalId }) => ({ kind: "service_principal", id: servicePrincipalId }),
     execute: (input, context) => workflow.createApiCredential(context, input)

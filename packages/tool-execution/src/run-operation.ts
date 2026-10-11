@@ -339,7 +339,9 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     throw new AppError("INTERNAL", "This surface cannot hold a call for a confirmation");
   }
   if (policy.next === "await_approval") {
-    // A held call is executed later, when nobody is there to be shown the secret once.
+    // A held call is executed later, when nobody is there to be shown the secret once. An
+    // approval the instance default alone asks for never gets here: the policy takes it as a
+    // confirmation. So this refuses what a setting for the operation or a guardrail asked.
     if (definition.secret) {
       return { ending: await denyRun(context, { kind: "policy", operation: definition.name }) };
     }

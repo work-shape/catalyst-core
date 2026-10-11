@@ -6742,27 +6742,6 @@
               }
             }
           },
-          "202": {
-            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationRun"
-                }
-              }
-            },
-            "headers": {
-              "Operation-Run-Id": {
-                "$ref": "#/components/headers/OperationRunId"
-              },
-              "Location": {
-                "$ref": "#/components/headers/Location"
-              },
-              "Idempotent-Replayed": {
-                "$ref": "#/components/headers/IdempotentReplayed"
-              }
-            }
-          },
           "400": {
             "$ref": "#/components/responses/BadRequest"
           },
@@ -6770,13 +6749,13 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "$ref": "#/components/responses/IdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+            "$ref": "#/components/responses/IdempotencyKeyReusedOrOperationInProgressOrOutputNotRetained"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
@@ -10058,6 +10037,16 @@
       },
       "ForbiddenOrPolicyDeniedOrGuardrailBlocked": {
         "description": "`FORBIDDEN`: The caller lacks the scope or the right this operation requires. `POLICY_DENIED`: The instance's policy does not allow this operation from here. `details.operation` names it. `GUARDRAIL_BLOCKED`: A guardrail refused the call. `details.guardrailId` names it.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        }
+      },
+      "IdempotencyKeyReusedOrOperationInProgressOrOutputNotRetained": {
+        "description": "`IDEMPOTENCY_KEY_REUSED`: The `Idempotency-Key` was already used for another operation or another input. Send a new key. `OPERATION_IN_PROGRESS`: The first call with this `Idempotency-Key` has not ended, or it was interrupted and its outcome is not known (`details.interrupted` is `true`). `details.operationRunId` names its run. An interrupted call is never run again under its key: check what it changed, then send a new key. `OUTPUT_NOT_RETAINED`: The call with this `Idempotency-Key` completed, and its answer is not kept: it was too large, or it held a secret that is shown once. Read the result from what the call changed. A secret is not shown again.",
         "content": {
           "application/json": {
             "schema": {

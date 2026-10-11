@@ -358,9 +358,9 @@ id from config_assets where status = 'deleted')`.
   principal and issuing and revoking an API key are Operation Runs. `service_principals.create`,
   `service_principals.update`, `api_credentials.create` and `api_credentials.revoke` keep their
   addresses, inputs and `200` answers, answer the header `Operation-Run-Id` and take an
-  `Idempotency-Key`. The typed client answers these four as an operation outcome
-  (`{ status: "done", output }`); `completedOutput(outcome)` from `@vivd-catalyst/api-client`
-  hands a caller the output. The rule for who may call is unchanged, a superadmin who holds
+  `Idempotency-Key`. The typed client answers the first, the second and the fourth as an
+  operation outcome (`{ status: "done", output }`) and the new key plain;
+  `completedOutput(outcome)` from `@vivd-catalyst/api-client` hands a caller the output. The rule for who may call is unchanged, a superadmin who holds
   `api_access.manage`, and is now the operations' own check: the descriptors list no `requires`,
   a refusal is recorded on the run, and a refusal for the missing role reads
   `Missing the right '<operation id>'` in place of `... requires a superadmin role`. The audit
@@ -368,12 +368,19 @@ id from config_assets where status = 'deleted')`.
   `operation.authorization_checked` row records the same fact. The rows
   `api_access.service_principal_created`, `..._updated`, `api_access.credential_created` and
   `..._revoked` stay and name the run.
-- **Operations:** an operation may be registered with `secret: true` when its answer holds a
-  secret that is shown once. Its run keeps no output, a repeated call with the same
-  `Idempotency-Key` answers `409 OUTPUT_NOT_RETAINED` and never the secret, and the call is never
-  held for an approval: a policy or guardrail that asks for one refuses it with `POLICY_DENIED`,
-  and a registration with the default policy `approval` stops startup. `api_credentials.create`
-  is the first. A key whose answer was lost is revoked and issued again under a new key.
+- **Operations:** an operation of the registry may declare `secret: true` on its descriptor when
+  its answer holds a secret that is shown once. Its run keeps no output, and a repeated call
+  with the same `Idempotency-Key` answers `409 OUTPUT_NOT_RETAINED` and never the secret. The
+  call is never held for an approval, so its descriptor declares no `202` answer and the typed
+  client answers its output plain. An instance default of `approval` for changing operations
+  does not make such an operation impossible: it takes the inherited value as `confirm` and runs
+  on its caller's own word. A policy setting that matches the operation or a guardrail that asks
+  for an approval refuses the call with `POLICY_DENIED`, and a registration with the default
+  policy `approval` stops startup. `api_credentials.create` is the first. A key whose answer was
+  lost is revoked and issued again under a new key.
+- **Operations (fixed):** a registered operation reads each input field from the part of the
+  request its descriptor declares it in. A query field the descriptor does not declare no longer
+  replaces a field of the body; it is ignored, as on every other route.
 - **Document extraction (breaking config):** the extraction of the document processing
   capability calls its model through the model gateway. The block
   `capabilities.documentProcessing.extraction.provider` is gone, and startup of the API and of

@@ -86,12 +86,10 @@ export async function createLocalApiKey(options: LocalApiKeyOptions): Promise<st
         body: { displayLabel: PRINCIPAL_LABEL, permissions: [...PERMISSIONS] }
       })
     );
-  const credential = completedOutput(
-    await client.api_credentials.create({
-      params: { servicePrincipalId: principal.id },
-      body: { name: "local development", scopes: [...SCOPES] }
-    })
-  );
+  const credential = await client.api_credentials.create({
+    params: { servicePrincipalId: principal.id },
+    body: { name: "local development", scopes: [...SCOPES] }
+  });
   return credential.secret;
 }
 

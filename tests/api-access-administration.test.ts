@@ -3,7 +3,8 @@ import { listenTestInstance, createTestInstance, type TestInstance } from "./sup
 import { afterEach, describe, expect, it } from "vitest";
 
 import { completedOutput, createApiClient, listAll } from "@vivd-catalyst/api-client";
-import { apiErrorResponseSchema } from "@vivd-catalyst/api-contract";
+import { apiErrorResponseSchema, apiOperations } from "@vivd-catalyst/api-contract";
+import { openApiJsonOperation } from "./support/operations";
 import { inspect } from "node:util";
 import postgres from "postgres";
 import { z } from "zod";
@@ -74,16 +75,15 @@ describe("API Access administration", () => {
     expect(updated.principal.description).toBeUndefined();
 
     const expiresAt = new Date(Date.now() + 60_000).toISOString();
-    const createdCredential = completedOutput(
-      await client.api_credentials.create({
-        params: { servicePrincipalId: created.principal.id },
-        body: {
-          name: "CI key",
-          scopes: ["config_assets:read"],
-          expiresAt
-        }
-      })
-    );
+    // The answer is the key itself: this call is never held, so the client answers it plain.
+    const createdCredential = await client.api_credentials.create({
+      params: { servicePrincipalId: created.principal.id },
+      body: {
+        name: "CI key",
+        scopes: ["config_assets:read"],
+        expiresAt
+      }
+    });
     expect(createdCredential).toMatchObject({
       credential: {
         servicePrincipalId: created.principal.id,
@@ -197,14 +197,12 @@ describe("API Access administration", () => {
       })
     ).rejects.toMatchObject({ status: 403 });
 
-    const credential = completedOutput(
-      await superadminClient.api_credentials.create({
-        params: { servicePrincipalId: principal.principal.id },
-        body: {
-          name: "Superadmin key"
-        }
-      })
-    );
+    const credential = await superadminClient.api_credentials.create({
+      params: { servicePrincipalId: principal.principal.id },
+      body: {
+        name: "Superadmin key"
+      }
+    });
     await expect(
       managerClient.api_credentials.revoke({ params: { credentialId: credential.credential.id } })
     ).rejects.toMatchObject({
@@ -282,7 +280,16 @@ describe("API Access changes as Operation Runs", () => {
     expect(tables).toEqual(
       expect.arrayContaining(["operation_runs", "audit_events", "api_credentials"])
     );
-    expect(rows.filter((row) => row.text.includes(random)).map((row) => row.table)).toEqual([]);
+    // The key whole, its random part, the first 12 characters of that part, which the stored
+    // display prefix does not hold, and each of them as base64 and base64url.
+    const traces = keyTraces(secret, random);
+    expect(traces).toHaveLength(9);
+    expect(credential.keyPrefix).not.toContain(random.slice(0, 12));
+    const holding = (found: { table: string; text: string }[]) =>
+      found
+        .filter((row) => traces.some((trace) => row.text.includes(trace)))
+        .map((row) => row.table);
+    expect(holding(rows)).toEqual([]);
     // The hash of the key rests with the credential and nowhere else.
     const [stored] = rows.filter((row) => row.table === "api_credentials");
     const { secret_hash: secretHash } = z
@@ -295,7 +302,8 @@ describe("API Access changes as Operation Runs", () => {
     expect(
       rows.some((row) => row.table === "audit_events" && row.text.includes(credential.keyPrefix))
     ).toBe(true);
-    expect(fixture.logged.join("\n")).not.toContain(random);
+    const loggedTraces = () => traces.filter((trace) => fixture.logged.join("\n").includes(trace));
+    expect(loggedTraces()).toEqual([]);
 
     const runs = await fixture.runs("api_credentials.create");
     expect(runs).toHaveLength(1);
@@ -320,8 +328,8 @@ describe("API Access changes as Operation Runs", () => {
         servicePrincipalId: asServicePrincipalId(principal.id)
       })
     ).toHaveLength(1);
-    expect((await storedRows()).filter((row) => row.text.includes(random))).toEqual([]);
-    expect(fixture.logged.join("\n")).not.toContain(random);
+    expect(holding(await storedRows())).toEqual([]);
+    expect(loggedTraces()).toEqual([]);
 
     // The key of the first call with another input is another call, and it is refused.
     const other = await fixture.server.call("api_credentials.create", {
@@ -331,6 +339,55 @@ describe("API Access changes as Operation Runs", () => {
     });
     expect(other.statusCode).toBe(409);
     expect(apiErrorResponseSchema.parse(other.json()).error.code).toBe("IDEMPOTENCY_KEY_REUSED");
+  });
+
+  // Fails without input assembled from the declared parts: the query replaced the body's field
+  // before the handler's check, so a key with the query's expiry was issued.
+  it("takes a field of the body from the body, whatever the query string says", async () => {
+    const fixture = await createFixture();
+    const principal = await createPrincipal(fixture, "Query");
+    const future = new Date(Date.now() + 60_000).toISOString();
+    const refused = await fixture.server.call("api_credentials.create", {
+      params: { servicePrincipalId: principal.id },
+      headers: superadmin,
+      undeclaredQuery: { expiresAt: future, name: "From the query" },
+      payload: { name: "Expired", expiresAt: "2020-01-01T00:00:00.000Z" }
+    });
+    expect(refused.statusCode).toBe(422);
+    expect(apiErrorResponseSchema.parse(refused.json()).error.message).toBe(
+      "API credential expiry must be in the future"
+    );
+    // A stray query string is ignored and not refused, as on a plain route.
+    const created = await fixture.server.call("api_credentials.create", {
+      params: { servicePrincipalId: principal.id },
+      headers: superadmin,
+      undeclaredQuery: {
+        name: "From the query",
+        scopes: "config_assets:release",
+        servicePrincipalId: "spn_other"
+      },
+      payload: { name: "From the body", scopes: ["config_assets:read"] }
+    });
+    expect(created.statusCode).toBe(200);
+    const stored = await fixture.store.apiAccess.listApiCredentials({
+      clientInstanceId: fixture.clientInstanceId,
+      servicePrincipalId: asServicePrincipalId(principal.id)
+    });
+    expect(stored.map(({ name, scopes, expiresAt }) => ({ name, scopes, expiresAt }))).toEqual([
+      { name: "From the body", scopes: ["config_assets:read"], expiresAt: undefined }
+    ]);
+  });
+
+  it("declares no waiting answer for the call that answers the key", () => {
+    const { responses } = openApiJsonOperation("api_credentials.create");
+    expect(Object.keys(responses)).toContain("200");
+    expect(Object.keys(responses)).not.toContain("202");
+    expect(Object.keys(openApiJsonOperation("service_principals.create").responses)).toContain(
+      "202"
+    );
+    expect(apiOperations["api_credentials.create"].errors).not.toContain("DECLINED");
+    // The other three changes can wait for an approval and say so.
+    expect(apiOperations["api_credentials.revoke"].accepted).toBeDefined();
   });
 
   it("records each change as one run of its caller, with the audit rows of the change", async () => {
@@ -487,6 +544,18 @@ describe("API Access changes as Operation Runs", () => {
 });
 
 const superadmin = { authorization: "Bearer superadmin" };
+
+/**
+ * What a kept key could look like in a row: the key, its random part and the first 12
+ * characters of that part, each as it is and as base64 and base64url. An encoding is cut to
+ * whole groups of three bytes, so it is found whatever follows the value.
+ */
+function keyTraces(secret: string, random: string): string[] {
+  return [secret, random, random.slice(0, 12)].flatMap((value) => {
+    const whole = Buffer.from(value.slice(0, value.length - (value.length % 3)));
+    return [value, whole.toString("base64"), whole.toString("base64url")];
+  });
+}
 
 const createdCredentialSchema = z.object({
   secret: z.string(),

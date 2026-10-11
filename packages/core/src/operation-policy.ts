@@ -36,7 +36,13 @@ export interface PolicyTarget {
 export type PersonPolicySetting = "always_allow" | "ask" | "never";
 
 export interface PolicyInput {
-  definition: { name: string; effect: OperationEffect; defaultPolicy?: PolicyValue };
+  definition: {
+    name: string;
+    effect: OperationEffect;
+    defaultPolicy?: PolicyValue;
+    /** The answer holds a secret that is shown once, so the call cannot wait for an approval. */
+    secret?: true;
+  };
   origin: OperationOrigin;
   instanceDefaults: PolicyDefaults;
   centralSettings: readonly CentralPolicySetting[];
@@ -73,7 +79,8 @@ export type PolicyResolution = { source: PolicySource } & (
 
 /**
  * The one function that says what the policy asks of a call. The base is the operation's
- * declared default or, without one, the instance default of its effect. A central setting
+ * declared default or, without one, the instance default of its effect. An operation whose
+ * answer holds a secret takes an instance default of `approval` as `confirm`. A central setting
  * replaces the base, and of several that match the strictest wins. A call with several targets
  * takes the strictest of what each target resolves to. A guardrail can only tighten. `confirm` and `approval` are values of changing operations: on a reading operation
  * they do not apply, wherever they come from, so a reading operation resolves to `allow` or
@@ -92,6 +99,13 @@ export function resolvePolicy(input: PolicyInput): PolicyResolution {
   if (!applies(value)) {
     // An instance default that names a waiting value for reads leaves them allowed.
     value = "allow";
+  }
+  if (definition.secret && value === "approval") {
+    // An instance that sends every change to an approval did not mean this operation, and a
+    // call whose answer is a secret cannot wait: it would make the operation impossible. So
+    // the inherited value falls back to the caller's own confirmation. A setting that matches
+    // the operation or a guardrail still asks for an approval, and the call is then refused.
+    value = "confirm";
   }
   if (applies(definition.defaultPolicy)) {
     value = definition.defaultPolicy;

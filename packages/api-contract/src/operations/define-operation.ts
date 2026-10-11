@@ -154,6 +154,13 @@ export type OperationConfig = OperationAccess & {
    * finishes by itself. There is nothing to read afterwards.
    */
   readonly deferred?: true;
+  /**
+   * The answer holds a secret that is shown once, such as a new key. Only an operation of the
+   * registry declares it. Its run keeps no answer, a repeated call with the same
+   * `Idempotency-Key` answers `OUTPUT_NOT_RETAINED`, and the call never waits for an approval,
+   * so it has no `202` answer.
+   */
+  readonly secret?: true;
   /** The headers of `OPERATION_HEADERS` the operation takes and sets. */
   readonly headers?: {
     readonly request?: readonly OperationRequestHeader[];
@@ -216,6 +223,14 @@ const REGISTERED_CHANGING = {
   }
 } as const;
 
+/** A call whose answer is a secret is never held, so it has no `202` and no `Location`. */
+const REGISTERED_SECRET = {
+  headers: {
+    request: ["Idempotency-Key"],
+    response: ["Operation-Run-Id", "Idempotent-Replayed"]
+  }
+} as const;
+
 /** The error codes the policy of an instance adds to every operation of the registry. */
 const REGISTERED_ERRORS = ["POLICY_DENIED", "GUARDRAIL_BLOCKED"] as const;
 /** The error codes a changing operation of the registry adds for approvals and repeated calls. */
@@ -226,6 +241,8 @@ const REGISTERED_CHANGING_ERRORS = [
   "OPERATION_EXPIRED",
   "OUTPUT_NOT_RETAINED"
 ] as const;
+/** The codes of a held call, which a call whose answer is a secret never is. */
+const HELD_CALL_ERRORS: readonly string[] = ["DECLINED", "OPERATION_EXPIRED"];
 
 /**
  * An operation of the registry: every recorded call of it is an Operation Run, named by the
@@ -234,21 +251,36 @@ const REGISTERED_CHANGING_ERRORS = [
  * is declared on a reading operation and present when the call was recorded.
  * A reading one answers its output or an error. A changing one takes an
  * `Idempotency-Key` and can also answer `202` with the run while it waits for an approval.
+ * One that declares `secret` never waits and answers its output or an error.
  */
+export function defineRegisteredOperation<
+  const Config extends RegisteredOperationConfig & { readonly effect: "changing"; secret: true }
+>(config: Config): Operation<Config & typeof REGISTERED_SECRET>;
 export function defineRegisteredOperation<
   const Config extends RegisteredOperationConfig & { readonly effect: "reading" }
 >(config: Config): Operation<Config & typeof REGISTERED_READING>;
 export function defineRegisteredOperation<
-  const Config extends RegisteredOperationConfig & { readonly effect: "changing" }
+  const Config extends RegisteredOperationConfig & {
+    readonly effect: "changing";
+    readonly secret?: never;
+  }
 >(config: Config): Operation<Config & typeof REGISTERED_CHANGING>;
 export function defineRegisteredOperation(config: RegisteredOperationConfig): Operation {
+  if (config.secret && config.effect !== "changing") {
+    throw new Error(`Operation '${config.id}' is reading and cannot declare a secret answer`);
+  }
+  const changing = config.secret ? REGISTERED_SECRET : REGISTERED_CHANGING;
   return defineOperation({
     ...config,
-    ...(config.effect === "changing" ? REGISTERED_CHANGING : REGISTERED_READING),
+    ...(config.effect === "changing" ? changing : REGISTERED_READING),
     errors: [
       ...config.errors,
       ...REGISTERED_ERRORS,
-      ...(config.effect === "changing" ? REGISTERED_CHANGING_ERRORS : [])
+      ...(config.effect === "changing"
+        ? REGISTERED_CHANGING_ERRORS.filter(
+            (code) => !config.secret || !HELD_CALL_ERRORS.includes(code)
+          )
+        : [])
     ]
   });
 }

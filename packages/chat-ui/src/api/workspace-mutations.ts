@@ -98,14 +98,11 @@ export function useApiAccessMutations(
       const originAuthority = revealControllerRef.current.captureAuthority();
       setCredentialCreationPending(true);
       try {
-        // The server never holds this call for an approval: its answer is the key, shown once.
-        const response = completedOutput(
-          await input.client.api_credentials.create({
-            params: { servicePrincipalId: mutationInput.principalId },
-            body: mutationInput.credential
-          }),
-          input.heldMessage
-        );
+        // This call is never held for an approval: its answer is the key, shown once.
+        const response = await input.client.api_credentials.create({
+          params: { servicePrincipalId: mutationInput.principalId },
+          body: mutationInput.credential
+        });
         const acceptedReveal = revealControllerRef.current.accept(originAuthority, {
           secret: response.secret,
           credentialName: response.credential.name,
