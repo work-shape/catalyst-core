@@ -19,7 +19,7 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
           "type": "string",
           "minLength": 1,
           "maxLength": 65536,
-          "description": "Complete Bash command or multiline script. Each call starts in /workspace unless cwd is provided for that call. The standard project directories scripts, artifacts, previews, and tmp are available at the start of every command. Files created or changed under /workspace persist across calls. Run helpers directly, e.g. \`pptx_inspect deck.pptx --view summary\`; do not write \`set -e pptx_inspect ...\`. For multiline create-and-verify commands, put \`set -e\` on its own line before later commands. Do not pass helper flags such as \`--view\`, \`--spec\`, \`--out\`, \`--range\`, \`--page\`, or \`--sheet\` to \`cat\`, \`ls\`, or \`printf\`."
+          "description": "Complete Bash command or multiline script."
         },
         "cwd": {
           "type": "string",
@@ -69,7 +69,7 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
           "type": "string",
           "minLength": 1,
           "maxLength": 65536,
-          "description": "Complete Bash command or multiline script. Each call starts in /workspace unless cwd is provided for that call. The standard project directories scripts, artifacts, previews, and tmp are available at the start of every command. Files created or changed under /workspace persist across calls. Run helpers directly, e.g. \`pptx_inspect deck.pptx --view summary\`; do not write \`set -e pptx_inspect ...\`. For multiline create-and-verify commands, put \`set -e\` on its own line before later commands. Do not pass helper flags such as \`--view\`, \`--spec\`, \`--out\`, \`--range\`, \`--page\`, or \`--sheet\` to \`cat\`, \`ls\`, or \`printf\`."
+          "description": "Complete Bash command or multiline script."
         },
         "cwd": {
           "type": "string",

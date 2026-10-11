@@ -40,18 +40,27 @@ describe("workspace tools", () => {
       "`--view`, `--spec`, `--out`, `--range`, `--page`, or `--sheet`"
     );
     expect(execTool?.description).toContain("`cat`, `ls`, or `printf`");
+    // The usage text stands once, in the description. Fails when the `command` parameter
+    // repeats it, as it did before.
     expect(execTool?.inputJsonSchema).toMatchObject({
       properties: {
         command: {
-          description: expect.stringMatching(
-            /Complete Bash command[\s\S]*standard project directories scripts, artifacts, previews, and tmp[\s\S]*`cat`, `ls`, or `printf`/u
-          )
+          description: "Complete Bash command or multiline script."
         },
         cwd: {
           description: expect.stringContaining("does not persist")
         }
       }
     });
+    const modelFacingExec = JSON.stringify([execTool?.description, execTool?.inputJsonSchema]);
+    for (const usage of [
+      "standard project directories scripts, artifacts, previews, and tmp",
+      "Files created or changed under /workspace persist",
+      "put `set -e` on its own line",
+      "`cat`, `ls`, or `printf`"
+    ]) {
+      expect(modelFacingExec.split(usage)).toHaveLength(2);
+    }
     const applyPatchTool = harness.tools.find((tool) => tool.name === "workspace.apply_patch");
     expect(applyPatchTool?.description).toContain("unified diff patch");
     expect(applyPatchTool?.description).toContain("/workspace");
