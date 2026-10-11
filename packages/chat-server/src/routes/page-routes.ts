@@ -143,6 +143,21 @@ export function registerPageRoutes(route: Route, options: ResolvedChatServerOpti
     return { ...toPageResponse(page), fileSets: fileSets.map(toFileSetResponse) };
   });
 
+  route(apiOperations["pages.files.list"], async ({ user, params }) => {
+    const page = await requirePage(params, user);
+    const fileSet = await requireFileSet(page.id, params.fileSetId);
+    return {
+      files: fileSet.sourceFiles
+        .map((file) => ({
+          path: file.path,
+          contentType: file.contentType,
+          bytes: file.bytes,
+          sha256: file.sha256
+        }))
+        .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0))
+    };
+  });
+
   route(apiOperations["pages.files.get"], async ({ user, params, query }) => {
     const page = await requirePage(params, user);
     const fileSet = await requireFileSet(page.id, params.fileSetId);

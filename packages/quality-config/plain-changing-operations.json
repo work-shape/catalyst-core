@@ -204,6 +204,7 @@
   "rightDecidedBy": {
     "access_tokens.exchange": "public",
     "app_content.files.get": "public",
+    "app_kit.files.get": "public",
     "approval_requests.count_pending": "own",
     "approval_requests.decide": "own",
     "approval_requests.get": "own",
@@ -250,6 +251,7 @@
     "openapi.get": "own",
     "operations.get_run": "own",
     "pages.files.get": "conversation_access",
+    "pages.files.list": "conversation_access",
     "pages.get": "conversation_access",
     "pages.list": "conversation_access",
     "pages.preview": "conversation_access",

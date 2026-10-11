@@ -3,6 +3,7 @@ import {
   pagePreviewRequestSchema,
   pagePreviewSchema,
   pageSchema,
+  pageSourceFileListSchema,
   pageSourceFileQuerySchema,
   pageSourceFileSchema
 } from "../pages";
@@ -37,6 +38,15 @@ export const pageOperations = {
     path: "/api/v1/conversations/:conversationId/pages/:pageId",
     summary: "Read one Page with its revisions, newest first",
     response: json(pageDetailSchema),
+    errors: ["NOT_FOUND"]
+  }),
+  "pages.files.list": defineOperation({
+    ...pageAccess,
+    id: "pages.files.list",
+    method: "GET",
+    path: "/api/v1/conversations/:conversationId/pages/:pageId/file-sets/:fileSetId/source-files",
+    summary: "List the source files of a Page revision",
+    response: json(pageSourceFileListSchema),
     errors: ["NOT_FOUND"]
   }),
   "pages.files.get": defineOperation({

@@ -53,8 +53,10 @@ const appsModule = defineModule({
     "pages.list",
     "pages.get",
     "pages.files.get",
+    "pages.files.list",
     "pages.preview",
-    "app_content.files.get"
+    "app_content.files.get",
+    "app_kit.files.get"
   ],
   tools: ["page.save"],
   jobKinds: ["page.bundle"],

@@ -43,6 +43,21 @@ export const systemOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
+  // The App Kit a Page loads: `<version>/<file>` below the prefix, one frozen directory per
+  // released version. A Page's frame has no origin, so its requests carry no credentials and
+  // the answer is the same for everyone. An unknown version answers `kit_unavailable`.
+  "app_kit.files.get": defineOperation({
+    id: "app_kit.files.get",
+    method: "GET",
+    path: "/app-runtime/kit/:version/*",
+    summary: "Serve one file of a released App Kit version to a Page",
+    tag: "System",
+    auth: "public",
+    effect: "reading",
+    response: blob(),
+    errors: ["NOT_FOUND"],
+    rateClass: "read"
+  }),
   // Beside the view runtime and for the same reason outside `/api`: the address of a frame.
   // It reads no credentials and answers everyone the same. A browser may still attach cookies
   // of the instance to the request. It answers a frame only.

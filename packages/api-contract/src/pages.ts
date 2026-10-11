@@ -29,6 +29,20 @@ export const pageDetailSchema = pageSchema.extend({
   fileSets: z.array(pageFileSetSchema)
 });
 
+/** One source file of a revision, as the Files view lists it. */
+export const pageSourceFileEntrySchema = z.object({
+  path: z.string(),
+  contentType: z.string(),
+  bytes: z.number().int().nonnegative(),
+  /** Lower-case hex. Two revisions hold the same file when path and hash are equal. */
+  sha256: z.string()
+});
+
+/** The source files of one revision, ordered by path. A file set has at most 500. */
+export const pageSourceFileListSchema = z.object({
+  files: z.array(pageSourceFileEntrySchema)
+});
+
 export const pageSourceFileQuerySchema = z.object({
   path: z.string().min(1).max(FILE_SET_MAX_PATH_CHARS)
 });
@@ -67,5 +81,7 @@ export const pagePreviewSchema = z.object({
 export type PageResponse = z.infer<typeof pageSchema>;
 export type PageFileSetResponse = z.infer<typeof pageFileSetSchema>;
 export type PageDetailResponse = z.infer<typeof pageDetailSchema>;
+export type PageSourceFileEntryResponse = z.infer<typeof pageSourceFileEntrySchema>;
+export type PageSourceFileListResponse = z.infer<typeof pageSourceFileListSchema>;
 export type PageSourceFileResponse = z.infer<typeof pageSourceFileSchema>;
 export type PagePreviewResponse = z.infer<typeof pagePreviewSchema>;

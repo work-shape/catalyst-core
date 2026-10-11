@@ -91,6 +91,7 @@ export type {
   ConversationRetentionOptions,
   ExecutionWorkspaceCleanupJobOptions
 } from "./types";
+export { APP_KIT_FILES, loadAppKitFiles } from "./app-kit-runtime";
 export { loadViewRuntimeFiles } from "./view-runtime";
 import { holdsAppContentToken } from "./app-content";
 export {

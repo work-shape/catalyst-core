@@ -36,6 +36,7 @@ const routeOf = (name: ApiOperationName) => `${descriptor(name).method} ${descri
 const unversioned: readonly ApiOperationName[] = [
   "health.get",
   "ready.get",
+  "app_kit.files.get",
   "view_runtime.files.get",
   "view_shell.files.get",
   "app_content.files.get"
@@ -61,6 +62,7 @@ describe("the operation catalog", () => {
         "api_credentials.create  POST /api/v1/instance/service-principals/:servicePrincipalId/credentials",
         "api_credentials.revoke  POST /api/v1/instance/api-credentials/:credentialId/revoke",
         "app_content.files.get  GET /app-content/*",
+        "app_kit.files.get  GET /app-runtime/kit/:version/*",
         "approval_requests.count_pending  GET /api/v1/approval-requests/pending-count",
         "approval_requests.decide  POST /api/v1/approval-requests/:requestId/decide",
         "approval_requests.get  GET /api/v1/approval-requests/:requestId",
@@ -135,6 +137,7 @@ describe("the operation catalog", () => {
         "operations.get_run  GET /api/v1/operations/runs/:runId",
         "operations.list_runs  GET /api/v1/operations/runs",
         "pages.files.get  GET /api/v1/conversations/:conversationId/pages/:pageId/file-sets/:fileSetId/source-file",
+        "pages.files.list  GET /api/v1/conversations/:conversationId/pages/:pageId/file-sets/:fileSetId/source-files",
         "pages.get  GET /api/v1/conversations/:conversationId/pages/:pageId",
         "pages.list  GET /api/v1/conversations/:conversationId/pages",
         "pages.preview  POST /api/v1/conversations/:conversationId/pages/:pageId/preview",
@@ -385,6 +388,7 @@ describe("a running instance", () => {
       "assets.sync",
       "pages.list",
       "pages.get",
+      "pages.files.list",
       "pages.files.get",
       "pages.preview"
     ];
