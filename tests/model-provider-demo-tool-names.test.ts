@@ -74,6 +74,11 @@ describe("the tools of the demo's agent on the way to the model", () => {
     expect(offered).toHaveLength(names.length);
     expect(new Set(offered).size).toBe(names.length);
     for (const name of offered) expect(name).toMatch(WIRE_NAME);
+    // Readable: the product name with every other character as an underscore, and no hash
+    // tail, because none of the agent's names is longer than the provider allows.
+    expect(offered).toEqual(names.map((name) => name.replace(/[^a-zA-Z0-9_-]/gu, "_")));
+    expect(offered).toContain("connection_sample-business_revenue_by_month");
+    expect(offered).toContain("workspace_exec");
     // Each name comes back as the product name it was sent for.
     expect(completion.toolCalls?.map((call) => call.toolName)).toEqual(names);
   });
