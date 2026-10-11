@@ -2,6 +2,7 @@ import {
   assetPointersResponseSchema,
   assetSchema,
   assetScopeQuerySchema,
+  getAssetQuerySchema,
   assetSummarySchema,
   assetWriteResponseSchema,
   checkAssetSyncResponseSchema,
@@ -109,15 +110,15 @@ export const assetOperations = {
     id: "assets.get",
     method: "GET",
     path: "/api/v1/assets/:kind/:name",
-    summary: "Read one asset",
+    summary: "Read one asset, or one revision of it with its source files",
     tag: "Assets",
     auth: "principal",
     scope: "config_assets:read",
     requires: [],
     effect: "reading",
-    query: assetScopeQuerySchema,
+    query: getAssetQuerySchema,
     response: json(assetSchema),
-    errors: ["NOT_FOUND"],
+    errors: ["NOT_FOUND", "VALIDATION_FAILED"],
     rateClass: "read"
   }),
   // A call with files that a policy holds for an approval is refused where its input is above
@@ -127,6 +128,8 @@ export const assetOperations = {
     id: "assets.put",
     method: "PUT",
     path: "/api/v1/assets/:kind/:name",
+    // A write with files that answers `TIMEOUT` (`build_timeout`) wrote nothing. Its
+    // Idempotency-Key is used up: the same write is sent again under a new key.
     summary: "Create one asset, or replace it at the revision the caller read",
     tag: "Assets",
     auth: "principal",

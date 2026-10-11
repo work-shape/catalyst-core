@@ -1331,7 +1331,7 @@
     "/api/v1/assets/{kind}/{name}": {
       "get": {
         "operationId": "assets.get",
-        "summary": "Read one asset",
+        "summary": "Read one asset, or one revision of it with its source files",
         "tags": [
           "Assets"
         ],
@@ -1376,6 +1376,26 @@
             "schema": {
               "type": "string",
               "minLength": 1
+            }
+          },
+          {
+            "name": "revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/AssetRevisionSelector"
+            }
+          },
+          {
+            "name": "files",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
             }
           }
         ],
@@ -13105,6 +13125,21 @@
           "config": {
             "$ref": "#/components/schemas/ConfigAssetConfig"
           },
+          "contentRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssetFile"
+            }
+          },
+          "filesOmitted": {
+            "type": "boolean",
+            "const": true
+          },
           "isDefault": {
             "type": "boolean",
             "const": true
@@ -13124,6 +13159,37 @@
           "revision",
           "config",
           "updatedAt"
+        ]
+      },
+      "AssetFile": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "text": {
+            "type": "string"
+          },
+          "base64": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "contentType",
+          "sha256",
+          "bytes"
         ]
       },
       "AssetFileEntry": {
@@ -13211,6 +13277,10 @@
           "draftRevision",
           "publishedRevision"
         ]
+      },
+      "AssetRevisionSelector": {
+        "type": "string",
+        "pattern": "^(?:draft|published|[1-9]\\d{0,8})$"
       },
       "AssetScope": {
         "oneOf": [
@@ -18262,13 +18332,19 @@
                 "type": "integer",
                 "exclusiveMinimum": 0,
                 "maximum": 9007199254740991
+              },
+              "ASSET_GET_FILES_MAX_BYTES": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
               }
             },
             "required": [
               "FILE_SET_MAX_FILES",
               "FILE_SET_MAX_FILE_BYTES",
               "FILE_SET_MAX_TOTAL_BYTES",
-              "ASSET_PUT_FILES_MAX_BYTES"
+              "ASSET_PUT_FILES_MAX_BYTES",
+              "ASSET_GET_FILES_MAX_BYTES"
             ]
           }
         },

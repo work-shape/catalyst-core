@@ -1,6 +1,7 @@
 import { RELEASE_VERSION, apiOperations } from "@vivd-catalyst/api-contract";
 import {
   AppError,
+  ASSET_GET_FILES_MAX_BYTES,
   ASSET_PUT_FILES_MAX_BYTES,
   FILE_SET_MAX_FILE_BYTES,
   FILE_SET_MAX_FILES,
@@ -102,7 +103,8 @@ export function registerPlatformRoutes(route: Route, options: ChatServerOptions)
                   FILE_SET_MAX_FILES,
                   FILE_SET_MAX_FILE_BYTES,
                   FILE_SET_MAX_TOTAL_BYTES,
-                  ASSET_PUT_FILES_MAX_BYTES
+                  ASSET_PUT_FILES_MAX_BYTES,
+                  ASSET_GET_FILES_MAX_BYTES
                 }
               }
             : {})

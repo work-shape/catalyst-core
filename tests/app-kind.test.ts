@@ -3,6 +3,7 @@ import { z } from "zod";
 import { appInterfacePath } from "@vivd-catalyst/api-contract";
 import { createAppAssetKind, type WorkflowAssetKind } from "@vivd-catalyst/chat-server";
 import {
+  ASSET_GET_FILES_MAX_BYTES,
   ASSET_PUT_FILES_MAX_BYTES,
   FILE_SET_MAX_FILE_BYTES,
   FILE_SET_MAX_FILES,
@@ -294,7 +295,8 @@ describe("a kind with a draft and a published revision on an instance", () => {
         FILE_SET_MAX_FILES,
         FILE_SET_MAX_FILE_BYTES,
         FILE_SET_MAX_TOTAL_BYTES,
-        ASSET_PUT_FILES_MAX_BYTES
+        ASSET_PUT_FILES_MAX_BYTES,
+        ASSET_GET_FILES_MAX_BYTES
       }
     });
     expect(context.actions).toEqual(expect.arrayContaining(["app.write", "app.publish"]));

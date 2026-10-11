@@ -31,7 +31,8 @@ export const platformAssetKindSchema = z.object({
       FILE_SET_MAX_FILES: z.number().int().positive(),
       FILE_SET_MAX_FILE_BYTES: z.number().int().positive(),
       FILE_SET_MAX_TOTAL_BYTES: z.number().int().positive(),
-      ASSET_PUT_FILES_MAX_BYTES: z.number().int().positive()
+      ASSET_PUT_FILES_MAX_BYTES: z.number().int().positive(),
+      ASSET_GET_FILES_MAX_BYTES: z.number().int().positive()
     })
     .optional()
 });

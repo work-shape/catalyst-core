@@ -18,6 +18,8 @@ export const FILE_SET_MAX_FILES = 500;
 const FILE_SET_MAX_PATH_CHARS = 512;
 /** How many decoded bytes of files one `assets.put` carries. */
 export const ASSET_PUT_FILES_MAX_BYTES = 8 * 1024 * 1024;
+/** How many bytes of file contents one `assets.get` answers. Above it the index comes alone. */
+export const ASSET_GET_FILES_MAX_BYTES = ASSET_PUT_FILES_MAX_BYTES;
 
 /** Who owns an asset: the instance, or one workspace. */
 export const assetScopeSchema = z.discriminatedUnion("kind", [
@@ -85,6 +87,21 @@ export const assetSummarySchema = z.object({
   updatedAt: timestampSchema
 });
 
+/**
+ * One source file of a revision as a read answers it: what the file set holds of it, and its
+ * content as `text` for a text type and as `base64` otherwise. Neither is present in an index
+ * without contents.
+ */
+export const assetFileSchema = z.object({
+  path: z.string(),
+  contentType: z.string(),
+  /** Lower-case hex, of the bytes as they were written. */
+  sha256: z.string(),
+  bytes: z.number().int().nonnegative(),
+  text: z.string().optional(),
+  base64: z.string().optional()
+});
+
 export const assetSchema = z.object({
   id: z.string(),
   kind: z.string(),
@@ -94,6 +111,21 @@ export const assetSchema = z.object({
   revision: revisionNumberSchema,
   ...pointerShape,
   config: configAssetConfigSchema,
+  /**
+   * The revision `config` and `files` are of, for a kind with a draft and a published revision:
+   * the draft where the call names none.
+   */
+  contentRevision: revisionNumberSchema.optional(),
+  /**
+   * The source files of that revision, in the order of their paths, where the call asked for
+   * `files`. Each carries its content unless `filesOmitted` says the contents were left out.
+   */
+  files: z.array(assetFileSchema).optional(),
+  /**
+   * The source files together exceed `ASSET_GET_FILES_MAX_BYTES`: `files` is the index, and
+   * no entry carries `text` or `base64`.
+   */
+  filesOmitted: z.literal(true).optional(),
   isDefault: isDefaultSchema,
   /**
    * The workspaces the asset is offered in, for a kind that is offered per workspace. Left
@@ -115,6 +147,22 @@ export const listAssetsQuerySchema = z.object({
 });
 
 export const assetScopeQuerySchema = z.object({ workspaceId: workspaceIdSchema });
+
+/**
+ * Which revision a read answers, for a kind with a draft and a published revision: `draft`
+ * (the default), `published`, or the number of one revision of the asset. Reading the draft
+ * or a numbered revision needs the write or the publish right of the kind; `published` needs
+ * the read right. A kind without a published revision takes `draft` alone.
+ */
+export const assetRevisionSelectorSchema = z
+  .string()
+  .regex(/^(?:draft|published|[1-9]\d{0,8})$/u, "draft, published, or a revision number");
+
+export const getAssetQuerySchema = assetScopeQuerySchema.extend({
+  revision: assetRevisionSelectorSchema.optional(),
+  /** `true` adds the source files of the revision, for a kind whose revisions hold files. */
+  files: z.enum(["true", "false"]).optional()
+});
 
 const filePathSchema = nameText(z.string().min(1).max(FILE_SET_MAX_PATH_CHARS));
 
