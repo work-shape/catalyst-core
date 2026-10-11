@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { JsonObject } from "@vivd-catalyst/core";
+import type { JsonObject, JsonValue } from "@vivd-catalyst/core";
 import { Ajv, type ErrorObject, type ValidateFunction } from "ajv";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { z } from "zod";
@@ -16,6 +16,21 @@ import { z } from "zod";
  * of its own, so a dropped schema leaves nothing behind.
  */
 export const JSON_SCHEMA_CACHE_MAX_ENTRIES = 2_000;
+
+/**
+ * The largest schema that is compiled, in bytes of its JSON. A tool of an outside system
+ * describes its input in a few kilobytes. A larger schema answers `ok: false`.
+ */
+export const JSON_SCHEMA_MAX_BYTES = 256 * 1024;
+
+/** How deep a schema may nest objects and arrays. A deeper one answers `ok: false`. */
+export const JSON_SCHEMA_MAX_DEPTH = 64;
+
+/**
+ * How many objects, arrays and values a schema may hold. It bounds what compiling one costs
+ * before its bytes are counted. A larger schema answers `ok: false`.
+ */
+export const JSON_SCHEMA_MAX_NODES = 20_000;
 
 /** How many issues one validation reports. A refused value names its first faults only. */
 export const JSON_SCHEMA_MAX_ISSUES = 20;
@@ -64,13 +79,43 @@ function validatorFor(schema: JsonObject): Ajv | Ajv2020 | undefined {
 
 const cache = new Map<string, CompiledJsonSchema>();
 
-const cacheKeys = new WeakMap<JsonObject, string>();
+/**
+ * Whether the schema is within the bounds of depth and node count. The walk stops at the
+ * first bound it passes, so it costs no more than the bounds allow whatever it is handed.
+ */
+function withinShapeBounds(schema: JsonObject): boolean {
+  let nodes = 0;
+  const visit = (value: JsonValue, depth: number): boolean => {
+    nodes += 1;
+    if (nodes > JSON_SCHEMA_MAX_NODES) return false;
+    if (typeof value !== "object" || value === null) return true;
+    if (depth >= JSON_SCHEMA_MAX_DEPTH) return false;
+    const children = Array.isArray(value) ? value : Object.values(value);
+    return children.every((child) => visit(child, depth + 1));
+  };
+  return visit(schema, 0);
+}
 
-function cacheKeyOf(schema: JsonObject): string {
-  const known = cacheKeys.get(schema);
-  if (known !== undefined) return known;
-  const key = createHash("sha256").update(JSON.stringify(schema)).digest("hex");
-  cacheKeys.set(schema, key);
+/**
+ * The key a schema is cached under, or nothing for a schema that is over a bound. The shape
+ * is measured before the schema is serialized, so a schema too deep to serialize is refused
+ * and never throws.
+ */
+function measure(schema: JsonObject): string | undefined {
+  if (!withinShapeBounds(schema)) return undefined;
+  const serialized = JSON.stringify(schema);
+  if (Buffer.byteLength(serialized, "utf8") > JSON_SCHEMA_MAX_BYTES) return undefined;
+  return createHash("sha256").update(serialized).digest("hex");
+}
+
+/** What `measure` said of a schema object, so a schema in use is measured once. */
+const measured = new WeakMap<JsonObject, { key: string | undefined }>();
+
+function cacheKeyOf(schema: JsonObject): string | undefined {
+  const known = measured.get(schema);
+  if (known) return known.key;
+  const key = measure(schema);
+  measured.set(schema, { key });
   return key;
 }
 
@@ -118,11 +163,12 @@ function compile(schema: JsonObject): CompiledJsonSchema {
 
 /**
  * Compiles a JSON Schema of draft 2020-12 or draft-07. A schema that names another dialect,
- * refers to another document or is malformed
+ * refers to another document, is over a bound of this file or is malformed
  * answers `ok: false` and throws nothing.
  */
 export function compileJsonSchema(schema: JsonObject): CompiledJsonSchema {
   const key = cacheKeyOf(schema);
+  if (key === undefined) return { ok: false };
   const cached = cache.get(key);
   if (cached) return cached;
   const compiled = compile(schema);

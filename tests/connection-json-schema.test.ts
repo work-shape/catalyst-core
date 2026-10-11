@@ -1,8 +1,53 @@
 import { describe, expect, it, vi } from "vitest";
-import { JSON_SCHEMA_CACHE_MAX_ENTRIES, compileJsonSchema } from "@vivd-catalyst/connections";
+import {
+  JSON_SCHEMA_CACHE_MAX_ENTRIES,
+  JSON_SCHEMA_MAX_BYTES,
+  JSON_SCHEMA_MAX_DEPTH,
+  JSON_SCHEMA_MAX_NODES,
+  compileJsonSchema
+} from "@vivd-catalyst/connections";
 import type { JsonObject, JsonValue } from "@vivd-catalyst/core";
 
-// The JSON Schema an outside system may have written: what compiling one leaves behind.
+// The JSON Schema an outside system may have written: what is compiled at all and what
+// compiling one leaves behind.
+
+/** `levels` objects, one inside the other. */
+function nested(levels: number): JsonObject {
+  let schema: JsonObject = { type: "string" };
+  for (let level = 1; level < levels; level += 1) {
+    schema = { not: schema };
+  }
+  return schema;
+}
+
+describe("the bounds of a schema", () => {
+  // Fails without the change: each of these was compiled, whatever its size, and the last
+  // one threw a RangeError out of `compileJsonSchema`.
+  it("refuses a schema over the bytes, the depth or the node count this file allows", () => {
+    expect(compileJsonSchema(nested(JSON_SCHEMA_MAX_DEPTH)).ok).toBe(true);
+    expect(compileJsonSchema(nested(JSON_SCHEMA_MAX_DEPTH + 1))).toEqual({ ok: false });
+
+    const describedIn = (bytes: number): JsonObject => ({
+      type: "string",
+      description: "x".repeat(bytes)
+    });
+    expect(compileJsonSchema(describedIn(JSON_SCHEMA_MAX_BYTES - 100)).ok).toBe(true);
+    expect(compileJsonSchema(describedIn(JSON_SCHEMA_MAX_BYTES))).toEqual({ ok: false });
+    // Bytes, not characters.
+    expect(
+      compileJsonSchema({ type: "string", description: "ä".repeat(JSON_SCHEMA_MAX_BYTES / 2) })
+    ).toEqual({ ok: false });
+
+    const listing = (values: number): JsonObject => ({
+      enum: Array.from({ length: values }, (_unused, index) => index)
+    });
+    expect(compileJsonSchema(listing(1_000)).ok).toBe(true);
+    expect(compileJsonSchema(listing(JSON_SCHEMA_MAX_NODES))).toEqual({ ok: false });
+
+    // Too deep to serialize: it is measured first, so nothing throws.
+    expect(compileJsonSchema(nested(200_000))).toEqual({ ok: false });
+  });
+});
 
 describe("a schema that is compiled", () => {
   // Fails without the change: `removeSchema` threw a TypeError for the `$id` below, out of
