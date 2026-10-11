@@ -1,10 +1,11 @@
-import { request as httpRequest } from "node:http";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { connectionConfigSchema } from "@vivd-catalyst/config-schema";
 import {
   MCP_CALL_TIMEOUT_MS,
+  MCP_CLEANUP_TIMEOUT_MS,
   JSON_SCHEMA_MAX_DEPTH,
   MCP_CONNECTOR_TYPE,
+  MCP_POOLED_CONNECTIONS_MAX,
   compileJsonSchema,
   createMcpConnectorType,
   openConnectorContext
@@ -14,11 +15,7 @@ import {
   type ConnectorContext,
   type JsonObject
 } from "@vivd-catalyst/core";
-import {
-  MCP_CLEANUP_TIMEOUT_MS,
-  MCP_TRANSPORT_HEADER_NAMES,
-  createMcpSocketPool
-} from "../packages/connections/src/mcp/client";
+import { required } from "./support/assertions";
 import { connection } from "./support/connections";
 import {
   answering,
@@ -55,12 +52,17 @@ describe("the Connector type mcp against a server that holds on", () => {
 
   async function connect(options: McpTestServerOptions, others: McpTestServer[] = []) {
     const server = await serve(options);
+    return attach(server, String(server.port), others);
+  }
+
+  /** A Connection to a server that runs already. Each has an id, and so sockets, of its own. */
+  function attach(server: McpTestServer, id: string, others: McpTestServer[] = []) {
     const egress = loopbackEgress([
       { host: HOST, port: server.port },
       ...others.map((other) => ({ host: OTHER_HOST, port: other.port }))
     ]);
     const config = connectionConfigSchema.parse(
-      connection(`held-${server.port}`, {
+      connection(`held-${id}`, {
         connectorType: MCP_CONNECTOR_TYPE,
         settings: { url: `http://${HOST}:${server.port}/mcp` },
         authScheme: "none",
@@ -70,7 +72,7 @@ describe("the Connector type mcp against a server that holds on", () => {
     const open = (signal: AbortSignal): Promise<ConnectorContext> =>
       openConnectorContext({
         type,
-        connection: { id: `asset-${server.port}`, revision: 1, config },
+        connection: { id: `asset-${id}`, revision: 1, config },
         egress: egress.checker,
         credentials: {
           resolve: () => Promise.reject(new Error("A Connection without a key resolves none"))
@@ -159,9 +161,7 @@ describe("the Connector type mcp against a server that holds on", () => {
       const w = await connect(
         {
           intercept: answering("tools/call", (_request, response) => {
-            response
-              .writeHead(307, { location: `http://${OTHER_HOST}:${other.port}/mcp` })
-              .end();
+            response.writeHead(307, { location: `http://${OTHER_HOST}:${other.port}/mcp` }).end();
           })
         },
         [other]
@@ -173,56 +173,50 @@ describe("the Connector type mcp against a server that holds on", () => {
       expect(w.server.open).toBe(1);
     });
 
-    it("destroys the agent that makes room in a full pool, and never one that serves a request", async () => {
-      const held: { end(): void }[] = [];
-      const server = await serve({ intercept: () => true });
-      const grant = await loopbackEgress([{ host: HOST, port: server.port }]).checker.check({
-        protocol: "http",
-        host: HOST,
-        port: server.port
+    it("keeps no more sockets than its ceiling, closes the one that makes room, and cuts off no call for it", async () => {
+      const server = await serve({
+        call: () => textResult("done"),
+        // A call of the tool `hold` is read and never answered.
+        intercept: (request) =>
+          request.rpc === "tools/call" && JSON.stringify(request.body).includes('"name":"hold"')
       });
-      /** A request on the agent that the server reads and never answers. */
-      const hold = async (agent: NonNullable<ReturnType<typeof pool.agentFor>>) => {
-        const arrived = server.requests.length;
-        const request = httpRequest({ host: "127.0.0.1", port: server.port, agent });
-        request.on("error", () => undefined);
-        request.end();
-        held.push({ end: () => request.destroy() });
-        await expect.poll(() => server.requests.length).toBe(arrived + 1);
-      };
-      const pool = createMcpSocketPool(2);
-      const agentOf = (connectionId: string, address = grant.address) => {
-        const agent = pool.agentFor(connectionId, { ...grant, address });
-        if (agent === undefined) throw new Error("The pool has no room");
-        return { agent, destroyed: vi.spyOn(agent, "destroy") };
-      };
+      const holding = () =>
+        server.requests.filter((request) => JSON.stringify(request.body).includes('"name":"hold"'))
+          .length;
+      const kept = Array.from({ length: MCP_POOLED_CONNECTIONS_MAX }, (_, index) =>
+        attach(server, `pool-${index}`)
+      );
+      for (const one of kept) await one.execute("echo");
+      expect(server.open).toBe(MCP_POOLED_CONNECTIONS_MAX);
 
-      const first = agentOf("first");
-      const second = agentOf("second");
-      expect(agentOf("first").agent).toBe(first.agent);
-      await hold(first.agent);
+      // One Connection more: the one used longest ago makes room, and its socket is closed.
+      const further = attach(server, "pool-further");
+      expect(await further.execute("echo")).toEqual(textResult("done"));
+      expect(server.connections).toBe(MCP_POOLED_CONNECTIONS_MAX + 1);
+      await expect.poll(() => server.open).toBe(MCP_POOLED_CONNECTIONS_MAX);
 
-      // Full: the one that serves nothing leaves, though the other was used longer ago.
-      expect(agentOf("second").agent).toBe(second.agent);
-      const third = agentOf("third");
-      expect(second.destroyed).toHaveBeenCalledTimes(1);
-      expect(first.destroyed).not.toHaveBeenCalled();
+      // Every kept socket serves a call. The Connection that lost its place is served on a
+      // socket of its own, which is closed with its request, and no running call is ended.
+      const caller = new AbortController();
+      let ended = 0;
+      const running = [...kept.slice(1), further].map((one) =>
+        one.execute("hold", {}, caller.signal).then(
+          () => (ended += 1),
+          () => (ended += 1)
+        )
+      );
+      await expect.poll(holding, { timeout: 10_000 }).toBe(MCP_POOLED_CONNECTIONS_MAX);
+      expect(server.open).toBe(MCP_POOLED_CONNECTIONS_MAX);
+      const opened = server.connections;
+      expect(await required(kept[0]).execute("echo")).toEqual(textResult("done"));
+      // Each request of that call had a socket of its own.
+      expect(server.connections).toBeGreaterThan(opened);
+      await expect.poll(() => server.open).toBe(MCP_POOLED_CONNECTIONS_MAX);
+      expect(ended).toBe(0);
 
-      // Every kept agent serves a request: nothing is destroyed and nothing more is kept.
-      await hold(third.agent);
-      expect(pool.agentFor("fourth", grant)).toBeUndefined();
-      // Another address of the same server is another agent, under the same ceiling.
-      expect(pool.agentFor("first", { ...grant, address: "127.0.0.2" })).toBeUndefined();
-      expect(first.destroyed).not.toHaveBeenCalled();
-      expect(third.destroyed).not.toHaveBeenCalled();
-
-      for (const request of held) request.end();
-      await expect.poll(() => Object.keys(first.agent.sockets).length).toBe(0);
-      const moved = agentOf("first", "127.0.0.2");
-      expect(moved.agent).not.toBe(first.agent);
-      expect(first.destroyed).toHaveBeenCalledTimes(1);
-      moved.agent.destroy();
-      third.agent.destroy();
+      caller.abort();
+      await Promise.all(running);
+      expect(ended).toBe(MCP_POOLED_CONNECTIONS_MAX);
     });
   });
 
@@ -231,15 +225,16 @@ describe("the Connector type mcp against a server that holds on", () => {
       type.settingsSchema.safeParse({ url: `https://${HOST}/mcp`, headerName });
 
     it("refuses at the settings every header the transport writes itself, in any case", () => {
-      for (const name of MCP_TRANSPORT_HEADER_NAMES) {
+      const refused = [
+        ...["Host", "Content-Length", "Content-Type", "Accept", "Transfer-Encoding"],
+        ...["Connection", "Keep-Alive", "Upgrade", "TE", "Trailer", "Expect"],
+        ...["Proxy-Authorization", "Proxy-Authenticate", "Proxy-Connection"],
+        ...["Mcp-Session-Id", "Mcp-Protocol-Version", "Last-Event-Id"]
+      ];
+      for (const name of refused) {
         expect(settings(name).success, name).toBe(false);
+        expect(settings(name.toLowerCase()).success, name).toBe(false);
         expect(settings(name.toUpperCase()).success, name).toBe(false);
-      }
-      for (const name of ["Host", "Content-Length", "Transfer-Encoding", "Connection"]) {
-        expect(settings(name).success, name).toBe(false);
-      }
-      for (const name of ["Mcp-Session-Id", "MCP-Protocol-Version", "Upgrade", "TE"]) {
-        expect(settings(name).success, name).toBe(false);
       }
       expect(settings("X-Api-Key").success).toBe(true);
       expect(settings("Authorization").success).toBe(true);

@@ -62,7 +62,7 @@ const MCP_IDLE_SOCKET_TIMEOUT_MS = 30_000;
  * with its request. An agent that leaves the pool is destroyed with its sockets, and only an
  * agent without a request leaves it.
  */
-const MCP_POOLED_CONNECTIONS_MAX = 256;
+export const MCP_POOLED_CONNECTIONS_MAX = 256;
 /** The longest session id a server may hand out. A longer one fails the session. */
 const MCP_SESSION_ID_MAX_CHARS = 256;
 /**
@@ -101,7 +101,7 @@ function isIdle(agent: PooledAgent): boolean {
   return Object.keys(agent.sockets).length === 0 && Object.keys(agent.requests).length === 0;
 }
 
-export function createMcpSocketPool(max: number = MCP_POOLED_CONNECTIONS_MAX): McpSocketPool {
+export function createMcpSocketPool(): McpSocketPool {
   // Insertion order is use order: an entry that is used moves to the end.
   const agents = new Map<string, PooledAgent>();
   return {
@@ -122,7 +122,7 @@ export function createMcpSocketPool(max: number = MCP_POOLED_CONNECTIONS_MAX): M
         agents.set(key, held);
         return held;
       }
-      if (agents.size >= max) {
+      if (agents.size >= MCP_POOLED_CONNECTIONS_MAX) {
         // The agent used longest ago that serves no request makes room, and is destroyed:
         // nothing outside the pool keeps a socket open.
         for (const [oldKey, old] of agents) {
@@ -131,7 +131,7 @@ export function createMcpSocketPool(max: number = MCP_POOLED_CONNECTIONS_MAX): M
           old.destroy();
           break;
         }
-        if (agents.size >= max) return undefined;
+        if (agents.size >= MCP_POOLED_CONNECTIONS_MAX) return undefined;
       }
       const options = {
         keepAlive: true,

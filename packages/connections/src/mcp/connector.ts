@@ -22,6 +22,8 @@ import {
 import { MCP_DISCOVERY_MAX_BYTES, MCP_DISCOVERY_TIMEOUT_MS, discoverMcpTools } from "./discovery";
 import { holdsCredential, mcpToolResult } from "./result";
 
+export { MCP_CLEANUP_TIMEOUT_MS, MCP_POOLED_CONNECTIONS_MAX } from "./client";
+
 // The Connector type `mcp`: a remote MCP server over Streamable HTTP. It has no stdio, no
 // SSE-only transport and no OAuth. Its auth schemes send nothing, a bearer key, or the key
 // in one named header. The tools of the server are read by discovery and never callable by
