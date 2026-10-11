@@ -502,7 +502,7 @@ id from config_assets where status = 'deleted')`.
   answer is lost is sent again under the same idempotency key. The first pull of a working copy
   reads each asset with one call. `push` and `validate` first ask `assets.sync_check`, and
   against an instance that has `assets.sync` without it they say that the instance must be on
-  this release or later and send nothing.
+  this release or later and write nothing.
 - **Asset API:** `POST /api/v1/assets/sync/check` (`assets.sync_check`) takes the body of
   `assets.sync`, runs its checks and writes nothing. A release through `assets.sync` is checked
   against the whole stored set instead of what its key may read, as the release path was, and

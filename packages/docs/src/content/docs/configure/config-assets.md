@@ -45,7 +45,7 @@ Commit or stash local edits in git before running that command: pull overwrites 
 
 State files from an older CLI remain readable, but their global version is not a per-asset baseline. Pull before a guarded push.
 
-CLI and server ship together. The addresses the CLI used before, `/api/v1/instance/config/export`, `/import` and `/validate`, are gone: an older CLI is answered `404` with the sentence to upgrade it. This CLI against an older server reports that the instance does not serve the asset operations it uses. `push` and `validate` need the instance on the release of this CLI or later: they ask `assets.sync_check` first, and against an instance that has `assets.sync` without it they say so and send nothing.
+CLI and server ship together. The addresses the CLI used before, `/api/v1/instance/config/export`, `/import` and `/validate`, are gone: an older CLI is answered `404` with the sentence to upgrade it. This CLI against an older server reports that the instance does not serve the asset operations it uses. `push` and `validate` need the instance on the release of this CLI or later: they send the batch to `assets.sync_check` first, where the instance checks it and writes nothing, and against an instance that has `assets.sync` without the check they say so and write nothing.
 
 The canonical skill package layout is:
 
