@@ -48,7 +48,7 @@ export function createExecutionWorkspaceHandleResolver(options: {
       if (!conversationId) {
         return undefined;
       }
-      const workspace = await options.store.getExecutionWorkspaceForConversation({
+      const workspace = await options.store.findExecutionWorkspaceOfActiveConversation({
         clientInstanceId: context.clientInstanceId,
         conversationId
       });

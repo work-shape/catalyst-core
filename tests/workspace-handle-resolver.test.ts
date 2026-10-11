@@ -39,13 +39,14 @@ function createFixture() {
     .fn<ExecutionWorkspaceMetadataStore["ensureExecutionWorkspace"]>()
     .mockResolvedValue(workspace);
   const find = vi
-    .fn<ExecutionWorkspaceMetadataStore["getExecutionWorkspaceForConversation"]>()
+    .fn<ExecutionWorkspaceMetadataStore["findExecutionWorkspaceOfActiveConversation"]>()
     .mockResolvedValue(undefined);
   const resolver = createExecutionWorkspaceHandleResolver({
     store: {
       ensureExecutionWorkspace: ensure,
       getExecutionWorkspace: async () => undefined,
-      getExecutionWorkspaceForConversation: find
+      getExecutionWorkspaceForConversation: async () => undefined,
+      findExecutionWorkspaceOfActiveConversation: find
     },
     now: () => now
   });

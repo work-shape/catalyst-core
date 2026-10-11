@@ -126,6 +126,17 @@ export async function getExecutionWorkspaceForConversation(
   return row ? mapExecutionWorkspace(row) : undefined;
 }
 
+export async function findExecutionWorkspaceOfActiveConversation(
+  db: PostgresConnection,
+  input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+  }
+): Promise<ExecutionWorkspace | undefined> {
+  await requireActiveConversation(db, input);
+  return getExecutionWorkspaceForConversation(db, input);
+}
+
 export async function upsertWorkspaceFile(
   db: PostgresConnection,
   input: UpsertWorkspaceFileInput
@@ -275,6 +286,30 @@ export async function listWorkspaceFiles(
     )
     .orderBy(asc(executionWorkspaceFiles.path));
   return rows.map(mapWorkspaceFile);
+}
+
+/** Served by the primary key of the table, (workspace_id, path): one row is read. */
+export async function getWorkspaceFile(
+  db: PostgresConnection,
+  input: {
+    clientInstanceId: ClientInstanceId;
+    workspaceId: ExecutionWorkspaceId;
+    path: string;
+  }
+): Promise<WorkspaceFile | undefined> {
+  const [row] = await db
+    .select()
+    .from(executionWorkspaceFiles)
+    .where(
+      and(
+        eq(executionWorkspaceFiles.workspaceId, input.workspaceId),
+        eq(executionWorkspaceFiles.path, input.path),
+        eq(executionWorkspaceFiles.clientInstanceId, input.clientInstanceId),
+        isNull(executionWorkspaceFiles.deletedAt)
+      )
+    )
+    .limit(1);
+  return row ? mapWorkspaceFile(row) : undefined;
 }
 
 export async function enqueueWorkspaceCommand(

@@ -21,7 +21,7 @@ export function workspaceReadFileTool(deps: WorkspaceToolDependencies) {
   return defineTool({
     name: "workspace.read_file",
     effect: "reading",
-    description: `Read UTF-8 text from a file in this conversation's execution workspace, by lines. Without offset and limit the answer starts at line 1 and holds up to ${WORKSPACE_READ_DEFAULT_LINES} lines or ${answerSize}, whichever comes first. It always ends at a whole line and lines carry no number prefix. The answer says which lines it holds (startLine, endLine) and how many the file has (totalLines). When lines remain, truncated is true and nextOffset is the line to continue with: call again with offset set to nextOffset until nextOffset is absent. Binary files and files above ${fileSize} are refused; read those with a command in workspace.exec.`,
+    description: `Read UTF-8 text from a file in this conversation's execution workspace, by lines. Without offset and limit the answer starts at line 1 and holds up to ${WORKSPACE_READ_DEFAULT_LINES} lines or ${answerSize}, whichever comes first. It ends at a whole line and lines carry no number prefix. The answer says which lines it holds (startLine, endLine) and how many the file has (totalLines). When lines remain, truncated is true and nextOffset is the line to continue with: call again with offset set to nextOffset until nextOffset is absent. One exception: a single line that is longer than one answer is cut inside the line. The answer then has lineCut true and a hint, nextOffset skips the rest of that line, and the rest is read with a command in workspace.exec. Binary files and files above ${fileSize} are refused; read those with a command in workspace.exec.`,
     inputSchema: workspaceReadFileInputSchema,
     outputSchema: workspaceReadFileOutputSchema,
     execute(input, context) {
@@ -97,6 +97,7 @@ export async function readWorkspaceFile(
       endLine: range.endLine,
       totalLines: range.totalLines,
       ...(range.nextOffset !== undefined ? { nextOffset: range.nextOffset } : {}),
+      ...(range.cutLine ? { lineCut: true } : {}),
       ...(hint ? { hint } : {})
     },
     {
@@ -108,7 +109,8 @@ export async function readWorkspaceFile(
           startLine: range.startLine,
           endLine: range.endLine,
           totalLines: range.totalLines,
-          truncated
+          truncated,
+          ...(range.cutLine ? { lineCut: true } : {})
         }
       }
     }

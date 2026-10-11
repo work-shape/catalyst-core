@@ -74,11 +74,11 @@ export async function findExistingWorkspaceFile(
   if (!workspaceId) {
     return workspaceFileNotFound(filePath);
   }
-  const files = await deps.store.executionWorkspaces.listWorkspaceFiles({
+  const file = await deps.store.executionWorkspaces.getWorkspaceFile({
     clientInstanceId: context.clientInstanceId,
-    workspaceId
+    workspaceId,
+    path: filePath
   });
-  const file = files.find((candidate) => candidate.path === filePath);
   return file
     ? { status: "success", value: { file, workspaceId } }
     : workspaceFileNotFound(filePath);

@@ -21,6 +21,8 @@ import {
   failWorkspaceCommand as failPostgresWorkspaceCommand,
   getExecutionWorkspace as getPostgresExecutionWorkspace,
   getExecutionWorkspaceForConversation as getPostgresExecutionWorkspaceForConversation,
+  findExecutionWorkspaceOfActiveConversation as findPostgresExecutionWorkspaceOfActiveConversation,
+  getWorkspaceFile as getPostgresWorkspaceFile,
   getWorkspaceCommand as getPostgresWorkspaceCommand,
   listExecutionWorkspaceCleanupTargets as listPostgresExecutionWorkspaceCleanupTargets,
   listExecutionWorkspaceObjectsForDeletion as listPostgresExecutionWorkspaceObjectsForDeletion,
@@ -52,6 +54,18 @@ export function createPostgresExecutionWorkspacesStore(
       input: Parameters<ExecutionWorkspaceMetadataStore["getExecutionWorkspaceForConversation"]>[0]
     ): Promise<ExecutionWorkspace | undefined> {
       return getPostgresExecutionWorkspaceForConversation(db, input);
+    },
+    async findExecutionWorkspaceOfActiveConversation(
+      input: Parameters<
+        ExecutionWorkspaceMetadataStore["findExecutionWorkspaceOfActiveConversation"]
+      >[0]
+    ): Promise<ExecutionWorkspace | undefined> {
+      return findPostgresExecutionWorkspaceOfActiveConversation(db, input);
+    },
+    async getWorkspaceFile(
+      input: Parameters<ExecutionWorkspaceFileStore["getWorkspaceFile"]>[0]
+    ): Promise<WorkspaceFile | undefined> {
+      return getPostgresWorkspaceFile(db, input);
     },
     async upsertWorkspaceFile(
       input: Parameters<ExecutionWorkspaceFileStore["upsertWorkspaceFile"]>[0]

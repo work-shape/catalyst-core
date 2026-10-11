@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { asClientInstanceId } from "@vivd-catalyst/core";
 import { DEFAULT_LIMITS, WORKSPACE_READ_DEFAULT_LINES } from "@vivd-catalyst/tool-execution";
 import { jsonObject } from "./support/assertions";
 import { createWorkspaceHarness } from "./support/workspace-tools-harness";
@@ -175,16 +176,39 @@ describe("workspace.read_file by lines", () => {
       endLine: 1,
       totalLines: 2,
       nextOffset: 2,
-      truncated: true
+      truncated: true,
+      lineCut: true
     });
-    expect(String(first.contentPreview)).not.toContain("�");
+    expect(String(first.contentPreview)).not.toContain("\uFFFD");
     expect(first.hint).toContain("Line 1 has 13 bytes");
     expect(first.hint).toContain("workspace.exec");
     expect(first.hint).toContain("offset 2");
-    expect(await read(harness, { path: "wide.txt", offset: 2 })).toMatchObject({
-      contentPreview: "next\n",
-      truncated: false
+    const whole = await read(harness, { path: "wide.txt", offset: 2 });
+    expect(whole).toMatchObject({ contentPreview: "next\n", truncated: false });
+    expect(whole.lineCut).toBeUndefined();
+
+    // The cut line is the last one: nothing to continue with, and the answer still says it
+    // is not the whole file.
+    await putText(harness, "one-line.json", "ääääää");
+    const last = await read(harness, { path: "one-line.json" });
+    expect(last).toMatchObject({
+      contentPreview: "ää",
+      startLine: 1,
+      endLine: 1,
+      totalLines: 1,
+      truncated: true,
+      lineCut: true
     });
+    expect(last.nextOffset).toBeUndefined();
+    expect(last.hint).toContain("Line 1 has 12 bytes");
+    expect(last.hint).toContain("workspace.exec");
+
+    const readTool = harness.tools.find((tool) => tool.name === "workspace.read_file");
+    expect(readTool?.description).toContain(
+      "a single line that is longer than one answer is cut inside the line"
+    );
+    expect(readTool?.description).toContain("lineCut true");
+    expect(readTool?.description).not.toContain("always ends at a whole line");
   });
 
   // Fails without the change: the answer had no line fields.
@@ -247,7 +271,12 @@ describe("workspace.read_file by lines", () => {
     const last = await read(harness, { path: "big/at-ceiling.txt", offset: 8192 });
     expect(last).toMatchObject({ contentPreview: line, endLine: 8192, truncated: false });
 
+    // The size on the file row decides. The bytes of a file over the ceiling are not asked for.
+    const get = vi.spyOn(harness.objectStore, "get");
+    const head = vi.spyOn(harness.objectStore, "head");
     const refused = await readFailure(harness, { path: "big/over-ceiling.txt" });
+    expect(get).not.toHaveBeenCalled();
+    expect(head).not.toHaveBeenCalled();
     expect(refused.message).toContain("maxReadFileBytes");
     expect(refused.message).toContain(String(ceiling));
     expect(refused.message).toContain("workspace.exec");
@@ -315,6 +344,84 @@ describe("workspace.read_file by lines", () => {
     const large = await readFailure(harness, { path: "large.txt" });
     expect(large.message).toContain("maxReadFileBytes, 64 bytes");
     expect(large.message).toContain("workspace.exec");
+
+    for (const [path, what] of [
+      ["/workspace", "must name a file"],
+      ["notes/", "must not end with a slash"],
+      ["../outside.txt", "cannot traverse outside the workspace"],
+      ["/etc/passwd", "must be relative"],
+      ["notes\\a.txt", "must use forward slashes"],
+      ["   ", "cannot be blank"]
+    ] as const) {
+      const invalid = await readFailure(harness, { path });
+      expect(invalid.code).toBe("validation_failed");
+      expect(invalid.message).toContain(what);
+      expect(invalid.message).toContain("Pass a path relative to /workspace");
+      expect(invalid.message).toContain("workspace.list_files");
+    }
+  });
+
+  // Fails without the change: a read listed every file row of the workspace to find one.
+  it("finds the file by workspace and path without listing the workspace", async () => {
+    const harness = await createWorkspaceHarness();
+    const stored = await harness.putWorkspaceFile({
+      path: "notes/a.txt",
+      objectKey: "workspace/notes/a.txt",
+      bytes: "alpha\n",
+      mimeType: "text/plain"
+    });
+    await putText(harness, "notes/b.txt", "beta\n");
+    const files = harness.store.executionWorkspaces;
+    const key = {
+      clientInstanceId: harness.clientInstanceId,
+      workspaceId: stored.workspaceId
+    };
+
+    await expect(files.getWorkspaceFile({ ...key, path: "notes/a.txt" })).resolves.toMatchObject({
+      path: "notes/a.txt",
+      byteSize: 6,
+      objectKey: "workspace/notes/a.txt"
+    });
+    await expect(files.getWorkspaceFile({ ...key, path: "notes/c.txt" })).resolves.toBeUndefined();
+    await expect(
+      files.getWorkspaceFile({
+        ...key,
+        clientInstanceId: asClientInstanceId("another_instance"),
+        path: "notes/a.txt"
+      })
+    ).resolves.toBeUndefined();
+
+    const list = vi.spyOn(files, "listWorkspaceFiles");
+    expect(await read(harness, { path: "notes/a.txt" })).toMatchObject({
+      contentPreview: "alpha\n"
+    });
+    expect((await readFailure(harness, { path: "notes/c.txt" })).message).toContain(
+      "was not found"
+    );
+    expect(list).not.toHaveBeenCalled();
+  });
+
+  // Fails without the change: the lookup of a reading tool did not ask whether the
+  // Conversation is still active, which the creating path does.
+  it("refuses a read and a list for a conversation that is not active, as a changing tool is refused", async () => {
+    const harness = await createWorkspaceHarness();
+    await putText(harness, "kept.txt", "kept\n");
+    await harness.store.conversations.deleteConversation({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      deletedAt: "2026-06-29T12:05:00.000Z"
+    });
+
+    const changing = await harness.runTool("workspace.exec", { command: "true" });
+    const reading = await harness.runTool("workspace.read_file", { path: "kept.txt" });
+    const listing = await harness.runTool("workspace.list_files", {});
+
+    expect(changing).toMatchObject({
+      status: "failed",
+      error: { message: "Conversation is not available" }
+    });
+    expect(reading).toEqual(changing);
+    expect(listing).toEqual(changing);
   });
 
   // Fails without the change: the audit summary had no line range.

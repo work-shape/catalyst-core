@@ -295,6 +295,15 @@ export interface ExecutionWorkspaceMetadataStore {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
   }): Promise<ExecutionWorkspace | undefined>;
+  /**
+   * The workspace a reading tool addresses: looked up, never created. Undefined when the
+   * Conversation has none. Refuses with `NOT_FOUND` when the Conversation is not active, as
+   * `ensureExecutionWorkspace` does.
+   */
+  findExecutionWorkspaceOfActiveConversation(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+  }): Promise<ExecutionWorkspace | undefined>;
 }
 
 export interface ExecutionWorkspaceFileStore {
@@ -304,6 +313,12 @@ export interface ExecutionWorkspaceFileStore {
     clientInstanceId: ClientInstanceId;
     workspaceId: ExecutionWorkspaceId;
   }): Promise<WorkspaceFile[]>;
+  /** One file by its path. Its cost does not grow with the number of files in the workspace. */
+  getWorkspaceFile(input: {
+    clientInstanceId: ClientInstanceId;
+    workspaceId: ExecutionWorkspaceId;
+    path: string;
+  }): Promise<WorkspaceFile | undefined>;
 }
 
 export interface WorkspaceCommandStore {

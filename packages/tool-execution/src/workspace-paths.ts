@@ -26,10 +26,15 @@ export function normalizeWorkspaceFilePath(
     return normalized;
   }
   if (normalized.value === ".") {
-    return workspacePathFailed("Workspace file path must name a file");
+    return workspacePathFailed(
+      "Workspace file path must name a file, not the workspace directory. Pass a path relative to /workspace that stays inside it, for example notes/report.txt; workspace.list_files shows the paths that exist."
+    );
   }
   if (value.endsWith("/")) {
-    return workspacePathFailed("Workspace file path must not end with a slash", { path: value });
+    return workspacePathFailed(
+      "Workspace file path must not end with a slash, because that names a directory. Pass a path relative to /workspace that stays inside it, for example notes/report.txt; workspace.list_files shows the paths that exist.",
+      { path: value }
+    );
   }
   return normalized;
 }
@@ -56,9 +61,12 @@ export function resolveWorkspaceFilesystemPath(
       ? workspaceRoot
       : resolve(workspaceRoot, ...normalized.value.split("/"));
   if (target !== workspaceRoot && !target.startsWith(`${workspaceRoot}${sep}`)) {
-    return workspacePathFailed("Workspace path cannot traverse outside the workspace", {
-      path: workspacePath
-    });
+    return workspacePathFailed(
+      "Workspace path cannot traverse outside the workspace. Pass a path relative to /workspace that stays inside it, for example notes/report.txt; workspace.list_files shows the paths that exist.",
+      {
+        path: workspacePath
+      }
+    );
   }
   return {
     status: "success",
@@ -78,27 +86,43 @@ function normalizeWorkspacePath(
         ? trimmedInput.slice("/workspace/".length)
         : trimmedInput;
   if (trimmed.length === 0) {
-    return workspacePathFailed("Workspace path cannot be blank");
+    return workspacePathFailed(
+      "Workspace path cannot be blank. Pass a path relative to /workspace that stays inside it, for example notes/report.txt; workspace.list_files shows the paths that exist."
+    );
   }
   if (trimmed.length > limits.maxPathLength) {
-    return workspacePathFailed("Workspace path is too long", {
-      maxPathLength: limits.maxPathLength
-    });
+    return workspacePathFailed(
+      "Workspace path is too long. Use a path of at most maxPathLength characters.",
+      {
+        maxPathLength: limits.maxPathLength
+      }
+    );
   }
   if (trimmed.includes("\0")) {
-    return workspacePathFailed("Workspace path cannot contain NUL bytes");
+    return workspacePathFailed(
+      "Workspace path cannot contain NUL bytes. Pass a path relative to /workspace that stays inside it, for example notes/report.txt; workspace.list_files shows the paths that exist."
+    );
   }
   if (trimmed.startsWith("/") || trimmed.startsWith("\\") || /^[A-Za-z]:/u.test(trimmed)) {
-    return workspacePathFailed("Workspace path must be relative", { path: value });
+    return workspacePathFailed(
+      "Workspace path must be relative. Pass a path relative to /workspace that stays inside it, for example notes/report.txt; workspace.list_files shows the paths that exist.",
+      { path: value }
+    );
   }
   if (trimmed.includes("\\")) {
-    return workspacePathFailed("Workspace path must use forward slashes", { path: value });
+    return workspacePathFailed(
+      "Workspace path must use forward slashes. Pass a path relative to /workspace that stays inside it, for example notes/report.txt; workspace.list_files shows the paths that exist.",
+      { path: value }
+    );
   }
   const normalized = posixPath.normalize(trimmed);
   if (normalized === ".." || normalized.startsWith("../")) {
-    return workspacePathFailed("Workspace path cannot traverse outside the workspace", {
-      path: value
-    });
+    return workspacePathFailed(
+      "Workspace path cannot traverse outside the workspace. Pass a path relative to /workspace that stays inside it, for example notes/report.txt; workspace.list_files shows the paths that exist.",
+      {
+        path: value
+      }
+    );
   }
   return {
     status: "success",

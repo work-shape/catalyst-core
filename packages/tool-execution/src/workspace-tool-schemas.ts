@@ -284,6 +284,9 @@ export const workspaceReadFileOutputSchema = z.object({
   totalLines: z.number().int().min(0),
   // The `offset` to continue with, when lines remain after `endLine`.
   nextOffset: z.number().int().min(1).optional(),
+  // True when `contentPreview` is the start of one line that is longer than one answer. The
+  // rest of that line is not reachable through `nextOffset`; the hint says how to read it.
+  lineCut: z.boolean().optional(),
   // How to get the rest, in words. Present when `truncated` is true.
   hint: z.string().optional()
 });
