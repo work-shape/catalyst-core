@@ -3,7 +3,7 @@ import { defineTranslations } from "./translation-area";
 export const access = defineTranslations({
   en: {
     "access.description":
-      "Give a person rights on agents and skills inside a Namespace or on one asset, and check what a person may do.",
+      "Give a person rights inside a Namespace, in a shared workspace or on one asset, and check what a person may do.",
     "access.tabs": "Parts of Access",
     "access.tabNamespaces": "Namespaces",
     "access.tabGrants": "Rights",
@@ -155,7 +155,7 @@ export const access = defineTranslations({
     "access.grantPartlyWritten": "{written} of {total} rows were written before this.",
 
     "access.checkDescription":
-      "Choose a person and name an agent or a skill. The name does not have to exist yet.",
+      "Choose a person, a kind and a name. The name does not have to exist yet.",
     "access.checkPerson": "Person",
     "access.checkKind": "Kind",
     "access.checkName": "Asset name",
@@ -240,7 +240,7 @@ export const access = defineTranslations({
   },
   de: {
     "access.description":
-      "Gib einer Person Rechte an Agenten und Fähigkeiten in einem Namespace oder an einem einzelnen Asset und prüfe, was eine Person darf.",
+      "Gib einer Person Rechte in einem Namespace, in einem geteilten Arbeitsbereich oder an einem einzelnen Asset und prüfe, was eine Person darf.",
     "access.tabs": "Abschnitte der Zugriffsseite",
     "access.tabNamespaces": "Namespaces",
     "access.tabGrants": "Rechte",
@@ -393,7 +393,7 @@ export const access = defineTranslations({
     "access.grantPartlyWritten": "Davor wurden {written} von {total} Zeilen geschrieben.",
 
     "access.checkDescription":
-      "Wähle eine Person und nenne einen Agenten oder eine Fähigkeit. Den Namen muss es noch nicht geben.",
+      "Wähle eine Person, eine Art und einen Namen. Den Namen muss es noch nicht geben.",
     "access.checkPerson": "Person",
     "access.checkKind": "Art",
     "access.checkName": "Asset-Name",
