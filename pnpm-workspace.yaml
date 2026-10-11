@@ -2,3 +2,7 @@ packages:
   - "packages/*"
   - "clients/*"
 
+# One zod for every package and every dependency. Two versions make schemas of one package
+# fail the types of another, and a caret range lets a new package resolve the newer one.
+overrides:
+  zod: 4.4.3
