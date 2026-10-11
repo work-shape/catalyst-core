@@ -22,6 +22,11 @@ export async function executeToolCall(input: {
   toolCall: ModelToolCall;
   /** Runs the call as the operation the tool is. Every check of the call is on that path. */
   runTool: ToolOperationRunner;
+  /**
+   * Set for a call of a data tool the run was not offered when it started. It is answered as
+   * a failure the agent reads, and nothing is run.
+   */
+  unoffered?: boolean;
   modelContext: ModelContextProjectionOptions;
   repeatedToolCall: {
     repeated: boolean;
@@ -50,6 +55,27 @@ export async function executeToolCall(input: {
     agentName: input.startInput.agentName,
     input: input.toolCall.input
   };
+
+  if (input.unoffered) {
+    const result = {
+      status: "failed" as const,
+      error: {
+        code: "not_allowed" as const,
+        message: `Tool '${input.toolCall.toolName}' is not available in this run`
+      }
+    };
+    const modelOutput = await createModelVisibleToolOutput(result, input.modelContext);
+    input.state.emit({
+      type: "tool_call_failed",
+      runId: input.runId,
+      toolCallId,
+      toolName: input.toolCall.toolName,
+      result,
+      modelOutput: modelOutput.text,
+      projectionNotice: modelOutput.notice
+    });
+    return { result, modelOutput };
+  }
 
   if (input.repeatedToolCall.repeated) {
     const result = {

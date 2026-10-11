@@ -109,6 +109,15 @@ async function describeWithin(
   }
 }
 
+/**
+ * Whether a call names a data tool this run was not offered when it started. Such a call is
+ * refused whatever the source says by now: what an agent may call in a run is fixed at its
+ * start, and a tool that became ready meanwhile is there for the next run.
+ */
+export function isUnofferedDataToolCall(toolName: string, offered: ReadonlySet<string>): boolean {
+  return isDataToolName(toolName) && !offered.has(toolName);
+}
+
 export interface ModelToolMaterializationInput {
   agent: AgentConfig;
   /** What the agent's model can do, as the gateway reports it. */

@@ -7,6 +7,7 @@ import type {
 } from "@vivd-catalyst/core";
 import type { ModelMessage, ModelToolCall } from "@vivd-catalyst/model-provider";
 import { executeToolCall } from "../tool-call-execution";
+import { isUnofferedDataToolCall } from "../model-tool-materialization";
 import {
   createToolResultMetadata,
   stableStringify,
@@ -34,7 +35,9 @@ export class ToolDispatch {
     state: RunState,
     toolCalls: ModelToolCall[],
     repeatedToolCalls: Map<string, number>,
-    messages: ModelMessage[]
+    messages: ModelMessage[],
+    /** The data tools the run was offered when it started. A call of another one is refused. */
+    offeredDataTools: ReadonlySet<string>
   ): Promise<boolean> {
     for (const toolCall of toolCalls) {
       if (context.signal?.aborted) return true;
@@ -45,6 +48,7 @@ export class ToolDispatch {
         state,
         toolCall,
         runTool: this.options.runTool,
+        unoffered: isUnofferedDataToolCall(toolCall.toolName, offeredDataTools),
         modelContext: this.modelInput.modelContextOptions(context),
         repeatedToolCall: this.registerToolCall(
           repeatedToolCalls,

@@ -84,6 +84,7 @@ export class TurnLoop {
         "Agent lists data tools that do not exist now; the run goes on without them"
       );
     }
+    const offeredDataTools = new Set(dataTools.described.map((tool) => tool.name));
     const tools = materializeModelTools({
       agent,
       capabilities,
@@ -255,7 +256,8 @@ export class TurnLoop {
           state,
           completion.toolCalls,
           repeatedToolCalls,
-          messages
+          messages,
+          offeredDataTools
         )
       ) {
         return;

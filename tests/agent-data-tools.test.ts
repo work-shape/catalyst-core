@@ -27,7 +27,8 @@ import {
 } from "@vivd-catalyst/core";
 import {
   DETERMINISTIC_CAPABILITIES,
-  DeterministicModelProvider
+  DeterministicModelProvider,
+  modelContentText
 } from "@vivd-catalyst/model-provider";
 import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
 import {
@@ -205,6 +206,16 @@ function agent(name: string, toolNames: string[]): AgentConfig {
   };
 }
 
+function noReportedUsage() {
+  return {
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    source: "not_reported" as const,
+    webSearchCallCount: 0
+  };
+}
+
 const providerConfig: ModelProviderConfig = {
   id: "test-provider",
   type: "deterministic",
@@ -371,6 +382,64 @@ describe("an agent carries data tools", () => {
         })
       );
     }
+  });
+
+  it("refuses a data tool the run was not offered at its start, though it exists by now", async () => {
+    const connection = createFakeConnection();
+    connection.gone.add(ECHO);
+    const toolResults: string[] = [];
+    let requests = 0;
+    const chat = await startChat({
+      agent: agent("data_agent", ["test.inspect", ECHO]),
+      connection,
+      // A model that calls the tool it was not offered, after the tool became ready.
+      modelProvider: {
+        id: "test-provider",
+        complete: () => Promise.reject(new Error("The runtime streams")),
+        async *stream(request) {
+          requests += 1;
+          if (requests === 1) {
+            connection.gone.delete(ECHO);
+            yield {
+              type: "completed",
+              completion: {
+                text: "",
+                toolCalls: [{ toolCallId: "toolcall_late", toolName: ECHO, input: { text: "x" } }],
+                usage: noReportedUsage()
+              }
+            };
+            return;
+          }
+          toolResults.push(
+            ...request.messages
+              .filter((message) => message.role === "tool")
+              .map((message) => modelContentText(message.content))
+          );
+          yield {
+            type: "completed",
+            completion: { text: "Done.", toolCalls: [], usage: noReportedUsage() }
+          };
+        }
+      }
+    });
+
+    const answer = await chat.say("Use the tool");
+
+    // The call is a failure the agent reads, and the run ends as any other.
+    expect(answer.failed).toEqual([]);
+    expect(answer.completed).toEqual(["Done."]);
+    expect(toolResults.join("\n")).toContain(`Tool '${ECHO}' is not available in this run`);
+    expect(connection.executed).toEqual([]);
+    expect(chat.runs).toEqual([]);
+    // One read, at the start. The refused call asked nobody.
+    expect(connection.describeCalls).toEqual([[ECHO]]);
+
+    // The next run is offered the tool and calls it.
+    requests = 0;
+    const next = await chat.say("Use the tool");
+    expect(next.failed).toEqual([]);
+    expect(connection.executed).toEqual([ECHO]);
+    expect(chat.runs).toHaveLength(1);
   });
 
   it("refuses an agent's changing call as policy and does not run it", async () => {
