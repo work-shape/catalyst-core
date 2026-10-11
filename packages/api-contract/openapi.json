@@ -5069,7 +5069,7 @@
     "/api/v1/instance/api-credentials/{credentialId}/revoke": {
       "post": {
         "operationId": "api_credentials.revoke",
-        "summary": "Revoke an API key",
+        "summary": "Revoke an API key; superadmins only",
         "tags": [
           "API Access"
         ],
@@ -5093,6 +5093,17 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
           }
         ],
         "responses": {
@@ -5104,6 +5115,35 @@
                   "$ref": "#/components/schemas/ApiCredential"
                 }
               }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
             }
           },
           "400": {
@@ -5113,10 +5153,13 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
@@ -5129,9 +5172,6 @@
           }
         },
         "x-catalyst-effect": "changing",
-        "x-catalyst-requires": [
-          "api_access.manage"
-        ],
         "x-catalyst-rate-class": "write"
       }
     },
@@ -6409,7 +6449,7 @@
       },
       "post": {
         "operationId": "service_principals.create",
-        "summary": "Create a service principal",
+        "summary": "Create a service principal; superadmins only",
         "tags": [
           "API Access"
         ],
@@ -6425,7 +6465,19 @@
             ]
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -6445,6 +6497,35 @@
                   "$ref": "#/components/schemas/ServicePrincipalDetail"
                 }
               }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
             }
           },
           "400": {
@@ -6454,7 +6535,10 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
@@ -6467,16 +6551,13 @@
           }
         },
         "x-catalyst-effect": "changing",
-        "x-catalyst-requires": [
-          "api_access.manage"
-        ],
         "x-catalyst-rate-class": "write"
       }
     },
     "/api/v1/instance/service-principals/{servicePrincipalId}": {
       "patch": {
         "operationId": "service_principals.update",
-        "summary": "Change a service principal",
+        "summary": "Change a service principal; superadmins only",
         "tags": [
           "API Access"
         ],
@@ -6499,6 +6580,17 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
             }
           }
         ],
@@ -6521,6 +6613,35 @@
                   "$ref": "#/components/schemas/ServicePrincipalDetail"
                 }
               }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
             }
           },
           "400": {
@@ -6530,10 +6651,13 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
@@ -6546,16 +6670,13 @@
           }
         },
         "x-catalyst-effect": "changing",
-        "x-catalyst-requires": [
-          "api_access.manage"
-        ],
         "x-catalyst-rate-class": "write"
       }
     },
     "/api/v1/instance/service-principals/{servicePrincipalId}/credentials": {
       "post": {
         "operationId": "api_credentials.create",
-        "summary": "Issue an API key for a service principal",
+        "summary": "Issue an API key for a service principal; superadmins only",
         "tags": [
           "API Access"
         ],
@@ -6579,6 +6700,17 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
           }
         ],
         "requestBody": {
@@ -6600,6 +6732,35 @@
                   "$ref": "#/components/schemas/CreateApiCredentialResponse"
                 }
               }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
             }
           },
           "400": {
@@ -6609,10 +6770,13 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
@@ -6625,9 +6789,6 @@
           }
         },
         "x-catalyst-effect": "changing",
-        "x-catalyst-requires": [
-          "api_access.manage"
-        ],
         "x-catalyst-rate-class": "write"
       }
     },
@@ -9916,7 +10077,7 @@
         }
       },
       "IdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained": {
-        "description": "`IDEMPOTENCY_KEY_REUSED`: The `Idempotency-Key` was already used for another operation or another input. Send a new key. `OPERATION_IN_PROGRESS`: The first call with this `Idempotency-Key` has not ended, or it was interrupted and its outcome is not known (`details.interrupted` is `true`). `details.operationRunId` names its run. An interrupted call is never run again under its key: check what it changed, then send a new key. `OPERATION_EXPIRED`: The call waited for an approval until it expired, and nothing was executed. Call again with a new key. `OUTPUT_NOT_RETAINED`: The call with this `Idempotency-Key` completed, and its answer was too large to keep. Read the result from what the call changed.",
+        "description": "`IDEMPOTENCY_KEY_REUSED`: The `Idempotency-Key` was already used for another operation or another input. Send a new key. `OPERATION_IN_PROGRESS`: The first call with this `Idempotency-Key` has not ended, or it was interrupted and its outcome is not known (`details.interrupted` is `true`). `details.operationRunId` names its run. An interrupted call is never run again under its key: check what it changed, then send a new key. `OPERATION_EXPIRED`: The call waited for an approval until it expired, and nothing was executed. Call again with a new key. `OUTPUT_NOT_RETAINED`: The call with this `Idempotency-Key` completed, and its answer is not kept: it was too large, or it held a secret that is shown once. Read the result from what the call changed. A secret is not shown again.",
         "content": {
           "application/json": {
             "schema": {

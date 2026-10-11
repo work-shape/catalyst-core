@@ -3,12 +3,14 @@ import { useApiAccessMutations } from "../../api/workspace-mutations";
 import { useServicePrincipalsQuery } from "../../api/workspace-queries";
 import { ApiAccessPanel } from "../../control-plane/api-access-panel";
 import { createApiAccessAuthorityKey } from "../../control-plane/api-access-reveal-controller";
+import { useTranslation } from "../../i18n";
 import { apiErrorMessage } from "../../workspace-utils";
 import { useSettingsPage } from "../settings-page-context";
 
 /** Instance > API access: the service principals and their keys, with its own data. */
 export function ApiAccessPage() {
   const { apiBaseUrl, authScope, client, user } = useSettingsPage();
+  const { t } = useTranslation();
   const canManageSuperadminAccess = user.roles.includes("superadmin");
   const servicePrincipalsQuery = useServicePrincipalsQuery({
     apiBaseUrl,
@@ -20,6 +22,7 @@ export function ApiAccessPage() {
     apiBaseUrl,
     authScope,
     client,
+    heldMessage: t("apiAccessWaitsForApproval"),
     authorityKey: createApiAccessAuthorityKey({
       apiBaseUrl,
       principalId: user.id,

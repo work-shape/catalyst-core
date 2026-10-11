@@ -4,14 +4,6 @@
       "class": "identity",
       "reason": "This operation establishes the actor."
     },
-    "api_credentials.create": {
-      "class": "pending",
-      "ticket": "CONV-4"
-    },
-    "api_credentials.revoke": {
-      "class": "pending",
-      "ticket": "CONV-4"
-    },
     "approval_requests.decide": {
       "class": "decision",
       "reason": "A decision on a held call cannot itself be held."
@@ -115,14 +107,6 @@
     "password_setup.complete": {
       "class": "own_account",
       "reason": "This operation restores access to the person's own account."
-    },
-    "service_principals.create": {
-      "class": "pending",
-      "ticket": "CONV-4"
-    },
-    "service_principals.update": {
-      "class": "pending",
-      "ticket": "CONV-4"
     },
     "session_tokens.issue": {
       "class": "identity",

@@ -19,7 +19,7 @@ import type {
   UpsertAdministeredUserIdentityRequest,
   WorkspaceMembershipRole
 } from "@vivd-catalyst/api-client";
-import { signOut } from "@vivd-catalyst/api-client";
+import { completedOutput, signOut } from "@vivd-catalyst/api-client";
 import { apiErrorMessage } from "../workspace-utils";
 import { updateRailConversations } from "./rail-conversations";
 import { workspaceQueryKeys } from "./workspace-query-keys";
@@ -38,8 +38,13 @@ interface CollaborationWorkspaceScopedMutationInput extends WorkspaceMutationInp
   collaborationWorkspaceId: string | undefined;
 }
 
+/**
+ * The four changes of API access. Each is an Operation Run and answers its output once it ran.
+ * A change that waits for somebody else's approval changed nothing, and is reported to the
+ * screen as a failure with `heldMessage`.
+ */
 export function useApiAccessMutations(
-  input: WorkspaceMutationInput & { authorityKey: string | undefined }
+  input: WorkspaceMutationInput & { authorityKey: string | undefined; heldMessage: string }
 ) {
   const queryClient = useQueryClient();
   const [credentialCreationPending, setCredentialCreationPending] = useState(false);
@@ -64,16 +69,25 @@ export function useApiAccessMutations(
   };
 
   const createPrincipal = useMutation({
-    mutationFn: (mutationInput: CreateServicePrincipalRequest) =>
-      input.client.service_principals.create({ body: mutationInput }),
+    mutationFn: async (mutationInput: CreateServicePrincipalRequest) =>
+      completedOutput(
+        await input.client.service_principals.create({ body: mutationInput }),
+        input.heldMessage
+      ),
     onSuccess: invalidateApiAccess
   });
   const updatePrincipal = useMutation({
-    mutationFn: (mutationInput: { principalId: string; update: UpdateServicePrincipalRequest }) =>
-      input.client.service_principals.update({
-        params: { servicePrincipalId: mutationInput.principalId },
-        body: mutationInput.update
-      }),
+    mutationFn: async (mutationInput: {
+      principalId: string;
+      update: UpdateServicePrincipalRequest;
+    }) =>
+      completedOutput(
+        await input.client.service_principals.update({
+          params: { servicePrincipalId: mutationInput.principalId },
+          body: mutationInput.update
+        }),
+        input.heldMessage
+      ),
     onSuccess: invalidateApiAccess
   });
   const createCredential = {
@@ -84,10 +98,14 @@ export function useApiAccessMutations(
       const originAuthority = revealControllerRef.current.captureAuthority();
       setCredentialCreationPending(true);
       try {
-        const response = await input.client.api_credentials.create({
-          params: { servicePrincipalId: mutationInput.principalId },
-          body: mutationInput.credential
-        });
+        // The server never holds this call for an approval: its answer is the key, shown once.
+        const response = completedOutput(
+          await input.client.api_credentials.create({
+            params: { servicePrincipalId: mutationInput.principalId },
+            body: mutationInput.credential
+          }),
+          input.heldMessage
+        );
         const acceptedReveal = revealControllerRef.current.accept(originAuthority, {
           secret: response.secret,
           credentialName: response.credential.name,
@@ -104,8 +122,11 @@ export function useApiAccessMutations(
     }
   };
   const revokeCredential = useMutation({
-    mutationFn: (credentialId: string) =>
-      input.client.api_credentials.revoke({ params: { credentialId } }),
+    mutationFn: async (credentialId: string) =>
+      completedOutput(
+        await input.client.api_credentials.revoke({ params: { credentialId } }),
+        input.heldMessage
+      ),
     onSuccess: invalidateApiAccess
   });
 

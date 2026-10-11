@@ -1,42 +1,55 @@
 import { apiOperations } from "@vivd-catalyst/api-contract";
-import { ApiAccessAdministrationWorkflow } from "../api-access-administration-workflow";
+import {
+  ApiAccessAdministrationWorkflow,
+  authorizeApiAccessChange
+} from "../api-access-administration-workflow";
 import type { Route } from "../http/route";
-import { requirePathParam } from "../request-context";
 import type { ChatServerOptions } from "../types";
 
+/**
+ * Instance > API Access. The list is a plain read. The four changes are registered operations:
+ * each call is an Operation Run, and only a superadmin who holds `api_access.manage` makes one.
+ */
 export function registerApiAccessAdministrationRoutes(
   route: Route,
   options: ChatServerOptions
 ): void {
   const workflow = new ApiAccessAdministrationWorkflow(options);
+  const createPrincipal = apiOperations["service_principals.create"];
+  const updatePrincipal = apiOperations["service_principals.update"];
+  const createCredential = apiOperations["api_credentials.create"];
+  const revokeCredential = apiOperations["api_credentials.revoke"];
 
   route(apiOperations["service_principals.list"], ({ user, context }) =>
     workflow.listServicePrincipals(user, context)
   );
 
-  route(apiOperations["service_principals.create"], ({ user, context, body }) =>
-    workflow.createServicePrincipal(user, context, body)
-  );
+  route.operation(createPrincipal, {
+    changeClass: "reversible",
+    authorize: authorizeApiAccessChange(createPrincipal.id),
+    execute: (input, context) => workflow.createServicePrincipal(context, input)
+  });
 
-  route(apiOperations["service_principals.update"], ({ user, context, params, body }) =>
-    workflow.updateServicePrincipal(user, context, {
-      servicePrincipalId: requirePathParam(params.servicePrincipalId, "Missing servicePrincipalId"),
-      ...body
-    })
-  );
+  route.operation(updatePrincipal, {
+    changeClass: "reversible",
+    authorize: authorizeApiAccessChange(updatePrincipal.id),
+    resource: ({ servicePrincipalId }) => ({ kind: "service_principal", id: servicePrincipalId }),
+    execute: (input, context) => workflow.updateServicePrincipal(context, input)
+  });
 
-  route(apiOperations["api_credentials.create"], ({ user, context, params, body }) =>
-    workflow.createApiCredential(user, context, {
-      servicePrincipalId: requirePathParam(params.servicePrincipalId, "Missing servicePrincipalId"),
-      ...body
-    })
-  );
+  route.operation(createCredential, {
+    // A key can be revoked. The answer holds it once, so the run keeps no output.
+    changeClass: "reversible",
+    secret: true,
+    authorize: authorizeApiAccessChange(createCredential.id),
+    resource: ({ servicePrincipalId }) => ({ kind: "service_principal", id: servicePrincipalId }),
+    execute: (input, context) => workflow.createApiCredential(context, input)
+  });
 
-  route(apiOperations["api_credentials.revoke"], ({ user, context, params }) =>
-    workflow.revokeApiCredential(
-      user,
-      context,
-      requirePathParam(params.credentialId, "Missing credentialId")
-    )
-  );
+  route.operation(revokeCredential, {
+    // A revoked key stays revoked, so the change counts as irreversible.
+    authorize: authorizeApiAccessChange(revokeCredential.id),
+    resource: ({ credentialId }) => ({ kind: "api_credential", id: credentialId }),
+    execute: ({ credentialId }, context) => workflow.revokeApiCredential(context, credentialId)
+  });
 }

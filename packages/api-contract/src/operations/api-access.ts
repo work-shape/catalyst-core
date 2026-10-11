@@ -7,8 +7,10 @@ import {
   servicePrincipalDetailSchema,
   updateServicePrincipalRequestSchema
 } from "../identity";
-import { defineOperation, json, page } from "./define-operation";
+import { defineOperation, defineRegisteredOperation, json, page } from "./define-operation";
 
+// The four changing operations ask for the right `api_access.manage` and for the superadmin
+// role. The rule is more than one right, so each operation checks it itself and requires none.
 export const apiAccessOperations = {
   "service_principals.list": defineOperation({
     id: "service_principals.list",
@@ -25,60 +27,60 @@ export const apiAccessOperations = {
     errors: [],
     rateClass: "read"
   }),
-  "service_principals.create": defineOperation({
+  "service_principals.create": defineRegisteredOperation({
     id: "service_principals.create",
     method: "POST",
     path: "/api/v1/instance/service-principals",
-    summary: "Create a service principal",
+    summary: "Create a service principal; superadmins only",
     tag: "API Access",
     auth: "user",
     scope: "api_access:write",
-    requires: ["api_access.manage"],
+    requires: [],
     effect: "changing",
     body: createServicePrincipalRequestSchema,
     response: json(servicePrincipalDetailSchema),
     errors: [],
     rateClass: "write"
   }),
-  "service_principals.update": defineOperation({
+  "service_principals.update": defineRegisteredOperation({
     id: "service_principals.update",
     method: "PATCH",
     path: "/api/v1/instance/service-principals/:servicePrincipalId",
-    summary: "Change a service principal",
+    summary: "Change a service principal; superadmins only",
     tag: "API Access",
     auth: "user",
     scope: "api_access:write",
-    requires: ["api_access.manage"],
+    requires: [],
     effect: "changing",
     body: updateServicePrincipalRequestSchema,
     response: json(servicePrincipalDetailSchema),
     errors: ["NOT_FOUND"],
     rateClass: "write"
   }),
-  "api_credentials.create": defineOperation({
+  "api_credentials.create": defineRegisteredOperation({
     id: "api_credentials.create",
     method: "POST",
     path: "/api/v1/instance/service-principals/:servicePrincipalId/credentials",
-    summary: "Issue an API key for a service principal",
+    summary: "Issue an API key for a service principal; superadmins only",
     tag: "API Access",
     auth: "user",
     scope: "api_access:write",
-    requires: ["api_access.manage"],
+    requires: [],
     effect: "changing",
     body: createApiCredentialRequestSchema,
     response: json(createApiCredentialResponseSchema),
     errors: ["NOT_FOUND"],
     rateClass: "write"
   }),
-  "api_credentials.revoke": defineOperation({
+  "api_credentials.revoke": defineRegisteredOperation({
     id: "api_credentials.revoke",
     method: "POST",
     path: "/api/v1/instance/api-credentials/:credentialId/revoke",
-    summary: "Revoke an API key",
+    summary: "Revoke an API key; superadmins only",
     tag: "API Access",
     auth: "user",
     scope: "api_access:write",
-    requires: ["api_access.manage"],
+    requires: [],
     effect: "changing",
     response: json(apiCredentialSchema),
     errors: ["NOT_FOUND"],

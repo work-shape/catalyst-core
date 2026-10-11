@@ -354,6 +354,20 @@ id from config_assets where status = 'deleted')`.
 
 ### Changed
 
+- **API access (breaking for callers of the typed client):** creating and changing a service
+  principal and issuing and revoking an API key are Operation Runs. `service_principals.create`,
+  `service_principals.update`, `api_credentials.create` and `api_credentials.revoke` keep their
+  addresses, inputs and `200` answers, answer the header `Operation-Run-Id` and take an
+  `Idempotency-Key`. The typed client answers these four as an operation outcome
+  (`{ status: "done", output }`); `completedOutput(outcome)` from `@vivd-catalyst/api-client`
+  hands a caller the output. The rule for who may call is unchanged, a superadmin who holds
+  `api_access.manage`, and is now the operations' own check: the descriptors list no `requires`,
+  a refusal is recorded on the run, and a refusal for the missing role reads
+  `Missing the right '<operation id>'` in place of `... requires a superadmin role`. The audit
+  rows `api_access.*_authorized` of these four are no longer written; the run's
+  `operation.authorization_checked` row records the same fact. The rows
+  `api_access.service_principal_created`, `..._updated`, `api_access.credential_created` and
+  `..._revoked` stay and name the run.
 - **Operations:** an operation may be registered with `secret: true` when its answer holds a
   secret that is shown once. Its run keeps no output, a repeated call with the same
   `Idempotency-Key` answers `409 OUTPUT_NOT_RETAINED` and never the secret, and the call is never

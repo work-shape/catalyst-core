@@ -2,15 +2,22 @@ import { listenTestInstance, createTestInstance, type TestInstance } from "./sup
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createApiClient, listAll } from "@vivd-catalyst/api-client";
+import { completedOutput, createApiClient, listAll } from "@vivd-catalyst/api-client";
+import { apiErrorResponseSchema } from "@vivd-catalyst/api-contract";
+import { inspect } from "node:util";
+import postgres from "postgres";
+import { z } from "zod";
+import { fileTestDatabaseUrl } from "./support/test-database";
 
 import {
   AppError,
   StoreBackedAuditRecorder,
   asClientInstanceId,
+  asServicePrincipalId,
   authenticatedUserFromRecord,
   type AgentRuntime,
   type AuthenticatedUser,
+  type Logger,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
 
@@ -29,13 +36,15 @@ describe("API Access administration", () => {
     const fixture = await createFixture();
     const client = await createClient(fixture.server, "superadmin");
 
-    const created = await client.service_principals.create({
-      body: {
-        displayLabel: "Release CLI",
-        description: "Configuration release automation",
-        permissions: ["config_assets.read", "config_assets.release"]
-      }
-    });
+    const created = completedOutput(
+      await client.service_principals.create({
+        body: {
+          displayLabel: "Release CLI",
+          description: "Configuration release automation",
+          permissions: ["config_assets.read", "config_assets.release"]
+        }
+      })
+    );
     expect(created).toMatchObject({
       principal: {
         displayLabel: "Release CLI",
@@ -46,15 +55,17 @@ describe("API Access administration", () => {
       credentials: []
     });
 
-    const updated = await client.service_principals.update({
-      params: { servicePrincipalId: created.principal.id },
-      body: {
-        displayLabel: "Disabled release CLI",
-        description: null,
-        status: "disabled",
-        permissions: ["config_assets.read"]
-      }
-    });
+    const updated = completedOutput(
+      await client.service_principals.update({
+        params: { servicePrincipalId: created.principal.id },
+        body: {
+          displayLabel: "Disabled release CLI",
+          description: null,
+          status: "disabled",
+          permissions: ["config_assets.read"]
+        }
+      })
+    );
     expect(updated.principal).toMatchObject({
       displayLabel: "Disabled release CLI",
       status: "disabled",
@@ -63,14 +74,16 @@ describe("API Access administration", () => {
     expect(updated.principal.description).toBeUndefined();
 
     const expiresAt = new Date(Date.now() + 60_000).toISOString();
-    const createdCredential = await client.api_credentials.create({
-      params: { servicePrincipalId: created.principal.id },
-      body: {
-        name: "CI key",
-        scopes: ["config_assets:read"],
-        expiresAt
-      }
-    });
+    const createdCredential = completedOutput(
+      await client.api_credentials.create({
+        params: { servicePrincipalId: created.principal.id },
+        body: {
+          name: "CI key",
+          scopes: ["config_assets:read"],
+          expiresAt
+        }
+      })
+    );
     expect(createdCredential).toMatchObject({
       credential: {
         servicePrincipalId: created.principal.id,
@@ -88,9 +101,11 @@ describe("API Access administration", () => {
     expect(JSON.stringify(listed)).not.toContain(createdCredential.secret);
     expect(JSON.stringify(listed)).not.toContain("secretHash");
 
-    const revoked = await client.api_credentials.revoke({
-      params: { credentialId: createdCredential.credential.id }
-    });
+    const revoked = completedOutput(
+      await client.api_credentials.revoke({
+        params: { credentialId: createdCredential.credential.id }
+      })
+    );
     expect(revoked.revokedAt).toEqual(expect.any(String));
 
     const events = await fixture.store.audit.listAuditEvents({
@@ -137,12 +152,14 @@ describe("API Access administration", () => {
     ).rejects.toMatchObject({ status: 403 });
 
     const superadminClient = await createClient(fixture.server, "superadmin");
-    const principal = await superadminClient.service_principals.create({
-      body: {
-        displayLabel: "Managed principal",
-        permissions: ["config_assets.read"]
-      }
-    });
+    const principal = completedOutput(
+      await superadminClient.service_principals.create({
+        body: {
+          displayLabel: "Managed principal",
+          permissions: ["config_assets.read"]
+        }
+      })
+    );
     await expect(
       managerClient.service_principals.update({
         params: { servicePrincipalId: principal.principal.id },
@@ -180,12 +197,14 @@ describe("API Access administration", () => {
       })
     ).rejects.toMatchObject({ status: 403 });
 
-    const credential = await superadminClient.api_credentials.create({
-      params: { servicePrincipalId: principal.principal.id },
-      body: {
-        name: "Superadmin key"
-      }
-    });
+    const credential = completedOutput(
+      await superadminClient.api_credentials.create({
+        params: { servicePrincipalId: principal.principal.id },
+        body: {
+          name: "Superadmin key"
+        }
+      })
+    );
     await expect(
       managerClient.api_credentials.revoke({ params: { credentialId: credential.credential.id } })
     ).rejects.toMatchObject({
@@ -210,12 +229,14 @@ describe("API Access administration", () => {
   it("rejects unsupported credential scopes and non-future expiry", async () => {
     const fixture = await createFixture();
     const client = await createClient(fixture.server, "superadmin");
-    const principal = await client.service_principals.create({
-      body: {
-        displayLabel: "Validation principal",
-        permissions: ["config_assets.read"]
-      }
-    });
+    const principal = completedOutput(
+      await client.service_principals.create({
+        body: {
+          displayLabel: "Validation principal",
+          permissions: ["config_assets.read"]
+        }
+      })
+    );
 
     const invalidScope = await fixture.server.call("api_credentials.create", {
       params: { servicePrincipalId: principal.principal.id },
@@ -235,6 +256,271 @@ describe("API Access administration", () => {
     });
   });
 });
+
+// The four changes are registered operations. These tests fail without that: the plain routes
+// wrote no Operation Run, answered no run id and knew no Idempotency-Key.
+describe("API Access changes as Operation Runs", () => {
+  it("keeps the key of a new credential in no stored row and no log line", async () => {
+    const fixture = await createFixture();
+    const principal = await createPrincipal(fixture, "Key holder");
+    const create = () =>
+      fixture.server.call("api_credentials.create", {
+        params: { servicePrincipalId: principal.id },
+        headers: { ...superadmin, "idempotency-key": "create-key-once" },
+        payload: { name: "CI key", scopes: ["config_assets:read"] }
+      });
+
+    const first = await create();
+    expect(first.statusCode).toBe(200);
+    const { secret, credential } = createdCredentialSchema.parse(first.json());
+    // The part of the key nobody but its holder knows: what follows the prefix.
+    const random = secret.slice(credential.keyPrefix.length);
+    expect(random).toMatch(/^[0-9a-f]{32,}$/u);
+
+    const rows = await storedRows();
+    const tables = [...new Set(rows.map((row) => row.table))];
+    expect(tables).toEqual(
+      expect.arrayContaining(["operation_runs", "audit_events", "api_credentials"])
+    );
+    expect(rows.filter((row) => row.text.includes(random)).map((row) => row.table)).toEqual([]);
+    // The hash of the key rests with the credential and nowhere else.
+    const [stored] = rows.filter((row) => row.table === "api_credentials");
+    const { secret_hash: secretHash } = z
+      .object({ secret_hash: z.string().min(16) })
+      .parse(JSON.parse(stored?.text ?? "{}"));
+    expect(rows.filter((row) => row.text.includes(secretHash)).map((row) => row.table)).toEqual([
+      "api_credentials"
+    ]);
+    // The rows were read: the prefix, which is no secret, is in the audit row of the creation.
+    expect(
+      rows.some((row) => row.table === "audit_events" && row.text.includes(credential.keyPrefix))
+    ).toBe(true);
+    expect(fixture.logged.join("\n")).not.toContain(random);
+
+    const runs = await fixture.runs("api_credentials.create");
+    expect(runs).toHaveLength(1);
+    expect(first.headers["operation-run-id"]).toBe(runs[0]?.id);
+    expect(runs[0]).toMatchObject({ status: "done", idempotencyKey: "create-key-once" });
+    expect(runs[0]?.output).toBeUndefined();
+    expect(runs[0]?.resultRef).toBeUndefined();
+
+    // The same call again is told that the answer is gone. It mints nothing and shows nothing.
+    const again = await create();
+    expect(again.statusCode).toBe(409);
+    expect(apiErrorResponseSchema.parse(again.json()).error).toMatchObject({
+      code: "OUTPUT_NOT_RETAINED",
+      details: { operationRunId: runs[0]?.id }
+    });
+    expect(again.headers["operation-run-id"]).toBe(runs[0]?.id);
+    expect(again.payload).not.toContain(random);
+    expect(await fixture.runs("api_credentials.create")).toHaveLength(1);
+    expect(
+      await fixture.store.apiAccess.listApiCredentials({
+        clientInstanceId: fixture.clientInstanceId,
+        servicePrincipalId: asServicePrincipalId(principal.id)
+      })
+    ).toHaveLength(1);
+    expect((await storedRows()).filter((row) => row.text.includes(random))).toEqual([]);
+    expect(fixture.logged.join("\n")).not.toContain(random);
+
+    // The key of the first call with another input is another call, and it is refused.
+    const other = await fixture.server.call("api_credentials.create", {
+      params: { servicePrincipalId: principal.id },
+      headers: { ...superadmin, "idempotency-key": "create-key-once" },
+      payload: { name: "Another key" }
+    });
+    expect(other.statusCode).toBe(409);
+    expect(apiErrorResponseSchema.parse(other.json()).error.code).toBe("IDEMPOTENCY_KEY_REUSED");
+  });
+
+  it("records each change as one run of its caller, with the audit rows of the change", async () => {
+    const fixture = await createFixture();
+    const principal = await createPrincipal(fixture, "Recorded");
+    const update = await fixture.server.call("service_principals.update", {
+      params: { servicePrincipalId: principal.id },
+      headers: superadmin,
+      payload: { description: "Changed" }
+    });
+    const created = await fixture.server.call("api_credentials.create", {
+      params: { servicePrincipalId: principal.id },
+      headers: superadmin,
+      payload: { name: "Key" }
+    });
+    const { credential } = createdCredentialSchema.parse(created.json());
+    const revoke = await fixture.server.call("api_credentials.revoke", {
+      params: { credentialId: credential.id },
+      headers: superadmin
+    });
+    expect([update.statusCode, created.statusCode, revoke.statusCode]).toEqual([200, 200, 200]);
+
+    const changes = [
+      ["service_principals.create", "api_access.service_principal_created", principal.id],
+      ["service_principals.update", "api_access.service_principal_updated", principal.id],
+      ["api_credentials.create", "api_access.credential_created", credential.id],
+      ["api_credentials.revoke", "api_access.credential_revoked", credential.id]
+    ] as const;
+    const events = await fixture.store.audit.listAuditEvents({
+      clientInstanceId: fixture.clientInstanceId,
+      limit: 100
+    });
+    for (const [operation, changeEvent, subject] of changes) {
+      const runs = await fixture.runs(operation);
+      expect(runs).toHaveLength(1);
+      expect(runs[0]).toMatchObject({
+        status: "done",
+        effect: "changing",
+        actor: { kind: "user", id: fixture.users.superadmin.id },
+        decision: { mode: "direct", by: fixture.users.superadmin.id }
+      });
+      const ofRun = events.filter((event) => event.metadata?.operationRunId === runs[0]?.id);
+      expect(ofRun.map((event) => `${event.type}:${event.status}`).sort()).toEqual([
+        `${changeEvent}:success`,
+        "operation.authorization_checked:success",
+        "operation.completed:success",
+        "operation.started:success"
+      ]);
+      expect(ofRun.find((event) => event.type === changeEvent)).toMatchObject({
+        subject,
+        actor: { userId: fixture.users.superadmin.id }
+      });
+    }
+    // The run records that the caller was let through. The workflow writes no second row for it.
+    expect(events.filter((event) => event.type.endsWith("_authorized"))).toEqual([]);
+  });
+
+  it("creates one principal for a call that is sent twice with one key", async () => {
+    const fixture = await createFixture();
+    const create = () =>
+      fixture.server.call("service_principals.create", {
+        headers: { ...superadmin, "idempotency-key": "principal-once" },
+        payload: { displayLabel: "Sent twice", permissions: ["config_assets.read"] }
+      });
+    const first = await create();
+    const second = await create();
+    expect([first.statusCode, second.statusCode]).toEqual([200, 200]);
+    expect(second.headers["idempotent-replayed"]).toBe("true");
+    expect(second.json()).toEqual(first.json());
+    expect(
+      await fixture.store.apiAccess.listServicePrincipals({
+        clientInstanceId: fixture.clientInstanceId
+      })
+    ).toHaveLength(1);
+  });
+
+  it("refuses an admin who is not a superadmin before anything runs, and records the refusal", async () => {
+    const fixture = await createFixture();
+    const principal = await createPrincipal(fixture, "Guarded");
+    const credential = createdCredentialSchema.parse(
+      (
+        await fixture.server.call("api_credentials.create", {
+          params: { servicePrincipalId: principal.id },
+          headers: superadmin,
+          payload: { name: "Guarded key" }
+        })
+      ).json()
+    ).credential;
+    const before = await storedRows();
+    const untouched = (rows: Awaited<ReturnType<typeof storedRows>>) =>
+      rows
+        .filter((row) => ["service_principals", "api_credentials"].includes(row.table))
+        .map((row) => row.text)
+        .sort();
+
+    const calls = [
+      ["service_principals.create", { payload: { displayLabel: "Refused" } }],
+      [
+        "service_principals.update",
+        { params: { servicePrincipalId: principal.id }, payload: { status: "disabled" } }
+      ],
+      [
+        "api_credentials.create",
+        { params: { servicePrincipalId: principal.id }, payload: { name: "Refused key" } }
+      ],
+      ["api_credentials.revoke", { params: { credentialId: credential.id } }]
+    ] as const;
+    for (const [operation, request] of calls) {
+      // Holds `api_access.manage` and the admin role, and is no superadmin.
+      const manager = await fixture.server.call(operation, {
+        ...request,
+        headers: { authorization: "Bearer admin-manager" }
+      });
+      expect(manager.statusCode).toBe(403);
+      expect(apiErrorResponseSchema.parse(manager.json()).error).toMatchObject({
+        code: "FORBIDDEN",
+        details: { action: operation, reason: "no_grant" }
+      });
+      // An admin without the right is told the right, as before.
+      const admin = await fixture.server.call(operation, {
+        ...request,
+        headers: { authorization: "Bearer admin" }
+      });
+      expect(admin.statusCode).toBe(403);
+      expect(apiErrorResponseSchema.parse(admin.json()).error).toMatchObject({
+        code: "FORBIDDEN",
+        message: "Missing the right 'api_access.manage'",
+        details: { action: "api_access.manage", reason: "no_grant" }
+      });
+
+      const refused = (await fixture.runs(operation)).filter((run) => run.status === "denied");
+      expect(refused.map((run) => run.actor.id).sort()).toEqual(
+        [fixture.users.admin.id, fixture.users["admin-manager"].id].sort()
+      );
+      const events = await fixture.store.audit.listAuditEvents({
+        clientInstanceId: fixture.clientInstanceId,
+        limit: 200
+      });
+      for (const run of refused) {
+        expect(run.id).toBe(
+          (run.actor.id === fixture.users.admin.id ? admin : manager).headers["operation-run-id"]
+        );
+        // One row for the check of the right, and the row every refused run ends with.
+        expect(
+          events
+            .filter((event) => event.metadata?.operationRunId === run.id)
+            .map((event) => `${event.type}:${event.status}`)
+            .sort()
+        ).toEqual(["operation.authorization_checked:denied", "operation.denied:denied"]);
+      }
+    }
+    expect(untouched(await storedRows())).toEqual(untouched(before));
+  });
+});
+
+const superadmin = { authorization: "Bearer superadmin" };
+
+const createdCredentialSchema = z.object({
+  secret: z.string(),
+  credential: z.object({ id: z.string(), keyPrefix: z.string() })
+});
+
+async function createPrincipal(fixture: Awaited<ReturnType<typeof createFixture>>, label: string) {
+  const response = await fixture.server.call("service_principals.create", {
+    headers: superadmin,
+    payload: { displayLabel: label, permissions: ["config_assets.read"] }
+  });
+  expect(response.statusCode).toBe(200);
+  return z.object({ principal: z.object({ id: z.string() }) }).parse(response.json()).principal;
+}
+
+/** Every row of every table of this file's database, as the text Postgres holds. */
+async function storedRows(): Promise<{ table: string; text: string }[]> {
+  const sql = postgres(await fileTestDatabaseUrl(), { max: 1, onnotice() {} });
+  try {
+    const tables = await sql<{ schema: string; name: string }[]>`
+      select table_schema as schema, table_name as name from information_schema.tables
+      where table_type = 'BASE TABLE' and table_schema not in ('pg_catalog', 'information_schema')`;
+    const rows: { table: string; text: string }[] = [];
+    for (const { schema, name } of tables) {
+      const found = await sql.unsafe<{ text: string }[]>(
+        `select row_to_json(t)::text as text from "${schema}"."${name}" t`
+      );
+      rows.push(...found.map(({ text }) => ({ table: name, text })));
+    }
+    return rows;
+  } finally {
+    await sql.end();
+  }
+}
 
 async function createFixture() {
   const clientInstanceId = asClientInstanceId("api-access-admin-test");
@@ -286,9 +572,24 @@ async function createFixture() {
     tools: []
   });
   const auditRecorder = new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit });
+  // Every line the server logs, at every level, with its fields.
+  const logged: string[] = [];
+  const keep =
+    (level: string) =>
+    (...line: unknown[]): void =>
+      // A request object is circular, so the line is kept as Node prints it, to any depth.
+      void logged.push(inspect([level, ...line], { depth: null, maxStringLength: null }));
+  const logger: Logger = {
+    debug: keep("debug"),
+    info: keep("info"),
+    warn: keep("warn"),
+    error: keep("error"),
+    child: () => logger
+  };
   const server = await createTestInstance({
     server: {
       config,
+      logger,
       clientInstanceId,
       authAdapter: {
         credentialMode: "explicit",
@@ -333,7 +634,11 @@ async function createFixture() {
     }
   });
   servers.push(server);
-  return { clientInstanceId, server, store, users };
+  const runs = async (operation: string) =>
+    (await store.operationRuns.list({ clientInstanceId })).filter(
+      (run) => run.operation === operation
+    );
+  return { clientInstanceId, server, store, users, logged, runs };
 }
 
 async function createClient(server: TestInstance, token: string) {

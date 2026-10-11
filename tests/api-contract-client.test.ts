@@ -16,6 +16,7 @@ import {
 } from "@vivd-catalyst/api-contract";
 import {
   ApiError,
+  completedOutput,
   createApiClient,
   createApiClientFor,
   listAll,
@@ -802,6 +803,20 @@ describe("api client for operations of the registry", () => {
     const wrong = registryClient(() => Response.json({ name: "one" }, { status: 202 }));
     await expect(wrong.client.testRunChange({ body: { name: "one" } })).rejects.toThrow(
       "API response does not match the contract"
+    );
+  });
+
+  // Fails without `completedOutput`: a caller that shows no waiting call would read `output`
+  // of a call that changed nothing.
+  it("hands a caller the output of a call that ran, and throws for one that waits", async () => {
+    const done = registryClient(() => Response.json({ name: "one" }));
+    expect(completedOutput(await done.client.testRunChange({ body: { name: "one" } }))).toEqual({
+      name: "one"
+    });
+    const held = registryClient(() => Response.json(run, { status: 202 }));
+    const outcome = await held.client.testRunChange({ body: { name: "one" } });
+    expect(() => completedOutput(outcome, "Waits for an approval")).toThrow(
+      "Waits for an approval"
     );
   });
 

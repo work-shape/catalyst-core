@@ -25,19 +25,9 @@ const OPERATION_AUDIT = {
 // Run observations remain a separate stream from platform events and audit.
 export const EVENTS = {
   "agent_run.recovered": { ...LEGACY_AUDIT, name: "agent_run.recovered", subject: "agent_run" },
-  "api_access.credential_create_authorized": {
-    ...LEGACY_AUDIT,
-    name: "api_access.credential_create_authorized",
-    subject: "api_access"
-  },
   "api_access.credential_created": {
     ...LEGACY_AUDIT,
     name: "api_access.credential_created",
-    subject: "api_access"
-  },
-  "api_access.credential_revoke_authorized": {
-    ...LEGACY_AUDIT,
-    name: "api_access.credential_revoke_authorized",
     subject: "api_access"
   },
   "api_access.credential_revoked": {
@@ -45,19 +35,9 @@ export const EVENTS = {
     name: "api_access.credential_revoked",
     subject: "api_access"
   },
-  "api_access.service_principal_create_authorized": {
-    ...LEGACY_AUDIT,
-    name: "api_access.service_principal_create_authorized",
-    subject: "api_access"
-  },
   "api_access.service_principal_created": {
     ...LEGACY_AUDIT,
     name: "api_access.service_principal_created",
-    subject: "api_access"
-  },
-  "api_access.service_principal_update_authorized": {
-    ...LEGACY_AUDIT,
-    name: "api_access.service_principal_update_authorized",
     subject: "api_access"
   },
   "api_access.service_principal_updated": {

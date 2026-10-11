@@ -88,6 +88,19 @@ export type OperationOutcome<Output, Run = unknown> = {
   | { status: "pending_approval"; run: Run; location: string | undefined }
 );
 
+/**
+ * The output of a call that ran. A call that waits for somebody else's approval changed
+ * nothing yet, so it throws with `heldMessage`: for a caller that has no way to show a call
+ * that waits.
+ */
+export function completedOutput<Output>(
+  outcome: OperationOutcome<Output>,
+  heldMessage = "The call waits for an approval and has changed nothing yet"
+): Output {
+  if (outcome.status === "done") return outcome.output;
+  throw new Error(heldMessage);
+}
+
 type OutputOf<Op extends Operation> = Op["response"] extends {
   kind: "sse";
   schema: infer Schema extends z.ZodType;

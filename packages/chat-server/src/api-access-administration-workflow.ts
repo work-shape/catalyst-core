@@ -1,13 +1,17 @@
 import type { ApiCredentialScope, ServicePrincipalPermission } from "@vivd-catalyst/api-contract";
 import {
   AppError,
+  isAuthenticatedServicePrincipal,
   isSuperadmin,
   asApiCredentialId,
   asServicePrincipalId,
   asUserId,
-  auditActorFromUser,
+  auditActorFromIdentity,
   type ApiCredentialRecord,
   type AuthenticatedUser,
+  type OperationAuthorization,
+  type OperationAuthorizeContext,
+  type OperationExecutionContext,
   type RuntimeCallContext,
   type ServicePrincipalRecord
 } from "@vivd-catalyst/core";
@@ -22,6 +26,32 @@ const CREDENTIAL_SCOPES = new Set<ApiCredentialScope>([
   "config_assets:read",
   "config_assets:release"
 ]);
+
+/** The right every API access operation asks for. */
+const API_ACCESS_ACTION = "api_access.manage";
+
+/** What a changing API access operation takes from its Operation Run. */
+type ChangeContext = Pick<OperationExecutionContext, "actor" | "audit" | "correlationId">;
+
+/**
+ * Who may change API access: a person who holds `api_access.manage` on the instance and is a
+ * superadmin. It is the `authorize` of the four changing operations, so the run records the
+ * check and a refusal, and nothing of the operation runs for anybody else. A refusal for the
+ * role names the operation, since no right stands for the role.
+ */
+export function authorizeApiAccessChange(
+  operationId: string
+): (input: unknown, context: OperationAuthorizeContext) => OperationAuthorization {
+  return (_input, { actor, access }) => {
+    const right = access.authorize(API_ACCESS_ACTION);
+    if (!right.allowed) {
+      return { allowed: false, action: API_ACCESS_ACTION, reason: right.reason };
+    }
+    return !isAuthenticatedServicePrincipal(actor) && isSuperadmin(actor)
+      ? { allowed: true }
+      : { allowed: false, action: operationId, reason: "no_grant" };
+  };
+}
 
 export interface ServicePrincipalDetail {
   principal: ServicePrincipalRecord;
@@ -50,6 +80,11 @@ interface CreateApiCredentialCommand {
   expiresAt?: string;
 }
 
+/**
+ * What an administrator sees and changes about service principals and their keys. The four
+ * changes are registered operations: the caller's right is checked by `authorizeApiAccessChange`
+ * before a method here runs.
+ */
 export class ApiAccessAdministrationWorkflow {
   constructor(private readonly options: ChatServerOptions) {}
 
@@ -57,7 +92,13 @@ export class ApiAccessAdministrationWorkflow {
     actor: AuthenticatedUser,
     context: RuntimeCallContext
   ): Promise<ServicePrincipalDetail[]> {
-    await this.recordAccess(actor, context, "api_access.service_principals_viewed");
+    // The list is a plain read with no Operation Run, so it records the access itself.
+    await recordGovernanceAccess({
+      options: this.options,
+      user: actor,
+      context,
+      auditType: "api_access.service_principals_viewed"
+    });
     const principals = await this.options.stores.apiAccess.listServicePrincipals({
       clientInstanceId: this.options.clientInstanceId
     });
@@ -65,12 +106,9 @@ export class ApiAccessAdministrationWorkflow {
   }
 
   async createServicePrincipal(
-    actor: AuthenticatedUser,
-    context: RuntimeCallContext,
+    context: ChangeContext,
     command: CreateServicePrincipalCommand
   ): Promise<ServicePrincipalDetail> {
-    this.requireSuperadmin(actor, "Service principal creation");
-    await this.recordAccess(actor, context, "api_access.service_principal_create_authorized");
     this.requireServicePermissions(command.permissions);
     const principal = await this.options.stores.apiAccess.createServicePrincipal({
       clientInstanceId: this.options.clientInstanceId,
@@ -79,24 +117,16 @@ export class ApiAccessAdministrationWorkflow {
       status: command.status,
       permissionRefs: [],
       permissions: command.permissions ?? [],
-      createdByUserId: asUserId(actor.id)
+      createdByUserId: asUserId(context.actor.id)
     });
-    await this.recordPrincipalMutation(
-      actor,
-      context,
-      "api_access.service_principal_created",
-      principal
-    );
+    await this.recordPrincipalMutation(context, "api_access.service_principal_created", principal);
     return this.detail(principal);
   }
 
   async updateServicePrincipal(
-    actor: AuthenticatedUser,
-    context: RuntimeCallContext,
+    context: ChangeContext,
     command: UpdateServicePrincipalCommand
   ): Promise<ServicePrincipalDetail> {
-    this.requireSuperadmin(actor, "Service principal updates");
-    await this.recordAccess(actor, context, "api_access.service_principal_update_authorized");
     this.requireServicePermissions(command.permissions);
     const principal = await this.options.stores.apiAccess.updateServicePrincipal({
       clientInstanceId: this.options.clientInstanceId,
@@ -106,24 +136,21 @@ export class ApiAccessAdministrationWorkflow {
       status: command.status,
       permissions: command.permissions
     });
-    await this.recordPrincipalMutation(
-      actor,
-      context,
-      "api_access.service_principal_updated",
-      principal
-    );
+    await this.recordPrincipalMutation(context, "api_access.service_principal_updated", principal);
     return this.detail(principal);
   }
 
+  /**
+   * Answers the key once. The operation is registered as `secret`, so the run keeps nothing of
+   * this answer; the audit row below names the key by its prefix alone.
+   */
   async createApiCredential(
-    actor: AuthenticatedUser,
-    context: RuntimeCallContext,
+    context: ChangeContext,
     command: CreateApiCredentialCommand
   ): Promise<{ credential: ApiCredentialRecord; secret: string }> {
-    this.requireSuperadmin(actor, "API credential creation");
-    await this.recordAccess(actor, context, "api_access.credential_create_authorized");
     this.requireCredentialScopes(command.scopes);
     this.requireFutureExpiry(command.expiresAt);
+    const { audit: auditRecorder } = context;
     const created = await this.options.stores.apiAccess.createApiCredential({
       clientInstanceId: this.options.clientInstanceId,
       servicePrincipalId: asServicePrincipalId(command.servicePrincipalId),
@@ -131,12 +158,12 @@ export class ApiAccessAdministrationWorkflow {
       scopes: command.scopes,
       expiresAt: command.expiresAt
     });
-    await this.options.auditRecorder.record({
+    await auditRecorder.record({
       type: "api_access.credential_created",
       status: "success",
-      actor: auditActorFromUser(actor),
-      subject: created.credential.id,
+      actor: auditActorFromIdentity(context.actor),
       correlationId: context.correlationId,
+      subject: created.credential.id,
       metadata: {
         servicePrincipalId: created.credential.servicePrincipalId,
         credentialId: created.credential.id,
@@ -149,22 +176,20 @@ export class ApiAccessAdministrationWorkflow {
   }
 
   async revokeApiCredential(
-    actor: AuthenticatedUser,
-    context: RuntimeCallContext,
+    context: ChangeContext,
     credentialId: string
   ): Promise<ApiCredentialRecord> {
-    this.requireSuperadmin(actor, "API credential revocation");
-    await this.recordAccess(actor, context, "api_access.credential_revoke_authorized");
+    const { audit: auditRecorder } = context;
     const credential = await this.options.stores.apiAccess.revokeApiCredential({
       clientInstanceId: this.options.clientInstanceId,
       credentialId: asApiCredentialId(credentialId)
     });
-    await this.options.auditRecorder.record({
+    await auditRecorder.record({
       type: "api_access.credential_revoked",
       status: "success",
-      actor: auditActorFromUser(actor),
-      subject: credential.id,
+      actor: auditActorFromIdentity(context.actor),
       correlationId: context.correlationId,
+      subject: credential.id,
       metadata: {
         servicePrincipalId: credential.servicePrincipalId,
         credentialId: credential.id,
@@ -212,33 +237,18 @@ export class ApiAccessAdministrationWorkflow {
     }
   }
 
-  private requireSuperadmin(actor: AuthenticatedUser, operation: string): void {
-    if (!isSuperadmin(actor)) {
-      throw new AppError("FORBIDDEN", `${operation} requires a superadmin role`);
-    }
-  }
-
-  // The right itself, `api_access.manage`, is every API access operation's `requires`.
-  private recordAccess(
-    actor: AuthenticatedUser,
-    context: RuntimeCallContext,
-    auditType: string
-  ): Promise<void> {
-    return recordGovernanceAccess({ options: this.options, user: actor, context, auditType });
-  }
-
   private async recordPrincipalMutation(
-    actor: AuthenticatedUser,
-    context: RuntimeCallContext,
+    context: ChangeContext,
     type: string,
     principal: ServicePrincipalRecord
   ): Promise<void> {
-    await this.options.auditRecorder.record({
+    const { audit: auditRecorder } = context;
+    await auditRecorder.record({
       type,
       status: "success",
-      actor: auditActorFromUser(actor),
-      subject: principal.id,
+      actor: auditActorFromIdentity(context.actor),
       correlationId: context.correlationId,
+      subject: principal.id,
       metadata: {
         servicePrincipalId: principal.id,
         status: principal.status,

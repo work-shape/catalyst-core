@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
+  completedOutput,
   createApiClient,
   listAll,
   signInForSessionFetch,
@@ -80,13 +81,17 @@ export async function createLocalApiKey(options: LocalApiKeyOptions): Promise<st
   );
   const { principal } =
     existing ??
-    (await client.service_principals.create({
-      body: { displayLabel: PRINCIPAL_LABEL, permissions: [...PERMISSIONS] }
-    }));
-  const credential = await client.api_credentials.create({
-    params: { servicePrincipalId: principal.id },
-    body: { name: "local development", scopes: [...SCOPES] }
-  });
+    completedOutput(
+      await client.service_principals.create({
+        body: { displayLabel: PRINCIPAL_LABEL, permissions: [...PERMISSIONS] }
+      })
+    );
+  const credential = completedOutput(
+    await client.api_credentials.create({
+      params: { servicePrincipalId: principal.id },
+      body: { name: "local development", scopes: [...SCOPES] }
+    })
+  );
   return credential.secret;
 }
 

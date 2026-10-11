@@ -50,7 +50,8 @@ export const apiAccess = defineTranslations({
     apiAccessServerUrl: "Server URL",
     apiAccessServicePrincipals: "Service principals",
     apiAccessServicePrincipalsDescription: "Machine identities are managed separately from users.",
-    apiAccessStatus: "Status"
+    apiAccessStatus: "Status",
+    apiAccessWaitsForApproval: "This change waits for an approval. Nothing has changed yet."
   },
   de: {
     apiAccessActive: "Aktiv",
@@ -109,6 +110,8 @@ export const apiAccess = defineTranslations({
     apiAccessServicePrincipals: "Service Principals",
     apiAccessServicePrincipalsDescription:
       "Maschinenidentitäten werden getrennt von Benutzern verwaltet.",
-    apiAccessStatus: "Status"
+    apiAccessStatus: "Status",
+    apiAccessWaitsForApproval:
+      "Diese Änderung wartet auf eine Freigabe. Bisher wurde nichts geändert."
   }
 });
