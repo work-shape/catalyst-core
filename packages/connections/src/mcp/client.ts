@@ -67,6 +67,12 @@ export const MCP_RESPONSE_ENVELOPE_BYTES = 64 * 1024;
  * socket can be used again. A longer one closes the socket.
  */
 const MCP_DISCARD_MAX_BYTES = 16 * 1024;
+/**
+ * How long the end of a session may take beyond its work: telling the server the session is
+ * over, and reading an answer nobody reads to its end. A server that stays silent then loses
+ * its socket, and the call goes on without it. The caller's signal ends both at once.
+ */
+export const MCP_CLEANUP_TIMEOUT_MS = 3_000;
 
 const CLIENT_INFO = { name: "workshape-catalyst", version: "1" } as const;
 const SESSION_ID_PATTERN = /^[\x21-\x7e]+$/u;
@@ -307,7 +313,9 @@ function boundedBody(response: IncomingMessage, state: SessionState): ReadableSt
     async cancel() {
       cancelled = true;
       // What is left is read to its end and thrown away before the reader goes on, so the
-      // socket serves its next request, unless it is more than a short rest.
+      // socket serves its next request, unless it is more than a short rest or takes longer
+      // than a short while. The end of the session ends the wait too.
+      const late = setTimeout(() => response.destroy(), MCP_CLEANUP_TIMEOUT_MS);
       try {
         for (let read = 0; read <= MCP_DISCARD_MAX_BYTES;) {
           const step = await chunks.next();
@@ -317,6 +325,8 @@ function boundedBody(response: IncomingMessage, state: SessionState): ReadableSt
         }
       } catch {
         // The response ended with an error. Its socket goes with it.
+      } finally {
+        clearTimeout(late);
       }
       response.destroy();
     }
@@ -330,11 +340,13 @@ function headerOf(response: IncomingMessage, name: string): string | undefined {
 
 /**
  * Lets go of an answer whose body nobody reads. A short body is read to its end and thrown
- * away, so the socket serves the next request. A longer one ends with its socket, and one
- * that does not end is ended with the session.
+ * away, so the socket serves the next request. A longer one ends with its socket, and so
+ * does one that is not over after MCP_CLEANUP_TIMEOUT_MS or when the session ends.
  */
 function discard(response: IncomingMessage): void {
   let read = 0;
+  const late = setTimeout(() => response.destroy(), MCP_CLEANUP_TIMEOUT_MS);
+  response.once("close", () => clearTimeout(late));
   response.on("data", (chunk: unknown) => {
     read += chunk instanceof Uint8Array ? chunk.byteLength : MCP_DISCARD_MAX_BYTES + 1;
     if (read > MCP_DISCARD_MAX_BYTES) response.destroy();
@@ -560,13 +572,17 @@ export async function withMcpSession<Result>(
     }
     throw connectionCallError(reason, state.reason === reason ? state.message : undefined);
   } finally {
-    deadline.removeEventListener("abort", onDeadline);
-    // A server that keeps sessions is told this one is over. It is not waited for beyond
-    // the session's own time, and its answer changes nothing.
+    // A server that keeps sessions is told this one is over, and its answer changes nothing.
+    // The end has a short time of its own, inside the session's: a server that never answers
+    // holds neither the call nor its socket, and the caller's signal ends the wait at once.
+    const ending = AbortSignal.any([deadline, AbortSignal.timeout(MCP_CLEANUP_TIMEOUT_MS)]);
+    ending.addEventListener("abort", onDeadline, { once: true });
     if (transport.sessionId !== undefined && !state.abort.signal.aborted) {
       await transport.terminateSession().catch(() => undefined);
     }
     await client.close().catch(() => undefined);
+    ending.removeEventListener("abort", onDeadline);
+    deadline.removeEventListener("abort", onDeadline);
     state.abort.abort();
   }
 }
