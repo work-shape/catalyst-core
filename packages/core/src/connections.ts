@@ -211,9 +211,14 @@ export interface SecretStore {
 /**
  * What the connector auth component hands a Connector type for one call: the secret, and the
  * headers the Connection's auth scheme makes of it. Neither is ever part of the settings.
- * Read the members one by one: the object handed out answers a fixed redaction to
- * `JSON.stringify`, a logger and `util.inspect`, and `secret` and `headers` are not
- * enumerable.
+ * Read the members one by one: the object handed out and its `headers` answer a fixed
+ * redaction to `JSON.stringify`, to the process logger (they carry `LOG_REDACTION`) and to
+ * `util.inspect`, and `secret` and `headers` are not enumerable.
+ *
+ * A connector sets the headers on its request, for which it copies them (`{ ...headers }`).
+ * Such a copy, and `secret` or one header read by itself, is plaintext without any mark:
+ * hand it to the request and to nothing else. Never log it, never put it into an error, an
+ * Operation Run or an answer.
  */
 export interface ConnectionCredential {
   scheme: string;

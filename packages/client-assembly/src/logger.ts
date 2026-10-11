@@ -1,5 +1,5 @@
 import pino from "pino";
-import type { Logger } from "@vivd-catalyst/core";
+import { LOG_REDACTION, type Logger } from "@vivd-catalyst/core";
 
 const REDACTED = "[REDACTED]";
 const TRUNCATED = "[TRUNCATED]";
@@ -25,15 +25,18 @@ export function createLogger(): Logger {
         },
         formatters: {
           log: (fields) =>
-            sanitizeFields(
-              {
-                ...fields,
-                ...(fields.req === undefined ? {} : { req: serializeRequest(fields.req) }),
-                ...(fields.res === undefined ? {} : { res: serializeResponse(fields.res) })
-              },
-              0,
-              new WeakSet<object>()
-            )
+            // A marked value given as the record itself: its entries are never copied.
+            markOf(fields) !== undefined
+              ? { value: markOf(fields) }
+              : sanitizeFields(
+                  {
+                    ...fields,
+                    ...(fields.req === undefined ? {} : { req: serializeRequest(fields.req) }),
+                    ...(fields.res === undefined ? {} : { res: serializeResponse(fields.res) })
+                  },
+                  0,
+                  new WeakSet<object>()
+                )
         }
       },
       process.stdout
@@ -66,7 +69,12 @@ function wrap(backend: pino.Logger): Logger {
     info: (input, message) => write("info", input, message),
     warn: (input, message) => write("warn", input, message),
     error: (input, message) => write("error", input, message),
-    child: (bindings) => wrap(backend.child(sanitizeFields(bindings, 0, new WeakSet<object>())))
+    child: (bindings) =>
+      wrap(
+        backend.child(
+          sanitizeFields(markOf(bindings) === undefined ? bindings : {}, 0, new WeakSet<object>())
+        )
+      )
   };
 }
 
@@ -90,6 +98,9 @@ function sanitize(value: unknown, depth: number, seen: WeakSet<object>): unknown
   if (typeof value === "bigint") return value.toString();
   if (typeof value === "function" || typeof value === "symbol") return undefined;
   if (value === null || typeof value !== "object") return value;
+  // A marked value is written as its mark says and never walked, at every depth.
+  const mark = markOf(value);
+  if (mark !== undefined) return mark;
   if (value instanceof Date) {
     return Number.isNaN(value.getTime()) ? "Invalid Date" : value.toISOString();
   }
@@ -115,6 +126,13 @@ function sanitize(value: unknown, depth: number, seen: WeakSet<object>): unknown
   }
   if (Array.isArray(value)) return value.map((entry) => sanitize(entry, depth + 1, seen));
   return sanitizeFields(Object.fromEntries(Object.entries(value)), depth + 1, seen);
+}
+
+/** What a value marked with `LOG_REDACTION` is written as; `undefined` for every other. */
+function markOf(value: object): string | undefined {
+  if (!(LOG_REDACTION in value)) return undefined;
+  const mark: unknown = value[LOG_REDACTION];
+  return typeof mark === "string" ? mark : REDACTED;
 }
 
 function sanitizeString(value: string): string {

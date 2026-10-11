@@ -1,5 +1,6 @@
 import { format, inspect } from "node:util";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { createLogger } from "@vivd-catalyst/client-assembly";
 import { connectionConfigSchema, egressConfigSchema } from "@vivd-catalyst/config-schema";
 import {
   EGRESS_RESOLUTION_FAILURE_TTL_MS,
@@ -10,6 +11,7 @@ import {
   type EgressAllowEntry
 } from "@vivd-catalyst/connections";
 import {
+  LOG_REDACTION,
   type ConnectionConfig,
   type ConnectionCredentialResolver,
   type EgressChecker,
@@ -601,6 +603,50 @@ describe("the order around a call", () => {
       expect(Object.values(credential.headers)).toHaveLength(1);
       expect(Object.isFrozen(credential) && Object.isFrozen(credential.headers)).toBe(true);
     }
+  });
+
+  it("is written by the process logger as its redaction, also inside an error cause", async () => {
+    // Fails without the change: the logger walked the entries of the headers and of an
+    // error's cause, and every line below held the secret under `x-auth`.
+    const t = setup({ "api.example.com": ["93.184.216.34"] });
+    await t.call(
+      stored({
+        authScheme: "header",
+        settings: { url: "https://api.example.com/mcp", headerName: "X-Auth" }
+      })
+    );
+    const credential = required(required(t.connector.calls[0]).credential);
+    const { headers } = credential;
+    const chunks: string[] = [];
+    const spy = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      chunks.push(String(chunk));
+      return true;
+    });
+    try {
+      const logger = createLogger();
+      const failed = Object.assign(new Error("The request failed", { cause: { headers } }), {
+        config: { headers, attempts: [credential, headers] }
+      });
+      logger.info({ headers }, "as a field");
+      logger.info({ request: { headers, sent: [headers, credential] }, value: credential }, "deep");
+      logger.warn({ error: failed }, "inside an error and its cause");
+      logger.error(new Error("outer", { cause: new Error("inner", { cause: headers }) }));
+      logger.error({ err: new Error("as the cause itself", { cause: credential }) }, "err");
+      logger.info(headers, "as the record itself");
+      logger.info(credential, "as the record itself");
+      logger.child({ headers, request: { headers } }).info("as a binding");
+      logger.child(headers).info("as the bindings themselves");
+    } finally {
+      spy.mockRestore();
+    }
+    const written = chunks.join("");
+    expect(chunks).toHaveLength(9);
+    expect(findLeak(written, t.secret)).toBeUndefined();
+    expect(written).not.toContain("x-auth");
+    expect(written.split("[credential]").length).toBeGreaterThan(12);
+    // The headers a request takes are a plain copy, without the mark.
+    expect({ ...headers }).toEqual({ "x-auth": t.secret });
+    expect(LOG_REDACTION in { ...headers }).toBe(false);
   });
 
   it("puts the secret into the header the type names, under the scheme header", async () => {

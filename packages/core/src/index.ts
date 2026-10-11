@@ -19,6 +19,7 @@ export * from "./infrastructure-checks";
 export * from "./modules";
 export * from "./pages";
 
+export { LOG_REDACTION } from "./logger";
 export type { Logger } from "./logger";
 export type { HttpListenInput, HttpRuntime } from "./http-runtime";
 export type { RateLimitDecision, RateLimiter, RateLimitRule } from "./rate-limiter";

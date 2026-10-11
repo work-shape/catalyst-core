@@ -2,6 +2,7 @@ import {
   AppError,
   CREDENTIAL_REFUSALS,
   EGRESS_DENIED,
+  LOG_REDACTION,
   SHARED_CREDENTIAL_SUBJECT,
   type ConnectionConfig,
   type ConnectionCredential,
@@ -30,13 +31,21 @@ const INSPECT: unique symbol = Symbol.for("nodejs.util.inspect.custom");
 
 /**
  * The headers of a credential. Each stays enumerable, because a connector sets each of them
- * on its request. Written out as a whole, by `JSON.stringify`, a logger or `console.log`,
- * they answer the fixed redaction.
+ * on its request. Written out as a whole, by `JSON.stringify`, `console.log` or the process
+ * logger, which reads the mark, they answer the fixed redaction. The hooks and the mark are
+ * not enumerable: a copy of the entries is the plain headers a request takes, and plaintext.
  */
 function sealHeaders(headers: Record<string, string>): Readonly<Record<string, string>> {
   const answer = { value: () => CREDENTIAL_REDACTION, enumerable: false };
   return Object.freeze(
-    Object.defineProperties({ ...headers }, { toJSON: answer, [INSPECT]: answer })
+    Object.defineProperties(
+      { ...headers },
+      {
+        toJSON: answer,
+        [INSPECT]: answer,
+        [LOG_REDACTION]: { value: CREDENTIAL_REDACTION, enumerable: false }
+      }
+    )
   );
 }
 
@@ -50,11 +59,16 @@ class SealedCredential implements ConnectionCredential {
   readonly scheme: string;
   declare readonly secret: string;
   declare readonly headers: Readonly<Record<string, string>>;
+  declare readonly [LOG_REDACTION]: string;
 
   constructor(scheme: string, secret: string, headers: Record<string, string>) {
     this.scheme = scheme;
     Object.defineProperty(this, "secret", { value: secret, enumerable: false });
     Object.defineProperty(this, "headers", { value: sealHeaders(headers), enumerable: false });
+    Object.defineProperty(this, LOG_REDACTION, {
+      value: CREDENTIAL_REDACTION,
+      enumerable: false
+    });
     Object.freeze(this);
   }
 
