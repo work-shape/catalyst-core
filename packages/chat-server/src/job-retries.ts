@@ -1,4 +1,5 @@
 import { renderArtifactPreviewJob, type JobRetry } from "@vivd-catalyst/core";
+import { connectionDiscoverJob } from "./connection-jobs";
 import { deleteAccountJob, deleteWorkspaceJob, generateConversationTitleJob } from "./job-kinds";
 
 /**
@@ -11,6 +12,8 @@ const platformJobRetries: readonly JobRetry[] = [
   { kind: generateConversationTitleJob },
   { kind: deleteAccountJob },
   { kind: deleteWorkspaceJob },
+  // Reads the Connection anew and asks the outside system again.
+  { kind: connectionDiscoverJob },
   {
     kind: renderArtifactPreviewJob,
     // The job that gave up wrote the failure onto the preview row, and a job that finds its

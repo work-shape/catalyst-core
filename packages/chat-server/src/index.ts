@@ -238,7 +238,11 @@ export type { AgentAssetKindOptions } from "./asset-kinds/agent";
 export { createSkillAssetKind } from "./asset-kinds/skill";
 export { createConnectionAssetKind } from "./asset-kinds/connection";
 export type { ConnectionAssetKindOptions } from "./asset-kinds/connection";
-export type { ConnectionManagementPort } from "./connection-management-port";
+export type {
+  ConnectionDiscoveryOutcome,
+  ConnectionManagementPort
+} from "./connection-management-port";
+export { enqueueConnectionDiscovery } from "./connection-jobs";
 export type {
   ConfigAssetBundle,
   ConfigAssetValidationRefs,

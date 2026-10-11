@@ -10,6 +10,7 @@ import {
   type RegisteredJobHandler
 } from "@vivd-catalyst/core";
 import { completeAccountDeletion, recordAccountDeletionStalled } from "./account-deletion";
+import { createConnectionDiscoveryJobs } from "./connection-jobs";
 import { ConversationWorkflow } from "./conversations/conversation-workflow";
 import {
   adoptLegacyJobsJob,
@@ -271,6 +272,8 @@ export function createChatServerJobs(
   });
   handlers.push(...operationRuns.handlers);
   schedules.push(...operationRuns.schedules);
+
+  handlers.push(...createConnectionDiscoveryJobs(options).handlers);
 
   const cleanup = options.executionWorkspaceCleanup;
   if (cleanup) {

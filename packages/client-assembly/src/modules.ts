@@ -66,12 +66,14 @@ const appsModule = defineModule({
 /**
  * Connections: the asset kind that holds the access to an outside system, and its list in
  * Build. Off, the kind does not exist on the instance: no call reads, lists or writes one and
- * no right on one is handed out. What the store holds stays and is inactive.
+ * no right on one is handed out, and no discovery runs. What the store holds stays and is
+ * inactive.
  */
 const connectionsModule = defineModule({
   name: "connections",
   operations: ["connections.get", "connections.test", "connections.list_tools"],
   kinds: ["connection"],
+  jobKinds: ["connection.discover"],
   ui: ["build.connections"]
 });
 

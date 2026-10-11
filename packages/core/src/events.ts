@@ -171,6 +171,16 @@ export const EVENTS = {
     name: "config_assets.replaced",
     subject: "config_assets"
   },
+  "connection.discovered": {
+    ...LEGACY_AUDIT,
+    name: "connection.discovered",
+    subject: "connection"
+  },
+  "connection.discovery_failed": {
+    ...LEGACY_AUDIT,
+    name: "connection.discovery_failed",
+    subject: "connection"
+  },
   "conversation.cleanup_completed": {
     ...LEGACY_AUDIT,
     name: "conversation.cleanup_completed",
