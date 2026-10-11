@@ -79,9 +79,19 @@ function validatorFor(schema: JsonObject): Ajv | Ajv2020 | undefined {
 
 const cache = new Map<string, CompiledJsonSchema>();
 
+/** The keyword that makes a schema, or a part of one, asynchronous. */
+const ASYNC_KEYWORD = "$async";
+
 /**
- * Whether the schema is within the bounds of depth and node count. The walk stops at the
- * first bound it passes, so it costs no more than the bounds allow whatever it is handed.
+ * Whether the schema is within the bounds of depth and node count and asynchronous nowhere.
+ * The walk stops at the first bound it passes, so it costs no more than the bounds allow
+ * whatever it is handed.
+ *
+ * An asynchronous schema answers a promise, which would read as a value that fits. No schema
+ * of an operation needs one: nothing here is fetched while a value is checked. The keyword is
+ * refused wherever the walk meets it as a key, whatever it holds and also in a part nothing
+ * refers to. That refuses a schema with a property of that very name too, which no ordinary
+ * schema has.
  */
 function withinShapeBounds(schema: JsonObject): boolean {
   let nodes = 0;
@@ -90,10 +100,20 @@ function withinShapeBounds(schema: JsonObject): boolean {
     if (nodes > JSON_SCHEMA_MAX_NODES) return false;
     if (typeof value !== "object" || value === null) return true;
     if (depth >= JSON_SCHEMA_MAX_DEPTH) return false;
+    if (!Array.isArray(value) && Object.hasOwn(value, ASYNC_KEYWORD)) return false;
     const children = Array.isArray(value) ? value : Object.values(value);
     return children.every((child) => visit(child, depth + 1));
   };
   return visit(schema, 0);
+}
+
+/**
+ * Whether a schema is one this file compiles at all: within its bounds and asynchronous
+ * nowhere. Whoever walks a schema of an outside system on its own, to fingerprint it or to
+ * store it, asks this first. It throws nothing, however deep the schema is.
+ */
+export function isJsonSchemaWithinBounds(schema: JsonObject): boolean {
+  return cacheKeyOf(schema) !== undefined;
 }
 
 /**
@@ -146,9 +166,6 @@ function issueOf(error: ErrorObject): JsonSchemaIssue {
 const UNCHECKABLE: JsonSchemaIssue[] = [{ path: [], message: "is nested too deeply to check" }];
 
 function compile(schema: JsonObject): CompiledJsonSchema {
-  // An asynchronous schema answers a promise, which would read as a value that fits. No
-  // schema of an operation needs one: nothing here is fetched while a value is checked.
-  if (Object.hasOwn(schema, "$async")) return { ok: false };
   let check: ValidateFunction;
   try {
     const validator = validatorFor(schema);
@@ -158,7 +175,8 @@ function compile(schema: JsonObject): CompiledJsonSchema {
     // A `$ref` that leaves the schema, a malformed keyword, a pattern that is no expression.
     return { ok: false };
   }
-  if ("$async" in check) return { ok: false };
+  // The walk refused the keyword already. This holds whatever a validator makes of a schema.
+  if (ASYNC_KEYWORD in check) return { ok: false };
   return {
     ok: true,
     validate(value) {

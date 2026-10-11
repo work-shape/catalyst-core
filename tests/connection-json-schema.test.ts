@@ -5,6 +5,7 @@ import {
   JSON_SCHEMA_MAX_DEPTH,
   JSON_SCHEMA_MAX_NODES,
   compileJsonSchema,
+  isJsonSchemaWithinBounds,
   jsonSchemaAsZod
 } from "@vivd-catalyst/connections";
 import type { JsonObject, JsonValue } from "@vivd-catalyst/core";
@@ -118,6 +119,35 @@ describe("an asynchronous schema", () => {
     // The same schema without the keyword checks as it reads.
     expect(jsonSchemaAsZod(required).safeParse({ id: 1 }).success).toBe(true);
     expect(jsonSchemaAsZod(required).safeParse({}).success).toBe(false);
+  });
+});
+
+describe("an asynchronous part of a schema", () => {
+  // Fails without the change: only the keyword at the root was refused, so a schema that was
+  // asynchronous in a definition or in a property compiled.
+  it("is refused at any depth, whatever the keyword holds and also where nothing refers to it", () => {
+    const part = (value: boolean): JsonObject => ({ type: "string", $async: value });
+    const refused: JsonObject[] = [
+      { type: "object", $defs: { unused: part(true) } },
+      { type: "object", $defs: { unused: part(false) } },
+      { type: "object", properties: { name: part(true) } },
+      { type: "object", properties: { name: part(false) } },
+      { type: "array", items: { anyOf: [{ type: "number" }, part(true)] } },
+      { $ref: "#/$defs/node", $defs: { node: { $async: true, type: "object" } } },
+      {
+        $schema: "http://json-schema.org/draft-07/schema#",
+        definitions: { unused: part(true) }
+      }
+    ];
+    for (const schema of refused) {
+      expect(compileJsonSchema(schema), JSON.stringify(schema)).toEqual({ ok: false });
+      expect(isJsonSchemaWithinBounds(schema)).toBe(false);
+      expect(jsonSchemaAsZod(schema).safeParse("x").success).toBe(false);
+    }
+    // The same shapes without the keyword compile.
+    const plain: JsonObject = { type: "object", $defs: { unused: { type: "string" } } };
+    expect(compileJsonSchema(plain).ok).toBe(true);
+    expect(isJsonSchemaWithinBounds(plain)).toBe(true);
   });
 });
 
