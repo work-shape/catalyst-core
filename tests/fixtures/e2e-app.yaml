@@ -69,6 +69,14 @@ auth:
           - user
         permissionRefs:
           - demo-tools
+      - email: e2e-pages@example.test
+        displayLabel: E2E Pages
+        passwordEnvName: E2E_PAGES_PASSWORD
+        developmentPassword: e2e-pages-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
   sessionToken:
     issuer: demo-e2e-client-instance
     ttlSeconds: 900
@@ -146,6 +154,11 @@ tools:
   - name: propose_skill_change
     enabled: true
   - name: show_view
+    enabled: true
+  # An agent writes a Page with the patch tool and saves it.
+  - name: workspace.apply_patch
+    enabled: true
+  - name: page.save
     enabled: true
   - name: demo.workflow_summary
     enabled: true

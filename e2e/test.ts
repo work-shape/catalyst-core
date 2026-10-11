@@ -184,7 +184,8 @@ const allowedPageErrors: readonly AllowedPageError[] = [
       pageTestTitles.instanceAddress,
       pageTestTitles.otherSite,
       pageTestTitles.noOrigin,
-      pageTestTitles.failClosed
+      pageTestTitles.failClosed,
+      "a Page built in chat shows beside the conversation, changes with the next save and is found again after a reload"
     ]
   },
   {
