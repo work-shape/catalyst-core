@@ -458,11 +458,15 @@ describe("what a check decides", () => {
       {
         kind: "agent",
         plural: "agents",
+        lifecycle: "active" as const,
+        representation: "config" as const,
         actions: { read: "agent.read", write: "agent.write", delete: "agent.delete" }
       },
       {
         kind: "connection",
         plural: "connections",
+        lifecycle: "active" as const,
+        representation: "config" as const,
         actions: {
           read: "connection.read",
           use: "connection.use",
@@ -473,6 +477,8 @@ describe("what a check decides", () => {
       {
         kind: "app",
         plural: "apps",
+        lifecycle: "active" as const,
+        representation: "config" as const,
         actions: { read: "app.read", write: "app.write", delete: "app.delete" }
       }
     ];
