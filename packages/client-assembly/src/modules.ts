@@ -16,7 +16,8 @@ const resourcesModule = defineModule({
 
 /**
  * Changing agents and skills in the interface. Running an agent and a config push are core:
- * `assets.sync` carries a push, so it is no operation of the module and asks the switch itself.
+ * `assets.sync` carries a push too, so its workflow asks the switch and lets the release holder
+ * pass where the module is off. For every other caller it is an operation of the module.
  */
 const assetManagementModule = defineModule({
   name: "assetManagement",
@@ -27,6 +28,7 @@ const assetManagementModule = defineModule({
     "config_agents.set_default",
     "config_agents.set_availability"
   ],
+  selfCheckedOperations: ["assets.sync"],
   ui: ["settings.build"]
 });
 

@@ -28,6 +28,12 @@ export interface ModuleDefinition {
   readonly kinds?: readonly string[];
   /** Operation ids of the API catalog. */
   readonly operations?: readonly string[];
+  /**
+   * Operation ids the module owns whose workflow asks the switch itself, because one caller
+   * passes where the module is off. They count as operations of the module and no gate reads
+   * them: the workflow refuses everyone else as a call of a module that is off.
+   */
+  readonly selfCheckedOperations?: readonly string[];
   readonly jobKinds?: readonly string[];
   /** Agent tool names. */
   readonly tools?: readonly string[];
@@ -41,6 +47,7 @@ export function defineModule(definition: ModuleDefinition): ModuleDefinition {
     requires: frozenList(definition.requires),
     kinds: frozenList(definition.kinds),
     operations: frozenList(definition.operations),
+    selfCheckedOperations: frozenList(definition.selfCheckedOperations),
     jobKinds: frozenList(definition.jobKinds),
     tools: frozenList(definition.tools),
     ui: frozenList(definition.ui)

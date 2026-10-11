@@ -59,7 +59,8 @@ export function registerConfigRoutes(route: Route, options: ChatServerOptions): 
       configKey: moduleConfigKey(name),
       requires: [...(definition?.requires ?? [])],
       kinds: [...(definition?.kinds ?? [])],
-      operationCount: definition?.operations?.length ?? 0,
+      operationCount:
+        (definition?.operations?.length ?? 0) + (definition?.selfCheckedOperations?.length ?? 0),
       jobKinds: [...(definition?.jobKinds ?? [])],
       toolCount: definition?.tools?.length ?? 0
     }))

@@ -118,7 +118,9 @@ describe("the module registry", () => {
     const operationIds = new Set(Object.keys(apiOperations));
 
     for (const module of platformModules) {
-      for (const operation of module.operations ?? []) {
+      const owned = [...(module.operations ?? []), ...(module.selfCheckedOperations ?? [])];
+      expect(new Set(owned).size, module.name).toBe(owned.length);
+      for (const operation of owned) {
         expect(operationIds, `${module.name}: ${operation}`).toContain(operation);
       }
     }
