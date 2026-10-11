@@ -579,4 +579,67 @@ describe("assets.sync without a Namespace", () => {
     );
     expect(pushed.statusCode, pushed.body).toBe(200);
   });
+
+  it("is a release only with the release scope on the key and the release right on its principal", async () => {
+    const t = await setup({ editingLimits: RELEASE_ONLY });
+    const before = await t.version();
+    const RELEASE_KEY = "config_assets:read config_assets:release";
+    const WRITE_KEY = "config_assets:read config_assets:write";
+    const items = [putAgent("rel-intake")];
+    const call =
+      (operation: "assets.sync" | "assets.sync_check") =>
+      (userId: string, scopes: string, payload: Item) =>
+        t.call(userId, operation, { payload, headers: { [SCOPES_HEADER]: scopes } });
+    const refusal = async (answer: ReturnType<typeof t.call>) => {
+      const response = await answer;
+      return {
+        status: response.statusCode,
+        message: errorSchema.parse(response.json()).error.message
+      };
+    };
+    const needsNamespace = { status: 422, message: "A batch names the Namespace it belongs to" };
+    const missingScope = { status: 403, message: "Missing auth scope 'config_assets:write'" };
+
+    for (const operation of ["assets.sync_check", "assets.sync"] as const) {
+      const as = call(operation);
+      // The write scope and the release right: an ordinary writer. The batch names its
+      // Namespace, names no default agent and is bound by the editing limits.
+      expect(await refusal(as(t.releaser.id, WRITE_KEY, { items }))).toEqual(needsNamespace);
+      const named = await as(t.releaser.id, WRITE_KEY, { namespace: "rel-", items });
+      expect(named.statusCode).toBe(403);
+      expect(refusedItems(named).items).toEqual([
+        {
+          name: "rel-intake",
+          status: "refused",
+          code: "FORBIDDEN",
+          message: "Interactive agent creation is disabled"
+        }
+      ]);
+      const naming = { namespace: "rel-", items: [], defaultAgentName: "rel-old" };
+      expect(await refusal(as(t.releaser.id, WRITE_KEY, naming))).toEqual({
+        status: 403,
+        message: "Missing the right 'assets.release'"
+      });
+
+      // The release scope without the release right does not reach the operation.
+      expect(await refusal(as(t.admin.id, RELEASE_KEY, { items }))).toEqual(missingScope);
+      // Neither of the two: an ordinary writer.
+      expect(await refusal(as(t.admin.id, WRITE_KEY, { items }))).toEqual(needsNamespace);
+      expect(await t.version()).toBe(before);
+    }
+
+    // Both: the release, first checked and then applied.
+    const release = { items, defaultAgentName: "rel-intake" };
+    const checked = await call("assets.sync_check")(t.releaser.id, RELEASE_KEY, release);
+    expect(checked.statusCode, checked.body).toBe(200);
+    expect(await t.version()).toBe(before);
+    const pushed = await call("assets.sync")(t.releaser.id, RELEASE_KEY, release);
+    expect(pushed.statusCode, pushed.body).toBe(200);
+    expect(await t.stored("agent", "rel-intake")).toMatchObject({ status: "active" });
+    // A key that carries both scopes is a release key too.
+    const both = await call("assets.sync")(t.releaser.id, `${WRITE_KEY} config_assets:release`, {
+      items: [putSkill("free-standing", "Outside every Namespace.")]
+    });
+    expect(both.statusCode, both.body).toBe(200);
+  });
 });

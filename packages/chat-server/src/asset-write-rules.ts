@@ -1,6 +1,7 @@
 import {
   AppError,
   findNamespaceOfAssetName,
+  hasAuthScope,
   isJsonObject,
   moduleOffError,
   operationDenialError,
@@ -217,6 +218,37 @@ const RELEASE_ACTION = "assets.release";
 export function isReleaseSync(access: ActorAccess, surface: AssetWriteSurface): boolean {
   // Asked without a resource, so only an entry at instance scope answers.
   return surface === "sync" && access.authorize(RELEASE_ACTION).allowed;
+}
+
+/** The scope of a key that was issued for release sync. */
+const RELEASE_SCOPE = "config_assets:release";
+
+/**
+ * The access a sync or its check is decided with. A release takes both: the release right on
+ * the principal and the release scope on the credential of this call. With a credential that
+ * carries no release scope the principal holds no release right here, so the batch is an
+ * ordinary writer's: it names its Namespace and is bound by everything `isReleaseSync` lists.
+ */
+export function accessOfSyncCredential(
+  actor: AuthenticatedIdentity,
+  access: ActorAccess
+): ActorAccess {
+  if (hasAuthScope(actor, RELEASE_SCOPE)) return access;
+  const authorize: ActorAccess["authorize"] = (action, resource) =>
+    action === RELEASE_ACTION
+      ? { allowed: false, reason: "no_grant" }
+      : access.authorize(action, resource);
+  return {
+    authorize,
+    require(action, resource) {
+      if (action === RELEASE_ACTION) {
+        throw operationDenialError({ kind: "forbidden", action, reason: "no_grant" });
+      }
+      access.require(action, resource);
+    },
+    holdsGrantAt: (action, scopeKinds) =>
+      action !== RELEASE_ACTION && access.holdsGrantAt(action, scopeKinds)
+  };
 }
 
 /** Refuses what only a release may carry, naming the release right. */

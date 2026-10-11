@@ -369,7 +369,8 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
  * instance. A release is written through `assets.sync` and checked through
  * `assets.sync_check`, which ask for the scope of writing assets: a key issued for release
  * sync passes there when its principal holds the release right, and on no other operation and
- * for no other principal.
+ * for no other principal. The reverse holds in the sync: without this scope on the key the
+ * release right opens nothing there (`accessOfSyncCredential`).
  */
 const FURTHER_SCOPE_OF_OPERATION: Partial<
   Record<string, { scope: OperationScope; heldWith: string }>

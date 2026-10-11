@@ -10,6 +10,7 @@ import {
   isAppError,
   isAuthenticatedServicePrincipal,
   type AccessResource,
+  type AuthenticatedIdentity,
   type ActorAccess,
   type AgentAvailability,
   type AssetScope,
@@ -150,8 +151,12 @@ export class AssetWorkflow {
    * Every item of a batch, as its own write or delete. A batch with an item its caller may
    * not make throws its refusal here, which names each item, and so never reaches the policy.
    */
-  async authorizeSync(access: ActorAccess, input: AssetSyncInput): Promise<OperationAuthorization> {
-    await authorizeAssetSync(this.options, access, input);
+  async authorizeSync(
+    actor: AuthenticatedIdentity,
+    access: ActorAccess,
+    input: AssetSyncInput
+  ): Promise<OperationAuthorization> {
+    await authorizeAssetSync(this.options, actor, access, input);
     return { allowed: true };
   }
 

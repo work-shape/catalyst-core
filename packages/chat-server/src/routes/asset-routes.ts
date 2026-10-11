@@ -25,7 +25,7 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
 
   route.operation(apiOperations["assets.sync"], {
     // The right is decided per item, each as its own write or delete, before the policy.
-    authorize: (input, { access }) => workflow.authorizeSync(access, input),
+    authorize: (input, { actor, access }) => workflow.authorizeSync(actor, access, input),
     policyTargets: (input) => workflow.syncPolicyTargets(input),
     changeClass: "reversible",
     // No module: a release is pushed through this operation also where changing assets in
@@ -35,7 +35,7 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
 
   route.operation(apiOperations["assets.sync_check"], {
     // Decided as for the sync itself: a batch its caller may not make is not checked either.
-    authorize: (input, { access }) => workflow.authorizeSync(access, input),
+    authorize: (input, { actor, access }) => workflow.authorizeSync(actor, access, input),
     policyTargets: (input) => workflow.syncPolicyTargets(input),
     execute: (input, context) => workflow.checkSync(context, input)
   });

@@ -5,6 +5,7 @@ import {
   findNamespaceOfAssetName,
   isAppError,
   type ActorAccess,
+  type AuthenticatedIdentity,
   type ConfigAssetMutation,
   type ConfigAssetRecord,
   type PolicyTarget
@@ -34,6 +35,7 @@ import {
   loadReferableAssets,
   loadStoredAssets,
   impliesDefaultChange,
+  accessOfSyncCredential,
   maxSyncItems,
   missingUpsertRightOf,
   preparedUpsert,
@@ -113,8 +115,9 @@ export async function syncAssets(
   call: AssetCall,
   input: AssetSyncInput
 ) {
-  const checked = await checkBatch(options, call, input, "apply");
-  return applyBatch(options, call, checked);
+  const bound = withSyncCredential(call);
+  const checked = await checkBatch(options, bound, input, "apply");
+  return applyBatch(options, bound, checked);
 }
 
 /**
@@ -127,8 +130,13 @@ export async function checkAssetSync(
   call: AssetCall,
   input: AssetSyncInput
 ): Promise<{ valid: true }> {
-  await checkBatch(options, call, input, "check");
+  await checkBatch(options, withSyncCredential(call), input, "check");
   return { valid: true };
+}
+
+/** The call as it is decided: whether it is a release depends on the key it came with. */
+function withSyncCredential(call: AssetCall): AssetCall {
+  return { ...call, access: accessOfSyncCredential(call.actor, call.access) };
 }
 
 /** A batch every check accepted, with what the store is asked to write for it. */
@@ -590,10 +598,11 @@ function leftByItems(
  */
 export async function authorizeAssetSync(
   options: ChatServerOptions,
+  actor: AuthenticatedIdentity,
   access: ActorAccess,
   input: AssetSyncInput
 ): Promise<void> {
-  await authorizeItems(options, access, input);
+  await authorizeItems(options, accessOfSyncCredential(actor, access), input);
 }
 
 /**
