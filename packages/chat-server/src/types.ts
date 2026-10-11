@@ -32,6 +32,7 @@ import type { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import type { ConfigAssetValidationRefs, WorkflowAssetKind } from "./asset-kinds/shared";
 import type { ChatAttachmentService } from "./attachments";
 import type { InfrastructureWorkflow } from "./infrastructure-workflow";
+import type { ConnectionManagementPort } from "./connection-management-port";
 import type { SystemModelGateway } from "./system-model-call";
 import type { ApprovalRequestWorkflowOptions } from "./approval-request-workflow";
 
@@ -93,6 +94,8 @@ export interface ChatServerOptions {
     validationRefs: ConfigAssetValidationRefs;
   };
   agentRuntime: AgentRuntime;
+  /** The instance's Connections, where the module `connections` is on. */
+  connections?: ConnectionManagementPort;
   attachments?: ChatAttachmentService;
   /**
    * How ended jobs of kinds that capabilities declare are retried by hand. The server brings

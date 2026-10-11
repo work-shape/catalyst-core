@@ -70,6 +70,7 @@ const appsModule = defineModule({
  */
 const connectionsModule = defineModule({
   name: "connections",
+  operations: ["connections.get", "connections.test", "connections.list_tools"],
   kinds: ["connection"],
   ui: ["build.connections"]
 });

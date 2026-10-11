@@ -215,6 +215,11 @@ export interface AccessInstanceOptions {
   fastModeModelBindingIds?: string[];
   /** Switches of `modules`, such as `{ connections: { enabled: true } }`. */
   modules?: ModuleSwitches;
+  /**
+   * Further server options, built from the stores and the config of the instance. They
+   * replace the ones this file sets, such as the call path with a further operation source.
+   */
+  server?: (stores: TestStore, config: ReturnType<typeof configWith>) => Partial<TestServerOptions>;
 }
 
 export async function setupAccessInstance(
@@ -251,7 +256,8 @@ export async function setupAccessInstance(
               ...furtherKinds
             ])
           })
-    }
+    },
+    ...options.server?.(stores, config)
   }));
   const { stores } = instance;
   const createUser = (displayLabel: string, roles: UserRole[], permissions: string[] = []) =>

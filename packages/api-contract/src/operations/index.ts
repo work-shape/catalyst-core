@@ -5,6 +5,7 @@ import { approvalRequestOperations } from "./approval-requests";
 import { assetOperations } from "./assets";
 import { collaborationWorkspaceOperations } from "./collaboration-workspaces";
 import { configAssetOperations } from "./config-assets";
+import { connectionOperations } from "./connections";
 import { conversationFileOperations } from "./conversation-files";
 import { conversationOperations } from "./conversations";
 import { credentialOperations } from "./credentials";
@@ -32,6 +33,7 @@ export const apiOperations = {
   ...pageOperations,
   ...configAssetOperations,
   ...assetOperations,
+  ...connectionOperations,
   ...userOperations,
   ...apiAccessOperations,
   ...accessOperations,

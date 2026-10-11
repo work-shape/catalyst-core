@@ -89,6 +89,9 @@ describe("the operation catalog", () => {
         "config_assets.get_overview  GET /api/v1/instance/config/assets",
         "config_assets.replace  POST /api/v1/instance/config/import",
         "config_assets.validate  POST /api/v1/instance/config/validate",
+        "connections.get  GET /api/v1/connections/:name",
+        "connections.list_tools  GET /api/v1/connection-tools",
+        "connections.test  POST /api/v1/connections/:name/test",
         "conversations.artifacts.get_content  GET /api/v1/conversations/:conversationId/artifacts/:artifactId/content",
         "conversations.artifacts.get_preview  GET /api/v1/conversations/:conversationId/artifacts/:artifactId/preview",
         "conversations.artifacts.retry_preview  POST /api/v1/conversations/:conversationId/artifacts/:artifactId/preview/retry",
@@ -223,6 +226,8 @@ describe("the operation catalog", () => {
       "approval-requests",
       "assets",
       "auth",
+      "connection-tools",
+      "connections",
       "context",
       "conversations",
       "dev",
@@ -390,7 +395,10 @@ describe("a running instance", () => {
       "pages.get",
       "pages.files.list",
       "pages.files.get",
-      "pages.preview"
+      "pages.preview",
+      "connections.get",
+      "connections.test",
+      "connections.list_tools"
     ];
     expect(retiredApiPaths.length).toBe(versioned.length - added.length + 2);
   });

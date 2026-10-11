@@ -30,6 +30,7 @@ import {
 } from "./routes/page-routes";
 import { registerCollaborationWorkspaceRoutes } from "./routes/collaboration-workspace-routes";
 import { registerAssetRoutes } from "./routes/asset-routes";
+import { registerConnectionRoutes } from "./routes/connection-routes";
 import { registerConfigAssetRoutes } from "./routes/config-asset-routes";
 import { registerConversationFileRoutes } from "./routes/conversation-file-routes";
 import { registerConversationResourceRoutes } from "./routes/conversation-resource-routes";
@@ -199,6 +200,7 @@ export async function createChatServer(input: ChatServerOptions): Promise<HttpRu
   registerCollaborationWorkspaceRoutes(route, options);
   registerConfigAssetRoutes(route, options);
   registerAssetRoutes(route, options);
+  registerConnectionRoutes(route, options);
   registerApprovalRequestRoutes(route, options);
   registerUserAccountRoutes(route, options);
   registerConversationRoutes(route, options);
@@ -236,6 +238,7 @@ export type { AgentAssetKindOptions } from "./asset-kinds/agent";
 export { createSkillAssetKind } from "./asset-kinds/skill";
 export { createConnectionAssetKind } from "./asset-kinds/connection";
 export type { ConnectionAssetKindOptions } from "./asset-kinds/connection";
+export type { ConnectionManagementPort } from "./connection-management-port";
 export type {
   ConfigAssetBundle,
   ConfigAssetValidationRefs,

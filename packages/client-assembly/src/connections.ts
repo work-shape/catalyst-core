@@ -1,5 +1,8 @@
 import {
   createConnectionCredentialResolver,
+  createConnectionManagement,
+  createConnectionOperationSource,
+  createConnectionToolSource,
   createEgressChecker,
   loadSecretKeyring,
   platformStoreTargetsOf,
@@ -13,12 +16,16 @@ import {
   type ConnectionCredentialResolver,
   type ConnectorTypeDefinition,
   type ConnectorTypeRegistry,
+  type DataToolSource,
   type EgressChecker,
   type Logger,
   type ModuleSnapshot,
+  type OperationRegistry,
+  type OperationSource,
   type PlatformStores,
   type SecretResolver
 } from "@vivd-catalyst/core";
+import type { ChatServerOptions } from "@vivd-catalyst/chat-server";
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import { readClientInstanceEnv } from "./env";
 import { PLATFORM_SECRET_NAMES } from "./infrastructure";
@@ -32,6 +39,27 @@ export interface InstanceConnections {
   readonly credentials?: ConnectionCredentialResolver;
   /** Makes the stored release Connections equal to release config. The API process calls it. */
   seed(): Promise<ReleaseSeedResult>;
+  /** Every accepted operation of every Connection, as an operation of the call path. */
+  readonly operationSource: OperationSource;
+  /** The same operations as the tools an agent may carry. */
+  readonly toolSource: DataToolSource;
+  /** What the Connection routes of the API read and test through. */
+  readonly management: NonNullable<ChatServerOptions["connections"]>;
+}
+
+/**
+ * Adds the Connections' operations to the call path of this process and answers the tool
+ * options with their tools, so an agent's run offers and calls them. Without Connections it
+ * answers the options as they are: every agent has the tools it had.
+ */
+export function withConnections<Options extends object>(
+  connections: InstanceConnections | undefined,
+  operationCalls: { registry: Pick<OperationRegistry, "addSource"> },
+  options: Options
+): Options & { dataTools?: DataToolSource } {
+  if (!connections) return options;
+  operationCalls.registry.addSource(connections.operationSource);
+  return { ...options, dataTools: connections.toolSource };
 }
 
 /**
@@ -122,18 +150,17 @@ async function buildInstanceConnections(
     platformStore: platformStore ?? [],
     platformStoreUnknown: platformStore === undefined
   });
+  const credentials = keyring
+    ? createConnectionCredentialResolver({ clientInstanceId, keyring, store: stores.connections })
+    : undefined;
+  const operations = { clientInstanceId, stores, connectorTypes, egress, credentials, logger };
   return {
     connectorTypes,
     egress,
-    ...(keyring
-      ? {
-          credentials: createConnectionCredentialResolver({
-            clientInstanceId,
-            keyring,
-            store: stores.connections
-          })
-        }
-      : {}),
+    ...(credentials ? { credentials } : {}),
+    operationSource: createConnectionOperationSource(operations),
+    toolSource: createConnectionToolSource(operations),
+    management: createConnectionManagement(operations),
     async seed() {
       const result = await seedReleaseConnections({
         clientInstanceId,

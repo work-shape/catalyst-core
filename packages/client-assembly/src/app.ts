@@ -64,7 +64,7 @@ import { createInstanceModels } from "./capability-models";
 import { createConfigAssetSource } from "./config-asset-source";
 import { createInstanceAgentTools, createInstanceOperationCalls } from "./operation-calls";
 import { createClientInstanceAuth } from "./auth";
-import { createInstanceConnections, seedInstanceConnections } from "./connections";
+import { createInstanceConnections, seedInstanceConnections, withConnections } from "./connections";
 import { createClientInstanceMail } from "./mail";
 import type {
   ClientInstanceAttachmentHandler,
@@ -176,6 +176,7 @@ export async function createClientInstanceApp(
     },
     configAssets: execution.configAssets,
     agentRuntime,
+    connections: execution.connections?.management,
     attachments,
     managedObjects,
     jobRetries,
@@ -450,7 +451,11 @@ export async function createClientInstanceExecutionAssembly(
     enabledToolNames: getEnabledToolNames(config),
     modules
   });
-  const toolOptions = { clientInstanceId, logger, runtime: config.runtime };
+  const toolOptions = withConnections(connections, operationCalls, {
+    clientInstanceId,
+    logger,
+    runtime: config.runtime
+  });
   const defaultModelProvider = modelProviders[0];
   if (!defaultModelProvider) {
     throw new AppError("VALIDATION_FAILED", "At least one model provider is required");
