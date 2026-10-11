@@ -58,3 +58,15 @@ export async function denied(work: Promise<unknown>): Promise<AppError> {
   expect(error.details).toMatchObject({ reason: "egress_denied" });
   return error;
 }
+
+/** A listed target whose name gave no address: refused, and not as `egress_denied`. */
+export async function unresolved(work: Promise<unknown>): Promise<AppError> {
+  const error: unknown = await work.then(
+    () => undefined,
+    (caught: unknown) => caught
+  );
+  if (!(error instanceof AppError)) throw new Error("Expected the target to be refused");
+  expect(error.code).toBe("CONFLICT");
+  expect(error.details).toMatchObject({ reason: "egress_unresolved" });
+  return error;
+}

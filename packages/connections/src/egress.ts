@@ -3,6 +3,7 @@ import {
   AppError,
   EGRESS_DENIED,
   EGRESS_PROTOCOLS,
+  EGRESS_UNRESOLVED,
   type EgressChecker,
   type EgressGrant,
   type EgressProtocol,
@@ -20,6 +21,9 @@ import {
 // What is decided here:
 // - A target is protocol, host and port. All three must equal one entry of `egress.allow`. A
 //   host is one exact name or one literal address: no wildcard, no suffix match.
+// - A target outside the list is refused before anything is resolved, so that answer never
+//   depends on DNS. A listed host whose name gives no address is refused too and nothing is
+//   contacted, with the reason `egress_unresolved` and not `egress_denied`.
 // - The host is resolved when it is checked, and every answer is judged. One answer that is
 //   loopback, link-local, a metadata address or a private range refuses a public entry, also
 //   as an IPv4-mapped IPv6 address. An entry with `network: private` is the operator saying
@@ -97,6 +101,20 @@ export function egressDenied(target: { host: string; port: number }): AppError {
     host,
     port: target.port
   });
+}
+
+/**
+ * The refusal of a target that is on the list and whose name gave no address: the lookup
+ * failed, timed out or answered nothing. Nothing is contacted. It is not `egress_denied`,
+ * so nobody is sent to the list for a stopped service or a resolver that is down.
+ */
+function egressUnresolved(target: { host: string; port: number }): AppError {
+  const host = printableHost(target.host);
+  return new AppError(
+    "CONFLICT",
+    `${EGRESS_UNRESOLVED}: ${host}:${target.port} is on the egress list, but the host did not resolve to an address`,
+    { reason: EGRESS_UNRESOLVED, host, port: target.port }
+  );
 }
 
 /** A host as a refusal may repeat it: a name or an address, and nothing that was pasted. */
@@ -295,27 +313,29 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
 
   /** The refusals that came from the resolver. They are held for the shorter time. */
   const unresolved = new WeakSet<AppError>();
-  const notResolved = (target: EgressTarget): AppError => {
-    const error = egressDenied(target);
+  const briefly = (error: AppError): AppError => {
     unresolved.add(error);
     return error;
   };
 
   const judge = async (target: EgressTarget, listed: ListedEntry): Promise<EgressGrant> => {
     let addresses: EgressResolvedAddress[];
+    // Only a listed target comes here. Its own name giving no address is the one refusal
+    // that is not `egress_denied`.
     try {
       addresses = await addressesOf(target.host);
     } catch {
-      throw notResolved(target);
+      throw briefly(egressUnresolved(target));
     }
     if (addresses.length === 0) {
-      throw notResolved(target);
+      throw briefly(egressUnresolved(target));
     }
     let store: string[];
     try {
       store = await storeAddressesOn(target.port);
     } catch {
-      throw notResolved(target);
+      // The Platform Store's name gave no address: the target cannot be told apart from it.
+      throw briefly(egressDenied(target));
     }
     for (const answer of addresses) {
       // An answer this check cannot read as an address is never connected to.

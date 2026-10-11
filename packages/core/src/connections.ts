@@ -156,7 +156,9 @@ export interface EgressGrant extends EgressTarget {
 
 /**
  * The one check every outbound connection of a Connection passes before it is opened and
- * before a credential is resolved. It throws `egress_denied` with the host and the port.
+ * before a credential is resolved. It throws `egress_denied` with the host and the port. A
+ * target that is on the list and whose name does not resolve is refused as well, with
+ * `egress_unresolved`: nothing is contacted, and the refusal says the list is not the cause.
  */
 export interface EgressChecker {
   check(target: EgressTarget): Promise<EgressGrant>;
@@ -164,6 +166,13 @@ export interface EgressChecker {
 
 /** The reason and the code of a refused target. */
 export const EGRESS_DENIED = "egress_denied";
+
+/**
+ * The reason of a target that is on the egress list and could not be resolved to an address.
+ * It is refused like any other, and a caller is told `connection_unavailable`: the place to
+ * look is the outside system or the resolver, not the list.
+ */
+export const EGRESS_UNRESOLVED = "egress_unresolved";
 
 /** The one subject a shared credential has. A credential per person names that person. */
 export const SHARED_CREDENTIAL_SUBJECT = "shared";

@@ -12,12 +12,13 @@ import {
 } from "@vivd-catalyst/connections";
 import {
   LOG_REDACTION,
+  connectionCallReasonOf,
   type ConnectionConfig,
   type ConnectionCredentialResolver,
   type EgressChecker,
   type EgressTarget
 } from "@vivd-catalyst/core";
-import { checkerOf, denied, https, type Dns } from "./support/egress";
+import { checkerOf, denied, https, unresolved, type Dns } from "./support/egress";
 import { required } from "./support/assertions";
 import { connection } from "./support/connections";
 import { createTestConnector, findLeak, generateTestSecret } from "./support/test-connector";
@@ -156,12 +157,66 @@ describe("the egress checker", () => {
     }
   });
 
-  it("refuses a host that does not resolve or resolves to nothing", async () => {
-    const { checker } = checkerOf([{ host: "gone.example.com" }, { host: "empty.example.com" }], {
-      "empty.example.com": []
+  it("refuses a listed host that does not resolve with a reason of its own, and contacts nothing", async () => {
+    // Fails without the change: both answered `egress_denied: ... is not allowed`, which
+    // sent an operator to the list for a stopped service.
+    const { checker, asked } = checkerOf(
+      [{ host: "gone.example.com" }, { host: "empty.example.com" }],
+      { "empty.example.com": [] }
+    );
+    const gone = await unresolved(checker.check(https("gone.example.com")));
+    expect(gone.message).toBe(
+      "egress_unresolved: gone.example.com:443 is on the egress list, but the host did not resolve to an address"
+    );
+    expect(gone.details).toEqual({
+      reason: "egress_unresolved",
+      host: "gone.example.com",
+      port: 443
     });
-    await denied(checker.check(https("gone.example.com")));
-    await denied(checker.check(https("empty.example.com")));
+    expect(connectionCallReasonOf(gone)).toBe("connection_unavailable");
+    await unresolved(checker.check(https("empty.example.com")));
+    expect(asked).toEqual(["gone.example.com", "empty.example.com"]);
+  });
+
+  it("refuses a host outside the list as egress_denied before anything is resolved", async () => {
+    // The answer for an unlisted target does not depend on DNS: with and without an address
+    // it is the same refusal, and the resolver is never asked.
+    const cases: Dns[] = [{}, { "other.example.com": ["93.184.216.34"] }];
+    for (const dns of cases) {
+      const { checker, asked } = checkerOf([{ host: "api.example.com" }], dns);
+      const error = await denied(checker.check(https("other.example.com")));
+      expect(error.message).toBe("egress_denied: other.example.com:443 is not allowed");
+      // Another port and another protocol of a listed host are outside the list as well.
+      await denied(checker.check(https("api.example.com", 8443)));
+      await denied(checker.check({ protocol: "http", host: "api.example.com", port: 443 }));
+      expect(asked).toEqual([]);
+    }
+  });
+
+  it("keeps egress_denied for a listed host that resolves to a private address without cidrs", async () => {
+    // No check is loosened: an address the rules refuse is `egress_denied` as before.
+    for (const address of ["10.0.0.5", "127.0.0.1", "169.254.169.254", "::ffff:10.0.0.5"]) {
+      const { checker } = checkerOf([{ host: "api.example.com" }], {
+        "api.example.com": [address]
+      });
+      const error = await denied(checker.check(https("api.example.com")));
+      expect(error.message, address).toBe("egress_denied: api.example.com:443 is not allowed");
+    }
+    // A Store whose name gives no address refuses the target on its port as `egress_denied`.
+    const { checker } = checkerOf(
+      [
+        {
+          protocol: "postgres",
+          host: "warehouse",
+          port: 5432,
+          network: "private",
+          cidrs: ["172.28.0.0/16"]
+        }
+      ],
+      { warehouse: ["172.28.0.9"] },
+      { platformStore: [{ host: "postgres", port: 5432 }] }
+    );
+    await denied(checker.check({ protocol: "postgres", host: "warehouse", port: 5432 }));
   });
 
   it("reaches a private target only where the operator's entry names its ranges", async () => {
@@ -429,8 +484,8 @@ describe("the egress checker", () => {
     );
     const warehouse: EgressTarget = { protocol: "postgres", host: "warehouse", port: 5432 };
     // A failed lookup, no answer, and a Store that does not resolve.
-    await denied(checker.check(https("api.example.com")));
-    await denied(checker.check(https("empty.example.com")));
+    await unresolved(checker.check(https("api.example.com")));
+    await unresolved(checker.check(https("empty.example.com")));
     dns.warehouse = ["172.28.0.9"];
     await denied(checker.check(warehouse));
     await denied(checker.check(https("blocked.example.com")));
@@ -442,7 +497,7 @@ describe("the egress checker", () => {
     dns.postgres = ["172.28.0.2"];
     dns["blocked.example.com"] = ["93.184.216.36"];
     time += EGRESS_RESOLUTION_FAILURE_TTL_MS - 1;
-    await denied(checker.check(https("api.example.com")));
+    await unresolved(checker.check(https("api.example.com")));
     expect(asked).toHaveLength(5);
 
     // After it the three resolver refusals are asked again and granted. The refusal by rule

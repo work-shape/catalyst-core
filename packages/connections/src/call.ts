@@ -1,6 +1,8 @@
 import {
   AppError,
+  CONNECTION_CALL_REASONS,
   CREDENTIAL_REFUSALS,
+  EGRESS_UNRESOLVED,
   connectionCallError,
   connectionCallReasonOf,
   isAppError,
@@ -190,6 +192,27 @@ const NO_CREDENTIALS: ConnectionCredentialResolver = {
 /** A host as DNS writes one, or an address. Anything else is not repeated in an error. */
 const HOST_PATTERN = /^[A-Za-z0-9.:_[\]-]{1,255}$/u;
 
+/** Host and port of a target the egress checker refused, where they may be repeated. */
+function refusedTargetOf(
+  details: unknown,
+  secret: string | undefined
+): { host: string; port: number; unresolved?: true } | undefined {
+  if (typeof details !== "object" || details === null) return undefined;
+  if (!("host" in details && "port" in details)) return undefined;
+  const { host, port } = details;
+  if (
+    typeof host !== "string" ||
+    !HOST_PATTERN.test(host) ||
+    typeof port !== "number" ||
+    !Number.isInteger(port) ||
+    namesSecret(`${host}:${port}`, secret)
+  ) {
+    return undefined;
+  }
+  const unresolved = "reason" in details && details.reason === EGRESS_UNRESOLVED;
+  return unresolved ? { host, port, unresolved } : { host, port };
+}
+
 /**
  * The error a failed call leaves with. Only a reason passes: the sentence is this module's
  * own, so no text an outside system sent and no text a Connector type composed reaches a run,
@@ -206,24 +229,22 @@ function safeCallError(
   if (reason === undefined) {
     return new AppError("INTERNAL", "The connector failed");
   }
-  if (reason === "egress_denied" && isAppError(error)) {
-    const details: unknown = error.details;
-    if (typeof details === "object" && details !== null && "host" in details && "port" in details) {
-      const { host, port } = details;
-      if (
-        typeof host === "string" &&
-        HOST_PATTERN.test(host) &&
-        typeof port === "number" &&
-        Number.isInteger(port) &&
-        !namesSecret(`${host}:${port}`, secret)
-      ) {
-        return new AppError(
-          "FORBIDDEN",
-          `${reason}: ${host}:${port} is not allowed by the instance's egress list`,
-          { reason, host, port }
-        );
-      }
-    }
+  const target = isAppError(error) ? refusedTargetOf(error.details, secret) : undefined;
+  if (reason === "egress_denied" && target) {
+    return new AppError(
+      "FORBIDDEN",
+      `${reason}: ${target.host}:${target.port} is not allowed by the instance's egress list`,
+      { reason, ...target }
+    );
+  }
+  // The checker's own reason for a listed host without an address. The list is not the cause.
+  if (reason === "connection_unavailable" && target?.unresolved === true) {
+    return new AppError(
+      CONNECTION_CALL_REASONS[reason],
+      `${reason}: the host ${target.host}:${target.port} did not resolve to an address`,
+      { reason, cause: EGRESS_UNRESOLVED, host: target.host, port: target.port },
+      { exposeMessage: true }
+    );
   }
   return exposed(connectionCallError(reason));
 }

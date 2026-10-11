@@ -239,6 +239,25 @@ describe("the Connection routes", () => {
     );
   });
 
+  it("test says unavailable, not network_denied, when the listed host does not resolve", async () => {
+    // Fails without the change: the test answered `network_denied` and wrote `egress_denied`.
+    const t = await fixture();
+    const assetId = await t.seed("crm");
+    await t.grant(t.kai.id, "connection.read", { assetId });
+    t.state.hostResolves = false;
+    const tested = z
+      .object({ status: z.string() })
+      .parse(
+        (await t.expectOk(t.admin.id, "connections.test", { params: { name: "crm" } })).json()
+      );
+    expect(tested.status).toBe("unavailable");
+    expect(t.sequence).not.toContain("resolve credential");
+    const detail = connectionDetailSchema.parse(
+      (await t.expectOk(t.kai.id, "connections.get", { params: { name: "crm" } })).json()
+    );
+    expect(detail).toMatchObject({ health: "failed", lastErrorCode: "connection_unavailable" });
+  });
+
   it("test a Connection through the same context as a call and write its health", async () => {
     const t = await fixture();
     const assetId = await t.seed("crm");

@@ -142,6 +142,8 @@ const failedSchema = z.object({
 /** What a test changes about its instance while it runs. */
 interface FixtureState {
   hostAllowed: boolean;
+  /** Whether the listed host has an address. Read by the checker's resolver. */
+  hostResolves: boolean;
   limits: ConnectorLimits;
   centralSettings: CentralPolicySetting[];
   agentTools: Map<string, string[]>;
@@ -201,6 +203,7 @@ export async function fixture(
   const storeKey = generateSecretStoreKey();
   const state: FixtureState = {
     hostAllowed: true,
+    hostResolves: true,
     limits: DEFAULT_LIMITS,
     centralSettings: [],
     agentTools: new Map(),
@@ -252,7 +255,10 @@ export async function fixture(
           : Promise.reject(new SecretNotResolvedError(name, "is not set"))
     }
   });
-  const address = () => Promise.resolve([{ address: "93.184.216.34", family: 4 as const }]);
+  const address = () =>
+    state.hostResolves
+      ? Promise.resolve([{ address: "93.184.216.34", family: 4 as const }])
+      : Promise.reject(new Error("ENOTFOUND"));
   const open = createEgressChecker({
     allow: [{ protocol: "https", host: HOST, port: 443, network: "public", cidrs: [] }],
     resolve: address

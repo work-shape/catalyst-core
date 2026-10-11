@@ -380,6 +380,27 @@ describe("a call of a Connection's operation", () => {
     expect(t.executed).toEqual([]);
   });
 
+  it("answers connection_unavailable, not egress_denied, when the listed host does not resolve", async () => {
+    // Fails without the change: the call failed with "egress_denied: ... is not allowed by
+    // the instance's egress list" although the host is on the list.
+    const t = await fixture();
+    const assetId = await t.seed("crm");
+    await t.grant(t.kai.id, "connection.use", { assetId });
+    t.state.hostResolves = false;
+
+    const failed = await t.failure(t.invoke(t.kai, "connection.crm.echo", { text: "hello" }));
+
+    expect(failed).toMatchObject({ code: "CONFLICT", reason: "connection_unavailable" });
+    expect(failed.message).toMatch(
+      /^connection_unavailable: the host [a-z0-9.-]+:443 did not resolve to an address$/u
+    );
+    // Still refused before anything else: no credential is resolved and nothing is called.
+    expect(t.sequence.slice(-2)).toEqual(["check egress", "record failed"]);
+    expect(t.sequence).not.toContain("resolve credential");
+    expect(t.executed).toEqual([]);
+    expect(await t.health(assetId)).toBe("failed");
+  });
+
   it("never validates against, and never tells, a schema nobody accepted", async () => {
     const t = await fixture();
     const changed: ConnectorOperationDescriptor = { ...lookup, description: "Changed outside." };

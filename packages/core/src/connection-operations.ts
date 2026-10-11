@@ -3,6 +3,7 @@ import {
   CONNECTION_NAME_PATTERN,
   CONNECTION_OPERATION_NAME_MAX_LENGTH,
   CONNECTION_OPERATION_NAME_PATTERN,
+  EGRESS_UNRESOLVED,
   type ConnectionExposure,
   type ConnectorOperationDescriptor
 } from "./connections";
@@ -174,10 +175,15 @@ function isConnectionCallReason(value: unknown): value is ConnectionCallReason {
   return typeof value === "string" && Object.hasOwn(CONNECTION_CALL_REASONS, value);
 }
 
-/** The reason an error of a Connection call carries, or nothing for any other error. */
+/**
+ * The reason an error of a Connection call carries, or nothing for any other error. A listed
+ * target that did not resolve (`egress_unresolved`) is `connection_unavailable` to a caller,
+ * as a target is that resolves and does not answer.
+ */
 export function connectionCallReasonOf(error: unknown): ConnectionCallReason | undefined {
   if (!isAppError(error)) return undefined;
   const { details } = error;
   if (typeof details !== "object" || details === null || !("reason" in details)) return undefined;
+  if (details.reason === EGRESS_UNRESOLVED) return "connection_unavailable";
   return isConnectionCallReason(details.reason) ? details.reason : undefined;
 }

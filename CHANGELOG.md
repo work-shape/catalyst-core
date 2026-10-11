@@ -1264,6 +1264,14 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- **Connections:** a Connection whose host is on the egress list and does not resolve, as with
+  a stopped service or a resolver that is down, no longer reads as refused by the list. A call
+  answers `connection_unavailable` with "the host <host>:<port> did not resolve to an address"
+  and a test answers `unavailable`, where both said `egress_denied` and `network_denied`
+  before. The target stays refused and nothing is contacted. A host outside the list keeps
+  `egress_denied`, decided before any lookup. The log line of a failed job attempt now carries
+  the fixed reason code of its error beside the class and the code.
+
 - **Models:** a caller that stops reading a streamed answer without stopping the call now ends
   the request to the provider, for every adapter. Before, the provider kept generating, and
   billing, after the call was settled.
