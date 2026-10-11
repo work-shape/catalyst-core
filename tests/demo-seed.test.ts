@@ -1,0 +1,209 @@
+import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
+import { z } from "zod";
+import { listAll } from "@vivd-catalyst/api-client";
+import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
+import { assertLocalDevelopmentHost, people, seedDemo } from "@vivd-catalyst/demo/seed";
+import {
+  createdBy,
+  expectCheckAnswers,
+  expectSecondRunChangedNothing,
+  useSeededInstance
+} from "./support/demo-seed";
+
+// `pnpm demo:seed` against the instance of the browser suite: its fixture config, the real
+// sign-in, the real config CLI, Postgres. Every test here fails without the seed.
+
+const fixtureConfig = resolve("tests/fixtures/e2e-app.yaml");
+
+/** The fixture config enables this tool; the suite's own server brings it. */
+const recordNote = defineTool({
+  name: "e2e.record_note",
+  effect: "changing",
+  permission: { mode: "allow" },
+  description: "Records a note. A fixture: it stores nothing.",
+  inputSchema: z.object({ text: z.string().min(1) }),
+  outputSchema: z.object({ recorded: z.string() }),
+  execute: (input) => toolSuccess({ recorded: input.text })
+});
+
+const seeded = useSeededInstance({
+  configPath: fixtureConfig,
+  baseUrl: "http://127.0.0.1:4210",
+  origin: "http://127.0.0.1:5273",
+  instanceAssets: resolve("tests/fixtures/e2e-assets"),
+  superadmin: { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" },
+  tools: [recordNote]
+});
+
+describe("the demo seed on the fixture instance", () => {
+  it("creates the company on an empty instance and says how much of each", () => {
+    expect(createdBy(seeded().first)).toEqual({
+      people: 7,
+      "service principals": 1,
+      "API keys": 1,
+      "the instance's own agents and skills": 2,
+      namespaces: 3,
+      agents: 8,
+      skills: 7,
+      "grant rows": 16,
+      "approval requests": 1,
+      connections: 0
+    });
+  });
+
+  it("leaves people across the roles, one deactivated and one who never signed in", () => {
+    const { users } = seeded().before;
+    const byLabel = (label: string) => users.find((user) => user.displayLabel === label);
+    expect(users).toHaveLength(people.length);
+    expect(users.filter((user) => user.roles.includes("admin"))).toHaveLength(2);
+    expect(users.filter((user) => user.roles.includes("superadmin"))).toHaveLength(0);
+    expect(byLabel("Lena Hoffmann")?.status).toBe("disabled");
+    // Rights beside the role's own, as the Users page shows them.
+    expect(byLabel("Jonas Brandt")?.permissions).toEqual([
+      "api_access.manage",
+      "agent_models.manage"
+    ]);
+    expect(byLabel("Sven Olsen")?.permissions).toEqual(["config_assets.read", "usage.view"]);
+    expect(byLabel("Mara Lindqvist")).toMatchObject({ identities: 1, signedIn: true });
+    // This instance has no invitation module: the invited person has no way to sign in, and
+    // the seed says so.
+    expect(byLabel("Noah Fischer")).toMatchObject({ identities: 0, signedIn: false });
+    expect(seeded().first.steps.find((step) => step.name === "people")?.note).toContain(
+      "userInvitations"
+    );
+  });
+
+  it("registers three Namespaces, one with a tool list and a model list", () => {
+    expect(
+      seeded().before.namespaces.map(
+        ({ prefix, allowedToolNames, allowedModelBindingIds, assetCount }) => ({
+          prefix,
+          allowedToolNames,
+          allowedModelBindingIds,
+          assetCount
+        })
+      )
+    ).toEqual([
+      { prefix: "hr-", allowedToolNames: null, allowedModelBindingIds: null, assetCount: 4 },
+      { prefix: "sales-", allowedToolNames: null, allowedModelBindingIds: null, assetCount: 4 },
+      {
+        prefix: "tax-",
+        allowedToolNames: ["read_skill", "show_view", "demo.workflow_summary"],
+        // Of the two models the seed names, this instance has one.
+        allowedModelBindingIds: ["primary"],
+        assetCount: 4
+      }
+    ]);
+  });
+
+  it("pushes the agents and skills, shows every agent, and gives one agent a second revision", async () => {
+    const { client, defaultAgentName } = seeded().before;
+    // The instance's own two agents are there as well, and one of them stays the default.
+    const own = ["application_assistant", "research_assistant"];
+    const assets = seeded().before.assets.filter((asset) => !own.includes(asset.name));
+    expect(defaultAgentName).toBe("application_assistant");
+    expect(assets.filter((asset) => asset.kind === "agent")).toHaveLength(8);
+    expect(assets.filter((asset) => asset.kind === "skill")).toHaveLength(7);
+    expect(assets.filter((asset) => asset.kind === "agent" && asset.shown !== "all")).toEqual([]);
+    expect(assets.filter((asset) => asset.revision !== 1).map((asset) => asset.name)).toEqual([
+      "tax-vat-checker"
+    ]);
+    const revisions = await listAll((paging) =>
+      client.assets.revisions.list({
+        params: { kind: "agent", name: "tax-vat-checker" },
+        query: paging
+      })
+    );
+    // Newest first: the config CLI's push over the draft a person saved.
+    expect(
+      revisions.map((revision) => [revision.revision, revision.actor?.principalKind ?? "user"])
+    ).toEqual([
+      [2, "service"],
+      [1, "user"]
+    ]);
+    expect(revisions[1]?.actor?.displayLabel).toBe("Jonas Brandt");
+  });
+
+  it("writes allow and deny rows in Namespaces and on single assets", () => {
+    const { grants } = seeded().before;
+    const count = (effect: string, scopeKind: string) =>
+      grants.filter((row) => row.effect === effect && row.scopeKind === scopeKind).length;
+    expect(grants).toHaveLength(16);
+    expect(count("allow", "namespace")).toBe(12);
+    expect(count("allow", "asset")).toBe(2);
+    expect(count("deny", "namespace")).toBe(1);
+    expect(count("deny", "asset")).toBe(1);
+  });
+
+  it("creates the config CLI's service principal with one key and leaves one call waiting in the Inbox", () => {
+    const { principals, approvals, assets } = seeded().before;
+    expect(principals).toEqual([
+      {
+        id: expect.any(String),
+        displayLabel: "Local config CLI",
+        credentials: [expect.any(String)]
+      }
+    ]);
+    expect(approvals).toEqual([
+      {
+        id: expect.any(String),
+        kind: "operation_call",
+        requestedBy: "Elif Aydin",
+        status: "pending"
+      }
+    ]);
+    // Nothing was written yet: the skill exists once somebody approves.
+    expect(assets.some((asset) => asset.name === "hr-parental-leave-faq")).toBe(false);
+  });
+
+  it("says that the instance has Connections and that it brings none yet", () => {
+    // The fixture config has the module on. The demo's own config has it off.
+    expect(seeded().first.steps.find((step) => step.name === "connections")?.note).toBe(
+      "This instance has Connections, and the seed brings none yet. See the demo README."
+    );
+  });
+
+  it("changes nothing when it runs a second time", () => {
+    expectSecondRunChangedNothing(seeded());
+  });
+
+  it("gives the Check tab the answers the demo README promises", async () => {
+    await expectCheckAnswers(seeded().before);
+  });
+
+  it("refuses a host that is not a local development host before it sends anything", async () => {
+    let requests = 0;
+    await expect(
+      seedDemo({
+        baseUrl: "https://catalyst.example.com",
+        appConfigPath: fixtureConfig,
+        assetsDir: seeded().assetsDir,
+        instanceAssetsDir: seeded().instanceAssetsDir,
+        env: {},
+        envFile: seeded().envFile,
+        fetchImpl: () => {
+          requests += 1;
+          return Promise.resolve(new Response());
+        }
+      })
+    ).rejects.toThrow("Refusing to seed 'catalyst.example.com'");
+    expect(requests).toBe(0);
+    for (const allowed of [
+      "http://localhost:4100",
+      "http://127.0.0.1:4100",
+      "http://[::1]:4100",
+      "http://demo.localhost:4100",
+      "https://catalyst.test"
+    ]) {
+      expect(() => assertLocalDevelopmentHost(allowed)).not.toThrow();
+    }
+    for (const refused of [
+      "http://10.0.0.5:4100",
+      "https://test.example.com",
+      "http://localtest.me"
+    ]) {
+      expect(() => assertLocalDevelopmentHost(refused)).toThrow("Refusing to seed");
+    }
+  });
+});
