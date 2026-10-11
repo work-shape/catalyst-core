@@ -24,7 +24,8 @@ import { isBlockedIpAddress, nodeWebFetchAddressResolver } from "@vivd-catalyst/
 //   (`pinnedLookup`) and keeps the host as TLS and `Host` name, so the address used is the
 //   address checked and a second DNS answer changes nothing.
 // - The Platform Store's own host and port are refused whatever the list says, by name and by
-//   address.
+//   address. Its addresses are resolved with every judged target. Where they cannot be
+//   resolved, every target on the Store's port is refused.
 // - Plain `http` reaches a private entry only. The release config schema refuses it for a
 //   public one, and so does this check.
 // - A redirect or a returned download address is a new target: `egressTargetOfUrl` reads it
@@ -220,7 +221,6 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
   // Holds the answer for each target of the list that was asked, so at most one entry per
   // line of `egress.allow`. A refusal is held as long as a grant.
   const answers = new Map<string, { until: number; answer: Promise<EgressGrant> }>();
-  const storeAddresses = new Map<string, { until: number; answer: Promise<string[]> }>();
 
   const addressesOf = async (host: string): Promise<EgressResolvedAddress[]> => {
     const literal = canonicalAddress(host);
@@ -232,23 +232,22 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
     return resolved.map((answer) => canonicalAddress(answer.address) ?? answer);
   };
 
-  /** The addresses the Platform Store answers on the port, for the comparison by address. */
+  /**
+   * The addresses the Platform Store answers on the port, for the comparison by address.
+   * They are resolved each time a target is judged, at the same moment as the target, and
+   * are held nowhere else: a judged answer and the Store addresses it was compared with are
+   * always of one age, at most `EGRESS_RESOLUTION_TTL_MS`. A Store host that does not
+   * resolve throws, and the target is refused: without the Store's addresses nobody can say
+   * that a target is not the Store.
+   */
   const storeAddressesOn = async (port: number): Promise<string[]> => {
     const found: string[] = [];
     for (const store of platformStore.filter((candidate) => candidate.port === port)) {
-      let held = storeAddresses.get(store.host);
-      if (!held || held.until <= now()) {
-        held = {
-          until: now() + EGRESS_RESOLUTION_TTL_MS,
-          answer: addressesOf(store.host).then(
-            (addresses) => addresses.map((entry) => entry.address),
-            // A store host that does not resolve here is still refused by its name.
-            () => []
-          )
-        };
-        storeAddresses.set(store.host, held);
+      const addresses = await addressesOf(store.host);
+      if (addresses.length === 0) {
+        throw new Error("The Platform Store host has no address");
       }
-      found.push(...(await held.answer));
+      found.push(...addresses.map((entry) => entry.address));
     }
     return found;
   };
@@ -263,7 +262,12 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
     if (addresses.length === 0) {
       throw egressDenied(target);
     }
-    const store = await storeAddressesOn(target.port);
+    let store: string[];
+    try {
+      store = await storeAddressesOn(target.port);
+    } catch {
+      throw egressDenied(target);
+    }
     for (const answer of addresses) {
       // An answer this check cannot read as an address is never connected to.
       if (isIP(answer.address) === 0 || isNeverRoutable(answer)) {

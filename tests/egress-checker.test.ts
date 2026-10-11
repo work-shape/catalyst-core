@@ -290,6 +290,43 @@ describe("the egress checker", () => {
     });
   });
 
+  it("refuses a target on the Store's port while the Store's address cannot be resolved", async () => {
+    // Fails without the change: a Store host that did not resolve left an empty deny list,
+    // and the alias below was granted.
+    let time = 1_000;
+    const private_ = { network: "private" as const, cidrs: ["172.28.0.0/16"] };
+    const dns: Dns = { "db-alias": ["172.28.0.2"], api: ["172.28.0.9"] };
+    const { checker } = checkerOf(
+      [
+        { protocol: "postgres", host: "db-alias", port: 5432, ...private_ },
+        { protocol: "postgres", host: "172.28.0.2", port: 5432, ...private_ },
+        { protocol: "https", host: "api", port: 443, ...private_ }
+      ],
+      dns,
+      { platformStore: [{ host: "postgres", port: 5432 }], now: () => time }
+    );
+    await denied(checker.check({ protocol: "postgres", host: "db-alias", port: 5432 }));
+    await denied(checker.check({ protocol: "postgres", host: "172.28.0.2", port: 5432 }));
+    // Another port is not the Store's: it needs no Store address to be judged.
+    expect(await checker.check(https("api"))).toMatchObject({ address: "172.28.0.9" });
+
+    // The Store resolves again, elsewhere: the alias is another database and is granted.
+    dns.postgres = ["172.28.0.3"];
+    time += EGRESS_RESOLUTION_TTL_MS;
+    expect(
+      await checker.check({ protocol: "postgres", host: "db-alias", port: 5432 })
+    ).toMatchObject({ address: "172.28.0.2" });
+    // The Store moves onto the alias's address. No held Store address stands in the way: it
+    // is resolved again with the target, and the target is refused.
+    dns.postgres = ["172.28.0.2"];
+    time += EGRESS_RESOLUTION_TTL_MS;
+    await denied(checker.check({ protocol: "postgres", host: "db-alias", port: 5432 }));
+    // A Store host with no address at all refuses as one that fails.
+    dns.postgres = [];
+    time += EGRESS_RESOLUTION_TTL_MS;
+    await denied(checker.check({ protocol: "postgres", host: "db-alias", port: 5432 }));
+  });
+
   it("resolves once per target within EGRESS_RESOLUTION_TTL_MS, and again after it", async () => {
     let time = 1_000;
     const dns: Dns = { "api.example.com": ["93.184.216.34"] };
