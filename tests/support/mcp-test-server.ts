@@ -57,6 +57,8 @@ export interface McpTestServer {
   readonly requests: McpTestRequest[];
   /** How many TCP connections were opened to the server. */
   readonly connections: number;
+  /** How many of them are open now. */
+  readonly open: number;
   /** The requests of one JSON-RPC method. */
   rpc(method: string): McpTestRequest[];
   close(): Promise<void>;
@@ -203,6 +205,9 @@ export async function startMcpTestServer(
     requests,
     get connections() {
       return connections;
+    },
+    get open() {
+      return sockets.size;
     },
     rpc: (method) => requests.filter((request) => request.rpc === method),
     close() {

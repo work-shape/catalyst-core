@@ -44,15 +44,23 @@ import { egressTargetOfUrl, isSameEgressOrigin, pinnedLookup } from "../egress";
 /** How many redirects one request follows before it fails. */
 const MCP_MAX_REDIRECTS = 3;
 /**
- * How many sockets one Connection keeps to its server in one process. Calls beyond it wait
- * for a socket. It equals the calls of one Connection that run side by side.
+ * How many sockets one kept agent holds: the sockets of one Connection to one checked address
+ * of its server, in one process. Requests beyond it wait for a socket. It equals the calls
+ * of one Connection that run side by side.
  */
 export const MCP_SOCKETS_PER_CONNECTION = 8;
 /** How long an unused socket stays open for the next call before it is closed. */
 const MCP_IDLE_SOCKET_TIMEOUT_MS = 30_000;
 /**
- * For how many Connections one process keeps sockets for reuse. Beyond it the Connection
- * that was used longest ago opens new sockets at its next call.
+ * How many agents one process keeps for reuse. A Connection has one for each address its
+ * server was checked at, so one whose name answers two addresses in turn counts twice.
+ *
+ * The sockets of one process to MCP servers are at most
+ * MCP_POOLED_CONNECTIONS_MAX x MCP_SOCKETS_PER_CONNECTION kept ones (2,048), plus one for
+ * each request in flight that has no kept agent: a request a redirect sent to another origin,
+ * and a request of a Connection that found every kept agent in use. Such a socket is closed
+ * with its request. An agent that leaves the pool is destroyed with its sockets, and only an
+ * agent without a request leaves it.
  */
 const MCP_POOLED_CONNECTIONS_MAX = 256;
 /** The longest session id a server may hand out. A longer one fails the session. */
@@ -81,25 +89,49 @@ type PooledAgent = HttpAgent | HttpsAgent;
 
 /** The sockets one process keeps to MCP servers, by Connection. It holds no credential. */
 interface McpSocketPool {
-  agentFor(connectionId: string, grant: EgressGrant): PooledAgent;
+  /**
+   * The kept agent of a Connection towards one checked address, or nothing where the pool is
+   * full and every agent in it serves a request. The caller then sends on a socket of that
+   * one request.
+   */
+  agentFor(connectionId: string, grant: EgressGrant): PooledAgent | undefined;
 }
 
-export function createMcpSocketPool(): McpSocketPool {
-  // Insertion order is use order: an entry that is used moves to the end. An entry that is
-  // dropped is not closed by force: calls on its sockets end as they would, and each socket
-  // closes once it was unused for MCP_IDLE_SOCKET_TIMEOUT_MS.
-  const agents = new Map<string, { key: string; agent: PooledAgent }>();
+function isIdle(agent: PooledAgent): boolean {
+  return Object.keys(agent.sockets).length === 0 && Object.keys(agent.requests).length === 0;
+}
+
+export function createMcpSocketPool(max: number = MCP_POOLED_CONNECTIONS_MAX): McpSocketPool {
+  // Insertion order is use order: an entry that is used moves to the end.
+  const agents = new Map<string, PooledAgent>();
   return {
     agentFor(connectionId, grant) {
-      // A socket is reused only towards the address that was checked for this call.
-      const key = `${grant.protocol}|${grant.host}|${grant.port}|${grant.address}`;
-      const held = agents.get(connectionId);
+      // A socket is reused only by its Connection, and only towards the address that was
+      // checked for this call. An address the server had before keeps its agent until that
+      // is the one used longest ago: calls still running towards it are not cut off.
+      const key = JSON.stringify([
+        connectionId,
+        grant.protocol,
+        grant.host,
+        grant.port,
+        grant.address
+      ]);
+      const held = agents.get(key);
       if (held) {
-        agents.delete(connectionId);
-        if (held.key === key) {
-          agents.set(connectionId, held);
-          return held.agent;
+        agents.delete(key);
+        agents.set(key, held);
+        return held;
+      }
+      if (agents.size >= max) {
+        // The agent used longest ago that serves no request makes room, and is destroyed:
+        // nothing outside the pool keeps a socket open.
+        for (const [oldKey, old] of agents) {
+          if (!isIdle(old)) continue;
+          agents.delete(oldKey);
+          old.destroy();
+          break;
         }
+        if (agents.size >= max) return undefined;
       }
       const options = {
         keepAlive: true,
@@ -108,11 +140,7 @@ export function createMcpSocketPool(): McpSocketPool {
         timeout: MCP_IDLE_SOCKET_TIMEOUT_MS
       };
       const agent = grant.protocol === "https" ? new HttpsAgent(options) : new HttpAgent(options);
-      agents.set(connectionId, { key, agent });
-      if (agents.size > MCP_POOLED_CONNECTIONS_MAX) {
-        const oldest = agents.keys().next();
-        if (!oldest.done) agents.delete(oldest.value);
-      }
+      agents.set(key, agent);
       return agent;
     }
   };
@@ -217,6 +245,7 @@ function hostHeaderOf(grant: EgressGrant): string {
   return grant.port === usual ? host : `${host}:${grant.port}`;
 }
 
+/** An agent for one request. Whoever makes it destroys it when the request is over. */
 function oneRequestAgent(grant: EgressGrant): PooledAgent {
   return grant.protocol === "https" ? new HttpsAgent() : new HttpAgent();
 }
@@ -406,6 +435,11 @@ function pinnedFetch(
       // Last, so that nothing above stands in the place of a credential header.
       Object.assign(headers, credential?.headers);
 
+      // Another origin gets a socket for this one request, and so does the Connection's own
+      // where the pool has no room. It is an agent of this file either way, never the
+      // process's own, so no proxy of the environment is used.
+      const kept = own ? sockets.agentFor(context.connection.id, grant) : undefined;
+      const agent = kept ?? oneRequestAgent(grant);
       let response: IncomingMessage;
       try {
         response = await sendHop({
@@ -414,12 +448,13 @@ function pinnedFetch(
           method,
           headers,
           body,
-          // Another origin gets a socket for this one request. It is an agent of this file
-          // either way, never the process's own, so no proxy of the environment is used.
-          agent: own ? sockets.agentFor(context.connection.id, grant) : oneRequestAgent(grant),
+          agent,
           signal: state.abort.signal
         });
+        // The socket of one request ends with the answer to it, however that ends.
+        if (kept === undefined) response.once("close", () => agent.destroy());
       } catch {
+        if (kept === undefined) agent.destroy();
         throw fail(
           state,
           state.abort.signal.aborted ? "upstream_timeout" : "connection_unavailable"
