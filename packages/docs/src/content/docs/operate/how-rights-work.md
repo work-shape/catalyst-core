@@ -3,8 +3,6 @@ title: How rights work
 description: Who may do what in Workshape Catalyst, explained from the start. Roles, single rights, grants, Namespaces, the checks an action passes, and which screen sets which of them.
 ---
 
-This page explains the rights system to a reader who has never seen it. It says what exists today. The last section lists what does not exist yet. For the exact rules of the Access page, see [Rights and Namespaces](/operate/rights-and-namespaces/).
-
 ## The short version
 
 1. An action is checked before it runs, in a fixed order, whether you click a button, a script calls the API or an agent uses a tool for you.
@@ -40,6 +38,8 @@ This page explains the rights system to a reader who has never seen it. It says 
 </svg>
 <figcaption>An action passes these layers from top to bottom, and any layer can stop it. Layers 4 and 5 exist for the actions on the full path, which the section on the path lists.</figcaption>
 </figure>
+
+This page explains the rights system to a reader who has never seen it. It says what exists today. The last section lists what does not exist yet. For the exact rules of the Access page, see [Rights and Namespaces](/operate/rights-and-namespaces/).
 
 Three words come up on every screen, so here they are once.
 
@@ -114,31 +114,27 @@ Take the tax team of a company. It has both.
 - The Shared Workspace **Tax team** is where its twelve people chat. Its owner added them as members, and members reach the shared conversations in it. A private conversation stays with the person who created it. A Superadmin can enter every Shared Workspace without being a member.
 - The Namespace `tax-` holds the agents the team uses, such as `tax-vat-helper`. Mara and one colleague hold grants in it. They are the two people of the team who build those agents. An Admin or a Superadmin of the instance can change them too.
 
-<figure class="docs-diagram docs-diagram-wide">
-<svg viewBox="0 0 660 236" role="img" aria-labelledby="rights-fig-6-title rights-fig-6-desc">
+<figure class="docs-diagram">
+<svg viewBox="0 0 420 372" role="img" aria-labelledby="rights-fig-6-title rights-fig-6-desc">
 <title id="rights-fig-6-title">The tax team has a workspace and a Namespace</title>
-<desc id="rights-fig-6-desc">Two boxes side by side. The workspace Tax team has twelve members and their conversations. The Namespace tax- holds three assets, and two people hold grants in it. One arrow goes from the Namespace box to the workspace box. It stands for the setting Available in, which is set for each agent. Nothing else connects the two boxes.</desc>
+<desc id="rights-fig-6-desc">Two boxes, one above the other. On top, the Namespace tax- holds three assets, and two people hold grants in it. Below, the workspace Tax team has twelve members and their conversations. One arrow goes down from the Namespace to the workspace. It stands for the setting Available in, which is set for each agent. Nothing else connects the two boxes.</desc>
 <defs><marker id="rights-arrow-6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0 0 10 5 0 10z"/></marker></defs>
-<rect class="box" x="10" y="10" width="270" height="170" rx="10"/>
-<text x="28" y="38" class="strong">Workspace "Tax team"</text>
-<text x="28" y="66" class="small">Where people work and what they see.</text>
-<text x="28" y="96" class="small">12 members</text>
-<text x="28" y="116" class="small">Their conversations and files</text>
-<text x="28" y="136" class="small">The agents they can choose</text>
-<text x="28" y="164" class="small-strong">Decides who uses.</text>
-<rect class="box-accent" x="380" y="10" width="270" height="170" rx="10"/>
-<text x="398" y="38" class="strong">Namespace tax-</text>
-<text x="398" y="66" class="small">A prefix that says what a right covers.</text>
-<text x="398" y="96" class="small">tax-vat-helper, tax-year-end</text>
-<text x="398" y="116" class="small">tax-audit-notes</text>
-<text x="398" y="136" class="small">Grants: Mara and one colleague</text>
-<text x="398" y="164" class="small-strong">Decides who builds.</text>
-<path class="line" d="M380 95 L282 95" marker-end="url(#rights-arrow-6)"/>
-<text x="330" y="84" class="small" text-anchor="middle">Available in</text>
-<text x="330" y="114" class="small" text-anchor="middle">per agent</text>
-<text x="330" y="212" class="small" text-anchor="middle">No setting says "the agents of tax- belong to the workspace Tax team".</text>
+<rect class="box-accent" x="10" y="8" width="400" height="150" rx="10"/>
+<text x="28" y="36" class="strong">Namespace tax-</text>
+<text x="28" y="62" class="small">A prefix that says what a right covers.</text>
+<text x="28" y="90" class="small">tax-vat-helper, tax-year-end, tax-audit-notes</text>
+<text x="28" y="110" class="small">Grants: Mara and one colleague</text>
+<text x="28" y="138" class="small-strong">Decides who builds.</text>
+<path class="line" d="M120 158 L120 212" marker-end="url(#rights-arrow-6)"/>
+<text x="136" y="190" class="small">Available in, per agent</text>
+<rect class="box" x="10" y="214" width="400" height="150" rx="10"/>
+<text x="28" y="242" class="strong">Workspace "Tax team"</text>
+<text x="28" y="268" class="small">Where people work and what they see.</text>
+<text x="28" y="296" class="small">12 members, their conversations and files</text>
+<text x="28" y="316" class="small">The agents they can choose</text>
+<text x="28" y="344" class="small-strong">Decides who uses.</text>
 </svg>
-<figcaption>One team, two things. The only arrow between them is the setting <strong>Available in</strong>, which somebody sets on each agent.</figcaption>
+<figcaption>One team, two things. The only arrow between them is the setting <strong>Available in</strong>, which somebody sets on each agent. No setting says "the agents of <code>tax-</code> belong to the workspace Tax team".</figcaption>
 </figure>
 
 So ten people of the team use the agents and two build them. Membership in the workspace makes nobody a builder, and a grant in the Namespace gives no access to the team's conversations.
@@ -550,7 +546,7 @@ Mara has the role User and two grants: read and write on agents in `tax-`. The i
 <path class="line" d="M336 328 L598 328" marker-end="url(#rights-arrow-4)"/>
 <text x="266.0" y="351" class="small" text-anchor="middle">200, new revision</text>
 <path class="line" d="M336 358 L196 358" marker-end="url(#rights-arrow-4)"/>
-<text x="129.0" y="381" class="small" text-anchor="middle">shows the saved agent</text>
+<text x="129.0" y="376" class="small" text-anchor="middle">shows the saved agent</text>
 <path class="line" d="M196 388 L62 388" marker-end="url(#rights-arrow-4)"/>
 </svg>
 <figcaption>One save, step by step. Each line inside the Instance column is a check from the flow chart above.</figcaption>
