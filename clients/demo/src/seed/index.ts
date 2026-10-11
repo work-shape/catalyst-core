@@ -3,6 +3,12 @@
 
 export { demoTools } from "../../tools";
 export { demoOperations } from "../policy";
-export { SEED_EMAIL_SUFFIX, checkQuestions, people, type CheckReason } from "./company";
+export {
+  SEED_EMAIL_SUFFIX,
+  checkQuestions,
+  connectionCheckQuestions,
+  people,
+  type CheckReason
+} from "./company";
 export { assertLocalDevelopmentHost } from "./adapters/local-network";
 export { seedDemo, type SeedReport } from "./run";

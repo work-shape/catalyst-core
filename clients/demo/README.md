@@ -73,7 +73,7 @@ A run that stopped half way is continued by the next one. An invited person who 
 
 ### What to ask the Check tab
 
-Open Administration > Access > Check, pick the person and the asset, and compare.
+Open Settings > Instance > Access > Check, pick the person, the kind and the asset, and compare.
 
 | Person         | Asset                            | Read | Write | Delete | Because                                                                                                   |
 | -------------- | -------------------------------- | ---- | ----- | ------ | --------------------------------------------------------------------------------------------------------- |
@@ -88,6 +88,17 @@ Open Administration > Access > Check, pick the person and the asset, and compare
 | Lena Hoffmann  | agent `sales-pitch-coach`        | no   | no    | no     | Her account is deactivated, so her rows in `sales-` allow nothing.                                        |
 
 The table is `checkQuestions` in `src/seed/company.ts`, and `tests/demo-seed.test.ts` asks the instance every row of it.
+
+A Connection has a fourth action: using it, which is calling through it, is a right of its own beside reading its settings. Choose the kind Connections and the asset `sample-business`.
+
+| Person         | Read | Use | Write | Delete | Because                                                                                  |
+| -------------- | ---- | --- | ----- | ------ | ---------------------------------------------------------------------------------------- |
+| Mara Lindqvist | yes  | yes | yes   | yes    | An admin may do everything with every Connection.                                        |
+| Tobias Keller  | no   | yes | no    | no     | He holds the right to use this one Connection, which does not let him see its settings.  |
+| Sven Olsen     | yes  | yes | no    | no     | He holds the rights to read and to use this one Connection, and none to change it.       |
+| Elif Aydin     | no   | no  | no    | no     | No right of hers names a Connection.                                                     |
+
+This table is `connectionCheckQuestions` in `src/seed/company.ts`, and `tests/demo-seed-own-config.test.ts` asks an instance with the demo's own config every row of it.
 
 ### What it leaves out
 

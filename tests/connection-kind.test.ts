@@ -429,9 +429,17 @@ describe("a Connection through the asset operations", () => {
       plural: "connections",
       actions: {
         read: "connection.read",
+        // Using a Connection is a right of its own, and the Check tab asks for it by this name.
+        use: "connection.use",
         write: "connection.write",
         delete: "connection.delete"
       }
+    });
+    // The kinds without such a right name none.
+    expect(context.kinds.find((kind) => kind.kind === "agent")?.actions).toEqual({
+      read: "agent.read",
+      write: "agent.write",
+      delete: "agent.delete"
     });
     expect(context.actions).toEqual(
       expect.arrayContaining(["agent.read", "connection.read", "connection.write"])

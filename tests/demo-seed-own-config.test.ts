@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { listAll } from "@vivd-catalyst/api-client";
+import { connectionCheckQuestions } from "@vivd-catalyst/demo/seed";
 import {
   createdBy,
   demoConfigEnv,
@@ -99,5 +100,9 @@ describe("the demo seed on the demo's own config", () => {
 
   it("gives the Check tab the answers the demo README promises", async () => {
     await expectCheckAnswers(seeded().before);
+  });
+
+  it("answers the Check tab for the Connection, with using it as an action of its own", async () => {
+    await expectCheckAnswers(seeded().before, connectionCheckQuestions);
   });
 });

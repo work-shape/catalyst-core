@@ -55,6 +55,10 @@ async function expectVerdictsHold(t: AccessInstance, holderId: string, name: str
   };
   const compared: string[] = [];
   for (const verdict of said) {
+    // An agent has no action to use; the registry never offers one for it.
+    if (verdict.verb === "use") {
+      continue;
+    }
     const response = await calls[verdict.verb]();
     if (response.statusCode === 404) {
       continue;

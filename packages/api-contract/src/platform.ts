@@ -4,7 +4,13 @@ import { z } from "zod";
 export const platformAssetKindSchema = z.object({
   kind: z.string(),
   plural: z.string(),
-  actions: z.object({ read: z.string(), write: z.string(), delete: z.string() })
+  actions: z.object({
+    read: z.string(),
+    write: z.string(),
+    delete: z.string(),
+    /** Only for a kind whose assets are used through a right of their own, as a Connection. */
+    use: z.string().optional()
+  })
 });
 
 /** A Namespace the caller holds a right in, with the actions that right covers there. */

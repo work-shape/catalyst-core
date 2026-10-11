@@ -213,6 +213,7 @@ export const access = defineTranslations({
     "access.revokeDeny": "Remove deny",
     "access.grantNothingAdded": "Nothing was added. The person already has every row you chose.",
     "access.grantPartlyAdded": "{added} added. {existing} already there and left as they are.",
+    "access.checkNameInvalid": "A name is one word without spaces.",
     "access.checkNameInvalidAgent": "An agent name is one word without spaces.",
     "access.checkNameInvalidSkill":
       "A skill name starts with a letter and uses only letters, digits, dots, hyphens and underscores.",
@@ -453,6 +454,7 @@ export const access = defineTranslations({
       "Es wurde nichts hinzugefügt. Die Person hat alle gewählten Zeilen bereits.",
     "access.grantPartlyAdded":
       "{added} hinzugefügt. {existing} gab es schon, sie bleiben unverändert.",
+    "access.checkNameInvalid": "Ein Name ist ein Wort ohne Leerzeichen.",
     "access.checkNameInvalidAgent": "Ein Agentenname ist ein Wort ohne Leerzeichen.",
     "access.checkNameInvalidSkill":
       "Der Name einer Fähigkeit beginnt mit einem Buchstaben und besteht nur aus Buchstaben, Ziffern, Punkten, Bindestrichen und Unterstrichen.",

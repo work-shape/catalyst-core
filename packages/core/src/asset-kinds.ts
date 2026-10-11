@@ -39,6 +39,8 @@ export interface AssetKindActions {
   read: string;
   write: string;
   delete: string;
+  /** Where using an asset of the kind is a right of its own, as calling through a Connection is. */
+  use?: string;
 }
 
 /** What a validator may look up besides the definitions it checks. */

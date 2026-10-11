@@ -244,12 +244,12 @@ export const cliPrincipal = {
 /** What the Check tab answers for one action, in the tab's own reasons. */
 export type CheckReason = "role" | "individual_right" | "grant" | "deny" | "no_grant" | "inactive";
 
-interface CheckQuestion {
+interface CheckQuestion<Kind extends string = AssetKind, Action extends string = Verb> {
   person: PersonKey;
-  kind: AssetKind;
+  kind: Kind;
   /** The name does not have to exist. */
   asset: string;
-  expect: Record<Verb, { allowed: boolean; reason: CheckReason }>;
+  expect: Record<Action, { allowed: boolean; reason: CheckReason }>;
   because: string;
 }
 
@@ -325,5 +325,56 @@ export const checkQuestions: CheckQuestion[] = [
     asset: "sales-pitch-coach",
     expect: { read: no("inactive"), write: no("inactive"), delete: no("inactive") },
     because: "Her account is deactivated, so her rows in `sales-` allow nothing."
+  }
+];
+
+/**
+ * The same for the Connection, which has a fourth action: using it. An instance answers these
+ * only with the module `connections` on, as the demo's own config has it.
+ */
+export const connectionCheckQuestions: CheckQuestion<"connection", Verb | "use">[] = [
+  {
+    person: "tobias",
+    kind: "connection",
+    asset: SEEDED_CONNECTION,
+    expect: {
+      read: no("no_grant"),
+      use: yes("grant"),
+      write: no("no_grant"),
+      delete: no("no_grant")
+    },
+    because:
+      "His row on this Connection allows using it: his agents get its data. He does not see it under Build."
+  },
+  {
+    person: "sven",
+    kind: "connection",
+    asset: SEEDED_CONNECTION,
+    expect: {
+      read: yes("grant"),
+      use: yes("grant"),
+      write: no("no_grant"),
+      delete: no("no_grant")
+    },
+    because: "His rows on this Connection allow reading and using it, and nothing more."
+  },
+  {
+    person: "elif",
+    kind: "connection",
+    asset: SEEDED_CONNECTION,
+    expect: {
+      read: no("no_grant"),
+      use: no("no_grant"),
+      write: no("no_grant"),
+      delete: no("no_grant")
+    },
+    because: "She holds no row on the Connection, so her agents are refused its tools."
+  },
+  {
+    person: "mara",
+    kind: "connection",
+    asset: SEEDED_CONNECTION,
+    expect: { read: yes("role"), use: yes("role"), write: yes("role"), delete: yes("role") },
+    because: "An admin holds every right on a Connection by the role."
   }
 ];

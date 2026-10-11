@@ -124,6 +124,9 @@ function grantsTab(props: Partial<ComponentProps<typeof GrantsTab>>) {
 
 function checkTab(props: Partial<ComponentProps<typeof CheckTab>>) {
   return createElement(CheckTab, {
+    kinds: undefined,
+    kindAssets: undefined,
+    onKindChange: nothing,
     users: [user("user-1", "Kai Example")],
     usersFailed: false,
     assets: [],
@@ -380,6 +383,112 @@ describe("what a check decides", () => {
     expect(actions[2]?.deniedThrough).toBe("write");
     // The deny names one asset: its neighbour under the prefix stays allowed.
     expect(decisions(denied, "kai-other", "asset-2")[1]).toEqual(["write", true, "grant"]);
+  });
+
+  it("answers every action the registry names for the kind, using a Connection among them", () => {
+    const connectionActions = {
+      read: "connection.read",
+      use: "connection.use",
+      write: "connection.write",
+      delete: "connection.delete"
+    };
+    const user: EffectivePermissions = {
+      holderActive: true,
+      items: [
+        {
+          action: "connection.use",
+          effect: "allow",
+          scopeKind: "asset",
+          scopeId: "conn-1",
+          source: "grant"
+        }
+      ]
+    };
+    const asked = (holder: EffectivePermissions, assetId?: string) =>
+      checkAsset(
+        holder,
+        { kind: "connection", name: "sample-business" },
+        assetId,
+        connectionActions
+      ).map((action) => [action.verb, action.allowed, action.reason]);
+    // A right to use a Connection is found, in the order the page lists the actions.
+    expect(asked(user, "conn-1")).toEqual([
+      ["read", false, "no_grant"],
+      ["use", true, "grant"],
+      ["write", false, "no_grant"],
+      ["delete", false, "no_grant"]
+    ]);
+    // The row names one Connection: the same name without its id is not covered.
+    expect(asked(user)[1]).toEqual(["use", false, "no_grant"]);
+    // Asked as an agent would be, the same person has no action called `use` and no right.
+    expect(decisions(user, "sample-business", "conn-1")).toEqual([
+      ["read", false, "no_grant"],
+      ["write", false, "no_grant"],
+      ["delete", false, "no_grant"]
+    ]);
+    // A deny on using does not refuse a delete: only a denied read or write does.
+    const admin: EffectivePermissions = {
+      holderActive: true,
+      items: [
+        ...Object.values(connectionActions).map((action) => ({
+          action,
+          effect: "allow" as const,
+          scopeKind: "instance" as const,
+          source: "role" as const
+        })),
+        {
+          action: "connection.use",
+          effect: "deny",
+          scopeKind: "asset",
+          scopeId: "conn-1",
+          source: "grant"
+        }
+      ]
+    };
+    expect(asked(admin, "conn-1")).toEqual([
+      ["read", true, "role"],
+      ["use", false, "deny"],
+      ["write", true, "role"],
+      ["delete", true, "role"]
+    ]);
+  });
+
+  it("offers the kinds of the instance's registry, and an unknown one by the instance's name", () => {
+    const registry = [
+      {
+        kind: "agent",
+        plural: "agents",
+        actions: { read: "agent.read", write: "agent.write", delete: "agent.delete" }
+      },
+      {
+        kind: "connection",
+        plural: "connections",
+        actions: {
+          read: "connection.read",
+          use: "connection.use",
+          write: "connection.write",
+          delete: "connection.delete"
+        }
+      },
+      {
+        kind: "app",
+        plural: "apps",
+        actions: { read: "app.read", write: "app.write", delete: "app.delete" }
+      }
+    ];
+    const markup = render(checkTab({ kinds: registry }));
+    expect(markup).toContain('<option value="agent" selected="">Agents</option>');
+    expect(markup).toContain('<option value="connection">Connections</option>');
+    expect(markup).toContain('<option value="app">apps</option>');
+    expect(markup).not.toContain('value="skill"');
+    expect(render(checkTab({ kinds: registry }), "de")).toContain(
+      '<option value="connection">Verbindungen</option>'
+    );
+    // Until the instance has answered, the two kinds every instance has are offered.
+    const waiting = render(checkTab({}));
+    expect(waiting).toContain('<option value="agent" selected="">Agents</option>');
+    expect(waiting).toContain('<option value="skill">Skills</option>');
+    expect(waiting).not.toContain('value="connection"');
   });
 
   it("holds nothing for a holder that is not active", () => {

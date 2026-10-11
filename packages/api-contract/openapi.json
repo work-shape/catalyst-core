@@ -17595,6 +17595,9 @@
               },
               "delete": {
                 "type": "string"
+              },
+              "use": {
+                "type": "string"
               }
             },
             "required": [

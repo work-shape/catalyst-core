@@ -288,6 +288,64 @@ test("an administrator sees Connections in Build and grants its rights; a read g
       await expect(grantRow.locator('[data-effect="allow"]')).toHaveText("Use connections");
     });
 
+    await test.step("the Check tab answers for the Connection, with using it as an action of its own", async () => {
+      const rowOf = (verb: string) =>
+        page.locator(`[data-testid="check-row"][data-verb="${verb}"]`);
+      /** Asks the tab what the member may do with the Connection. */
+      const ask = async () => {
+        await page.getByRole("tab", { name: /^(Check|Prüfen)$/u }).click();
+        const check = page.getByRole("tabpanel", { name: /^(Check|Prüfen)$/u });
+        await check.getByRole("button", { name: /^Person/u }).click();
+        await page.getByRole("option", { name: /E2E Connections/u }).click();
+        await expect(page.getByRole("listbox")).toHaveCount(0);
+        // The kinds are the instance's registry: a Connection is among them with its module on.
+        await check.getByRole("combobox", { name: /^(Kind|Art)$/u }).selectOption("connection");
+        await check
+          .getByRole("button", { name: /^(Pick an existing asset|Vorhandenes Asset wählen)$/u })
+          .click();
+        await page.getByRole("option", { name: connection.name, exact: true }).click();
+        await expect(page.getByRole("listbox")).toHaveCount(0);
+        await expect(rowOf("use")).toBeVisible();
+      };
+      await ask();
+      // The member holds the right to use this one Connection, and nothing else on it.
+      await expect(rowOf("use")).toContainText("Use");
+      await expect(rowOf("use")).toContainText("Allowed");
+      await expect(rowOf("use")).toContainText("Given right");
+      await expect(rowOf("use")).toContainText("Right on this asset");
+      for (const verb of ["read", "write", "delete"]) {
+        await expect(rowOf(verb)).toContainText("Refused");
+        await expect(rowOf(verb)).toContainText("No right");
+      }
+      await expect(page.getByTestId("check-row")).toHaveCount(4);
+      // The same name asked as an agent has no action to use, and no right at all.
+      const check = page.getByRole("tabpanel", { name: "Check" });
+      await check.getByRole("combobox", { name: "Kind" }).selectOption("agent");
+      await check.getByRole("textbox").fill(connection.name);
+      await expect(page.getByTestId("check-row")).toHaveCount(3);
+      await expect(rowOf("use")).toHaveCount(0);
+      await expect(rowOf("read")).toContainText("No right");
+
+      if (shotsDir) {
+        await mkdir(shotsDir, { recursive: true });
+        await page.setViewportSize({ width: 1440, height: 900 });
+        for (const theme of ["light", "dark"] as const) {
+          await page.evaluate(
+            (value) => window.localStorage.setItem("vivd-catalyst:theme", value),
+            theme
+          );
+          await page.reload();
+          await ask();
+          await page.screenshot({
+            path: join(shotsDir, `access-check-connection-${theme}-en-1440.png`)
+          });
+        }
+        await page.evaluate(() => window.localStorage.removeItem("vivd-catalyst:theme"));
+        await page.setViewportSize({ width: 1280, height: 800 });
+        await page.reload();
+      }
+    });
+
     await test.step("a grant to use the Connection gives its holder no Build entry", async () => {
       const signedIn = await requestWithOrigin(
         memberPage,

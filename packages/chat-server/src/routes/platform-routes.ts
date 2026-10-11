@@ -11,14 +11,15 @@ import { configAssetReferences } from "../config-asset-workflow";
 import type { Route } from "../http/route";
 import type { ChatServerOptions } from "../types";
 
-/** The scope a credential must carry before its holder can use each right of a kind. */
+/** The rights of a kind that decide what a caller does with its definitions. */
+const VERBS = ["read", "write", "delete"] as const satisfies readonly (keyof AssetKindActions)[];
+
+/** The scope a credential must carry before its holder can use each of those rights. */
 const SCOPE_OF_VERB = {
   read: "config_assets:read",
   write: "config_assets:write",
   delete: "config_assets:write"
-} as const satisfies Record<keyof AssetKindActions, OperationScope>;
-
-const VERBS = ["read", "write", "delete"] as const;
+} as const satisfies Record<(typeof VERBS)[number], OperationScope>;
 
 /**
  * The actions of the registered kinds a caller can use: the ones its grants allow on what

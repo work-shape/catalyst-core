@@ -61,6 +61,7 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
       },
       actions: {
         read: CONNECTION_ACTIONS.read,
+        use: CONNECTION_ACTIONS.use,
         write: CONNECTION_ACTIONS.write,
         delete: CONNECTION_ACTIONS.delete
       },

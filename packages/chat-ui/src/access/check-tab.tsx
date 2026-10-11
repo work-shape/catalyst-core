@@ -28,14 +28,14 @@ import {
 import { DocsReference } from "../docs-links";
 import { useTranslation, type TranslationContextValue, type TranslationKey } from "../i18n";
 import {
-  ACCESS_ASSET_KINDS,
   assetNameValid,
   checkAsset,
   checkedAssetId,
   checkState,
   namespaceOfName,
-  type AccessAssetKind,
+  type CheckableAsset,
   type CheckedAction,
+  type CheckedKind,
   type LoadFailure
 } from "./access-model";
 import { kindLabelKeys, verbLabelKeys } from "./grants-tab";
@@ -86,7 +86,29 @@ function decidedBy(action: CheckedAction, t: Translate): string {
       });
 }
 
+/** The name of a kind in the list: the page's own word, else the name the instance gives it. */
+function kindLabel(kind: CheckedKind, t: Translate): string {
+  const key = Object.entries(kindLabelKeys).find(([known]) => known === kind.kind)?.[1];
+  return key === undefined ? kind.plural : t(key);
+}
+
+/** The assets of one kind beyond agents and skills, as the page could list them. */
+interface CheckKindAssets {
+  /** Absent while they load. */
+  items: readonly CheckableAsset[] | undefined;
+  failure: LoadFailure | undefined;
+  retry(): void;
+}
+
 export interface CheckTabProps {
+  /**
+   * The asset kinds of the instance with the actions each is checked as, from the instance's
+   * registry. Absent until the instance has answered: agents and skills are offered meanwhile.
+   */
+  kinds: readonly CheckedKind[] | undefined;
+  /** The assets of the chosen kind where it is no agent or skill. Asked for by `onKindChange`. */
+  kindAssets: CheckKindAssets | undefined;
+  onKindChange(kind: string): void;
   /** The users the caller is shown. Absent while they load and when they could not be loaded. */
   users: readonly AdministeredUser[] | undefined;
   usersFailed: boolean;
@@ -115,8 +137,25 @@ export interface CheckTabProps {
   onRetryGrants(): void;
 }
 
-/** What one person may do with one agent or skill, per action, with what decided it. */
+/** The kinds every instance has, offered until the instance has named its own. */
+const BUILT_IN_KINDS: readonly CheckedKind[] = [
+  {
+    kind: "agent",
+    plural: "agents",
+    actions: { read: "agent.read", write: "agent.write", delete: "agent.delete" }
+  },
+  {
+    kind: "skill",
+    plural: "skills",
+    actions: { read: "skill.read", write: "skill.write", delete: "skill.delete" }
+  }
+];
+
+/** What one person may do with one asset of a kind, per action, with what decided it. */
 export function CheckTab({
+  kinds: reportedKinds,
+  kindAssets: otherAssets,
+  onKindChange,
   users,
   usersFailed,
   assets,
@@ -134,22 +173,32 @@ export function CheckTab({
   onRetryGrants
 }: CheckTabProps) {
   const { t } = useTranslation();
-  const [kind, setKind] = useState<AccessAssetKind>("agent");
+  const kinds = reportedKinds ?? BUILT_IN_KINDS;
+  const [kindId, setKindId] = useState("agent");
   const [name, setName] = useState("");
   const holder = users?.find((user) => user.id === holderId);
   const assetName = name.trim();
-  const kindAssets = (assets ?? []).filter((asset) => asset.kind === kind);
+  const checkedKind = kinds.find((candidate) => candidate.kind === kindId) ?? kinds[0];
+  const kind = checkedKind?.kind ?? kindId;
+  // Agents and skills come with the agent configuration; every other kind has its own list.
+  const fromOverview = kind === "agent" || kind === "skill";
+  const loadedAssets: readonly CheckableAsset[] | undefined = fromOverview
+    ? assets
+    : otherAssets?.items;
+  const kindAssets = (loadedAssets ?? []).filter((asset) => asset.kind === kind);
+  const kindAssetsFailure = fromOverview ? assetsFailure : otherAssets?.failure;
+  const retryKindAssets = fromOverview ? onRetryAssets : (otherAssets?.retry ?? onRetryAssets);
   const nameValid = assetNameValid(kind, assetName);
   const state = checkState({
     holderId,
-    kind,
+    kind: checkedKind?.kind,
     name: assetName,
     effectiveLoaded: effective !== undefined,
     effectiveFailure,
     grantsLoaded: holderGrants !== undefined,
     grantsFailed,
-    assetsLoaded: assets !== undefined,
-    assetsFailure
+    assetsLoaded: loadedAssets !== undefined,
+    assetsFailure: kindAssetsFailure
   });
   const retryBanner = (text: string, retry: () => void) => (
     <Banner
@@ -196,17 +245,18 @@ export function CheckTab({
           <Select
             value={kind}
             onChange={(event) => {
-              const next = ACCESS_ASSET_KINDS.find(
-                (candidate) => candidate === event.currentTarget.value
-              );
+              const next = kinds.find((candidate) => candidate.kind === event.currentTarget.value);
               if (next) {
-                setKind(next);
+                setKindId(next.kind);
+                // An asset belongs to its kind: the name of another kind's asset is not kept.
+                setName("");
+                onKindChange(next.kind);
               }
             }}
           >
-            {ACCESS_ASSET_KINDS.map((candidate) => (
-              <option key={candidate} value={candidate}>
-                {t(kindLabelKeys[candidate])}
+            {kinds.map((candidate) => (
+              <option key={candidate.kind} value={candidate.kind}>
+                {kindLabel(candidate, t)}
               </option>
             ))}
           </Select>
@@ -218,7 +268,11 @@ export function CheckTab({
             assetName === "" || nameValid
               ? undefined
               : t(
-                  kind === "agent" ? "access.checkNameInvalidAgent" : "access.checkNameInvalidSkill"
+                  kind === "skill"
+                    ? "access.checkNameInvalidSkill"
+                    : kind === "agent"
+                      ? "access.checkNameInvalidAgent"
+                      : "access.checkNameInvalid"
                 )
           }
         >
@@ -258,8 +312,11 @@ export function CheckTab({
       ) : state === "assetsForbidden" ? (
         <Banner tone="warning">{t("access.checkAssetsForbidden")}</Banner>
       ) : state === "assetsFailed" ? (
-        retryBanner(t("access.checkAssetsFailed"), onRetryAssets)
-      ) : effective === undefined || holderGrants === undefined || assets === undefined ? (
+        retryBanner(t("access.checkAssetsFailed"), retryKindAssets)
+      ) : effective === undefined ||
+        holderGrants === undefined ||
+        loadedAssets === undefined ||
+        checkedKind === undefined ? (
         <SkeletonList rows={3} />
       ) : (
         <CheckResult
@@ -272,7 +329,8 @@ export function CheckTab({
           actions={checkAsset(
             effective,
             { kind, name: assetName },
-            checkedAssetId({ kind, name: assetName }, assets, holderGrants)
+            checkedAssetId({ kind, name: assetName }, loadedAssets, holderGrants),
+            checkedKind.actions
           )}
         />
       )}
@@ -285,7 +343,7 @@ export function CheckTab({
  * skill and for a Namespace without lists: lists bind agents only.
  */
 function namespaceLimits(
-  kind: AccessAssetKind,
+  kind: string,
   namespace: NamespaceWithUsage | undefined,
   modelBindings: readonly { id: string; model: string }[] | undefined,
   t: Translate
@@ -326,7 +384,7 @@ function CheckResult({
   actions
 }: {
   holderName: string;
-  kind: AccessAssetKind;
+  kind: string;
   assetName: string;
   effective: EffectivePermissions;
   namespace: NamespaceWithUsage | undefined;
@@ -372,7 +430,7 @@ function CheckResult({
           </TableBody>
         </Table>
         {/* The table answers for the right. What else refuses a save is said under it. */}
-        {allowed("write") ? (
+        {allowed("write") && (kind === "agent" || kind === "skill") ? (
           <p data-testid="check-right-only" className="text-body text-muted-foreground">
             {t(kind === "agent" ? "access.checkRightOnlyAgent" : "access.checkRightOnlySkill")}
           </p>
@@ -382,7 +440,7 @@ function CheckResult({
             {limits.join(" ")}
           </Banner>
         ) : null}
-        {allowed("read")?.reason === "grant" ? (
+        {allowed("read")?.reason === "grant" && (kind === "agent" || kind === "skill") ? (
           <Banner layout="line">{t("access.checkReadThroughGrant")}</Banner>
         ) : null}
         {actions.some((action) => action.reason === "deny") ? (

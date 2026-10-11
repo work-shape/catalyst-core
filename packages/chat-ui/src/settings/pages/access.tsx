@@ -31,6 +31,7 @@ export function AccessPage() {
   const { apiBaseUrl, authScope, client } = useSettingsPage();
   const api = { apiBaseUrl, authScope, client };
   const [checkedHolderId, setCheckedHolderId] = useState<string | undefined>();
+  const [checkedKind, setCheckedKind] = useState("agent");
   const namespacesQuery = useNamespacesQuery(api);
   const grantsQuery = usePermissionGrantsQuery(api);
   const usersQuery = useWorkspaceUsersQuery({ ...api, enabled: true });
@@ -48,6 +49,19 @@ export function AccessPage() {
     queryFn: () =>
       listAll((paging) => client.assets.list({ params: { kind: "connection" }, query: paging })),
     enabled: hasConnections,
+    retry: false
+  });
+  // The Check tab asks about every kind the instance has. Agents and skills come with the
+  // agent configuration; the assets of any other kind are listed once the kind is chosen.
+  const checkedOtherKind =
+    checkedKind !== "agent" &&
+    checkedKind !== "skill" &&
+    Boolean(contextQuery.data?.kinds.some((kind) => kind.kind === checkedKind));
+  const checkedKindAssetsQuery = useQuery({
+    queryKey: [...workspaceQueryKeys.assets(apiBaseUrl, authScope), "choice", checkedKind],
+    queryFn: () =>
+      listAll((paging) => client.assets.list({ params: { kind: checkedKind }, query: paging })),
+    enabled: checkedOtherKind,
     retry: false
   });
   const workspacesQuery = useAdministeredCollaborationWorkspacesQuery({
@@ -139,6 +153,21 @@ export function AccessPage() {
         </TabsContent>
         <TabsContent value="check" className="pt-5">
           <CheckTab
+            kinds={contextQuery.data?.kinds}
+            kindAssets={
+              checkedOtherKind
+                ? {
+                    items: checkedKindAssetsQuery.data?.map((asset) => ({
+                      id: asset.id,
+                      kind: checkedKind,
+                      name: asset.name
+                    })),
+                    failure: loadFailure(checkedKindAssetsQuery.error),
+                    retry: retry(checkedKindAssetsQuery)
+                  }
+                : undefined
+            }
+            onKindChange={setCheckedKind}
             users={usersQuery.data}
             usersFailed={Boolean(usersQuery.error)}
             assets={overview?.assets}

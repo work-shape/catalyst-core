@@ -6,7 +6,8 @@ import {
   type CreatePermissionGrantRequest,
   type EffectivePermissions,
   type NamespaceWithUsage,
-  type PermissionGrantRow
+  type PermissionGrantRow,
+  type PlatformContext
 } from "@vivd-catalyst/api-client";
 import {
   NAMESPACE_PREFIX_MAX_LENGTH,
@@ -18,16 +19,19 @@ import {
   type GrantableAction
 } from "@vivd-catalyst/core";
 
-/** The asset kinds the Check tab asks about. */
-export const ACCESS_ASSET_KINDS = ["agent", "skill"] as const;
-export type AccessAssetKind = (typeof ACCESS_ASSET_KINDS)[number];
+/** A kind of the instance's registry, with the actions its rights are checked as. */
+export type CheckedKind = PlatformContext["kinds"][number];
 
 /** What the Check tab decides on an asset, in the order the page lists it. */
-const ACCESS_VERBS = ["read", "write", "delete"] as const;
+const ACCESS_VERBS = ["read", "use", "write", "delete"] as const;
 type AccessVerb = (typeof ACCESS_VERBS)[number];
 
-function grantableAction(kind: AccessAssetKind, verb: AccessVerb): GrantableAction {
-  return `${kind}.${verb}`;
+/** The actions of a kind the check answers for: every one its registry entry names. */
+function checkedVerbs(actions: CheckedKind["actions"]): { verb: AccessVerb; action: string }[] {
+  return ACCESS_VERBS.flatMap((verb) => {
+    const action = actions[verb];
+    return action === undefined ? [] : [{ verb, action }];
+  });
 }
 
 /** The asset kinds a grant of this page names. A Connection is offered while its module is on. */
@@ -193,8 +197,11 @@ export function namespaceOfName(
 const SKILL_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_.-]*$/u;
 const AGENT_NAME_PATTERN = /^\S+$/u;
 
-/** Whether the server could hold an asset of this name: a check gives no verdict otherwise. */
-export function assetNameValid(kind: AccessAssetKind, name: string): boolean {
+/**
+ * Whether the server could hold an asset of this name: a check gives no verdict otherwise.
+ * A kind without a rule of its own here is held to one word.
+ */
+export function assetNameValid(kind: string, name: string): boolean {
   return (kind === "skill" ? SKILL_NAME_PATTERN : AGENT_NAME_PATTERN).test(name);
 }
 
@@ -433,7 +440,14 @@ type EffectiveEntry = EffectivePermissions["items"][number];
 
 /** The asset a check asks about: a name that need not exist yet. */
 export interface CheckedAsset {
-  kind: AccessAssetKind;
+  kind: string;
+  name: string;
+}
+
+/** An asset as the check needs it: enough to find the id a grant row on one asset names. */
+export interface CheckableAsset {
+  id?: string;
+  kind: string;
   name: string;
 }
 
@@ -457,7 +471,7 @@ export interface CheckedAction {
  */
 export function checkedAssetId(
   asset: CheckedAsset,
-  assets: readonly ConfigAssetSummary[],
+  assets: readonly CheckableAsset[],
   holderGrants: readonly PermissionGrantRow[]
 ): string | undefined {
   const active = assets.find(
@@ -472,24 +486,28 @@ export function checkedAssetId(
 }
 
 /**
- * Decides read, write and delete on one asset from a holder's effective entries, with the
- * evaluator the server decides with. A delete follows the asset workflow's further rule.
+ * Decides every action of the asset's kind on one asset, from a holder's effective entries,
+ * with the evaluator the server decides with. `actions` are the ones the instance's registry
+ * names for the kind; without them a kind has reading, writing and deleting under its own
+ * name. A delete follows the asset workflow's further rule.
  */
 export function checkAsset(
   effective: EffectivePermissions,
   asset: CheckedAsset,
-  assetId: string | undefined
+  assetId: string | undefined,
+  actions: CheckedKind["actions"] = {
+    read: `${asset.kind}.read`,
+    write: `${asset.kind}.write`,
+    delete: `${asset.kind}.delete`
+  }
 ): CheckedAction[] {
+  const verbs = checkedVerbs(actions);
   if (!effective.holderActive) {
-    return ACCESS_VERBS.map((verb) => ({ verb, allowed: false, reason: "holder_inactive" }));
+    return verbs.map(({ verb }) => ({ verb, allowed: false, reason: "holder_inactive" }));
   }
   const resource = { kind: asset.kind, name: asset.name, ...(assetId ? { assetId } : {}) };
-  const decided = ACCESS_VERBS.map((verb): CheckedAction => {
-    const { decision, entry } = explainAccessEntries(
-      effective.items,
-      grantableAction(asset.kind, verb),
-      resource
-    );
+  const decided = verbs.map(({ verb, action }): CheckedAction => {
+    const { decision, entry } = explainAccessEntries(effective.items, action, resource);
     if (decision.allowed) {
       return {
         verb,
@@ -506,7 +524,9 @@ export function checkAsset(
     if (action.verb !== "delete" || !action.allowed) {
       return action;
     }
-    const deny = decided.find((other) => other.verb !== "delete" && other.reason === "deny");
+    const deny = decided.find(
+      (other) => (other.verb === "read" || other.verb === "write") && other.reason === "deny"
+    );
     return deny
       ? {
           verb: "delete",
@@ -522,7 +542,8 @@ export function checkAsset(
 /** What the Check tab has to go on, and what keeps it from giving a result. */
 export interface CheckInputs {
   holderId: string | undefined;
-  kind: AccessAssetKind;
+  /** The chosen kind. Absent until the instance has said which kinds it has. */
+  kind: string | undefined;
   name: string;
   effectiveLoaded: boolean;
   effectiveFailure: "hidden" | "failed" | undefined;
@@ -548,7 +569,11 @@ export type CheckState =
  * would miss a deny on one asset and call the action allowed.
  */
 export function checkState(inputs: CheckInputs): CheckState {
-  if (inputs.holderId === undefined || !assetNameValid(inputs.kind, inputs.name)) {
+  if (
+    inputs.holderId === undefined ||
+    inputs.kind === undefined ||
+    !assetNameValid(inputs.kind, inputs.name)
+  ) {
     return "incomplete";
   }
   if (inputs.effectiveFailure !== undefined) {

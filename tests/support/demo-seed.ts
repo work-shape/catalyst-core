@@ -15,6 +15,7 @@ import { checkAsset, checkedAssetId } from "@vivd-catalyst/chat-ui/access";
 import {
   SEED_EMAIL_SUFFIX,
   checkQuestions,
+  connectionCheckQuestions,
   demoOperations,
   demoTools,
   people,
@@ -233,8 +234,26 @@ const reasonOf = (action: ReturnType<typeof checkAsset>[number]): CheckReason =>
  * Asks every question of the demo README's table the way the Check tab does: the tab's own
  * decision, from the three things the tab loads.
  */
-export async function expectCheckAnswers(state: InstanceState): Promise<void> {
-  for (const question of checkQuestions) {
+export async function expectCheckAnswers(
+  state: InstanceState,
+  questions: readonly (
+    (typeof checkQuestions)[number] | (typeof connectionCheckQuestions)[number]
+  )[] = checkQuestions
+): Promise<void> {
+  // The tab takes the kinds and the actions of each from the instance's registry.
+  const { kinds } = await state.client.platform.context.get();
+  for (const question of questions) {
+    const registered = kinds.find((kind) => kind.kind === question.kind);
+    if (!registered) throw new Error(`The instance has no kind '${question.kind}'`);
+    // Agents and skills come with the agent configuration, any other kind has its own list.
+    const listed =
+      question.kind === "agent" || question.kind === "skill"
+        ? state.assetSummaries
+        : (
+            await listAll((paging) =>
+              state.client.assets.list({ params: { kind: question.kind }, query: paging })
+            )
+          ).map((asset) => ({ id: asset.id, kind: question.kind, name: asset.name }));
     const email = people.find((person) => person.key === question.person)?.email;
     const holder = state.users.find((user) => user.email === email);
     if (!holder) throw new Error(`No seeded user for '${question.person}'`);
@@ -250,7 +269,8 @@ export async function expectCheckAnswers(state: InstanceState): Promise<void> {
     const answers = checkAsset(
       effective,
       asset,
-      checkedAssetId(asset, state.assetSummaries, holderGrants)
+      checkedAssetId(asset, listed, holderGrants),
+      registered.actions
     );
     expect(
       Object.fromEntries(
