@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { ArrowUpRight, Check } from "lucide-react";
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui";
 import { forwardRef, useId, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { cn } from "../cn";
@@ -102,6 +102,16 @@ export interface DropdownMenuItemProps {
    */
   reasonPlacement?: "tooltip" | "line";
   onSelect?(): void;
+  /**
+   * An address outside the product. The item is then a link that opens it in a new tab, and
+   * shows the mark of a way out at its trailing edge. `onSelect` still runs.
+   */
+  href?: string;
+  /**
+   * The name a link item is read by when its text does not say that it opens a new tab, such
+   * as "Documentation, opens in a new tab". It starts with the item's text.
+   */
+  accessibleName?: string;
   className?: string;
 }
 
@@ -114,6 +124,8 @@ export function DropdownMenuItem({
   disabledReason,
   reasonPlacement = "tooltip",
   onSelect,
+  href,
+  accessibleName,
   className
 }: DropdownMenuItemProps) {
   const reasonId = useId();
@@ -131,6 +143,17 @@ export function DropdownMenuItem({
     tone === "danger" && "text-destructive data-highlighted:bg-destructive-soft",
     className
   );
+  if (href !== undefined && disabledReason === undefined && !disabled) {
+    return (
+      <DropdownMenuPrimitive.Item asChild className={classes} onSelect={onSelect}>
+        <a href={href} target="_blank" rel="noopener noreferrer" aria-label={accessibleName}>
+          {icon}
+          <span className="min-w-0 flex-1 truncate">{children}</span>
+          <ArrowUpRight aria-hidden="true" className="size-3.5! text-muted-foreground" />
+        </a>
+      </DropdownMenuPrimitive.Item>
+    );
+  }
   if (disabledReason === undefined) {
     return (
       <DropdownMenuPrimitive.Item className={classes} disabled={disabled} onSelect={onSelect}>

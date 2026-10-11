@@ -2,6 +2,7 @@ import {
   Archive,
   Bot,
   ChevronDown,
+  CircleHelp,
   Copy,
   Ellipsis,
   Link,
@@ -315,6 +316,14 @@ function DropdownMenuSamples({ text }: { text: GalleryText }) {
             reasonPlacement="line"
           >
             {text.menuLock}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            icon={<CircleHelp aria-hidden="true" />}
+            href="https://docs.example/catalyst"
+            accessibleName={text.menuDocsName}
+          >
+            {text.menuDocs}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem icon={<Trash2 aria-hidden="true" />} tone="danger">

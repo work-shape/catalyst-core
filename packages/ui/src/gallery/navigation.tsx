@@ -25,6 +25,7 @@ import {
   type SegmentedControlSize
 } from "../navigation/segmented-control";
 import { Sidebar } from "../navigation/sidebar";
+import { DocsAddressProvider, DocsLink } from "../navigation/docs-link";
 import { SkipLink } from "../navigation/skip-link";
 import { SubRail, type SubRailGroup } from "../navigation/sub-rail";
 import { Tabs, TabsContent, TabsLink, TabsList, TabsNav, TabsTrigger } from "../navigation/tabs";
@@ -276,6 +277,40 @@ function NavItemSamples({ text }: { text: GalleryText }) {
         </Sidebar>
       </div>
     </div>
+  );
+}
+
+function DocsLinkSamples({ text }: { text: GalleryText }) {
+  const sentence = (
+    <p className="max-w-prose text-body text-muted-foreground">
+      {text.docsLinkSentence}{" "}
+      <DocsLink
+        path="/operate/how-rights-work/#namespaces"
+        accessibleName={text.docsLinkLearnMoreName}
+      >
+        {text.docsLinkLearnMore}
+      </DocsLink>
+    </p>
+  );
+  return (
+    <>
+      <DocsAddressProvider address="https://docs.example/catalyst">
+        <Samples label={text.docsLinkAfterSentence}>{sentence}</Samples>
+        <Samples label={text.docsLinkAlone}>
+          <p className="text-caption text-muted-foreground">
+            <DocsLink
+              path="/operate/how-rights-work/#the-short-version"
+              accessibleName={text.docsLinkNamedName}
+            >
+              {text.docsLinkNamed}
+            </DocsLink>
+          </p>
+        </Samples>
+      </DocsAddressProvider>
+      <DocsAddressProvider address={undefined}>
+        <Samples label={text.docsLinkNoAddress}>{sentence}</Samples>
+      </DocsAddressProvider>
+    </>
   );
 }
 
@@ -559,6 +594,11 @@ export const navigationGallery: GalleryGroup = {
       name: "NavItem",
       components: ["NavItem", "NavGroup"],
       render: (text) => <NavItemSamples text={text} />
+    },
+    {
+      name: "DocsLink",
+      components: ["DocsLink", "DocsAddressProvider"],
+      render: (text) => <DocsLinkSamples text={text} />
     },
     {
       name: "SkipLink",

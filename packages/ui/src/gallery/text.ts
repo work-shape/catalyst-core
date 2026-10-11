@@ -104,6 +104,16 @@ export interface GalleryText extends LayoutGalleryText, SampleGalleryText, Chart
   skipLinkLabel: string;
   skipLinkHint: string;
   skipLinkTarget: string;
+  docsLinkSentence: string;
+  docsLinkLearnMore: string;
+  docsLinkLearnMoreName: string;
+  docsLinkNamed: string;
+  docsLinkNamedName: string;
+  docsLinkAfterSentence: string;
+  docsLinkAlone: string;
+  docsLinkNoAddress: string;
+  menuDocs: string;
+  menuDocsName: string;
   pickWorkspaces: string;
   pickRole: string;
   pickerInDialog: string;
@@ -290,6 +300,17 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     skipLinkLabel: "Skip to content",
     skipLinkHint: "The link shows while it holds the focus: press Tab from here.",
     skipLinkTarget: "Content",
+    docsLinkSentence:
+      "Agents and skills whose names start with the prefix belong to the Namespace.",
+    docsLinkLearnMore: "Learn more",
+    docsLinkLearnMoreName: "Learn more about Namespaces, opens in a new tab",
+    docsLinkNamed: "How rights work",
+    docsLinkNamedName: "How rights work, opens in a new tab",
+    docsLinkAfterSentence: "After a sentence",
+    docsLinkAlone: "Alone, with a name of its own",
+    docsLinkNoAddress: "Without a documentation address: the sentence stands alone",
+    menuDocs: "Documentation",
+    menuDocsName: "Documentation, opens in a new tab",
     pickWorkspaces: "Workspaces",
     pickRole: "Choose role",
     pickerInDialog: "Picker in a dialog",
@@ -505,6 +526,17 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     skipLinkLabel: "Zum Inhalt springen",
     skipLinkHint: "Der Link erscheint, solange er den Fokus hat: von hier aus Tab drücken.",
     skipLinkTarget: "Inhalt",
+    docsLinkSentence:
+      "Agenten und Fähigkeiten, deren Name mit dem Präfix beginnt, gehören zum Namespace.",
+    docsLinkLearnMore: "Mehr erfahren",
+    docsLinkLearnMoreName: "Mehr erfahren über Namespaces, öffnet in neuem Tab",
+    docsLinkNamed: "So funktionieren Rechte",
+    docsLinkNamedName: "So funktionieren Rechte, öffnet in neuem Tab",
+    docsLinkAfterSentence: "Nach einem Satz",
+    docsLinkAlone: "Allein, mit eigenem Namen",
+    docsLinkNoAddress: "Ohne Adresse der Dokumentation: Der Satz steht allein",
+    menuDocs: "Dokumentation",
+    menuDocsName: "Dokumentation, öffnet in neuem Tab",
     pickWorkspaces: "Workspaces",
     pickRole: "Rolle wählen",
     pickerInDialog: "Auswahl in einem Dialog",

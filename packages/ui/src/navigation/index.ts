@@ -1,3 +1,11 @@
+export {
+  DocsAddressProvider,
+  DocsLink,
+  docsAddress,
+  useDocsLinkShown,
+  type DocsAddressProviderProps,
+  type DocsLinkProps
+} from "./docs-link";
 export { NavGroup, NavItem, type NavGroupProps, type NavItemProps } from "./nav-item";
 export { useSidebarCollapsed } from "./sidebar-collapsed";
 export {

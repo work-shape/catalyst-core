@@ -3,6 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
   CountBadge,
+  docsAddress,
+  DocsAddressProvider,
+  DocsLink,
   ListRow,
   NavGroup,
   NavItem,
@@ -569,5 +572,48 @@ describe("a page with a head across its width", () => {
       })
     );
     expect(markup).toMatch(/data-mode="routes" class="[^"]*\bsticky\b/u);
+  });
+
+  it("links into the documentation from the instance's docs address, in a new tab", () => {
+    const link = createElement(DocsLink, {
+      path: "/operate/how-rights-work/#namespaces",
+      accessibleName: "Learn more about Namespaces, opens in a new tab",
+      children: "Learn more"
+    });
+    const at = (address: string | undefined) =>
+      render(createElement(DocsAddressProvider, { address, children: link }));
+
+    const markup = at("https://docs.workshape.ai/catalyst");
+    expect(markup).toMatch(
+      /<a href="https:\/\/docs\.workshape\.ai\/catalyst\/operate\/how-rights-work\/#namespaces" target="_blank" rel="noopener noreferrer" aria-label="Learn more about Namespaces, opens in a new tab"/u
+    );
+    // It takes the colour of the text it stands in, is underlined and ends with the mark.
+    const classes = /<a [^>]*class="([^"]*)"/u.exec(markup)?.[1]?.split(" ") ?? [];
+    expect(classes).toEqual(expect.arrayContaining(["text-inherit", "underline"]));
+    expect(markup).toMatch(/>Learn more<svg[^>]*aria-hidden="true"/u);
+    // The docs address keeps its own path, with or without a slash at its end.
+    expect(at("https://docs.workshape.ai/catalyst/")).toContain(
+      'href="https://docs.workshape.ai/catalyst/operate/how-rights-work/#namespaces"'
+    );
+    expect(docsAddress("https://docs.example.com", "operate/x/")).toBe(
+      "https://docs.example.com/operate/x/"
+    );
+  });
+
+  it("renders no documentation link on an instance without a docs address", () => {
+    const link = createElement(DocsLink, {
+      path: "/operate/how-rights-work/",
+      accessibleName: "Learn more, opens in a new tab",
+      children: "Learn more"
+    });
+
+    expect(render(createElement("p", null, "A sentence.", link))).toBe(
+      render(createElement("p", null, "A sentence."))
+    );
+    expect(
+      render(createElement(DocsAddressProvider, { address: undefined, children: link }))
+    ).not.toContain("<a");
+    expect(docsAddress(undefined, "/operate/")).toBeUndefined();
+    expect(docsAddress("", "/operate/")).toBeUndefined();
   });
 });
