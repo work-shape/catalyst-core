@@ -81,6 +81,20 @@ describe("what a Connector type returns", () => {
     expect(unfit.message).not.toContain("not an object");
   });
 
+  // Fails without the change: serializing such a result threw a RangeError outside every
+  // check, and the call ended as an internal error.
+  it("is refused as output_invalid when it is nested too deeply to serialize", async () => {
+    const t = await fixture();
+    const assetId = await t.seed("crm");
+    await t.grant(t.kai.id, "connection.use", { assetId });
+    let deep: JsonValue = [];
+    for (let level = 0; level < 200_000; level += 1) deep = [deep];
+
+    t.setBehaviour(() => Promise.resolve({ deep }));
+    const failed = await t.failure(t.invoke(t.kai, "connection.crm.echo", { text: "a" }));
+    expect(failed).toMatchObject({ code: "CONFLICT", reason: "output_invalid" });
+  });
+
   it("passes on a reason and never a text of the outside system or of the type", async () => {
     const t = await fixture();
     const assetId = await t.seed("crm");

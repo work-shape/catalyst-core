@@ -120,3 +120,28 @@ describe("an asynchronous schema", () => {
     expect(jsonSchemaAsZod(required).safeParse({}).success).toBe(false);
   });
 });
+
+describe("a value nested too deeply for a recursive schema", () => {
+  // Fails without the change: the compiled function ran out of stack and `validate` threw a
+  // RangeError, which a caller saw as an internal error.
+  it("does not fit, and nothing is thrown", () => {
+    const recursive: JsonObject = {
+      $defs: { node: { type: "array", items: { $ref: "#/$defs/node" } } },
+      $ref: "#/$defs/node"
+    };
+    let value: unknown[] = [];
+    for (let level = 0; level < 200_000; level += 1) value = [value];
+
+    const compiled = compileJsonSchema(recursive);
+    if (!compiled.ok) throw new Error("the schema compiles");
+    expect(compiled.validate([[[]]])).toEqual([]);
+    expect(compiled.validate(value)).toEqual([
+      { path: [], message: "is nested too deeply to check" }
+    ]);
+    const parsed = jsonSchemaAsZod(recursive).safeParse(value);
+    expect(parsed.success).toBe(false);
+    // The validator still works after it ran out of stack once.
+    expect(compiled.validate([[], [[]]])).toEqual([]);
+    expect(compiled.validate([7]).length).toBeGreaterThan(0);
+  });
+});

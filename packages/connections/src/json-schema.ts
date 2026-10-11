@@ -142,6 +142,9 @@ function issueOf(error: ErrorObject): JsonSchemaIssue {
   };
 }
 
+/** What a value that could not be checked at all is told. It names no value. */
+const UNCHECKABLE: JsonSchemaIssue[] = [{ path: [], message: "is nested too deeply to check" }];
+
 function compile(schema: JsonObject): CompiledJsonSchema {
   // An asynchronous schema answers a promise, which would read as a value that fits. No
   // schema of an operation needs one: nothing here is fetched while a value is checked.
@@ -159,8 +162,18 @@ function compile(schema: JsonObject): CompiledJsonSchema {
   return {
     ok: true,
     validate(value) {
-      if (check(value)) return [];
-      return (check.errors ?? []).slice(0, JSON_SCHEMA_MAX_ISSUES).map(issueOf);
+      let fits: unknown;
+      try {
+        fits = check(value);
+      } catch {
+        // A schema that refers to itself follows a value as deep as it goes. One that is
+        // deeper than the stack is a value that does not fit, not a failure of the process.
+        return UNCHECKABLE;
+      }
+      if (fits === true) return [];
+      const issues = (check.errors ?? []).slice(0, JSON_SCHEMA_MAX_ISSUES).map(issueOf);
+      // Anything but a plain yes is a no, also where the validator names no fault.
+      return issues.length > 0 ? issues : [{ path: [], message: "does not fit the schema" }];
     }
   };
 }

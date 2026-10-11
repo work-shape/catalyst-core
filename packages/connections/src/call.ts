@@ -396,6 +396,7 @@ export async function callConnectionOperation(
     target
   );
   if (issuesOf(descriptor, input)) throw connectionCallError("input_invalid");
+  const jsonInput = toJsonInput(input);
   const limits = connectionCallLimits(type);
 
   const release = await slots.acquire(connection.assetId, limits);
@@ -420,7 +421,7 @@ export async function callConnectionOperation(
       opening.catch(() => undefined);
       const connectorContext: ConnectorContext = await Promise.race([opening, aborted.promise]);
       secret = connectorContext.credentialFor(connectorContext.target)?.secret;
-      const executing = type.execute(target.operationName, toJsonInput(input), connectorContext);
+      const executing = type.execute(target.operationName, jsonInput, connectorContext);
       executing.catch(() => undefined);
       result = await Promise.race([executing, aborted.promise]);
     } catch (error) {
@@ -436,7 +437,7 @@ export async function callConnectionOperation(
       throw safeCallError(error, reason);
     }
 
-    const serialized: string | undefined = JSON.stringify(result);
+    const serialized = serializedOrUndefined(result);
     if (serialized === undefined || Buffer.byteLength(serialized, "utf8") > limits.resultMaxBytes) {
       throw connectionCallError("output_invalid");
     }
@@ -457,10 +458,24 @@ export async function callConnectionOperation(
   }
 }
 
+/**
+ * The value as JSON text, or nothing where it has none: a value that is no JSON, one nested
+ * too deeply for the stack, one that refers to itself. None of those is an internal error.
+ */
+function serializedOrUndefined(value: unknown): string | undefined {
+  try {
+    const serialized: string | undefined = JSON.stringify(value);
+    return serialized;
+  } catch {
+    return undefined;
+  }
+}
+
 /** The validated input as the JSON a Connector type is handed. */
 function toJsonInput(input: unknown): JsonValue {
-  const serialized: string | undefined = JSON.stringify(input);
-  if (serialized === undefined) return null;
+  if (input === undefined) return null;
+  const serialized = serializedOrUndefined(input);
+  if (serialized === undefined) throw connectionCallError("input_invalid");
   const value: JsonValue = JSON.parse(serialized);
   return value;
 }
