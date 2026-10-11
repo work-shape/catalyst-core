@@ -30,9 +30,9 @@ import { useApp, useAppList, useAppWrites, type AppList } from "./app-data";
 import {
   AppDeleteDialog,
   AppDetailsDialog,
-  appLink,
   AppScope,
   AppStateBadge,
+  CopyAppLinkItem,
   opensHere
 } from "./app-header";
 import {
@@ -86,7 +86,6 @@ export function AppsPage() {
   const [deleting, setDeleting] = useState<AssetSummary>();
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string>();
-  const [copied, setCopied] = useState(0);
   const details = useApp(
     workspace?.id ?? "",
     detailsOf?.name ?? "",
@@ -114,10 +113,7 @@ export function AppsPage() {
         setDetailsOf(app);
         break;
       case "copy_link":
-        navigator.clipboard.writeText(appLink(workspace.id, app.name, window.location.origin)).then(
-          () => setCopied((count) => count + 1),
-          () => undefined
-        );
+        // The item copies by itself and answers in place.
         break;
       case "delete":
         setDeleteError(undefined);
@@ -150,7 +146,6 @@ export function AppsPage() {
         onAction={act}
         onBuildInChat={host.startChat}
       />
-      <CopiedNotice key={copied} shown={copied > 0} />
       {detailsOf ? (
         <AppDetailsDialog
           name={appDisplayName(detailsOf)}
@@ -171,16 +166,6 @@ export function AppsPage() {
         />
       ) : null}
     </>
-  );
-}
-
-/** Says to someone who does not see the clipboard that the link is on it. */
-export function CopiedNotice({ shown }: { shown: boolean }) {
-  const { t } = useTranslation();
-  return (
-    <span role="status" className="sr-only">
-      {shown ? t("apps.linkCopied") : null}
-    </span>
   );
 }
 
@@ -224,8 +209,8 @@ export function AppsPageView({
     >
       <div
         ref={scrollRef}
-        // The page scrolls up to the top edge, under the floating header's buttons.
-        className="chat-scrollbar min-h-0 min-w-0 overflow-x-hidden overflow-y-auto [--layout-page-inset:var(--layout-header)] [container-type:size]"
+        // Below `md` the button that opens the sidebar floats over the page, which starts below it.
+        className="chat-scrollbar min-h-0 min-w-0 overflow-x-hidden overflow-y-auto [container-type:size] max-md:[--layout-page-inset:var(--layout-header)]"
       >
         <Page>
           <PageHeader title={t("apps.title")} description={t("apps.description")} />
@@ -332,26 +317,36 @@ function AppRow({
   const state = appState(app);
   const route = appRowRoute(workspace.id, app, state, rights);
   const actions = appRowActions(rights, state);
+  const stateChips = (
+    <>
+      <AppStateBadge state={state} />
+      {rights.write && state.kind === "published" && state.draftAhead ? (
+        <Badge tone="warning" size="sm">
+          {t("apps.unpublishedChanges")}
+        </Badge>
+      ) : null}
+    </>
+  );
   return (
     <ListRow
       leading={<Avatar kind="app" name={name} />}
       title={name}
-      description={app.description?.trim() || <code className="font-mono">{app.name}</code>}
-      chips={
+      // A phone gives the first line to the name: the state stands under it, where a wider
+      // window has the description or the id. The list names its workspace above.
+      description={
         <>
-          {/* A phone has room for the name and the state. The list names its workspace above. */}
-          <span className="hidden sm:contents">
-            <AppScope workspace={workspace} />
+          <span className="flex flex-wrap gap-1.5 py-0.5 sm:hidden">{stateChips}</span>
+          <span className="max-sm:hidden">
+            {app.description?.trim() || <code className="font-mono">{app.name}</code>}
           </span>
-          <AppStateBadge state={state} />
-          {rights.write && state.kind === "published" && state.draftAhead ? (
-            <span className="hidden sm:contents">
-              <Badge tone="warning" size="sm">
-                {t("apps.unpublishedChanges")}
-              </Badge>
-            </span>
-          ) : null}
         </>
+      }
+      descriptionWraps
+      chips={
+        <span className="hidden sm:contents">
+          <AppScope workspace={workspace} />
+          {stateChips}
+        </span>
       }
       time={
         <time
@@ -391,6 +386,8 @@ function AppRow({
                     separated={actions.length > 1}
                     onSelect={() => onAction(action, app)}
                   />
+                ) : action === "copy_link" ? (
+                  <CopyAppLinkItem key={action} workspaceId={workspace.id} app={app.name} />
                 ) : (
                   <DropdownMenuItem key={action} onSelect={() => onAction(action, app)}>
                     {t(ROW_ACTION_LABELS[action])}

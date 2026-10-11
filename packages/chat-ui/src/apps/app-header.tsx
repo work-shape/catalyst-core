@@ -1,11 +1,12 @@
-import { ArrowLeft } from "lucide-react";
-import { useEffect, useRef, type ReactNode } from "react";
+import { ArrowLeft, Check } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Asset } from "@vivd-catalyst/api-client";
 import {
   Badge,
   Button,
   ConfirmDialog,
   Dialog,
+  DropdownMenuItem,
   InlineError,
   KeyValue,
   KeyValueList,
@@ -24,6 +25,44 @@ export function appLink(workspaceId: string, app: string, origin: string): strin
     workspaceRoutePath({ kind: "app", collaborationWorkspaceId: workspaceId, app }),
     origin
   ).toString();
+}
+
+/** How long the copy item says that it copied, as the copy buttons of a conversation do. */
+const LINK_COPIED_MS = 1500;
+
+/**
+ * The menu item that puts the link of an App on the clipboard. The menu stays open and the
+ * item says for a moment that it copied, in its label and to a screen reader.
+ */
+export function CopyAppLinkItem({ workspaceId, app }: { workspaceId: string; app: string }) {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) {
+      return;
+    }
+    const timeout = setTimeout(() => setCopied(false), LINK_COPIED_MS);
+    return () => clearTimeout(timeout);
+  }, [copied]);
+  return (
+    <>
+      <DropdownMenuItem
+        keepOpen
+        icon={copied ? <Check aria-hidden="true" /> : undefined}
+        onSelect={() => {
+          navigator.clipboard.writeText(appLink(workspaceId, app, window.location.origin)).then(
+            () => setCopied(true),
+            () => setCopied(false)
+          );
+        }}
+      >
+        {copied ? t("apps.linkCopied") : t("apps.copyLink")}
+      </DropdownMenuItem>
+      <span role="status" className="sr-only">
+        {copied ? t("apps.linkCopied") : null}
+      </span>
+    </>
+  );
 }
 
 /** The chip that says which workspace an App belongs to. */

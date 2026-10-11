@@ -12,7 +12,13 @@ import {
 import { useTranslation } from "../i18n";
 import { workspaceRouteFromPath, workspaceRoutePath } from "../routes";
 import { useApp } from "./app-data";
-import { AppDetailsDialog, AppFrame, AppHeader, appLink, AppStateBadge } from "./app-header";
+import {
+  AppDetailsDialog,
+  AppFrame,
+  AppHeader,
+  AppStateBadge,
+  CopyAppLinkItem
+} from "./app-header";
 import {
   APP_START_ROUTE,
   appReadRevision,
@@ -21,7 +27,6 @@ import {
   type AppRights
 } from "./app-model";
 import { AppPreview } from "./app-preview";
-import { CopiedNotice } from "./apps-page";
 import { useAppsHost, type AppsWorkspace } from "./apps-host";
 
 /**
@@ -45,7 +50,6 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
   );
   const [shown, setShown] = useState<AppPreviewResponse>();
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [copied, setCopied] = useState(0);
   const showRoute = host?.showRoute;
   const workspaceId = workspace?.id;
 
@@ -99,12 +103,7 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
         onBack={() => host.showRoute({ kind: "apps", collaborationWorkspaceId: workspace.id })}
         onEdit={() => host.showRoute({ kind: "app-edit", ...address })}
         onDetails={() => setDetailsOpen(true)}
-        onCopyLink={() => {
-          navigator.clipboard.writeText(appLink(workspace.id, app, window.location.origin)).then(
-            () => setCopied((count) => count + 1),
-            () => undefined
-          );
-        }}
+        app={app}
       >
         <AppPreview
           app={app}
@@ -122,7 +121,6 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
           onShown={onShown}
         />
       </AppViewFrame>
-      <CopiedNotice key={copied} shown={copied > 0} />
       {detailsOpen ? (
         <AppDetailsDialog
           name={name}
@@ -138,16 +136,18 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
 /** Layout 2 for given facts: the head with what this reader may do, and the App under it. */
 export function AppViewFrame({
   name,
+  app,
   workspace,
   rights,
   publishedRevision,
   children,
   onBack,
   onEdit,
-  onDetails,
-  onCopyLink
+  onDetails
 }: {
   name: string;
+  /** The id of the App, which its link carries. */
+  app: string;
   workspace: AppsWorkspace;
   rights: AppRights;
   /** The number of the revision shown, once it is known. */
@@ -157,7 +157,6 @@ export function AppViewFrame({
   onBack(): void;
   onEdit(): void;
   onDetails(): void;
-  onCopyLink(): void;
 }) {
   const { t } = useTranslation();
   return (
@@ -196,7 +195,7 @@ export function AppViewFrame({
                 {rights.read ? (
                   <DropdownMenuItem onSelect={onDetails}>{t("apps.details")}</DropdownMenuItem>
                 ) : null}
-                <DropdownMenuItem onSelect={onCopyLink}>{t("apps.copyLink")}</DropdownMenuItem>
+                <CopyAppLinkItem workspaceId={workspace.id} app={app} />
               </DropdownMenuContent>
             </DropdownMenu>
           }

@@ -200,8 +200,12 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   const publish = edit.getByRole("button", { name: "Publish", exact: true });
   await publish.click();
   await expect(edit.getByRole("heading", { name: APP_NAME })).toBeVisible();
+  // The header of the conversation the App was saved from is no band over the App's head.
+  await expect(page.locator("header[data-beside-surface]")).toHaveCount(0);
   const publishDialog = page.getByRole("dialog", { name: `Publish “${APP_NAME}”?` });
-  await expect(publishDialog).toContainText("Revision 1 becomes what everyone in Sales team");
+  await expect(publishDialog).toContainText(
+    "Everyone in Sales team gets revision 1 when they open the app."
+  );
   if (shotsDir) {
     await mkdir(shotsDir, { recursive: true });
     await page.screenshot({
@@ -294,7 +298,8 @@ test("a Page is saved as an App, published, opened by a second member and deep l
       animations: "disabled"
     });
   }
-  await revisions.getByRole("button", { name: "Close", exact: true }).click();
+  // Escape closes the drawer, as it closes every dialog.
+  await page.keyboard.press("Escape");
   await expect(revisions).toBeHidden();
 
   // A builder who may write and not publish finds Publish held, with the right named.
@@ -337,6 +342,22 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   };
   await viewReady();
   await shoot(page, "app-view", MAIN, viewReady);
+
+  // Copy link puts the App's address on the clipboard and says so in place for a moment.
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.getByTestId("app-view").getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("menuitem", { name: "Copy link" }).click();
+  await expect(page.getByRole("menuitem", { name: "Link copied" })).toBeVisible();
+  if (shotsDir) {
+    await page.screenshot({
+      path: join(shotsDir, "app-link-copied-light-en-1440.png"),
+      animations: "disabled"
+    });
+  }
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`${uiOrigin}${appPath}`);
+  await expect(page.getByRole("menuitem", { name: "Copy link" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toBeHidden();
 
   // Discard asks once, and the draft shows what is published again.
   await page.goto(`${appPath}/edit`);

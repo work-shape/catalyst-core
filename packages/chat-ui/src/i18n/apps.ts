@@ -54,7 +54,7 @@ export const apps = defineTranslations({
     "apps.promptForm": "Build a page with a form that computes ",
     "apps.promptStart": "Build a page for this workspace: ",
     "apps.publish": "Publish",
-    "apps.publishBody": "Revision {number} becomes what everyone in {workspace} is served.",
+    "apps.publishBody": "Everyone in {workspace} gets revision {number} when they open the app.",
     "apps.publishConnections": "Connections it uses",
     "apps.publishFailed": "The app could not be published.",
     "apps.revisionFilesRemoved":
@@ -146,7 +146,7 @@ export const apps = defineTranslations({
     "apps.promptForm": "Baue eine Page mit einem Formular, das Folgendes berechnet: ",
     "apps.promptStart": "Baue eine Page für diesen Arbeitsbereich: ",
     "apps.publish": "Veröffentlichen",
-    "apps.publishBody": "Revision {number} wird zu dem, was alle in {workspace} bekommen.",
+    "apps.publishBody": "Alle in {workspace} bekommen Revision {number}, wenn sie die App öffnen.",
     "apps.publishConnections": "Verbindungen, die sie nutzt",
     "apps.publishFailed": "Die App konnte nicht veröffentlicht werden.",
     "apps.revisionFilesRemoved":

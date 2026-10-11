@@ -329,7 +329,7 @@ describe("an open App (layout 2)", () => {
         onBack() {},
         onEdit() {},
         onDetails() {},
-        onCopyLink() {}
+        app: "fee-estimate"
       })
     );
 
@@ -497,7 +497,9 @@ describe("the draft of an App (layout 3)", () => {
     );
 
     expect(markup).toContain("Publish “Angebotsrechner”?");
-    expect(markup).toContain("Revision 3 becomes what everyone in Nordlicht Beratung is served.");
+    expect(markup).toContain(
+      "Everyone in Nordlicht Beratung gets revision 3 when they open the app."
+    );
     expect(markup).toContain("Connections it uses");
     expect(markup).toContain(">crm</code>");
     expect(markup).toContain("External hosts it calls");
