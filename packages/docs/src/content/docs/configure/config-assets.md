@@ -206,6 +206,8 @@ Every asset is read and written at one address, `/api/v1/assets/{kind}/{name}`, 
 | `assets.revisions.list`   | `GET /api/v1/assets/{kind}/{name}/revisions` | `<kind>.read`        |
 | `assets.revert`           | `POST /api/v1/assets/{kind}/{name}/revert`   | `<kind>.write`       |
 | `assets.validate`         | `POST /api/v1/assets/{kind}/validate`        | `<kind>.read`        |
+| `assets.publish` | `POST /api/v1/assets/{kind}/{name}/publish` | `<kind>.publish` |
+| `assets.discard_draft` | `POST /api/v1/assets/{kind}/{name}/discard-draft` | `<kind>.write` |
 | `assets.sync`             | `POST /api/v1/assets/sync`                   | per item             |
 | `assets.sync_check`       | `POST /api/v1/assets/sync/check`             | per item             |
 | `platform.context.get`    | `GET /api/v1/context`                        | any signed-in caller |
@@ -234,6 +236,22 @@ The writing operations and `assets.sync` belong to the module `assetManagement` 
 `assets.set_default` (`POST /api/v1/assets/{kind}/default` with `{ "name": "…" }`) makes one asset the instance's default of its kind, and `assets.set_availability` (`PUT /api/v1/assets/{kind}/{name}/availability`) sets the workspaces one asset is offered in. Only the agent kind takes either today. Both are Operation Runs of the module `assetManagement`, and both need the right to write the kind on the whole instance: a grant in a Namespace or on one asset does not answer it, and a deny on the named asset refuses. The default also needs `allowDefaultAgentChange`. A changed availability moves the version of the asset set, and the next run that starts reads it. Either call may name what it was decided against: `expectedAssetId`, the id of the asset as it was read, and for the availability `expectedAvailability`, the availability as it was read or `null` for none. Where the instance holds something else by then, the call answers `409` and writes nothing, which matters for a call that waited for an approval. Without the fields the call replaces what is stored.
 
 `platform.references.get` answers what a definition may refer to on this instance: the model providers and bindings, the reasoning efforts, the enabled tools, and the tools whose module is off. It answers a caller who holds at least one right on an asset kind, on the instance or in one Namespace, with a credential that carries `config_assets:read` and the scope of that right. It writes no Operation Run, so an editor may read it each time it opens a definition.
+
+### Apps: a draft and a published revision
+
+An App is the asset kind `app`, on an instance with the module `apps` on. Two things set it apart from an agent or a skill, and the kind list of `platform.context.get` reports both: its `lifecycle` is `draft_published`, and its `representation` is `files`.
+
+A write moves the draft and nothing else. The revision the members of the App's workspace are served is the published one, and only `assets.publish` moves it. `assets.list` and `assets.get` answer `draftRevision` and `publishedRevision`; the second is absent before the first publish. `assets.publish` names the revision number to publish. Publishing an earlier number is the way back, so `assets.revert` answers `use_publish` for such a kind. `assets.discard_draft` moves the draft back to the published revision. The discarded revision keeps its number and can still be published, and the next write takes the highest number plus one. A draft write leaves the configuration `version` as it is.
+
+`assets.put` for an App carries `files`, the whole source set of the App with its `app.yaml`, and no `config`: `[{ "path": "index.html", "text": "..." }, { "path": "logo.png", "base64": "..." }]`. One call carries at most 8 MiB of decoded files (`ASSET_PUT_FILES_MAX_BYTES`). The instance builds the files as it builds a Page and waits up to 60 seconds. A set that does not build answers `422` with `details.issues`, each with its file and line. A build that did not end in time answers `504 TIMEOUT` with `build_timeout`; send the write again. In both cases the draft is the revision it was. The answer of a write names `fileSetId` and, for every source file, `path`, `sha256` and `bytes`. The Operation Run keeps those and never the contents. Without `expectedRevision` the call creates the App in the workspace named by `workspaceId`; an App belongs to one workspace, and a write without one answers `scope_unavailable`. `assets.sync` takes no App.
+
+`apps.create_from_page` (`POST /api/v1/apps`) saves the newest revision of a Page as an App with a draft. It copies the files, so the App stays when the conversation of the Page is deleted. `apps.preview` (`POST /api/v1/apps/{app}/preview`) answers the address a frame loads, for the mode `published` or `draft`, and `interfacePath`, the path of the App in the interface. `assets.delete` removes an App with its revisions and its files; its Operation Runs and audit events stay.
+
+| Right | Who holds it | What it allows |
+| --- | --- | --- |
+| `app.read`, `app.write`, `app.delete` | admin, superadmin | Read, write and delete Apps. A writer is shown the draft. |
+| `app.publish` | admin, superadmin | Move the published revision. A credential needs the scope `config_assets:publish`, which `config_assets:write` does not include. |
+| `app.use` | every member of the App's workspace | Open the published revision. A member is never shown a draft. |
 
 ## Permissions
 
