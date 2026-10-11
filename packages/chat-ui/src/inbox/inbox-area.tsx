@@ -228,8 +228,8 @@ export function InboxAreaView({
       <div className="grid h-full min-h-0 min-w-0 flex-1 grid-rows-[minmax(0,1fr)]" inert={covered}>
         <div
           ref={titleRef}
-          // The page scrolls up to the top edge, under the floating header's buttons.
-          className="chat-scrollbar min-h-0 min-w-0 overflow-x-hidden overflow-y-auto [--layout-page-inset:var(--layout-header)] [container-type:size]"
+          // Below `md` the button that opens the sidebar floats over the page, which starts below it.
+          className="chat-scrollbar min-h-0 min-w-0 overflow-x-hidden overflow-y-auto [container-type:size] max-md:[--layout-page-inset:var(--layout-header)]"
         >
           <Page>
             <PageHeader title={t("nav.inbox")} />

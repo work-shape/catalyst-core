@@ -345,8 +345,13 @@ function ChatWorkspaceContent({
               surfaceBesideWidth={surfaceBesideWidth}
               covered={chatCovered}
               selectedAgentName={model.config.activeAgentName}
-              // The Inbox and Build are not a conversation: there is no agent to choose.
-              showAgentSelector={!onStartPage && !inboxRoute && !model.controlPlane.build}
+              // Only a conversation has an agent to choose: not the Inbox, Build or Settings.
+              showAgentSelector={
+                !onStartPage &&
+                !inboxRoute &&
+                !model.controlPlane.build &&
+                !model.controlPlane.settings
+              }
               onSelectAgent={model.config.selectAgentName}
               onOpenSidebar={model.chrome.openSidebarDrawer}
             />

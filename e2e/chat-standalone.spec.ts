@@ -2881,6 +2881,47 @@ test("users, usage, audit and API access follow the German locale", async ({ pag
   await expect(panel.getByRole("heading", { name: "API-Zugang", exact: true })).toBeVisible();
 });
 
+test("no page keeps room for the agent button: lists share one title line and a detail head is the top band", async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await signInViaApi(page, superadminUser);
+  // The head of a list page: its title is set in the middle of it, beside the head's actions.
+  const title = page.locator("section header[data-variant]").first();
+  const titleTop = async (path: string) => {
+    await page.goto(path);
+    await expect(title.getByRole("heading", { level: 1 })).toBeVisible();
+    // Only a conversation has an agent to choose.
+    await expect(page.getByRole("button", { name: "Select agent" })).toHaveCount(0);
+    return (await title.boundingBox())?.y;
+  };
+  const settingsTitle = await titleTop("/settings/instance/usage");
+  expect(settingsTitle).toBeDefined();
+  expect(await titleTop("/inbox")).toBe(settingsTitle);
+  expect(await titleTop("/build/agents")).toBe(settingsTitle);
+
+  // The page's own top padding is all that is above a list title: the header band's room is gone.
+  const band = await page.evaluate(() => {
+    const probe = document.createElement("div");
+    probe.style.height = "var(--layout-header)";
+    document.body.append(probe);
+    const height = probe.getBoundingClientRect().height;
+    probe.remove();
+    return height;
+  });
+  expect(settingsTitle ?? band).toBeLessThan(band);
+
+  // A detail head is the top band itself: at the top edge, at least as tall as the sidebar's
+  // first row. A title with a second line under it makes it taller.
+  await page.goto("/build/agents/research_assistant");
+  const head = page.locator("header[data-variant=detail]");
+  await expect(head).toBeVisible();
+  await expect(page.getByRole("button", { name: "Select agent" })).toHaveCount(0);
+  const box = await head.boundingBox();
+  expect(box?.y).toBe(0);
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(band);
+});
+
 test("a Settings page that fits its window does not scroll", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: TALL_WINDOW_HEIGHT });
   await signInViaApi(page, superadminUser);

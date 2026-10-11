@@ -107,13 +107,14 @@ export function BuildArea({ build }: { build: BuildAreaModel }) {
 }
 
 /**
- * The frame of a full-page area. The page scrolls up to the top edge, under the floating
- * header's buttons: no band is kept free for them. The page starts below them and its pinned
- * parts stay clear of them, which is what `--layout-page-inset` tells the `Page`. The scroll
- * area is the container a sub-rail takes its greatest height from.
+ * The frame of a full-page area. Nothing floats over it from `md` up, so the page starts at
+ * the top edge: a list page at its own top padding, a detail head as the top band, level with
+ * the sidebar's first row. The scroll area is the container a sub-rail takes its greatest
+ * height from.
  *
- * Below `md` the header's first button is the one that opens the sidebar. A detail head starts
- * at the top edge there, with its first row beside that button.
+ * Below `md` the button that opens the sidebar floats over the page. The page starts below it
+ * and its pinned parts stay clear of it, which is what `--layout-page-inset` tells the `Page`.
+ * A detail head starts at the top edge there too, with its first row beside that button.
  */
 function AreaFrame({
   ref,
@@ -132,7 +133,7 @@ function AreaFrame({
     >
       <div
         ref={ref}
-        className="chat-scrollbar min-h-0 min-w-0 overflow-x-hidden overflow-y-auto [--layout-page-inset:var(--layout-header)] [container-type:size] max-md:[--layout-page-head-inset:0rem] max-md:[--layout-page-head-start:var(--layout-header-control)]"
+        className="chat-scrollbar min-h-0 min-w-0 overflow-x-hidden overflow-y-auto [container-type:size] max-md:[--layout-page-inset:var(--layout-header)] max-md:[--layout-page-head-inset:0rem] max-md:[--layout-page-head-start:var(--layout-header-control)]"
       >
         {children}
       </div>

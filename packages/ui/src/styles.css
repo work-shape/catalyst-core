@@ -124,9 +124,10 @@
      beside it. */
   --layout-header: 4rem;
   --layout-gutter: 1.5rem;
-  /* The height of what floats over the top of a page's scroll area, such as the workspace
-     header's buttons. The page starts below it and scrolls up under it; a pinned SubRail or
-     detail PageHeader stays clear of it. An area with such a header sets it on its scroll area. */
+  /* The height of what floats over the top of a page's scroll area, such as the button that
+     opens the sidebar in a narrow window. The page starts below it and scrolls up under it; a
+     pinned SubRail or detail PageHeader stays clear of it. An area sets it on its scroll area
+     only where such a control is on the page: no page keeps room for a control it does not show. */
   --layout-page-inset: 0rem;
   /* A detail PageHeader beside a floating control instead of below it: the area sets
      `--layout-page-head-inset` to nothing, so the head starts at the top edge, and
