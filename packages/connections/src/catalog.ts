@@ -12,7 +12,7 @@ import {
   type JsonValue
 } from "@vivd-catalyst/core";
 import { z } from "zod";
-import { compileJsonSchema } from "./json-schema";
+import { compileJsonSchema, isJsonSchemaWithinBounds } from "./json-schema";
 
 // What a discovery leaves behind and what it makes callable. Pure: nothing here reads or
 // writes a store or opens a connection. A discovery never widens anything: a tool is callable
@@ -30,9 +30,23 @@ function canonicalJson(value: JsonValue): string {
 }
 
 /**
+ * Whether the schemas of a descriptor are ones the platform compiles: within the bounds of a
+ * JSON Schema here. A descriptor that is not is no operation, and nothing walks its schemas:
+ * a fingerprint follows a schema as deep as it goes, and one deeper than the stack would end
+ * the read of a catalog with an error where it should end with one operation less.
+ */
+function hasUsableSchemas(descriptor: ConnectorOperationDescriptor): boolean {
+  return (
+    isJsonSchemaWithinBounds(descriptor.inputSchema) &&
+    (descriptor.outputSchema === undefined || isJsonSchemaWithinBounds(descriptor.outputSchema))
+  );
+}
+
+/**
  * The fingerprint of a descriptor: sha256, hex, over the canonical JSON (keys sorted) of its
  * name, description, input schema, output schema and proposed effect. The description is
- * part of it, because a changed description is what a model reads.
+ * part of it, because a changed description is what a model reads. Only a descriptor with
+ * usable schemas is handed to it.
  */
 export function fingerprintOperation(descriptor: ConnectorOperationDescriptor): string {
   const fingerprinted: JsonObject = {
@@ -128,8 +142,10 @@ export function buildConnectionCatalog(input: {
   const entries = new Map<string, ConnectionCatalogEntry>();
   for (const descriptor of input.discovered) {
     // A type leaves out a name that cannot end an operation name. One that arrives here anyway
-    // is left out too, and of two tools of one name the first stands.
+    // is left out too, and of two tools of one name the first stands. So is a tool whose
+    // schema the platform would not compile: it is checked before anything walks the schema.
     if (!acceptableName(descriptor.name) || entries.has(descriptor.name)) continue;
+    if (!hasUsableSchemas(descriptor)) continue;
     entries.set(descriptor.name, {
       name: descriptor.name,
       description: descriptor.description,
@@ -192,7 +208,9 @@ export function connectionOperationStatus(input: {
   let fingerprint: string | undefined;
   let accepted: string | undefined;
   if (type.catalog) {
-    descriptor = type.catalog.find((candidate) => candidate.name === operation.name);
+    descriptor = type.catalog.find(
+      (candidate) => candidate.name === operation.name && hasUsableSchemas(candidate)
+    );
     fingerprint = descriptor ? fingerprintOperation(descriptor) : undefined;
     accepted = operation.schemaFingerprint ?? fingerprint;
   } else {

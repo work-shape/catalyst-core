@@ -280,6 +280,39 @@ describe("the catalog of a Connection", () => {
     expect(catalog.entries[0]?.description).toBe("Reads revenue.");
   });
 
+  // Fails without the change: the fingerprint walked the schema before anything bounded it,
+  // and a schema deeper than the stack ended the read of the whole catalog with a RangeError.
+  it("leaves out a tool whose schema is over the bounds, before anything walks the schema", () => {
+    let deep: JsonValue = { type: "string" };
+    for (let level = 0; level < 200_000; level += 1) deep = { not: deep };
+    const tooDeep = descriptor("deep", { inputSchema: { type: "object", properties: { deep } } });
+    const deepOutput = descriptor("deep_output", { outputSchema: { type: "object", not: deep } });
+    const asynchronous = descriptor("later", {
+      inputSchema: { type: "object", $defs: { unused: { $async: true } } }
+    });
+
+    const catalog = buildConnectionCatalog({
+      discovered: [tooDeep, descriptor("revenue"), deepOutput, asynchronous],
+      accepted: [accepted("deep"), accepted("revenue"), accepted("deep_output")],
+      previous: undefined,
+      now: NOW
+    });
+
+    expect(catalog.entries.map((entry) => entry.name)).toEqual(["revenue"]);
+    expect(Object.keys(catalog.pinned)).toEqual(["revenue"]);
+    expect(statusOf(accepted("revenue"), catalog).status).toBe("ready");
+    expect(statusOf(accepted("deep"), catalog)).toEqual({ status: "unknown" });
+
+    // The same for a type that ships its catalog: the operation is unknown, nothing throws.
+    const { discover: _discover, catalog: _catalog, ...base } = discovering;
+    const shipping: ConnectorTypeDefinition = {
+      ...base,
+      catalog: [tooDeep, descriptor("revenue")]
+    };
+    expect(statusOf(accepted("deep"), undefined, shipping)).toEqual({ status: "unknown" });
+    expect(statusOf(accepted("revenue"), undefined, shipping).status).toBe("ready");
+  });
+
   it("reads a type's static catalog without a stored one, and checks a config fingerprint", () => {
     const { type } = createTestConnector();
     const echo = required(type.catalog?.[0]);
