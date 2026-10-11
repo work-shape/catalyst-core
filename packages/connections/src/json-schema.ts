@@ -12,7 +12,8 @@ import { z } from "zod";
 /**
  * How many compiled schemas this process keeps, by the fingerprint of the schema. One schema
  * is compiled once for all its calls. When the bound is reached the schema that was compiled
- * first is dropped and compiled again at its next use.
+ * first is dropped and compiled again at its next use. Each schema is compiled by a validator
+ * of its own, so a dropped schema leaves nothing behind.
  */
 export const JSON_SCHEMA_CACHE_MAX_ENTRIES = 2_000;
 
@@ -41,23 +42,28 @@ const AJV_OPTIONS = {
   strict: false,
   validateFormats: false,
   allErrors: false,
-  // The compiled function is kept by this file under the bound above, not by the validator.
-  addUsedSchema: false
+  addUsedSchema: false,
+  // A validator that cannot build its code would print that code. Nothing of a schema an
+  // outside system wrote goes to a log from here.
+  logger: false
 } as const;
 
-const draft2020 = new Ajv2020(AJV_OPTIONS);
-const draft07 = new Ajv(AJV_OPTIONS);
-
+/**
+ * A validator for one schema. It is made for that schema alone and lives as long as the
+ * compiled function does: a validator keeps what it compiled, and its ids, for good, so one
+ * that served every schema would grow with every schema this process ever saw.
+ */
 function validatorFor(schema: JsonObject): Ajv | Ajv2020 | undefined {
   const dialect = schema.$schema;
-  if (dialect === undefined) return draft2020;
+  if (dialect === undefined) return new Ajv2020(AJV_OPTIONS);
   if (typeof dialect !== "string") return undefined;
-  if (DRAFT_2020_12.test(dialect)) return draft2020;
-  if (DRAFT_07.test(dialect)) return draft07;
+  if (DRAFT_2020_12.test(dialect)) return new Ajv2020(AJV_OPTIONS);
+  if (DRAFT_07.test(dialect)) return new Ajv(AJV_OPTIONS);
   return undefined;
 }
 
 const cache = new Map<string, CompiledJsonSchema>();
+
 const cacheKeys = new WeakMap<JsonObject, string>();
 
 function cacheKeyOf(schema: JsonObject): string {
@@ -92,17 +98,14 @@ function issueOf(error: ErrorObject): JsonSchemaIssue {
 }
 
 function compile(schema: JsonObject): CompiledJsonSchema {
-  const validator = validatorFor(schema);
-  if (!validator) return { ok: false };
   let check: ValidateFunction;
   try {
+    const validator = validatorFor(schema);
+    if (!validator) return { ok: false };
     check = validator.compile(schema);
   } catch {
     // A `$ref` that leaves the schema, a malformed keyword, a pattern that is no expression.
     return { ok: false };
-  } finally {
-    // The validator keeps every schema it compiled by identity. Nothing is to stay there.
-    validator.removeSchema(schema);
   }
   return {
     ok: true,
@@ -115,7 +118,8 @@ function compile(schema: JsonObject): CompiledJsonSchema {
 
 /**
  * Compiles a JSON Schema of draft 2020-12 or draft-07. A schema that names another dialect,
- * refers to another document or is malformed answers `ok: false` and throws nothing.
+ * refers to another document or is malformed
+ * answers `ok: false` and throws nothing.
  */
 export function compileJsonSchema(schema: JsonObject): CompiledJsonSchema {
   const key = cacheKeyOf(schema);
