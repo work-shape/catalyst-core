@@ -198,6 +198,43 @@ describe("a call of a Connection's operation", () => {
     });
   });
 
+  it("does not let a connection.use grant on one Connection cover another", async () => {
+    const t = await fixture();
+    const granted = await t.seed("crm");
+    await t.seed("erp");
+    await t.grant(t.kai.id, "connection.use", { assetId: granted });
+
+    const other = await t.invoke(t.kai, "connection.erp.echo", { text: "hello" });
+
+    expect(other.result).toMatchObject({
+      status: "denied",
+      reason: { kind: "forbidden", action: "connection.use", reason: "no_grant" }
+    });
+    expect(t.sequence).toEqual([
+      "read connection",
+      "create run",
+      "authorize connection.use",
+      "record denied"
+    ]);
+    expect(t.sequence).not.toContain("resolve credential");
+    expect(t.executed).toEqual([]);
+    // The same holds for the agent that calls for the person.
+    t.state.agentTools.set("assistant", ["connection.erp.echo", "connection.crm.echo"]);
+    const byAgent = await t.invoke(
+      t.kai,
+      "connection.erp.echo",
+      { text: "hello" },
+      { origin: agentOrigin("connection.erp.echo") }
+    );
+    expect(byAgent.result).toMatchObject({ status: "denied", reason: { kind: "forbidden" } });
+    expect(t.executed).toEqual([]);
+
+    // The grant does what it says on the Connection it names.
+    const own = await t.invoke(t.kai, "connection.crm.echo", { text: "hello" });
+    expect(own.result).toMatchObject({ status: "done", output: { text: "hello" } });
+    expect(t.executed).toMatchObject([{ operation: "echo" }]);
+  });
+
   it("refuses an agent's changing call as policy unless the operation asks for an approval", async () => {
     const t = await fixture();
     const assetId = await t.seed("crm", {
@@ -220,11 +257,13 @@ describe("a call of a Connection's operation", () => {
       reason: { kind: "policy", operation: "connection.crm.write" }
     });
     expect(t.sequence).not.toContain("check egress");
+    expect(t.sequence).not.toContain("resolve credential");
     expect(t.executed).toEqual([]);
 
     // The policy an operation carries only tightens: `deny` stops a read for everybody.
     const denied = await t.invoke(t.kai, "connection.crm.echo", { text: "hello" });
     expect(denied.result).toMatchObject({ status: "denied", reason: { kind: "policy" } });
+    expect(t.sequence).not.toContain("resolve credential");
     expect(t.executed).toEqual([]);
 
     // The person's own changing call is its confirmation and runs.
@@ -323,6 +362,7 @@ describe("a call of a Connection's operation", () => {
 
     expect(failed.reason).toBe("connection_unavailable");
     expect(t.sequence).not.toContain("check egress");
+    expect(t.sequence).not.toContain("resolve credential");
     expect(t.executed).toEqual([]);
   });
 
@@ -451,6 +491,7 @@ describe("the parallel calls of one Connection", () => {
     expect(waited).toBeGreaterThanOrEqual(290);
     // It never got as far as the egress check, the credential or the connector.
     expect(t.sequence).not.toContain("check egress");
+    expect(t.sequence).not.toContain("resolve credential");
     expect(running).toBe(CONNECTION_MAX_PARALLEL_CALLS);
 
     // A tenth call waits too, and takes the slot of the first call that ends.
