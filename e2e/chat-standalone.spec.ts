@@ -886,6 +886,12 @@ for (const showAgentName of [false, true]) {
     });
     await headerChip.click();
     await expect(page.getByRole("option")).toHaveCount(2);
+    // The list grows into place. Its box and the boxes of its options are read one after the
+    // other, so they are read once it has stopped growing: a box of the list from an earlier
+    // frame is narrower than the options of a later one.
+    await list.evaluate((element) =>
+      Promise.all(element.getAnimations({ subtree: true }).map((animation) => animation.finished))
+    );
     const chipBox = await headerChip.boundingBox();
     const listBox = await list.boundingBox();
     if (!chipBox || !listBox) throw new Error("agent list is not laid out");
