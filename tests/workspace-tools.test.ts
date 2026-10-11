@@ -1412,6 +1412,35 @@ describe("workspace tools", () => {
     });
   });
 
+  it("asks to recreate a preview whose bytes are gone after an earlier successful look", async () => {
+    const harness = await createWorkspaceHarness();
+    const objectKey = "execution-workspaces/private/previews/gone/page-1.png";
+    await harness.putWorkspaceFile({
+      path: "previews/gone/page-1.png",
+      objectKey,
+      bytes: encode("page-1"),
+      mimeType: "image/png"
+    });
+    const first = await harness.runTool("workspace.preview_images", {
+      path: "previews/gone/page-1.png"
+    });
+    expect(first.status).toBe("success");
+
+    await harness.objectStore.delete(objectKey);
+    const second = await harness.runTool("workspace.preview_images", {
+      path: "previews/gone/page-1.png"
+    });
+
+    expect(second).toMatchObject({
+      status: "failed",
+      error: {
+        code: "handler_failed",
+        message: expect.stringContaining("Recreate the preview before inspecting it")
+      }
+    });
+    expect(JSON.stringify(second)).not.toContain('"status":"ready"');
+  });
+
   it("does not register a ready preview artifact when workspace bytes are missing", async () => {
     const harness = await createWorkspaceHarness();
     const workspace = await harness.store.executionWorkspaces.ensureExecutionWorkspace({

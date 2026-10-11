@@ -143,8 +143,8 @@ async function previewWorkspaceImagePaths(
       );
     }
     const kind = previewImageKind(mimeType);
-    // The id names this version of the file, so looking at an unchanged file again finds the
-    // row of the first look by primary key instead of adding one per call.
+    // The id names the stored version of the file, so looking at an unchanged file again
+    // finds the row of the first look by primary key instead of adding one per call.
     const artifact = await deps.store.files.ensureManagedArtifact({
       id: workspacePreviewImageArtifactId({
         clientInstanceId: context.clientInstanceId,
@@ -218,9 +218,11 @@ async function previewWorkspaceImagePaths(
 }
 
 /**
- * The artifact id of one version of a workspace image: the same workspace, path and checksum
- * give the same id. The other parts are the fields `ensureManagedArtifact` compares, so a row
- * found under the id always describes the same bytes at the same place.
+ * The artifact id of one stored version of a workspace image. Workspace, path and checksum are
+ * part of it, and so are the object key and the kind: an unchanged file keeps its id, a changed
+ * file gets a new one, and so does a file stored again under a new object key, even with the
+ * same bytes. Every field `ensureManagedArtifact` compares is in the id, so a row found under
+ * it always describes the same bytes at the same place.
  */
 function workspacePreviewImageArtifactId(version: {
   clientInstanceId: string;
