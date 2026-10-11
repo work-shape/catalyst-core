@@ -425,6 +425,10 @@ id from config_assets where status = 'deleted')`.
   ("Wo"), as the dialog's field. The descriptions of the New right dialog, of Deny, of the
   places and the read-only notice of an asset outside every Namespace say what they do in
   plain words; the notice no longer names a "Builder".
+- **Theme:** the dark page of the base theme is a little darker: the dark `surfaceColor`
+  default is `#181614` (it was `#1c1a17`). Cards and the chosen row of the sidebar follow, and
+  the raised surface of menus becomes `#252320`. The sidebar, borders and text are unchanged.
+  An instance that sets its own `darkTheme.surfaceColor` keeps it.
 - **User administration (breaking for callers of the typed client):** `users.create`,
   `users.update`, `users.delete`, `users.identities.upsert`, `users.identities.delete`,
   `users.password.reset` and `users.invitation.send` are Operation Runs. They answer the

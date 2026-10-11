@@ -63,11 +63,11 @@
   --shadow-modal: 0 16px 48px rgb(0 0 0 / 0.18);
 }
 :root[data-vivd-theme="dark"] {
-  --background: #1c1a17;
+  --background: #181614;
   --foreground: #efebe4;
-  --card: #1c1a17;
+  --card: #181614;
   --card-foreground: #efebe4;
-  --popover: color-mix(in srgb, #efebe4 6%, #1c1a17);
+  --popover: color-mix(in srgb, #efebe4 6%, #181614);
   --popover-foreground: #efebe4;
   --primary: #d98c6c;
   --primary-foreground: #111111;
@@ -116,7 +116,7 @@
   --sidebar-foreground: #efebe4;
   --sidebar-primary: #d98c6c;
   --sidebar-primary-foreground: #111111;
-  --sidebar-accent: #1c1a17;
+  --sidebar-accent: #181614;
   --sidebar-accent-foreground: #e8ab90;
   --sidebar-border: #33302b;
   --sidebar-ring: #d98c6c;

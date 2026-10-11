@@ -702,7 +702,7 @@ const defaultDarkUiTheme = {
   accentColor: "#d98c6c",
   accentStrongColor: "#e8ab90",
   backgroundColor: "#131210",
-  surfaceColor: "#1c1a17",
+  surfaceColor: "#181614",
   textColor: "#efebe4",
   mutedTextColor: "#b3ada3",
   borderColor: "#33302b"

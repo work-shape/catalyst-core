@@ -31,7 +31,7 @@ export const DEFAULT_THEME_INPUTS: ThemeInputsByMode = {
     accentStrongColor: "#8c3f26"
   },
   dark: {
-    surfaceColor: "#1c1a17",
+    surfaceColor: "#181614",
     backgroundColor: "#131210",
     textColor: "#efebe4",
     mutedTextColor: "#b3ada3",

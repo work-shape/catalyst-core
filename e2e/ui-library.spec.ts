@@ -7,7 +7,7 @@ const normalUser = { email: "e2e-user@example.test", password: "e2e-user-passwor
 const adminUser = { email: "e2e-admin@example.test", password: "e2e-admin-password" };
 
 // The default theme's raised surface: in dark the fill carries the lift, so it differs from the page.
-const darkPopover = "color-mix(in srgb, #efebe4 6%, #1c1a17)";
+const darkPopover = "color-mix(in srgb, #efebe4 6%, #181614)";
 
 test("the UI library gallery opens for an administrator and for nobody else", async ({
   page,
@@ -48,7 +48,7 @@ test("the gallery switches mode and language without touching the application", 
   await openSection(page, "Sample pages");
   await choose(page, "Mode", "Dark");
   // The gallery's own frame follows the chosen mode.
-  expect(await token(page.locator("[data-ui-gallery]"), "--background")).toBe("#1c1a17");
+  expect(await token(page.locator("[data-ui-gallery]"), "--background")).toBe("#181614");
   const buildList = page.locator('[data-gallery-sample="build-list"]');
   await buildList.getByRole("searchbox").fill("no such asset");
   await buildList.getByRole("button", { name: "Clear filters" }).click();
@@ -62,7 +62,7 @@ test("the gallery switches mode and language without touching the application", 
   await expect(dark).toBeVisible();
   expect(await token(light, "--background")).toBe("#fdfbf7");
   expect(await token(light, "--primary")).toBe("#b5573a");
-  expect(await token(dark, "--background")).toBe("#1c1a17");
+  expect(await token(dark, "--background")).toBe("#181614");
   expect(await token(dark, "--primary")).toBe("#d98c6c");
 
   // The group's own name changes with the language, so the choice is checked by its effect.

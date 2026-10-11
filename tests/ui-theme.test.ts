@@ -168,13 +168,13 @@ describe("UI theme contrast", () => {
     expect(table.light?.["primary button label when pressed on sidebar"]).toBeCloseTo(4.82, 1);
     expect(table.light?.["label on the solid accent"]).toBeCloseTo(4.78, 1);
     expect(table.light?.["chosen segment on sidebar"]).toBeCloseTo(5.13, 1);
-    expect(table.dark?.["text on page"]).toBeCloseTo(14.61, 1);
-    expect(table.dark?.["text on raised"]).toBeCloseTo(12.61, 1);
-    expect(table.dark?.["muted text on raised"]).toBeCloseTo(6.72, 1);
-    expect(table.dark?.["primary button label on page"]).toBeCloseTo(7.3, 1);
-    expect(table.dark?.["danger button label on hover on raised"]).toBeCloseTo(4.62, 1);
+    expect(table.dark?.["text on page"]).toBeCloseTo(15.19, 1);
+    expect(table.dark?.["text on raised"]).toBeCloseTo(13.21, 1);
+    expect(table.dark?.["muted text on raised"]).toBeCloseTo(7.05, 1);
+    expect(table.dark?.["primary button label on page"]).toBeCloseTo(7.64, 1);
+    expect(table.dark?.["danger button label on hover on raised"]).toBeCloseTo(4.83, 1);
     expect(Math.min(...Object.values(table.light ?? {}))).toBeCloseTo(4.53, 1);
-    expect(Math.min(...Object.values(table.dark ?? {}))).toBeCloseTo(4.62, 1);
+    expect(Math.min(...Object.values(table.dark ?? {}))).toBeCloseTo(4.83, 1);
   });
 });
 
