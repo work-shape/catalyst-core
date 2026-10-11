@@ -1,3 +1,4 @@
+import { format, inspect } from "node:util";
 import { describe, expect, it } from "vitest";
 import { connectionConfigSchema, egressConfigSchema } from "@vivd-catalyst/config-schema";
 import {
@@ -18,7 +19,7 @@ import {
 } from "@vivd-catalyst/core";
 import { required } from "./support/assertions";
 import { connection } from "./support/connections";
-import { createTestConnector, generateTestSecret } from "./support/test-connector";
+import { createTestConnector, findLeak, generateTestSecret } from "./support/test-connector";
 
 // The egress checker, and the order the auth component keeps around it. Each test fails
 // without the checker: before it nothing judged a Connection's target.
@@ -503,13 +504,56 @@ describe("the order around a call", () => {
       host: "api.example.com",
       address: "93.184.216.34"
     });
-    expect(made.credential).toEqual({
-      scheme: "bearer",
-      secret: t.secret,
-      headers: { authorization: `Bearer ${t.secret}` }
-    });
+    const credential = required(made.credential);
+    expect(credential.scheme).toBe("bearer");
+    expect(credential.secret).toBe(t.secret);
+    expect({ ...credential.headers }).toEqual({ authorization: `Bearer ${t.secret}` });
     // The settings of the call hold no credential: it is the context's alone.
     expect(JSON.stringify(made.context.connection)).not.toContain(t.secret);
+  });
+
+  it("hands out a credential that no serializer and no print writes out", async () => {
+    // Fails without the change: the credential was a plain object, and each of these texts
+    // held the secret.
+    for (const authScheme of ["bearer", "header"]) {
+      const t = setup({ "api.example.com": ["93.184.216.34"] });
+      await t.call(
+        stored({
+          authScheme,
+          settings: { url: "https://api.example.com/mcp", headerName: "X-Api-Key" }
+        })
+      );
+      const made = required(t.connector.calls[0]);
+      const credential = required(made.credential);
+      // `console.log` writes what `format` answers.
+      const printed = [
+        format(credential, credential.headers, made),
+        format("%o %j %s", credential, credential.headers, credential),
+        format({ nested: { credential }, list: [credential.headers] })
+      ].join("\n");
+      const texts = [
+        JSON.stringify(credential),
+        JSON.stringify(credential.headers),
+        JSON.stringify({ made, list: [credential], headers: credential.headers }),
+        inspect(credential, { showHidden: false, depth: 10 }),
+        inspect({ made, headers: credential.headers }, { depth: 10 }),
+        String(credential),
+        `${JSON.stringify(Object.entries(credential))}${JSON.stringify({ ...credential })}`,
+        format("%o %O %j", credential, made, credential.headers),
+        printed
+      ];
+      for (const text of texts) {
+        expect(findLeak(text, t.secret), text.slice(0, 200)).toBeUndefined();
+      }
+      expect(JSON.stringify(credential)).toBe('"[credential]"');
+      expect(JSON.stringify(credential.headers)).toBe('"[credential]"');
+      expect(printed).toContain("[credential]");
+      expect(Object.keys(credential)).toEqual(["scheme"]);
+      // A connector still reads what it needs, member by member.
+      expect(credential.secret).toBe(t.secret);
+      expect(Object.values(credential.headers)).toHaveLength(1);
+      expect(Object.isFrozen(credential) && Object.isFrozen(credential.headers)).toBe(true);
+    }
   });
 
   it("puts the secret into the header the type names, under the scheme header", async () => {
@@ -520,11 +564,9 @@ describe("the order around a call", () => {
         settings: { url: "https://api.example.com/mcp", headerName: "X-Api-Key" }
       })
     );
-    expect(required(t.connector.calls[0]).credential).toEqual({
-      scheme: "header",
-      secret: t.secret,
-      headers: { "x-api-key": t.secret }
-    });
+    const credential = required(required(t.connector.calls[0]).credential);
+    expect(credential.scheme).toBe("header");
+    expect({ ...credential.headers }).toEqual({ "x-api-key": t.secret });
     // Without a name for the header there is no call.
     const error: unknown = await t.call(stored({ authScheme: "header" })).catch((e: unknown) => e);
     expect(error).toMatchObject({ details: { reason: "connection_not_configured" } });
@@ -566,7 +608,7 @@ describe("the order around a call", () => {
     expect(() => context.credentialFor({ ...context.target, address: "10.0.0.5" })).toThrow();
     // The same origin, checked again, does.
     const again = await context.checkEgress(egressTargetOfUrl("https://api.example.com/next"));
-    expect(context.credentialFor(again)?.headers).toEqual({ authorization: `Bearer ${t.secret}` });
+    expect(context.credentialFor(again)?.headers.authorization).toBe(`Bearer ${t.secret}`);
   });
 
   it("refuses settings that do not fit the type before anything is checked", async () => {

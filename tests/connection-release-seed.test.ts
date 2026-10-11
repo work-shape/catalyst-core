@@ -455,11 +455,9 @@ describe("what stops a start, and what a missing or unreadable secret does", () 
     expect((await readStates()).map((row) => row.health)).toEqual(["unknown"]);
     expect(await call(w, w.env)).toBeUndefined();
     expect(w.connector.calls).toHaveLength(1);
-    expect(required(w.connector.calls[0]).credential).toEqual({
-      scheme: "bearer",
-      secret: w.token,
-      headers: { authorization: `Bearer ${w.token}` }
-    });
+    expect(required(w.connector.calls[0]).credential?.headers.authorization).toBe(
+      `Bearer ${w.token}`
+    );
 
     // And goes again: the stored secret goes with it.
     await (await w.start({ env })).close();

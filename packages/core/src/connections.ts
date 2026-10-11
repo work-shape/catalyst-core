@@ -211,6 +211,9 @@ export interface SecretStore {
 /**
  * What the connector auth component hands a Connector type for one call: the secret, and the
  * headers the Connection's auth scheme makes of it. Neither is ever part of the settings.
+ * Read the members one by one: the object handed out answers a fixed redaction to
+ * `JSON.stringify`, a logger and `util.inspect`, and `secret` and `headers` are not
+ * enumerable.
  */
 export interface ConnectionCredential {
   scheme: string;

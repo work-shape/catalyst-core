@@ -24,6 +24,57 @@ export const AUTH_SCHEME_NONE = "none";
 /** A header name as HTTP writes one. A name a type hands over is checked against it. */
 const HEADER_NAME_PATTERN = /^[A-Za-z0-9!#$%&'*+.^_`|~-]{1,64}$/u;
 
+/** What a credential answers to anything that would write it out. */
+export const CREDENTIAL_REDACTION = "[credential]";
+const INSPECT: unique symbol = Symbol.for("nodejs.util.inspect.custom");
+
+/**
+ * The headers of a credential. Each stays enumerable, because a connector sets each of them
+ * on its request. Written out as a whole, by `JSON.stringify`, a logger or `console.log`,
+ * they answer the fixed redaction.
+ */
+function sealHeaders(headers: Record<string, string>): Readonly<Record<string, string>> {
+  const answer = { value: () => CREDENTIAL_REDACTION, enumerable: false };
+  return Object.freeze(
+    Object.defineProperties({ ...headers }, { toJSON: answer, [INSPECT]: answer })
+  );
+}
+
+/**
+ * The credential of one call. Its members read as `ConnectionCredential` says. The secret
+ * and the headers are not enumerable, so a spread, `Object.entries` or a serializer that
+ * walks the object finds the scheme and nothing else, and `JSON.stringify`, a logger and
+ * `util.inspect` are answered the fixed redaction.
+ */
+class SealedCredential implements ConnectionCredential {
+  readonly scheme: string;
+  declare readonly secret: string;
+  declare readonly headers: Readonly<Record<string, string>>;
+
+  constructor(scheme: string, secret: string, headers: Record<string, string>) {
+    this.scheme = scheme;
+    Object.defineProperty(this, "secret", { value: secret, enumerable: false });
+    Object.defineProperty(this, "headers", { value: sealHeaders(headers), enumerable: false });
+    Object.freeze(this);
+  }
+
+  toJSON(): string {
+    return CREDENTIAL_REDACTION;
+  }
+
+  [INSPECT](): string {
+    return CREDENTIAL_REDACTION;
+  }
+}
+
+function sealCredential(
+  scheme: string,
+  secret: string,
+  headers: Record<string, string>
+): ConnectionCredential {
+  return new SealedCredential(scheme, secret, headers);
+}
+
 /**
  * What an auth scheme makes of the secret. `bearer` and `header` become one request header;
  * every other scheme, such as a database password, is handed the secret itself. No scheme
@@ -36,7 +87,7 @@ function credentialOf(
   secret: string
 ): ConnectionCredential {
   if (scheme === "bearer") {
-    return { scheme, secret, headers: Object.freeze({ authorization: `Bearer ${secret}` }) };
+    return sealCredential(scheme, secret, { authorization: `Bearer ${secret}` });
   }
   if (scheme === "header") {
     const name = type.credentialHeaderName?.(settings);
@@ -47,9 +98,9 @@ function credentialOf(
         { reason: CREDENTIAL_REFUSALS.notConfigured }
       );
     }
-    return { scheme, secret, headers: Object.freeze({ [name.toLowerCase()]: secret }) };
+    return sealCredential(scheme, secret, { [name.toLowerCase()]: secret });
   }
-  return { scheme, secret, headers: Object.freeze({}) };
+  return sealCredential(scheme, secret, {});
 }
 
 export interface OpenConnectorContextInput {
