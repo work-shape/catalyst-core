@@ -108,18 +108,6 @@
       "class": "own_account",
       "reason": "The signed-in person changes their own account."
     },
-    "namespaces.create": {
-      "class": "pending",
-      "ticket": "CONV-3"
-    },
-    "namespaces.delete": {
-      "class": "pending",
-      "ticket": "CONV-3"
-    },
-    "namespaces.update": {
-      "class": "pending",
-      "ticket": "CONV-3"
-    },
     "password_reset.request": {
       "class": "own_account",
       "reason": "This operation restores access to the person's own account."
@@ -127,14 +115,6 @@
     "password_setup.complete": {
       "class": "own_account",
       "reason": "This operation restores access to the person's own account."
-    },
-    "permissions.grant": {
-      "class": "pending",
-      "ticket": "CONV-3"
-    },
-    "permissions.revoke": {
-      "class": "pending",
-      "ticket": "CONV-3"
     },
     "service_principals.create": {
       "class": "pending",

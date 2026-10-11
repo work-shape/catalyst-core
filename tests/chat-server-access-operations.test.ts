@@ -1,0 +1,317 @@
+import { describe, expect, it } from "vitest";
+import { operationRunSchema } from "@vivd-catalyst/api-contract";
+import type { CentralPolicySetting } from "@vivd-catalyst/core";
+import {
+  clientInstanceId,
+  grantSchema,
+  setupAccessInstance,
+  type AccessInstance
+} from "./support/access-instance";
+import type { TestCallInput, TestOperationName } from "./support/operations";
+
+// The five changing operations of grants and Namespaces as operations of the registry: the run
+// each call leaves, the repeated call, the rule for a superadmin's rows asked before the
+// policy, and the policy itself. What each call writes and refuses is in
+// `chat-server-access-administration.test.ts`.
+
+/** An instance with these admin settings, and how often a call asked for them. */
+async function setup(settings: CentralPolicySetting[] = []) {
+  const asked = { policy: 0 };
+  const t = await setupAccessInstance({
+    operations: {
+      centralPolicySettings: () => {
+        asked.policy += 1;
+        return settings;
+      }
+    }
+  });
+  return { t, asked };
+}
+
+const grantPayload = (holderId: string, overrides: Record<string, unknown> = {}) => ({
+  holderKind: "user",
+  holderId,
+  action: "agent.write",
+  scopeKind: "namespace",
+  namespace: "kai-",
+  ...overrides
+});
+
+const actorOf = (event: { actor?: { userId?: string } }) => event.actor?.userId;
+
+/** One call under its own correlation id, with the run and the audit rows it left. */
+async function traced(
+  t: AccessInstance,
+  userId: string,
+  operation: TestOperationName,
+  input: TestCallInput,
+  correlationId: string
+) {
+  const before = await t.stores.operationRuns.list({ clientInstanceId });
+  const response = await t.call(userId, operation, {
+    ...input,
+    headers: { ...input.headers, "x-correlation-id": correlationId }
+  });
+  const runs = (await t.stores.operationRuns.list({ clientInstanceId })).filter(
+    (run) => !before.some((earlier) => earlier.id === run.id)
+  );
+  const audit = (await t.stores.audit.listAuditEvents({ clientInstanceId, limit: 200 }))
+    .filter((event) => event.correlationId === correlationId)
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  return { response, runs, audit };
+}
+
+describe("the Operation Run of a grant or Namespace write", () => {
+  // Fails without the registration: a plain route leaves no run and sets no header.
+  it("leaves one run per call with its actor, and audit rows that name what the call touched", async () => {
+    const { t } = await setup();
+    const created = await traced(
+      t,
+      t.admin.id,
+      "namespaces.create",
+      { payload: { prefix: "kai-", displayName: "Kai" } },
+      "corr_ns_create"
+    );
+    const granted = await traced(
+      t,
+      t.admin.id,
+      "permissions.grant",
+      { payload: grantPayload(t.kai.id) },
+      "corr_grant"
+    );
+    const grantId = grantSchema.parse(granted.response.json()).id;
+    const updated = await traced(
+      t,
+      t.admin.id,
+      "namespaces.update",
+      { params: { prefix: "kai-" }, payload: { displayName: "Kai's" } },
+      "corr_ns_update"
+    );
+    const revoked = await traced(
+      t,
+      t.root.id,
+      "permissions.revoke",
+      { params: { grantId } },
+      "corr_revoke"
+    );
+    const deleted = await traced(
+      t,
+      t.admin.id,
+      "namespaces.delete",
+      { params: { prefix: "kai-" } },
+      "corr_ns_delete"
+    );
+
+    const calls = [
+      {
+        ...created,
+        operation: "namespaces.create",
+        actor: t.admin.id,
+        kind: "namespace",
+        id: "kai-"
+      },
+      { ...granted, operation: "permissions.grant", actor: t.admin.id, kind: "user", id: t.kai.id },
+      {
+        ...updated,
+        operation: "namespaces.update",
+        actor: t.admin.id,
+        kind: "namespace",
+        id: "kai-"
+      },
+      {
+        ...revoked,
+        operation: "permissions.revoke",
+        actor: t.root.id,
+        kind: "permission_grant",
+        id: grantId
+      },
+      {
+        ...deleted,
+        operation: "namespaces.delete",
+        actor: t.admin.id,
+        kind: "namespace",
+        id: "kai-"
+      }
+    ];
+    for (const call of calls) {
+      expect(call.response.statusCode, call.operation).toBe(200);
+      expect(
+        call.runs.map((run) => ({
+          id: run.id,
+          operation: run.operation,
+          actor: run.actor.id,
+          effect: run.effect,
+          status: run.status,
+          origin: run.origin.kind
+        })),
+        call.operation
+      ).toEqual([
+        {
+          id: call.response.headers["operation-run-id"],
+          operation: call.operation,
+          actor: call.actor,
+          effect: "changing",
+          status: "done",
+          origin: "user"
+        }
+      ]);
+      // The rows of the call path name the resource; the governance row names what was written.
+      const ofCallPath = call.audit.filter((event) => event.type.startsWith("operation."));
+      expect(ofCallPath.length, call.operation).toBeGreaterThan(0);
+      for (const event of ofCallPath) {
+        expect(
+          { subject: event.subject, kind: event.metadata?.subjectKind, actor: actorOf(event) },
+          `${call.operation} ${event.type}`
+        ).toEqual({ subject: call.id, kind: call.kind, actor: call.actor });
+      }
+      expect(
+        call.audit.filter((event) => !event.type.startsWith("operation.")).map((e) => e.type),
+        call.operation
+      ).toHaveLength(1);
+    }
+  });
+
+  // Fails without the registration: the second call answered 409 `duplicate_grant`.
+  it("answers a repeated grant with the same key from the first call and writes one row", async () => {
+    const { t } = await setup();
+    await t.createNamespace("kai-");
+    const input = {
+      payload: grantPayload(t.kai.id),
+      headers: { "idempotency-key": "grant-kai-once" }
+    };
+    const first = await t.expectOk(t.admin.id, "permissions.grant", input);
+    expect(first.headers["idempotent-replayed"]).toBeUndefined();
+    const second = await t.expectOk(t.admin.id, "permissions.grant", input);
+    expect(second.headers["idempotent-replayed"]).toBe("true");
+    expect(second.headers["operation-run-id"]).toBe(first.headers["operation-run-id"]);
+    expect(second.json()).toEqual(first.json());
+    expect(await t.stores.access.listGrants({ clientInstanceId })).toHaveLength(1);
+    expect(await t.stores.operationRuns.list({ clientInstanceId })).toHaveLength(2);
+
+    // The key is the caller's own: another administrator's same key is another call.
+    await t.expectRefused(t.root.id, "permissions.grant", input, {
+      status: 409,
+      code: "CONFLICT"
+    });
+    // The same key with another input is refused and writes nothing.
+    await t.expectRefused(
+      t.admin.id,
+      "permissions.grant",
+      { ...input, payload: grantPayload(t.lena.id) },
+      { status: 409, code: "IDEMPOTENCY_KEY_REUSED" }
+    );
+    expect(await t.stores.access.listGrants({ clientInstanceId })).toHaveLength(1);
+  });
+});
+
+describe("a superadmin's rows", () => {
+  // Fails without the operation's own check: the policy was asked first, and the refusal came
+  // from the handler as a failed run.
+  it("are refused to an administrator before the policy is asked, as a denied run", async () => {
+    const { t, asked } = await setup();
+    await t.createNamespace("kai-");
+    const held = grantSchema.parse(
+      (
+        await t.expectOk(t.root.id, "permissions.grant", { payload: grantPayload(t.root.id) })
+      ).json()
+    );
+
+    const attempts: Array<[TestOperationName, TestCallInput]> = [
+      ["permissions.grant", { payload: grantPayload(t.root.id, { effect: "deny" }) }],
+      // The holder is decided before what the row says: an action that cannot be granted is
+      // not looked at for a caller who may not write this holder's rows.
+      ["permissions.grant", { payload: grantPayload(t.root.id, { action: "users.manage" }) }],
+      ["permissions.revoke", { params: { grantId: held.id } }]
+    ];
+    for (const [index, [operation, input]] of attempts.entries()) {
+      const policyAsked = asked.policy;
+      const { response, runs, audit } = await traced(
+        t,
+        t.admin.id,
+        operation,
+        input,
+        `corr_refused_${index}`
+      );
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toEqual({
+        error: {
+          correlationId: `corr_refused_${index}`,
+          code: "FORBIDDEN",
+          message: `Missing the right '${operation}'`,
+          details: { action: operation, reason: "no_grant" }
+        }
+      });
+      expect(asked.policy, "the policy was not asked").toBe(policyAsked);
+      expect(runs.map((run) => ({ status: run.status, denial: run.denial }))).toEqual([
+        { status: "denied", denial: { kind: "forbidden", action: operation, reason: "no_grant" } }
+      ]);
+      // The two rows every refused call of the registry leaves: the check and the ending.
+      expect(
+        audit.map((event) => ({ type: event.type, status: event.status, actor: actorOf(event) }))
+      ).toEqual([
+        { type: "operation.authorization_checked", status: "denied", actor: t.admin.id },
+        { type: "operation.denied", status: "denied", actor: t.admin.id }
+      ]);
+    }
+    expect(await t.stores.access.listGrants({ clientInstanceId })).toHaveLength(1);
+  });
+
+  // Fails without `users.manage` inside the operation's own check: the two grant writes name
+  // no right in `requires`, so nothing else would refuse this caller.
+  it("and everyone's are refused to a caller without users.manage before any holder is read", async () => {
+    const { t, asked } = await setup();
+    await t.createNamespace("kai-");
+    const grantId = await t.grant(t.lena.id, "agent.read", { namespace: "kai-" });
+    const policyAsked = asked.policy;
+    for (const [operation, input] of [
+      // A holder who is a superadmin answers as any other holder does.
+      ["permissions.grant", { payload: grantPayload(t.root.id) }],
+      ["permissions.grant", { payload: grantPayload("user_missing") }],
+      ["permissions.revoke", { params: { grantId } }],
+      ["permissions.revoke", { params: { grantId: "missing" } }]
+    ] as const) {
+      await t.expectRefused(t.kai.id, operation, input, t.forbidden("users.manage", "no_grant"));
+    }
+    expect(asked.policy).toBe(policyAsked);
+    expect(await t.stores.access.listGrants({ clientInstanceId })).toHaveLength(1);
+  });
+});
+
+describe("the policy of a grant or Namespace write", () => {
+  // Fails without the registration: a plain route asks no policy and wrote the row.
+  it("refuses a write the instance denies and writes nothing", async () => {
+    const { t } = await setup([
+      { operation: "permissions.grant", value: "deny" },
+      { operation: "namespaces.delete", value: "deny" }
+    ]);
+    await t.createNamespace("kai-");
+    await t.expectRefused(
+      t.admin.id,
+      "permissions.grant",
+      { payload: grantPayload(t.kai.id) },
+      { status: 403, code: "POLICY_DENIED" }
+    );
+    await t.expectRefused(
+      t.root.id,
+      "namespaces.delete",
+      { params: { prefix: "kai-" } },
+      { status: 403, code: "POLICY_DENIED" }
+    );
+    expect(await t.stores.access.listGrants({ clientInstanceId })).toEqual([]);
+    expect(await t.stores.access.listNamespaces({ clientInstanceId })).toHaveLength(1);
+  });
+
+  // Fails without the registration: the grant was written at once.
+  it("holds a grant for another person's approval with 202 and writes nothing meanwhile", async () => {
+    const { t } = await setup([{ operation: "permissions.grant", value: "approval" }]);
+    await t.createNamespace("kai-");
+    const held = await t.call(t.admin.id, "permissions.grant", {
+      payload: grantPayload(t.kai.id)
+    });
+    expect(held.statusCode).toBe(202);
+    const run = operationRunSchema.parse(held.json());
+    expect(run).toMatchObject({ operation: "permissions.grant", status: "pending_approval" });
+    expect(held.headers.location).toContain(run.id);
+    expect(await t.stores.access.listGrants({ clientInstanceId })).toEqual([]);
+  });
+});

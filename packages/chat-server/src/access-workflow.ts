@@ -11,18 +11,22 @@ import {
   type AccessHolder,
   type ActorAccess,
   type AuthenticatedUser,
+  type OperationAuthorization,
+  type OperationExecutionContext,
   type GrantScopeAsset,
   type JsonObject,
   type Namespace,
   type NamespaceUsage,
   type PermissionGrant,
-  type RuntimeCallContext,
   type StorePage,
   type UserRecord
 } from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "./types";
 
-type AccessCallContext = Pick<RuntimeCallContext, "correlationId">;
+type AccessCallContext = Pick<OperationExecutionContext, "correlationId">;
+
+/** The right every operation here asks for. The two grant writes ask it themselves. */
+const MANAGE_ACTION = "users.manage";
 
 export interface GrantViewContext {
   hiddenUserIds: ReadonlySet<string>;
@@ -46,12 +50,65 @@ interface NamespaceListsCommand {
 
 /**
  * Grants and Namespaces as an instance administrator writes them. The right itself,
- * `users.manage`, is every operation's `requires`. What this slice writes is narrower than what
- * the table holds: a user as holder, read, write and delete on agents and skills, a Namespace
- * or one asset as scope.
+ * `users.manage`, is the `requires` of the reads and the Namespace writes. The two grant
+ * writes check it themselves, with the rule that a superadmin's rows are a superadmin's alone.
+ * What this slice writes is narrower than what the table holds: a user as holder, read, write
+ * and delete on agents and skills, a Namespace or one asset as scope.
  */
 export class AccessWorkflow {
   constructor(private readonly options: ChatServerOptions) {}
+
+  /**
+   * Who may write a grant row for the holder the call names. A holder that does not exist
+   * passes: the write answers that itself.
+   */
+  async authorizeGrant(
+    actor: AuthenticatedUser,
+    access: ActorAccess,
+    operation: string,
+    command: Pick<GrantCommand, "holderKind" | "holderId">
+  ): Promise<OperationAuthorization> {
+    return this.authorizeHolderWrite(actor, access, operation, () =>
+      command.holderKind === "user" ? this.findUser(command.holderId) : undefined
+    );
+  }
+
+  /** Who may remove the grant row the call names. A row that does not exist passes. */
+  async authorizeRevoke(
+    actor: AuthenticatedUser,
+    access: ActorAccess,
+    operation: string,
+    grantId: string
+  ): Promise<OperationAuthorization> {
+    return this.authorizeHolderWrite(actor, access, operation, async () => {
+      const existing = await this.options.stores.access.getGrant({
+        clientInstanceId: this.options.clientInstanceId,
+        grantId
+      });
+      return existing?.holderKind === "user" ? this.findUser(existing.holderId) : undefined;
+    });
+  }
+
+  /**
+   * `users.manage` first, so a caller without it causes no read. Then the holder: a refusal
+   * for a superadmin's row names the operation, because no right a caller can be granted
+   * opens it.
+   */
+  private async authorizeHolderWrite(
+    actor: AuthenticatedUser,
+    access: ActorAccess,
+    operation: string,
+    findHolder: () => Promise<UserRecord | undefined> | undefined
+  ): Promise<OperationAuthorization> {
+    const right = access.authorize(MANAGE_ACTION);
+    if (!right.allowed) {
+      return { allowed: false, action: MANAGE_ACTION, reason: right.reason };
+    }
+    const holder = await findHolder();
+    return holder && !mayManageHolder(actor, holder)
+      ? { allowed: false, action: operation, reason: "no_grant" }
+      : { allowed: true };
+  }
 
   async grant(
     actor: AuthenticatedUser,
@@ -75,6 +132,7 @@ export class AccessWorkflow {
     if (!holder) {
       throw new AppError("NOT_FOUND", "User not found", { reason: "unknown_holder" });
     }
+    // Asked before the policy by `authorizeGrant`, and again here on the holder as it is now.
     requireManageableHolder(actor, holder);
     // The store refuses the same for a deletion requested after this read.
     if (holder.status === "deleting") throw userInDeletionError();
@@ -399,8 +457,12 @@ function refused(reason: string, message: string): AppError {
 }
 
 /** A caller who is not a superadmin writes no row for a holder who is one. */
+function mayManageHolder(actor: AuthenticatedUser, holder: UserRecord): boolean {
+  return !isSuperadmin(holder) || isSuperadmin(actor);
+}
+
 function requireManageableHolder(actor: AuthenticatedUser, holder: UserRecord): void {
-  if (isSuperadmin(holder) && !isSuperadmin(actor)) {
+  if (!mayManageHolder(actor, holder)) {
     throw new AppError("FORBIDDEN", "Only superadmins can manage superadmin users");
   }
 }

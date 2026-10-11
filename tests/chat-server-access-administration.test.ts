@@ -196,13 +196,13 @@ describe("who may write a grant, and what a grant may say", () => {
       namespace: "kai-",
       effect: "deny"
     };
-    const refusal = await t.expectRefused(
+    // The operation's own check refuses, so the refusal names the operation.
+    await t.expectRefused(
       t.admin.id,
       "permissions.grant",
       { payload },
-      { status: 403, code: "FORBIDDEN" }
+      t.forbidden("permissions.grant", "no_grant")
     );
-    expect(refusal.message).toBe("Only superadmins can manage superadmin users");
     expect(await t.stores.access.listGrants({ clientInstanceId })).toEqual([]);
 
     // A superadmin may, and the other administrator cannot take the row away again.

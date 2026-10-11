@@ -10,10 +10,13 @@ import {
   permissionGrantSchema,
   updateNamespaceRequestSchema
 } from "../access";
-import { defineOperation, json, page } from "./define-operation";
+import { defineOperation, defineRegisteredOperation, json, page } from "./define-operation";
+
+// The five changing operations are operations of the registry: a call is an Operation Run.
+// The three reads are plain.
 
 export const accessOperations = {
-  "permissions.grant": defineOperation({
+  "permissions.grant": defineRegisteredOperation({
     id: "permissions.grant",
     method: "POST",
     path: "/api/v1/instance/access/grants",
@@ -21,14 +24,16 @@ export const accessOperations = {
     tag: "Access",
     auth: "user",
     scope: "user_admin:write",
-    requires: ["users.manage"],
+    // The rule is more than one right: `users.manage`, and a superadmin's rows are a
+    // superadmin's alone. The operation checks both itself, before the policy is asked.
+    requires: [],
     effect: "changing",
     body: createPermissionGrantRequestSchema,
     response: json(permissionGrantSchema),
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  "permissions.revoke": defineOperation({
+  "permissions.revoke": defineRegisteredOperation({
     id: "permissions.revoke",
     method: "DELETE",
     path: "/api/v1/instance/access/grants/:grantId",
@@ -36,7 +41,9 @@ export const accessOperations = {
     tag: "Access",
     auth: "user",
     scope: "user_admin:write",
-    requires: ["users.manage"],
+    // The rule is more than one right: `users.manage`, and a superadmin's rows are a
+    // superadmin's alone. The operation checks both itself, before the policy is asked.
+    requires: [],
     effect: "changing",
     response: json(permissionGrantSchema),
     errors: ["NOT_FOUND"],
@@ -72,7 +79,7 @@ export const accessOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
-  "namespaces.create": defineOperation({
+  "namespaces.create": defineRegisteredOperation({
     id: "namespaces.create",
     method: "POST",
     path: "/api/v1/instance/access/namespaces",
@@ -87,7 +94,7 @@ export const accessOperations = {
     errors: ["CONFLICT"],
     rateClass: "write"
   }),
-  "namespaces.update": defineOperation({
+  "namespaces.update": defineRegisteredOperation({
     id: "namespaces.update",
     method: "PATCH",
     path: "/api/v1/instance/access/namespaces/:prefix",
@@ -117,7 +124,7 @@ export const accessOperations = {
     errors: [],
     rateClass: "read"
   }),
-  "namespaces.delete": defineOperation({
+  "namespaces.delete": defineRegisteredOperation({
     id: "namespaces.delete",
     method: "DELETE",
     path: "/api/v1/instance/access/namespaces/:prefix",
