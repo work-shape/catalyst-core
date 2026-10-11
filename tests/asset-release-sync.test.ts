@@ -424,6 +424,55 @@ describe("what a release is checked against", () => {
   });
 });
 
+describe("assets of a kind no release carries", () => {
+  it("are left alone by a release, also where their kind is not registered, and stop none", async () => {
+    const t = await setup();
+    // A row of a module that was switched off: the instance registers no kind for it.
+    await t.stores.configAssets.applyConfigAssetMutations({
+      clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "connection",
+          name: "rel-crm",
+          config: { name: "rel-crm", title: "CRM" }
+        }
+      ]
+    });
+    const release = [
+      putSkill("rel-guide", "Pushed.", 1),
+      putAgent("rel-intake"),
+      deleteAgent("rel-old")
+    ];
+
+    const checked = await asService(t, "assets.sync_check", { payload: { items: release } });
+    expect(checked.statusCode, checked.body).toBe(200);
+    const pushed = await syncAsService(t, release);
+    expect(pushed.statusCode, pushed.body).toBe(200);
+    expect(await t.stored("agent", "rel-old")).toMatchObject({ status: "deleted" });
+    expect(await t.stored("connection", "rel-crm")).toMatchObject({
+      status: "active",
+      revision: 1
+    });
+    // The listing of a release kind does not show it, so no working copy takes it for a
+    // remote-only asset to prune.
+    for (const kind of ["agent", "skill"]) {
+      const listed = await asService(t, "assets.list", { params: { kind } });
+      expect(listed.body).not.toContain("rel-crm");
+    }
+    // Nor does the overview a pull reads its version from.
+    const overview = await asService(t, "config_assets.get_overview", {});
+    expect(overview.statusCode, overview.body).toBe(200);
+    expect(overview.body).not.toContain("rel-crm");
+    // Naming it in a release is a refusal of that item, by its kind.
+    const named = await syncAsService(t, [
+      { type: "delete", kind: "connection", name: "rel-crm", expectedRevision: 1 }
+    ]);
+    expect(named.statusCode).toBeGreaterThanOrEqual(400);
+    expect(await t.stored("connection", "rel-crm")).toMatchObject({ status: "active" });
+  });
+});
+
 describe("assets.sync_check", () => {
   it("answers what the sync would and writes nothing", async () => {
     const t = await setup({ furtherToolNames: ["read_skill"] });

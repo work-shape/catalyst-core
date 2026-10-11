@@ -603,7 +603,14 @@ skills:
       instances: { local: pulledBaseline(1, remote) }
     });
     const mergeRequests: unknown[] = [];
-    const { fetchImpl } = await instanceHolding(remote, mergeRequests);
+    const { fetchImpl, fixture } = await instanceHolding(remote, mergeRequests);
+    // A row of a kind no release carries, left by a module that is off.
+    await fixture.store.configAssets.applyConfigAssetMutations({
+      clientInstanceId: fixture.clientInstanceId,
+      mutations: [
+        { type: "upsert", kind: "connection", name: "crm", config: { name: "crm", title: "CRM" } }
+      ]
+    });
     const mergeStdout: string[] = [];
     expect(
       await runConfigCommand("push", {
@@ -657,6 +664,14 @@ skills:
     expect(mergeRequests[1]).toEqual({
       items: [{ type: "delete", kind: "agent", name: "remote-only", expectedRevision: 1 }]
     });
+    expect(pruneStdout.join("")).not.toContain("crm");
+    expect(
+      await fixture.store.configAssets.getConfigAsset({
+        clientInstanceId: fixture.clientInstanceId,
+        kind: "connection",
+        name: "crm"
+      })
+    ).toMatchObject({ status: "active", revision: 1 });
   });
 
   it("sends only selected assets on push and rejects --prune with --only", async () => {
