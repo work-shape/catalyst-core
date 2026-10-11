@@ -41,4 +41,6 @@ export const apiOperations = {
   ...systemOperations
 } as const;
 
+export * from "./connections";
+
 export type ApiOperationName = keyof typeof apiOperations;

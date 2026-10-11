@@ -14,6 +14,8 @@ export * from "./operation-denial";
 export * from "./events";
 export * from "./operation-policy";
 export * from "./operation-registry";
+export * from "./connection-operations";
+export * from "./data-tools";
 export * from "./operation-runs";
 export * from "./infrastructure-checks";
 export * from "./modules";

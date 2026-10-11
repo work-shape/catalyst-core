@@ -41,7 +41,9 @@
   "dependencies": {
     "@vivd-catalyst/config-schema": "workspace:*",
     "@vivd-catalyst/core": "workspace:*",
-    "@vivd-catalyst/web-access": "workspace:*"
+    "@vivd-catalyst/web-access": "workspace:*",
+    "ajv": "^8.20.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^24.13.1",
