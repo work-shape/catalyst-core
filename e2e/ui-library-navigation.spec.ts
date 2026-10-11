@@ -208,18 +208,27 @@ test("a group's label stays at the top of a sidebar's body while its items scrol
   await body.evaluate((element) => {
     element.scrollTop = 100;
   });
+  // The body's mask and the label's fade follow the scroll a moment later, each on its own:
+  // both are waited for, and the rest is read once they stand.
   await expect.poll(async () => (await measure()).mask).toContain("linear-gradient");
+  // The label carries the fade of the start: 12 px of the sidebar's colour under it.
+  await expect
+    .poll(async () => {
+      const { fade, fadeHeight } = await measure();
+      return { fade, fadeHeight };
+    })
+    .toEqual({ fade: "1", fadeHeight: "12px" });
   const scrolled = await measure();
   expect(scrolled).toMatchObject({
     labelTop: 0,
     labelHeight: 36,
     labelAtTopEdge: true,
-    labelAboveItems: true
+    labelAboveItems: true,
+    fade: "1",
+    fadeHeight: "12px"
   });
   // The body fades its end and not its start: a fade there would take the label with it.
   expect(scrolled.mask).not.toContain("transparent 0");
-  // The label carries the fade of the start instead: 12 px of the sidebar's colour under it.
-  expect(scrolled).toMatchObject({ fade: "1", fadeHeight: "12px" });
   expect(scrolled.fadeImage).toContain("linear-gradient");
 
   // Back at the start the label is still at the top, and its fade is gone again.
