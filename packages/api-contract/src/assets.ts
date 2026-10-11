@@ -59,6 +59,9 @@ const isDefaultSchema = z.literal(true).optional();
  * The two pointers of an asset whose kind has the lifecycle `draft_published`, as revision
  * numbers. Both are left out on every other kind. `revision` beside them equals
  * `draftRevision`. `publishedRevision` is left out before the first publish.
+ *
+ * Whoever may not read the draft is answered the published view: `revision` and
+ * `publishedRevision` both name the published revision, and `draftRevision` is left out.
  */
 const pointerShape = {
   draftRevision: revisionNumberSchema.optional(),

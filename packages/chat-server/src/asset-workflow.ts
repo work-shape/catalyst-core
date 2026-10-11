@@ -26,7 +26,7 @@ import {
   type StorePage
 } from "@vivd-catalyst/core";
 import { z } from "zod";
-import { AssetDraftWorkflow } from "./asset-draft-workflow";
+import { AssetDraftWorkflow, showsPublishedView, summarizeAsset } from "./asset-draft-workflow";
 import type { AssetFileInput } from "./asset-files";
 import { readDefinitionName, type WorkflowAssetKind } from "./asset-kinds/shared";
 import {
@@ -216,6 +216,9 @@ export class AssetWorkflow {
     const kind = this.kind(input.kind);
     const scope = scopeOf(input.workspaceId);
     const [after] = page?.after ?? [];
+    // Whoever reads the asset is shown all of it; a holder of the use right its published view.
+    const reads = (resource: AssetTarget["resource"]) =>
+      call.access.authorize(kind.actions.read, resource).allowed;
     const [namespaces, defaultName, records] = await Promise.all([
       this.namespaces(scope),
       this.defaultName(kind, scope),
@@ -227,19 +230,24 @@ export class AssetWorkflow {
         nameContains: input.text,
         afterName: typeof after === "string" ? after : undefined,
         limit: page?.limit ?? DEFAULT_ASSET_LIST_LIMIT,
-        readable: (asset) =>
-          call.access.authorize(
-            kind.actions.read,
-            accessResource(asset.kind, asset.name, asset.scope, asset.id)
-          ).allowed
+        readable: (asset) => {
+          const resource = accessResource(asset.kind, asset.name, asset.scope, asset.id);
+          return (
+            reads(resource) ||
+            showsPublishedView(kind, call.access, resource, asset.published === true)
+          );
+        }
       })
     ]);
     return records.map((record) => {
       const namespace = findNamespaceOfAssetName(namespaces, record.name);
+      if (!reads(accessResource(record.kind, record.name, record.scope, record.id))) {
+        return this.drafts.publishedSummary(kind, record, namespace?.prefix);
+      }
       return {
         id: record.id,
         kind: record.kind,
-        ...summarize(kind, record),
+        ...summarizeAsset(kind, record.name, record.config),
         scope: record.scope,
         ...(namespace ? { namespace: namespace.prefix } : {}),
         revision: record.revision,
@@ -253,19 +261,20 @@ export class AssetWorkflow {
   /** The right a read of the revision the call names asks. */
   async authorizeGet(
     access: ActorAccess,
-    input: AssetAddress & { revision?: string }
+    input: AssetAddress & { revision?: string; files?: boolean }
   ): Promise<OperationAuthorization> {
     const target = await this.target(input);
-    return decide(access, this.drafts.readAction(access, target, input.revision), target.resource);
+    return decide(access, this.drafts.readAction(access, target, input).action, target.resource);
   }
 
   async get(call: AssetCall, address: AssetAddress & { revision?: string; files?: boolean }) {
     const target = await this.target(address);
-    call.access.require(
-      this.drafts.readAction(call.access, target, address.revision),
-      target.resource
-    );
+    const read = this.drafts.readAction(call.access, target, address);
+    call.access.require(read.action, target.resource);
     const asset = requireActive(target);
+    // Whoever may not read the draft is answered the published revision and nothing of it.
+    const publishedOnly = read.publishedView;
+    if (publishedOnly) address = { ...address, revision: "published" };
     const [namespaces, defaultName, availability, content] = await Promise.all([
       this.namespaces(target.scope),
       this.defaultName(target.kind, target.scope),
@@ -279,8 +288,10 @@ export class AssetWorkflow {
       name: asset.name,
       scope: asset.scope,
       ...(namespace ? { namespace: namespace.prefix } : {}),
-      revision: asset.revision,
-      ...pointersOf(target.kind, asset),
+      revision: publishedOnly ? (content.contentRevision ?? asset.revision) : asset.revision,
+      ...(publishedOnly
+        ? { publishedRevision: content.contentRevision }
+        : pointersOf(target.kind, asset)),
       ...content,
       ...(asset.name === defaultName ? { isDefault: true as const } : {}),
       ...(availability ? { availability } : {}),
@@ -291,7 +302,11 @@ export class AssetWorkflow {
   /** One page of the history, newest first. It stays readable after its asset is deleted. */
   async listRevisions(call: AssetCall, address: AssetAddress, page: StorePage | undefined) {
     const target = await this.target(address);
-    call.access.require(target.kind.actions.read, target.resource);
+    // The history holds every draft: it is read with the right the draft is read with.
+    call.access.require(
+      this.drafts.readAction(call.access, target, { revision: "draft" }).action,
+      target.resource
+    );
     if (!target.asset) {
       throw notFound(target);
     }
@@ -782,24 +797,6 @@ function storedWritableIssues(
     return undefined;
   } catch (error) {
     if (isAppError(error)) return errorIssues(error);
-    throw error;
-  }
-}
-
-/** What a list shows of one asset. A stored definition its kind no longer reads shows its name. */
-function summarize(kind: WorkflowAssetKind, record: ConfigAssetRecord) {
-  try {
-    const { title, description, attributes } = kind.summarize(record.config);
-    return {
-      name: record.name,
-      title,
-      ...(description === undefined ? {} : { description }),
-      ...(attributes === undefined ? {} : { attributes: { ...attributes } })
-    };
-  } catch (error) {
-    if (isAppError(error) && error.code === "VALIDATION_FAILED") {
-      return { name: record.name, title: record.name };
-    }
     throw error;
   }
 }

@@ -91,6 +91,8 @@ export interface ConfigAssetRecord {
   publishedRevisionId?: string;
   publishedRevision?: number;
   publishedFileSetId?: FileSetId;
+  /** The content of the published revision: what a holder of the use right alone is shown. */
+  publishedConfig?: JsonObject;
   createdAt: string;
   updatedAt: string;
 }
@@ -155,6 +157,8 @@ export interface ConfigAssetKey {
   kind: ConfigAssetKind;
   name: string;
   scope: AssetScope;
+  /** Whether the published pointer names a revision. Told where a page of a list is read. */
+  published?: boolean;
 }
 
 export interface ConfigAssetStore {

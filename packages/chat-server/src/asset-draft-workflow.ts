@@ -71,21 +71,56 @@ export class AssetDraftWorkflow {
   }
 
   /**
-   * The right a read of one revision asks. The published revision is what the kind's readers
-   * are shown, and its writers too. The draft and every numbered revision are for whoever
-   * writes or publishes the asset. A kind without a published revision asks its read right.
+   * The right a read asks, and whether it answers the published view alone. For a kind with
+   * a published revision, that revision is what its readers are shown, and its writers too;
+   * the draft and every numbered revision are for whoever writes or publishes the asset. A
+   * read that names no revision answers the draft to whoever may read it, and to everybody
+   * else who may be shown the published revision (`showsPublishedView`) that revision and
+   * nothing of the draft. A kind without a published revision asks its read right.
    */
-  readAction(access: ActorAccess, target: AssetTarget, revision: string | undefined): string {
+  readAction(
+    access: ActorAccess,
+    target: AssetTarget,
+    input: { revision?: string; files?: boolean }
+  ): { action: string; publishedView: boolean } {
     const { kind, resource } = target;
-    const { read, write, publish } = kind.actions;
+    const { read, write, publish, use } = kind.actions;
     const holds = (action: string) => access.authorize(action, resource).allowed;
     if (kind.lifecycle !== "draft_published") {
-      return read;
+      return { action: read, publishedView: false };
     }
-    if (revision === "published") {
-      return !holds(read) && holds(write) ? write : read;
+    if (input.revision === "published" && (holds(read) || holds(write))) {
+      return { action: holds(read) ? read : write, publishedView: false };
     }
-    return !holds(write) && publish !== undefined && holds(publish) ? publish : write;
+    const draft = !holds(write) && publish !== undefined && holds(publish) ? publish : write;
+    if (input.revision !== "published" && (input.revision !== undefined || holds(draft))) {
+      return { action: draft, publishedView: false };
+    }
+    // No revision named by somebody who may not read the draft, or the published one named
+    // by somebody who reads through the use right: the published view, without files.
+    const shown =
+      !input.files && showsPublishedView(kind, access, resource, isPublished(kind, target.asset));
+    if (shown) {
+      return { action: use !== undefined && !holds(read) ? use : read, publishedView: true };
+    }
+    return { action: input.revision === "published" ? read : draft, publishedView: false };
+  }
+
+  /**
+   * One asset as a list shows it to a holder of the use right alone: the published revision
+   * under its own number, and nothing of the draft.
+   */
+  publishedSummary(kind: WorkflowAssetKind, record: ConfigAssetRecord, namespace?: string) {
+    return {
+      id: record.id,
+      kind: record.kind,
+      ...summarizeAsset(kind, record.name, record.publishedConfig),
+      scope: record.scope,
+      ...(namespace ? { namespace } : {}),
+      revision: record.publishedRevision ?? record.revision,
+      publishedRevision: record.publishedRevision,
+      updatedAt: record.updatedAt
+    };
   }
 
   /**
@@ -152,6 +187,14 @@ export class AssetDraftWorkflow {
     selector: string
   ): Promise<{ revision: number; config: JsonObject; fileSetId?: FileSet["id"] }> {
     const { kind, name } = target;
+    // The published revision comes with the asset: no further read.
+    if (selector === "published" && isPublished(kind, asset) && asset.publishedConfig) {
+      return {
+        revision: asset.publishedRevision ?? asset.revision,
+        config: asset.publishedConfig,
+        ...(asset.publishedFileSetId ? { fileSetId: asset.publishedFileSetId } : {})
+      };
+    }
     if (selector === "draft") {
       return {
         revision: asset.revision,
@@ -475,4 +518,52 @@ function publishAction(kind: WorkflowAssetKind): string {
     );
   }
   return publish;
+}
+
+/** Whether the asset has a revision its users are served. */
+function isPublished(kind: WorkflowAssetKind, asset: ConfigAssetRecord | undefined): boolean {
+  return (
+    asset !== undefined &&
+    liveRevisionId(asset, kind) !== undefined &&
+    asset.publishedRevision !== undefined
+  );
+}
+
+/**
+ * The rule of every kind with a published revision: whoever holds its read right or its use
+ * right is shown the published revision of the asset, as a list entry and as a read, and
+ * through the use right nothing of an asset that has none. It is the right `mayOpenAssetFileSet` serves the files
+ * of that revision for.
+ */
+export function showsPublishedView(
+  kind: WorkflowAssetKind,
+  access: ActorAccess,
+  resource: AssetTarget["resource"],
+  published: boolean
+): boolean {
+  const { read, use } = kind.actions;
+  return (
+    kind.lifecycle === "draft_published" &&
+    published &&
+    (access.authorize(read, resource).allowed ||
+      (use !== undefined && access.authorize(use, resource).allowed))
+  );
+}
+
+/** What a list shows of one asset. A stored definition its kind no longer reads shows its name. */
+export function summarizeAsset(kind: WorkflowAssetKind, name: string, config: unknown) {
+  try {
+    const { title, description, attributes } = kind.summarize(config);
+    return {
+      name,
+      title,
+      ...(description === undefined ? {} : { description }),
+      ...(attributes === undefined ? {} : { attributes: { ...attributes } })
+    };
+  } catch (error) {
+    if (isAppError(error) && error.code === "VALIDATION_FAILED") {
+      return { name, title: name };
+    }
+    throw error;
+  }
 }

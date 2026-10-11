@@ -62,7 +62,8 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
   });
 
   route.operation(apiOperations["assets.get"], {
-    authorize: (input, { access }) => workflow.authorizeGet(access, input),
+    authorize: ({ files, ...input }, { access }) =>
+      workflow.authorizeGet(access, { ...input, files: files === "true" }),
     resource: assetResource,
     policyTargets: (input) => workflow.policyTargets(input),
     execute: ({ files, ...input }, context) =>
@@ -116,7 +117,9 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
   });
 
   route.operation(apiOperations["assets.revisions.list"], {
-    authorize: (input, { access }) => workflow.authorizeRead(access, input),
+    // The history holds every draft, so it asks what a read of the draft asks.
+    authorize: (input, { access }) =>
+      workflow.authorizeGet(access, { ...input, revision: "draft" }),
     resource: assetResource,
     policyTargets: (input) => workflow.policyTargets(input),
     execute: (input, context) => workflow.listRevisions(context, input, context.paging)

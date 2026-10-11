@@ -166,8 +166,7 @@ describe("reading the source files of one revision of an App", () => {
       { files: "true" },
       { revision: "draft" },
       { revision: "2" },
-      { revision: "1" },
-      {}
+      { revision: "1" }
     ];
     for (const query of draftReads) {
       const refused = await get(t.kai.id, "guarded", query);
@@ -177,6 +176,10 @@ describe("reading the source files of one revision of an App", () => {
       });
       expect(refused.body).not.toContain("unpublished");
     }
+    // A read that names no revision answers a reader the published one, never the draft.
+    const plain = await read(t.kai.id, "guarded");
+    expect(plain).toMatchObject({ revision: 1, contentRevision: 1 });
+    expect(plain).not.toHaveProperty("draftRevision");
     await t.stores.access.deleteGrant({ clientInstanceId, grantId: reading.id });
 
     // Whoever publishes reads what is to be published; whoever writes reads both.

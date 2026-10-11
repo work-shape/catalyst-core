@@ -39,7 +39,8 @@ const publishedRevisions = alias(configAssetRevisions, "published_revisions");
 const publishedColumns = {
   id: publishedRevisions.id,
   revision: publishedRevisions.revision,
-  fileSetId: publishedRevisions.fileSetId
+  fileSetId: publishedRevisions.fileSetId,
+  config: publishedRevisions.config
 };
 
 export async function getConfigAssetState(
@@ -118,7 +119,8 @@ export async function listConfigAssetPage(
         kind: configAssets.kind,
         name: configAssets.name,
         scopeKind: configAssets.scopeKind,
-        scopeId: configAssets.scopeId
+        scopeId: configAssets.scopeId,
+        publishedRevisionId: configAssets.publishedRevisionId
       })
       .from(configAssets)
       .where(
@@ -132,7 +134,13 @@ export async function listConfigAssetPage(
     for (const key of keys) {
       if (
         ids.length < input.limit &&
-        input.readable({ id: key.id, kind: key.kind, name: key.name, scope: mapAssetScope(key) })
+        input.readable({
+          id: key.id,
+          kind: key.kind,
+          name: key.name,
+          scope: mapAssetScope(key),
+          published: key.publishedRevisionId !== null
+        })
       ) {
         ids.push(key.id);
       }

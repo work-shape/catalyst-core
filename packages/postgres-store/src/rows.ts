@@ -642,7 +642,7 @@ export function mapConfigAsset(
   row: ConfigAssetRow | undefined,
   revision: ConfigAssetRevisionRow | undefined,
   /** The revision the published pointer names, where the reader joined it. */
-  published?: Pick<ConfigAssetRevisionRow, "id" | "revision" | "fileSetId"> | null
+  published?: Pick<ConfigAssetRevisionRow, "id" | "revision" | "fileSetId" | "config"> | null
 ): ConfigAssetRecord {
   if (!row || !revision || revision.id !== row.activeRevisionId) {
     throw new AppError("INTERNAL", "Expected config asset with its active revision");
@@ -665,7 +665,8 @@ export function mapConfigAsset(
     ...(published
       ? {
           publishedRevision: published.revision,
-          ...(published.fileSetId ? { publishedFileSetId: published.fileSetId } : {})
+          ...(published.fileSetId ? { publishedFileSetId: published.fileSetId } : {}),
+          ...(published.config ? { publishedConfig: published.config } : {})
         }
       : {}),
     createdAt: row.createdAt.toISOString(),
