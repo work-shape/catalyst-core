@@ -549,10 +549,8 @@ const CONNECTIONS_MODULE = "connections";
 const CONNECTION_KIND = "connection";
 
 /**
- * Connections are seeded once a Connection can reach something: the platform has the module
- * and the kind, and no connector type and no Secret Store yet. Until the seed carries a
- * Connection, an instance that has the module and the kind is told so instead of being left
- * without a word.
+ * The seed carries no Connection yet. Until it does, an instance that has the module and the
+ * kind is told so instead of being left without a word.
  */
 function seedConnections(
   modules: Awaited<ReturnType<SeedApi["listModules"]>>,

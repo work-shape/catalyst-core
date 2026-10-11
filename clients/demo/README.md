@@ -91,7 +91,12 @@ The table is `checkQuestions` in `src/seed/company.ts`, and `tests/demo-seed.tes
 ### What it leaves out
 
 - A conversation with a Page. A Page is saved by an agent's `page.save` during a run, and a run needs a model call, which the seed does not make.
-- Connections. The demo has the module `connections` off, and the platform has no connector type and no Secret Store yet, so a seeded Connection would reach nothing. The seed looks for the module and the kind `connection` and says in its output what it found; the Connection, its secret and its grants are added behind that check.
+- Connections. The demo has the module `connections` off and the seed brings no Connection yet. It looks for the module and the kind `connection` and says in its output what it found; the Connection, its secret and its grants are added behind that check.
+
+### Limits
+
+- The host name is looked up once, before the first request. A name that answers with another address afterwards is not caught, so use `127.0.0.1` where that matters.
+- Whether the invited person was mailed is read from the audit events, newest first, on every rerun. On an instance with a long audit history that takes many requests.
 
 ### Adding to it
 
