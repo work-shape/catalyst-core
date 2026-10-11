@@ -572,6 +572,32 @@ describe("Namespace allowlists", () => {
     await t.expectOk(t.root.id, "assets.sync", release(["known.tool"]));
   });
 
+  it("answers a synced agent that fails the selectable models and the list with the list's refusal", async () => {
+    const t = await setup();
+    await t.createNamespace("kai-", { allowedToolNames: ["known.tool"] });
+    await t.stores.users.updateUser({
+      clientInstanceId,
+      userId: t.root.id,
+      permissions: ["config_assets.release"]
+    });
+    const config = agent("kai-both", {
+      toolNames: ["second.tool"],
+      userSelectableModelBindingIds: ["unbound.model"]
+    });
+
+    // Neither refusal hides the other's: the one of the Namespace is the answer of the call.
+    await t.expectRefused(
+      t.root.id,
+      "assets.sync",
+      { payload: { items: [{ type: "put", kind: "agent", config }] } },
+      {
+        status: 403,
+        code: "FORBIDDEN",
+        details: { reason: "tool_not_allowed", toolName: "second.tool", namespace: "kai-" }
+      }
+    );
+  });
+
   it("checks only an agent a write creates or changes", async () => {
     const t = await setup();
     expect(

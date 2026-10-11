@@ -283,10 +283,9 @@ async function checkBatch(
   const puts = putsByAsset(ready());
   for (const { agentName, error } of changed.refusals) {
     const entry = puts.get(assetKey("agent", agentName));
-    if (!entry) {
-      throw error;
-    }
-    entry.refusal ??= toRefusal(error);
+    // A second refusal of an agent is the answer of the call: the first is on its item.
+    if (!entry || entry.refusal) throw error;
+    entry.refusal = toRefusal(error);
   }
   const acceptedByName = definitionsByName(found.accepted);
   for (const entry of ready()) {
