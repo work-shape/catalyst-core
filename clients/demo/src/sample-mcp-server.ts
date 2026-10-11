@@ -1,0 +1,49 @@
+import { z } from "zod";
+import {
+  createSampleMcpServer,
+  SAMPLE_MCP_KEY_NAME,
+  SAMPLE_MCP_PORT,
+  SampleMcpKeyError
+} from "../sample-mcp/server.js";
+import { readSampleMcpEnvironment } from "./env.js";
+
+try {
+  const environment = readSampleMcpEnvironment();
+  const server = createSampleMcpServer({
+    key: await environment.secrets.resolve(SAMPLE_MCP_KEY_NAME),
+    anchor: environment.anchor
+  });
+  const port = z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(65535)
+    .safeParse(environment.port ?? SAMPLE_MCP_PORT);
+  const host = z
+    .string()
+    .min(1)
+    .safeParse(environment.host ?? "0.0.0.0");
+  if (!port.success || !host.success) throw new Error("PORT or HOST is invalid.");
+  const address = await server.listen(port.data, host.data);
+  console.log(`Sample MCP server listening on port ${address.port}.`);
+  let closing = false;
+  const close = () => {
+    if (closing) return;
+    closing = true;
+    void server.close().catch(() => {
+      console.error("The sample MCP server could not close.");
+      process.exitCode = 1;
+    });
+  };
+  process.once("SIGTERM", close);
+  process.once("SIGINT", close);
+} catch (error: unknown) {
+  // Both messages name the variable and never its value.
+  const message =
+    error instanceof SampleMcpKeyError ||
+    (error instanceof Error && error.name === "SecretNotResolvedError")
+      ? error.message
+      : "The sample MCP server could not start. Check SAMPLE_DATA_ANCHOR, PORT and HOST.";
+  console.error(message);
+  process.exitCode = 1;
+}

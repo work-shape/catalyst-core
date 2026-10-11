@@ -29,6 +29,8 @@ x-demo-api-watch-ignore: &demo-api-watch-ignore
   - "**/.astro/**"
   - "src/chat-main.tsx"
   - "src/styles.css"
+  - "sample-mcp/**"
+  - "src/sample-mcp-server.ts"
   - "widgets/**"
   - "public/**"
   - "index.html"
@@ -158,6 +160,45 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+
+  sample-mcp:
+    build:
+      <<: *client-build
+      target: api
+    command: ["node", "clients/demo/dist/sample-mcp-server.js"]
+    environment:
+      # The server refuses to start without DEMO_SAMPLE_MCP_KEY.
+      DEMO_SAMPLE_MCP_KEY: ${DEMO_SAMPLE_MCP_KEY:-}
+      PORT: 8787
+      HOST: 0.0.0.0
+    expose: ["8787"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8787/healthz').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    develop:
+      watch:
+        - action: rebuild
+          path: ../../clients/demo/sample-mcp
+        - action: rebuild
+          path: ../../clients/demo/src/sample-mcp-server.ts
+        - action: rebuild
+          path: ../../clients/demo/package.json
+        - action: rebuild
+          path: ../../docker
+        - action: rebuild
+          path: ../../package.json
+        - action: rebuild
+          path: ../../pnpm-lock.yaml
+        - action: rebuild
+          path: ../../pnpm-workspace.yaml
 
   # Builds the image the Docker sandbox starts a container from for each command and each Page
   # build. The service itself runs nothing.

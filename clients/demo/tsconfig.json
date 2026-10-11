@@ -3,5 +3,5 @@
   "compilerOptions": {
     "types": ["node", "vite/client"]
   },
-  "include": ["src", "tools", "widgets", "vite.config.ts"]
+  "include": ["src", "tools", "widgets", "sample-mcp", "vite.config.ts"]
 }
