@@ -11,6 +11,7 @@ import type {
   ConnectorOperationDescriptor,
   JsonValue
 } from "@vivd-catalyst/core";
+import { connectionCallSentence } from "@vivd-catalyst/core";
 import { clientInstanceId } from "./support/access-instance";
 import {
   DEFAULT_LIMITS,
@@ -393,9 +394,9 @@ describe("a call of a Connection's operation", () => {
     const failed = await t.failure(t.invoke(t.kai, "connection.crm.echo", { text: "hello" }));
 
     expect(failed).toMatchObject({ code: "CONFLICT", reason: "connection_unavailable" });
-    expect(failed.message).toMatch(
-      /^connection_unavailable: the host [a-z0-9.-]+:443 did not resolve to an address$/u
-    );
+    // The sentence says what a person can do and names neither the host nor the list.
+    expect(failed.message).toBe(connectionCallSentence("connection_unavailable", "Connection crm"));
+    expect(failed.message).not.toMatch(/:443|resolve|egress/u);
     // Still refused before anything else: no credential is resolved and nothing is called.
     expect(t.sequence.slice(-2)).toEqual(["check egress", "record failed"]);
     expect(t.sequence).not.toContain("resolve credential");

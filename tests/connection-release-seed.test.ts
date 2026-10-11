@@ -260,9 +260,8 @@ describe("a failed call of a Connection operation by an agent", () => {
     expect(sentence).toContain("the connection Sample business");
     expect(events).toContain(sentence);
     expect(events).not.toContain(unlisted);
-    expect(events).not.toContain("egress_denied:");
-    // The reason stays in the structured part of the tool result.
-    expect(events).toContain('"reason":"egress_denied"');
+    // The code is not among what the model reads: it would repeat it to the person.
+    expect(events).not.toContain("egress_denied");
     expect(w.connector.calls).toEqual([]);
     const runs = (await instance.stores.operationRuns.list({ clientInstanceId })).filter(
       (run) => run.operation === tool

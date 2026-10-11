@@ -113,6 +113,31 @@ describe("a call of a Connection operation that fails", () => {
     expect(failed.message).not.toMatch(/example|\d{2,}/u);
   });
 
+  // Fails without the change: the message named the host and the port that did not resolve.
+  it("tells a listed host without an address as unavailable, with its cause in the details", async () => {
+    const t = await fixture();
+    const assetId = await t.seed("crm", { displayName: "Sample business" });
+    await t.grant(t.kai.id, "connection.use", { assetId });
+    t.state.hostResolves = false;
+
+    const outcome = await t.invoke(t.kai, "connection.crm.echo", { text: "a" });
+
+    const sentence = connectionCallSentence("connection_unavailable", "Sample business");
+    expect(outcome.result).toMatchObject({
+      status: "failed",
+      error: {
+        code: "CONFLICT",
+        message: sentence,
+        details: { reason: "connection_unavailable", cause: "egress_unresolved", port: 443 }
+      }
+    });
+    expect(outcome.run.error).toMatchObject({
+      reason: "connection_unavailable",
+      message: sentence
+    });
+    expect(sentence).not.toMatch(/\d|resolve/u);
+  });
+
   // Fails without the fix: the result of a timeout carried no details, and a failure answered
   // again under its key carried the code and the sentence only.
   it("keeps the reason in the details of a timeout and of a failure answered again", async () => {

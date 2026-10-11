@@ -479,13 +479,18 @@ function inSentence(error: unknown, displayName: string | undefined): unknown {
     typeof details === "object" && details !== null && "host" in details && "port" in details
       ? details
       : undefined;
-  return connectionCallFailure(
-    reason,
-    displayName,
-    typeof refused?.host === "string" && typeof refused.port === "number"
+  // A listed host without an address keeps its cause beside the reason it is told as.
+  const unresolved =
+    typeof details === "object" &&
+    details !== null &&
+    "cause" in details &&
+    details.cause === EGRESS_UNRESOLVED;
+  return connectionCallFailure(reason, displayName, {
+    ...(typeof refused?.host === "string" && typeof refused.port === "number"
       ? { host: refused.host, port: refused.port }
-      : {}
-  );
+      : {}),
+    ...(unresolved ? { cause: EGRESS_UNRESOLVED } : {})
+  });
 }
 
 /**

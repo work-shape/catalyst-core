@@ -204,7 +204,7 @@ const CONNECTION_CALL_SENTENCES: Record<ConnectionCallReason, (c: string) => str
   operation_needs_review: (c) =>
     `This action of ${c} changed in the outside system and waits for a review. Trying again will not help until an administrator has accepted the change. The details are under ${WHERE}.`,
   egress_denied: (c) =>
-    `This instance does not allow ${c} to reach its outside system. Trying again will not help. An administrator can check it under ${WHERE}.`,
+    `This instance does not allow ${c} to reach its outside system. Trying again will not help until an administrator checks the connection under ${WHERE}.`,
   input_invalid: (c) =>
     `${c} did not run this action because the input does not fit what the action expects. Correct the input and try again.`,
   output_invalid: (c) =>
