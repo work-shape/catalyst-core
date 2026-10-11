@@ -21,10 +21,12 @@ const member = { email: "e2e-connections@example.test", password: "e2e-connectio
 /** Set to a directory to keep pictures of the list in both languages and both themes. */
 const shotsDir = process.env.E2E_SHOTS_DIR;
 
-const EMPTY_EN =
-  "No connections yet. A connection holds the access to an outside system. Connections cannot be created here yet.";
+const EMPTY_EN = "No connections yet. A connection holds the access to an outside system.";
+const DESCRIPTION_EN = "Connections come from the release config and cannot be changed here.";
+const DESCRIPTION_DE =
+  "Verbindungen kommen aus der Release-Konfiguration und lassen sich hier nicht ändern.";
 const EMPTY_DE =
-  "Noch keine Verbindungen. Eine Verbindung hält den Zugang zu einem externen System. Verbindungen lassen sich hier noch nicht anlegen.";
+  "Noch keine Verbindungen. Eine Verbindung hält den Zugang zu einem externen System.";
 
 async function withSql<Result>(run: (sql: postgres.Sql) => Promise<Result>): Promise<Result> {
   const sql = postgres(databaseUrl, { max: 1 });
@@ -167,6 +169,7 @@ test("an administrator sees Connections in Build and grants its rights; a read g
           .getByRole("button", { name: "Connections", exact: true })
       ).toHaveAttribute("aria-current", "true");
       await expect(main.getByText(EMPTY_EN, { exact: true })).toBeVisible();
+      await expect(main.getByText(DESCRIPTION_EN, { exact: true })).toBeVisible();
       // Nothing starts a Connection here yet, and it has no CLI entry.
       await expect(main.getByRole("button", { name: /^New /u })).toHaveCount(0);
       await expect(main.getByRole("button", { name: "More actions", exact: true })).toHaveCount(0);
@@ -183,6 +186,7 @@ test("an administrator sees Connections in Build and grants its rights; a read g
       await page.reload();
       await expect(page.getByRole("heading", { name: "Verbindungen", level: 1 })).toBeVisible();
       await expect(main.getByText(EMPTY_DE, { exact: true })).toBeVisible();
+      await expect(main.getByText(DESCRIPTION_DE, { exact: true })).toBeVisible();
       await page.evaluate(() => window.localStorage.removeItem("vivd-catalyst:locale"));
     });
 
@@ -191,6 +195,8 @@ test("an administrator sees Connections in Build and grants its rights; a read g
       await page.reload();
       const row = list.getByRole("listitem").filter({ hasText: connection.name });
       await expect(row).toContainText("Client records");
+      // The explanation stands above the rows as it stood above the empty list.
+      await expect(main.getByText(DESCRIPTION_EN, { exact: true })).toBeVisible();
       for (const chip of ["mcp", "Instance", "Enabled"]) {
         await expect(row.getByText(chip, { exact: true })).toBeVisible();
       }

@@ -65,6 +65,8 @@ interface BuildKindBase {
   label: TranslationKey;
   /** Names the list's search field. */
   searchLabel: TranslationKey;
+  /** What the list says under its title, with rows and without: such as where the kind comes from. */
+  description?: TranslationKey;
   /** The sentence of the empty list. An editable kind says it to a person who may create. */
   emptyText: TranslationKey;
   icon: LucideIcon;

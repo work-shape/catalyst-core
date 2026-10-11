@@ -398,6 +398,7 @@ function BuildList({
     <>
       <PageHeader
         title={t(entry.label)}
+        description={entry.description ? t(entry.description) : undefined}
         primaryAction={newButton}
         overflow={
           editable ? (

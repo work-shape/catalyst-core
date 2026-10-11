@@ -320,6 +320,8 @@ describe("Build frame", () => {
     expect(list).not.toContain("<a ");
     expect(list).not.toContain(">New ");
     expect(list).not.toContain("More actions");
+    // The list says where Connections come from, with rows and without.
+    expect(list).toContain("Connections come from the release config and cannot be changed here.");
     // The address of one Connection shows the list.
     expect(
       render({ kindPath: "connections", name: "crm" }, { source: withConnections(rows) })
@@ -328,11 +330,18 @@ describe("Build frame", () => {
     const empty = (locale: LocaleCode) =>
       render({ kindPath: "connections" }, { locale, source: withConnections([]) });
     expect(empty("en")).toContain(
-      "No connections yet. A connection holds the access to an outside system. Connections cannot be created here yet."
+      "No connections yet. A connection holds the access to an outside system."
+    );
+    expect(empty("en")).toContain(
+      "Connections come from the release config and cannot be changed here."
+    );
+    expect(empty("en")).not.toContain("cannot be created here");
+    expect(empty("de")).toContain(
+      "Verbindungen kommen aus der Release-Konfiguration und lassen sich hier nicht ändern."
     );
     expect(empty("en")).not.toContain(">New ");
     expect(empty("de")).toContain(
-      "Noch keine Verbindungen. Eine Verbindung hält den Zugang zu einem externen System. Verbindungen lassen sich hier noch nicht anlegen."
+      "Noch keine Verbindungen. Eine Verbindung hält den Zugang zu einem externen System."
     );
     // The instance did not answer for the kind: no rail item.
     expect(render({ kindPath: "agents" })).not.toContain("Connections");

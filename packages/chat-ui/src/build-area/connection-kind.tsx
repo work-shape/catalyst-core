@@ -13,6 +13,7 @@ export const connectionKind: BuildListedKind = {
   kind: "connection",
   path: "connections",
   label: "connections.kind",
+  description: "connections.description",
   searchLabel: "connections.search",
   emptyText: "connections.empty",
   icon: Cable,
