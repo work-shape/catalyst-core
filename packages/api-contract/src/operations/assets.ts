@@ -1,11 +1,14 @@
 import {
+  assetPointersResponseSchema,
   assetSchema,
   assetScopeQuerySchema,
   assetSummarySchema,
   assetWriteResponseSchema,
   checkAssetSyncResponseSchema,
   deleteAssetRequestSchema,
+  discardAssetDraftRequestSchema,
   listAssetsQuerySchema,
+  publishAssetRequestSchema,
   putAssetRequestSchema,
   revertAssetRequestSchema,
   setAssetAvailabilityRequestSchema,
@@ -129,7 +132,39 @@ export const assetOperations = {
     effect: "changing",
     body: putAssetRequestSchema,
     response: json(assetWriteResponseSchema),
-    errors: ["CONFLICT"],
+    errors: ["CONFLICT", "TIMEOUT"],
+    rateClass: "write"
+  }),
+  // The right is `<kind>.publish`, and the credential scope is one of its own: a key that
+  // holds `config_assets:write` writes drafts and publishes none of them.
+  "assets.publish": defineRegisteredOperation({
+    id: "assets.publish",
+    method: "POST",
+    path: "/api/v1/assets/:kind/:name/publish",
+    summary: "Make one revision of an asset the one its users are served",
+    tag: "Assets",
+    auth: "principal",
+    scope: "config_assets:publish",
+    requires: [],
+    effect: "changing",
+    body: publishAssetRequestSchema,
+    response: json(assetPointersResponseSchema),
+    errors: ["NOT_FOUND"],
+    rateClass: "write"
+  }),
+  "assets.discard_draft": defineRegisteredOperation({
+    id: "assets.discard_draft",
+    method: "POST",
+    path: "/api/v1/assets/:kind/:name/discard-draft",
+    summary: "Move the draft of one asset back to its published revision",
+    tag: "Assets",
+    auth: "principal",
+    scope: "config_assets:write",
+    requires: [],
+    effect: "changing",
+    body: discardAssetDraftRequestSchema,
+    response: json(assetPointersResponseSchema),
+    errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
   "assets.delete": defineRegisteredOperation({

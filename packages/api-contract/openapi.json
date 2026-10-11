@@ -25,6 +25,9 @@
       "name": "Approval Requests"
     },
     {
+      "name": "Apps"
+    },
+    {
       "name": "Assets"
     },
     {
@@ -606,6 +609,193 @@
         },
         "x-catalyst-effect": "changing",
         "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/apps": {
+      "post": {
+        "operationId": "apps.create_from_page",
+        "summary": "Save the newest revision of a Page as an App with a draft",
+        "tags": [
+          "Apps"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAppFromPageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateAppFromPageResponse"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/apps/{app}/preview": {
+      "post": {
+        "operationId": "apps.preview",
+        "summary": "Get the address a frame loads the published or the draft revision of an App from",
+        "tags": [
+          "Apps"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "conversation:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "conversation:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppPreviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
       }
     },
     "/api/v1/assets/sync": {
@@ -1352,6 +1542,9 @@
           },
           "500": {
             "$ref": "#/components/responses/Internal"
+          },
+          "504": {
+            "$ref": "#/components/responses/Timeout"
           }
         },
         "x-catalyst-effect": "changing",
@@ -1607,6 +1800,270 @@
           },
           "409": {
             "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/assets/{kind}/{name}/discard-draft": {
+      "post": {
+        "operationId": "assets.discard_draft",
+        "summary": "Move the draft of one asset back to its published revision",
+        "tags": [
+          "Assets"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscardAssetDraftRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetPointersResponse"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/assets/{kind}/{name}/publish": {
+      "post": {
+        "operationId": "assets.publish",
+        "summary": "Make one revision of an asset the one its users are served",
+        "tags": [
+          "Assets"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:publish"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:publish"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:publish"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishAssetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetPointersResponse"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
@@ -10684,6 +11141,16 @@
           }
         }
       },
+      "Timeout": {
+        "description": "`TIMEOUT`: The instance did not finish the work in time.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        }
+      },
       "ValidationFailed": {
         "description": "`VALIDATION_FAILED`: Path, query or body do not match the operation's schema.",
         "content": {
@@ -11969,6 +12436,63 @@
           "INTERNAL"
         ]
       },
+      "AppMode": {
+        "type": "string",
+        "enum": [
+          "published",
+          "draft"
+        ]
+      },
+      "AppPreview": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "fileSetId": {
+            "type": "string"
+          },
+          "number": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "pageSessionId": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "interfacePath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "expiresAt",
+          "fileSetId",
+          "number",
+          "pageSessionId",
+          "revision",
+          "interfacePath"
+        ]
+      },
+      "AppPreviewRequest": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/AppMode"
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
       "ApprovalCheckResult": {
         "type": "object",
         "properties": {
@@ -12568,6 +13092,16 @@
             "exclusiveMinimum": 0,
             "maximum": 9007199254740991
           },
+          "draftRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "publishedRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
           "config": {
             "$ref": "#/components/schemas/ConfigAssetConfig"
           },
@@ -12590,6 +13124,92 @@
           "revision",
           "config",
           "updatedAt"
+        ]
+      },
+      "AssetFileEntry": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "path",
+          "sha256",
+          "bytes"
+        ]
+      },
+      "AssetFileInput": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "text"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "base64": {
+                "type": "string",
+                "format": "base64",
+                "contentEncoding": "base64",
+                "pattern": "^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$"
+              }
+            },
+            "required": [
+              "path",
+              "base64"
+            ]
+          }
+        ]
+      },
+      "AssetPointersResponse": {
+        "type": "object",
+        "properties": {
+          "draftRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "publishedRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "replacedRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "draftRevision",
+          "publishedRevision"
         ]
       },
       "AssetScope": {
@@ -12649,6 +13269,16 @@
             "type": "string"
           },
           "revision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "draftRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "publishedRevision": {
             "type": "integer",
             "exclusiveMinimum": 0,
             "maximum": 9007199254740991
@@ -12845,13 +13475,22 @@
         "properties": {
           "version": {
             "type": "integer",
-            "exclusiveMinimum": 0,
+            "minimum": 0,
             "maximum": 9007199254740991
           },
           "revision": {
             "type": "integer",
             "exclusiveMinimum": 0,
             "maximum": 9007199254740991
+          },
+          "fileSetId": {
+            "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssetFileEntry"
+            }
           },
           "warnings": {
             "type": "array",
@@ -13221,6 +13860,7 @@
           "api_access:write",
           "config_assets:read",
           "config_assets:write",
+          "config_assets:publish",
           "config_assets:release"
         ]
       },
@@ -14661,6 +15301,69 @@
           "secret"
         ]
       },
+      "CreateAppFromPageRequest": {
+        "type": "object",
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "pageId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 63
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "conversationId",
+          "pageId",
+          "name",
+          "title",
+          "workspaceId"
+        ]
+      },
+      "CreateAppFromPageResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "fileSetId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "workspaceId",
+          "revision",
+          "fileSetId"
+        ]
+      },
       "CreateCollaborationWorkspaceRequest": {
         "type": "object",
         "properties": {
@@ -15018,6 +15721,23 @@
           "ok"
         ]
       },
+      "DiscardAssetDraftRequest": {
+        "type": "object",
+        "properties": {
+          "expectedRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "expectedRevision"
+        ]
+      },
       "DraftAttachment": {
         "type": "object",
         "properties": {
@@ -15175,7 +15895,8 @@
                     "role",
                     "legacy",
                     "legacy_ref",
-                    "grant"
+                    "grant",
+                    "membership"
                   ]
                 }
               },
@@ -15553,6 +16274,7 @@
                 "api_access:write",
                 "config_assets:read",
                 "config_assets:write",
+                "config_assets:publish",
                 "config_assets:release"
               ]
             }
@@ -17476,6 +18198,20 @@
           "plural": {
             "type": "string"
           },
+          "lifecycle": {
+            "type": "string",
+            "enum": [
+              "active",
+              "draft_published"
+            ]
+          },
+          "representation": {
+            "type": "string",
+            "enum": [
+              "config",
+              "files"
+            ]
+          },
           "actions": {
             "type": "object",
             "properties": {
@@ -17488,6 +18224,9 @@
               "delete": {
                 "type": "string"
               },
+              "publish": {
+                "type": "string"
+              },
               "use": {
                 "type": "string"
               }
@@ -17497,11 +18236,47 @@
               "write",
               "delete"
             ]
+          },
+          "manifestFile": {
+            "type": "string"
+          },
+          "limits": {
+            "type": "object",
+            "properties": {
+              "FILE_SET_MAX_FILES": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "FILE_SET_MAX_FILE_BYTES": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "FILE_SET_MAX_TOTAL_BYTES": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "ASSET_PUT_FILES_MAX_BYTES": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "FILE_SET_MAX_FILES",
+              "FILE_SET_MAX_FILE_BYTES",
+              "FILE_SET_MAX_TOTAL_BYTES",
+              "ASSET_PUT_FILES_MAX_BYTES"
+            ]
           }
         },
         "required": [
           "kind",
           "plural",
+          "lifecycle",
+          "representation",
           "actions"
         ]
       },
@@ -17590,13 +18365,10 @@
           "actions"
         ]
       },
-      "PutAssetRequest": {
+      "PublishAssetRequest": {
         "type": "object",
         "properties": {
-          "config": {
-            "$ref": "#/components/schemas/ConfigAssetConfig"
-          },
-          "expectedRevision": {
+          "revision": {
             "type": "integer",
             "exclusiveMinimum": 0,
             "maximum": 9007199254740991
@@ -17607,8 +18379,33 @@
           }
         },
         "required": [
-          "config"
+          "revision"
         ]
+      },
+      "PutAssetRequest": {
+        "type": "object",
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/ConfigAssetConfig"
+          },
+          "files": {
+            "minItems": 1,
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssetFileInput"
+            }
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
       },
       "Ready": {
         "type": "object",

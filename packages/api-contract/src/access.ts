@@ -73,7 +73,11 @@ export const effectivePermissionsSchema = z.object({
       scopeKind: grantScopeKindSchema,
       scopeId: z.string().optional(),
       namespace: z.string().optional(),
-      source: z.enum(["role", "legacy", "legacy_ref", "grant"])
+      /**
+       * `membership`: held by being a member of the workspace the entry names, such as opening
+       * the published Apps of that workspace.
+       */
+      source: z.enum(["role", "legacy", "legacy_ref", "grant", "membership"])
     })
   )
 });

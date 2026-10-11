@@ -12,6 +12,13 @@ export const ASSET_SYNC_MAX_ITEMS = 200;
  */
 export const ASSET_RELEASE_SYNC_MAX_ITEMS = 2000;
 
+// Mirror the constants of the same names in core.
+/** How many files one file set holds, source and built files counted together. */
+export const FILE_SET_MAX_FILES = 500;
+const FILE_SET_MAX_PATH_CHARS = 512;
+/** How many decoded bytes of files one `assets.put` carries. */
+export const ASSET_PUT_FILES_MAX_BYTES = 8 * 1024 * 1024;
+
 /** Who owns an asset: the instance, or one workspace. */
 export const assetScopeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("instance") }),
@@ -46,6 +53,16 @@ const workspaceIdSchema = z.string().min(1).optional();
  */
 const isDefaultSchema = z.literal(true).optional();
 
+/**
+ * The two pointers of an asset whose kind has the lifecycle `draft_published`, as revision
+ * numbers. Both are left out on every other kind. `revision` beside them equals
+ * `draftRevision`. `publishedRevision` is left out before the first publish.
+ */
+const pointerShape = {
+  draftRevision: revisionNumberSchema.optional(),
+  publishedRevision: revisionNumberSchema.optional()
+};
+
 /** One asset as a list shows it: what every kind can say about itself, without its content. */
 export const assetSummarySchema = z.object({
   /** What an asset-scoped grant names as its `scopeId`. */
@@ -58,6 +75,7 @@ export const assetSummarySchema = z.object({
   /** The prefix of the Namespace the name belongs to, where it belongs to one. */
   namespace: z.string().optional(),
   revision: revisionNumberSchema,
+  ...pointerShape,
   isDefault: isDefaultSchema,
   /**
    * What the kind says of the asset beside its name, by the kind's own keys: a Connection
@@ -74,6 +92,7 @@ export const assetSchema = z.object({
   scope: assetScopeSchema,
   namespace: z.string().optional(),
   revision: revisionNumberSchema,
+  ...pointerShape,
   config: configAssetConfigSchema,
   isDefault: isDefaultSchema,
   /**
@@ -97,22 +116,82 @@ export const listAssetsQuerySchema = z.object({
 
 export const assetScopeQuerySchema = z.object({ workspaceId: workspaceIdSchema });
 
-export const putAssetRequestSchema = z.object({
-  config: assetDefinitionSchema,
+const filePathSchema = nameText(z.string().min(1).max(FILE_SET_MAX_PATH_CHARS));
+
+/**
+ * One source file as a write carries it: its path inside the asset's folder and its content,
+ * as `text` or, for a file that is not text, as `base64`.
+ */
+export const assetFileInputSchema = z.union([
+  z.strictObject({ path: filePathSchema, text: z.string() }),
+  z.strictObject({ path: filePathSchema, base64: z.base64() })
+]);
+
+/** One stored source file of a revision: where it is and what it holds, without the content. */
+export const assetFileEntrySchema = z.object({
+  path: z.string(),
+  /** Lower-case hex. */
+  sha256: z.string(),
+  bytes: z.number().int().nonnegative()
+});
+
+export const putAssetRequestSchema = z
+  .object({
+    /** The definition, for a kind whose revision is its config. */
+    config: assetDefinitionSchema.optional(),
+    /**
+     * The whole source set, for a kind whose revisions hold files: every file of the revision,
+     * the manifest among them. At most `ASSET_PUT_FILES_MAX_BYTES` decoded bytes in one call.
+     * The call builds the files and answers when the revision exists, or with what the build
+     * refused.
+     */
+    files: z.array(assetFileInputSchema).min(1).max(FILE_SET_MAX_FILES).optional(),
+    /**
+     * The revision the caller last read. Left out, the call creates the asset and is refused
+     * when the name exists.
+     */
+    expectedRevision: revisionNumberSchema.optional(),
+    workspaceId: workspaceIdSchema
+  })
+  .refine((value) => (value.config === undefined) !== (value.files === undefined), {
+    message: "A write carries the config of the asset or its files, one of the two"
+  });
+
+export const assetWriteResponseSchema = z.object({
   /**
-   * The revision the caller last read. Left out, the call creates the asset and is refused
-   * when the name exists.
+   * The version of the instance's whole asset set after the write. A write of a kind with a
+   * draft leaves it as it was: the set its users are served did not change.
    */
-  expectedRevision: revisionNumberSchema.optional(),
+  version: z.number().int().nonnegative(),
+  /** The revision the write left the asset at. A delete is a revision too. */
+  revision: revisionNumberSchema,
+  /** The file set of the revision and its source files, after a write that carried files. */
+  fileSetId: z.string().optional(),
+  files: z.array(assetFileEntrySchema).optional(),
+  warnings: z.array(assetWarningSchema)
+});
+
+export const publishAssetRequestSchema = z.object({
+  /**
+   * The number of the revision that becomes the published one. It is required: a publish
+   * never means "whatever the draft is now". Naming an earlier number is the way back.
+   */
+  revision: revisionNumberSchema,
   workspaceId: workspaceIdSchema
 });
 
-export const assetWriteResponseSchema = z.object({
-  /** The version of the instance's whole asset set after the write. */
-  version: z.number().int().positive(),
-  /** The revision the write left the asset at. A delete is a revision too. */
-  revision: revisionNumberSchema,
-  warnings: z.array(assetWarningSchema)
+export const discardAssetDraftRequestSchema = z.object({
+  /** The draft revision the caller last read. */
+  expectedRevision: revisionNumberSchema,
+  workspaceId: workspaceIdSchema
+});
+
+/** Where the two pointers of an asset are after a publish or a discard. */
+export const assetPointersResponseSchema = z.object({
+  draftRevision: revisionNumberSchema,
+  publishedRevision: revisionNumberSchema,
+  /** The revision that was published before a publish, left out on the first one. */
+  replacedRevision: revisionNumberSchema.optional()
 });
 
 export const deleteAssetRequestSchema = z.object({

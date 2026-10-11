@@ -35,6 +35,9 @@ export const FIRST_PARTY_AUTH_SCOPES = [
   "api_access:write",
   "config_assets:read",
   "config_assets:write",
+  // Moving the published pointer of an asset. A credential that writes drafts with
+  // `config_assets:write` publishes none of them without this one.
+  "config_assets:publish",
   "config_assets:release"
 ] as const;
 
