@@ -569,8 +569,8 @@ policy:
 - `changing`: `allow` runs a changing operation. `confirm` asks the caller to confirm, and a
   person's or a service's own call through the API or the CLI is that confirmation. `deny`
   refuses it. `approval` holds a person's call until a person with the right to approve
-  decided it in the Inbox: the caller receives `202` with the run, and the call runs once it is
-  approved. A declined call answers `DECLINED`, and one nobody decided within 7 days answers
+  decided it in the Inbox: the caller receives `202` with the run. An approval queues the call, and
+  the instance checks it again before it runs. A declined call answers `DECLINED`, and one nobody decided within 7 days answers
   `OPERATION_EXPIRED`. A call of a Service Principal cannot be held and is refused with
   `POLICY_DENIED`, a release push included. An agent's run cannot wait either, so startup refuses an
   enabled changing tool that would wait under this default. Such a tool declares

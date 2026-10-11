@@ -1,21 +1,21 @@
 ---
 title: How rights work
-description: Who may do what in Workshape Catalyst, explained from the start. Roles, single rights, grants, Namespaces, the checks every action passes, and which screen sets which of them.
+description: Who may do what in Workshape Catalyst, explained from the start. Roles, single rights, grants, Namespaces, the checks an action passes, and which screen sets which of them.
 ---
 
 This page explains the rights system to a reader who has never seen it. It says what exists today. The last section lists what does not exist yet. For the exact rules of the Access page, see [Rights and Namespaces](/operate/rights-and-namespaces/).
 
 ## The short version
 
-1. Every action passes the same checks in the same order, whether you click a button, a script calls the API or an agent uses a tool.
+1. An action is checked before it runs, in a fixed order, whether you click a button, a script calls the API or an agent uses a tool for you.
 2. The instance first finds out who is calling, and for an API key what that key may be used for.
 3. Then it asks whether the caller holds the right for this action in this place. A right comes from your role, from a single right on the Users page, or from a grant on the Access page.
-4. For an action that changes something, a policy decides whether it runs at once, waits for a person's approval, or is refused.
-5. The instance records what ran, what it refused and who decided.
+4. For most changes, a policy decides whether the action runs at once, waits for a person's approval, or is refused. [Which actions take the whole path](#which-actions-take-the-whole-path) lists them.
+5. For those actions the instance records each change, each refusal by a right or by the policy, and who decided.
 
 <figure class="docs-diagram">
 <svg viewBox="0 0 420 398" role="img" aria-labelledby="rights-fig-1-title rights-fig-1-desc">
-<title id="rights-fig-1-title">The five layers every action passes</title>
+<title id="rights-fig-1-title">The five layers an action passes</title>
 <desc id="rights-fig-1-desc">Five boxes from top to bottom: identity, key scope, right, policy and guardrails, run and record. A call passes them in this order.</desc>
 <defs><marker id="rights-arrow-1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0 0 10 5 0 10z"/></marker></defs>
 <rect class="box" x="10" y="8" width="400" height="62" rx="8"/>
@@ -36,20 +36,20 @@ This page explains the rights system to a reader who has never seen it. It says 
 <path class="line" d="M210.0 310 L210.0 326" marker-end="url(#rights-arrow-1)"/>
 <rect class="box-ok" x="10" y="328" width="400" height="62" rx="8"/>
 <text x="28" y="355" class="strong">5  Run and record</text>
-<text x="28" y="375" class="small">The action runs. An Operation Run is kept.</text>
+<text x="28" y="375" class="small">The action runs. A change leaves a record.</text>
 </svg>
-<figcaption>Every action passes the same five layers, from top to bottom. Any layer can stop it.</figcaption>
+<figcaption>An action passes these layers from top to bottom, and any layer can stop it. Layers 4 and 5 exist for the actions on the full path, which the section on the path lists.</figcaption>
 </figure>
 
 Three words come up on every screen, so here they are once.
 
 - A **right** is the permission to do one kind of thing, such as "write agents". In the API a right has a short name like `agent.write`.
 - A **grant** is one row that gives or refuses one person one right in one place. You write grants on the Access page.
-- A **Namespace** is a registered beginning of a name, such as `tax-`. Every agent and skill whose name starts with it belongs to it. See [Namespaces](#namespaces). It is not a workspace, as the next section shows.
+- A **Namespace** is a registered beginning of a name, such as `tax-`. Every agent and skill whose name starts with it belongs to it, and so does every Connection where that module is on. See [Namespaces](#namespaces). It is not a workspace, as the next section shows.
 
 ## Namespace or workspace?
 
-They are two different things, and they answer two different questions. A **Namespace** says who may build and change a family of agents. A **workspace** says who works together in which conversations. A team often has one of each, which is why they get mixed up.
+They are two different things. A **workspace** is where people work and what they see: its conversations, their files and the agents they can choose there. A **Namespace** is a name prefix, such as `tax-`, that says which agents and skills a right covers. Nothing links the two today. In practice they often come together, because a team tends to have a workspace and a prefix, and that is why they get mixed up.
 
 <figure class="docs-diagram docs-diagram-wide">
 <svg viewBox="0 0 660 534" role="img" aria-labelledby="rights-fig-5-title rights-fig-5-desc">
@@ -81,8 +81,8 @@ They are two different things, and they answer two different questions. A **Name
 <rect class="box" x="405" y="222" width="245" height="74" rx="8"/>
 <text x="164" y="246" class="small">A person with Manage users</text>
 <text x="164" y="264" class="small">registers it and writes its grants.</text>
-<text x="419" y="246" class="small">Its owners and admins add</text>
-<text x="419" y="264" class="small">and remove members.</text>
+<text x="419" y="246" class="small">Its owners and admins manage</text>
+<text x="419" y="264" class="small">the members.</text>
 <text x="8" y="330" class="small-strong">Where you see it</text>
 <rect class="box" x="150" y="304" width="245" height="74" rx="8"/>
 <rect class="box" x="405" y="304" width="245" height="74" rx="8"/>
@@ -111,8 +111,35 @@ They are two different things, and they answer two different questions. A **Name
 
 Take the tax team of a company. It has both.
 
-- The Shared Workspace **Tax team** is where its twelve people chat. Its owner added them as members. Membership decides who can reach the conversations in it.
-- The Namespace `tax-` holds the agents the team uses, such as `tax-vat-helper`. Mara and one colleague hold a grant in it. They are the two people who may change those agents.
+- The Shared Workspace **Tax team** is where its twelve people chat. Its owner added them as members, and members reach the shared conversations in it. A private conversation stays with the person who created it. A Superadmin can enter every Shared Workspace without being a member.
+- The Namespace `tax-` holds the agents the team uses, such as `tax-vat-helper`. Mara and one colleague hold grants in it. They are the two people of the team who build those agents. An Admin or a Superadmin of the instance can change them too.
+
+<figure class="docs-diagram docs-diagram-wide">
+<svg viewBox="0 0 660 236" role="img" aria-labelledby="rights-fig-6-title rights-fig-6-desc">
+<title id="rights-fig-6-title">The tax team has a workspace and a Namespace</title>
+<desc id="rights-fig-6-desc">Two boxes side by side. The workspace Tax team has twelve members and their conversations. The Namespace tax- holds three assets, and two people hold grants in it. One arrow goes from the Namespace box to the workspace box. It stands for the setting Available in, which is set for each agent. Nothing else connects the two boxes.</desc>
+<defs><marker id="rights-arrow-6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0 0 10 5 0 10z"/></marker></defs>
+<rect class="box" x="10" y="10" width="270" height="170" rx="10"/>
+<text x="28" y="38" class="strong">Workspace "Tax team"</text>
+<text x="28" y="66" class="small">Where people work and what they see.</text>
+<text x="28" y="96" class="small">12 members</text>
+<text x="28" y="116" class="small">Their conversations and files</text>
+<text x="28" y="136" class="small">The agents they can choose</text>
+<text x="28" y="164" class="small-strong">Decides who uses.</text>
+<rect class="box-accent" x="380" y="10" width="270" height="170" rx="10"/>
+<text x="398" y="38" class="strong">Namespace tax-</text>
+<text x="398" y="66" class="small">A prefix that says what a right covers.</text>
+<text x="398" y="96" class="small">tax-vat-helper, tax-year-end</text>
+<text x="398" y="116" class="small">tax-audit-notes</text>
+<text x="398" y="136" class="small">Grants: Mara and one colleague</text>
+<text x="398" y="164" class="small-strong">Decides who builds.</text>
+<path class="line" d="M380 95 L282 95" marker-end="url(#rights-arrow-6)"/>
+<text x="330" y="84" class="small" text-anchor="middle">Available in</text>
+<text x="330" y="114" class="small" text-anchor="middle">per agent</text>
+<text x="330" y="212" class="small" text-anchor="middle">No setting says "the agents of tax- belong to the workspace Tax team".</text>
+</svg>
+<figcaption>One team, two things. The only arrow between them is the setting <strong>Available in</strong>, which somebody sets on each agent.</figcaption>
+</figure>
 
 So ten people of the team use the agents and two build them. Membership in the workspace makes nobody a builder, and a grant in the Namespace gives no access to the team's conversations.
 
@@ -129,28 +156,28 @@ Two exceptions. The default agent of the instance is always available everywhere
 
 Nothing links a Namespace to a workspace today. You cannot say "the agents of `tax-` belong to the workspace Tax team". The only bridge is the **Available in** setting, agent by agent, and only a person with the instance-wide right sets it.
 
-One kind of grant does name a workspace. With the module `connections` on, a grant to read or use Connections can be written "In a shared workspace", and it covers the Connections that workspace owns. It says nothing about agents, skills or conversations, and it has nothing to do with a Namespace.
+One kind of grant does name a workspace. With the module `connections` on, a grant to read or use Connections can be written "In a shared workspace", and it covers the Connections that workspace owns. The same kind of grant can instead be written in a Namespace or on one Connection. A grant on a workspace says nothing about agents, skills or conversations, and it has nothing to do with a Namespace.
 
 ## The four questions
 
-The instance asks four questions about every action. A "no" to any of them stops the action, and the answer says which question stopped it.
+The instance asks four questions about an action. A "no" to any of them stops the action, and the answer says which question stopped it.
 
 ### Who are you
 
 A caller is one of two things.
 
 - A **User** is a person. You sign in to the interface, or the application of your company signs you in to the embedded chat.
-- A **Service Principal** is an identity for a script or the Catalyst CLI. It has no password. It presents an API key.
+- A **Service Principal** is an identity for a script or the Catalyst CLI. It has no password. It has an API key, which the script or the CLI exchanges for a short-lived access token before it calls.
 
 A call without a valid sign-in or key gets `401 UNAUTHENTICATED` and nothing else happens. An account that is not active has no rights, whatever its role and its grants say.
 
-Example: Mara signs in with her email and password. The nightly release job presents the API key of the Service Principal `release-ci`. Both are known callers now. Neither may do anything yet.
+Example: Mara signs in with her email and password. The nightly release job uses the API key of the Service Principal `release-ci`. Both are known callers now. Neither may do anything yet.
 
 ### What may your key do
 
 This question matters for keys. A key carries **scopes**. A scope is a limit on the key itself, such as `config_assets:read`. The key can never do more than its scopes, even when the Service Principal behind it holds more rights. That lets you hand out a weak key for a task that only reads.
 
-A person who signs in to the interface has no such limit.
+A person who signs in to the interface has no such limit. A session of the embedded chat is limited to the chat.
 
 A call outside the scopes of its key gets `403 FORBIDDEN` with the text `Missing auth scope` and the name of the scope.
 
@@ -164,7 +191,7 @@ The instance collects everything that speaks about you:
 
 1. Your **role** gives you a fixed set of rights on the whole instance.
 2. A **single right** on the Users page adds one right to that set or takes one away, also for the whole instance.
-3. A **grant** on the Access page allows or denies one action in one place. For agents and skills the place is one Namespace or one asset. For Connections it is one Connection or one Shared Workspace.
+3. A **grant** on the Access page allows or denies one action in one place. For agents and skills the place is one Namespace or one asset. For Connections it is one Namespace, one Connection or one Shared Workspace.
 
 Then it decides:
 
@@ -178,7 +205,7 @@ Example: Mara has the role User, which carries no administrative right. A grant 
 
 ### Does it need a second pair of eyes
 
-A caller who holds the right can still be held back. Every action is either **reading** or **changing**, and a **policy** gives it one of four values:
+A caller who holds the right can still be held back. This question is asked for the actions on the [full path](#which-actions-take-the-whole-path). Each of them is either **reading** or **changing**, and a **policy** gives it one of four values:
 
 | Value | What happens |
 | --- | --- |
@@ -191,7 +218,7 @@ A reading action only knows `allow` and `deny`. Nobody approves a read.
 
 The instance ships with `allow` for reading and `confirm` for changing. The operator of the instance changes that in [release config](/configure/release-config/#operation-policy).
 
-Example: an instance sets changing actions to `approval`. Mara saves `tax-vat-helper`. Build says "This change waits for an approval. Nothing was changed yet and your text is still here." An administrator approves it in the Inbox, and the instance saves the agent as Mara.
+Example: an instance sets changing actions to `approval`. Mara saves `tax-vat-helper`. Build says "This change waits for an approval. Nothing was changed yet and your text is still here." An administrator approves it in the Inbox. The instance then checks the call once more and saves the agent as Mara.
 
 ## Roles and single rights
 
@@ -218,13 +245,13 @@ Below the Access level, the same page has a card named **Rights** with one switc
 | Manage API access | `api_access.manage` | Superadmin |
 | Manage agent model settings | `agent_models.manage` | Superadmin |
 
-Some things are reserved for a Superadmin. Only a Superadmin gives somebody the Superadmin level, changes another Superadmin, or switches on "Manage API access" and "Manage agent model settings".
+Some things are reserved for a Superadmin. Only a Superadmin gives somebody the Superadmin level, changes another Superadmin, deletes a user, or switches "Manage API access" and "Manage agent model settings" on or off.
 
 "Approve skill changes" also lets a person decide an action that waits for an approval.
 
 One right is on no switch. Pushing a release with `catalyst config push` needs `config_assets.release`, and only a Service Principal can hold it. See [API keys and Service Principals](#api-keys-and-service-principals).
 
-Chatting is not on this list. Which conversations you see depends on the Collaboration Workspaces you are a member of, and not on a right.
+Chatting is not on this list. Which conversations you see depends on the Collaboration Workspaces you are a member of and on whether a conversation is private, and not on one of these rights. The one exception is a Superadmin, who can enter every Shared Workspace.
 
 The Users page has one more field, **Permission refs**. A tool written for one customer can ask for a reference such as `support-ticket-reader`. An agent can use that tool only for a person who has the same reference in this field.
 
@@ -237,7 +264,7 @@ A role and a single right always apply to the whole instance. A grant is for eve
 | Who | One person. |
 | Kind | Agents, or skills. Connections too, when the module `connections` is on. |
 | Action | Read, write, delete for agents and skills. Read and use for Connections. |
-| Where | For agents and skills, one Namespace or one existing asset. For Connections, one existing Connection or one Shared Workspace. |
+| Where | For agents and skills, one Namespace or one existing asset. For Connections, one Namespace, one existing Connection or one Shared Workspace. |
 | Effect | Allow, or deny. |
 
 So the answer to "can rights only be given to single people" is yes, today. A grant names one person. There are no groups, and a role cannot hold a grant.
@@ -246,7 +273,7 @@ So the answer to "can rights only be given to single people" is yes, today. A gr
 
 **Read and write are separate.** A person who should edit agents needs both. With write alone they cannot open the agent they are meant to change.
 
-**Check before you guess.** The tab **Check** on the Access page takes a person and a name and says for each action whether it is allowed and what decided. The name does not have to exist yet.
+**Check before you guess.** The tab **Check** on the Access page takes a person and a name and says for each action whether it is allowed and what decided. The name does not have to exist yet. The tab covers agents and skills. To get a result you need "View agent configuration" beside "Manage users", because the tab looks up the assets.
 
 ## Namespaces
 
@@ -291,7 +318,7 @@ You register a prefix, for example `tax-`. From then on every agent and skill of
 <text x="456" y="244" class="small">A grant can name a workspace</text>
 <text x="456" y="264" class="small">only for its Connections.</text>
 </svg>
-<figcaption>The tinted boxes show where a grant on agents and skills can sit: a whole Namespace, or one asset. A grant on Connections sits on one Connection or on a Shared Workspace. Everything wider is a role or a single right on the Users page.</figcaption>
+<figcaption>The tinted boxes show where a grant on agents and skills can sit: a whole Namespace, or one asset. A grant on Connections sits in a Namespace, on one Connection or on a Shared Workspace. Everything wider is a role or a single right on the Users page.</figcaption>
 </figure>
 
 ### An example
@@ -306,18 +333,18 @@ A company has a tax team. Its agents are named `tax-vat-helper` and `tax-year-en
 
 ### Rules for a prefix
 
-- A prefix is lowercase words joined by hyphens, and it ends in a hyphen: `tax-`, `tax-team-`. It has 2 to 32 characters. `tax/` is not a valid prefix.
+- A prefix is made of lowercase letters and digits, in parts joined by single hyphens. It starts with a letter and ends in a hyphen: `tax-`, `tax-team-`. It has 2 to 32 characters. `tax/` is not a valid prefix.
 - Two Namespaces never overlap. While `tax-` exists, `tax-team-` is refused, so a name belongs to at most one Namespace.
 - A prefix cannot be changed later. The id of an agent cannot be changed either. Decide the names first.
 - Deleting a Namespace needs its grants revoked first. The agents and skills stay.
 
 ### A Namespace can also limit tools and models
 
-A Namespace can carry a list of allowed tools and a list of allowed models. An agent in the Namespace is saved only with tools and models from the lists. These lists bind every writer, an administrator and the release push included. They are not rights. They are limits on what an agent in this family may be given. The details are in [Rights and Namespaces](/operate/rights-and-namespaces/#namespaces).
+A Namespace can carry a list of allowed tools and a list of allowed models. An agent in the Namespace is saved only with tools from the tool list and with model bindings from the model list. One way around the model list is left: a person with "Manage agent model settings" can save an agent that names no model binding, and it then runs on the model the instance uses by default. The lists are checked when an agent is saved. They bind every writer, an administrator and the release push included. They are not rights. They are limits on what an agent in this family may be given. The details are in [Rights and Namespaces](/operate/rights-and-namespaces/#namespaces).
 
 ### A Namespace is not a workspace
 
-A grant in a Namespace covers the agents and skills of the instance itself. It gives no access to any conversation and does not cover Connections. [Namespace or workspace?](#namespace-or-workspace) puts the two side by side.
+A grant in a Namespace covers what the instance itself owns under that prefix: its agents, its skills or its Connections, depending on the kind of the grant. It gives no access to any conversation. [Namespace or workspace?](#namespace-or-workspace) puts the two side by side.
 
 ## The path of one action
 
@@ -325,7 +352,7 @@ Here is the whole way, in order. The table below the chart says who sets each st
 
 <figure class="docs-diagram docs-diagram-wide">
 <svg viewBox="0 0 660 862" role="img" aria-labelledby="rights-fig-2-title rights-fig-2-desc">
-<title id="rights-fig-2-title">The path of one action with every refusal exit</title>
+<title id="rights-fig-2-title">The path of one action with its refusal exits</title>
 <desc id="rights-fig-2-desc">A flow chart with twelve steps from top to bottom. Each step has an exit to the right that names what the caller receives when the step refuses.</desc>
 <defs><marker id="rights-arrow-2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0 0 10 5 0 10z"/></marker></defs>
 <rect class="box" x="10" y="10" width="300" height="50" rx="8"/>
@@ -408,7 +435,7 @@ Here is the whole way, in order. The table below the chart says who sets each st
 <rect class="box-ok" x="10" y="802" width="300" height="50" rx="8"/>
 <text x="26" y="832" class="strong">12  Operation Run and audit rows</text>
 </svg>
-<figcaption>The left column is the way through. Each exit on the right is what the caller receives when that step stops the action.</figcaption>
+<figcaption>The left column is the way through. Each exit on the right is what the caller receives when that step stops the action. The Operation Run of step 12 is opened once the input is valid, so a refusal from the right onwards is on record too.</figcaption>
 </figure>
 
 | Step | Set by | Where |
@@ -422,20 +449,26 @@ Here is the whole way, in order. The table below the chart says who sets each st
 | 7 Right | Administrator | Users for role and single rights, Access for grants |
 | 8 and 10 Policy | Operator, and the author of a tool | `policy.defaults` in release config, `permission.mode` on a tool |
 | 9 Guardrails | Nobody yet | See [Guardrails](#guardrails) |
-| 11 and 12 Run and record | Nobody. This always happens. | Read it on Operations and Audit |
+| 11 and 12 Run and record | Nobody. It is part of every action on the full path. | Read it on Operations and Audit |
+
+The chart shows the common exits. A few rarer ones exist.
+
+- At step 1, a Service Principal that calls a route meant for people gets `403 FORBIDDEN`, and so does a browser request from an address the instance does not trust.
+- At step 10, a call that needs an approval and cannot be held gets `403 POLICY_DENIED`. That is every call of a Service Principal and every call that carries a secret. A call whose input is too large to be held gets `422 VALIDATION_FAILED`.
+- A call that repeats an `Idempotency-Key` gets the answer of the first call again, without new checks. The same key with different input is refused with `IDEMPOTENCY_KEY_REUSED`.
 
 Three things about the order are worth knowing.
 
-- **The module comes before the right.** A feature that is switched off does not exist for anybody, an administrator included.
+- **The module comes before the right.** A feature that is switched off does not exist for anybody, an administrator included. One switch is narrower. With `assetManagement` off, nobody changes agents and skills in the interface, but they can still be read and a release push still writes them.
 - **The right comes before the policy.** A caller without the right never learns what the policy says, and never puts anything into somebody's Inbox.
-- **An approved action is checked again.** When an approver says yes, the instance asks for the module, the right, the policy and the guardrails once more for the person who made the call, as that person is at that moment. If they lost the right while the call waited, the call does not run.
+- **An approved action is checked again.** An approval queues the call. Just before the call runs, the instance asks for the module, the right, the policy and the guardrails once more for the person who made the call, as that person is at that moment. If they lost the right while the call waited, the call does not run.
 
 ### Which actions take the whole path
 
 Not every part of the product is on the full path yet.
 
-- **All 12 steps:** every tool call of an agent, reading and writing agents and skills, grants and Namespaces, creating and changing a Service Principal, creating and revoking an API key, and the retry of a background job.
-- **Steps 1 to 4, a simpler input check and step 7:** everything else, for example conversations, users, usage and the audit log. These calls are refused the same way for a missing sign-in, module, scope or right. They have no policy step, cannot wait for an approval and leave no Operation Run.
+- **All 12 steps:** every tool call of an agent. Reading, saving, deleting and reverting agents and skills in Build and through the asset API, and the release push. Writing or revoking a grant, and creating, changing or deleting a Namespace. Creating, changing and deleting a user, and changing a user's sign-in identities, password or invitation. Creating and changing a Service Principal, and creating and revoking an API key. The retry of a background job.
+- **Steps 1 to 4, a simpler input check and step 7:** everything else, for example conversations, workspaces, the lists of grants and Namespaces, the default agent, the **Available in** setting, usage and the audit log. These calls are refused the same way for a missing sign-in, module, scope or right. They have no policy step, cannot wait for an approval and leave no Operation Run.
 
 ### Approvals
 
@@ -443,7 +476,7 @@ When the policy says `approval`, the action stops before it changes anything.
 
 - The caller receives `202` and a reference to the waiting call. In Build the page says that the change waits and keeps your text.
 - The call appears in the **Inbox** of everybody who may decide it, as an "Operation call". That is every person with "Approve skill changes".
-- **Approve** runs the call once, as the person who made it. The record names the approver.
+- **Approve** queues the call. The instance checks it again and then runs it once, as the person who made it. If that check fails, the call is refused although it was approved. The record names the approver.
 - **Decline** ends it. The caller's record shows `DECLINED` and the approver's comment. The caller can also withdraw a waiting call.
 - A call that nobody decides expires after 7 days.
 
@@ -451,17 +484,17 @@ A person who holds the approval right can approve their own call. The instance d
 
 Only a person's call can wait. A call made with an API key is refused with `POLICY_DENIED` where the policy asks for an approval, and that includes a release push.
 
-One action never waits: creating an API key. The key is shown once to the person who asks, so the answer cannot be held for somebody else. Under an instance default of `approval` the call runs on the caller's own word. See [operation policy](/configure/release-config/#operation-policy).
+A call that carries a secret never waits. These are creating an API key, resetting a user's password, and creating a user with a first password. A held call would keep the secret and show it to whoever decides, and a key shown later reaches nobody. Under an instance default of `approval` such a call runs on the caller's own word. See [operation policy](/configure/release-config/#operation-policy).
 
 There is an older, separate approval that works without the policy. An agent can propose a change to one of its skills. That proposal is an Approval Request of the kind "Skill change", and the same people decide it. The operator can add **Approval Checks** to it, which are rules a model evaluates and which warn the approver or block the proposal. See [config assets](/configure/config-assets/#agent-skill-changes).
 
-Agents and approvals do not go together yet. A run cannot pause for a person and continue later, so the instance refuses to start with a tool that would need an approval or a confirmation. Each changing tool states `allow` or `deny`.
+Agents and approvals do not go together yet. A run cannot pause for a person and continue later. So the instance refuses to start with a tool of the release whose calls would need an approval or a confirmation. Such a tool states `allow` or `deny`, unless the instance default for its kind of action already is one of the two.
 
 ### Guardrails
 
 A guardrail is meant to be a rule that looks at an action just before it runs and can block it or send it to an approval. It sits at step 9, after the right and the first look at the policy, and it can only make the answer stricter.
 
-**No guardrail exists yet.** The step is built and every action passes it, but nothing is plugged in, so it always answers "no objection". The error `GUARDRAIL_BLOCKED` is in the API reference and does not occur today.
+**No guardrail exists yet.** The step is built and every action on the full path passes it, but nothing is plugged in, so it always answers "no objection". The error `GUARDRAIL_BLOCKED` is in the API reference and does not occur today.
 
 What protects an instance today are fixed limits that are not called guardrails:
 
@@ -476,15 +509,15 @@ What protects an instance today are fixed limits that are not called guardrails:
 
 ### What the record shows
 
-Every changing action leaves an **Operation Run**. That is one record of one call: which action, who called, from where, and how it ended. A reading action leaves one only when it was refused or failed. Every tool call of an agent leaves one, a reading one too.
+Every changing action on the full path leaves an **Operation Run**. That is one record of one call: which action, who called, from where, and how it ended. A reading action leaves one only when it was refused or failed. Every tool call of an agent leaves one, a reading one too. A call that is stopped at steps 1 to 4, or for invalid input, leaves none, and neither does an action off the full path.
 
 **Settings > Instance > Operations** lists them. The origin says where a call came from: User, CLI or Agent. A call that was refused has the status "Denied" and names what refused it. You need "View audit log" to open the page.
 
-Beside the run, the instance writes Audit Events, for example `permission.granted` when somebody writes a grant. An Audit Event holds names, ids and codes. It never holds the content of an agent or a conversation. See [Governance](/operate/governance/#audit).
+Beside the run, the instance writes Audit Events, for example `permission.granted` when somebody writes a grant. The events the product writes hold names, ids and codes, and no content of an agent or a conversation. A tool written for one customer adds its own details to its events and has to keep to the same rule. See [Governance](/operate/governance/#audit).
 
 ## A worked example
 
-Mara has the role User and one grant: read and write on agents in `tax-`. The instance runs with the default policy.
+Mara has the role User and two grants: read and write on agents in `tax-`. The instance runs with the default policy.
 
 <figure class="docs-diagram docs-diagram-wide">
 <svg viewBox="0 0 660 424" role="img" aria-labelledby="rights-fig-4-title rights-fig-4-desc">
@@ -543,23 +576,23 @@ You need "Manage users" yourself. Open **Settings > Instance > Access**.
 | Person | One person from the list | The grant is for this person alone. To give it to three colleagues, send the dialog three times. |
 | Kind | Agents or Skills | One kind per dialog. A team that edits both needs the dialog twice. With the module `connections` on, the dialog offers Connections as a third kind. |
 | Actions | Read, Write, Delete | Tick Read and Write for somebody who should edit. Tick Delete only if they should remove agents too. The dialog writes one row per tick. |
-| Where | "In a Namespace" or "On one asset" | "In a Namespace" covers every agent whose name starts with the prefix, future ones included. "On one asset" covers one agent that exists now. For Connections the two choices are "On one connection" and "In a shared workspace". |
+| Where | "In a Namespace" or "On one asset" | "In a Namespace" covers every agent whose name starts with the prefix, future ones included. "On one asset" covers one agent that exists now. For Connections the choices are "In a Namespace", "On one connection" and "In a shared workspace". |
 | Namespace, or Asset | The Namespace `tax-`, or the one agent | Only registered Namespaces are offered. If the list is empty, register one first. |
 | Effect | Allow or Deny | Allow gives the ticked actions there. Deny refuses them there and beats every allow and every role. For this task choose Allow. |
 
-Press **Create grant**. The grant works at once. Your colleague sees **Build** in the main rail the next time the interface loads, with the agents of `tax-` and nothing else.
+Press **Create grant**. Under the default policy the grant works at once. On an instance that sends changes to an approval, it works once the approval is given. Your colleague sees **Build** in the main rail the next time the interface loads, with the agents of `tax-`. If these grants are all they hold, they see nothing else.
 
 Three things to know afterwards.
 
 - You can send the same dialog again. Rows the person already has are left alone, and the dialog says how many it added.
-- **Check** on the same page confirms the result. Choose the person, enter `tax-vat-helper` and read the answer for each action.
+- **Check** on the same page confirms the result. Choose the person, enter `tax-vat-helper` and read the answer for each action. You need "View agent configuration" for that.
 - A save can still be refused for a reason that is not a right. Examples are a tool that is off the Namespace's list, or a model setting that needs "Manage agent model settings". The Check tab lists these under its result.
 
-To take the right away, open the menu of the line in the list and choose **Revoke** for the action. It stops working with the next call.
+To take the right away, open the menu of the line in the list and choose **Revoke** for the action. Once the revocation has run, the next call of your colleague is refused.
 
 ## API keys and Service Principals
 
-A script or the CLI does not sign in as a person. A Superadmin creates a **Service Principal** on **Settings > Instance > API access** and gives it one or both of two rights:
+The Catalyst CLI does not sign in as a person. It works as a Service Principal, and so should a script. A Superadmin creates a **Service Principal** on **Settings > Instance > API access** and gives it one or both of two rights:
 
 - "Read configuration assets", to pull and compare agents and skills.
 - "Release configuration assets", to push them with `catalyst config push`.
@@ -576,7 +609,7 @@ A Service Principal has no role, and no grant can be written for one. A release 
 | Give or take one right for the whole instance | Settings > Instance > Users, Rights | Manage users |
 | Let somebody edit the agents of one team | Settings > Instance > Access, Grants | Manage users |
 | Register a team's prefix, limit its tools or models | Settings > Instance > Access, Namespaces | Manage users |
-| Find out why somebody can or cannot do something | Settings > Instance > Access, Check | Manage users |
+| Find out why somebody can or cannot do something | Settings > Instance > Access, Check | Manage users and View agent configuration |
 | Create a key for the CLI or a script | Settings > Instance > API access | Superadmin |
 | Decide a call or a skill change that waits | Inbox | Approve skill changes |
 | See what was called, by whom, and what was refused | Settings > Instance > Operations | View audit log |
@@ -586,10 +619,10 @@ A Service Principal has no role, and no grant can be written for one. A release 
 ## What the system does not have yet
 
 - **Groups and teams.** A grant names one person. Nothing gives a right to a group.
-- **Custom roles.** The three roles are fixed, and no screen shows or edits what a role carries.
+- **Custom roles.** The three roles are fixed. The Rights card on the Users page shows which rights a person has by role, and nothing edits what a role carries.
 - **Company sign-in with group mapping.** People are not signed in through a company identity provider with its groups.
-- **Grants on a workspace for agents and skills, and grants for other kinds.** A grant covers agents and skills, in a Namespace or on one asset, and Connections, on one Connection or in one Shared Workspace. Writing, deleting and approving a Connection stay with the Admin role.
-- **A policy per action or per Namespace.** The policy has two instance-wide defaults and the mode a tool states. An administrator cannot set "saving in `tax-` needs an approval" in the interface.
+- **Grants on a workspace for agents and skills, and grants for other kinds.** A grant covers agents and skills, in a Namespace or on one asset, and Connections, in a Namespace, on one Connection or in one Shared Workspace. Writing, deleting and approving a Connection stay with the Admin role.
+- **Policy settings for administrators.** The instance can already resolve a policy value per action, per Namespace, per workspace and per kind of asset. Nothing stores such settings and no screen edits them. Today the policy is two instance-wide defaults and the mode a tool states. An administrator cannot set "saving in `tax-` needs an approval" in the interface.
 - **Guardrails.** The step exists and nothing is plugged in.
 - **An agent that waits for a person.** A run cannot pause for a confirmation or an approval and continue.
-- **One path for everything.** Conversations, users and the other areas named [above](#which-actions-take-the-whole-path) are checked for sign-in, module, scope and right, without policy and without an Operation Run.
+- **One path for everything.** Conversations, workspaces and the other areas named [above](#which-actions-take-the-whole-path) are checked for sign-in, module, scope and right, without policy and without an Operation Run.

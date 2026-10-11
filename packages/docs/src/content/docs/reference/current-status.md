@@ -28,7 +28,7 @@ Document processing, the artifact helper commands for execution workspaces and t
 
 - OpenAPI API tools. [OpenAPI API Tools](/extend/openapi-tools/) describes the intended shape; the tool adapter is not built.
 - Tools with the permission mode `approval_required`. An agent run cannot pause for a person's decision and continue afterwards, so startup refuses such a tool.
-- An approval for a call an agent makes. The operation policy value `approval` holds a person's call for a decision in the Inbox, see [Operation policy](/configure/release-config/#operation-policy). An agent's call cannot wait.
+- An approval for a call an agent makes. The operation policy value `approval` holds a person's call for a decision in the Inbox, see [Operation policy](/configure/release-config/#operation-policy). An agent's run cannot pause for such a decision and continue, so startup refuses a tool of the release whose calls would wait.
 - Editing a sent message and exporting a conversation.
 
 Each page of these docs describes the current release unless it says otherwise.
