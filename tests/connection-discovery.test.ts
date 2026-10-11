@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import {
   CONNECTION_DISCOVERY_DESCRIPTION_MAX_CHARS,
   CONNECTION_DISCOVERY_MAX_OPERATIONS,
+  CONNECTION_DISCOVERY_TIMEOUT_MS,
   discoverConnection,
   fingerprintOperation,
   readConnectionCatalog
@@ -738,5 +739,73 @@ describe("what a discovery takes from an outside system", () => {
       }
     ]);
     expect(findLeak(await dumpDatabaseText(), w.token)).toBeUndefined();
+  });
+
+  // Fails without the change: every schema of an answer was compiled in one turn of the
+  // process, which answered no request for as long as that took.
+  it("gives the process a turn before each operation of an answer", async () => {
+    const w = world();
+    const instance = await w.start();
+    const count = CONNECTION_DISCOVERY_MAX_OPERATIONS;
+    let turns = 0;
+    let counting = true;
+    const turn = () => {
+      turns += 1;
+      if (counting) setImmediate(turn);
+    };
+    /** The turn of the process in which each operation was first read, in order. */
+    const readInTurn: number[] = [];
+    w.connector.discover = () =>
+      Promise.resolve(
+        Array.from({ length: count }, (_unused, index) => ({
+          ...listedOperation(`tool_${index}`, {
+            // Each schema is its own, so each one is compiled.
+            inputSchema: { type: "object", properties: { [`field_${index}`]: { type: "string" } } }
+          }),
+          get name() {
+            readInTurn.push(turns);
+            return `tool_${index}`;
+          }
+        }))
+      );
+    setImmediate(turn);
+    try {
+      expect(await discoverDirectly(w)).toMatchObject({
+        status: "discovered",
+        operationCount: count
+      });
+    } finally {
+      counting = false;
+    }
+    expect(readInTurn).toHaveLength(count);
+    // No two operations were worked on in the same turn.
+    expect(new Set(readInTurn).size).toBe(count);
+    expect(required((await storedState(instance)).catalog).entries).toHaveLength(count);
+  });
+
+  // The deadline itself, on a clock the test moves. Fails without a deadline: the discovery
+  // of a type that never answers would never end.
+  it("ends after CONNECTION_DISCOVERY_TIMEOUT_MS and not a millisecond before", async () => {
+    const w = world();
+    const instance = await w.start();
+    w.connector.discover = () => new Promise(() => undefined);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      let ended = false;
+      const discovering = discoverDirectly(w).finally(() => {
+        ended = true;
+      });
+      await expect.poll(() => w.connector.discoveries, { timeout: 10_000 }).toBe(1);
+
+      await vi.advanceTimersByTimeAsync(CONNECTION_DISCOVERY_TIMEOUT_MS - 1);
+      expect(ended).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await discovering).toEqual({ status: "failed", reason: "upstream_timeout" });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect((await storedState(instance)).state).toMatchObject({
+      lastErrorCode: "upstream_timeout"
+    });
   });
 });

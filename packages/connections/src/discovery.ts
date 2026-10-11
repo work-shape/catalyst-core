@@ -237,20 +237,25 @@ function jsonBytesWithin(value: JsonValue, budget: number): number {
  * cannot end an operation name, whose text cannot be stored or whose schema the validator
  * refuses is left out and the others stay. So is one that holds the Connection's credential,
  * by the search a call makes of its result: it would be stored in the clear and sent to a
- * model. The deadline is asked before each operation.
+ * model.
+ *
+ * Compiling a schema does not give other work a turn, and five hundred of them take seconds.
+ * So the process gets a turn before each operation, and the deadline and the caller's signal
+ * are asked there: requests are answered while an answer is worked on, and a discovery that
+ * was stopped ends at the next operation.
  *
  * This bounds what is processed and stored. The answer is in memory when it arrives here:
  * bounding what is received from the outside system is the Connector type's transport.
  */
-function boundedOperations(
+async function boundedOperations(
   discovered: readonly ConnectorOperationDescriptor[],
   secret: string | undefined,
   deadline: DiscoveryDeadline
-): {
+): Promise<{
   operations: ConnectorOperationDescriptor[];
   leftOut: number;
   rejected: number;
-} {
+}> {
   if (discovered.length > CONNECTION_DISCOVERY_MAX_OPERATIONS) {
     throw connectionCallError("output_invalid");
   }
@@ -259,6 +264,9 @@ function boundedOperations(
   let bytes = 0;
   let rejected = 0;
   for (const descriptor of discovered) {
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
     deadline.check();
     const { name, inputSchema, outputSchema, proposedEffect } = descriptor;
     const description = boundedDescription(descriptor.description);
@@ -376,7 +384,7 @@ export async function discoverConnection(
   let reason: ConnectionCallReason | undefined;
   try {
     const answer = await discoverOperations(input, connection, discover, type, deadline);
-    const { operations, leftOut, rejected } = boundedOperations(
+    const { operations, leftOut, rejected } = await boundedOperations(
       answer.discovered,
       answer.secret,
       deadline
