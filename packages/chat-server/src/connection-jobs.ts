@@ -129,7 +129,8 @@ export function createConnectionDiscoveryJobs(options: ConnectionDiscoveryJobOpt
               metadata: {
                 connectionName,
                 operationCount: outcome.operationCount ?? 0,
-                leftOutCount: outcome.leftOutCount ?? 0
+                leftOutCount: outcome.leftOutCount ?? 0,
+                rejectedCount: outcome.rejectedCount ?? 0
               }
             });
             return;

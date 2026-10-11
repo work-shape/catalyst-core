@@ -17,6 +17,8 @@ export interface ConnectionDiscoveryOutcome {
   operationCount?: number;
   /** How many listed operations the catalog did not take. */
   leftOutCount?: number;
+  /** How many of those were left out because they held the Connection's credential. */
+  rejectedCount?: number;
 }
 
 /**

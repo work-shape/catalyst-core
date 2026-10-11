@@ -16,6 +16,7 @@ import {
   type Logger,
   type PlatformStores
 } from "@vivd-catalyst/core";
+import { holdsSecret } from "./call";
 import { buildConnectionCatalog } from "./catalog";
 import { readConnection, type StoredConnection } from "./connection-reads";
 import { openConnectorContext } from "./connector-context";
@@ -55,6 +56,13 @@ export const CONNECTION_DISCOVERY_MAX_BYTES = 4 * 1024 * 1024;
  */
 export const CONNECTION_DISCOVERY_DESCRIPTION_MAX_CHARS = 4_000;
 
+/**
+ * The error code a discovery leaves that stored its catalog and left out an operation whose
+ * name, description or schema held the Connection's credential. It is the reason of a call
+ * whose result holds it. Nothing of the operation is recorded with it.
+ */
+export const CONNECTION_DISCOVERY_REJECTED_CODE = "output_rejected" satisfies ConnectionCallReason;
+
 /** The error code a discovery leaves that failed for no reason of a Connection call. */
 export const CONNECTION_DISCOVERY_FAILED_CODE = "discovery_failed";
 
@@ -66,6 +74,8 @@ export interface ConnectionDiscoveryResult {
   operationCount?: number;
   /** How many listed operations were left out of the catalog. Only with `discovered`. */
   leftOutCount?: number;
+  /** How many of those were left out because they held the credential. Only with `discovered`. */
+  rejectedCount?: number;
 }
 
 export interface DiscoverConnectionInput {
@@ -206,17 +216,21 @@ function jsonBytesWithin(value: JsonValue, budget: number): number {
  * or fingerprinted of an answer that is over a bound, and an answer over the bound of count
  * or of bytes throws `output_invalid` whatever its schemas are. An operation whose name
  * cannot end an operation name, whose text cannot be stored or whose schema the validator
- * refuses is left out and the others stay. The deadline is asked before each operation.
+ * refuses is left out and the others stay. So is one that holds the Connection's credential,
+ * by the search a call makes of its result: it would be stored in the clear and sent to a
+ * model. The deadline is asked before each operation.
  *
  * This bounds what is processed and stored. The answer is in memory when it arrives here:
  * bounding what is received from the outside system is the Connector type's transport.
  */
 function boundedOperations(
   discovered: readonly ConnectorOperationDescriptor[],
+  secret: string | undefined,
   deadline: DiscoveryDeadline
 ): {
   operations: ConnectorOperationDescriptor[];
   leftOut: number;
+  rejected: number;
 } {
   if (discovered.length > CONNECTION_DISCOVERY_MAX_OPERATIONS) {
     throw connectionCallError("output_invalid");
@@ -224,6 +238,7 @@ function boundedOperations(
   const operations: ConnectorOperationDescriptor[] = [];
   const names = new Set<string>();
   let bytes = 0;
+  let rejected = 0;
   for (const descriptor of discovered) {
     deadline.check();
     const { name, inputSchema, outputSchema, proposedEffect } = descriptor;
@@ -243,16 +258,22 @@ function boundedOperations(
     ) {
       continue;
     }
-    names.add(name);
-    operations.push({
+    const operation: ConnectorOperationDescriptor = {
       name,
       description,
       inputSchema,
       ...(outputSchema === undefined ? {} : { outputSchema }),
       proposedEffect
-    });
+    };
+    // Both schemas are within the validator's bounds, so this serializes without surprise.
+    if (secret !== undefined && holdsSecret(JSON.stringify(operation), secret)) {
+      rejected += 1;
+      continue;
+    }
+    names.add(name);
+    operations.push(operation);
   }
-  return { operations, leftOut: discovered.length - operations.length };
+  return { operations, leftOut: discovered.length - operations.length, rejected };
 }
 
 /** The health a failed discovery leaves, for the reasons that say the Connection is broken. */
@@ -284,7 +305,7 @@ async function discoverOperations(
   discover: NonNullable<NonNullable<StoredConnection["type"]>["discover"]>,
   type: NonNullable<StoredConnection["type"]>,
   deadline: DiscoveryDeadline
-): Promise<readonly ConnectorOperationDescriptor[]> {
+): Promise<{ discovered: readonly ConnectorOperationDescriptor[]; secret: string | undefined }> {
   // The one way to a context: settings, then egress, then the credential.
   const opening = openConnectorContext({
     type,
@@ -301,7 +322,10 @@ async function discoverOperations(
   const context = await Promise.race([opening, deadline.passed]);
   const discovering = discover(context);
   discovering.catch(() => undefined);
-  return await Promise.race([discovering, deadline.passed]);
+  return {
+    discovered: await Promise.race([discovering, deadline.passed]),
+    secret: context.credentialFor(context.target)?.secret
+  };
 }
 
 /**
@@ -325,8 +349,10 @@ export async function discoverConnection(
   // and fingerprinting it.
   const deadline = openDeadline(input.signal, input.timeoutMs ?? CONNECTION_DISCOVERY_TIMEOUT_MS);
   try {
-    const { operations, leftOut } = boundedOperations(
-      await discoverOperations(input, connection, discover, type, deadline),
+    const answer = await discoverOperations(input, connection, discover, type, deadline);
+    const { operations, leftOut, rejected } = boundedOperations(
+      answer.discovered,
+      answer.secret,
       deadline
     );
     const catalog = buildConnectionCatalog({
@@ -341,7 +367,7 @@ export async function discoverConnection(
       clientInstanceId,
       connectionAssetId: connection.assetId,
       health: "ok",
-      lastErrorCode: null,
+      lastErrorCode: rejected > 0 ? CONNECTION_DISCOVERY_REJECTED_CODE : null,
       catalog: {
         version: catalog.version,
         discoveredAt: catalog.discoveredAt,
@@ -351,14 +377,15 @@ export async function discoverConnection(
     });
     if (leftOut > 0) {
       input.logger?.warn(
-        { connection: connectionName, leftOut },
+        { connection: connectionName, leftOut, rejected },
         "A discovery listed operations that the catalog does not take"
       );
     }
     return {
       status: "discovered",
       operationCount: catalog.entries.length,
-      leftOutCount: leftOut
+      leftOutCount: leftOut,
+      ...(rejected > 0 ? { rejectedCount: rejected } : {})
     };
   } catch (error) {
     // Only the reason is read. The text of the error is the type's or the outside system's.

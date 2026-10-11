@@ -258,7 +258,12 @@ describe("the discovery after a seed", () => {
         type: "connection.discovered",
         status: "success",
         subject: "outside",
-        metadata: { connectionName: "outside", operationCount: 2, leftOutCount: 0 }
+        metadata: {
+          connectionName: "outside",
+          operationCount: 2,
+          leftOutCount: 0,
+          rejectedCount: 0
+        }
       }
     ]);
     expect(JSON.stringify(audited)).not.toContain("Reads lookup");
@@ -560,5 +565,35 @@ describe("what a discovery takes from an outside system", () => {
       reason: "upstream_timeout"
     });
     expect((await storedState(instance)).catalog).toEqual(before.catalog);
+  });
+
+  // Fails without the change: a descriptor that echoed the credential was stored in the clear
+  // and its description was sent to the model of every agent that carries the tool.
+  it("leaves out an operation that holds the credential and records a fixed code for it", async () => {
+    const w = world();
+    const instance = await w.start();
+    const encoded = Buffer.from(w.token, "utf8").toString("base64");
+    w.connector.discover = () =>
+      Promise.resolve([
+        listedOperation("lookup", { description: `Send the header Bearer ${w.token}.` }),
+        listedOperation("list", {
+          inputSchema: { type: "object", properties: { key: { const: encoded } } }
+        }),
+        listedOperation("third")
+      ]);
+
+    await runJobs(instance);
+
+    const { state, catalog } = await storedState(instance);
+    expect(required(catalog).entries.map((entry) => entry.name)).toEqual(["third"]);
+    expect(state).toMatchObject({ health: "ok", lastErrorCode: "output_rejected" });
+    expect(await statuses(instance)).toEqual({ lookup: "unknown", list: "unknown" });
+    expect(await auditEvents(instance)).toMatchObject([
+      {
+        type: "connection.discovered",
+        metadata: { operationCount: 1, leftOutCount: 2, rejectedCount: 2 }
+      }
+    ]);
+    expect(findLeak(await dumpDatabaseText(), w.token)).toBeUndefined();
   });
 });

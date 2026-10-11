@@ -332,9 +332,10 @@ function unescaped(text: string): string {
 
 /**
  * Whether the result's JSON holds the credential of the call: as it is, escaped as JSON once
- * or several times over, in base64 of either alphabet, in hex or percent-encoded.
+ * or several times over, in base64 of either alphabet, in hex or percent-encoded. A discovery
+ * searches what it was answered with it too.
  */
-function holdsSecret(serialized: string, secret: string): boolean {
+export function holdsSecret(serialized: string, secret: string): boolean {
   if (secret.length < CONNECTION_SECRET_ECHO_MIN_CHARS) return false;
   // JSON inside a string of the result escapes a quote or a backslash of the secret again.
   const bare = unescaped(secret);
