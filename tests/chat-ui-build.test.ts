@@ -308,13 +308,14 @@ describe("Build frame", () => {
       ">postgres<",
       ">Instance<",
       ">Workspace<",
-      ">Release config<",
-      ">Runtime<",
       "Enabled",
       "Disabled"
     ]) {
       expect(list, chip).toContain(chip);
     }
+    // Where a Connection comes from is no chip of the row.
+    expect(list).not.toContain("Release config");
+    expect(list).not.toContain(">Runtime<");
     // No page opens and nothing is started or mirrored: no link, no New button, no menu.
     expect(list).not.toContain("<a ");
     expect(list).not.toContain(">New ");

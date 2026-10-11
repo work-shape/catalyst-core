@@ -7,8 +7,6 @@ export const connections = defineTranslations({
       "No connections yet. A connection holds the access to an outside system. Connections cannot be created here yet.",
     "connections.enabled": "Enabled",
     "connections.kind": "Connections",
-    "connections.originRelease": "Release config",
-    "connections.originRuntime": "Runtime",
     "connections.scopeInstance": "Instance",
     "connections.scopeWorkspace": "Workspace",
     "connections.search": "Search connections"
@@ -19,8 +17,6 @@ export const connections = defineTranslations({
       "Noch keine Verbindungen. Eine Verbindung hält den Zugang zu einem externen System. Verbindungen lassen sich hier noch nicht anlegen.",
     "connections.enabled": "Aktiv",
     "connections.kind": "Verbindungen",
-    "connections.originRelease": "Release-Konfiguration",
-    "connections.originRuntime": "Laufzeit",
     "connections.scopeInstance": "Instanz",
     "connections.scopeWorkspace": "Arbeitsbereich",
     "connections.search": "Verbindungen durchsuchen"

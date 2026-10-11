@@ -191,9 +191,11 @@ test("an administrator sees Connections in Build and grants its rights; a read g
       await page.reload();
       const row = list.getByRole("listitem").filter({ hasText: connection.name });
       await expect(row).toContainText("Client records");
-      for (const chip of ["mcp", "Instance", "Release config", "Enabled"]) {
+      for (const chip of ["mcp", "Instance", "Enabled"]) {
         await expect(row.getByText(chip, { exact: true })).toBeVisible();
       }
+      // Where it comes from is no chip: every Connection comes from release config so far.
+      await expect(row).not.toContainText("Release config");
       // The row opens nothing, and the page shows nothing of the definition.
       await expect(list.getByRole("link")).toHaveCount(0);
       await expect(main).not.toContainText("secret_");
@@ -214,7 +216,7 @@ test("an administrator sees Connections in Build and grants its rights; a read g
         .getByRole("list", { name: "Verbindungen", exact: true })
         .getByRole("listitem")
         .filter({ hasText: connection.name });
-      for (const chip of ["mcp", "Instanz", "Release-Konfiguration", "Aktiv"]) {
+      for (const chip of ["mcp", "Instanz", "Aktiv"]) {
         await expect(germanRow.getByText(chip, { exact: true })).toBeVisible();
       }
       await page.evaluate(() => window.localStorage.removeItem("vivd-catalyst:locale"));
@@ -233,9 +235,10 @@ test("an administrator sees Connections in Build and grants its rights; a read g
       await expect(dialog.getByLabel("Read", { exact: true })).toBeVisible();
       await expect(dialog.getByLabel("Write", { exact: true })).toHaveCount(0);
       await expect(dialog.getByLabel("Delete", { exact: true })).toHaveCount(0);
-      await expect(dialog.getByRole("radio", { name: /^In a Namespace/u })).toHaveCount(0);
+      // The three places a Connection right is written at. The form opens on the Namespace.
+      await expect(dialog.getByRole("radio", { name: /^In a Namespace/u })).toBeChecked();
       await expect(dialog.getByRole("radio", { name: /^In a shared workspace/u })).toBeVisible();
-      await expect(dialog.getByRole("radio", { name: /^On one connection/u })).toBeChecked();
+      await dialog.getByRole("radio", { name: /^On one connection/u }).check();
       // Each action says what it allows.
       await expect(
         dialog.getByText("See the connection and its status in Build. Never its credentials.", {
