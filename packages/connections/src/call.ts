@@ -66,6 +66,12 @@ export const CONNECTION_MAX_WAITING_CALLS = 64;
  */
 export const CONNECTION_SECRET_ECHO_MIN_CHARS = 8;
 
+/**
+ * How long a failed call waits for the write of the Connection's health. The call holds its
+ * slot while it waits, so a store that does not answer costs a slot this long and no longer.
+ */
+export const CONNECTION_HEALTH_WRITE_TIMEOUT_MS = 2_000;
+
 /** The bounds of a call of one type: the type's own, never beyond the platform's. */
 export function connectionCallLimits(type: Pick<ConnectorTypeDefinition, "limits">): {
   callTimeoutMs: number;
@@ -99,12 +105,16 @@ export class ConnectionCallSlots {
 
   /**
    * Takes a slot of the Connection, waiting for one where all are taken. Answers the release
-   * of the slot. Throws `connection_busy` when the wait ends without one.
+   * of the slot and whether the call waited for it. Throws `connection_busy` when the wait
+   * ends without one: after `slotWaitMs`, or when the caller stops the call, which takes its
+   * place in the line away at once.
    */
   async acquire(
     connectionAssetId: string,
-    limits: { maxParallelCalls: number; slotWaitMs: number }
-  ): Promise<() => void> {
+    limits: { maxParallelCalls: number; slotWaitMs: number },
+    signal?: AbortSignal
+  ): Promise<{ release: () => void; waited: boolean }> {
+    if (signal?.aborted) throw connectionCallError("connection_busy");
     let entry = this.byConnection.get(connectionAssetId);
     if (!entry) {
       entry = { active: 0, waiting: [] };
@@ -113,26 +123,44 @@ export class ConnectionCallSlots {
     const held = entry;
     if (held.active < limits.maxParallelCalls) {
       held.active += 1;
-      return this.releaseOf(connectionAssetId, held);
+      return { release: this.releaseOf(connectionAssetId, held), waited: false };
     }
     if (held.waiting.length >= CONNECTION_MAX_WAITING_CALLS) {
+      // A Connection without a slot to give, such as one whose bound is zero, keeps no entry.
+      if (held.active === 0 && held.waiting.length === 0) {
+        this.byConnection.delete(connectionAssetId);
+      }
       throw connectionCallError("connection_busy");
     }
     await new Promise<void>((resolve, reject) => {
+      const leave = () => {
+        clearTimeout(timer);
+        signal?.removeEventListener("abort", leave);
+        const position = held.waiting.indexOf(waiter);
+        if (position >= 0) held.waiting.splice(position, 1);
+        if (held.active === 0 && held.waiting.length === 0) {
+          this.byConnection.delete(connectionAssetId);
+        }
+        reject(connectionCallError("connection_busy"));
+      };
       const waiter: Waiter = {
         grant() {
           clearTimeout(timer);
+          signal?.removeEventListener("abort", leave);
           resolve();
         }
       };
-      const timer = setTimeout(() => {
-        held.waiting.splice(held.waiting.indexOf(waiter), 1);
-        reject(connectionCallError("connection_busy"));
-      }, limits.slotWaitMs);
+      const timer = setTimeout(leave, limits.slotWaitMs);
+      signal?.addEventListener("abort", leave, { once: true });
       held.waiting.push(waiter);
     });
     // The slot was handed over by the call that ended: `active` stayed as it was.
-    return this.releaseOf(connectionAssetId, held);
+    return { release: this.releaseOf(connectionAssetId, held), waited: true };
+  }
+
+  /** The calls of a Connection that wait for a slot now. */
+  waiting(connectionAssetId: string): number {
+    return this.byConnection.get(connectionAssetId)?.waiting.length ?? 0;
   }
 
   private releaseOf(
@@ -206,8 +234,9 @@ const HEALTH_OF_FAILURE: Partial<Record<ConnectionCallReason, ConnectionHealth>>
 
 /**
  * Writes what a failed call says about the Connection. A row that says it already is left
- * alone, so an outage costs one write and not one per call. A write that fails changes
- * nothing about how the call ends.
+ * alone, so an outage costs one write and not one per call. A write that fails, or one that
+ * is not answered within `CONNECTION_HEALTH_WRITE_TIMEOUT_MS`, changes nothing about how the
+ * call ends.
  */
 async function recordFailedHealth(
   deps: ConnectionOperationSourceDeps,
@@ -217,18 +246,32 @@ async function recordFailedHealth(
   const health = reason === undefined ? undefined : HEALTH_OF_FAILURE[reason];
   if (health === undefined || reason === undefined) return;
   if (connection.state?.health === health && connection.state.lastErrorCode === reason) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    await deps.stores.connections.putConnectionState({
+    const writing = deps.stores.connections.putConnectionState({
       clientInstanceId: deps.clientInstanceId,
       connectionAssetId: connection.assetId,
       health,
       lastErrorCode: reason
     });
+    // The write may still fail after nobody waits for it.
+    writing.catch(() => undefined);
+    await Promise.race([
+      writing,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
+          () => reject(new Error("The write took too long")),
+          CONNECTION_HEALTH_WRITE_TIMEOUT_MS
+        );
+      })
+    ]);
   } catch {
     deps.logger.warn(
       { connection: connection.config.name, reason },
       "The health of a Connection could not be written after a failed call"
     );
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -391,18 +434,27 @@ export async function callConnectionOperation(
   input: unknown,
   context: Pick<OperationExecutionContext, "runtime">
 ): Promise<JsonValue> {
-  const { connection, type, descriptor } = callable(
-    await readConnection(deps, target.connectionName),
-    target
-  );
-  if (issuesOf(descriptor, input)) throw connectionCallError("input_invalid");
+  // Refused without a wait where the Connection or the input says so already.
+  const read = async () => {
+    const found = callable(await readConnection(deps, target.connectionName), target);
+    if (issuesOf(found.descriptor, input)) throw connectionCallError("input_invalid");
+    return found;
+  };
+  const first = await read();
   const jsonInput = toJsonInput(input);
-  const limits = connectionCallLimits(type);
+  const limits = connectionCallLimits(first.type);
 
-  const release = await slots.acquire(connection.assetId, limits);
+  const { release, waited } = await slots.acquire(
+    first.connection.assetId,
+    limits,
+    context.runtime.signal
+  );
   const deadline = callSignal(limits.callTimeoutMs, context.runtime.signal);
   const aborted = untilAborted(deadline.signal);
   try {
+    // What was read before a wait is as old as the wait. The Connection is read again, so a
+    // call that waited runs on the revision and the state of the moment it got its slot.
+    const { connection, type, descriptor } = waited ? await read() : first;
     let result: JsonValue;
     let secret: string | undefined;
     try {

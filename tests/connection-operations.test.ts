@@ -473,13 +473,15 @@ describe("the parallel calls of one Connection", () => {
   it("hands a freed slot to the call that waited longest and keeps no entry for an idle Connection", async () => {
     const slots = new ConnectionCallSlots();
     const limits = { maxParallelCalls: 2, slotWaitMs: 5_000 };
-    const first = await slots.acquire("a", limits);
-    const second = await slots.acquire("a", limits);
+    const { release: first } = await slots.acquire("a", limits);
+    const { release: second } = await slots.acquire("a", limits);
     const order: string[] = [];
-    const third = slots.acquire("a", limits).then((release) => (order.push("third"), release));
-    const fourth = slots.acquire("a", limits).then((release) => (order.push("fourth"), release));
+    const third = slots.acquire("a", limits).then(({ release }) => (order.push("third"), release));
+    const fourth = slots
+      .acquire("a", limits)
+      .then(({ release }) => (order.push("fourth"), release));
     // Another Connection is not held up.
-    (await slots.acquire("b", limits))();
+    (await slots.acquire("b", limits)).release();
 
     first();
     first();

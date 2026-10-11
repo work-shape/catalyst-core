@@ -4,6 +4,7 @@ import {
   EGRESS_DENIED,
   LOG_REDACTION,
   SHARED_CREDENTIAL_SUBJECT,
+  connectionCallError,
   type ConnectionConfig,
   type ConnectionCredential,
   type ConnectionCredentialResolver,
@@ -146,6 +147,8 @@ export async function openConnectorContext(
     );
   }
   const target = await egress.check(type.target(settings.data));
+  // A call that ended while its target was checked resolves no credential.
+  if (signal.aborted) throw connectionCallError("upstream_timeout");
 
   let credential: ConnectionCredential | undefined;
   if (config.authScheme !== AUTH_SCHEME_NONE) {
