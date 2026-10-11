@@ -453,6 +453,25 @@ describe("an agent carries data tools", () => {
   });
 });
 
+describe("the operation registry", () => {
+  it("refuses a release operation that takes a name of a data operation", async () => {
+    const connection = createFakeConnection();
+    const registry = createOperationRegistry();
+    registry.addSource(connection.operationSource);
+    const fromSource = await registry.resolve(ECHO);
+    if (!fromSource) throw new Error("Expected the source to contribute the operation");
+
+    // Registered, it would be resolved before the source and stand in for the data operation.
+    expect(() => registry.register({ ...fromSource, name: ECHO })).toThrow(
+      /starts with 'connection\.', which names operations that come from data/u
+    );
+    expect(() => registry.register({ ...fromSource, name: "connection.other" })).toThrow();
+    expect(await registry.resolve(ECHO)).toBe(fromSource);
+    // The plural prefix of the management operations is free.
+    expect(() => registry.register({ ...fromSource, name: "connections.test" })).not.toThrow();
+  });
+});
+
 describe("validation of an agent that lists data tools", () => {
   const refs = {
     modelProviderIds: ["test-provider"],

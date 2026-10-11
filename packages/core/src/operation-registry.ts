@@ -240,11 +240,30 @@ export interface OperationRegistry {
   list(scope?: OperationListScope): Promise<OperationDefinition[]>;
 }
 
+/**
+ * The name prefixes of operations that exist as data and come from an `OperationSource`: the
+ * operations of a Connection, `connection.<name>.<operation>`. An operation of the release may
+ * not take such a name. `resolve` asks the release first, so one that did would stand in for
+ * the data operation of that name, with rights and a policy of its own.
+ *
+ * Local until `core/src/data-tools.ts` exists (C1 slice K). Then this is `DATA_TOOL_PREFIXES`.
+ */
+const DATA_OPERATION_PREFIXES = ["connection."] as const;
+
 export function createOperationRegistry(): OperationRegistry {
   const registered = new Map<string, OperationDefinition>();
   const sources: OperationSource[] = [];
   return {
     register(definition) {
+      const dataPrefix = DATA_OPERATION_PREFIXES.find((prefix) =>
+        definition.name.startsWith(prefix)
+      );
+      if (dataPrefix !== undefined) {
+        throw new AppError(
+          "INTERNAL",
+          `Operation '${definition.name}' starts with '${dataPrefix}', which names operations that come from data. Register it under another name.`
+        );
+      }
       if (registered.has(definition.name)) {
         throw new AppError("INTERNAL", `Operation '${definition.name}' is registered twice`);
       }
