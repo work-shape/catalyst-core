@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
+  AppError,
   CONNECTION_CALL_REASONS,
   CONNECTION_NAME_IN_SENTENCE_MAX_LENGTH,
   connectionCallError,
   connectionCallSentence,
   type ConnectionCallReason
 } from "@vivd-catalyst/core";
-import { fixture } from "./support/connection-operations";
+import {
+  ConnectionCallSlots,
+  callConnectionOperation,
+  readConnection
+} from "@vivd-catalyst/connections";
+import { DEFAULT_LIMITS, fixture, operationOf } from "./support/connection-operations";
 
 // What a failed call of a Connection operation tells its caller: a sentence for people that
 // names the Connection, with the fixed reason beside it. Each test fails without the change:
@@ -107,19 +113,89 @@ describe("a call of a Connection operation that fails", () => {
     expect(failed.message).not.toMatch(/example|\d{2,}/u);
   });
 
-  it("names the Connection where the call is refused before anything is contacted", async () => {
+  // Fails without the fix: the result of a timeout carried no details, and a failure answered
+  // again under its key carried the code and the sentence only.
+  it("keeps the reason in the details of a timeout and of a failure answered again", async () => {
+    const t = await fixture();
+    const assetId = await t.seed("crm", {
+      displayName: "Sample business",
+      operations: [operationOf("echo"), operationOf("write", { effect: "changing" })]
+    });
+    await t.grant(t.kai.id, "connection.use", { assetId });
+    t.state.limits = { ...DEFAULT_LIMITS, callTimeoutMs: 150 };
+    t.setBehaviour(() => new Promise(() => undefined));
+
+    const late = await t.invoke(t.kai, "connection.crm.echo", { text: "a" });
+
+    expect(late.result).toMatchObject({
+      status: "failed",
+      error: { code: "TIMEOUT", details: { reason: "upstream_timeout" } }
+    });
+
+    t.setBehaviour(() => Promise.reject(connectionCallError("upstream_error")));
+    const keyed = { effect: "changing" as const, idempotencyKey: "key-again-1" };
+    const first = await t.invoke(t.kai, "connection.crm.write", {}, keyed);
+    const again = await t.invoke(t.kai, "connection.crm.write", {}, keyed);
+
+    expect(first.result).toMatchObject({ status: "failed" });
+    expect(again.replayed).toBe(true);
+    expect(again.result).toEqual({
+      status: "failed",
+      runId: first.run.id,
+      error: {
+        code: "CONFLICT",
+        message: connectionCallSentence("upstream_error", "Sample business"),
+        details: { reason: "upstream_error" }
+      }
+    });
+  });
+
+  // Fails without the fix: the display name was taken from whatever the name read, before the
+  // asset and the revision of the call were compared.
+  it("does not name a Connection the call was not authorized on", async () => {
+    const t = await fixture();
+    await t.seed("crm", { displayName: "Sample business" });
+    const stored = await readConnection(t.sourceDeps, "crm");
+    if (!stored) throw new Error("the Connection is stored");
+    const refusedFor = async (target: { assetId: string; revision: number }) => {
+      const error: unknown = await callConnectionOperation(
+        t.sourceDeps,
+        new ConnectionCallSlots(),
+        { connectionName: "crm", operationName: "echo", ...target },
+        { text: "a" },
+        { runtime: {} }
+      ).then(
+        () => undefined,
+        (thrown: unknown) => thrown
+      );
+      if (!(error instanceof AppError)) throw new Error("the call is refused");
+      return error.message;
+    };
+
+    for (const target of [
+      { assetId: "asset_of_before", revision: stored.revision },
+      { assetId: stored.assetId, revision: stored.revision + 1 }
+    ]) {
+      const message = await refusedFor(target);
+      expect(message).toBe(connectionCallSentence("connection_unavailable", undefined));
+      expect(message).not.toContain("Sample business");
+    }
+    expect(t.executed).toEqual([]);
+  });
+
+  it("names no Connection for a call whose Connection changed since its checks", async () => {
     const t = await fixture();
     const assetId = await t.seed("crm", { displayName: "Sample business" });
     await t.grant(t.kai.id, "connection.use", { assetId });
     t.state.beforeSecondRead = async () => {
-      await t.seed("crm", { displayName: "Sample business", enabled: false });
+      await t.seed("crm", { displayName: "Other business", enabled: false });
     };
 
     const failed = await t.failure(t.invoke(t.kai, "connection.crm.echo", { text: "a" }));
 
     expect(failed).toMatchObject({
       reason: "connection_unavailable",
-      message: connectionCallSentence("connection_unavailable", "Sample business")
+      message: connectionCallSentence("connection_unavailable", undefined)
     });
     expect(t.executed).toEqual([]);
   });

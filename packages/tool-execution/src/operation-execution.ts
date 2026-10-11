@@ -667,7 +667,8 @@ export async function failRun(
     }
   });
   await context.emit("operation.failed", "after", { status: "failed", reason: safe.code });
-  const details = detailsRecord(safe.details);
+  // The envelope drops the details of a 5xx, a timeout among them. The fixed reason stays.
+  const details = detailsRecord(safe.details) ?? (reason ? { reason } : undefined);
   return {
     result: {
       status: "failed",

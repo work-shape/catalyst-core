@@ -515,13 +515,17 @@ async function call(
   target: ConnectionCallTarget,
   input: unknown,
   context: Pick<OperationExecutionContext, "runtime">,
-  /** Receives the display name of the Connection as soon as a read found one. */
+  /** Receives the display name of the Connection the call was authorized on, once read. */
   named: { displayName?: string }
 ): Promise<JsonValue> {
   // Refused without a wait where the Connection or the input says so already.
   const read = async () => {
     const stored = await readConnection(deps, target.connectionName);
-    if (stored) named.displayName = stored.config.displayName;
+    // Only the asset and the revision the caller was authorized on lend their name to a
+    // refusal. A Connection that took the same name since is not the caller's to learn of.
+    if (stored?.assetId === target.assetId && stored.revision === target.revision) {
+      named.displayName = stored.config.displayName;
+    }
     const found = callable(stored, target);
     if (issuesOf(found.descriptor, input)) throw connectionCallError("input_invalid");
     return found;

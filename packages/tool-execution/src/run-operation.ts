@@ -339,7 +339,11 @@ function recordedResult(
       return {
         status: "failed",
         runId,
-        error: { code: held.error.code, message: held.error.message }
+        error: {
+          code: held.error.code,
+          message: held.error.message,
+          ...(held.error.reason ? { details: { reason: held.error.reason } } : {})
+        }
       };
   }
   throw new AppError("INTERNAL", `Operation run '${runId}' cannot be answered again`);
