@@ -47,6 +47,7 @@ import {
   requireReleaseSync,
   toJsonObject
 } from "./asset-write-rules";
+import { REFUSAL_ORDER, refusalOf, toRefusal, type ItemRefusal } from "./asset-sync-refusals";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
 import type { ChatServerOptions } from "./types";
 
@@ -67,16 +68,6 @@ export interface AssetSyncInput {
   expectedDefaultAgentName?: string | null;
 }
 
-/** Why one item stops the batch. */
-interface ItemRefusal {
-  code: "FORBIDDEN" | "CONFLICT" | "NOT_FOUND" | "VALIDATION_FAILED";
-  message: string;
-  /** The right the caller lacks, for a refusal of rights. */
-  action?: string;
-  /** What the asset is at, for an item made against another revision. */
-  currentRevision?: number | null;
-}
-
 interface PlannedItem {
   index: number;
   item: AssetSyncItem;
@@ -91,9 +82,6 @@ interface PlannedItem {
 
 /** An item that passed the checks of its own input: its kind is registered and it has a name. */
 type ReadyItem = PlannedItem & { name: string; kind: WorkflowAssetKind };
-
-/** Which refusal names the batch's error, where its items were refused for different reasons. */
-const REFUSAL_ORDER = ["FORBIDDEN", "NOT_FOUND", "CONFLICT", "VALIDATION_FAILED"] as const;
 
 const conflictsSchema = z.object({
   conflicts: z.array(
@@ -747,32 +735,6 @@ function writeIssues(check: () => AssetSetIssue[]): AssetSetIssue[] {
   } catch (error) {
     if (isAppError(error) && error.code === "VALIDATION_FAILED") {
       return errorIssues(error);
-    }
-    throw error;
-  }
-}
-
-function toRefusal(error: AppError): ItemRefusal {
-  const code = REFUSAL_ORDER.find((candidate) => candidate === error.code);
-  if (!code) {
-    throw error;
-  }
-  return {
-    code,
-    message: errorIssues(error)
-      .map(({ message }) => message)
-      .join("; ")
-  };
-}
-
-/** Runs a rule of a kind that refuses by throwing, and answers its refusal. */
-function refusalOf(rule: () => void): ItemRefusal | undefined {
-  try {
-    rule();
-    return undefined;
-  } catch (error) {
-    if (isAppError(error)) {
-      return toRefusal(error);
     }
     throw error;
   }
