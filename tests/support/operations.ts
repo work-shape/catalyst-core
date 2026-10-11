@@ -269,6 +269,8 @@ export type TestCallInput = BuildApiPathOptions & {
   headers?: Record<string, string | string[] | undefined>;
   remoteAddress?: string;
   payload?: unknown;
+  /** Query fields the operation does not declare, sent as a caller could send them. */
+  undeclaredQuery?: Record<string, string>;
 };
 
 export interface TestRequest {

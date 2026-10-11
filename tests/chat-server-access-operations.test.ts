@@ -204,6 +204,27 @@ describe("the Operation Run of a grant or Namespace write", () => {
   });
 });
 
+describe("a field the query string names", () => {
+  // Fails without input assembled from the declared parts: the query's holder replaced the
+  // body's, and the grant went to somebody the body did not name.
+  it("does not replace the field of the body: the grant is the body's", async () => {
+    const { t } = await setup();
+    await t.createNamespace("kai-");
+    const response = await t.expectOk(t.admin.id, "permissions.grant", {
+      payload: grantPayload(t.kai.id),
+      undeclaredQuery: { holderId: t.lena.id, action: "agent.delete", stray: "1" }
+    });
+    expect(grantSchema.parse(response.json())).toMatchObject({
+      holderId: t.kai.id,
+      action: "agent.write"
+    });
+    const grants = await t.stores.access.listGrants({ clientInstanceId });
+    expect(grants.map((grant) => [grant.holderId, grant.action])).toEqual([
+      [t.kai.id, "agent.write"]
+    ]);
+  });
+});
+
 describe("a superadmin's rows", () => {
   // Fails without the operation's own check: the policy was asked first, and the refusal came
   // from the handler as a failed run.

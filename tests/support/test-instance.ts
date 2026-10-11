@@ -427,7 +427,7 @@ function bindInstance<S extends PlatformStores>(
       }
       const server = state.server;
       const descriptor = testOperations[operation];
-      const { params, query, method, payload, ...request } = input;
+      const { params, query, method, payload, undeclaredQuery, ...request } = input;
       const identity = typeof as === "string" ? { headers: { "x-dev-user-id": as } } : as;
       if (!server) throw new Error("This store fixture has no HTTP transport");
       const requestPayload =
@@ -438,7 +438,7 @@ function bindInstance<S extends PlatformStores>(
         ...request,
         ...(payload === undefined ? {} : { payload: requestPayload }),
         method: method ?? descriptor.method,
-        url: descriptor.buildPath({ params, query }),
+        url: withUndeclaredQuery(descriptor.buildPath({ params, query }), undeclaredQuery),
         headers: { ...request.headers, ...identity?.headers }
       });
     },
@@ -563,6 +563,11 @@ export async function listTestRoutes(
  * Calls a path that is deliberately not an operation, such as one the API retired. Operations
  * are called by name through `instance.call`.
  */
+function withUndeclaredQuery(path: string, fields: Record<string, string> = {}): string {
+  const extra = new URLSearchParams(fields).toString();
+  return extra ? `${path}${path.includes("?") ? "&" : "?"}${extra}` : path;
+}
+
 export async function callTestPath(
   instance: TestInstance,
   method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",

@@ -338,15 +338,21 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
         if (!caller.identity) {
           throw new AppError("INTERNAL", `Operation '${operation.id}' was reached by nobody`);
         }
-        // The parts are handed on as they arrived: the registry's one schema parses them, and
-        // what it parsed is what the run hashes and the operation receives.
+        // The fields the descriptor declares are handed on as they arrived: the registry's one
+        // schema parses them, and what it parsed is what the run hashes and the operation
+        // receives. A field of the query or the body that the descriptor does not declare there
+        // is left out, so a query string never stands in for a field of the body.
         return face.answer(
           operation,
           {
             identity: caller.identity,
             origin: originOf(caller.identity, request),
             correlationId,
-            input: { ...inputFields(request.body), ...inputFields(request.query), ...params },
+            input: {
+              ...declaredFields(operation.body, request.body),
+              ...declaredFields(operation.query, request.query),
+              ...params
+            },
             idempotencyKey: readIdempotencyKey(request)
           },
           reply
@@ -400,8 +406,18 @@ function originOf(identity: AuthenticatedIdentity, request: FastifyRequest): Ope
 
 const inputFieldsSchema = z.record(z.string(), z.unknown()).catch({});
 
-function inputFields(part: unknown): Record<string, unknown> {
-  return inputFieldsSchema.parse(part ?? {});
+/**
+ * The fields of one part of a request that the descriptor declares for that part. A part the
+ * descriptor declares nothing for gives none, whatever the caller sent in it.
+ */
+function declaredFields(schema: z.ZodType | undefined, part: unknown): Record<string, unknown> {
+  if (!(schema instanceof z.ZodObject)) return {};
+  const sent = inputFieldsSchema.parse(part ?? {});
+  return Object.fromEntries(
+    Object.keys(schema.shape)
+      .filter((name) => Object.hasOwn(sent, name))
+      .map((name) => [name, sent[name]])
+  );
 }
 
 /** The caller's key for the call. It is the one header a call's outcome depends on. */
