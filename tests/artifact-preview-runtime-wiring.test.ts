@@ -183,6 +183,9 @@ describe("artifact preview runtime wiring", () => {
     expect(workspaceRunner).not.toContain("COPY . ");
     expect(workspaceRunner).not.toContain("COPY --from=deps");
     expect(workspaceRunner).toContain('CMD ["/bin/bash"]');
+    // Commands in the runner are not root, and the Page build is checked as that user too.
+    expect(workspaceRunner).toContain("USER 10001:10001");
+    expect(workspaceRunner).toContain('test "$(id -u)" = "10001"');
     expect(previewRuntime).toContain("FROM workspace-artifact-runtime AS artifact-preview-runtime");
     expect(artifactWorker).toContain("FROM artifact-preview-runtime AS artifact-preview-worker");
     expect(artifactWorker).toContain("ARTIFACT_PREVIEW_WORKER_ENTRY");

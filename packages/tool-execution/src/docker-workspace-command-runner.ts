@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { lchown, readdir } from "node:fs/promises";
+import { join } from "node:path";
 import {
   DEFAULT_WORKSPACE_COMMAND_SHELL,
   DEFAULT_WORKSPACE_COMMAND_PATH,
@@ -14,6 +16,65 @@ const SANDBOX_ENV_KEYS = new Set(["HOME", "PATH", "TMPDIR", "WORKSPACE_DIR"]);
 const ENGINE_CHECK_TIMEOUT_SECONDS = 10;
 const DEFAULT_DOCKER_WORKSPACE_COMMAND_MEMORY_BYTES = 4 * 1024 * 1024 * 1024;
 
+/**
+ * The user and the group a command has in the runner container when the worker is root, which
+ * it is in its own container. Both runner images create this user. It is fixed and is not a
+ * setting: an operator who must know which user owns the files of a command reads it here.
+ */
+export const RUNNER_USER_ID = 10001;
+export const RUNNER_GROUP_ID = 10001;
+
+/** Who a command is in the runner container. Never root. */
+export interface RunnerUser {
+  uid: number;
+  gid: number;
+  /**
+   * Whether the worker gives the workspace directory to this user before the command starts.
+   * Only a worker that is root can, and only it has to: any other worker runs the command as
+   * itself.
+   */
+  receivesWorkspace: boolean;
+}
+
+/**
+ * The user of every command in the runner container. A worker that is root runs commands as
+ * `RUNNER_USER_ID`. A worker that is not root, on a developer's machine, cannot give files
+ * away, so the command runs as the worker's own user and the files stay its own. A platform
+ * without user ids runs commands as `RUNNER_USER_ID` too. No case answers root.
+ */
+export function resolveRunnerUser(
+  worker: { uid?: number; gid?: number } = {
+    uid: process.getuid?.(),
+    gid: process.getgid?.()
+  }
+): RunnerUser {
+  if (worker.uid === undefined || worker.uid === 0) {
+    return { uid: RUNNER_USER_ID, gid: RUNNER_GROUP_ID, receivesWorkspace: worker.uid === 0 };
+  }
+  return {
+    uid: worker.uid,
+    // A worker in the group of root keeps its user and gets the runner's group.
+    gid: worker.gid === undefined || worker.gid === 0 ? RUNNER_GROUP_ID : worker.gid,
+    receivesWorkspace: false
+  };
+}
+
+/**
+ * Gives a directory and everything in it to a user. A link is given away itself and is never
+ * followed, so a link a command left cannot name a file outside the directory.
+ */
+async function giveDirectoryTo(directory: string, user: RunnerUser): Promise<void> {
+  await lchown(directory, user.uid, user.gid);
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      await giveDirectoryTo(path, user);
+    } else {
+      await lchown(path, user.uid, user.gid);
+    }
+  }
+}
+
 export interface DockerWorkspaceCommandProcessExecutorOptions {
   image: string;
   dockerPath?: string;
@@ -27,6 +88,8 @@ export interface DockerWorkspaceCommandProcessExecutorOptions {
   containerNamePrefix?: string;
   commandClient?: DockerCommandClient;
   createContainerName?: (input: WorkspaceCommandProcessInput) => string;
+  /** Who commands are in the container. Absent means `resolveRunnerUser()`. Root is refused. */
+  runnerUser?: RunnerUser;
 }
 
 export interface DockerCommandClient {
@@ -73,6 +136,7 @@ export class DockerWorkspaceCommandProcessExecutor implements WorkspaceCommandPr
   > & {
     commandClient: DockerCommandClient;
     createContainerName?: (input: WorkspaceCommandProcessInput) => string;
+    runnerUser: RunnerUser;
   };
 
   constructor(options: DockerWorkspaceCommandProcessExecutorOptions) {
@@ -91,12 +155,37 @@ export class DockerWorkspaceCommandProcessExecutor implements WorkspaceCommandPr
           dockerPath: options.dockerPath ?? "docker",
           endpoint: options.endpoint
         }),
-      createContainerName: options.createContainerName
+      createContainerName: options.createContainerName,
+      runnerUser: options.runnerUser ?? resolveRunnerUser()
     };
+    assertNotRoot(this.options.runnerUser);
   }
 
+  /**
+   * The one place a command starts: workspace commands and the Page build both come through
+   * here, so both run as the runner's user.
+   */
   async execute(input: WorkspaceCommandProcessInput): Promise<ProcessResult> {
     const invocation = createDockerRunInvocation(input, this.options);
+    if (this.options.runnerUser.receivesWorkspace) {
+      const startedAt = Date.now();
+      try {
+        // The worker filled the directory as root. The command must be able to write there.
+        await giveDirectoryTo(input.workspaceDirectory, this.options.runnerUser);
+      } catch (error) {
+        // The command does not start as root instead.
+        return {
+          exitCode: 1,
+          stdoutPreview: "",
+          stderrPreview: "",
+          truncated: { stdout: false, stderr: false },
+          durationMs: Date.now() - startedAt,
+          spawnError: new Error(
+            `The workspace directory could not be given to the runner's user ${this.options.runnerUser.uid}:${this.options.runnerUser.gid}: ${error instanceof Error ? error.message : String(error)}`
+          )
+        };
+      }
+    }
     const result = await this.options.commandClient.run({
       args: invocation.args,
       containerName: invocation.containerName,
@@ -153,8 +242,11 @@ export function createDockerRunInvocation(
     | "pidsLimit"
     | "containerNamePrefix"
     | "createContainerName"
+    | "runnerUser"
   >
 ): DockerRunInvocation {
+  const user = options.runnerUser ?? resolveRunnerUser();
+  assertNotRoot(user);
   const containerName = sanitizeDockerName(
     options.createContainerName?.(input) ??
       `${options.containerNamePrefix ?? "catalyst-workspace-command"}-${input.command.id}-${randomUUID()}`
@@ -173,6 +265,8 @@ export function createDockerRunInvocation(
     String(options.memoryBytes ?? DEFAULT_DOCKER_WORKSPACE_COMMAND_MEMORY_BYTES),
     "--pids-limit",
     String(options.pidsLimit ?? 128),
+    "--user",
+    `${user.uid}:${user.gid}`,
     "--cap-drop",
     "ALL",
     "--security-opt",
@@ -180,9 +274,9 @@ export function createDockerRunInvocation(
     "--ipc",
     "none",
     "--tmpfs",
-    "/tmp:rw,nosuid,nodev,size=64m",
+    `/tmp:rw,nosuid,nodev,size=64m,uid=${user.uid},gid=${user.gid}`,
     "--tmpfs",
-    "/var/tmp:rw,nosuid,nodev,size=64m",
+    `/var/tmp:rw,nosuid,nodev,size=64m,uid=${user.uid},gid=${user.gid}`,
     "--mount",
     `type=bind,source=${input.workspaceDirectory},target=/workspace`,
     "--workdir",
@@ -311,6 +405,17 @@ export function parseDockerContainerListing(output: string): DockerContainerList
         : Number.NaN;
       return { name, ...(Number.isNaN(createdAtMs) ? {} : { createdAtMs }) };
     });
+}
+
+function assertNotRoot(user: RunnerUser): void {
+  if (
+    !Number.isInteger(user.uid) ||
+    !Number.isInteger(user.gid) ||
+    user.uid <= 0 ||
+    user.gid <= 0
+  ) {
+    throw new Error("A command in the runner container never runs as root.");
+  }
 }
 
 function containerWorkspaceCwd(workspaceCwd: string): string {

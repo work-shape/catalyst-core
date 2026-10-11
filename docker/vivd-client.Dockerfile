@@ -94,7 +94,18 @@ RUN chmod +x /opt/catalyst-page-build/dist/cli.js \
   && catalyst-page-build --version \
   && catalyst-page-build --check
 
+# Commands run as this user, never as root. The worker names the same ids on `docker run`
+# (RUNNER_USER_ID in packages/tool-execution/src/docker-workspace-command-runner.ts); the image
+# has the user so that a container started without them is not root either.
+RUN groupadd --gid 10001 catalyst-runner \
+  && useradd --uid 10001 --gid 10001 --home-dir /workspace --no-create-home --shell /bin/bash catalyst-runner \
+  && chown 10001:10001 /workspace
+
+ENV HOME=/workspace
+USER 10001:10001
 WORKDIR /workspace
+RUN test "$(id -u)" = "10001" \
+  && catalyst-page-build --check
 CMD ["/bin/bash"]
 
 FROM base AS deps
