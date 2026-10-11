@@ -208,6 +208,23 @@ describe("the Secret Store", () => {
     expect(required((await readRows())[0]).nonce.equals(before.nonce)).toBe(true);
   });
 
+  it("makes the same value from another source a write, so the secret changes hands", async () => {
+    // Fails without the change: the runtime put answered `changed: false` and the row
+    // stayed the bootstrap's, which a later seed replaces or removes.
+    const store = storeWith();
+    const value = generateTestSecret();
+    await store.put({ binding: first, value, source: "bootstrap" });
+    expect(await store.put({ binding: first, value, source: "runtime" })).toMatchObject({
+      version: 2,
+      changed: true
+    });
+    expect(await store.status(first)).toMatchObject({ state: "set", source: "runtime" });
+    expect(await store.put({ binding: first, value, source: "runtime" })).toMatchObject({
+      version: 2,
+      changed: false
+    });
+  });
+
   it("hands the value to the resolver for the binding of the call and to nothing else", async () => {
     const store = storeWith();
     const value = generateTestSecret();

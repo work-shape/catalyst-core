@@ -242,7 +242,10 @@ export function createSecretStore(options: SecretStoreOptions): SecretStore {
             if (
               stored?.length === plaintext.length &&
               timingSafeEqual(stored, plaintext) &&
-              current.keyId === keyring.encryptingKeyId
+              current.keyId === keyring.encryptingKeyId &&
+              // Who set a secret decides who may replace it. The same value from another
+              // source is a write: it makes the secret the new source's.
+              current.source === source
             ) {
               return { handle: current.handle, version: current.version, changed: false };
             }

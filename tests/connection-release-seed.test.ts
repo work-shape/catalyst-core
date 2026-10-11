@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { connectionConfigSchema, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import { openConnectorContext } from "@vivd-catalyst/connections";
+import {
+  createSecretStore,
+  loadSecretKeyring,
+  openConnectorContext
+} from "@vivd-catalyst/connections";
 import {
   SHARED_CREDENTIAL_SUBJECT,
   asClientInstanceId,
@@ -487,6 +491,36 @@ describe("what stops a start, and what a missing or unreadable secret does", () 
     expect((await readStates()).map((row) => row.health)).toEqual(["unknown"]);
     expect(await call(w, w.env)).toBeUndefined();
     expect(w.connector.calls).toHaveLength(1);
+  });
+
+  it("leaves a secret that was replaced on the instance alone, also with the same value", async () => {
+    // Fails without the source comparison: the replacement stayed bootstrap-owned and the
+    // start below, whose variable is gone, deleted it.
+    const w = world();
+    const first = await w.start();
+    const asset = required((await readAssets())[0]);
+    const store = createSecretStore({
+      clientInstanceId,
+      keyring: await loadSecretKeyring({
+        keys: [{ id: "k1", ref: KEY_VARIABLE }],
+        secrets: { resolve: () => Promise.resolve(w.key) }
+      }),
+      store: first.stores.connections
+    });
+    await store.put({
+      binding: { connectionAssetId: asset.id, subject: SHARED_CREDENTIAL_SUBJECT },
+      value: w.token,
+      source: "runtime"
+    });
+    await first.close();
+    expect(await readSecrets()).toMatchObject([{ version: 2, source: "runtime" }]);
+
+    await (await w.start({ env: { [KEY_VARIABLE]: w.key } })).close();
+    await (await w.start({ env: { ...w.env, [TOKEN_VARIABLE]: generateTestSecret() } })).close();
+    expect(await readSecrets()).toMatchObject([{ version: 2, source: "runtime" }]);
+    expect((await readStates()).map((row) => row.health)).toEqual(["unknown"]);
+    expect(await call(w, w.env)).toBeUndefined();
+    expect(required(w.connector.calls[0]).credential?.secret).toBe(w.token);
   });
 
   it("re-seals a bootstrap secret under a new first key", async () => {
