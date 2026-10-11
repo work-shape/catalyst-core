@@ -4,6 +4,7 @@ import {
   createConnectionOperationSource,
   createConnectionToolSource,
   createEgressChecker,
+  createMcpConnectorType,
   loadSecretKeyring,
   platformStoreTargetsOf,
   seedReleaseConnections,
@@ -130,7 +131,10 @@ async function buildInstanceConnections(
     }
     return undefined;
   }
-  const connectorTypes = createConnectorTypeRegistry(types);
+  const connectorTypes = createConnectorTypeRegistry([
+    createMcpConnectorType({ logger }),
+    ...types
+  ]);
   let keyring: SecretKeyring | undefined;
   if (configured) {
     keyring = await loadSecretKeyring({
