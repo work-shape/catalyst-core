@@ -445,6 +445,84 @@ test("an asset that was deleted meanwhile says so, keeps the text and offers the
   }
 });
 
+test("an agent's availability and the default agent are changed by the asset operations", async ({
+  page
+}) => {
+  const name = "e2e_placement_probe";
+  await signInViaApi(page, superadminUser);
+  await deleteAgent(page, name);
+  const created = await requestWithOrigin(page, "put", agentPath(name), {
+    data: {
+      config: {
+        name,
+        displayName: "Placement Probe",
+        modelProviderId: "local",
+        instructions: "A probe of the Build tests.",
+        toolNames: []
+      }
+    }
+  });
+  expect(created.ok()).toBe(true);
+  try {
+    await page.setViewportSize(WIDE);
+    await page.goto(`/build/agents/${name}`);
+    const everywhere = page.getByRole("radio", { name: "All workspaces" });
+    const selected = page.getByRole("radio", { name: "Selected workspaces" });
+    const personal = page.getByRole("checkbox", { name: "Personal workspaces" });
+    await expect(everywhere).toBeChecked();
+
+    // The availability is saved by the asset operation, whose call is an Operation Run.
+    await selected.click();
+    await personal.click();
+    const saved = page.waitForResponse(
+      (response) =>
+        response.request().method() === "PUT" &&
+        new URL(response.url()).pathname === `/api/v1/assets/agent/${name}/availability`
+    );
+    await page.getByRole("button", { name: "Save availability", exact: true }).click();
+    const answer = await saved;
+    expect(answer.status()).toBe(200);
+    expect(answer.headers()["operation-run-id"]).toBeTruthy();
+    expect(await answer.json()).toEqual({
+      mode: "selected",
+      personalWorkspaces: true,
+      collaborationWorkspaceIds: []
+    });
+    await expect(
+      page.getByRole("button", { name: "Save availability", exact: true })
+    ).toBeDisabled();
+    expect(field(await (await page.request.get(agentPath(name))).json(), "availability")).toEqual({
+      mode: "selected",
+      personalWorkspaces: true,
+      collaborationWorkspaceIds: []
+    });
+
+    // The page that is loaded again shows what was stored.
+    await page.reload();
+    await expect(selected).toBeChecked();
+    await expect(personal).toBeChecked();
+
+    // The default is asked of the asset operation too. An agent that is not offered everywhere
+    // cannot be the default: the instance refuses, the page says so in the instance's words,
+    // and the default every other test runs with stays as it was.
+    const asked = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === "/api/v1/assets/agent/default"
+    );
+    await page.getByRole("button", { name: "Make default", exact: true }).click();
+    const refused = await asked;
+    expect(refused.request().postDataJSON()).toEqual({ name });
+    expect(refused.status()).toBe(422);
+    expect(refused.headers()["operation-run-id"]).toBeTruthy();
+    await expect(
+      page.getByText(`Default agent '${name}' must be available in all workspaces`)
+    ).toBeVisible();
+  } finally {
+    await deleteAgent(page, name);
+  }
+});
+
 test("a long history comes a page at a time", async ({ page }) => {
   const name = "e2e_history_probe";
   await signInViaApi(page, superadminUser);

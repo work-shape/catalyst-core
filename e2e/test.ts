@@ -70,6 +70,15 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     ]
   },
   {
+    name: "refused-default-agent",
+    reason:
+      "Chromium's own log line: the test asks for an agent that is not offered everywhere to " +
+      "become the default, and asserts what the page shows for the 422.",
+    matches: requestAnswered(422),
+    path: /^\/api\/v1\/assets\/agent\/default$/u,
+    tests: ["an agent's availability and the default agent are changed by the asset operations"]
+  },
+  {
     name: "refused-config-asset",
     reason:
       "Chromium's own log line: the test saves an asset that does not validate and one that " +
