@@ -63,6 +63,7 @@ import {
   loadStoredAssets,
   type StoredAssets,
   requireInstanceDefaultChange,
+  requireAssetKindModuleOn,
   requireMatchingConfigName,
   setsInitialDefault,
   toJsonObject
@@ -584,7 +585,9 @@ export class AssetWorkflow {
     });
   }
 
+  /** A kind of a module that is off does not exist here, whatever the store still holds. */
   private kind(kind: string): WorkflowAssetKind {
+    requireAssetKindModuleOn(this.options.modules, kind);
     return this.options.configAssets.kinds.require(kind);
   }
 
@@ -727,8 +730,13 @@ function requireExpectedRevision(target: AssetTarget, expected: number | null): 
 /** What a list shows of one asset. A stored definition its kind no longer reads shows its name. */
 function summarize(kind: WorkflowAssetKind, record: ConfigAssetRecord) {
   try {
-    const { title, description } = kind.summarize(record.config);
-    return { name: record.name, title, ...(description === undefined ? {} : { description }) };
+    const { title, description, attributes } = kind.summarize(record.config);
+    return {
+      name: record.name,
+      title,
+      ...(description === undefined ? {} : { description }),
+      ...(attributes === undefined ? {} : { attributes: { ...attributes } })
+    };
   } catch (error) {
     if (isAppError(error) && error.code === "VALIDATION_FAILED") {
       return { name: record.name, title: record.name };

@@ -10,7 +10,8 @@ export const MODULE_NAMES = [
   "resources",
   "assetManagement",
   "userInvitations",
-  "apps"
+  "apps",
+  "connections"
 ] as const;
 
 export type ModuleName = (typeof MODULE_NAMES)[number];
@@ -88,12 +89,13 @@ export interface ModuleState {
 }
 
 /** What a module can own that a caller reaches by name. */
-export type ModuleContribution = "operation" | "tool" | "jobKind";
+export type ModuleContribution = "operation" | "tool" | "jobKind" | "kind";
 
 const contributionLists = {
   operation: "operations",
   tool: "tools",
-  jobKind: "jobKinds"
+  jobKind: "jobKinds",
+  kind: "kinds"
 } as const satisfies Record<ModuleContribution, keyof ModuleDefinition>;
 
 /** The release config key that switches a module. */

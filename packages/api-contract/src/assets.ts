@@ -59,6 +59,11 @@ export const assetSummarySchema = z.object({
   namespace: z.string().optional(),
   revision: revisionNumberSchema,
   isDefault: isDefaultSchema,
+  /**
+   * What the kind says of the asset beside its name, by the kind's own keys: a Connection
+   * names its `connectorType`, its `origin` and whether it is `enabled`.
+   */
+  attributes: z.record(z.string(), z.union([z.string(), z.boolean()])).optional(),
   updatedAt: timestampSchema
 });
 

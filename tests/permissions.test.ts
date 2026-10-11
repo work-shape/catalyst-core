@@ -15,7 +15,7 @@ import {
 } from "@vivd-catalyst/core";
 
 describe("permissions", () => {
-  it("maps each of the fourteen actions to exactly one of the nine legacy keys", () => {
+  it("maps each action a legacy key names to exactly one of the nine legacy keys", () => {
     expect(ACTIONS).toEqual([
       "agent.read",
       "agent.write",
@@ -24,6 +24,11 @@ describe("permissions", () => {
       "skill.write",
       "skill.delete",
       "skill.approve",
+      "connection.read",
+      "connection.use",
+      "connection.write",
+      "connection.delete",
+      "connection.approve",
       "operations.approve",
       "users.manage",
       "usage.view",
@@ -32,9 +37,16 @@ describe("permissions", () => {
       "agent_models.manage",
       "assets.release"
     ]);
+    // A Connection right came after the legacy keys: no key names one, so nobody holds one
+    // through the legacy column.
+    const keyed = ACTIONS.filter((action) => !action.startsWith("connection."));
+    expect(keyed).toHaveLength(14);
+    for (const action of ACTIONS.filter((candidate) => candidate.startsWith("connection."))) {
+      expect(() => legacyPermissionFor(action), action).toThrow("No legacy permission");
+    }
     expect(Object.keys(LEGACY_PERMISSION_ACTIONS).sort()).toEqual([...PERMISSIONS].sort());
-    expect(Object.values(LEGACY_PERMISSION_ACTIONS).flat().sort()).toEqual([...ACTIONS].sort());
-    for (const action of ACTIONS) {
+    expect(Object.values(LEGACY_PERMISSION_ACTIONS).flat().sort()).toEqual([...keyed].sort());
+    for (const action of keyed) {
       const keys = PERMISSIONS.filter((permission) =>
         LEGACY_PERMISSION_ACTIONS[permission].some((candidate) => candidate === action)
       );
@@ -84,6 +96,11 @@ describe("permissions", () => {
       "skill.write",
       "skill.delete",
       "skill.approve",
+      "connection.read",
+      "connection.use",
+      "connection.write",
+      "connection.delete",
+      "connection.approve",
       "operations.approve",
       "users.manage",
       "usage.view",
@@ -105,9 +122,14 @@ describe("permissions", () => {
       PERMISSIONS.filter((permission) => permission !== "config_assets.release")
     );
     for (const role of ["user", "admin", "superadmin"] as const) {
-      expect(new Set(ROLE_DEFAULT_ACTIONS[role].map(legacyPermissionFor))).toEqual(
-        new Set(ROLE_DEFAULT_PERMISSIONS[role])
-      );
+      // The legacy keys of a role name what they named: a Connection right has no key.
+      expect(
+        new Set(
+          ROLE_DEFAULT_ACTIONS[role]
+            .filter((action) => !action.startsWith("connection."))
+            .map(legacyPermissionFor)
+        )
+      ).toEqual(new Set(ROLE_DEFAULT_PERMISSIONS[role]));
     }
   });
 

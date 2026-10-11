@@ -4,7 +4,9 @@ import {
   asUserId,
   auditActorFromUser,
   isGrantableAction,
+  isGrantableAt,
   isPlatformAction,
+  moduleOffError,
   isSuperadmin,
   listAccessEntries,
   type AccessEntry,
@@ -125,6 +127,17 @@ export class AccessWorkflow {
       throw refused(
         "action_not_grantable",
         `'${command.action}' cannot be granted in a Namespace or on one asset`
+      );
+    }
+    // The action carries its kind. A kind of a module that is off has no rights to hand out.
+    const module = this.options.modules.offModuleOf("kind", kindOfAction(command.action));
+    if (module !== undefined) {
+      throw moduleOffError(module);
+    }
+    if (!isGrantableAt(command.action, command.scopeKind)) {
+      throw refused(
+        "invalid_scope",
+        `'${command.action}' cannot be granted at the scope kind '${command.scopeKind}'`
       );
     }
     const scope = await this.grantScope(command);
@@ -312,12 +325,23 @@ export class AccessWorkflow {
         assetId: command.scopeId
       });
       // The action carries the kind, so a skill action on an agent could never match.
-      if (!asset || !command.action.startsWith(`${asset.kind}.`)) {
+      if (!asset || asset.kind !== kindOfAction(command.action)) {
         throw refused("invalid_scope", "The asset is not an active asset of the action's kind");
       }
       return { scopeKind: "asset", scopeId: asset.id };
     }
-    throw refused("invalid_scope", "A grant can be written for a Namespace or one asset only");
+    if (command.scopeKind === "workspace") {
+      if (command.scopeId === undefined || command.namespace !== undefined) {
+        throw refused("invalid_scope", "A workspace grant names a workspace id and no Namespace");
+      }
+      // The store refuses a workspace that is not a Shared Workspace of this instance, under
+      // the lock that keeps a row from appearing while the workspace is deleted.
+      return { scopeKind: "workspace", scopeId: command.scopeId };
+    }
+    throw refused(
+      "invalid_scope",
+      "A grant can be written for a Namespace, one asset or one workspace only"
+    );
   }
 
   /** An entry of a list must exist on this instance: an enabled tool, a known model binding. */
@@ -450,6 +474,11 @@ export class AccessWorkflow {
       metadata
     });
   }
+}
+
+/** The asset kind an action is a right of: `agent` of `agent.read`. */
+function kindOfAction(action: string): string {
+  return action.slice(0, action.indexOf("."));
 }
 
 function refused(reason: string, message: string): AppError {

@@ -63,12 +63,24 @@ const appsModule = defineModule({
   commandWorkerJobKinds: ["page.bundle"]
 });
 
+/**
+ * Connections: the asset kind that holds the access to an outside system, and its list in
+ * Build. Off, the kind does not exist on the instance: no call reads, lists or writes one and
+ * no right on one is handed out. What the store holds stays and is inactive.
+ */
+const connectionsModule = defineModule({
+  name: "connections",
+  kinds: ["connection"],
+  ui: ["build.connections"]
+});
+
 /** The modules whose code ships with the platform. A capability declares its own. */
 export const platformModules = [
   resourcesModule,
   assetManagementModule,
   userInvitationsModule,
-  appsModule
+  appsModule,
+  connectionsModule
 ];
 
 export interface InstanceModules {

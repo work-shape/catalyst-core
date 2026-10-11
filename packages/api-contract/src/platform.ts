@@ -19,6 +19,11 @@ export const platformContextSchema = z.object({
   instance: z.object({ id: z.string(), name: z.string() }),
   release: z.object({ version: z.string() }),
   kinds: z.array(platformAssetKindSchema),
+  /**
+   * The actions of the listed kinds the caller can use on the instance's own assets as a
+   * whole, whatever their names. A right in one Namespace or on one asset is not among them.
+   */
+  actions: z.array(z.string()),
   namespaces: z.array(platformContextNamespaceSchema)
 });
 

@@ -57,6 +57,11 @@ export interface AssetSummary {
   name: string;
   title: string;
   description?: string;
+  /**
+   * What a list shows of the asset beside its name, by the kind's own keys, such as the
+   * connector type of a Connection. Nothing of it is secret and nothing of it decides a right.
+   */
+  attributes?: Readonly<Record<string, string | boolean>>;
 }
 
 export interface AssetKindDefinition<Definition, Kind extends string = string> {

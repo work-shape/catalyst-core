@@ -69,6 +69,7 @@ export function registerPlatformRoutes(route: Route, options: ChatServerOptions)
           plural: kind.plural,
           actions: { ...kind.actions }
         })),
+        actions: usableActions(options, { access, actor }),
         namespaces: namespaces.flatMap((namespace) => {
           const actions = usableActions(options, { access, actor }, namespace.prefix);
           return actions.length > 0

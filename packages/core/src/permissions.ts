@@ -32,6 +32,11 @@ export const ACTIONS = [
   "skill.write",
   "skill.delete",
   "skill.approve",
+  "connection.read",
+  "connection.use",
+  "connection.write",
+  "connection.delete",
+  "connection.approve",
   "operations.approve",
   "users.manage",
   "usage.view",
@@ -159,24 +164,44 @@ export const NAMESPACE_PREFIX_PATTERN = /^[a-z][a-z0-9]*(-[a-z0-9]+)*-$/u;
 export const NAMESPACE_PREFIX_MIN_LENGTH = 2;
 export const NAMESPACE_PREFIX_MAX_LENGTH = 32;
 
-/** The actions a grant row can be written for until the slice that brings each further check. */
-export const GRANTABLE_ACTIONS = [
-  "agent.read",
-  "agent.write",
-  "agent.delete",
-  "skill.read",
-  "skill.write",
-  "skill.delete"
-] as const satisfies readonly PlatformAction[];
+/**
+ * The actions a grant row can be written for, each with the scope kinds it can be written at,
+ * until the slice that brings each further check. No row is written at instance scope: the
+ * whole instance is a role's.
+ */
+export const GRANTABLE_ACTION_SCOPES = {
+  "agent.read": ["namespace", "asset"],
+  "agent.write": ["namespace", "asset"],
+  "agent.delete": ["namespace", "asset"],
+  "skill.read": ["namespace", "asset"],
+  "skill.write": ["namespace", "asset"],
+  "skill.delete": ["namespace", "asset"],
+  // Reading and using a Connection are granted on one Connection or on what a workspace owns.
+  // Writing, deleting and approving stay with the role until a slice opens them.
+  "connection.read": ["asset", "workspace"],
+  "connection.use": ["asset", "workspace"]
+} as const satisfies Partial<
+  Record<PlatformAction, readonly Exclude<PermissionGrant["scopeKind"], "instance">[]>
+>;
 
-export type GrantableAction = (typeof GRANTABLE_ACTIONS)[number];
+export type GrantableAction = keyof typeof GRANTABLE_ACTION_SCOPES;
+
+export const GRANTABLE_ACTIONS: readonly GrantableAction[] = ACTIONS.filter(isGrantableAction);
 
 export function isPlatformAction(action: string): action is PlatformAction {
   return ACTIONS.some((candidate) => candidate === action);
 }
 
 export function isGrantableAction(action: string): action is GrantableAction {
-  return GRANTABLE_ACTIONS.some((candidate) => candidate === action);
+  return Object.hasOwn(GRANTABLE_ACTION_SCOPES, action);
+}
+
+/** Whether a grant row of the action can be written at the scope kind. */
+export function isGrantableAt(
+  action: GrantableAction,
+  scopeKind: PermissionGrant["scopeKind"]
+): boolean {
+  return GRANTABLE_ACTION_SCOPES[action].some((candidate) => candidate === scopeKind);
 }
 
 /** The one test of the superadmin role. */

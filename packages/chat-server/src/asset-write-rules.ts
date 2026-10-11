@@ -314,6 +314,17 @@ export function itemWriteDecision(
   return { allowed: true };
 }
 
+/** Refuses a call that names an asset kind of a module that is off, as a call of that module. */
+export function requireAssetKindModuleOn(
+  modules: ChatServerOptions["modules"],
+  kind: string
+): void {
+  const module = modules.offModuleOf("kind", kind);
+  if (module !== undefined) {
+    throw moduleOffError(module);
+  }
+}
+
 /** Refuses a write where changing assets is off, as a call of an operation of the module. */
 export function requireAssetManagementOn(
   options: Pick<ChatServerOptions, "modules">,

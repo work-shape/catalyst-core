@@ -40,6 +40,7 @@ import {
   missingUpsertRightOf,
   preparedUpsert,
   releaseInitialAvailability,
+  requireAssetKindModuleOn,
   requireAssetManagementOn,
   requireNamespaceOrRelease,
   requireReleaseSync,
@@ -552,6 +553,7 @@ function isReady(entry: PlannedItem): entry is ReadyItem {
 function planItems(options: ChatServerOptions, input: AssetSyncInput): PlannedItem[] {
   const seen = new Set<string>();
   return input.items.map((item, index): PlannedItem => {
+    requireAssetKindModuleOn(options.modules, item.kind);
     const kind = options.configAssets.kinds.get(item.kind);
     const name = item.type === "put" ? readDefinitionName(item.config) : item.name;
     const base = { index, item, ...(name === undefined ? {} : { name }) };

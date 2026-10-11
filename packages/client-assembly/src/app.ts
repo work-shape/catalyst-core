@@ -8,6 +8,7 @@ import {
   REASONING_EFFORTS,
   StoreBackedAuditRecorder,
   createAssetKindRegistry,
+  createConnectorTypeRegistry,
   type AgentConfig,
   type ApprovalRequestHandlerRegistry,
   type StructuredDataPublicationReviewer
@@ -15,6 +16,7 @@ import {
 import {
   createSkillChangeApprovalHandler,
   createAgentAssetKind,
+  createConnectionAssetKind,
   createChatServer,
   createChatServerJobs,
   createSkillAssetKind
@@ -358,7 +360,11 @@ export async function createClientInstanceExecutionAssembly(
         validationRefs,
         validateAgents
       }),
-      createSkillAssetKind({ config })
+      createSkillAssetKind({ config }),
+      // No Connector type ships yet: the first one registers here with its assembly.
+      ...(modules.isEnabled("connections")
+        ? [createConnectionAssetKind({ connectorTypes: createConnectorTypeRegistry([]) })]
+        : [])
     ]),
     validationRefs
   };

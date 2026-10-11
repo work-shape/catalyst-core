@@ -40,8 +40,16 @@ describe("platform.context.get", () => {
     expect(context.namespaces).toEqual([
       { prefix: "kai-", displayName: "kai-", actions: ["agent.write"] }
     ]);
+    // A right in one Namespace is no right on the instance's assets as a whole.
+    expect(context.actions).toEqual([]);
     // No field for modules: the module slice adds it.
-    expect(Object.keys(context).sort()).toEqual(["instance", "kinds", "namespaces", "release"]);
+    expect(Object.keys(context).sort()).toEqual([
+      "actions",
+      "instance",
+      "kinds",
+      "namespaces",
+      "release"
+    ]);
   });
 
   it("lists no Namespace for a user who holds nothing, and an administrator's actions less a deny", async () => {
@@ -54,6 +62,7 @@ describe("platform.context.get", () => {
     );
     expect(lena.kinds).toEqual(kinds);
     expect(lena.namespaces).toEqual([]);
+    expect(lena.actions).toEqual([]);
 
     const admin = platformContextSchema.parse(
       (await t.expectOk(t.admin.id, "platform.context.get")).json()
@@ -64,6 +73,16 @@ describe("platform.context.get", () => {
         displayName: "kai-",
         actions: ["agent.read", "agent.write", "skill.read", "skill.write", "skill.delete"]
       }
+    ]);
+    // On the instance's assets as a whole the role holds every action: the deny names one
+    // Namespace.
+    expect(admin.actions).toEqual([
+      "agent.read",
+      "agent.write",
+      "agent.delete",
+      "skill.read",
+      "skill.write",
+      "skill.delete"
     ]);
   });
 

@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   AppError,
   asClientInstanceId,
@@ -14,6 +14,7 @@ import {
 import { keysetFilter } from "../paging";
 import type { PostgresConnection, PostgresTransaction } from "../postgres-database";
 import {
+  collaborationWorkspaces,
   configAssets,
   namespaces,
   permissionGrants,
@@ -105,6 +106,30 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
             throw new AppError("VALIDATION_FAILED", "Namespace is not registered", {
               reason: "unknown_namespace"
             });
+          }
+        }
+        if (input.scopeKind === "workspace") {
+          // What a Shared Workspace owns. A Personal Workspace is one person's and shares
+          // nothing. Held until the row is written: the deletion of the workspace removes
+          // the rows that name it, so none may appear once it was requested.
+          const [workspace] = await tx
+            .select({ id: collaborationWorkspaces.id })
+            .from(collaborationWorkspaces)
+            .where(
+              and(
+                eq(collaborationWorkspaces.clientInstanceId, input.clientInstanceId),
+                eq(collaborationWorkspaces.id, input.scopeId ?? ""),
+                eq(collaborationWorkspaces.kind, "shared"),
+                isNull(collaborationWorkspaces.deletionRequestedAt)
+              )
+            )
+            .for("share");
+          if (!workspace) {
+            throw new AppError(
+              "VALIDATION_FAILED",
+              "The workspace is not a Shared Workspace of this instance",
+              { reason: "invalid_scope" }
+            );
           }
         }
         const [row] = await tx

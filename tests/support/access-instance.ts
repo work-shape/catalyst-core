@@ -7,6 +7,7 @@ import {
   StoreBackedAuditRecorder,
   asApiCredentialId,
   asClientInstanceId,
+  type CollaborationWorkspaceId,
   asServicePrincipalId,
   createAssetKindRegistry,
   type UserRecord,
@@ -28,11 +29,15 @@ import {
 export const clientInstanceId = asClientInstanceId("demo-local");
 export const otherClientInstanceId = asClientInstanceId("another-instance");
 
+/** The modules that are on beside the ones the config turns on by itself. */
+type ModuleSwitches = Record<string, { enabled: boolean }>;
+
 /** The editing limits of the instance. Each test instance may set its own. */
 type EditingLimits = Record<string, boolean | string[]>;
 
-const configWith = (editingLimits: EditingLimits) =>
+const configWith = (editingLimits: EditingLimits, modules: ModuleSwitches = {}) =>
   parseClientInstanceConfig({
+    modules,
     version: 1,
     clientInstance: {
       id: clientInstanceId,
@@ -184,7 +189,7 @@ export interface AccessInstance {
   grant(
     holderId: string,
     action: string,
-    scope: { namespace: string } | { assetId: string },
+    scope: { namespace: string } | { assetId: string } | { workspaceId: string },
     effect?: "allow" | "deny"
   ): Promise<string>;
   putAgent(
@@ -192,7 +197,9 @@ export interface AccessInstance {
     name: string,
     overrides?: Record<string, unknown>
   ): Promise<AccessResponse>;
-  assetId(kind: "agent" | "skill", name: string): Promise<string>;
+  assetId(kind: string, name: string): Promise<string>;
+  /** A Shared Workspace the administrator created. Returns its id. */
+  sharedWorkspace(name: string): Promise<CollaborationWorkspaceId>;
 }
 
 export interface AccessInstanceOptions {
@@ -206,13 +213,15 @@ export interface AccessInstanceOptions {
   furtherKinds?: WorkflowAssetKind[];
   /** The model bindings that support fast mode. */
   fastModeModelBindingIds?: string[];
+  /** Switches of `modules`, such as `{ connections: { enabled: true } }`. */
+  modules?: ModuleSwitches;
 }
 
 export async function setupAccessInstance(
   options: AccessInstanceOptions = {}
 ): Promise<AccessInstance> {
   const { operations, furtherToolNames = [], editingLimits = {}, furtherKinds = [] } = options;
-  const config = configWith(editingLimits);
+  const config = configWith(editingLimits, options.modules);
   const validationRefs = {
     modelProviderIds: ["local"],
     modelBindingIds: ["plain", "other"],
@@ -302,7 +311,7 @@ export async function setupAccessInstance(
   const grant = async (
     holderId: string,
     action: string,
-    scope: { namespace: string } | { assetId: string },
+    scope: { namespace: string } | { assetId: string } | { workspaceId: string },
     effect: "allow" | "deny" = "allow"
   ) => {
     const response = await expectOk(admin.id, "permissions.grant", {
@@ -313,7 +322,9 @@ export async function setupAccessInstance(
         effect,
         ...("namespace" in scope
           ? { scopeKind: "namespace", namespace: scope.namespace }
-          : { scopeKind: "asset", scopeId: scope.assetId })
+          : "workspaceId" in scope
+            ? { scopeKind: "workspace", scopeId: scope.workspaceId }
+            : { scopeKind: "asset", scopeId: scope.assetId })
       }
     });
     return grantSchema.parse(response.json()).id;
@@ -323,7 +334,7 @@ export async function setupAccessInstance(
       params: { kind: "agent", name },
       payload: { config: agent(name, overrides) }
     });
-  const assetId = async (kind: "agent" | "skill", name: string) => {
+  const assetId = async (kind: string, name: string) => {
     const asset = await stores.configAssets.getConfigAsset({ clientInstanceId, kind, name });
     if (!asset) throw new Error(`No ${kind} '${name}'`);
     return asset.id;
@@ -342,6 +353,15 @@ export async function setupAccessInstance(
     createNamespace,
     grant,
     putAgent,
-    assetId
+    assetId,
+    sharedWorkspace: async (name) =>
+      (
+        await stores.workspaces.createWorkspace({
+          clientInstanceId,
+          kind: "shared",
+          name,
+          creatorUserId: admin.id
+        })
+      ).id
   };
 }

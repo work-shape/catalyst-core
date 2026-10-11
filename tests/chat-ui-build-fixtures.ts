@@ -1,9 +1,25 @@
 import type { PlatformContext } from "@vivd-catalyst/api-client";
+import { LEGACY_PERMISSION_ACTIONS, isPermission } from "@vivd-catalyst/core";
 
 export type Namespaces = PlatformContext["namespaces"];
 
-/** What the instance answers a caller who holds the given Namespaces. */
-export function platformContext(namespaces: Namespaces = []): PlatformContext {
+/** The actions on agents and skills the instance names for a session with these legacy keys. */
+export function instanceActions(permissions: readonly string[]): string[] {
+  return permissions
+    .filter(isPermission)
+    .flatMap((permission) => [...LEGACY_PERMISSION_ACTIONS[permission]])
+    .filter((action) => action.startsWith("agent.") || action.startsWith("skill."))
+    .filter((action) => !action.endsWith(".approve"));
+}
+
+/**
+ * What the instance answers a caller who holds the given Namespaces and, on the instance's
+ * assets as a whole, the given actions.
+ */
+export function platformContext(
+  namespaces: Namespaces = [],
+  actions: string[] = []
+): PlatformContext {
   return {
     instance: { id: "client", name: "Catalyst" },
     release: { version: "1.4.0" },
@@ -19,6 +35,7 @@ export function platformContext(namespaces: Namespaces = []): PlatformContext {
         actions: { read: "skill.read", write: "skill.write", delete: "skill.delete" }
       }
     ],
+    actions,
     namespaces
   };
 }

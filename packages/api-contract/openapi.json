@@ -11978,6 +11978,22 @@
             "type": "boolean",
             "const": true
           },
+          "attributes": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            }
+          },
           "updatedAt": {
             "$ref": "#/components/schemas/Timestamp"
           }
@@ -16908,6 +16924,12 @@
               "$ref": "#/components/schemas/PlatformAssetKind"
             }
           },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "namespaces": {
             "type": "array",
             "items": {
@@ -16919,6 +16941,7 @@
           "instance",
           "release",
           "kinds",
+          "actions",
           "namespaces"
         ]
       },

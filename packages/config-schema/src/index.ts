@@ -1,4 +1,5 @@
 export * from "./schemas";
+export * from "./connection-schema";
 export * from "./infrastructure";
 export * from "./validation";
 export * from "./asset-validation";

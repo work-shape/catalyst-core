@@ -595,6 +595,16 @@ export async function deleteWorkspaceOwnedAssets(
     eq(configAssets.scopeKind, "workspace"),
     eq(configAssets.scopeId, input.collaborationWorkspaceId)
   );
+  // The grant rows that name the workspace itself as their scope cover what it owns.
+  await tx
+    .delete(permissionGrants)
+    .where(
+      and(
+        eq(permissionGrants.clientInstanceId, input.clientInstanceId),
+        eq(permissionGrants.scopeKind, "workspace"),
+        eq(permissionGrants.scopeId, input.collaborationWorkspaceId)
+      )
+    );
   const [any] = await tx.select({ id: configAssets.id }).from(configAssets).where(owned).limit(1);
   if (!any) {
     return;

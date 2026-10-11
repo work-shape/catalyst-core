@@ -589,7 +589,8 @@ describe("tenant and holder boundaries of the access store", () => {
 
   it("answers a workspace row for its workspace only", async () => {
     const t = await setup();
-    // No operation writes a workspace row yet; the table and the evaluator already hold one.
+    // No operation writes a workspace row for an agent right; the store writes one itself.
+    const workspace = { id: await t.sharedWorkspace("Team") };
     await t.stores.access.createGrant({
       clientInstanceId,
       holderKind: "user",
@@ -597,7 +598,7 @@ describe("tenant and holder boundaries of the access store", () => {
       action: "agent.write",
       effect: "allow",
       scopeKind: "workspace",
-      scopeId: "workspace-1",
+      scopeId: workspace.id,
       grantedBy: asUserId(t.admin.id)
     });
     const access = await createAuthorizer(t.stores.access).forActor({
@@ -609,7 +610,7 @@ describe("tenant and holder boundaries of the access store", () => {
       clientInstanceId,
       authSource: "test"
     });
-    expect(access.authorize("agent.write", { workspaceId: "workspace-1" })).toEqual({
+    expect(access.authorize("agent.write", { workspaceId: workspace.id })).toEqual({
       allowed: true,
       source: "grant"
     });

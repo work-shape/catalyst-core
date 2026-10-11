@@ -1,0 +1,535 @@
+import { describe, expect, it } from "vitest";
+import { z } from "zod";
+import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
+import { connectionConfigSchema, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import {
+  CONNECTION_MAX_ACCEPTED_OPERATIONS,
+  asClientInstanceId,
+  createConnectionSecretHandle,
+  createConnectorTypeRegistry,
+  findConnectorTypeIssues,
+  type JsonObject
+} from "@vivd-catalyst/core";
+import { agent, clientInstanceId, errorSchema } from "./support/access-instance";
+import { assetPageSchema } from "./support/asset-operations";
+import {
+  FIXTURE_SECRET_HANDLE,
+  connection,
+  fixtureConnectorType,
+  fixtureConnectorTypes,
+  setupConnectionInstance
+} from "./support/connections";
+import { createTestConfig } from "./support/fixtures";
+import { createTestInstance, getTestConfig } from "./support/test-instance";
+
+// The Connection kind: what its definition may hold, that a secret has no place in it, that
+// no asset operation writes one before runtime authoring, and that the kind does not exist
+// while its module is off.
+
+/** A text that stands for a credential. No answer, row or issue below may repeat it. */
+const SECRET = "sk-live-9f8e7d6c5b4a";
+
+const validationSchema = z.object({
+  valid: z.boolean(),
+  issues: z.array(z.object({ message: z.string(), path: z.array(z.string()).optional() }))
+});
+
+function issuesOf(config: unknown) {
+  const parsed = connectionConfigSchema.safeParse(config);
+  return parsed.success
+    ? []
+    : parsed.error.issues.map((issue) => ({
+        path: issue.path.join("."),
+        message: issue.message
+      }));
+}
+
+describe("the definition of a Connection", () => {
+  it("reads a definition and fills what it leaves out", () => {
+    const parsed = connectionConfigSchema.parse({
+      name: "exampledata",
+      displayName: "Exampledata",
+      connectorType: "mcp",
+      ownerPrincipalId: "system",
+      authScheme: "bearer",
+      operations: [{ name: "list_clients", effect: "reading" }],
+      origin: "release"
+    });
+    expect(parsed).toEqual({
+      name: "exampledata",
+      displayName: "Exampledata",
+      connectorType: "mcp",
+      ownerPrincipalId: "system",
+      settings: {},
+      authScheme: "bearer",
+      credentialMode: "shared",
+      // No exposure means callable by nobody.
+      operations: [{ name: "list_clients", effect: "reading", exposure: [], enabled: true }],
+      enabled: true,
+      origin: "release"
+    });
+  });
+
+  it("refuses a credential in the settings and never repeats it", () => {
+    const refused: Array<[string, JsonObject, string]> = [
+      ["userinfo", { url: `https://user:${SECRET}@host.example.test/mcp` }, "settings.url"],
+      ["user name alone", { url: `https://${SECRET}@host.example.test/mcp` }, "settings.url"],
+      [
+        "query parameter",
+        { url: `https://host.example.test/mcp?api_key=${SECRET}` },
+        "settings.url"
+      ],
+      [
+        "database address",
+        { dsn: `postgres://reader:${SECRET}@db.example.test:5432/app` },
+        "settings.dsn"
+      ],
+      ["header", { headers: { "X-Api-Key": SECRET } }, "settings.headers.X-Api-Key"],
+      [
+        "authorization header",
+        { headers: { Authorization: SECRET } },
+        "settings.headers.Authorization"
+      ],
+      ["bearer value", { extra: [`Bearer ${SECRET}`] }, "settings.extra.0"],
+      ["named key", { clientSecret: SECRET }, "settings.clientSecret"],
+      ["token", { nested: { access_token: SECRET } }, "settings.nested.access_token"]
+    ];
+    for (const [label, settings, path] of refused) {
+      const issues = issuesOf(connection("outside", { settings }));
+      expect(issues, label).toHaveLength(1);
+      expect(issues[0]?.path, label).toBe(path);
+      expect(issues[0]?.message, label).toMatch(/^credential_in_settings: /u);
+      expect(JSON.stringify(issues), label).not.toContain(SECRET);
+    }
+  });
+
+  it("keeps settings that only name where a credential goes", () => {
+    const settings = {
+      url: "https://host.example.test/mcp?tenant=acme",
+      headerName: "X-Api-Key",
+      requiresToken: true,
+      schemas: ["public"]
+    };
+    expect(issuesOf(connection("outside", { settings }))).toEqual([]);
+  });
+
+  it("holds a handle of the Secret Store and nothing else where the handle belongs", () => {
+    expect(
+      issuesOf(connection("outside", { secretHandle: createConnectionSecretHandle() }))
+    ).toEqual([]);
+    const pasted = issuesOf(connection("outside", { secretHandle: SECRET }));
+    expect(pasted).toEqual([
+      {
+        path: "secretHandle",
+        message: "secretHandle must be a handle of the Secret Store, never a secret"
+      }
+    ]);
+    // A field the schema does not name is refused, so no secret travels beside the handle.
+    for (const field of ["secret", "token", "credential"]) {
+      const issues = issuesOf(connection("outside", { [field]: SECRET }));
+      expect(issues.map((issue) => issue.message).join(" "), field).toContain("Unrecognized key");
+      expect(JSON.stringify(issues), field).not.toContain(SECRET);
+    }
+  });
+
+  it("accepts a policy that tightens and no other", () => {
+    const withPolicy = (effect: string, policy: string) =>
+      issuesOf(
+        connection("outside", { operations: [{ name: "write", effect, exposure: [], policy }] })
+      );
+    expect(withPolicy("changing", "approval")).toEqual([]);
+    expect(withPolicy("changing", "deny")).toEqual([]);
+    expect(withPolicy("reading", "deny")).toEqual([]);
+    expect(withPolicy("reading", "approval")).toEqual([
+      {
+        path: "operations.0.policy",
+        message: "Only a changing operation can carry the policy 'approval'"
+      }
+    ]);
+    // Loosening is the instance's setting and no value of a Connection.
+    expect(withPolicy("changing", "allow")).toHaveLength(1);
+    expect(withPolicy("changing", "confirm")).toHaveLength(1);
+  });
+
+  it("refuses an operation without an effect, a doubled operation and too many of them", () => {
+    expect(
+      issuesOf(connection("outside", { operations: [{ name: "echo", exposure: ["agent"] }] }))
+    ).toMatchObject([{ path: "operations.0.effect" }]);
+    expect(
+      issuesOf(
+        connection("outside", {
+          operations: [
+            { name: "echo", effect: "reading" },
+            { name: "echo", effect: "changing" }
+          ]
+        })
+      )
+    ).toEqual([{ path: "operations.1.name", message: "Duplicate operation: echo" }]);
+    const many = Array.from({ length: CONNECTION_MAX_ACCEPTED_OPERATIONS + 1 }, (_, index) => ({
+      name: `tool_${index}`,
+      effect: "reading"
+    }));
+    expect(issuesOf(connection("outside", { operations: many }))).toEqual([
+      {
+        path: "operations",
+        message: `A Connection accepts at most ${CONNECTION_MAX_ACCEPTED_OPERATIONS} operations (CONNECTION_MAX_ACCEPTED_OPERATIONS)`
+      }
+    ]);
+    expect(issuesOf(connection("outside", { operations: many.slice(1) }))).toEqual([]);
+  });
+
+  it("refuses a name that could not end an operation name, and a personal credential", () => {
+    for (const name of ["Outside", "out.side", "out side", "-outside", "x".repeat(65)]) {
+      expect(issuesOf(connection(name)), name).toMatchObject([{ path: "name" }]);
+    }
+    expect(issuesOf(connection("kai-outside_2"))).toEqual([]);
+    expect(issuesOf(connection("outside", { credentialMode: "user" }))).toMatchObject([
+      { path: "credentialMode" }
+    ]);
+  });
+});
+
+describe("the Connector types of a build", () => {
+  it("refuses a type registered twice or with a malformed id", () => {
+    expect(() => createConnectorTypeRegistry([fixtureConnectorType, fixtureConnectorType])).toThrow(
+      "Connector type 'fixture' is registered more than once"
+    );
+    expect(() =>
+      createConnectorTypeRegistry([{ ...fixtureConnectorType, type: "Fixture.Type" }])
+    ).toThrow("must be lowercase words joined by underscores");
+    expect(fixtureConnectorTypes.get("fixture")).toBe(fixtureConnectorType);
+    expect(fixtureConnectorTypes.get("mcp")).toBeUndefined();
+  });
+
+  it("refuses a Connection of a type the build does not ship, and settings the type does not read", () => {
+    const check = (overrides: Record<string, unknown>) =>
+      findConnectorTypeIssues(fixtureConnectorTypes, {
+        connectorType: "fixture",
+        settings: { url: "https://outside.example.test/mcp" },
+        authScheme: "bearer",
+        ...overrides
+      });
+    expect(check({})).toEqual([]);
+    expect(check({ connectorType: "mcp" })).toEqual([
+      {
+        message: "connector_type_unknown: this instance has no connector type 'mcp'",
+        path: ["connectorType"]
+      }
+    ]);
+    expect(
+      check({ settings: { url: "https://outside.example.test", note: SECRET } })
+    ).toMatchObject([{ path: ["settings"] }]);
+    expect(JSON.stringify(check({ settings: { note: SECRET } }))).not.toContain(SECRET);
+    expect(check({ authScheme: "oauth" })).toEqual([
+      {
+        message: "Connector type 'fixture' offers the auth schemes: none, bearer",
+        path: ["authScheme"]
+      }
+    ]);
+  });
+});
+
+describe("a Connection through the asset operations", () => {
+  const put = (name: string, overrides = {}) => ({
+    params: { kind: "connection", name },
+    payload: { config: connection(name, overrides) }
+  });
+  const authoringRefused = {
+    status: 422,
+    code: "VALIDATION_FAILED",
+    details: { reason: "connection_runtime_authoring_unavailable" }
+  };
+
+  it("refuses an administrator's put, and stores nothing", async () => {
+    const t = await setupConnectionInstance();
+    const refused = await t.expectRefused(
+      t.admin.id,
+      "assets.put",
+      put("outside"),
+      authoringRefused
+    );
+    expect(refused.message).toMatch(/^connection_runtime_authoring_unavailable: /u);
+    // A superadmin is refused the same: the refusal is no missing right.
+    await t.expectRefused(t.root.id, "assets.put", put("outside"), authoringRefused);
+    expect(
+      await t.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: "connection",
+        name: "outside"
+      })
+    ).toBeUndefined();
+  });
+
+  it("refuses every write of a stored Connection: put, revert, delete and a batch", async () => {
+    const t = await setupConnectionInstance();
+    await t.seed("outside");
+    const address = { params: { kind: "connection", name: "outside" } };
+    // A put that changes it, and one that leaves it as it is stored.
+    await t.expectRefused(
+      t.admin.id,
+      "assets.put",
+      put("outside", { enabled: false }),
+      authoringRefused
+    );
+    await t.expectRefused(t.admin.id, "assets.put", put("outside"), authoringRefused);
+    await t.expectRefused(
+      t.admin.id,
+      "assets.revert",
+      { ...address, payload: { revision: 1 } },
+      authoringRefused
+    );
+    await t.expectRefused(t.admin.id, "assets.delete", address, authoringRefused);
+    // A batch of a Namespace holder, and a release, which carries agents and skills only.
+    await t.createNamespace("kai-");
+    const batch = await t.call(t.admin.id, "assets.sync", {
+      payload: {
+        namespace: "kai-",
+        items: [{ type: "put", kind: "connection", config: connection("kai-outside") }]
+      }
+    });
+    expect(batch.statusCode).toBeGreaterThanOrEqual(400);
+    expect(JSON.stringify(batch.json())).toContain("connection_runtime_authoring_unavailable");
+    const release = await t.instance.call("assets.sync", {
+      headers: { "x-test-service": "release" },
+      payload: { items: [{ type: "put", kind: "connection", config: connection("released") }] }
+    });
+    expect(release.statusCode).toBeGreaterThanOrEqual(400);
+    expect(JSON.stringify(release.json())).toContain("is not part of a release");
+
+    const stored = await t.stores.configAssets.listActiveConfigAssets({
+      clientInstanceId,
+      kind: "connection"
+    });
+    expect(stored.map((asset) => [asset.name, asset.revision])).toEqual([["outside", 1]]);
+  });
+
+  it("says in validate what a put would be refused for", async () => {
+    const t = await setupConnectionInstance();
+    const validate = async (overrides: JsonObject) => {
+      const response = await t.expectOk(t.admin.id, "assets.validate", {
+        params: { kind: "connection" },
+        payload: { config: connection("outside", overrides) }
+      });
+      expect(response.body).not.toContain(SECRET);
+      return validationSchema.parse(response.json());
+    };
+    const userinfo = await validate({
+      settings: { url: `https://user:${SECRET}@host.example.test/mcp` }
+    });
+    expect(userinfo.valid).toBe(false);
+    expect(userinfo.issues).toEqual([
+      {
+        message:
+          "credential_in_settings: the setting is an address with a user name or a password. A credential belongs in the Secret Store",
+        path: ["settings", "url"]
+      }
+    ]);
+    expect((await validate({ connectorType: "mcp" })).issues).toEqual([
+      {
+        message: "connector_type_unknown: this instance has no connector type 'mcp'",
+        path: ["connectorType"]
+      }
+    ]);
+    expect((await validate({ authScheme: "oauth" })).issues).toMatchObject([
+      { path: ["authScheme"] }
+    ]);
+    // A definition nothing is wrong with is still no definition a put would take.
+    const sound = await validate({});
+    expect(sound.valid).toBe(false);
+    expect(sound.issues[0]?.message).toMatch(/^connection_runtime_authoring_unavailable: /u);
+  });
+
+  it("lists and reads a seeded Connection with its handle and no secret", async () => {
+    const t = await setupConnectionInstance();
+    const id = await t.seed("outside", { description: "The outside system." });
+    await t.seed("paused", { enabled: false, origin: "runtime", secretHandle: undefined });
+    const page = (
+      await t.expectOk(t.admin.id, "assets.list", { params: { kind: "connection" } })
+    ).json<{ items: Array<Record<string, unknown>> }>();
+    expect(assetPageSchema.parse(page).items.map((item) => item.name)).toEqual([
+      "outside",
+      "paused"
+    ]);
+    expect(page.items[0]).toMatchObject({
+      id,
+      kind: "connection",
+      name: "outside",
+      title: "Connection outside",
+      description: "The outside system.",
+      scope: { kind: "instance" },
+      revision: 1,
+      attributes: { connectorType: "fixture", origin: "release", enabled: true }
+    });
+    expect(page.items[1]).toMatchObject({
+      attributes: { connectorType: "fixture", origin: "runtime", enabled: false }
+    });
+    // The list carries no content: neither the settings nor the handle.
+    expect(JSON.stringify(page)).not.toContain(FIXTURE_SECRET_HANDLE);
+    expect(JSON.stringify(page)).not.toContain("outside.example.test");
+
+    const read = (
+      await t.expectOk(t.admin.id, "assets.get", {
+        params: { kind: "connection", name: "outside" }
+      })
+    ).json<{ config: Record<string, unknown> }>();
+    expect(read.config).toEqual(connection("outside", { description: "The outside system." }));
+    const history = (
+      await t.expectOk(t.admin.id, "assets.revisions.list", {
+        params: { kind: "connection", name: "outside" }
+      })
+    ).json<{ items: Array<{ config: Record<string, unknown> }> }>();
+    expect(history.items.map((revision) => revision.config.secretHandle)).toEqual([
+      FIXTURE_SECRET_HANDLE
+    ]);
+  });
+
+  it("leaves a write to another asset alone when a stored Connection names a type that is gone", async () => {
+    const t = await setupConnectionInstance();
+    await t.seed("legacy", { connectorType: "removed_type" });
+    await t.expectOk(t.admin.id, "assets.put", {
+      params: { kind: "agent", name: "helper" },
+      payload: { config: agent("helper") }
+    });
+  });
+
+  it("names the kind with its rights in the context", async () => {
+    const t = await setupConnectionInstance();
+    const context = (await t.expectOk(t.admin.id, "platform.context.get")).json<{
+      kinds: Array<{ kind: string; plural: string; actions: Record<string, string> }>;
+      actions: string[];
+    }>();
+    expect(context.kinds.find((kind) => kind.kind === "connection")).toEqual({
+      kind: "connection",
+      plural: "connections",
+      actions: {
+        read: "connection.read",
+        write: "connection.write",
+        delete: "connection.delete"
+      }
+    });
+    expect(context.actions).toEqual(
+      expect.arrayContaining(["agent.read", "connection.read", "connection.write"])
+    );
+    // A person who holds nothing on the instance is told of no action there.
+    const kai = (await t.expectOk(t.kai.id, "platform.context.get")).json<{ actions: string[] }>();
+    expect(kai.actions).toEqual([]);
+  });
+});
+
+describe("the module connections", () => {
+  const moduleOff = { reason: "module_off", module: "connections" };
+  const configWith = (enabled: boolean | undefined) =>
+    parseClientInstanceConfig({
+      ...createTestConfig({
+        developmentAuth: {
+          enabled: true,
+          user: {
+            id: "user-1",
+            externalUserId: "user-1",
+            displayLabel: "User",
+            roles: ["user", "admin", "superadmin"]
+          }
+        }
+      }),
+      modules: {
+        assetManagement: { enabled: true },
+        ...(enabled === undefined ? {} : { connections: { enabled } })
+      },
+      administration: { agentConfiguration: { enabled: true, allowSkillEditing: true } }
+    });
+  const start = (enabled: boolean | undefined, restarted = false) =>
+    createTestInstance({
+      config: configWith(enabled),
+      env: {},
+      tools: [],
+      ...(restarted ? { seedAssets: false } : {})
+    });
+  const kindsOf = async (instance: Awaited<ReturnType<typeof start>>) =>
+    (await instance.call("platform.context.get", {}))
+      .json<{ kinds: Array<{ kind: string }> }>()
+      .kinds.map((kind) => kind.kind);
+
+  it("is off unless release config turns it on", () => {
+    expect(resolveInstanceModules(configWith(undefined)).snapshot.isEnabled("connections")).toBe(
+      false
+    );
+    expect(resolveInstanceModules(configWith(true)).snapshot.isEnabled("connections")).toBe(true);
+  });
+
+  it("registers the kind on an assembled instance while it is on", async () => {
+    const instance = await start(true);
+    expect(await kindsOf(instance)).toEqual(["agent", "skill", "connection"]);
+    const listed = await instance.call("assets.list", { params: { kind: "connection" } });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json<{ items: unknown[] }>().items).toEqual([]);
+    // The assembly registers no Connector type yet, so a definition names an unknown one.
+    const validated = await instance.call("assets.validate", {
+      params: { kind: "connection" },
+      payload: { config: connection("outside") }
+    });
+    expect(validationSchema.parse(validated.json()).issues).toEqual([
+      {
+        message: "connector_type_unknown: this instance has no connector type 'fixture'",
+        path: ["connectorType"]
+      }
+    ]);
+  });
+
+  it("makes the kind absent while it is off, and keeps what the store holds", async () => {
+    const on = await start(true);
+    await on.stores.configAssets.applyConfigAssetMutations({
+      clientInstanceId: asClientInstanceId(getTestConfig(on).clientInstance.id),
+      mutations: [
+        { type: "upsert", kind: "connection", name: "outside", config: connection("outside") }
+      ]
+    });
+    for (const enabled of [false, undefined]) {
+      const off = await start(enabled, true);
+      expect(await kindsOf(off)).toEqual(["agent", "skill"]);
+      const address = { params: { kind: "connection", name: "outside" } };
+      const calls = [
+        off.call("assets.list", { params: { kind: "connection" } }),
+        off.call("assets.get", address),
+        off.call("assets.revisions.list", address),
+        off.call("assets.validate", {
+          params: { kind: "connection" },
+          payload: { config: connection("outside") }
+        }),
+        off.call("assets.put", { ...address, payload: { config: connection("outside") } }),
+        off.call("assets.delete", { ...address, payload: { expectedRevision: 1 } }),
+        off.call("assets.sync", {
+          payload: {
+            namespace: "kai-",
+            items: [{ type: "put", kind: "connection", config: connection("kai-outside") }]
+          }
+        }),
+        off.call("permissions.grant", {
+          payload: {
+            holderKind: "user",
+            holderId: "user-1",
+            action: "connection.use",
+            scopeKind: "asset",
+            scopeId: "asset-1"
+          }
+        })
+      ];
+      for (const response of await Promise.all(calls)) {
+        expect(response.statusCode, response.body).toBe(404);
+        expect(errorSchema.parse(response.json()).error).toMatchObject({
+          code: "NOT_FOUND",
+          details: moduleOff
+        });
+      }
+      // The agents of the instance are served as before.
+      expect((await off.call("assets.list", { params: { kind: "agent" } })).statusCode).toBe(200);
+      await off.close();
+    }
+
+    // Nothing was deleted: turned on again, the Connection is there.
+    const again = await start(true, true);
+    const listed = await again.call("assets.list", { params: { kind: "connection" } });
+    expect(assetPageSchema.parse(listed.json()).items.map((item) => item.name)).toEqual([
+      "outside"
+    ]);
+  });
+});
