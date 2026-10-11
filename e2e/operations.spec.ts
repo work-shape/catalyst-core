@@ -96,7 +96,11 @@ test("the Operations page opens on changing calls and lists a read only when it 
     );
     await expect(readsNote).toHaveCount(0);
   });
-  await effect.selectOption("reading");
+  // The list of reads is asked for again by leaving that view and coming back, as a person
+  // would: the page's own refresh is as long as an assertion waits, so nothing waits on it.
+  await effect.selectOption("changing");
+  await expect(failedRow).toHaveCount(0);
+  await Promise.all([page.waitForResponse(noReads), effect.selectOption("reading")]);
   await expect(empty).toContainText("Successful reading calls are not recorded.");
   await expect(readsNote).toHaveCount(0);
   await page.unroute(noReads);
