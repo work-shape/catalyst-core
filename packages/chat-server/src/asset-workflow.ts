@@ -250,14 +250,27 @@ export class AssetWorkflow {
     });
   }
 
-  async get(call: AssetCall, address: AssetAddress) {
+  /** The right a read of the revision the call names asks. */
+  async authorizeGet(
+    access: ActorAccess,
+    input: AssetAddress & { revision?: string }
+  ): Promise<OperationAuthorization> {
+    const target = await this.target(input);
+    return decide(access, this.drafts.readAction(access, target, input.revision), target.resource);
+  }
+
+  async get(call: AssetCall, address: AssetAddress & { revision?: string; files?: boolean }) {
     const target = await this.target(address);
-    call.access.require(target.kind.actions.read, target.resource);
+    call.access.require(
+      this.drafts.readAction(call.access, target, address.revision),
+      target.resource
+    );
     const asset = requireActive(target);
-    const [namespaces, defaultName, availability] = await Promise.all([
+    const [namespaces, defaultName, availability, content] = await Promise.all([
       this.namespaces(target.scope),
       this.defaultName(target.kind, target.scope),
-      this.availability(call, target.kind, asset.name)
+      this.availability(call, target.kind, asset.name),
+      this.drafts.revisionContent(target, asset, address)
     ]);
     const namespace = findNamespaceOfAssetName(namespaces, asset.name);
     return {
@@ -268,7 +281,7 @@ export class AssetWorkflow {
       ...(namespace ? { namespace: namespace.prefix } : {}),
       revision: asset.revision,
       ...pointersOf(target.kind, asset),
-      config: asset.config,
+      ...content,
       ...(asset.name === defaultName ? { isDefault: true as const } : {}),
       ...(availability ? { availability } : {}),
       updatedAt: asset.updatedAt

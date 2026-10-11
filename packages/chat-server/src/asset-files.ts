@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   AppError,
+  ASSET_GET_FILES_MAX_BYTES,
   ASSET_PUT_FILES_MAX_BYTES,
   assetObjectPrefix,
   createFileSetId,
@@ -268,4 +269,70 @@ export function sourceFileEntries(
   return fileSet.sourceFiles
     .map((file) => ({ path: file.path, sha256: file.sha256, bytes: file.bytes }))
     .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
+}
+
+/** How many source files of one read are fetched from the store at a time. */
+const ASSET_GET_FILE_READS_IN_FLIGHT = 8;
+
+/** One source file as a read answers it. Without `text` and `base64` it is an index entry. */
+export interface AssetFileOutput {
+  path: string;
+  contentType: string;
+  sha256: string;
+  bytes: number;
+  text?: string;
+  base64?: string;
+}
+
+const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+
+/**
+ * The content of a file as a call carries it back: `text` where the bytes are UTF-8 text, so
+ * that writing the text again stores the same bytes, and `base64` for everything else.
+ */
+function fileContent(bytes: Uint8Array): { text: string } | { base64: string } {
+  if (!bytes.includes(0)) {
+    try {
+      return { text: utf8.decode(bytes) };
+    } catch {
+      // Not UTF-8: answered as bytes.
+    }
+  }
+  return { base64: Buffer.from(bytes).toString("base64") };
+}
+
+/**
+ * The source files of a file set in the order of their paths, each checked against its hash.
+ * A set above `ASSET_GET_FILES_MAX_BYTES` is answered as its index, and no object is read.
+ */
+export async function readSourceFiles(
+  options: FilesContext,
+  fileSet: FileSet
+): Promise<{ files: AssetFileOutput[]; filesOmitted?: true }> {
+  const index = [...fileSet.sourceFiles].sort((left, right) =>
+    left.path < right.path ? -1 : left.path > right.path ? 1 : 0
+  );
+  const entry = (file: (typeof index)[number]): AssetFileOutput => ({
+    path: file.path,
+    contentType: file.contentType,
+    sha256: file.sha256,
+    bytes: file.bytes
+  });
+  const total = index.reduce((sum, file) => sum + file.bytes, 0);
+  if (total > ASSET_GET_FILES_MAX_BYTES) {
+    return { files: index.map(entry), filesOmitted: true };
+  }
+  const files: AssetFileOutput[] = [];
+  for (let start = 0; start < index.length; start += ASSET_GET_FILE_READS_IN_FLIGHT) {
+    const batch = index.slice(start, start + ASSET_GET_FILE_READS_IN_FLIGHT);
+    files.push(
+      ...(await Promise.all(
+        batch.map(async (file) => ({
+          ...entry(file),
+          ...fileContent(await readFileSetFile(options, fileSet, "src", file))
+        }))
+      ))
+    );
+  }
+  return { files };
 }

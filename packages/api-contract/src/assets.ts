@@ -19,7 +19,7 @@ const FILE_SET_MAX_PATH_CHARS = 512;
 /** How many decoded bytes of files one `assets.put` carries. */
 export const ASSET_PUT_FILES_MAX_BYTES = 8 * 1024 * 1024;
 /** How many bytes of file contents one `assets.get` answers. Above it the index comes alone. */
-export const ASSET_GET_FILES_MAX_BYTES = ASSET_PUT_FILES_MAX_BYTES;
+export const ASSET_GET_FILES_MAX_BYTES = 8 * 1024 * 1024;
 
 /** Who owns an asset: the instance, or one workspace. */
 export const assetScopeSchema = z.discriminatedUnion("kind", [

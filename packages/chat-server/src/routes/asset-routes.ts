@@ -62,10 +62,11 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
   });
 
   route.operation(apiOperations["assets.get"], {
-    authorize: (input, { access }) => workflow.authorizeRead(access, input),
+    authorize: (input, { access }) => workflow.authorizeGet(access, input),
     resource: assetResource,
     policyTargets: (input) => workflow.policyTargets(input),
-    execute: (input, context) => workflow.get(context, input)
+    execute: ({ files, ...input }, context) =>
+      workflow.get(context, { ...input, files: files === "true" })
   });
 
   route.operation(apiOperations["assets.put"], {

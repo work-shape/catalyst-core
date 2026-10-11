@@ -84,7 +84,7 @@ export const ASSET_PUT_FILES_MAX_BYTES = 8 * 1024 * 1024;
  * How many bytes of file contents one `assets.get` answers. A source set above it, such as one
  * copied from a large Page, is answered as its index without contents.
  */
-export const ASSET_GET_FILES_MAX_BYTES = ASSET_PUT_FILES_MAX_BYTES;
+export const ASSET_GET_FILES_MAX_BYTES = 8 * 1024 * 1024;
 
 /**
  * Who a file set belongs to: a Page of a conversation, or an asset whose revisions hold files,
