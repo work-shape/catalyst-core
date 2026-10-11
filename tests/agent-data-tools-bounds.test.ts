@@ -1,9 +1,16 @@
 import { describe, expect, it } from "vitest";
+import { describeAgentDataTools } from "@vivd-catalyst/agent-runtime";
 import { createOperationRegistry, type OperationCall } from "@vivd-catalyst/core";
-import { executeApprovedOperation } from "@vivd-catalyst/tool-execution";
+import {
+  DataToolSourceBusyError,
+  createBoundedDataToolSource,
+  createToolOperationRunner,
+  executeApprovedOperation
+} from "@vivd-catalyst/tool-execution";
 import {
   ECHO,
   WRITE,
+  agent,
   context,
   createCallPath,
   createFakeConnection,
@@ -74,6 +81,70 @@ describe("a call that waited for an approval", () => {
 
     expect(end).toMatchObject({ execution: "done" });
     expect(connection.executed).toEqual([WRITE]);
+  });
+});
+
+describe("a bounded data tool source", () => {
+  it("shares one outstanding read among callers that ask for the same tools", async () => {
+    const connection = createFakeConnection();
+    const bounded = createBoundedDataToolSource(connection.toolSource);
+
+    const answers = await Promise.all([
+      bounded.describe([ECHO, WRITE], {}),
+      bounded.describe([WRITE, ECHO], {}),
+      bounded.describe([ECHO, WRITE, ECHO], {})
+    ]);
+
+    expect(connection.describeCalls).toEqual([[ECHO, WRITE]]);
+    expect(answers.map((answer) => answer.map((tool) => tool.name))).toEqual([
+      [ECHO, WRITE],
+      [ECHO, WRITE],
+      [ECHO, WRITE]
+    ]);
+    // An answered read is not kept: the next caller reads again.
+    expect(bounded.outstanding).toBe(0);
+    await bounded.describe([ECHO, WRITE], {});
+    expect(connection.describeCalls).toHaveLength(2);
+  });
+
+  it("holds a stalled source to its ceiling and answers further reads at once", async () => {
+    const connection = createFakeConnection();
+    connection.source.answers = "never";
+    const bounded = createBoundedDataToolSource(connection.toolSource, { maxOutstanding: 2 });
+    const path = createCallPath({ agentToolNames: { data_agent: [ECHO, WRITE] }, connection });
+    const runTool = createToolOperationRunner(path.deps, path.toolRegistry, {
+      source: bounded,
+      describeTimeoutMs: 50
+    });
+
+    // Many calls of two tools, each abandoned by its caller after the timeout.
+    const results = await Promise.all(
+      Array.from({ length: 40 }, (_unused, index) =>
+        runTool(toolRequest(index % 2 === 0 ? ECHO : WRITE, "data_agent"), context)
+      )
+    );
+    expect(new Set(results.map((result) => result.status))).toEqual(new Set(["failed"]));
+    // Two reads reached the source and two stay outstanding, whatever the number of callers.
+    expect(connection.describeCalls).toEqual([[ECHO], [WRITE]]);
+    expect(bounded.outstanding).toBe(2);
+
+    // A third key is above the ceiling: refused at once, and the source is not asked.
+    await expect(bounded.describe([ECHO, WRITE], {})).rejects.toBeInstanceOf(
+      DataToolSourceBusyError
+    );
+    const started = Date.now();
+    const atRunStart = await describeAgentDataTools(
+      agent("data_agent", [ECHO, WRITE]),
+      bounded,
+      60_000
+    );
+    expect(atRunStart).toEqual({
+      described: [],
+      missing: [ECHO, WRITE],
+      sourceFailure: "failed"
+    });
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(connection.describeCalls).toHaveLength(2);
   });
 });
 

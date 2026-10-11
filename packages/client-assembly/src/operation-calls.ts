@@ -20,6 +20,7 @@ import {
 } from "@vivd-catalyst/core";
 import type { ModelGateway } from "@vivd-catalyst/model-provider";
 import {
+  createBoundedDataToolSource,
   createToolOperationRunner,
   registerToolOperations,
   type DataToolSource,
@@ -117,9 +118,15 @@ export function createInstanceAgentTools(
     dataTools?: DataToolSource;
   }
 ): InstanceAgentTools {
-  const { dataTools, runtime, ...toolOptions } = options;
+  const { runtime, ...toolOptions } = options;
+  // One bounded source for the runtime and the runner: they share the reads that are
+  // outstanding and the ceiling on them.
+  const dataTools = options.dataTools && createBoundedDataToolSource(options.dataTools);
   const describeTimeoutMs = runtime.dataToolDescribeTimeoutMs;
-  registerToolOperations(operationCalls.registry, tools.list(), toolOptions);
+  registerToolOperations(operationCalls.registry, tools.list(), {
+    clientInstanceId: toolOptions.clientInstanceId,
+    logger: toolOptions.logger
+  });
   return {
     toolRegistry: tools,
     ...(dataTools ? { dataTools } : {}),

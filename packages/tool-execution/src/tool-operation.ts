@@ -354,6 +354,61 @@ export interface DataToolSource {
  */
 export const DATA_TOOL_DESCRIBE_TIMEOUT_MS = 10_000;
 
+/**
+ * How many reads of a data tool source may be outstanding in one process. A read that timed
+ * out for its caller is still running, so under a stalled source they would pile up without
+ * this. Callers that ask for the same tools share one read, so the number grows with the
+ * distinct lists of data tools the agents of an instance have and the distinct tools they
+ * call, not with people or runs. Above it a read is refused at once as unavailable.
+ */
+export const DATA_TOOL_MAX_OUTSTANDING_DESCRIBES = 256;
+
+/** Thrown for a read above `DATA_TOOL_MAX_OUTSTANDING_DESCRIBES`. It asked nobody. */
+export class DataToolSourceBusyError extends Error {
+  override readonly name = "DataToolSourceBusyError";
+  constructor(limit: number) {
+    super(`More than ${limit} reads of the data tool source are outstanding`);
+  }
+}
+
+/**
+ * A data tool source that bounds what a slow or stalled source can hold. Callers that ask for
+ * the same tools in the same scope while a read of them is outstanding join that read, and a
+ * read stays counted until the source answers it, also after every caller stopped waiting.
+ * The answer of a source says nothing of who asks, so one answer serves every caller.
+ *
+ * An instance wraps its source once and hands the result to the agent runtime and to the tool
+ * runner, so both share the one count.
+ */
+export function createBoundedDataToolSource(
+  source: DataToolSource,
+  options: { maxOutstanding?: number } = {}
+): DataToolSource & { readonly outstanding: number } {
+  const maxOutstanding = options.maxOutstanding ?? DATA_TOOL_MAX_OUTSTANDING_DESCRIBES;
+  const outstanding = new Map<string, Promise<DataToolDescriptor[]>>();
+  return {
+    get outstanding() {
+      return outstanding.size;
+    },
+    describe(toolNames, scope) {
+      const names = [...new Set(toolNames)].sort();
+      const key = JSON.stringify([scope.workspaceId ?? null, names]);
+      const shared = outstanding.get(key);
+      if (shared) {
+        return shared;
+      }
+      if (outstanding.size >= maxOutstanding) {
+        return Promise.reject(new DataToolSourceBusyError(maxOutstanding));
+      }
+      const read = Promise.resolve()
+        .then(() => source.describe(names, scope))
+        .finally(() => outstanding.delete(key));
+      outstanding.set(key, read);
+      return read;
+    }
+  };
+}
+
 export interface DataToolRunnerOptions {
   source: DataToolSource;
   /** Without it `DATA_TOOL_DESCRIBE_TIMEOUT_MS`. */
