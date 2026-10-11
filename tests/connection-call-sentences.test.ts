@@ -5,6 +5,8 @@ import {
   CONNECTION_NAME_IN_SENTENCE_MAX_LENGTH,
   connectionCallError,
   connectionCallSentence,
+  connectionUseDeniedSentence,
+  operationDenialError,
   type ConnectionCallReason
 } from "@vivd-catalyst/core";
 import {
@@ -12,7 +14,7 @@ import {
   callConnectionOperation,
   readConnection
 } from "@vivd-catalyst/connections";
-import { DEFAULT_LIMITS, fixture, operationOf } from "./support/connection-operations";
+import { DEFAULT_LIMITS, agentOrigin, fixture, operationOf } from "./support/connection-operations";
 
 // What a failed call of a Connection operation tells its caller: a sentence for people that
 // names the Connection, with the fixed reason beside it. Each test fails without the change:
@@ -87,7 +89,8 @@ describe("a call of a Connection operation that fails", () => {
 
     const failed = await t.failure(t.invoke(t.kai, "connection.crm.echo", { text: "a" }));
 
-    const sentence = connectionCallSentence(reason, "Sample business");
+    // The operation of the fixture reads, which the sentence of a timeout says.
+    const sentence = connectionCallSentence(reason, "Sample business", "reading");
     expect(failed).toEqual({ code: CONNECTION_CALL_REASONS[reason], reason, message: sentence });
     const runs = await t.runs();
     expect(runs).toHaveLength(1);
@@ -223,5 +226,115 @@ describe("a call of a Connection operation that fails", () => {
       message: connectionCallSentence("connection_unavailable", undefined)
     });
     expect(t.executed).toEqual([]);
+  });
+});
+
+// What a real model made of three texts: a missing right read as an outage, a timed-out read
+// came with a warning about a change, and a refused network path read as a switched-off
+// Connection. Each test fails without the change.
+
+/** Nothing of the machinery in a text a model words an answer from. */
+const NO_CODE_OR_ADDRESS = /[a-z]_[a-z]|connection\.use|:\d|\d+\.\d+|https?:|egress|upstream/u;
+
+describe("the three texts a model misread", () => {
+  it("says a missing right as a refusal that an administrator lifts", () => {
+    const sentence = connectionUseDeniedSentence("Sample business");
+
+    expect(sentence).toBe(
+      "The person making this request does not hold the right to use the connection Sample business. Nothing is wrong with the connection, and trying again will not help. An administrator can give the right under Settings > Instance > Access."
+    );
+    expect(sentence).not.toMatch(NO_CODE_OR_ADDRESS);
+    expect(sentence).not.toMatch(/available|reached|right now|disabled/u);
+    expect(connectionUseDeniedSentence(undefined)).toContain("the right to use this connection.");
+  });
+
+  it("says a timed-out read is safe to repeat and keeps the warning for a change", () => {
+    const reading = connectionCallSentence("upstream_timeout", "Sample business", "reading");
+
+    expect(reading).toBe(
+      "The connection Sample business did not answer in time. This action only reads, so trying again is safe. If it keeps failing, an administrator can check it under Build > Connections."
+    );
+    expect(reading).not.toMatch(/chang/u);
+    expect(reading).not.toMatch(NO_CODE_OR_ADDRESS);
+    for (const effect of ["changing", undefined] as const) {
+      const sentence = connectionCallSentence("upstream_timeout", "Sample business", effect);
+      expect(sentence).toContain("it is not known whether the change happened");
+      expect(sentence).not.toContain("safe");
+    }
+  });
+
+  it("says a refused network path as a path to allow, not a Connection that is off", () => {
+    const sentence = connectionCallSentence("egress_denied", "Sample business");
+
+    expect(sentence).toBe(
+      "The network path from this instance to the outside system of the connection Sample business has not been allowed yet. The connection itself is switched on. Trying again will not help until an administrator allows the path. The state is shown under Build > Connections."
+    );
+    expect(sentence).not.toMatch(/disabled|switched off|not available/u);
+    expect(sentence).not.toMatch(NO_CODE_OR_ADDRESS);
+  });
+});
+
+describe("a call by somebody without the right to use the Connection", () => {
+  it("is denied with the sentence, which names the Connection to an agent's chat only", async () => {
+    const t = await fixture();
+    await t.seed("crm", { displayName: "Sample business" });
+    // Only an agent that carries the tool reaches the check of the right at all.
+    t.state.agentTools.set("assistant", ["connection.crm.echo"]);
+
+    const byAgent = await t.invoke(
+      t.kai,
+      "connection.crm.echo",
+      { text: "a" },
+      { origin: agentOrigin("connection.crm.echo") }
+    );
+    const byPerson = await t.invoke(t.kai, "connection.crm.echo", { text: "a" });
+
+    if (byAgent.result.status !== "denied" || byPerson.result.status !== "denied") {
+      throw new Error("both calls are denied");
+    }
+    // The denial keeps the right and the reason beside the text.
+    expect(byAgent.result.reason).toEqual({
+      kind: "forbidden",
+      action: "connection.use",
+      reason: "no_grant",
+      message: connectionUseDeniedSentence("Sample business")
+    });
+    // What the agent's tool call answers is the message of the denial.
+    expect(operationDenialError(byAgent.result.reason).message).toBe(
+      connectionUseDeniedSentence("Sample business")
+    );
+    expect(byPerson.result.reason).toMatchObject({
+      action: "connection.use",
+      message: connectionUseDeniedSentence(undefined)
+    });
+    expect(JSON.stringify(byPerson.result)).not.toContain("Sample business");
+    expect(t.executed).toEqual([]);
+    expect(await t.runs()).toMatchObject([{ status: "denied" }, { status: "denied" }]);
+  });
+});
+
+describe("a call that timed out", () => {
+  it("is told by the effect of its operation", async () => {
+    const t = await fixture();
+    const assetId = await t.seed("crm", {
+      displayName: "Sample business",
+      operations: [operationOf("echo"), operationOf("write", { effect: "changing" })]
+    });
+    await t.grant(t.kai.id, "connection.use", { assetId });
+    t.state.limits = { ...DEFAULT_LIMITS, callTimeoutMs: 150 };
+    t.setBehaviour(() => new Promise(() => undefined));
+
+    const read = await t.failure(t.invoke(t.kai, "connection.crm.echo", { text: "a" }));
+    const changed = await t.failure(
+      t.invoke(t.kai, "connection.crm.write", {}, { effect: "changing" })
+    );
+
+    expect(read.message).toBe(
+      connectionCallSentence("upstream_timeout", "Sample business", "reading")
+    );
+    expect(changed.message).toBe(
+      connectionCallSentence("upstream_timeout", "Sample business", "changing")
+    );
+    expect(changed.message).not.toBe(read.message);
   });
 });

@@ -9,6 +9,7 @@ import {
   type DataToolDescriptor,
   type DataToolSource,
   type JsonValue,
+  connectionUseDeniedSentence,
   type OperationAuthorization,
   type OperationAuthorizeContext,
   type OperationDefinition,
@@ -87,7 +88,8 @@ export function connectionExposureDenial(
 /**
  * The operation's own check of the caller. The exposure is asked first, so an operation that
  * is not exposed to the caller's surface never reaches the policy and files no approval. Then
- * the right `connection.use` on the Connection, which a refusal names.
+ * the right `connection.use` on the Connection. A refusal names the right in its denial and
+ * says in a sentence that it is a refusal, not a fault of the Connection.
  */
 function authorizeCall(
   connection: StoredConnection,
@@ -97,9 +99,18 @@ function authorizeCall(
   const unexposed = connectionExposureDenial(operation, context.origin);
   if (unexposed) return unexposed;
   const decision = context.access.authorize(CONNECTION_ACTIONS.use, resourceOf(connection));
-  return decision.allowed
-    ? { allowed: true }
-    : { allowed: false, action: CONNECTION_ACTIONS.use, reason: decision.reason };
+  if (decision.allowed) return { allowed: true };
+  return {
+    allowed: false,
+    action: CONNECTION_ACTIONS.use,
+    reason: decision.reason,
+    // An agent that carries the tool was given it by name in its config, so the person in
+    // its chat reads the Connection's label there. Any other caller is told no label: the
+    // refusal must not show a Connection to somebody who may not see it.
+    message: connectionUseDeniedSentence(
+      context.origin.kind === "agent" ? connection.config.displayName : undefined
+    )
+  };
 }
 
 function stateOf(

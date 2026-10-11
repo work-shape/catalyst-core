@@ -5,6 +5,7 @@ import {
   CONNECTION_OPERATION_NAME_PATTERN,
   EGRESS_UNRESOLVED,
   type ConnectionExposure,
+  type ConnectionOperationEffect,
   type ConnectorOperationDescriptor
 } from "./connections";
 import { AppError, isAppError, type AppErrorCode } from "./errors";
@@ -180,6 +181,9 @@ function isConnectionCallReason(value: unknown): value is ConnectionCallReason {
 /** Where an administrator looks after a Connection, as the sentences name it. */
 const WHERE = "Build > Connections";
 
+/** Where an administrator gives a right, as the sentence of a missing right names it. */
+const WHERE_RIGHTS = "Settings > Instance > Access";
+
 /** The longest display name a sentence repeats. A longer one is cut. */
 export const CONNECTION_NAME_IN_SENTENCE_MAX_LENGTH = 80;
 
@@ -187,10 +191,14 @@ export const CONNECTION_NAME_IN_SENTENCE_MAX_LENGTH = 80;
  * What a failed call of a Connection operation tells the caller, one entry per reason. The
  * reader is an agent's model that words the answer for a person, or the person. Each entry
  * says what happened, whether trying again makes sense and who can act. `c` is the Connection
- * by its display name ("the connection Sample business"). No entry holds a host, a port, the
- * value of a credential or text an outside system sent.
+ * by its display name ("the connection Sample business"). `effect` is the effect of the
+ * operation where the call knows it. No entry holds a host, a port, a reason code, the value
+ * of a credential or text an outside system sent.
  */
-const CONNECTION_CALL_SENTENCES: Record<ConnectionCallReason, (c: string) => string> = {
+const CONNECTION_CALL_SENTENCES: Record<
+  ConnectionCallReason,
+  (c: string, effect: ConnectionOperationEffect | undefined) => string
+> = {
   connection_unavailable: (c) =>
     `${c} cannot be used right now. Trying again later may work. If it keeps failing, an administrator can check it under ${WHERE}.`,
   connection_not_configured: (c) =>
@@ -204,7 +212,7 @@ const CONNECTION_CALL_SENTENCES: Record<ConnectionCallReason, (c: string) => str
   operation_needs_review: (c) =>
     `This action of ${c} changed in the outside system and waits for a review. Trying again will not help until an administrator has accepted the change. The details are under ${WHERE}.`,
   egress_denied: (c) =>
-    `This instance does not allow ${c} to reach its outside system. Trying again will not help until an administrator checks the connection under ${WHERE}.`,
+    `The network path from this instance to the outside system of ${c} has not been allowed yet. The connection itself is switched on. Trying again will not help until an administrator allows the path. The state is shown under ${WHERE}.`,
   input_invalid: (c) =>
     `${c} did not run this action because the input does not fit what the action expects. Correct the input and try again.`,
   output_invalid: (c) =>
@@ -215,8 +223,11 @@ const CONNECTION_CALL_SENTENCES: Record<ConnectionCallReason, (c: string) => str
     `The outside system refused the credential of ${c}. Trying again will not help. An administrator can see what to do under ${WHERE}.`,
   upstream_rate_limited: (c) =>
     `The outside system behind ${c} accepts no more calls for the moment. Wait a little before trying again.`,
-  upstream_timeout: (c) =>
-    `${c} did not answer in time. If the action changes something, it is not known whether the change happened, so check before trying again. If it keeps failing, an administrator can check it under ${WHERE}.`,
+  // Only a call known to read is safe to repeat. Any other may have changed something.
+  upstream_timeout: (c, effect) =>
+    effect === "reading"
+      ? `${c} did not answer in time. This action only reads, so trying again is safe. If it keeps failing, an administrator can check it under ${WHERE}.`
+      : `${c} did not answer in time. If the action changes something, it is not known whether the change happened, so check before trying again. If it keeps failing, an administrator can check it under ${WHERE}.`,
   upstream_error: (c) =>
     `The outside system behind ${c} reported an error. Trying again later may work. If it keeps failing, an administrator can check it under ${WHERE}.`,
   connection_busy: (c) => `Too many calls of ${c} are waiting right now. Try again in a moment.`
@@ -232,19 +243,32 @@ function nameInSentence(displayName: string | undefined): string | undefined {
   return plain === "" ? undefined : plain;
 }
 
+/** The Connection as a sentence names it. A caller that may not learn its name reads none. */
+function connectionInSentence(displayName: string | undefined): string {
+  const name = nameInSentence(displayName);
+  return name === undefined ? "this connection" : `the connection ${name}`;
+}
+
 /**
  * The sentence of a reason for the Connection of that display name. A call that found no
- * Connection names none.
+ * Connection names none, and a call that does not know its effect is told as a changing one.
  */
 export function connectionCallSentence(
   reason: ConnectionCallReason,
-  displayName: string | undefined
+  displayName: string | undefined,
+  effect?: ConnectionOperationEffect
 ): string {
-  const name = nameInSentence(displayName);
-  const sentence = CONNECTION_CALL_SENTENCES[reason](
-    name === undefined ? "this connection" : `the connection ${name}`
-  );
+  const sentence = CONNECTION_CALL_SENTENCES[reason](connectionInSentence(displayName), effect);
   return `${sentence.charAt(0).toUpperCase()}${sentence.slice(1)}`;
+}
+
+/**
+ * What a caller without the right `connection.use` is told. It is a refusal and reads as
+ * one: nothing is broken and nothing is switched off, so no word of an outage is in it. The
+ * right and the action stay in the denial beside this text.
+ */
+export function connectionUseDeniedSentence(displayName: string | undefined): string {
+  return `The person making this request does not hold the right to use ${connectionInSentence(displayName)}. Nothing is wrong with the connection, and trying again will not help. An administrator can give the right under ${WHERE_RIGHTS}.`;
 }
 
 /**
@@ -255,11 +279,12 @@ export function connectionCallSentence(
 export function connectionCallFailure(
   reason: ConnectionCallReason,
   displayName: string | undefined,
-  details: Record<string, string | number> = {}
+  details: Record<string, string | number> = {},
+  effect?: ConnectionOperationEffect
 ): AppError {
   return new AppError(
     CONNECTION_CALL_REASONS[reason],
-    connectionCallSentence(reason, displayName),
+    connectionCallSentence(reason, displayName, effect),
     { ...details, reason },
     { exposeMessage: true }
   );

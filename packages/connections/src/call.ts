@@ -10,6 +10,7 @@ import {
   type ConnectionCallReason,
   type ConnectionCredentialResolver,
   type ConnectionHealth,
+  type ConnectionOperationEffect,
   type ConnectorContext,
   type ConnectorOperationDescriptor,
   type ConnectorTypeDefinition,
@@ -465,13 +466,20 @@ function callable(
   }
 }
 
+/** What a sentence says of the Connection and the operation a call was authorized on. */
+interface Named {
+  displayName?: string;
+  /** The effect of the operation, which decides whether a call that timed out is repeated. */
+  effect?: ConnectionOperationEffect;
+}
+
 /**
  * The error as the caller reads it: the sentence of its reason, which names the Connection by
  * its display name, and the reason as `details.reason`. The host and the port of a refused
  * target stay in the details, where `safeCallError` put them, and never enter the sentence.
  * An error without a reason leaves as it is.
  */
-function inSentence(error: unknown, displayName: string | undefined): unknown {
+function inSentence(error: unknown, named: Named): unknown {
   const reason = connectionCallReasonOf(error);
   if (reason === undefined || !isAppError(error)) return error;
   const details: unknown = error.details;
@@ -485,12 +493,17 @@ function inSentence(error: unknown, displayName: string | undefined): unknown {
     details !== null &&
     "cause" in details &&
     details.cause === EGRESS_UNRESOLVED;
-  return connectionCallFailure(reason, displayName, {
-    ...(typeof refused?.host === "string" && typeof refused.port === "number"
-      ? { host: refused.host, port: refused.port }
-      : {}),
-    ...(unresolved ? { cause: EGRESS_UNRESOLVED } : {})
-  });
+  return connectionCallFailure(
+    reason,
+    named.displayName,
+    {
+      ...(typeof refused?.host === "string" && typeof refused.port === "number"
+        ? { host: refused.host, port: refused.port }
+        : {}),
+      ...(unresolved ? { cause: EGRESS_UNRESOLVED } : {})
+    },
+    named.effect
+  );
 }
 
 /**
@@ -506,11 +519,11 @@ export async function callConnectionOperation(
   input: unknown,
   context: Pick<OperationExecutionContext, "runtime">
 ): Promise<JsonValue> {
-  const named: { displayName?: string } = {};
+  const named: Named = {};
   try {
     return await call(deps, slots, target, input, context, named);
   } catch (error) {
-    throw inSentence(error, named.displayName);
+    throw inSentence(error, named);
   }
 }
 
@@ -520,8 +533,8 @@ async function call(
   target: ConnectionCallTarget,
   input: unknown,
   context: Pick<OperationExecutionContext, "runtime">,
-  /** Receives the display name of the Connection the call was authorized on, once read. */
-  named: { displayName?: string }
+  /** Receives what a sentence says of the Connection the call was authorized on, once read. */
+  named: Named
 ): Promise<JsonValue> {
   // Refused without a wait where the Connection or the input says so already.
   const read = async () => {
@@ -530,6 +543,9 @@ async function call(
     // refusal. A Connection that took the same name since is not the caller's to learn of.
     if (stored?.assetId === target.assetId && stored.revision === target.revision) {
       named.displayName = stored.config.displayName;
+      named.effect = stored.config.operations.find(
+        (candidate) => candidate.name === target.operationName
+      )?.effect;
     }
     const found = callable(stored, target);
     if (issuesOf(found.descriptor, input)) throw connectionCallError("input_invalid");
