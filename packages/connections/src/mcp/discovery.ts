@@ -2,12 +2,11 @@ import {
   CONNECTION_OPERATION_NAME_MAX_LENGTH,
   CONNECTION_OPERATION_NAME_PATTERN,
   connectionCallError,
-  isJsonObject,
-  unknownToJsonValue,
   type ConnectorOperationDescriptor,
   type JsonObject
 } from "@vivd-catalyst/core";
 import { z } from "zod";
+import { JSON_SCHEMA_MAX_DEPTH, JSON_SCHEMA_MAX_NODES } from "../json-schema";
 import type { McpSession } from "./client";
 import { mcpOutputSchema } from "./result";
 
@@ -46,7 +45,10 @@ interface McpDiscoveryOmissions {
   malformed: number;
   /** A name that cannot end an operation name. */
   name: number;
-  /** An input or output schema over `MCP_TOOL_SCHEMA_MAX_BYTES`. */
+  /**
+   * An input or output schema over `MCP_TOOL_SCHEMA_MAX_BYTES`, or nested deeper or holding
+   * more nodes than the JSON Schema module compiles.
+   */
   schemaTooLarge: number;
 }
 
@@ -55,12 +57,30 @@ interface McpDiscovery {
   omitted: McpDiscoveryOmissions;
 }
 
-function schemaOf(value: Record<string, unknown>): JsonObject | "too_large" | undefined {
-  const schema = unknownToJsonValue(value);
-  if (!isJsonObject(schema)) return undefined;
-  return Buffer.byteLength(JSON.stringify(schema)) > MCP_TOOL_SCHEMA_MAX_BYTES
-    ? "too_large"
-    : schema;
+/**
+ * Whether what a server listed as a schema is JSON within the depth and the node count the
+ * JSON Schema module compiles. The walk stops at the first bound it passes, so it costs no
+ * more than the bounds allow and throws nothing, however deep the value is. Nothing reads,
+ * copies or serializes a listed schema before this said yes.
+ */
+function isSchemaWithinShapeBounds(schema: Record<string, unknown>): schema is JsonObject {
+  let nodes = 0;
+  const visit = (value: unknown, depth: number): boolean => {
+    nodes += 1;
+    if (nodes > JSON_SCHEMA_MAX_NODES) return false;
+    if (value === null || typeof value === "string" || typeof value === "boolean") return true;
+    if (typeof value === "number") return Number.isFinite(value);
+    if (typeof value !== "object") return false;
+    if (depth >= JSON_SCHEMA_MAX_DEPTH) return false;
+    const children: unknown[] = Array.isArray(value) ? value : Object.values(value);
+    return children.every((child) => visit(child, depth + 1));
+  };
+  return visit(schema, 0);
+}
+
+function schemaOf(value: Record<string, unknown>): JsonObject | "too_large" {
+  if (!isSchemaWithinShapeBounds(value)) return "too_large";
+  return Buffer.byteLength(JSON.stringify(value)) > MCP_TOOL_SCHEMA_MAX_BYTES ? "too_large" : value;
 }
 
 /**
@@ -81,12 +101,14 @@ function describeTool(listed: unknown): ConnectorOperationDescriptor | keyof Mcp
   const inputSchema = schemaOf(tool.inputSchema);
   const ownOutputSchema = tool.outputSchema === undefined ? undefined : schemaOf(tool.outputSchema);
   if (inputSchema === "too_large" || ownOutputSchema === "too_large") return "schemaTooLarge";
-  if (inputSchema === undefined) return "malformed";
+  // The tool's own schema is one member of the schema a result is checked by.
+  const outputSchema = mcpOutputSchema(ownOutputSchema);
+  if (!isSchemaWithinShapeBounds(outputSchema)) return "schemaTooLarge";
   return {
     name: tool.name,
     description: (tool.description ?? "").slice(0, MCP_TOOL_DESCRIPTION_MAX_CHARS),
     inputSchema,
-    outputSchema: mcpOutputSchema(ownOutputSchema),
+    outputSchema,
     proposedEffect: tool.annotations?.readOnlyHint === true ? "reading" : "changing"
   };
 }

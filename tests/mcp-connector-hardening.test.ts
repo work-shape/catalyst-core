@@ -3,7 +3,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { connectionConfigSchema } from "@vivd-catalyst/config-schema";
 import {
   MCP_CALL_TIMEOUT_MS,
+  JSON_SCHEMA_MAX_DEPTH,
   MCP_CONNECTOR_TYPE,
+  compileJsonSchema,
   createMcpConnectorType,
   openConnectorContext
 } from "@vivd-catalyst/connections";
@@ -23,6 +25,7 @@ import {
   loopbackEgress,
   startMcpTestServer,
   textResult,
+  tool,
   type McpTestServer,
   type McpTestServerOptions
 } from "./support/mcp-test-server";
@@ -263,6 +266,42 @@ describe("the Connector type mcp against a server that holds on", () => {
       );
       expect(reason).toBe("connection_not_configured");
       expect(w.server.requests).toHaveLength(0);
+    });
+  });
+
+  describe("a schema the server lists", () => {
+    /** A schema whose properties nest `depth` schemas inside one another. */
+    const nested = (depth: number): JsonObject => {
+      let schema: JsonObject = { type: "string" };
+      for (let level = 0; level < depth; level += 1) {
+        schema = { type: "object", properties: { inner: schema } };
+      }
+      return schema;
+    };
+
+    it("leaves out the one tool whose schema is too deep or holds too many nodes, and keeps the others", async () => {
+      const w = await connect({
+        tools: [
+          tool("first"),
+          // Under the bound in bytes, and far deeper than a schema is compiled.
+          tool("deep_input", { inputSchema: nested(1_000) }),
+          tool("deep_output", { outputSchema: nested(1_000) }),
+          // Within the depth on its own, and over it inside the schema of a result.
+          tool("deep_as_result", { outputSchema: nested(JSON_SCHEMA_MAX_DEPTH / 2 - 1) }),
+          tool("wide", {
+            inputSchema: { type: "object", enum: Array.from({ length: 21_000 }, () => 1) }
+          }),
+          tool("last", { outputSchema: nested(4) })
+        ]
+      });
+      const descriptors = await w.discover();
+      expect(descriptors.map((descriptor) => descriptor.name)).toEqual(["first", "last"]);
+      for (const descriptor of descriptors) {
+        expect(compileJsonSchema(descriptor.inputSchema).ok).toBe(true);
+        if (descriptor.outputSchema !== undefined) {
+          expect(compileJsonSchema(descriptor.outputSchema).ok).toBe(true);
+        }
+      }
     });
   });
 });
