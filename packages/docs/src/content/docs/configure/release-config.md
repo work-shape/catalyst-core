@@ -568,10 +568,13 @@ policy:
   `POLICY_DENIED`.
 - `changing`: `allow` runs a changing operation. `confirm` asks the caller to confirm, and a
   person's or a service's own call through the API or the CLI is that confirmation. `deny`
-  refuses it. `approval` is meant to hold the call until another person decided. This release
-  has nothing that files and decides such an approval, so a changing call under `approval` is
-  refused with 403 and the code `POLICY_DENIED`, like `deny`. The answers the API reference
-  lists for a held call (`202` with the run, `DECLINED`, `OPERATION_EXPIRED`) do not occur yet.
+  refuses it. `approval` holds a person's call until a person with the right to approve
+  decided it in the Inbox: the caller receives `202` with the run, and the call runs once it is
+  approved. A declined call answers `DECLINED`, and one nobody decided within 7 days answers
+  `OPERATION_EXPIRED`. A call of a Service Principal cannot be held and is refused with
+  `POLICY_DENIED`, a release push included. An agent's run cannot wait either, so startup refuses an
+  enabled changing tool that would wait under this default. Such a tool declares
+  `permission.mode` `allow` or `deny`. See [How rights work](/operate/how-rights-work/#approvals).
 
 Calls that carry a secret do not follow an inherited `approval`: issuing an API key
 (`api_credentials.create`), whose answer is the key, shown once to the person who asks; setting
