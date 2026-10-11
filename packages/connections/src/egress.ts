@@ -56,6 +56,12 @@ export type EgressAddressResolver = (host: string) => Promise<EgressResolvedAddr
  * change to it arrives with a restart and an empty cache.
  */
 export const EGRESS_RESOLUTION_TTL_MS = 30_000;
+/**
+ * How long a refusal is held that came from the resolver and not from a rule: a timeout, a
+ * failed lookup or no answer. It is short, so a resolver that was down for a moment does not
+ * keep a Connection refused for the time a judged answer is held.
+ */
+export const EGRESS_RESOLUTION_FAILURE_TTL_MS = 5_000;
 /** How long one DNS lookup may take before the target is refused. */
 export const EGRESS_RESOLVE_TIMEOUT_MS = 5_000;
 /** The default ports of the protocols an address may name without one. */
@@ -242,7 +248,8 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
     port: target.port
   }));
   // Holds the answer for each target of the list that was asked, so at most one entry per
-  // line of `egress.allow`. A refusal is held as long as a grant.
+  // line of `egress.allow`. A refusal by a rule is held as long as a grant, one that came
+  // from the resolver for `EGRESS_RESOLUTION_FAILURE_TTL_MS`.
   const answers = new Map<string, { until: number; answer: Promise<EgressGrant> }>();
 
   const addressesOf = async (host: string): Promise<EgressResolvedAddress[]> => {
@@ -275,21 +282,29 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
     return found;
   };
 
+  /** The refusals that came from the resolver. They are held for the shorter time. */
+  const unresolved = new WeakSet<AppError>();
+  const notResolved = (target: EgressTarget): AppError => {
+    const error = egressDenied(target);
+    unresolved.add(error);
+    return error;
+  };
+
   const judge = async (target: EgressTarget, listed: ListedEntry): Promise<EgressGrant> => {
     let addresses: EgressResolvedAddress[];
     try {
       addresses = await addressesOf(target.host);
     } catch {
-      throw egressDenied(target);
+      throw notResolved(target);
     }
     if (addresses.length === 0) {
-      throw egressDenied(target);
+      throw notResolved(target);
     }
     let store: string[];
     try {
       store = await storeAddressesOn(target.port);
     } catch {
-      throw egressDenied(target);
+      throw notResolved(target);
     }
     for (const answer of addresses) {
       // An answer this check cannot read as an address is never connected to.
@@ -354,8 +369,15 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
       const key = `${target.protocol}|${target.host}|${target.port}`;
       let held = answers.get(key);
       if (!held || held.until <= now()) {
-        held = { until: now() + EGRESS_RESOLUTION_TTL_MS, answer: judge(target, listed) };
-        answers.set(key, held);
+        const asked = now();
+        const entry = { until: asked + EGRESS_RESOLUTION_TTL_MS, answer: judge(target, listed) };
+        held = entry;
+        answers.set(key, entry);
+        entry.answer.catch((error: unknown) => {
+          if (error instanceof AppError && unresolved.has(error)) {
+            entry.until = asked + EGRESS_RESOLUTION_FAILURE_TTL_MS;
+          }
+        });
       }
       return held.answer;
     }

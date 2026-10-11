@@ -2,6 +2,7 @@ import { format, inspect } from "node:util";
 import { describe, expect, it } from "vitest";
 import { connectionConfigSchema, egressConfigSchema } from "@vivd-catalyst/config-schema";
 import {
+  EGRESS_RESOLUTION_FAILURE_TTL_MS,
   EGRESS_RESOLUTION_TTL_MS,
   createEgressChecker,
   egressTargetOfUrl,
@@ -409,6 +410,59 @@ describe("the egress checker", () => {
     time += 1;
     await denied(checker.check(https("api.example.com")));
     expect(asked).toHaveLength(2);
+  });
+
+  it("holds a refusal of the resolver for EGRESS_RESOLUTION_FAILURE_TTL_MS, one by rule for the full time", async () => {
+    // Fails without the change: a lookup that failed once kept the target refused for
+    // EGRESS_RESOLUTION_TTL_MS.
+    expect(EGRESS_RESOLUTION_FAILURE_TTL_MS).toBe(5_000);
+    let time = 1_000;
+    const dns: Dns = { "blocked.example.com": ["10.0.0.5"], "empty.example.com": [] };
+    const { checker, asked } = checkerOf(
+      [
+        { host: "api.example.com" },
+        { host: "empty.example.com" },
+        { host: "blocked.example.com" },
+        {
+          protocol: "postgres",
+          host: "warehouse",
+          port: 5432,
+          network: "private",
+          cidrs: ["172.28.0.0/16"]
+        }
+      ],
+      dns,
+      { now: () => time, platformStore: [{ host: "postgres", port: 5432 }] }
+    );
+    const warehouse: EgressTarget = { protocol: "postgres", host: "warehouse", port: 5432 };
+    // A failed lookup, no answer, and a Store that does not resolve.
+    await denied(checker.check(https("api.example.com")));
+    await denied(checker.check(https("empty.example.com")));
+    dns.warehouse = ["172.28.0.9"];
+    await denied(checker.check(warehouse));
+    await denied(checker.check(https("blocked.example.com")));
+    expect(asked).toHaveLength(5);
+
+    // Within the short time nothing is asked again.
+    dns["api.example.com"] = ["93.184.216.34"];
+    dns["empty.example.com"] = ["93.184.216.35"];
+    dns.postgres = ["172.28.0.2"];
+    dns["blocked.example.com"] = ["93.184.216.36"];
+    time += EGRESS_RESOLUTION_FAILURE_TTL_MS - 1;
+    await denied(checker.check(https("api.example.com")));
+    expect(asked).toHaveLength(5);
+
+    // After it the three resolver refusals are asked again and granted. The refusal by rule
+    // stands for the full time.
+    time += 1;
+    expect((await checker.check(https("api.example.com"))).address).toBe("93.184.216.34");
+    expect((await checker.check(https("empty.example.com"))).address).toBe("93.184.216.35");
+    expect((await checker.check(warehouse)).address).toBe("172.28.0.9");
+    await denied(checker.check(https("blocked.example.com")));
+    time += EGRESS_RESOLUTION_TTL_MS - EGRESS_RESOLUTION_FAILURE_TTL_MS - 1;
+    await denied(checker.check(https("blocked.example.com")));
+    time += 1;
+    expect((await checker.check(https("blocked.example.com"))).address).toBe("93.184.216.36");
   });
 
   it("names host and port in a refusal, and nothing else of the target", async () => {
