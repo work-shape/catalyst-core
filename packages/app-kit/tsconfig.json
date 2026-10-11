@@ -1,0 +1,8 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // A browser library: no Node globals. The release script is plain JavaScript.
+    "types": []
+  },
+  "include": ["src"]
+}

@@ -3,6 +3,7 @@
   "@vivd-catalyst/api-client": ["@vivd-catalyst/api-contract"],
   "@vivd-catalyst/api-contract": ["@vivd-catalyst/core"],
   "@vivd-catalyst/app-build": ["@vivd-catalyst/core"],
+  "@vivd-catalyst/app-kit": ["@vivd-catalyst/ui"],
   "@vivd-catalyst/auth": ["@vivd-catalyst/core"],
   "@vivd-catalyst/capability-sdk": [
     "@vivd-catalyst/core",

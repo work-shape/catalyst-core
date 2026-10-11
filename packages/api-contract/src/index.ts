@@ -1,3 +1,4 @@
+export * from "./app-bridge";
 export * from "./contract-diff";
 export * from "./openapi";
 export * from "./operations";

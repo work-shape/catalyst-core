@@ -1,0 +1,97 @@
+{
+  "version": "1.0.0",
+  "files": [
+    {
+      "file": "charts.js",
+      "bytes": 572513,
+      "sha256": "f6201667924111a80748d12a56a595314501a0a54872cfc15a67b211b7a1d377"
+    },
+    {
+      "file": "kit.js",
+      "bytes": 4469,
+      "sha256": "8b86cd5c45ab74f947969e641b7e2f7af8ff3b7e3f0b8133edc9ae1ad87bff79"
+    },
+    {
+      "file": "react.js",
+      "bytes": 196817,
+      "sha256": "854b07c6ec08ccfd474c419c97214d1acb8cdcc813443b1b9969d41c581e5e05"
+    },
+    {
+      "file": "router.js",
+      "bytes": 110594,
+      "sha256": "6cb1513bdda282487c120213067e911bc631cfd2a2fe6916d4554a77ffd40e9a"
+    },
+    {
+      "file": "ui.css",
+      "bytes": 50421,
+      "sha256": "12822762ac678bf79fc3a635b3a72b381739753d19f8d61ce59e82ba3a0f4491"
+    },
+    {
+      "file": "ui.js",
+      "bytes": 237795,
+      "sha256": "e8788d33deea52d06aa2b69a86e7d19efa8804ee658145a2b3c020f77920829f"
+    }
+  ],
+  "libraries": [
+    {
+      "name": "react",
+      "version": "19.2.7",
+      "licence": "MIT"
+    },
+    {
+      "name": "react-dom",
+      "version": "19.2.7",
+      "licence": "MIT"
+    },
+    {
+      "name": "@tanstack/react-router",
+      "version": "1.170.16",
+      "licence": "MIT"
+    },
+    {
+      "name": "echarts",
+      "version": "6.1.0",
+      "licence": "Apache-2.0"
+    },
+    {
+      "name": "radix-ui",
+      "version": "1.6.2",
+      "licence": "MIT"
+    },
+    {
+      "name": "cmdk",
+      "version": "1.1.1",
+      "licence": "MIT"
+    },
+    {
+      "name": "lucide-react",
+      "version": "1.17.0",
+      "licence": "ISC"
+    },
+    {
+      "name": "class-variance-authority",
+      "version": "0.7.1",
+      "licence": "Apache-2.0"
+    },
+    {
+      "name": "clsx",
+      "version": "2.1.1",
+      "licence": "MIT"
+    },
+    {
+      "name": "tailwind-merge",
+      "version": "3.6.0",
+      "licence": "MIT"
+    },
+    {
+      "name": "tailwindcss",
+      "version": "4.3.0",
+      "licence": "MIT"
+    },
+    {
+      "name": "tw-animate-css",
+      "version": "1.4.0",
+      "licence": "MIT"
+    }
+  ]
+}

@@ -742,6 +742,9 @@ const config = [
       "packages/postgres-store/migrations/**",
       // Third-party files served as they were published; the manifest test holds their hashes.
       "packages/chat-server/vendor/view-runtime/**",
+      // The released App Kit versions, written by `kit:release` and frozen; the kit runtime test
+      // holds their hashes.
+      "packages/chat-server/vendor/app-kit/**",
       "**/.astro/**",
       "**/coverage/**",
       "**/playwright-report/**",

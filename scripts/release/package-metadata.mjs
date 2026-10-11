@@ -16,6 +16,8 @@ const NODE_ENGINE = ">=22";
 
 // Packages under packages/ that are not published, with the reason.
 export const UNPUBLISHED = {
+  "app-kit":
+    "Source of the App Kit; a Page never installs it, the instance serves its released files from chat-server",
   "chat-standalone": "Vite application, not a library; deployments build their own UI entry",
   docs: "Astro documentation site",
   "quality-config":

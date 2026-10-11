@@ -1,0 +1,208 @@
+import {
+  envelope,
+  readHostMessage,
+  type AppContext,
+  type AppThemeChange,
+  type HostMessage,
+  type PageMessage
+} from "./protocol";
+
+// The kit client: what a Page calls to learn where it runs and to tell the interface where it
+// is. The client talks through a transport. Inside a frame the transport is `postMessage`;
+// app code never calls that itself, and never names `window.parent` or the instance address.
+
+/** How the client reaches the interface. */
+export interface Transport {
+  /** Sends one message of the Page. */
+  send(message: PageMessage): void;
+  /** Calls `listener` for every message of the interface until the returned function is called. */
+  subscribe(listener: (message: HostMessage) => void): () => void;
+}
+
+/** The longest a Page waits for the interface to answer its first message. */
+const CONTEXT_TIMEOUT_MS = 10_000;
+
+interface MessageSource {
+  postMessage(message: unknown, targetOrigin: string): void;
+}
+
+/** What the transport reads of a message that arrived. */
+interface ArrivedMessage {
+  data: unknown;
+  origin: string;
+  source: unknown;
+}
+
+interface FrameWindow {
+  parent: unknown;
+  addEventListener(type: "message", listener: (event: ArrivedMessage) => void): void;
+  removeEventListener(type: "message", listener: (event: ArrivedMessage) => void): void;
+}
+
+/**
+ * The window of this Page, as the transport reads it. A Page that is no frame is its own
+ * parent: its greeting comes back to it and is no message of an interface, so nothing answers.
+ */
+function pageWindow(): FrameWindow {
+  return {
+    parent: window.parent,
+    addEventListener: (type, listener) => window.addEventListener(type, listener),
+    removeEventListener: (type, listener) => window.removeEventListener(type, listener)
+  };
+}
+
+/**
+ * The windows that may be the interface: the one that holds the Page's frame and the one above
+ * it. The instance serves a Page inside a holding document of its own, so the interface is the
+ * second; a Page framed directly finds it as the first.
+ */
+function hostCandidates(self: FrameWindow): MessageSource[] {
+  const candidates: MessageSource[] = [];
+  let current: unknown = self;
+  for (let level = 0; level < 2; level += 1) {
+    const parent: unknown = isWindowLike(current) ? current.parent : undefined;
+    if (!isWindowLike(parent) || parent === current) {
+      break;
+    }
+    candidates.push(parent);
+    current = parent;
+  }
+  return candidates;
+}
+
+function isWindowLike(value: unknown): value is MessageSource & { parent: unknown } {
+  return typeof value === "object" && value !== null && "postMessage" in value;
+}
+
+/**
+ * The transport of a Page in a frame. The first message is a greeting without content and goes
+ * to the windows above the frame. The window that answers it with the context is the
+ * interface: from then on the Page posts to that window and to the origin it answered from,
+ * and takes messages from that window only.
+ */
+export function createFrameTransport(self: FrameWindow = pageWindow()): Transport {
+  const candidates = hostCandidates(self);
+  let host: { source: MessageSource; origin: string } | undefined;
+  return {
+    send(message) {
+      if (message.type === "ready") {
+        for (const candidate of candidates) {
+          candidate.postMessage(envelope(message), "*");
+        }
+        return;
+      }
+      host?.source.postMessage(envelope(message), host.origin);
+    },
+    subscribe(listener) {
+      const onMessage = (event: ArrivedMessage) => {
+        const source: unknown = event.source;
+        const known = host ? source === host.source : candidates.some((item) => item === source);
+        if (!known) {
+          return;
+        }
+        const message = readHostMessage(event.data);
+        if (!message) {
+          return;
+        }
+        if (!host && message.type === "context" && isWindowLike(source)) {
+          host = { source, origin: event.origin };
+        }
+        listener(message);
+      };
+      self.addEventListener("message", onMessage);
+      return () => self.removeEventListener("message", onMessage);
+    }
+  };
+}
+
+export interface AppClient {
+  /** Where the Page runs and who looks at it. Asked once; every later call gets the same answer. */
+  getContext(): Promise<AppContext>;
+  /** Calls `callback` when the interface changes its colours or its mode. Returns the way to stop. */
+  onThemeChange(callback: (change: AppThemeChange) => void): () => void;
+  /** Tells the interface which route the Page shows. A router made by the kit calls it itself. */
+  navigate(path: string): void;
+  /** Tells the interface how high the Page's content is, in pixels. */
+  resize(height: number): void;
+}
+
+/** A client on a transport. A Page uses the one below; a test brings its own transport. */
+export function createAppClient(
+  transport: Transport,
+  options: { contextTimeoutMs?: number } = {}
+): AppClient {
+  let session: string | undefined;
+  let context: Promise<AppContext> | undefined;
+  const themeListeners = new Set<(change: AppThemeChange) => void>();
+  // What the Page said before the interface answered: the newest message of each kind.
+  const pending = new Map<PageMessage["type"], PageMessage>();
+
+  function connect(): Promise<AppContext> {
+    context ??= new Promise<AppContext>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error("The interface did not answer. A Page runs inside the platform."));
+      }, options.contextTimeoutMs ?? CONTEXT_TIMEOUT_MS);
+      transport.subscribe((incoming) => {
+        if (incoming.type === "context") {
+          if (session === undefined) {
+            session = incoming.session;
+            clearTimeout(timeout);
+            resolve(incoming.context);
+            const queued = [...pending.values()];
+            pending.clear();
+            for (const message of queued) {
+              send(message);
+            }
+          }
+          return;
+        }
+        for (const listener of themeListeners) {
+          listener({ theme: incoming.theme, mode: incoming.mode });
+        }
+      });
+      transport.send({ type: "ready" });
+    });
+    return context;
+  }
+
+  /** A message sent before the interface answered waits for the session it has to carry. */
+  function send(message: PageMessage): void {
+    if (session === undefined) {
+      pending.set(message.type, message);
+      void connect().catch(() => undefined);
+      return;
+    }
+    transport.send(message.type === "ready" ? message : { ...message, session });
+  }
+
+  return {
+    getContext: connect,
+    onThemeChange(callback) {
+      themeListeners.add(callback);
+      void connect().catch(() => undefined);
+      return () => {
+        themeListeners.delete(callback);
+      };
+    },
+    navigate(path) {
+      send({ type: "navigate", session: "", path });
+    },
+    resize(height) {
+      send({ type: "resize", session: "", height });
+    }
+  };
+}
+
+let frameClient: AppClient | undefined;
+
+/** The client of this Page. It is made with the first call, so importing the kit sends nothing. */
+function client(): AppClient {
+  frameClient ??= createAppClient(createFrameTransport());
+  return frameClient;
+}
+
+export const getContext: AppClient["getContext"] = () => client().getContext();
+export const onThemeChange: AppClient["onThemeChange"] = (callback) =>
+  client().onThemeChange(callback);
+export const navigate: AppClient["navigate"] = (path) => client().navigate(path);
+export const resize: AppClient["resize"] = (height) => client().resize(height);

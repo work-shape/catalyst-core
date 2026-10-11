@@ -21,6 +21,11 @@
       "project": ["src/**/*.ts"],
       "vite": false
     },
+    "packages/app-kit": {
+      "entry": ["src/index.ts", "src/router-entry.ts", "scripts/release.mjs"],
+      "project": ["src/**/*.{ts,tsx}", "scripts/**/*.mjs"],
+      "vite": false
+    },
     "packages/ui": {
       "entry": ["src/index.ts", "src/theme/index.ts", "src/gallery/index.tsx"],
       "project": ["src/**/*.{ts,tsx}"],

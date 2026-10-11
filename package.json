@@ -37,7 +37,8 @@
     "lint": "catalyst-quality lint",
     "typecheck:packages": "catalyst-quality types:packages",
     "typecheck:tests": "catalyst-quality types:tests",
-    "typecheck:docs": "pnpm --filter @vivd-catalyst/docs typecheck"
+    "typecheck:docs": "pnpm --filter @vivd-catalyst/docs typecheck",
+    "kit:release": "pnpm --filter @vivd-catalyst/app-kit release"
   },
   "devDependencies": {
     "@assistant-ui/react": "^0.14.26",
@@ -48,6 +49,7 @@
     "@univerjs/core": "0.25.1",
     "@vitejs/plugin-react": "^6.0.2",
     "@vivd-catalyst/app-build": "workspace:*",
+    "@vivd-catalyst/app-kit": "workspace:*",
     "@vivd-catalyst/core": "workspace:*",
     "@vivd-catalyst/postgres-store": "workspace:*",
     "@vivd-catalyst/quality-config": "workspace:*",
