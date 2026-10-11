@@ -150,6 +150,12 @@ export interface ActorAccess {
   authorize(action: string, resource?: AccessResource): AccessDecision;
   /** Throws FORBIDDEN with the action and reason. */
   require(action: string, resource?: AccessResource): void;
+  /**
+   * A grant row allows the active holder the action at one of these scope kinds, on whichever
+   * asset, workspace or Namespace. It tells that something of the kind may be open to the
+   * holder and decides no call: a covering deny is not read.
+   */
+  holdsGrantAt(action: string, scopeKinds: readonly PermissionGrant["scopeKind"][]): boolean;
 }
 
 export interface Authorizer {
@@ -433,7 +439,15 @@ export function createActorAccess(holder: AccessHolder, persisted: PersistedAcce
       if (!decision.allowed) {
         throw operationDenialError({ kind: "forbidden", action, reason: decision.reason });
       }
-    }
+    },
+    holdsGrantAt: (action, scopeKinds) =>
+      persisted.holderActive &&
+      persisted.grants.some(
+        (grant) =>
+          grant.action === action &&
+          grant.effect === "allow" &&
+          scopeKinds.includes(grant.scopeKind)
+      )
   };
 }
 

@@ -1,7 +1,6 @@
 import { RELEASE_VERSION, apiOperations } from "@vivd-catalyst/api-contract";
 import {
   AppError,
-  accessHolderFromIdentity,
   hasAuthScope,
   type ActorAccess,
   type AssetKindActions,
@@ -47,34 +46,19 @@ function usableActions(
 
 /**
  * The read actions of the registered kinds a grant row allows the caller on one asset or on one
- * workspace's assets, where its credential's scopes let it read. One read of the caller's own
- * grant rows: it grows with the rows one holder has, never with the assets of the instance.
+ * workspace's assets, where its credential's scopes let it read. Read from the grant rows the
+ * request's authorization already loaded: it sends no statement.
  */
-async function readActionsOnSingleAssets(
+function readActionsOnSingleAssets(
   options: ChatServerOptions,
-  actor: AuthenticatedIdentity
-): Promise<string[]> {
-  if (!hasAuthScope(actor, SCOPE_OF_VERB.read)) {
-    return [];
-  }
-  const holder = accessHolderFromIdentity(actor);
-  const { holderActive, grants } = await options.stores.access.loadPersistedAccess({
-    clientInstanceId: options.clientInstanceId,
-    holder: { kind: holder.kind, id: holder.id }
-  });
-  if (!holderActive) {
+  context: { access: ActorAccess; actor: AuthenticatedIdentity }
+): string[] {
+  if (!hasAuthScope(context.actor, SCOPE_OF_VERB.read)) {
     return [];
   }
   return options.configAssets.kinds.kinds
     .map((kind) => kind.actions.read)
-    .filter((action) =>
-      grants.some(
-        (grant) =>
-          grant.action === action &&
-          grant.effect === "allow" &&
-          (grant.scopeKind === "asset" || grant.scopeKind === "workspace")
-      )
-    );
+    .filter((action) => context.access.holdsGrantAt(action, ["asset", "workspace"]));
 }
 
 export function registerPlatformRoutes(route: Route, options: ChatServerOptions): void {
@@ -103,7 +87,7 @@ export function registerPlatformRoutes(route: Route, options: ChatServerOptions)
           actions: { ...kind.actions }
         })),
         actions: usableActions(options, { access, actor }),
-        assetActions: await readActionsOnSingleAssets(options, actor),
+        assetActions: readActionsOnSingleAssets(options, { access, actor }),
         namespaces: namespaces.flatMap((namespace) => {
           const actions = usableActions(options, { access, actor }, namespace.prefix);
           return actions.length > 0
