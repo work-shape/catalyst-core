@@ -30,7 +30,11 @@ export function toOperationRunResource(run: OperationRun): OperationRunResource 
       at: run.decision.at,
       comment: run.decision.comment
     },
-    error: run.error && { code: run.error.code, message: run.error.message },
+    error: run.error && {
+      code: run.error.code,
+      message: run.error.message,
+      ...(run.error.reason === undefined ? {} : { reason: run.error.reason })
+    },
     usage: run.usage,
     correlationId: run.correlationId,
     createdAt: run.createdAt,

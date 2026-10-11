@@ -65,6 +65,11 @@ export interface OperationRunError {
   code: string;
   message: string;
   /**
+   * The fixed reason of the failure where the operation names one, such as the reason a call
+   * of a Connection ended with. The message is a sentence for people and may change its words.
+   */
+  reason?: string;
+  /**
    * Set where the call failed before the operation's implementation was reached, so nothing
    * was changed. Only such a failed run of a changing operation is run again under its key.
    */

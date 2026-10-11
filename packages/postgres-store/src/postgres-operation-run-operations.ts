@@ -402,6 +402,7 @@ function mapOperationRun(row: OperationRunRow): OperationRun {
       ? {
           code: row.error.code,
           message: row.error.message,
+          ...(row.error.reason === undefined ? {} : { reason: row.error.reason }),
           ...(row.error.unexecuted ? { unexecuted: true } : {})
         }
       : undefined,

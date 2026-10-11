@@ -6,7 +6,12 @@ import {
   openConnectorContext,
   readConnection
 } from "@vivd-catalyst/connections";
-import { AppError, connectionCallError, type JsonValue } from "@vivd-catalyst/core";
+import {
+  AppError,
+  connectionCallError,
+  connectionCallReasonOf,
+  type JsonValue
+} from "@vivd-catalyst/core";
 import { OPERATION_INPUT_MAX_DEPTH } from "@vivd-catalyst/tool-execution";
 import { clientInstanceId } from "./support/access-instance";
 import { connection } from "./support/connections";
@@ -54,7 +59,7 @@ async function refusal(work: Promise<unknown>): Promise<{ code: string; reason: 
     (thrown: unknown) => thrown
   );
   if (!(error instanceof AppError)) throw new Error(`no refusal: ${String(error)}`);
-  return { code: error.code, reason: error.message.split(":")[0] ?? "" };
+  return { code: error.code, reason: connectionCallReasonOf(error) ?? "" };
 }
 
 afterEach(() => {
@@ -383,12 +388,17 @@ describe("a refused target a Connector type asked for", () => {
       expect(text.toLowerCase(), where).not.toContain(t.secret.toLowerCase());
     }
 
-    // A refused target that holds nothing of the credential is still named.
+    // A refused target that holds nothing of the credential is still named, in the details
+    // of the error and not in its sentence.
     t.setBehaviour(async (_operation, input, context) => {
       await context.checkEgress({ protocol: "https", host: "elsewhere.example.com", port: 8443 });
       return input;
     });
-    const named = await t.failure(t.invoke(t.kai, "connection.crm.echo", { text: "a" }));
-    expect(named.message).toContain("elsewhere.example.com:8443");
+    const named = await t.invoke(t.kai, "connection.crm.echo", { text: "a" });
+    expect(named.result).toMatchObject({
+      status: "failed",
+      error: { details: { host: "elsewhere.example.com", port: 8443 } }
+    });
+    expect((await t.failure(Promise.resolve(named))).message).not.toContain("elsewhere");
   });
 });

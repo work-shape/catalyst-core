@@ -7,6 +7,7 @@ import {
   moduleOffError,
   operationDenialError,
   resolvePolicy,
+  connectionCallReasonOf,
   toErrorEnvelope,
   unknownToJsonValue,
   type AccessDecision,
@@ -642,6 +643,8 @@ export async function failRun(
   // The envelope is the one rule for what an error may tell: no thrown message of an
   // internal error and no provider text reaches the run, the audit row or the caller.
   const { statusCode, error: safe } = toErrorEnvelope(error, call.correlationId);
+  // The reason is one of a fixed list, so it is kept where the envelope drops the details.
+  const reason = connectionCallReasonOf(error);
   if (statusCode >= 500) {
     deps.logger.error(
       {
@@ -656,7 +659,12 @@ export async function failRun(
   const failed = await endRun(context, {
     status: "failed",
     finishedAt: now().toISOString(),
-    error: { code: safe.code, message: safe.message, ...(unexecuted ? { unexecuted } : {}) }
+    error: {
+      code: safe.code,
+      message: safe.message,
+      ...(reason ? { reason } : {}),
+      ...(unexecuted ? { unexecuted } : {})
+    }
   });
   await context.emit("operation.failed", "after", { status: "failed", reason: safe.code });
   const details = detailsRecord(safe.details);

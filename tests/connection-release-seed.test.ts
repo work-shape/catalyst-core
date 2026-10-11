@@ -13,6 +13,7 @@ import {
 import {
   SHARED_CREDENTIAL_SUBJECT,
   asClientInstanceId,
+  connectionCallSentence,
   type JsonObject
 } from "@vivd-catalyst/core";
 import { required } from "./support/assertions";
@@ -216,6 +217,66 @@ describe("an agent of an assembled instance", () => {
     ]);
     // The credential is in no row and in nothing the run sent to the person.
     expect(findLeak(await dumpDatabaseText(), w.token)).toBeUndefined();
+    expect(findLeak(events, w.token)).toBeUndefined();
+  });
+});
+
+describe("a failed call of a Connection operation by an agent", () => {
+  // Fails without the change: the model was handed "egress_denied: 93.184.216.35:443 is not
+  // allowed by the instance's egress list", and the run kept the reason only inside that text.
+  it("hands the model a sentence that names the Connection, and the run keeps the reason", async () => {
+    const w = world();
+    const tool = "connection.outside.echo";
+    const unlisted = "93.184.216.35";
+    const { config, ...input } = w.input({
+      connections: {
+        outside: outside({
+          displayName: "Sample business",
+          settings: { url: `https://${unlisted}/mcp` }
+        })
+      }
+    });
+    setTestAgent(config, {
+      name: "test_agent",
+      displayName: "Test Agent",
+      instructions: "Use configured tools only.",
+      modelProviderId: "local",
+      toolNames: [tool],
+      initialPrompts: []
+    });
+    const instance = await createTestInstance({ ...input, config });
+
+    const created = await instance.call("conversations.create", { payload: { title: "Call" } });
+    const conversationId = created.json<{ id: string }>().id;
+    const started = await injectStartConversationRun(
+      instance,
+      conversationId,
+      `/tool ${tool} {"text":"hello"}`
+    );
+    const events = await drainRunEvents(instance, conversationId, started.run.id);
+
+    // The deterministic model repeats what it was handed as the result of the tool.
+    const sentence = connectionCallSentence("egress_denied", "Sample business");
+    expect(sentence).toContain("the connection Sample business");
+    expect(events).toContain(sentence);
+    expect(events).not.toContain(unlisted);
+    expect(events).not.toContain("egress_denied:");
+    // The reason stays in the structured part of the tool result.
+    expect(events).toContain('"reason":"egress_denied"');
+    expect(w.connector.calls).toEqual([]);
+    const runs = (await instance.stores.operationRuns.list({ clientInstanceId })).filter(
+      (run) => run.operation === tool
+    );
+    expect(runs).toMatchObject([
+      { status: "failed", error: { code: "FORBIDDEN", reason: "egress_denied", message: sentence } }
+    ]);
+    // The run answers the same over the API, to whoever reads runs.
+    const read = await instance.call("operations.get_run", {
+      params: { runId: required(runs[0]).id }
+    });
+    expect(read.json<JsonObject>()).toMatchObject({
+      error: { code: "FORBIDDEN", reason: "egress_denied", message: sentence }
+    });
     expect(findLeak(events, w.token)).toBeUndefined();
   });
 });

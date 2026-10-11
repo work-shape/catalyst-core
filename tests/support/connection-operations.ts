@@ -184,7 +184,7 @@ interface ConnectionOperationsFixture extends AccessInstance {
     input: unknown,
     further?: InvokeOptions
   ): Promise<OperationOutcome>;
-  /** The reason a failed call carries, as the first word of its message. */
+  /** The reason the run of a failed call keeps, with the code and the sentence of its error. */
   failure(
     work: Promise<OperationOutcome>
   ): Promise<{ code: string; reason: string | undefined; message: string }>;
@@ -421,10 +421,11 @@ export async function fixture(
       operationCalls.deps
     );
   };
-  /** The reason a failed call carries, as the first word of its message. */
+  /** The reason a failed call carries beside its sentence. */
   const failure = async (work: Promise<OperationOutcome>) => {
-    const { error } = failedSchema.parse((await work).result);
-    return { code: error.code, reason: error.message.split(":")[0], message: error.message };
+    const outcome = await work;
+    const { error } = failedSchema.parse(outcome.result);
+    return { code: error.code, reason: outcome.run.error?.reason, message: error.message };
   };
   /** The runs of Connection operations. The grants a test writes leave runs of their own. */
   const runs = async () =>

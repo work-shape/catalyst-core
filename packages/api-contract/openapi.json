@@ -17046,6 +17046,9 @@
               },
               "message": {
                 "type": "string"
+              },
+              "reason": {
+                "type": "string"
               }
             },
             "required": [

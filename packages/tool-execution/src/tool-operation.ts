@@ -266,6 +266,7 @@ export function toolResultFromOperationResult(
     return outcome.toolResult;
   }
   const { result } = outcome;
+  const reason = outcome.run.error?.reason;
   switch (result.status) {
     case "done":
       return {
@@ -297,7 +298,13 @@ export function toolResultFromOperationResult(
     case "failed":
       return result.error.code === "INTERNAL"
         ? internalFailure(names.correlationId)
-        : failed("handler_failed", result.error.message);
+        : failed(
+            "handler_failed",
+            result.error.message,
+            // The message is a sentence the model words an answer from. The reason the run
+            // kept stays beside it for whatever reads the call as data.
+            reason === undefined ? undefined : { reason }
+          );
     case "expired":
     case "pending_confirmation":
       return internalFailure(names.correlationId);

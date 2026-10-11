@@ -4,6 +4,7 @@ import {
   CREDENTIAL_REFUSALS,
   EGRESS_UNRESOLVED,
   connectionCallError,
+  connectionCallFailure,
   connectionCallReasonOf,
   isAppError,
   type ConnectionCallReason,
@@ -246,16 +247,7 @@ function safeCallError(
       { exposeMessage: true }
     );
   }
-  return exposed(connectionCallError(reason));
-}
-
-/**
- * The same error with a message that reaches the caller whatever its status. The sentence is
- * the platform's own, and its first word is the reason: without this an `upstream_timeout`
- * would arrive as an internal error that names nothing.
- */
-function exposed(error: AppError): AppError {
-  return new AppError(error.code, error.message, error.details, { exposeMessage: true });
+  return connectionCallError(reason);
 }
 
 /** The health a failed call leaves behind, for the reasons that say the Connection is broken. */
@@ -474,9 +466,33 @@ function callable(
 }
 
 /**
+ * The error as the caller reads it: the sentence of its reason, which names the Connection by
+ * its display name, and the reason as `details.reason`. The host and the port of a refused
+ * target stay in the details, where `safeCallError` put them, and never enter the sentence.
+ * An error without a reason leaves as it is.
+ */
+function inSentence(error: unknown, displayName: string | undefined): unknown {
+  const reason = connectionCallReasonOf(error);
+  if (reason === undefined || !isAppError(error)) return error;
+  const details: unknown = error.details;
+  const refused =
+    typeof details === "object" && details !== null && "host" in details && "port" in details
+      ? details
+      : undefined;
+  return connectionCallFailure(
+    reason,
+    displayName,
+    typeof refused?.host === "string" && typeof refused.port === "number"
+      ? { host: refused.host, port: refused.port }
+      : {}
+  );
+}
+
+/**
  * Executes one call. The caller is `runOperation`, which has authorized the actor on the
  * Connection, resolved the policy and written the run. Answers the result of the Connector
  * type once it passed the size bound, the search for the credential and the output schema.
+ * A call that fails for a reason ends with the sentence of that reason.
  */
 export async function callConnectionOperation(
   deps: ConnectionOperationSourceDeps,
@@ -485,9 +501,28 @@ export async function callConnectionOperation(
   input: unknown,
   context: Pick<OperationExecutionContext, "runtime">
 ): Promise<JsonValue> {
+  const named: { displayName?: string } = {};
+  try {
+    return await call(deps, slots, target, input, context, named);
+  } catch (error) {
+    throw inSentence(error, named.displayName);
+  }
+}
+
+async function call(
+  deps: ConnectionOperationSourceDeps,
+  slots: ConnectionCallSlots,
+  target: ConnectionCallTarget,
+  input: unknown,
+  context: Pick<OperationExecutionContext, "runtime">,
+  /** Receives the display name of the Connection as soon as a read found one. */
+  named: { displayName?: string }
+): Promise<JsonValue> {
   // Refused without a wait where the Connection or the input says so already.
   const read = async () => {
-    const found = callable(await readConnection(deps, target.connectionName), target);
+    const stored = await readConnection(deps, target.connectionName);
+    if (stored) named.displayName = stored.config.displayName;
+    const found = callable(stored, target);
     if (issuesOf(found.descriptor, input)) throw connectionCallError("input_invalid");
     return found;
   };
@@ -589,7 +624,7 @@ async function current<Found>(
   try {
     return await Promise.race([reading, ended]);
   } catch (error) {
-    throw signal.aborted ? exposed(connectionCallError("upstream_timeout")) : error;
+    throw signal.aborted ? connectionCallError("upstream_timeout") : error;
   }
 }
 

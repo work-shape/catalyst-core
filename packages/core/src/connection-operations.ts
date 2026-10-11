@@ -112,7 +112,9 @@ export type ConnectionOperationStatus =
 
 /**
  * Why a call of a Connection is refused or fails, each with the error code it travels under.
- * The reason is the `details.reason` and the first word of the message of the `AppError`.
+ * The reason is the `details.reason` of the `AppError`. It is also the first word of the
+ * message where the platform speaks to an administrator (a test, a discovery). The error a
+ * call of an operation ends with says `CONNECTION_CALL_SENTENCES` instead.
  */
 export const CONNECTION_CALL_REASONS = {
   /** The Connection is disabled, cannot be reached, or its secret cannot be read. */
@@ -173,6 +175,94 @@ export function connectionCallError(reason: ConnectionCallReason, message?: stri
 
 function isConnectionCallReason(value: unknown): value is ConnectionCallReason {
   return typeof value === "string" && Object.hasOwn(CONNECTION_CALL_REASONS, value);
+}
+
+/** Where an administrator looks after a Connection, as the sentences name it. */
+const WHERE = "Build > Connections";
+
+/** The longest display name a sentence repeats. A longer one is cut. */
+export const CONNECTION_NAME_IN_SENTENCE_MAX_LENGTH = 80;
+
+/**
+ * What a failed call of a Connection operation tells the caller, one entry per reason. The
+ * reader is an agent's model that words the answer for a person, or the person. Each entry
+ * says what happened, whether trying again makes sense and who can act. `c` is the Connection
+ * by its display name ("the connection Sample business"). No entry holds a host, a port, the
+ * value of a credential or text an outside system sent.
+ */
+const CONNECTION_CALL_SENTENCES: Record<ConnectionCallReason, (c: string) => string> = {
+  connection_unavailable: (c) =>
+    `${c} cannot be used right now. Trying again later may work. If it keeps failing, an administrator can check it under ${WHERE}.`,
+  connection_not_configured: (c) =>
+    `${c} is not set up completely, so it cannot be used. Trying again will not help. An administrator can see what is missing under ${WHERE}.`,
+  secret_unreadable: (c) =>
+    `${c} cannot be used because its stored credential cannot be read. Trying again will not help. An administrator can see what to do under ${WHERE}.`,
+  operation_unknown: (c) =>
+    `${c} does not offer this action at the moment. Trying again will not help. An administrator can check the actions of the connection under ${WHERE}.`,
+  operation_disabled: (c) =>
+    `This action of ${c} is switched off. Trying again will not help. An administrator can check it under ${WHERE}.`,
+  operation_needs_review: (c) =>
+    `This action of ${c} changed in the outside system and waits for a review. Trying again will not help until an administrator has accepted the change. The details are under ${WHERE}.`,
+  egress_denied: (c) =>
+    `This instance does not allow ${c} to reach its outside system. Trying again will not help. An administrator can check it under ${WHERE}.`,
+  input_invalid: (c) =>
+    `${c} did not run this action because the input does not fit what the action expects. Correct the input and try again.`,
+  output_invalid: (c) =>
+    `The answer of ${c} was too large or not in the expected form and was discarded. Asking for less may work. If it keeps failing, an administrator can check it under ${WHERE}.`,
+  output_rejected: (c) =>
+    `The answer of ${c} was discarded because it contained the connection's credential. Trying again will not help. An administrator can check it under ${WHERE}.`,
+  upstream_unauthorized: (c) =>
+    `The outside system refused the credential of ${c}. Trying again will not help. An administrator can see what to do under ${WHERE}.`,
+  upstream_rate_limited: (c) =>
+    `The outside system behind ${c} accepts no more calls for the moment. Wait a little before trying again.`,
+  upstream_timeout: (c) =>
+    `${c} did not answer in time. If the action changes something, it is not known whether the change happened, so check before trying again. If it keeps failing, an administrator can check it under ${WHERE}.`,
+  upstream_error: (c) =>
+    `The outside system behind ${c} reported an error. Trying again later may work. If it keeps failing, an administrator can check it under ${WHERE}.`,
+  connection_busy: (c) => `Too many calls of ${c} are waiting right now. Try again in a moment.`
+};
+
+/** The display name as one word group of a sentence: one line, no control character, bounded. */
+function nameInSentence(displayName: string | undefined): string | undefined {
+  const plain = (displayName ?? "")
+    .replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\s]+/gu, " ")
+    .trim()
+    .slice(0, CONNECTION_NAME_IN_SENTENCE_MAX_LENGTH)
+    .trim();
+  return plain === "" ? undefined : plain;
+}
+
+/**
+ * The sentence of a reason for the Connection of that display name. A call that found no
+ * Connection names none.
+ */
+export function connectionCallSentence(
+  reason: ConnectionCallReason,
+  displayName: string | undefined
+): string {
+  const name = nameInSentence(displayName);
+  const sentence = CONNECTION_CALL_SENTENCES[reason](
+    name === undefined ? "this connection" : `the connection ${name}`
+  );
+  return `${sentence.charAt(0).toUpperCase()}${sentence.slice(1)}`;
+}
+
+/**
+ * The error a call of a Connection operation ends with: the code of the reason, the sentence
+ * as its message and the reason as `details.reason`. The message reaches the caller whatever
+ * the status, since it is the platform's own.
+ */
+export function connectionCallFailure(
+  reason: ConnectionCallReason,
+  displayName: string | undefined,
+  details: Record<string, string | number> = {}
+): AppError {
+  return new AppError(
+    CONNECTION_CALL_REASONS[reason],
+    connectionCallSentence(reason, displayName),
+    { ...details, reason },
+    { exposeMessage: true }
+  );
 }
 
 /**

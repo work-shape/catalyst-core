@@ -70,7 +70,9 @@ export const operationRunSchema = z.object({
     })
     .optional(),
   /** Why the run failed or was refused: a code and a message, never a provider's text. */
-  error: z.object({ code: z.string(), message: z.string() }).optional(),
+  error: z
+    .object({ code: z.string(), message: z.string(), reason: z.string().optional() })
+    .optional(),
   /** What the model calls made inside the run used, where it made any. */
   usage: z
     .object({
