@@ -193,8 +193,9 @@ export const firstDraft: {
 };
 
 /**
- * A call that waits for another person. The demo sends every new skill of the HR Namespace to
- * an approval (`demoCentralPolicySettings`), so this one lands in the Inbox of the admins.
+ * A call that waits for an approval. The demo holds every skill saved into the HR Namespace
+ * (`demoOperations`), and the person who saves this one does not hold `operations.approve`,
+ * so it lands in the Inbox of those who do.
  */
 export const heldSkill: {
   requestedBy: PersonKey;

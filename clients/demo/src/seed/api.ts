@@ -68,7 +68,7 @@ export interface SeedApi {
   assetsOverview(): Promise<ConfigAssetsOverview>;
   /** Nothing when the caller cannot read the asset or it does not exist. */
   getAsset(kind: string, name: string): Promise<Asset | undefined>;
-  /** `pending_approval`: nothing was written, another person decides. */
+  /** `pending_approval`: nothing was written, a holder of `operations.approve` decides. */
   createAsset(
     kind: string,
     config: Record<string, unknown> & { name: string }

@@ -45,7 +45,13 @@ The superadmin is the one of the demo's config, so the instance has eight people
 - Eight agents and seven skills from the working copy under `seed/`, pushed with the config CLI: two agents and two skills in each Namespace, and the agents `meeting-notes` and `travel-weather` and the skill `plain-language` outside every Namespace. The agent `tax-vat-checker` has two revisions: a draft Jonas Brandt saved in the interface's way, and the pushed definition over it.
 - Sixteen grant rows: allows in a Namespace, allows on one agent and one skill, a deny on one agent inside an allowed Namespace, and a deny in a Namespace against an admin.
 - One service principal, `Local config CLI`, with one key.
-- One approval waiting in the Inbox: Elif Aydin saved the skill `hr-parental-leave-faq`, and the demo holds every skill change in `hr-` for approval (`src/policy.ts`). Approve it as Mara Lindqvist or as the superadmin; Elif cannot approve her own request.
+- One approval waiting in the Inbox: Elif Aydin saved the skill `hr-parental-leave-faq`, and the demo holds it, see below.
+
+### The approval setting in `hr-`
+
+The demo's server runs with one policy setting, in `src/policy.ts`, whether or not the seed has run. It holds a new or changed skill that is saved through `assets.put` into the Namespace `hr-`, for every caller, admins and the superadmin included. So editing an HR skill in the interface asks for an approval first. It holds nothing else: not a delete, not a revert, and not a push of the config CLI, which is a different operation. While no Namespace `hr-` is registered it matches nothing, so a demo that was never seeded behaves as before.
+
+A held call is decided by anyone who holds `operations.approve`. Admins and the superadmin hold it, so Mara Lindqvist, Jonas Brandt or the superadmin can decide the seeded request. A requester who holds the right can decide their own request. Elif Aydin does not hold it, so hers waits for somebody else.
 
 ### What to ask the Check tab
 
