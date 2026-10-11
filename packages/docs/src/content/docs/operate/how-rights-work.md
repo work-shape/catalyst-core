@@ -45,7 +45,89 @@ Three words come up on every screen, so here they are once.
 
 - A **right** is the permission to do one kind of thing, such as "write agents". In the API a right has a short name like `agent.write`.
 - A **grant** is one row that gives or refuses one person one right in one place. You write grants on the Access page.
-- A **Namespace** is a registered beginning of a name, such as `tax-`. Every agent and skill whose name starts with it belongs to it. See [Namespaces](#namespaces).
+- A **Namespace** is a registered beginning of a name, such as `tax-`. Every agent and skill whose name starts with it belongs to it. See [Namespaces](#namespaces). It is not a workspace, as the next section shows.
+
+## Namespace or workspace?
+
+They are two different things, and they answer two different questions. A **Namespace** says who may build and change a family of agents. A **workspace** says who works together in which conversations. A team often has one of each, which is why they get mixed up.
+
+<figure class="docs-diagram docs-diagram-wide">
+<svg viewBox="0 0 660 534" role="img" aria-labelledby="rights-fig-5-title rights-fig-5-desc">
+<title id="rights-fig-5-title">Namespace and workspace side by side</title>
+<desc id="rights-fig-5-desc">A table in two columns. A Namespace is a registered start of a name and groups agents and skills. A workspace is a place where people work together in conversations and has members. The only bridge between them is the setting Available in on each agent.</desc>
+<defs><marker id="rights-arrow-5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0 0 10 5 0 10z"/></marker></defs>
+<rect class="box-accent" x="150" y="8" width="245" height="40" rx="8"/>
+<text x="272.5" y="33" class="strong" text-anchor="middle">Namespace</text>
+<rect class="box-ok" x="405" y="8" width="245" height="40" rx="8"/>
+<text x="527.5" y="33" class="strong" text-anchor="middle">Workspace</text>
+<text x="8" y="84" class="small-strong">What it is</text>
+<rect class="box" x="150" y="58" width="245" height="74" rx="8"/>
+<rect class="box" x="405" y="58" width="245" height="74" rx="8"/>
+<text x="164" y="82" class="small">A registered start of a name,</text>
+<text x="164" y="100" class="small">such as tax-.</text>
+<text x="419" y="82" class="small">A place where people work</text>
+<text x="419" y="100" class="small">together in conversations.</text>
+<text x="8" y="166" class="small-strong">What belongs to it</text>
+<rect class="box" x="150" y="140" width="245" height="74" rx="8"/>
+<rect class="box" x="405" y="140" width="245" height="74" rx="8"/>
+<text x="164" y="164" class="small">Agents and skills whose names</text>
+<text x="164" y="182" class="small">start with the prefix. Optional lists</text>
+<text x="164" y="200" class="small">of allowed tools and models.</text>
+<text x="419" y="164" class="small">Conversations with their files,</text>
+<text x="419" y="182" class="small">and members with a role:</text>
+<text x="419" y="200" class="small">owner, admin or member.</text>
+<text x="8" y="248" class="small-strong">Who decides</text>
+<rect class="box" x="150" y="222" width="245" height="74" rx="8"/>
+<rect class="box" x="405" y="222" width="245" height="74" rx="8"/>
+<text x="164" y="246" class="small">A person with Manage users</text>
+<text x="164" y="264" class="small">registers it and writes its grants.</text>
+<text x="419" y="246" class="small">Its owners and admins add</text>
+<text x="419" y="264" class="small">and remove members.</text>
+<text x="8" y="330" class="small-strong">Where you see it</text>
+<rect class="box" x="150" y="304" width="245" height="74" rx="8"/>
+<rect class="box" x="405" y="304" width="245" height="74" rx="8"/>
+<text x="164" y="328" class="small">Settings &gt; Instance &gt; Access,</text>
+<text x="164" y="346" class="small">and in Build beside each name.</text>
+<text x="419" y="328" class="small">The workspace switcher, and the</text>
+<text x="419" y="346" class="small">settings of the workspace.</text>
+<text x="8" y="412" class="small-strong">What it does not do</text>
+<rect class="box" x="150" y="386" width="245" height="74" rx="8"/>
+<rect class="box" x="405" y="386" width="245" height="74" rx="8"/>
+<text x="164" y="410" class="small">It has no members and no</text>
+<text x="164" y="428" class="small">conversations. It does not decide</text>
+<text x="164" y="446" class="small">where an agent can be used.</text>
+<text x="419" y="410" class="small">Membership gives no right to</text>
+<text x="419" y="428" class="small">read or change the definition</text>
+<text x="419" y="446" class="small">of an agent or a skill.</text>
+<text x="8" y="498" class="small-strong">The one bridge</text>
+<rect class="frame" x="150" y="468" width="500" height="58" rx="8"/>
+<text x="164" y="492" class="small">Each agent has a setting "Available in" that names the workspaces</text>
+<text x="164" y="510" class="small">where people can choose it. It is set per agent, not per Namespace.</text>
+</svg>
+<figcaption>A Namespace groups agents by name for the people who build them. A workspace groups conversations for the people who use them.</figcaption>
+</figure>
+
+### When they go hand in hand
+
+Take the tax team of a company. It has both.
+
+- The Shared Workspace **Tax team** is where its twelve people chat. Its owner added them as members. Membership decides who can reach the conversations in it.
+- The Namespace `tax-` holds the agents the team uses, such as `tax-vat-helper`. Mara and one colleague hold a grant in it. They are the two people who may change those agents.
+
+So ten people of the team use the agents and two build them. Membership in the workspace makes nobody a builder, and a grant in the Namespace gives no access to the team's conversations.
+
+### How an agent of the Namespace reaches the workspace
+
+Each agent has a setting named **Available in**. It lists the workspaces whose members can choose the agent in the chat.
+
+- **All workspaces** is where every new agent starts, also one created in a Namespace. Mara's new `tax-travel-costs` can be chosen in every workspace of the instance at once, personal ones and future ones included.
+- **Selected workspaces** narrows that to the Personal Workspaces, to chosen Shared Workspaces, or to both. With nothing ticked the agent is hidden everywhere.
+
+To keep the tax agents to the tax team, somebody opens each agent in Build, goes to **Available in**, chooses **Selected workspaces** and ticks **Tax team**. That somebody needs "Edit agent configuration" for the whole instance. Mara's grant in `tax-` does not show her this section, so she cannot do it herself.
+
+Two exceptions. The default agent of the instance is always available everywhere. And an agent that arrives through a release push starts hidden when the same push deletes an agent that was limited to selected workspaces, because that is a rename and the new name must not reach more people than the old one did.
+
+Nothing links a Namespace to a workspace today. You cannot say "the agents of `tax-` belong to the workspace Tax team". The only connection is the **Available in** setting, agent by agent, and only a person with the instance-wide right sets it.
 
 ## The four questions
 
@@ -233,15 +315,7 @@ A Namespace can carry a list of allowed tools and a list of allowed models. An a
 
 ### A Namespace is not a workspace
 
-The two get mixed up, so here is the difference.
-
-| | Namespace | Collaboration Workspace |
-| --- | --- | --- |
-| What it groups | Agents and skills, by the start of their name | Conversations and their files |
-| How you get in | A grant on the Access page | Workspace Membership |
-| What it decides | Who may read, change and delete those agents and skills | Who sees and takes part in those conversations |
-
-A grant in a Namespace covers the agents and skills of the instance itself. It gives no access to any conversation.
+A grant in a Namespace covers the agents and skills of the instance itself. It gives no access to any conversation. [Namespace or workspace?](#namespace-or-workspace) puts the two side by side.
 
 ## The path of one action
 
