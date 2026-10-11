@@ -151,7 +151,7 @@ export async function getConfigAsset(
   db: PostgresConnection,
   input: Parameters<ConfigAssetStore["getConfigAsset"]>[0]
 ): Promise<ConfigAssetRecord | undefined> {
-  const [row] = await db
+  const read = db
     .select({ asset: configAssets, revision: configAssetRevisions })
     .from(configAssets)
     .innerJoin(configAssetRevisions, eq(configAssetRevisions.id, configAssets.activeRevisionId))
@@ -163,6 +163,8 @@ export async function getConfigAsset(
       )
     )
     .limit(1);
+  // Every write of an asset updates its row, so a shared lock on that row makes it wait.
+  const [row] = await (input.lock === "share" ? read.for("share", { of: configAssets }) : read);
   return row ? mapConfigAsset(row.asset, row.revision) : undefined;
 }
 

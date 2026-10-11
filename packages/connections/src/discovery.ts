@@ -381,8 +381,8 @@ async function discoverOperations(
  * not exist, is off, or whose type has a static catalog or is not part of this build is
  * `skipped` and nothing is contacted. A failure writes its reason as `last_error_code` and
  * leaves the stored catalog as it is, so nothing that was accepted changes. The Connection is
- * read once, and before a write its revision is read again: where it changed meanwhile,
- * nothing is written and the answer says `superseded`. A discovery its
+ * read once, and before a write its revision is read again and held for the write: where it
+ * changed meanwhile, nothing is written and the answer says `superseded`. A discovery its
  * caller stopped writes nothing at all. Never throws for anything the type or the outside
  * system did.
  */
@@ -439,7 +439,11 @@ export async function discoverConnection(
     >
   ): Promise<boolean> =>
     write(async (tx) => {
-      const current = await readConnection({ ...input, stores: tx }, connectionName);
+      // Held at this revision until the write is committed: an edit of the Connection waits,
+      // so it comes after this discovery and not between the check and the write.
+      const current = await readConnection({ ...input, stores: tx }, connectionName, {
+        held: true
+      });
       if (current?.assetId !== connection.assetId || current.revision !== connection.revision) {
         return false;
       }

@@ -69,16 +69,21 @@ function storedConnection(
   };
 }
 
-/** One Connection by its name, with its state. Two point reads. */
+/**
+ * One Connection by its name, with its state. Two point reads. With `held`, inside a
+ * transaction, the Connection keeps the revision that is read until the transaction ends.
+ */
 export async function readConnection(
   deps: ReadDeps,
-  name: string
+  name: string,
+  options: { held?: true } = {}
 ): Promise<StoredConnection | undefined> {
   const { clientInstanceId, stores } = deps;
   const asset = await stores.configAssets.getConfigAsset({
     clientInstanceId,
     kind: CONNECTION_ASSET_KIND,
-    name
+    name,
+    ...(options.held ? { lock: "share" as const } : {})
   });
   if (!asset || asset.status !== "active") return undefined;
   const state = await stores.connections.getConnectionState({

@@ -162,6 +162,12 @@ export interface ConfigAssetStore {
     clientInstanceId: ClientInstanceId;
     kind: ConfigAssetKind;
     name: string;
+    /**
+     * Holds the asset at the revision that is read until the caller's transaction ends: a
+     * write that gives it a new revision waits for that. Only inside a transaction, by a
+     * writer whose row is only right for the revision it read.
+     */
+    lock?: "share";
   }): Promise<ConfigAssetRecord | undefined>;
   /** The revisions of one asset, oldest first unless `newestFirst` is set. */
   listConfigAssetRevisions(input: {

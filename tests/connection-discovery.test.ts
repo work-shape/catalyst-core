@@ -385,6 +385,61 @@ describe("a Connection that changes while it is discovered", () => {
     );
   });
 
+  // Fails without the change: the revision was read without a lock, so an edit could be
+  // committed between that read and the write, and the catalog of the old revision stayed.
+  it("holds the Connection at its revision until its write is committed, so an edit comes after", async () => {
+    const w = world();
+    const instance = await w.start();
+    const asset = required(
+      await instance.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: "connection",
+        name: "outside"
+      })
+    );
+    let edit: Promise<unknown> = Promise.resolve();
+    let edited = false;
+    let editedBeforeCommit = true;
+
+    const outcome = await discoverDirectly(w, undefined, {
+      transaction: (write) =>
+        instance.stores.transaction(async (tx) => {
+          const result = await write(tx);
+          // The state is written and not yet committed. An edit starts now.
+          edit = instance.stores.configAssets
+            .applyConfigAssetMutations({
+              clientInstanceId,
+              mutations: [
+                {
+                  type: "upsert",
+                  kind: "connection",
+                  name: "outside",
+                  config: { ...asset.config, displayName: "Outside, moved" }
+                }
+              ]
+            })
+            .then(() => {
+              edited = true;
+            });
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          editedBeforeCommit = edited;
+          return result;
+        })
+    });
+
+    expect(outcome).toMatchObject({ status: "discovered" });
+    expect(editedBeforeCommit).toBe(false);
+    await edit;
+    const after = required(
+      await instance.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: "connection",
+        name: "outside"
+      })
+    );
+    expect(after.revision).toBe(asset.revision + 1);
+  });
+
   // Fails without the change: the seed of the second start found the running job under the
   // Connection's key and queued nothing, so no discovery started after that seed.
   it("gets a discovery queued behind the running one by a seed, so a newly accepted operation needs no restart", async () => {
