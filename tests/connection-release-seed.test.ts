@@ -1,5 +1,9 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { defineClientInstance } from "@vivd-catalyst/client-assembly";
 import { connectionConfigSchema, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import {
   createSecretStore,
@@ -23,6 +27,7 @@ import {
   generateTestSecret,
   type TestConnector
 } from "./support/test-connector";
+import { fileTestDatabaseUrl } from "./support/test-database";
 import { createTestInstance, getTestExecution } from "./support/test-instance";
 import { withTestSql } from "./support/test-sql";
 
@@ -137,6 +142,35 @@ async function startupRefusal(work: Promise<unknown>): Promise<Error> {
   if (!(error instanceof Error)) throw new Error("Expected the start to stop");
   return error;
 }
+
+describe("the Connector types of a defined client instance", () => {
+  // Fails without the change: `defineClientInstance` took no Connector types and handed none
+  // on, so a client built with it could not start with a Connection in its release config.
+  it("reach the app a client starts, which seeds a Connection of such a type", async () => {
+    const w = world();
+    const env = { ...w.env, DATABASE_URL: await fileTestDatabaseUrl() };
+    const config = w.input().config;
+    const root = await mkdtemp(join(tmpdir(), "catalyst-client-"));
+    try {
+      const client = defineClientInstance({
+        rootDir: root,
+        workspaceRoot: root,
+        loadEnv: false,
+        connectorTypes: [w.connector.type]
+      });
+      const app = await client.createApp({ config, env });
+      await app.close();
+      expect(await readAssets()).toMatchObject([{ name: "outside", deleted: false }]);
+
+      // A client without the type does not start with that Connection.
+      const without = defineClientInstance({ rootDir: root, workspaceRoot: root, loadEnv: false });
+      const refused = await startupRefusal(without.createApp({ config, env }));
+      expect(refused.message).toContain("test");
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+});
 
 describe("the release seed of Connections", () => {
   it("stores what release config defines: a read-only Connection, a handle and ciphertext", async () => {

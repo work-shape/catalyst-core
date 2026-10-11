@@ -1,5 +1,8 @@
 export type { ClientInstanceEnv } from "./env";
-export type { StructuredDataPublicationReviewer } from "@vivd-catalyst/core";
+export type {
+  ConnectorTypeDefinition,
+  StructuredDataPublicationReviewer
+} from "@vivd-catalyst/core";
 export type {
   ClientInstanceCapability,
   ClientInstanceCapabilityContext,

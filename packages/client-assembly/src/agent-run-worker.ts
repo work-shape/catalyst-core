@@ -1,6 +1,7 @@
 import { createLogger } from "./logger";
 import {
   AppError,
+  type ConnectorTypeDefinition,
   type JobWorker,
   type StructuredDataPublicationReviewer
 } from "@vivd-catalyst/core";
@@ -21,6 +22,8 @@ export interface CreateClientInstanceAgentRunWorkerInput {
   configPath?: string;
   env?: ClientInstanceEnv;
   tools: ToolAssemblyDefinition[];
+  /** The Connector types of this build, the same ones the API process is given. */
+  connectorTypes?: ConnectorTypeDefinition[];
   capabilities?: ClientInstanceCapability[];
   structuredDataPublicationReviewer?: StructuredDataPublicationReviewer;
 }

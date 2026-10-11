@@ -2,7 +2,10 @@ import { existsSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadDotenv } from "dotenv";
-import type { StructuredDataPublicationReviewer } from "@vivd-catalyst/core";
+import type {
+  ConnectorTypeDefinition,
+  StructuredDataPublicationReviewer
+} from "@vivd-catalyst/core";
 import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
 import {
   createClientInstanceApp,
@@ -29,6 +32,11 @@ export interface DefineClientInstanceInput {
   workspaceRoot?: string | URL;
   configFile?: string;
   tools?: ToolAssemblyDefinition[];
+  /**
+   * The Connector types of this build. Every process of the instance gets the same ones: the
+   * API, which seeds and manages Connections, and the worker, whose agents call them.
+   */
+  connectorTypes?: ConnectorTypeDefinition[];
   capabilities?: ClientInstanceCapability[];
   structuredDataPublicationReviewer?: StructuredDataPublicationReviewer;
   allowedOrigins?: string | string[];
@@ -43,7 +51,7 @@ export interface DefinedClientInstance {
   loadEnvironment(input?: { env?: ClientInstanceEnv }): ClientInstanceEnv;
   resolveConfigPath(input?: { env?: ClientInstanceEnv; configPath?: string }): string;
   createApp(
-    input?: Omit<CreateClientInstanceAppInput, "configPath" | "tools"> & {
+    input?: Omit<CreateClientInstanceAppInput, "configPath" | "tools" | "connectorTypes"> & {
       configPath?: string;
     }
   ): Promise<ClientInstanceApp>;
@@ -59,7 +67,7 @@ export interface DefinedClientInstance {
   createAgentRunWorker(
     input?: Omit<
       CreateClientInstanceAgentRunWorkerInput,
-      "configPath" | "tools" | "capabilities"
+      "configPath" | "tools" | "connectorTypes" | "capabilities"
     > & {
       configPath?: string;
     }
@@ -67,7 +75,7 @@ export interface DefinedClientInstance {
   runAgentRunWorker(
     input?: Omit<
       CreateClientInstanceAgentRunWorkerInput,
-      "configPath" | "tools" | "capabilities"
+      "configPath" | "tools" | "connectorTypes" | "capabilities"
     > & {
       configPath?: string;
     }
@@ -84,8 +92,13 @@ export interface DefinedClientInstance {
 export function defineClientInstance(input: DefineClientInstanceInput): DefinedClientInstance {
   const clientRoot = resolve(toPath(input.rootDir));
   const workspaceRoot = resolve(toPath(input.workspaceRoot ?? resolve(clientRoot, "../..")));
-  const tools = input.tools ?? [];
-  const capabilities = input.capabilities ?? [];
+  // What the build is made of. One object, so no process of the instance is assembled from
+  // less than another.
+  const build = {
+    tools: input.tools ?? [],
+    connectorTypes: input.connectorTypes ?? [],
+    capabilities: input.capabilities ?? []
+  };
 
   function loadEnvironment(loadInput: { env?: ClientInstanceEnv } = {}): ClientInstanceEnv {
     const env = readClientInstanceEnv(loadInput.env);
@@ -119,7 +132,7 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
   }
 
   async function createApp(
-    appInput: Omit<CreateClientInstanceAppInput, "configPath" | "tools"> & {
+    appInput: Omit<CreateClientInstanceAppInput, "configPath" | "tools" | "connectorTypes"> & {
       configPath?: string;
     } = {}
   ): Promise<ClientInstanceApp> {
@@ -131,8 +144,7 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
         env,
         configPath: appInput.configPath
       }),
-      tools,
-      capabilities,
+      ...build,
       structuredDataPublicationReviewer:
         appInput.structuredDataPublicationReviewer ?? input.structuredDataPublicationReviewer,
       allowedOrigins:
@@ -144,7 +156,7 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
   function resolveAgentWorkerInput(
     workerInput: Omit<
       CreateClientInstanceAgentRunWorkerInput,
-      "configPath" | "tools" | "capabilities"
+      "configPath" | "tools" | "connectorTypes" | "capabilities"
     > & { configPath?: string } = {}
   ): CreateClientInstanceAgentRunWorkerInput {
     const env = loadEnvironment({ env: workerInput.env });
@@ -152,8 +164,7 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
       ...workerInput,
       env,
       configPath: resolveConfigPath({ env, configPath: workerInput.configPath }),
-      tools,
-      capabilities,
+      ...build,
       structuredDataPublicationReviewer:
         workerInput.structuredDataPublicationReviewer ?? input.structuredDataPublicationReviewer
     };
