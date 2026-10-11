@@ -365,7 +365,9 @@ function ChatWorkspaceContent({
             <WorkspaceChrome
               agents={model.config.config.agents}
               agentDisplay={agentChipDisplayFor(model.config.config.ui)}
-              surfaceBesideWidth={surfaceBesideWidth}
+              // An App takes the whole main area: the surface of the conversation it was opened
+              // from stands beside nothing there, so the header is no band over the App's head.
+              surfaceBesideWidth={appsRoute ? 0 : surfaceBesideWidth}
               covered={chatCovered}
               selectedAgentName={model.config.activeAgentName}
               // Only a conversation has an agent to choose: not the Inbox, Apps, Build or Settings.
