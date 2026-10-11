@@ -143,6 +143,9 @@ function issueOf(error: ErrorObject): JsonSchemaIssue {
 }
 
 function compile(schema: JsonObject): CompiledJsonSchema {
+  // An asynchronous schema answers a promise, which would read as a value that fits. No
+  // schema of an operation needs one: nothing here is fetched while a value is checked.
+  if (Object.hasOwn(schema, "$async")) return { ok: false };
   let check: ValidateFunction;
   try {
     const validator = validatorFor(schema);
@@ -152,6 +155,7 @@ function compile(schema: JsonObject): CompiledJsonSchema {
     // A `$ref` that leaves the schema, a malformed keyword, a pattern that is no expression.
     return { ok: false };
   }
+  if ("$async" in check) return { ok: false };
   return {
     ok: true,
     validate(value) {
@@ -163,7 +167,7 @@ function compile(schema: JsonObject): CompiledJsonSchema {
 
 /**
  * Compiles a JSON Schema of draft 2020-12 or draft-07. A schema that names another dialect,
- * refers to another document, is over a bound of this file or is malformed
+ * refers to another document, is asynchronous, is over a bound of this file or is malformed
  * answers `ok: false` and throws nothing.
  */
 export function compileJsonSchema(schema: JsonObject): CompiledJsonSchema {

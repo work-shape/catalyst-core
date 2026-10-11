@@ -4,7 +4,8 @@ import {
   JSON_SCHEMA_MAX_BYTES,
   JSON_SCHEMA_MAX_DEPTH,
   JSON_SCHEMA_MAX_NODES,
-  compileJsonSchema
+  compileJsonSchema,
+  jsonSchemaAsZod
 } from "@vivd-catalyst/connections";
 import type { JsonObject, JsonValue } from "@vivd-catalyst/core";
 
@@ -92,5 +93,30 @@ describe("a schema that is compiled", () => {
     expect(after).not.toBe(before);
     expect(after.ok && after.validate({})).toHaveLength(1);
     expect(after.ok && after.validate({ first: 1 })).toEqual([]);
+  });
+});
+
+describe("an asynchronous schema", () => {
+  // Fails without the change: the compiled function answered a promise, which read as a
+  // value that fits, so `{}` passed a schema that requires `id`.
+  it("is refused when it is compiled, in both dialects", () => {
+    const required: JsonObject = { type: "object", required: ["id"] };
+    expect(compileJsonSchema({ ...required, $async: true })).toEqual({ ok: false });
+    expect(
+      compileJsonSchema({
+        ...required,
+        $schema: "http://json-schema.org/draft-07/schema#",
+        $async: true
+      })
+    ).toEqual({ ok: false });
+    // Whatever the keyword holds: nobody here waits for a schema.
+    expect(compileJsonSchema({ ...required, $async: false })).toEqual({ ok: false });
+
+    const schema = jsonSchemaAsZod({ ...required, $async: true });
+    expect(schema.safeParse({}).success).toBe(false);
+    expect(schema.safeParse({ id: 1 }).success).toBe(false);
+    // The same schema without the keyword checks as it reads.
+    expect(jsonSchemaAsZod(required).safeParse({ id: 1 }).success).toBe(true);
+    expect(jsonSchemaAsZod(required).safeParse({}).success).toBe(false);
   });
 });
