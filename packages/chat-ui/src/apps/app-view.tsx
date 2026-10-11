@@ -28,8 +28,8 @@ import { useAppsHost, type AppsWorkspace } from "./apps-host";
  * One App as its users are served it, across the full width (layout 2). The frame shows the
  * published revision; the address carries the App's own route, so a link into the App opens
  * where it points and a reload stays there. The record of the App is read at the draft for
- * whoever may write or publish it and at the published revision for everybody else; a reader
- * the instance gives no record sees the App under its id.
+ * whoever may write or publish it and at the published revision for a holder of the read
+ * right alone. A member who only uses the App is given no record and sees it under its id.
  */
 export function AppView({ app, appPath }: { app: string; appPath?: string }) {
   const { t } = useTranslation();
@@ -39,7 +39,8 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
   const record = useApp(
     workspace?.id ?? "",
     app,
-    Boolean(workspace && rights),
+    // A member who only uses the App is refused its record, so none is asked for.
+    Boolean(workspace && (rights?.read || rights?.write || rights?.publish)),
     appReadRevision(rights ?? NO_APP_RIGHTS)
   );
   const [shown, setShown] = useState<AppPreviewResponse>();

@@ -663,7 +663,9 @@ describe("Save as app", () => {
 
   it("stands in the header of a Page for a writer of the workspace", () => {
     expect(action(host())).toContain(">Save as app</button>");
-    expect(action(host()).match(/<button/gu)).toHaveLength(1);
+    // The same action twice: with its words, and as its icon where the header is narrow.
+    expect(action(host()).match(/<button/gu)).toHaveLength(2);
+    expect(action(host())).toContain('aria-label="Save as app"');
   });
 
   it("is absent with the module off, without the write right and outside a workspace", () => {

@@ -1,5 +1,6 @@
+import { LayoutGrid } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { Button, Dialog, Field, InlineError, Input } from "@vivd-catalyst/ui";
+import { Button, Dialog, Field, IconButton, InlineError, Input } from "@vivd-catalyst/ui";
 import { instanceSentence } from "../build-area/build-refusals";
 import { useTranslation } from "../i18n";
 import { apiErrorCode } from "../workspace-utils";
@@ -33,9 +34,19 @@ export function SaveAsAppAction({
   const workspace = host.workspace;
   return (
     <>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+      {/* The header of a Page is narrow on a phone: the action is its icon alone there. */}
+      <Button variant="outline" size="sm" className="max-md:hidden" onClick={() => setOpen(true)}>
         {t("apps.save")}
       </Button>
+      <IconButton
+        label={t("apps.save")}
+        variant="outline"
+        size="sm"
+        className="md:hidden"
+        onClick={() => setOpen(true)}
+      >
+        <LayoutGrid aria-hidden="true" />
+      </IconButton>
       {open ? (
         <SaveAsAppDialog
           workspaceId={workspace.id}

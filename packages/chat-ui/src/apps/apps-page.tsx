@@ -339,12 +339,17 @@ function AppRow({
       description={app.description?.trim() || <code className="font-mono">{app.name}</code>}
       chips={
         <>
-          <AppScope workspace={workspace} />
+          {/* A phone has room for the name and the state. The list names its workspace above. */}
+          <span className="hidden sm:contents">
+            <AppScope workspace={workspace} />
+          </span>
           <AppStateBadge state={state} />
           {rights.write && state.kind === "published" && state.draftAhead ? (
-            <Badge tone="warning" size="sm">
-              {t("apps.unpublishedChanges")}
-            </Badge>
+            <span className="hidden sm:contents">
+              <Badge tone="warning" size="sm">
+                {t("apps.unpublishedChanges")}
+              </Badge>
+            </span>
           ) : null}
         </>
       }
