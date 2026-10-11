@@ -202,8 +202,11 @@ test("an administrator sees Connections in Build and grants its rights; a read g
       }
       // Where it comes from is no chip: every Connection comes from release config so far.
       await expect(row).not.toContainText("Release config");
-      // The row opens nothing, and the page shows nothing of the definition.
-      await expect(list.getByRole("link")).toHaveCount(0);
+      // The row opens the Connection's page, and the list shows nothing of the definition.
+      await expect(row.getByRole("link")).toHaveAttribute(
+        "href",
+        `/build/connections/${connection.name}`
+      );
       await expect(main).not.toContainText("secret_");
       await expect(main).not.toContainText("records.example.test");
       await shoot(page, "connections-list", async () => {
