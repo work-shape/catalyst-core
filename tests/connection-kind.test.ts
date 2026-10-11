@@ -92,7 +92,14 @@ describe("the definition of a Connection", () => {
       ],
       ["bearer value", { extra: [`Bearer ${SECRET}`] }, "settings.extra.0"],
       ["named key", { clientSecret: SECRET }, "settings.clientSecret"],
-      ["token", { nested: { access_token: SECRET } }, "settings.nested.access_token"]
+      ["token", { nested: { access_token: SECRET } }, "settings.nested.access_token"],
+      // A credential-named key is refused whatever stands under it.
+      ["list", { token: [SECRET.slice(0, 8), SECRET.slice(8)] }, "settings.token"],
+      ["object", { apiKey: { value: SECRET } }, "settings.apiKey"],
+      ["number", { pin: 1, password: 12345678 }, "settings.password"],
+      ["name with value", { tokenValue: SECRET }, "settings.tokenValue"],
+      ["jwt", { serviceJwt: SECRET }, "settings.serviceJwt"],
+      ["key in a list", { servers: [{ secret_key: [SECRET] }] }, "settings.servers.0.secret_key"]
     ];
     for (const [label, settings, path] of refused) {
       const issues = issuesOf(connection("outside", { settings }));

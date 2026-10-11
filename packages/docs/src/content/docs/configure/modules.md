@@ -35,7 +35,7 @@ A Connection is one configured access to an outside system, stored as an asset o
 
 In this release a Connection is listed and cannot be created, changed or deleted through the interface, the API or the CLI: such a write is refused with `connection_runtime_authoring_unavailable`. The release writes Connections once the Secret Store is part of the product.
 
-A Connection never holds a credential. Its definition holds `secretHandle`, an opaque reference into the Secret Store, and a definition that carries a credential anywhere else is refused: an address with a user name or a password, a header or a setting named like a credential, an `Authorization` value. The check reads names and shapes, so keep credentials out of `settings` yourself.
+A Connection never holds a credential. Its definition holds `secretHandle`, an opaque reference into the Secret Store, and a definition that carries a credential anywhere else is refused: an address with a user name or a password, a header named like a credential, a setting named like a credential whatever stands under it (a text, a number, a list or an object; only a switch such as `requiresToken: true` is kept), an `Authorization` value. The check reads names and shapes, so keep credentials out of `settings` yourself.
 
 A module that a later release adds is off until its entry says otherwise.
 

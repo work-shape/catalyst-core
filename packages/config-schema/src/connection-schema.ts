@@ -46,10 +46,16 @@ const CREDENTIAL_NAME_ENDINGS = [
   "credential",
   "credentials",
   "privatekey",
-  "signature"
+  "secretkey",
+  "accesskey",
+  "passphrase",
+  "signature",
+  "jwt"
 ];
 /** Short names that carry a credential only as the whole name. */
 const CREDENTIAL_NAMES = ["key", "auth", "sig", "pwd", "pass", "bearer"];
+/** What a name may end with after the word that counts: `tokenValue` is named like `token`. */
+const CREDENTIAL_NAME_SUFFIX = /(?:value|val|string|text|data)$/u;
 /** A value that is an `Authorization` header as it is sent. */
 const AUTHORIZATION_VALUE_PATTERN = /^(?:bearer|basic)\s+\S/iu;
 /** How deep settings are read. Deeper settings are refused, so nothing hides below the reading. */
@@ -57,9 +63,10 @@ const SETTINGS_MAX_DEPTH = 8;
 
 function looksLikeCredentialName(name: string): boolean {
   const plain = name.toLowerCase().replace(/[^a-z0-9]/gu, "");
-  return (
-    CREDENTIAL_NAMES.includes(plain) ||
-    CREDENTIAL_NAME_ENDINGS.some((ending) => plain.endsWith(ending))
+  return [plain, plain.replace(CREDENTIAL_NAME_SUFFIX, "")].some(
+    (candidate) =>
+      CREDENTIAL_NAMES.includes(candidate) ||
+      CREDENTIAL_NAME_ENDINGS.some((ending) => candidate.endsWith(ending))
   );
 }
 
@@ -89,6 +96,11 @@ function credentialInText(text: string): string | undefined {
     }
   }
   return undefined;
+}
+
+/** A switch, an absent value and an empty text hold nothing a credential could be. */
+function carriesValue(value: JsonValue): boolean {
+  return value !== null && typeof value !== "boolean" && value !== "";
 }
 
 export interface CredentialInSettings {
@@ -123,9 +135,10 @@ export function findCredentialsInSettings(settings: JsonObject): CredentialInSet
       return;
     }
     for (const [key, entry] of Object.entries(value)) {
-      // A name alone carries nothing: `requiresToken: true` is a setting, a text under
-      // `token` is a credential.
-      if (typeof entry === "string" && entry !== "" && looksLikeCredentialName(key)) {
+      // A name alone carries nothing: `requiresToken: true` is a setting. Whatever else stands
+      // under `token` is refused unread, a text as much as a number, a list or an object: a
+      // credential split into parts or wrapped in an object is still one.
+      if (carriesValue(entry) && looksLikeCredentialName(key)) {
         found.push({ path: [...path, key], finding: "is named like a credential" });
         continue;
       }
