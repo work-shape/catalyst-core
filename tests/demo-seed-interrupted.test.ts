@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { listAll } from "@vivd-catalyst/api-client";
+import { completedOutput, listAll } from "@vivd-catalyst/api-client";
 import { createdBy, expectSecondRunChangedNothing, useSeededInstance } from "./support/demo-seed";
 
 // A run of the seed that stopped after it created the invited person and before it mailed
@@ -18,16 +18,18 @@ const seeded = useSeededInstance({
   superadmin: { email: "superadmin@example.test", password: "demo-superadmin-password" },
   env: { OPENAI_API_KEY: "not-a-key" },
   prepare: async (client) => {
-    await client.users.create({
-      body: {
-        displayLabel: "Noah Fischer",
-        email: NOAH,
-        roles: ["user"],
-        permissions: [],
-        permissionRefs: ["demo-tools"],
-        status: "active"
-      }
-    });
+    completedOutput(
+      await client.users.create({
+        body: {
+          displayLabel: "Noah Fischer",
+          email: NOAH,
+          roles: ["user"],
+          permissions: [],
+          permissionRefs: ["demo-tools"],
+          status: "active"
+        }
+      })
+    );
   }
 });
 

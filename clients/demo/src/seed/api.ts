@@ -30,8 +30,8 @@ interface SeedUserInput {
 
 /**
  * Everything the seed asks of an instance, as one signed-in caller. The seed is written
- * against this and not against the product's client, so a call that moves, such as the user
- * administration becoming registered operations, changes `createSeedApi` and nothing else.
+ * against this and not against the product's client, so a call that moves changes
+ * `createSeedApi` and nothing else.
  */
 export interface SeedApi {
   listUsers(): Promise<AdministeredUser[]>;
@@ -81,15 +81,17 @@ export interface SeedApi {
 export function createSeedApi(client: ApiClient): SeedApi {
   return {
     listUsers: () => listAll((paging) => client.users.list({ query: paging })),
-    createUser: ({ password, ...user }) =>
-      client.users.create({
-        body: { ...user, ...(password === undefined ? {} : { passwordSignIn: { password } }) }
-      }),
+    createUser: async ({ password, ...user }) =>
+      completedOutput(
+        await client.users.create({
+          body: { ...user, ...(password === undefined ? {} : { passwordSignIn: { password } }) }
+        })
+      ),
     async updateUser(userId, input) {
-      await client.users.update({ params: { userId }, body: input });
+      completedOutput(await client.users.update({ params: { userId }, body: input }));
     },
     async sendInvitation(userId) {
-      await client.users.invitation.send({ params: { userId } });
+      completedOutput(await client.users.invitation.send({ params: { userId } }));
     },
     async invitationWasSent(userId) {
       let cursor: string | undefined;
