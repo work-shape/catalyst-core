@@ -343,6 +343,22 @@ describe("the Connector type mcp", () => {
       }
     });
 
+    it("goes to the checked address where the system resolver answers another one", async () => {
+      // The system resolver knows this name and answers a public address for it. The check
+      // answered 127.0.0.1, and that is where the request arrives: nothing resolves again.
+      const PUBLIC_NAME = "example.com";
+      const key = generateTestSecret();
+      const server = await serve({ requireHeader: bearer(key), call: () => textResult("pinned") });
+      const w = await connect({
+        url: urlOf(server, PUBLIC_NAME),
+        allow: [allowOf(server, PUBLIC_NAME)],
+        key
+      });
+      expect(await w.execute("echo")).toEqual(textResult("pinned"));
+      expect(w.egress.asked).toEqual([PUBLIC_NAME]);
+      expect(server.rpc("tools/call")[0]?.headers.host).toBe(`${PUBLIC_NAME}:${server.port}`);
+    });
+
     it("keeps the host name as the TLS name over https", async () => {
       const certificate = makeTestCertificate(HOST);
       const before = getCACertificates("default");

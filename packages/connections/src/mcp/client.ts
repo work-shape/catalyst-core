@@ -26,8 +26,12 @@ import { egressTargetOfUrl, isSameEgressOrigin, pinnedLookup } from "../egress";
 // - Transport is Streamable HTTP. A session is opened for one test, discovery or call and
 //   ended with it. Nothing is connected before the first of those: building the type opens
 //   no socket.
-// - Every request asks `context.checkEgress` first and connects to the address that check
-//   pinned, with the host name unchanged as `Host` header and TLS name.
+// - A request to the Connection's own origin goes to `context.target`, the target the call
+//   was checked and opened with. Every other target, which only a redirect can name, asks
+//   `context.checkEgress` first. Either way the request connects to the address the check
+//   pinned, with the host name unchanged as `Host` header and TLS name. The request is
+//   built from the checked target, and the agents are this file's own: the process's
+//   agent and a proxy of the environment are never used.
 // - No redirect is followed by the HTTP layer. A 307 or 308 is followed here, after a fresh
 //   egress check of where it points. Any other redirect is a failure.
 // - The credential is read from `context.credentialFor` for each request and put on that one
@@ -194,11 +198,28 @@ interface Hop {
   method: "POST" | "DELETE";
   headers: Record<string, string>;
   body: string | undefined;
-  agent: PooledAgent | false;
+  agent: PooledAgent;
   signal: AbortSignal;
 }
 
-/** Sends one request to the pinned address and answers once the status line arrived. */
+const DEFAULT_PORTS = { https: 443, http: 80 } as const;
+
+/** The `Host` of a request, written from the checked target and from nothing else. */
+function hostHeaderOf(grant: EgressGrant): string {
+  const host = isIP(grant.host) === 6 ? `[${grant.host}]` : grant.host;
+  const usual = grant.protocol === "https" ? DEFAULT_PORTS.https : DEFAULT_PORTS.http;
+  return grant.port === usual ? host : `${host}:${grant.port}`;
+}
+
+function oneRequestAgent(grant: EgressGrant): PooledAgent {
+  return grant.protocol === "https" ? new HttpsAgent() : new HttpAgent();
+}
+
+/**
+ * Sends one request to the pinned address and answers once the status line arrived. Where
+ * it goes is read from the checked target alone: protocol, host, port and address. Of the
+ * address the server was configured or redirected with, only path and query are used.
+ */
 function sendHop(hop: Hop): Promise<IncomingMessage> {
   return new Promise((resolve, reject) => {
     if (hop.signal.aborted) {
@@ -348,16 +369,21 @@ function pinnedFetch(
       let grant: EgressGrant;
       let credential: ConnectionCredential | undefined;
       try {
-        const checked = await context.checkEgress(egressTargetOfUrl(url.href));
-        // The Connection's own origin keeps the address this call was opened with, so the
-        // address the credential was resolved for is the address it is sent to.
-        grant = isSameEgressOrigin(checked, context.target) ? context.target : checked;
+        const target = egressTargetOfUrl(url.href);
+        // The Connection's own origin is the target this call was opened with: it was
+        // checked then, and the address the credential was resolved for is the address it
+        // is sent to. A second check could answer another address of the same name. Every
+        // other target is checked now.
+        grant = isSameEgressOrigin(target, context.target)
+          ? context.target
+          : await context.checkEgress(target);
+        // Asked for every hop anew. Nothing of the hop before is carried over.
         credential = credentialOrNone(context, grant);
       } catch (error) {
         throw fail(state, connectionCallReasonOf(error) ?? "connection_unavailable");
       }
       const own = grant === context.target;
-      const headers: Record<string, string> = { host: url.host };
+      const headers: Record<string, string> = { host: hostHeaderOf(grant) };
       for (const name of FORWARDED_REQUEST_HEADERS) {
         const value = sent.get(name);
         if (value !== null) headers[name] = value;
@@ -376,7 +402,9 @@ function pinnedFetch(
           method,
           headers,
           body,
-          agent: own ? sockets.agentFor(context.connection.id, grant) : false,
+          // Another origin gets a socket for this one request. It is an agent of this file
+          // either way, never the process's own, so no proxy of the environment is used.
+          agent: own ? sockets.agentFor(context.connection.id, grant) : oneRequestAgent(grant),
           signal: state.abort.signal
         });
       } catch {
