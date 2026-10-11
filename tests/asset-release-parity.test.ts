@@ -306,4 +306,27 @@ describe("the size of a batch", () => {
     const overRelease = await syncAsService(t, skills(ASSET_RELEASE_SYNC_MAX_ITEMS + 1));
     expect(overRelease.statusCode).toBe(422);
   });
+
+  it("names the put of each of 2,000 refusals without a pass over the batch for each", async () => {
+    const t = await setup();
+    const agents = Array.from({ length: ASSET_RELEASE_SYNC_MAX_ITEMS }, (_, index) =>
+      putAgent(`rel-bulk-${index}`, { reasoningEffort: "boundless" })
+    );
+
+    const started = performance.now();
+    const refused = await syncAsService(t, agents);
+    const elapsed = performance.now() - started;
+
+    expect(refused.statusCode).toBe(422);
+    const { items } = refusedItems(refused);
+    expect(items).toHaveLength(ASSET_RELEASE_SYNC_MAX_ITEMS);
+    // Each refusal is on its own put, in the order of the batch.
+    expect(items.map((item) => item.name)).toEqual(agents.map((_, index) => `rel-bulk-${index}`));
+    expect(new Set(items.map((item) => [item.status, item.code].join()))).toEqual(
+      new Set(["refused,VALIDATION_FAILED"])
+    );
+    expect(items[0]?.message).toContain("reasoningEffort");
+    // Generous: the whole call, validation and the answer included, on a loaded machine.
+    expect(elapsed).toBeLessThan(15_000);
+  });
 });

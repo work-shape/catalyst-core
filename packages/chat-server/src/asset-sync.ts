@@ -272,13 +272,9 @@ async function checkBatch(
   stopIfRefused(writeIssues(() => found.validateWrite(stored.set)));
 
   const changed = await findChangedAgentRefusals(options, call.access, stored.set, found.accepted);
+  const puts = putsByAsset(ready());
   for (const { agentName, error } of changed.refusals) {
-    const entry = ready().find(
-      (candidateEntry) =>
-        candidateEntry.item.type === "put" &&
-        candidateEntry.kind.kind === "agent" &&
-        candidateEntry.name === agentName
-    );
+    const entry = puts.get(assetKey("agent", agentName));
     if (!entry) {
       throw error;
     }
@@ -689,16 +685,29 @@ function planDefaultChange(
   return undefined;
 }
 
+/**
+ * The puts of a batch by the asset each writes, the first one where a name comes twice. Built
+ * once per pass, so that naming the put of each refusal does not grow with their product.
+ */
+function putsByAsset(entries: readonly ReadyItem[]): Map<string, ReadyItem> {
+  const puts = new Map<string, ReadyItem>();
+  for (const entry of entries) {
+    if (entry.item.type !== "put") continue;
+    const key = assetKey(entry.kind.kind, entry.name);
+    if (!puts.has(key)) puts.set(key, entry);
+  }
+  return puts;
+}
+
 /** Hands each issue to the put it is about. Returns the ones that are about the set. */
 function placeIssues(issues: readonly AssetSetIssue[], entries: readonly ReadyItem[]) {
   const unplaced: AssetSetIssue[] = [];
+  const puts = putsByAsset(entries);
   for (const issue of issues) {
-    const entry = entries.find(
-      (candidate) =>
-        candidate.item.type === "put" &&
-        candidate.kind.kind === issue.assetKind &&
-        candidate.name === issue.assetName
-    );
+    const entry =
+      issue.assetKind === undefined || issue.assetName === undefined
+        ? undefined
+        : puts.get(assetKey(issue.assetKind, issue.assetName));
     if (!entry) {
       unplaced.push(issue);
     } else if (entry.refusal) {
