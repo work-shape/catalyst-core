@@ -146,6 +146,29 @@ export async function runOperation(
   throw new AppError("INTERNAL", `Operation '${definition.name}' could not start a run`);
 }
 
+/**
+ * How deeply the input of a call may be nested. No operation reads an input near it. What is
+ * done with an input before a run exists follows it as deep as it goes: its schema, the hash a
+ * run keeps of it. An input deeper than the stack would end the call with an error of the
+ * process where it should end as an input that is invalid.
+ */
+export const OPERATION_INPUT_MAX_DEPTH = 256;
+
+/** Whether no value of the input is nested deeper than `OPERATION_INPUT_MAX_DEPTH`. */
+function withinInputDepth(input: unknown): boolean {
+  // A list of what is left to look at, so the check itself needs no stack.
+  const open: { value: unknown; depth: number }[] = [{ value: input, depth: 0 }];
+  for (let next = open.pop(); next !== undefined; next = open.pop()) {
+    const { value, depth } = next;
+    if (typeof value !== "object" || value === null) continue;
+    if (depth >= OPERATION_INPUT_MAX_DEPTH) return false;
+    for (const child of Array.isArray(value) ? value : Object.values(value)) {
+      open.push({ value: child, depth: depth + 1 });
+    }
+  }
+  return true;
+}
+
 /** The validated input, or the refusal of a call whose input no run can be started with. */
 function parseInput(
   call: OperationCall,
@@ -153,7 +176,11 @@ function parseInput(
   runtime: OperationCallRuntime,
   surface: OperationAuthorization
 ): unknown {
-  const unreadable = runtime.unreadableInput;
+  const unreadable =
+    runtime.unreadableInput ??
+    (withinInputDepth(call.input)
+      ? undefined
+      : { code: "input_invalid", message: "Operation input is nested too deeply" });
   const parsed = unreadable ? undefined : definition.inputSchema.safeParse(call.input);
   if (parsed?.success) {
     return parsed.data;

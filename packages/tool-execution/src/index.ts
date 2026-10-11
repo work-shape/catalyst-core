@@ -30,7 +30,7 @@ export * from "./structured-data-tool-schemas";
 export * from "./propose-skill-change-tool";
 export * from "./skill-source-version";
 export * from "./registration";
-export { runOperation } from "./run-operation";
+export { OPERATION_INPUT_MAX_DEPTH, runOperation } from "./run-operation";
 export type {
   OperationApprovalRequests,
   OperationOutcome,

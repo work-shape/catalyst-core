@@ -7,6 +7,7 @@ import {
   readConnection
 } from "@vivd-catalyst/connections";
 import { AppError, connectionCallError, type JsonValue } from "@vivd-catalyst/core";
+import { OPERATION_INPUT_MAX_DEPTH } from "@vivd-catalyst/tool-execution";
 import { clientInstanceId } from "./support/access-instance";
 import { connection } from "./support/connections";
 import { captureProcessOutput, dumpDatabaseText, findLeak } from "./support/test-connector";
@@ -74,6 +75,48 @@ describe("an input the call cannot hand on", () => {
     expect(await refusal(direct(t, "write", { deep }))).toMatchObject({ reason: "input_invalid" });
     expect(t.sequence).toEqual(["read connection"]);
     expect(t.executed).toEqual([]);
+  });
+});
+
+describe("an input nested deeper than any operation reads", () => {
+  const nested = (levels: number): JsonValue => {
+    let value: JsonValue = "x";
+    for (let level = 0; level < levels; level += 1) value = { a: value };
+    return value;
+  };
+
+  // Fails without the change: an input a permissive schema let through was hashed before a
+  // run existed, and one deeper than the stack ended the call with a RangeError.
+  it("is refused as an invalid input before a run exists, and nothing is thrown past it", async () => {
+    const t = await fixture();
+    const assetId = await t.seed("crm", {
+      operations: [operationOf("echo"), operationOf("write", { effect: "changing" })]
+    });
+    await t.grant(t.kai.id, "connection.use", { assetId });
+    t.setBehaviour(() => Promise.resolve({}));
+
+    for (const levels of [OPERATION_INPUT_MAX_DEPTH + 1, 200_000]) {
+      const refused = t.invoke(t.kai, "connection.crm.write", nested(levels), {
+        effect: "changing"
+      });
+      await expect(refused, String(levels)).rejects.toMatchObject({
+        code: "VALIDATION_FAILED",
+        details: { issues: [{ code: "input_invalid", path: [] }] }
+      });
+      expect(t.sequence).toEqual(["read connection"]);
+    }
+    expect(await t.runs()).toEqual([]);
+    expect(t.executed).toEqual([]);
+
+    // An input at the bound is an input like any other.
+    const atBound = await t.invoke(
+      t.kai,
+      "connection.crm.write",
+      nested(OPERATION_INPUT_MAX_DEPTH),
+      { effect: "changing" }
+    );
+    expect(atBound.result).toMatchObject({ status: "done" });
+    expect(t.executed).toHaveLength(1);
   });
 });
 
