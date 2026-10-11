@@ -536,6 +536,32 @@ export async function setAgentAvailability(
     if (!asset || asset.status !== "active") {
       throw new AppError("NOT_FOUND", `Config agent '${input.agentName}' was not found`);
     }
+    if (input.expectedAssetId !== undefined && input.expectedAssetId !== asset.id) {
+      throw availabilityConflict(input.agentName, "asset_replaced");
+    }
+    if (input.expectedAvailability !== undefined) {
+      // Every change of an availability holds the lock above, so what is read here stands.
+      const [stored] = await tx
+        .select({
+          mode: configAssetAvailability.mode,
+          personalWorkspaces: configAssetAvailability.personalWorkspaces
+        })
+        .from(configAssetAvailability)
+        .where(eq(configAssetAvailability.assetId, asset.id))
+        .limit(1);
+      const storedWorkspaces = stored
+        ? await tx
+            .select({ id: configAssetWorkspaceAvailability.collaborationWorkspaceId })
+            .from(configAssetWorkspaceAvailability)
+            .where(eq(configAssetWorkspaceAvailability.assetId, asset.id))
+        : [];
+      const current = stored
+        ? { ...stored, collaborationWorkspaceIds: storedWorkspaces.map(({ id }) => id) }
+        : null;
+      if (!availabilitiesEqual(current, input.expectedAvailability)) {
+        throw availabilityConflict(input.agentName, "availability_changed");
+      }
+    }
     if (input.availability.mode !== "all" && state?.defaultAgentName === input.agentName) {
       throw new AppError(
         "VALIDATION_FAILED",
@@ -584,6 +610,34 @@ export async function setAgentAvailability(
     }
     return { ...input.availability, collaborationWorkspaceIds };
   });
+}
+
+/** The refusal of an availability change that was decided against what is no longer stored. */
+function availabilityConflict(
+  agentName: string,
+  reason: "asset_replaced" | "availability_changed"
+): AppError {
+  return new AppError(
+    "CONFLICT",
+    reason === "asset_replaced"
+      ? `Config agent '${agentName}' is another asset than the one this change was made for`
+      : `The availability of config agent '${agentName}' changed since it was read`,
+    { kind: "agent", name: agentName, reason }
+  );
+}
+
+/** Whether two availabilities offer the same, whatever the order of their workspaces. */
+function availabilitiesEqual(
+  left: { mode: string; personalWorkspaces: boolean; collaborationWorkspaceIds: string[] } | null,
+  right: AgentAvailability | null
+): boolean {
+  if (left === null || right === null) return left === right;
+  const ids = (list: readonly string[]) => [...new Set(list)].sort().join("\u0000");
+  return (
+    left.mode === right.mode &&
+    left.personalWorkspaces === right.personalWorkspaces &&
+    ids(left.collaborationWorkspaceIds) === ids(right.collaborationWorkspaceIds)
+  );
 }
 
 /**

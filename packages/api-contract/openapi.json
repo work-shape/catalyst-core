@@ -1474,7 +1474,7 @@
             "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "$ref": "#/components/responses/IdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
@@ -18392,6 +18392,20 @@
               "type": "string",
               "minLength": 1
             }
+          },
+          "expectedAssetId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "expectedAvailability": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentAvailability"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -18411,6 +18425,10 @@
                 "type": "null"
               }
             ]
+          },
+          "expectedAssetId": {
+            "type": "string",
+            "minLength": 1
           }
         },
         "required": [

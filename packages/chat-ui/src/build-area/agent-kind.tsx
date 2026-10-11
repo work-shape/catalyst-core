@@ -94,13 +94,15 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
       onMakeDefault={
         asset && !isDefault && instanceWrite && management.allowDefaultAgentChange
           ? () =>
-              placement.setDefaultAgent.mutateAsync({ agentName: asset.name }).then(
-                () => {
-                  setIsDefault(true);
-                  return undefined;
-                },
-                (error: unknown) => apiErrorMessage(error, t("configChangeSaveFailed"))
-              )
+              placement.setDefaultAgent
+                .mutateAsync({ agentName: asset.name, assetId: asset.id })
+                .then(
+                  () => {
+                    setIsDefault(true);
+                    return undefined;
+                  },
+                  (error: unknown) => apiErrorMessage(error, t("configChangeSaveFailed"))
+                )
           : undefined
       }
       availability={
@@ -116,13 +118,15 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
             }
             mutating={placement.setAgentAvailability.isPending}
             onSave={(next) =>
-              placement.setAgentAvailability.mutateAsync({ name: asset.name, ...next }).then(
-                (saved) => {
-                  setAvailability(saved);
-                  return undefined;
-                },
-                (error: unknown) => apiErrorMessage(error, t("configChangeSaveFailed"))
-              )
+              placement.setAgentAvailability
+                .mutateAsync({ name: asset.name, assetId: asset.id, loaded: availability, ...next })
+                .then(
+                  (saved) => {
+                    setAvailability(saved);
+                    return undefined;
+                  },
+                  (error: unknown) => apiErrorMessage(error, t("configChangeSaveFailed"))
+                )
             }
           />
         ) : undefined

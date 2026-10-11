@@ -160,7 +160,7 @@ export const assetOperations = {
     effect: "changing",
     body: setAssetAvailabilityRequestSchema,
     response: json(agentAvailabilitySchema),
-    errors: ["NOT_FOUND"],
+    errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
   "assets.revisions.list": defineRegisteredOperation({

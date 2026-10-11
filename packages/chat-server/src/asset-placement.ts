@@ -32,6 +32,8 @@ interface SetAssetDefaultInput {
   kind: string;
   /** The asset that becomes the default, or `null` for none. */
   name: string | null;
+  /** The id of the named asset as the caller read it. */
+  expectedAssetId?: string;
 }
 
 interface SetAssetAvailabilityInput {
@@ -40,6 +42,13 @@ interface SetAssetAvailabilityInput {
   mode: AgentAvailability["mode"];
   personalWorkspaces?: boolean;
   collaborationWorkspaceIds?: string[];
+  /** What the change was decided against. The store compares both under its lock. */
+  expectedAssetId?: string;
+  expectedAvailability?: {
+    mode: AgentAvailability["mode"];
+    personalWorkspaces: boolean;
+    collaborationWorkspaceIds: string[];
+  } | null;
 }
 
 export async function authorizeAssetPlacement(
@@ -73,6 +82,7 @@ export async function setAssetDefault(
     throw new AppError("FORBIDDEN", "Interactive default-agent changes are disabled");
   }
   const name = input.name ?? undefined;
+  await requireExpectedAsset(options, kind, input);
   const stored = await loadStoredAssets(options);
   validateAssetSet(
     options.configAssets.kinds.kinds,
@@ -129,7 +139,22 @@ export async function setAssetAvailability(
       mode: input.mode,
       personalWorkspaces: selected && input.personalWorkspaces === true,
       collaborationWorkspaceIds
-    }
+    },
+    ...(input.expectedAssetId === undefined ? {} : { expectedAssetId: input.expectedAssetId }),
+    ...(input.expectedAvailability === undefined
+      ? {}
+      : {
+          expectedAvailability:
+            input.expectedAvailability === null
+              ? null
+              : {
+                  ...input.expectedAvailability,
+                  collaborationWorkspaceIds:
+                    input.expectedAvailability.collaborationWorkspaceIds.map(
+                      asCollaborationWorkspaceId
+                    )
+                }
+        })
   });
   await record(call, "config_asset.availability_set", {
     kind: kind.kind,
@@ -145,6 +170,30 @@ export async function setAssetAvailability(
 function kindOf(options: ChatServerOptions, kind: string): WorkflowAssetKind {
   requireAssetKindModuleOn(options.modules, kind);
   return options.configAssets.kinds.require(kind);
+}
+
+/**
+ * Refuses a change of the default that was made for another asset than the one that holds
+ * the name now: a call that waited for an approval runs against what is stored then.
+ */
+async function requireExpectedAsset(
+  options: ChatServerOptions,
+  kind: WorkflowAssetKind,
+  input: SetAssetDefaultInput
+): Promise<void> {
+  if (input.name === null || input.expectedAssetId === undefined) return;
+  const row = await options.configAssets.store.getConfigAsset({
+    clientInstanceId: options.clientInstanceId,
+    kind: kind.kind,
+    name: input.name
+  });
+  if (row?.id !== input.expectedAssetId) {
+    throw new AppError(
+      "CONFLICT",
+      `Config ${kind.kind} '${input.name}' is another asset than the one this change was made for`,
+      { kind: kind.kind, name: input.name, reason: "asset_replaced" }
+    );
+  }
 }
 
 /** The right once more, on what the store holds when the call runs. */

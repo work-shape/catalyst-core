@@ -33,11 +33,12 @@ export function useAgentPlacementMutations(input: AgentPlacementMutationInput) {
     ]);
 
   const setDefaultAgent = useMutation({
-    mutationFn: async ({ agentName }: { agentName: string }) =>
+    // The id says which agent the reader looked at, should another one hold the name later.
+    mutationFn: async ({ agentName, assetId }: { agentName: string; assetId: string }) =>
       completedOutput(
         await input.client.assets.set_default({
           params: { kind: "agent" },
-          body: { name: agentName }
+          body: { name: agentName, expectedAssetId: assetId }
         }),
         input.heldMessage
       ),
@@ -49,12 +50,15 @@ export function useAgentPlacementMutations(input: AgentPlacementMutationInput) {
       mode: AgentAvailability["mode"];
       personalWorkspaces: boolean;
       collaborationWorkspaceIds: string[];
+      assetId: string;
+      /** The availability the page shows as stored. A change beside it is a conflict. */
+      loaded: AgentAvailability | undefined;
     }) => {
-      const { name, ...availability } = mutationInput;
+      const { name, assetId, loaded, ...availability } = mutationInput;
       return completedOutput(
         await input.client.assets.set_availability({
           params: { kind: "agent", name },
-          body: availability
+          body: { ...availability, expectedAssetId: assetId, expectedAvailability: loaded ?? null }
         }),
         input.heldMessage
       );

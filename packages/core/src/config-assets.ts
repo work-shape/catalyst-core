@@ -210,5 +210,12 @@ export interface ConfigAssetStore {
     clientInstanceId: ClientInstanceId;
     agentName: string;
     availability: AgentAvailability;
+    /**
+     * What the change was decided against. Given, the store compares under the lock of the
+     * change and throws `CONFLICT` where the name is another asset's by now, or the stored
+     * availability is another one. `null` expects that none is stored.
+     */
+    expectedAssetId?: string;
+    expectedAvailability?: AgentAvailability | null;
   }): Promise<AgentAvailability>;
 }

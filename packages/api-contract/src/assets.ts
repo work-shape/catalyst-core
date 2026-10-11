@@ -131,7 +131,12 @@ export const revertAssetRequestSchema = z.object({
 
 export const setAssetDefaultRequestSchema = z.object({
   /** The asset that becomes the instance's default of its kind, or `null` for none. */
-  name: nameText(z.string().min(1)).nullable()
+  name: nameText(z.string().min(1)).nullable(),
+  /**
+   * The id of the named asset as the caller read it. Given, the call is refused with a
+   * conflict where the name is held by another asset by now. Left out, nothing is compared.
+   */
+  expectedAssetId: z.string().min(1).optional()
 });
 
 export const setAssetDefaultResponseSchema = z.object({
@@ -143,7 +148,15 @@ export const setAssetAvailabilityRequestSchema = z.object({
   mode: agentAvailabilitySchema.shape.mode,
   // Both apply to `selected` only and are ignored for `all`.
   personalWorkspaces: z.boolean().optional(),
-  collaborationWorkspaceIds: z.array(z.string().min(1)).optional()
+  collaborationWorkspaceIds: z.array(z.string().min(1)).optional(),
+  /** The id of the asset as the caller read it. Another asset of the name is a conflict. */
+  expectedAssetId: z.string().min(1).optional(),
+  /**
+   * The availability the caller read, or `null` where it read none. Given, the call is
+   * refused with a conflict where the stored one differs by now, and nothing is written.
+   * Left out, the call replaces whatever is stored.
+   */
+  expectedAvailability: agentAvailabilitySchema.nullable().optional()
 });
 
 export const validateAssetRequestSchema = z.object({

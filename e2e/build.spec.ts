@@ -512,7 +512,11 @@ test("an agent's availability and the default agent are changed by the asset ope
     );
     await page.getByRole("button", { name: "Make default", exact: true }).click();
     const refused = await asked;
-    expect(refused.request().postDataJSON()).toEqual({ name });
+    // The call names the agent the page shows, so another one of the name is not made default.
+    expect(refused.request().postDataJSON()).toEqual({
+      name,
+      expectedAssetId: field(await (await page.request.get(agentPath(name))).json(), "id")
+    });
     expect(refused.status()).toBe(422);
     expect(refused.headers()["operation-run-id"]).toBeTruthy();
     await expect(

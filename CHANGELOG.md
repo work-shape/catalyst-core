@@ -438,7 +438,12 @@ id from config_assets where status = 'deleted')`.
   Operation Runs: they answer the header `Operation-Run-Id`, take an `Idempotency-Key`, pass the
   policy of the instance, and the typed client answers them as an operation outcome. The right
   is unchanged, the right to write the kind on the whole instance, and a deny on the named asset
-  now refuses too. `baseVersion` of the default-agent call is gone with the old address. A
+  now refuses too. `baseVersion` of the default-agent call is gone with the old address. Both
+  calls take an optional `expectedAssetId`, and the availability an optional
+  `expectedAvailability` (the availability as it was read, or `null`): where the instance holds
+  another asset of the name or another availability by then, the call answers `409` and writes
+  nothing. The interface sends them, so a change that waited for an approval does not overwrite
+  a later one. A
   changed availability now moves the version of the asset set, so the overview's `version` rises
   by one with it. `routes/config-asset-routes.ts` is deleted; the two reads that stay,
   `config_assets.get_overview` and `instance.workspaces.list`, keep their addresses.

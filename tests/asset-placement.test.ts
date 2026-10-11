@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { operationRunSchema } from "@vivd-catalyst/api-contract";
+import type { CentralPolicySetting } from "@vivd-catalyst/core";
 import { clientInstanceId, setupAccessInstance as setup } from "./support/access-instance";
+import { getTestJobs } from "./support/test-instance";
 
 // The default of a kind and the workspaces an asset is offered in: `assets.set_default` and
 // `assets.set_availability`. That the next run reads a changed availability is held in
@@ -182,5 +185,127 @@ describe("the default and the availability of an asset", () => {
         })
       ).statusCode
     ).toBe(422);
+  });
+
+  // A call names what it was decided against, as `assets.put` names a revision. Each fails
+  // without the comparison: the change was written whatever was stored by then.
+  it("refuses a change that was made against another availability or another asset", async () => {
+    const t = await setup();
+    expect((await t.putAgent(t.admin.id, "assistant")).statusCode).toBe(200);
+    expect((await t.putAgent(t.admin.id, "helper")).statusCode).toBe(200);
+    const assetId = await t.assetId("agent", "helper");
+    const everywhere = { mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] };
+    const personal = { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] };
+    const stored = async () =>
+      (await t.stores.configAssets.listAgentAvailability({ clientInstanceId })).get("helper");
+    const set = (payload: Record<string, unknown>) =>
+      t.call(t.admin.id, "assets.set_availability", {
+        params: { kind: "agent", name: "helper" },
+        payload
+      });
+    const conflict = (reason: string) => ({
+      error: { code: "CONFLICT", details: { kind: "agent", name: "helper", reason } }
+    });
+
+    // Made against what is stored: applied.
+    const applied = await set({
+      ...personal,
+      expectedAssetId: assetId,
+      expectedAvailability: everywhere
+    });
+    expect(applied.statusCode, applied.body).toBe(200);
+    expect(await stored()).toEqual(personal);
+    // Made against what was stored before, against none, or for another asset: nothing lands.
+    for (const [payload, reason] of [
+      [{ mode: "all", expectedAvailability: everywhere }, "availability_changed"],
+      [{ mode: "all", expectedAvailability: null }, "availability_changed"],
+      [{ mode: "all", expectedAssetId: "cfga_another" }, "asset_replaced"]
+    ] as const) {
+      const refused = await set(payload);
+      expect(refused.statusCode).toBe(409);
+      expect(refused.json()).toMatchObject(conflict(reason));
+      expect(await stored()).toEqual(personal);
+    }
+    // Without the fields the call replaces what is stored, as a script's call does.
+    expect((await set({ mode: "all" })).statusCode).toBe(200);
+    expect(await stored()).toEqual(everywhere);
+
+    const setDefault = (expectedAssetId: string) =>
+      t.call(t.admin.id, "assets.set_default", {
+        params: { kind: "agent" },
+        payload: { name: "helper", expectedAssetId }
+      });
+    const state = () => t.stores.configAssets.getConfigAssetState({ clientInstanceId });
+    const before = (await state()).defaultAgentName;
+    const other = await setDefault("cfga_another");
+    expect(other.statusCode).toBe(409);
+    expect(other.json()).toMatchObject(conflict("asset_replaced"));
+    expect((await state()).defaultAgentName).toBe(before);
+    expect((await setDefault(assetId)).statusCode).toBe(200);
+    expect((await state()).defaultAgentName).toBe("helper");
+  });
+
+  it("keeps the newer availability when a held change is approved after it, and applies one nothing overtook", async () => {
+    let settings: CentralPolicySetting[] = [];
+    const t = await setup({ operations: { centralPolicySettings: () => settings } });
+    expect((await t.putAgent(t.admin.id, "assistant")).statusCode).toBe(200);
+    expect((await t.putAgent(t.admin.id, "helper")).statusCode).toBe(200);
+    const assetId = await t.assetId("agent", "helper");
+    const workspaceId = await t.sharedWorkspace("Team");
+    const everywhere = { mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] };
+    const personal = { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] };
+    const team = {
+      mode: "selected",
+      personalWorkspaces: false,
+      collaborationWorkspaceIds: [workspaceId]
+    };
+    const stored = async () =>
+      (await t.stores.configAssets.listAgentAvailability({ clientInstanceId })).get("helper");
+    /** Files the change as the interface sends it, and answers the id of its request. */
+    const hold = async (next: Record<string, unknown>, loaded: Record<string, unknown>) => {
+      settings = [{ operation: "assets.set_availability", value: "approval" }];
+      const held = await t.call(t.admin.id, "assets.set_availability", {
+        params: { kind: "agent", name: "helper" },
+        payload: { ...next, expectedAssetId: assetId, expectedAvailability: loaded }
+      });
+      settings = [];
+      expect(held.statusCode, held.body).toBe(202);
+      const { approvalRequestId = "" } = operationRunSchema.parse(held.json());
+      expect(approvalRequestId).not.toBe("");
+      return approvalRequestId;
+    };
+    const approve = async (requestId: string) => {
+      const decided = await t.call(t.root.id, "approval_requests.decide", {
+        params: { requestId },
+        payload: { decision: "approve" }
+      });
+      expect(decided.statusCode, decided.body).toBe(200);
+      await getTestJobs(t.instance).runDue();
+      return t.stores.approvals.getApprovalRequest({ clientInstanceId, requestId });
+    };
+
+    // Somebody chooses another availability while the call waits. The held call runs, is
+    // refused by the operation's own rule, and the later choice stays.
+    const overtaken = await hold(personal, everywhere);
+    expect(await stored()).toEqual(everywhere);
+    await t.stores.configAssets.setAgentAvailability({
+      clientInstanceId,
+      agentName: "helper",
+      availability: { ...team, mode: "selected", collaborationWorkspaceIds: [workspaceId] }
+    });
+    expect(await approve(overtaken)).toMatchObject({
+      status: "approved",
+      applyResult: { execution: "failed", error: { code: "CONFLICT" } }
+    });
+    expect(await stored()).toEqual(team);
+
+    // Nothing changes while the next one waits: the approved call applies.
+    const untouched = await hold(personal, team);
+    expect(await stored()).toEqual(team);
+    expect(await approve(untouched)).toMatchObject({
+      status: "approved",
+      applyResult: { execution: "done" }
+    });
+    expect(await stored()).toEqual(personal);
   });
 });
