@@ -23,7 +23,9 @@ pnpm demo:seed                    # seed: the test company
 
 `pnpm dev` already runs the migration once when it starts, so the second command is for a stack that is already up. Run `pnpm demo:seed` in a second terminal once the API answers.
 
-The seed signs in as the demo superadmin of `config/app.yaml` and works only through the operations of the API and the config CLI. It writes no table itself. It can run any number of times: a second run creates nothing and changes nothing. It refuses every host that is not `localhost`, `127.0.0.1`, `[::1]` or a name ending in `.localhost` or `.test`. It seeds the instance of `catalyst.yaml`; `DEMO_SEED_URL` names another local instance.
+The seed signs in as the demo superadmin of `config/app.yaml` and works only through the operations of the API and the config CLI. It writes no table itself. It can run any number of times: a second run on an untouched instance creates nothing and changes nothing. It seeds the instance of `catalyst.yaml`; `DEMO_SEED_URL` names another local instance.
+
+It talks to this machine only. It refuses every host that is not `localhost`, `127.0.0.1`, `[::1]` or a name ending in `.localhost` or `.test`, and a name is refused unless every address it resolves to is a loopback address. It refuses an address with a user, a password, a query or a fragment, sends every request to that one origin, follows no redirect, and prints the origin only.
 
 Every seeded person signs in with the address below and the password in `DEMO_SEED_PASSWORD`, see `.env.example`. The seed creates the service principal `Local config CLI` when it is missing and writes its key into the gitignored `.env` as `CATALYST_API_KEY` without printing it, the same way `pnpm config:local-key` does.
 
@@ -52,6 +54,21 @@ The superadmin is the one of the demo's config, so the instance has eight people
 The demo's server runs with one policy setting, in `src/policy.ts`, whether or not the seed has run. It holds a new or changed skill that is saved through `assets.put` into the Namespace `hr-`, for every caller, admins and the superadmin included. So editing an HR skill in the interface asks for an approval first. It holds nothing else: not a delete, not a revert, and not a push of the config CLI, which is a different operation. While no Namespace `hr-` is registered it matches nothing, so a demo that was never seeded behaves as before.
 
 A held call is decided by anyone who holds `operations.approve`. Admins and the superadmin hold it, so Mara Lindqvist, Jonas Brandt or the superadmin can decide the seeded request. A requester who holds the right can decide their own request. Elif Aydin does not hold it, so hers waits for somebody else.
+
+### Running it again
+
+A rerun puts back what the seed owns and leaves everything else alone. The seed owns what it finds by its own names: the seven people by their address, the three Namespaces by their prefix, and the agents and skills of `seed/` by their name.
+
+- A seeded person gets the seeded label, role, rights and status again. So a seeded person you deactivated is active after a rerun, and Lena Hoffmann is deactivated again.
+- A seeded Namespace gets its seeded name, tool list and model list again.
+- A seeded agent or skill that differs from `seed/` is replaced by the file with a new revision, like `pnpm config:push --force` does. Changes made in the interface are lost.
+- A seeded grant row that was removed is written again. Rows you added stay.
+- A decided approval request is not asked again once the skill exists.
+- Other people, Namespaces, agents, skills, grants, keys and conversations are not touched. Something of yours that uses a seeded address, prefix or name counts as the seed's.
+
+The seed never sets a password after it created a person. It signs in as Mara Lindqvist, Jonas Brandt and Elif Aydin when it has to write something in their name. If one of them has a new password, that sign-in is refused and the run stops with the address it could not sign in as. The way out is to change that person's password back to the value of `DEMO_SEED_PASSWORD`, or to set `DEMO_SEED_PASSWORD` in `.env` to the new password if all three share it.
+
+A run that stopped half way is continued by the next one. An invited person who was created and never mailed gets the invitation then: the seed looks for it in the audit events. A key that was created and not written to `.env` stays on the service principal unused, and the next run creates another; remove the unused one under Administration > API Access.
 
 ### What to ask the Check tab
 
