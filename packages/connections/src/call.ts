@@ -495,17 +495,18 @@ export async function callConnectionOperation(
   const jsonInput = toJsonInput(input);
   const limits = connectionCallLimits(first.type);
 
-  const { release, waited } = await slots.acquire(
-    first.connection.assetId,
-    limits,
-    context.runtime.signal
-  );
+  const { release } = await slots.acquire(first.connection.assetId, limits, context.runtime.signal);
   const deadline = callSignal(limits.callTimeoutMs, context.runtime.signal);
   const aborted = untilAborted(deadline.signal);
   try {
-    // What was read before a wait is as old as the wait. The Connection is read again, so a
-    // call that waited runs on the revision and the state of the moment it got its slot.
-    const { connection, type, descriptor } = waited ? await read() : first;
+    // The Connection is read again now that the call has its slot, so it runs on the revision
+    // and the state of that moment whether it waited or not. The read is inside the deadline
+    // of the call: a store that does not answer costs the slot that long and no longer.
+    const { connection, type, descriptor } = await current(
+      read(),
+      aborted.promise,
+      deadline.signal
+    );
     let result: JsonValue;
     let secret: string | undefined;
     try {
@@ -571,6 +572,24 @@ function serializedOrUndefined(value: unknown): string | undefined {
     return serialized;
   } catch {
     return undefined;
+  }
+}
+
+/**
+ * What the read of the Connection answers, unless the call ends first. A refusal of the read
+ * leaves as it is: it says nothing about the outside system, so no health is written for it.
+ */
+async function current<Found>(
+  reading: Promise<Found>,
+  ended: Promise<never>,
+  signal: AbortSignal
+): Promise<Found> {
+  // The read may still fail after nobody waits for it.
+  reading.catch(() => undefined);
+  try {
+    return await Promise.race([reading, ended]);
+  } catch (error) {
+    throw signal.aborted ? exposed(connectionCallError("upstream_timeout")) : error;
   }
 }
 

@@ -50,6 +50,8 @@ describe("a call of a Connection's operation", () => {
       "create run",
       "authorize connection.use",
       "resolve policy",
+      // Once before the call takes a slot and once when it has it.
+      "read connection",
       "read connection",
       "check egress",
       "resolve credential",

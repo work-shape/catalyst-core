@@ -130,8 +130,81 @@ describe("the order inside a call", () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     expect(failed.reason).toBe("upstream_timeout");
-    expect(t.sequence).toEqual(["read connection", "check egress"]);
+    expect(t.sequence).toEqual(["read connection", "read connection", "check egress"]);
     expect(t.executed).toEqual([]);
+  });
+
+  // Fails without the change: a call that got its slot at once ran on what it had read
+  // before, whatever was stored in between.
+  it("reads the Connection again when it has its slot, also without a wait", async () => {
+    const t = await fixture();
+    await t.seed("crm");
+    const slots = new ConnectionCallSlots();
+    const acquire = slots.acquire.bind(slots);
+    vi.spyOn(slots, "acquire").mockImplementation(async (...taken) => {
+      const slot = await acquire(...taken);
+      expect(slot.waited).toBe(false);
+      await t.stores.configAssets.applyConfigAssetMutations({
+        clientInstanceId,
+        mutations: [
+          {
+            type: "upsert",
+            kind: "connection",
+            name: "crm",
+            config: connection("crm", {
+              connectorType: "test",
+              settings: { url: URL_OF_HOST },
+              operations: [operationOf("echo", { exposure: ["workflow"] })]
+            })
+          }
+        ]
+      });
+      return slot;
+    });
+
+    const failed = await refusal(direct(t, "echo", { text: "a" }, { slots }));
+
+    expect(failed.reason).toBe("connection_unavailable");
+    expect(t.sequence).toEqual(["read connection", "read connection"]);
+    expect(t.executed).toEqual([]);
+    // A refusal of the read says nothing about the outside system: no health is written.
+    const stored = await readConnection(t.sourceDeps, "crm");
+    expect(stored?.state?.health).not.toBe("failed");
+    expect(slots.waiting(stored?.assetId ?? "")).toBe(0);
+  });
+
+  // Fails without the change: the read after the slot was outside the deadline of the call,
+  // so a store that did not answer held the slot for as long as it took.
+  it("gives its slot back at the deadline when the read after the slot is not answered", async () => {
+    const t = await fixture();
+    const assetId = await t.seed("crm");
+    t.state.limits = { ...DEFAULT_LIMITS, maxParallelCalls: 1, callTimeoutMs: 300 };
+    const slots = new ConnectionCallSlots();
+    const acquire = slots.acquire.bind(slots);
+    let stalled = false;
+    vi.spyOn(slots, "acquire").mockImplementation(async (...taken) => {
+      const slot = await acquire(...taken);
+      stalled = true;
+      return slot;
+    });
+    const getState = t.stores.connections.getConnectionState.bind(t.stores.connections);
+    const read = vi
+      .spyOn(t.stores.connections, "getConnectionState")
+      .mockImplementation((input) => (stalled ? new Promise(() => undefined) : getState(input)));
+
+    const startedAt = Date.now();
+    const failed = await refusal(direct(t, "echo", { text: "a" }, { slots }));
+    const took = Date.now() - startedAt;
+
+    expect(failed).toMatchObject({ code: "TIMEOUT", reason: "upstream_timeout" });
+    expect(took).toBeGreaterThanOrEqual(290);
+    expect(took).toBeLessThan(3_000);
+    expect(t.sequence).not.toContain("check egress");
+    // The slot is free again: with the store answering, the next call runs at once.
+    read.mockRestore();
+    stalled = false;
+    expect(await direct(t, "echo", { text: "b" }, { slots })).toEqual({ text: "b" });
+    expect(slots.waiting(assetId)).toBe(0);
   });
 
   // Fails without the change: `acquire` took no signal, so the waiter of a call its caller
