@@ -80,7 +80,36 @@ function readBody(request: IncomingMessage): Promise<unknown> {
   });
 }
 
-export function createSampleMcpServer(options: { key: string; anchor?: string; now?: Date }) {
+/** What a request names: the JSON-RPC method and, for a tool call, the tool. */
+const namedRequestSchema = z.object({
+  method: z.string().regex(/^[a-z][a-z/_]{0,63}$/u),
+  // A name of another shape is left out of the line, and the method is still logged.
+  params: z
+    .object({
+      name: z
+        .string()
+        .regex(/^[a-z][a-z_]{0,63}$/u)
+        .optional()
+        .catch(undefined)
+    })
+    .optional()
+    .catch(undefined)
+});
+
+/** What is logged of a request to `/mcp`: its answer and what it named, never a header or an argument. */
+function requestLine(status: number, body?: unknown): string {
+  const named = namedRequestSchema.safeParse(body);
+  const what = named.success ? [named.data.method, named.data.params?.name] : [];
+  return ["POST /mcp", status, ...what].filter((part) => part !== undefined).join(" ");
+}
+
+export function createSampleMcpServer(options: {
+  key: string;
+  anchor?: string;
+  now?: Date;
+  /** Receives one line per request to `/mcp`, so the developer sees who calls. */
+  log?: (line: string) => void;
+}) {
   const key = z.string().min(MINIMUM_KEY_LENGTH).safeParse(options.key);
   if (!key.success) throw new SampleMcpKeyError();
   const digest = createHash("sha256").update(key.data).digest();
@@ -109,10 +138,12 @@ export function createSampleMcpServer(options: { key: string; anchor?: string; n
     const matches = timingSafeEqual(digest, suppliedDigest);
     if (token === undefined || !matches) {
       response.setHeader("WWW-Authenticate", "Bearer");
+      options.log?.(requestLine(401));
       json(response, 401, { error: "Unauthorized." });
       return;
     }
     const body = await readBody(request);
+    response.once("finish", () => options.log?.(requestLine(response.statusCode, body)));
     if (response.destroyed) return;
     const mcp = new McpServer({ name: "demo-sample-mcp", version: "1.0.0" });
     registerSampleTools(mcp, data);

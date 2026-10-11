@@ -392,6 +392,29 @@ describe("demo sample MCP", () => {
       expect(body).not.toContain(customer.name);
   });
 
+  it("logs one line per request with its answer and the tool, and no header or argument", async () => {
+    const lines: string[] = [];
+    const server = createSampleMcpServer({ key, anchor, log: (line) => lines.push(line) });
+    servers.push(server);
+    const { port } = await server.listen(0, "127.0.0.1");
+    const address = `http://127.0.0.1:${port}`;
+    await fetch(`${address}/healthz`);
+    await fetch(`${address}/mcp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${"x".repeat(40)}` },
+      body: "{}"
+    });
+    expect(lines).toEqual(["POST /mcp 401"]);
+    const logged = await connectSampleMcpClient({ url: `${address}/mcp`, key });
+    clients.push(logged);
+    expect(lines).toContain("POST /mcp 200 initialize");
+    lines.length = 0;
+    await logged.callTool({ name: "get_customer", arguments: { id: "C-0001" } });
+    expect(lines).toContain("POST /mcp 200 tools/call get_customer");
+    expect(lines.join("\n")).not.toContain(key);
+    expect(lines.join("\n")).not.toContain("C-0001");
+  });
+
   it("bounds and parses HTTP bodies and restricts methods and paths", async () => {
     for (const method of ["GET", "DELETE", "PUT", "OPTIONS"]) {
       const response = await fetch(`${url}/mcp`, { method });

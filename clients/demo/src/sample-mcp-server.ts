@@ -11,7 +11,8 @@ try {
   const environment = readSampleMcpEnvironment();
   const server = createSampleMcpServer({
     key: await environment.secrets.resolve(SAMPLE_MCP_KEY_NAME),
-    anchor: environment.anchor
+    anchor: environment.anchor,
+    log: (line) => console.log(line)
   });
   const port = z.coerce
     .number()
