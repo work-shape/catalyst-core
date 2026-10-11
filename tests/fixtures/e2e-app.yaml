@@ -86,6 +86,36 @@ auth:
           - user
         permissionRefs:
           - demo-tools
+      # The three people of the Apps spec. No other spec uses them: the admin builds and
+      # publishes, the member uses what is published, and the builder is the one the spec shows
+      # the draft without the publish right. No grant gives a right on Apps yet, so the builder
+      # is an admin too and the spec takes the right out of what the interface is told.
+      - email: e2e-apps@example.test
+        displayLabel: E2E Apps
+        passwordEnvName: E2E_APPS_PASSWORD
+        developmentPassword: e2e-apps-password
+        roles:
+          - user
+          - admin
+        permissionRefs:
+          - demo-tools
+      - email: e2e-apps-member@example.test
+        displayLabel: E2E Apps Member
+        passwordEnvName: E2E_APPS_MEMBER_PASSWORD
+        developmentPassword: e2e-apps-member-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
+      - email: e2e-apps-builder@example.test
+        displayLabel: E2E Apps Builder
+        passwordEnvName: E2E_APPS_BUILDER_PASSWORD
+        developmentPassword: e2e-apps-builder-password
+        roles:
+          - user
+          - admin
+        permissionRefs:
+          - demo-tools
   sessionToken:
     issuer: demo-e2e-client-instance
     ttlSeconds: 900
