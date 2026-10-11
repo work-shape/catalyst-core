@@ -8,7 +8,7 @@ import {
   pageSource,
   pageSurface,
   patchThatAdds,
-  patchThatRewrites,
+  rewritePageFile,
   savePage,
   writePageFiles
 } from "./page-surface-fixtures";
@@ -142,14 +142,7 @@ test("a Page built in chat shows beside the conversation, changes with the next 
   await expect(table.getByRole("cell", { name: "February" })).toBeVisible();
 
   // The agent changes the Page: the next save is revision 2, on the route the reader was on.
-  await writePageFiles(
-    page,
-    patchThatRewrites(
-      "src/routes/index.tsx",
-      overviewRoute("Revenue overview"),
-      overviewRoute("Revenue this year")
-    )
-  );
+  await rewritePageFile(page, "src/routes/index.tsx", overviewRoute("Revenue this year"));
   await savePage(page);
   await expect(surface).toContainText("Revision 2");
   await expect(builtPage(page).getByRole("textbox", { name: "Rows as JSON" })).toBeVisible();
@@ -219,10 +212,7 @@ test("a save the build refuses says what it found, in the thread and under the P
   await expect(builtPage(page).getByRole("heading", { name: "Revenue overview" })).toBeVisible();
 
   const broken = overviewRoute("Revenue overview").replace("</h1>", "</h1");
-  await writePageFiles(
-    page,
-    patchThatRewrites("src/routes/index.tsx", overviewRoute("Revenue overview"), broken)
-  );
+  await rewritePageFile(page, "src/routes/index.tsx", broken);
   await savePage(page);
 
   // The revision that was built stays; the findings stand under it.
@@ -290,14 +280,7 @@ test("a new save opens a closed Page again, and coming back to the conversation 
   await expect(band).toHaveCount(0);
 
   // The agent saves again: the Page comes back, on the new revision.
-  await writePageFiles(
-    page,
-    patchThatRewrites(
-      "src/routes/index.tsx",
-      overviewRoute("Revenue overview"),
-      overviewRoute("Revenue this year")
-    )
-  );
+  await rewritePageFile(page, "src/routes/index.tsx", overviewRoute("Revenue this year"));
   await savePage(page);
   await expect(surface).toContainText("Revision 2");
   await expect(builtPage(page).getByRole("heading", { name: "Revenue this year" })).toBeVisible();

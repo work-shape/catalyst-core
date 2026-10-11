@@ -12,6 +12,7 @@ toolNames:
   - propose_skill_change
   - e2e.record_note
   - workspace.apply_patch
+  - workspace.write_file
   - page.save
 initialPrompts:
   - title: Find review risks

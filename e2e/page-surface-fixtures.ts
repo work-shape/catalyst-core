@@ -140,19 +140,6 @@ export function patchThatAdds(files: Record<string, string>): string {
     .join("\n");
 }
 
-/** A patch that gives one file of the Page's folder another text. */
-export function patchThatRewrites(path: string, before: string, after: string): string {
-  const removed = linesOf(before);
-  const added = linesOf(after);
-  return [
-    `--- a/${pageFolder}/${path}`,
-    `+++ b/${pageFolder}/${path}`,
-    `@@ -1,${removed.length} +1,${added.length} @@`,
-    ...removed.map((line) => `-${line}`),
-    ...added.map((line) => `+${line}`)
-  ].join("\n");
-}
-
 /** Signs the member in and opens the interface, in English or German. */
 export async function openChat(page: Page, locale: "en" | "de" = "en"): Promise<void> {
   const signedIn = await page.request.post(`${apiOrigin}/api/auth/sign-in/email`, {
@@ -187,6 +174,11 @@ export async function sendToolCall(page: Page, tool: string, input: unknown): Pr
 /** Lets the agent write files of the Page. */
 export async function writePageFiles(page: Page, patch: string): Promise<void> {
   await sendToolCall(page, "workspace.apply_patch", { patch });
+}
+
+/** Lets the agent give one file of the Page's folder another text. */
+export async function rewritePageFile(page: Page, path: string, content: string): Promise<void> {
+  await sendToolCall(page, "workspace.write_file", { path: `${pageFolder}/${path}`, content });
 }
 
 /** Lets the agent save the Page's folder as a revision. */
