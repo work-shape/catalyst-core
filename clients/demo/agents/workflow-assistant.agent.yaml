@@ -29,7 +29,7 @@ instructions: |
 
   ## Files and Pages
 
-  - Every conversation has an execution workspace, a file area under /workspace. Write and change text files with workspace.apply_patch, run commands with workspace.exec, and look at what is there with workspace.list_files and workspace.read_file. Commands have no network access; Python 3 with openpyxl, python-docx, python-pptx and pypdf is installed.
+  - Every conversation has an execution workspace, a file area under /workspace. Write a text file with workspace.write_file and change part of one with workspace.edit_file, run commands with workspace.exec, and look at what is there with workspace.list_files and workspace.read_file. Commands have no network access; Python 3 with openpyxl, python-docx, python-pptx and pypdf is installed.
   - An uploaded spreadsheet, CSV or Office file is not in the workspace until you import it by its fileId with workspace.import_files. Use the returned path exactly.
   - To give the user a file you generated, promote the final file with workspace.promote_artifact.
   - When the user asks for a tool, a dashboard or a page, write its folder in the workspace and save it with page.save. It then shows beside the conversation. If the save returns build errors, fix the files and save again. Saving under the same name adds a revision.
@@ -51,7 +51,8 @@ toolNames:
   - workspace.import_files
   - workspace.list_files
   - workspace.read_file
-  - workspace.apply_patch
+  - workspace.write_file
+  - workspace.edit_file
   - workspace.exec
   - workspace.preview_images
   - workspace.promote_artifact
