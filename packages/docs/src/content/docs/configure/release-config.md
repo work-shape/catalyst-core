@@ -728,6 +728,102 @@ When moving an existing instance:
   directory and the same mount so existing files stay reachable.
 - `EXECUTION_WORKSPACE_RUNNER_IMAGE` replaces the image of a `docker` sandbox only.
 
+## Connections
+
+`connections` names the Connections of the instance. It needs the module [`connections`](/configure/modules/#connections); with the module off the section is read and nothing is seeded.
+
+```yaml
+modules:
+  connections:
+    enabled: true
+
+connections:
+  crm:
+    connectorType: mcp
+    displayName: CRM
+    description: Customer records, read-only.
+    settings:
+      url: https://mcp.crm.example.com/mcp
+    authScheme: bearer
+    secret: CRM_MCP_TOKEN
+    operations:
+      - name: search_customers
+        effect: reading
+        exposure: [agent]
+
+secretStore:
+  keys:
+    - id: k1
+      ref: CATALYST_SECRET_STORE_KEY
+
+egress:
+  allow:
+    - protocol: https
+      host: mcp.crm.example.com
+      port: 443
+```
+
+Each key under `connections` is the name of a Connection. An entry takes `connectorType`, `displayName`, `description`, `settings`, `authScheme`, `secret` and `operations`, and nothing else. `settings` is checked against the strict schema of the connector type before anything is stored, and a `connectorType` this build does not ship stops startup with the place of the fault. An entry of `operations` takes `name`, `effect` (`reading` or `changing`), `exposure` (any of `agent`, `bridge`, `workflow`) and optionally `policy` and `schemaFingerprint`. What stands in the list is accepted; nothing else of the outside system can be called.
+
+`secret` is the name of a secret, resolved like every other secret of the instance: from the environment variable of that name or from the file `<NAME>_FILE` points at. It is the only place of a Connection where a secret may stand, and it never holds the value. An `authScheme` other than `none` needs it, and `none` refuses it.
+
+### What a start does
+
+The API process reconciles the stored Connections with this section each time it starts, in one transaction under one lock, so several API processes starting together write once. Workers do not seed.
+
+- A new entry becomes a Connection with `origin: release` at revision 1. A changed entry becomes a new revision. An unchanged entry writes nothing.
+- An entry that is gone removes its Connection, its stored secret and its state.
+- The value of `secret` is read once and stored encrypted. A changed value becomes the next version of the secret and no new revision of the Connection. A variable that is not set leaves the Connection in the state `needs_configuration`, and a call of it is refused with `connection_not_configured`.
+- A Connection created on the instance is never touched. An entry with the name of such a Connection stops startup.
+
+A seeded Connection is read-only on the instance: `read_only_origin`. Rotate a credential by changing the value of the variable and restarting.
+
+### Secret Store keys
+
+`secretStore.keys` lists the keys that encrypt Connection secrets, each with an `id` and a `ref`, the name of the secret that holds the key. A key is 32 random bytes in base64, for example from `openssl rand -base64 32`. The first key encrypts; every listed key decrypts.
+
+- With at least one entry under `connections`, the first key must resolve. Otherwise startup stops and names the variable, for example `The Secret Store key 'CATALYST_SECRET_STORE_KEY' is not set`.
+- A later key that is not set is skipped with a warning that names it. A secret only that key opens reads as `secret_unreadable`, and no call of its Connection is attempted.
+- To change the key, put the new key first and keep the old one in the list. A secret that comes from `secret` is sealed again under the first key at the next start. Remove the old key once no row names its `id`.
+
+Secrets are stored with AES-256-GCM, a random 12-byte nonce for every encryption, and associated data made of the instance, the Connection, the credential subject and the version of the secret. A row copied to another Connection does not open. The database holds ciphertext only, so a database backup restores no credential without the key: back the key up apart from the database. A lost key is not recovered; set the secrets again.
+
+Nothing returns a stored secret: no operation, route, CLI command, export, log line, audit event or error. A person sees whether a secret is set and its version.
+
+### Egress
+
+`egress.allow` is the list of outside targets a Connection may reach. It is empty unless set, and an empty list refuses every target.
+
+| Key | Meaning |
+| --- | --- |
+| `protocol` | `https`, `http` or `postgres`. |
+| `host` | One exact host name or one literal address. No wildcard, no suffix match. |
+| `port` | The one port. A default port is written out. |
+| `network` | `public`, the default, or `private`. |
+| `cidrs` | With `private`: the address ranges the host may resolve into. |
+
+Every connection a Connection opens is checked against this list before a credential is resolved, whatever its connector type:
+
+- Protocol, host and port must equal one entry.
+- The host is resolved at the check, and every address it answers is judged. For a `public` entry, one answer that is loopback, link-local, a cloud metadata address or a private range refuses the target, also written as an IPv4-mapped IPv6 address. For a `private` entry, every answer must lie in the entry's `cidrs`.
+- The connection goes to the address that was checked, with the host name unchanged for TLS, so a second DNS answer changes nothing.
+- A redirect and a returned download address are checked as new targets, and the credential is sent to the origin it was configured for and to no other.
+- An address with a user name or a password is refused.
+- The instance's own database host and port are refused whatever the list says.
+- Plain `http` is accepted for a `private` entry only.
+
+```yaml
+egress:
+  allow:
+    - protocol: http
+      host: mcp-internal
+      port: 8080
+      network: private
+      cidrs: ["172.28.0.0/16"]
+```
+
+A refusal answers `egress_denied` with the host and the port, and nothing else of the address. A checked answer is used for 30 seconds, so a call within that time makes no DNS lookup, and a page load makes none at all. The list is read at start: a change needs a restart.
+
 ## Config Is Not A Secret Store
 
 Release config may reference secrets, but it must not contain secret values.

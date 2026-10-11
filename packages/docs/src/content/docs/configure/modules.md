@@ -25,7 +25,7 @@ modules:
 | `resources`       | The Resources panel of a conversation.                                                                  | Nothing.                                                                          |
 | `assetManagement` | Changing agents and skills in the interface. Running agents and `catalyst config push` work without it. | Nothing. `administration.agentConfiguration` still says what a person may change. |
 | `userInvitations` | Inviting a user by an emailed link to set a password.                                                   | A mail sender under `infrastructure.mail` and standalone password sign-in.        |
-| `connections`     | Connections to outside systems: the asset kind `connection`, its rights and its list in Build.          | Nothing. A Connection that reaches a system needs a connector type in the build.  |
+| `connections`     | Connections to outside systems: the asset kind `connection`, its rights and its list in Build.          | `secretStore.keys` and `egress.allow` once `connections` names a Connection.      |
 
 The document processing capability is part of the paid capabilities and not in the open repository. The other modules ship with the open platform.
 
@@ -33,9 +33,11 @@ The document processing capability is part of the paid capabilities and not in t
 
 A Connection is one configured access to an outside system, stored as an asset of kind `connection`. With the module on, **Build > Connections** lists the Connections of the instance, and **Settings > Instance > Access** grants `connection.read` and `connection.use`. With the module off, the kind does not exist for any caller: `GET /api/v1/assets/connection` answers `404` with `details.reason: "module_off"`, and stored Connections stay as they are.
 
-In this release a Connection is listed and cannot be created, changed or deleted through the interface, the API or the CLI: such a write is refused with `connection_runtime_authoring_unavailable`. The release writes Connections once the Secret Store is part of the product.
+A Connection comes from release config: [`connections`](/configure/release-config/#connections) names each one, and the API process writes them into the store when it starts. Such a Connection is read-only on the instance. A put, a revert or a delete of it through the interface, the API or the CLI is refused with `403` and `details.reason: "read_only_origin"`; change it in release config and restart. A Connection cannot be created on the instance yet: that write is refused with `connection_runtime_authoring_unavailable`.
 
-A Connection never holds a credential. Its definition holds `secretHandle`, an opaque reference into the Secret Store, and a definition that carries a credential anywhere else is refused: an address with a user name or a password, a header named like a credential, a setting named like a credential whatever stands under it (a text, a number, a list or an object; only a switch such as `requiresToken: true` is kept), an `Authorization` value. The check reads names and shapes, so keep credentials out of `settings` yourself.
+A Connection never holds a credential. Its definition holds `secretHandle`, an opaque reference into the Secret Store, and the handle opens nothing by itself. A secret reaches a Connection in exactly one place, the field `secret` of its release config entry, and only as the name of a secret, never as a value. The settings are typed by the connector type: a key the type does not declare is refused, and the type never declares one for a credential. A header or query value that authenticates is produced from the stored secret when a call is made and is no setting.
+
+As a second net, a definition that carries a credential anywhere else is refused: an address with a user name or a password, a header named like a credential, a setting named like a credential whatever stands under it (a text, a number, a list or an object; only a switch such as `requiresToken: true` is kept), an `Authorization` value. That check reads names and shapes and is not the boundary. `displayName` and `description` are free text and are stored and shown as written, so write no credential into them.
 
 A module that a later release adds is off until its entry says otherwise.
 

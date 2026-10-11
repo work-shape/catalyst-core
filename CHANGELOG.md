@@ -7,6 +7,24 @@ contain breaking changes; a patch version does not.
 
 ### Added
 
+- **Connections, secrets and egress:** release config `connections` names the Connections of an
+  instance, and the API process writes them into the store when it starts, in one transaction
+  under one lock. Such a Connection has `origin: release` and is read-only on the instance:
+  `assets.put`, `assets.revert` and `assets.delete` answer `403` with
+  `details.reason: "read_only_origin"`. An entry that is gone removes its Connection. The
+  credential an entry names under `secret` is stored encrypted in the new table `secrets`
+  (AES-256-GCM, a random 12-byte nonce per encryption, bound to instance, Connection, subject
+  and version); a changed value becomes the next version. **An instance whose release config
+  names a Connection needs `secretStore.keys`**: the first key is 32 random bytes in base64, and
+  startup stops with the name of its variable when it is not set. Nothing returns a stored
+  secret. `egress.allow` lists the targets a Connection may reach as protocol, host and port;
+  it is empty by default and then refuses every target. The check resolves the host, refuses a
+  loopback, link-local, metadata or private address unless the entry says `network: private`
+  and names the range, pins the checked address and refuses the instance's own database.
+  Migration `0055_connection_secrets` adds `secrets` and `connection_state`. No connector type
+  ships yet, so no Connection can be configured before the next release adds one.
+- **Access:** `connection.read` and `connection.use` can be granted in a Namespace, which covers
+  the Connections whose names start with its prefix.
 - **Pages:** a conversation can hold Pages, each with numbered revisions. A revision is a file
   set that is stored once and never changed. The module `apps` owns them and is off by default;
   with it on, startup stops with the missing piece named unless `infrastructure.objectStorage.files`
@@ -381,6 +399,7 @@ id from config_assets where status = 'deleted')`.
 - **Operations (fixed):** a registered operation reads each input field from the part of the
   request its descriptor declares it in. A query field the descriptor does not declare no longer
   replaces a field of the body; it is ignored, as on every other route.
+- **Build:** a Connection's row no longer shows where the Connection comes from.
 - **Document extraction (breaking config):** the extraction of the document processing
   capability calls its model through the model gateway. The block
   `capabilities.documentProcessing.extraction.provider` is gone, and startup of the API and of
