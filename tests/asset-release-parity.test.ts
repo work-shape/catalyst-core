@@ -313,9 +313,15 @@ describe("the size of a batch", () => {
       putAgent(`rel-bulk-${index}`, { reasoningEffort: "boundless" })
     );
 
-    const started = performance.now();
-    const refused = await syncAsService(t, agents);
-    const elapsed = performance.now() - started;
+    const timed = async (batch: typeof agents) => {
+      const started = performance.now();
+      const response = await syncAsService(t, batch);
+      return { response, elapsed: performance.now() - started };
+    };
+    // A tenth of the batch first, as the measure of this machine under its load of the moment.
+    const tenth = await timed(agents.slice(0, ASSET_RELEASE_SYNC_MAX_ITEMS / 10));
+    expect(tenth.response.statusCode).toBe(422);
+    const { response: refused, elapsed } = await timed(agents);
 
     expect(refused.statusCode).toBe(422);
     const { items } = refusedItems(refused);
@@ -326,7 +332,8 @@ describe("the size of a batch", () => {
       new Set(["refused,VALIDATION_FAILED"])
     );
     expect(items[0]?.message).toContain("reasoningEffort");
-    // Generous: the whole call, validation and the answer included, on a loaded machine.
-    expect(elapsed).toBeLessThan(15_000);
-  });
+    // Ten times the items in about ten times the time. Generous: a pass over the batch for
+    // each item would be a hundred times.
+    expect(elapsed).toBeLessThan(60 * Math.max(tenth.elapsed, 100));
+  }, 120_000);
 });
