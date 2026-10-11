@@ -453,7 +453,8 @@ describe("local workspace command runner", () => {
       status: "failed",
       error: {
         code: "handler_failed",
-        message: "Workspace file 'notes.txt' was not found"
+        message:
+          "Workspace file 'notes.txt' was not found. Call workspace.list_files to see the paths that exist."
       }
     });
 

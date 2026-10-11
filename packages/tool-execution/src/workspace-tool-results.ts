@@ -194,15 +194,20 @@ export function decodeTextFile(
   if (bytes.includes(0)) {
     return {
       status: "failed",
-      result: failed("handler_failed", "Workspace file appears to be binary")
+      result: failed(
+        "handler_failed",
+        "Workspace file appears to be binary, so it has no text to return. Inspect it with a command in workspace.exec, or look at an image with workspace.preview_images."
+      )
     };
   }
   if (mimeType && !isTextMimeType(mimeType)) {
     return {
       status: "failed",
-      result: failed("handler_failed", "Workspace file is not a supported text MIME type", {
-        mimeType
-      })
+      result: failed(
+        "handler_failed",
+        "Workspace file is not a supported text MIME type. Inspect it with a command in workspace.exec, or look at an image with workspace.preview_images.",
+        { mimeType }
+      )
     };
   }
   try {
@@ -213,15 +218,15 @@ export function decodeTextFile(
   } catch {
     return {
       status: "failed",
-      result: failed("handler_failed", "Workspace file is not valid UTF-8 text")
+      result: failed(
+        "handler_failed",
+        "Workspace file is not valid UTF-8 text. Inspect or convert it with a command in workspace.exec, for example with iconv."
+      )
     };
   }
 }
 
-export function boundTextByBytes(
-  text: string,
-  maxBytes: number
-): { text: string; truncated: boolean } {
+function boundTextByBytes(text: string, maxBytes: number): { text: string; truncated: boolean } {
   const bytes = new TextEncoder().encode(text);
   if (bytes.byteLength <= maxBytes) {
     return { text, truncated: false };

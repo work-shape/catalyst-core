@@ -24,7 +24,10 @@ export const DEFAULT_LIMITS: WorkspaceCommandServiceLimits = {
   maxStdoutBytes: 64 * 1024,
   maxStderrBytes: 64 * 1024,
   maxWorkspaceBytes: 100 * 1024 * 1024,
-  maxReadFileBytes: 128 * 1024,
+  // Ceiling of workspace.read_file. A read loads the whole stored file into memory once per
+  // call, so this bounds the memory of one read, not the size of an answer.
+  maxReadFileBytes: 8 * 1024 * 1024,
+  // Most bytes of file text in one workspace.read_file answer; the model's context pays for it.
   maxReadPreviewBytes: 16 * 1024,
   maxApplyPatchBytes: 256 * 1024,
   maxCommandLength: 64 * 1024,
@@ -33,9 +36,19 @@ export const DEFAULT_LIMITS: WorkspaceCommandServiceLimits = {
   maxPathLength: 512
 };
 
+/**
+ * Lines in one workspace.read_file answer when the call gives no `limit`. An answer is also cut
+ * at `maxReadPreviewBytes`, whichever comes first. No operator setting: a call that wants more
+ * or fewer lines passes `limit`.
+ */
+export const WORKSPACE_READ_DEFAULT_LINES = 400;
+
 const workspacePathSchema = z.string().min(1).max(DEFAULT_LIMITS.maxPathLength);
 const workspaceCommandDescription =
   "Complete Bash command or multiline script. Each call starts in /workspace unless cwd is provided for that call. The standard project directories scripts, artifacts, previews, and tmp are available at the start of every command. Files created or changed under /workspace persist across calls. Run helpers directly, e.g. `pptx_inspect deck.pptx --view summary`; do not write `set -e pptx_inspect ...`. For multiline create-and-verify commands, put `set -e` on its own line before later commands. Do not pass helper flags such as `--view`, `--spec`, `--out`, `--range`, `--page`, or `--sheet` to `cat`, `ls`, or `printf`.";
+const workspaceReadOffsetDescription =
+  "First line to return, counted from 1. Omit it to start at line 1. To continue, pass the nextOffset of the previous answer.";
+const workspaceReadLimitDescription = `Number of lines to return. Omit it for up to ${WORKSPACE_READ_DEFAULT_LINES} lines.`;
 const workspaceCwdDescription =
   "Optional workspace-relative directory for this command only. It does not persist as the next command's cwd.";
 const workspaceExpectedOutputsDescription =
@@ -115,7 +128,9 @@ export const workspaceImportFilesInputSchema = z
 
 export const workspaceReadFileInputSchema = z
   .object({
-    path: workspacePathSchema
+    path: workspacePathSchema,
+    offset: z.number().int().min(1).describe(workspaceReadOffsetDescription).optional(),
+    limit: z.number().int().min(1).describe(workspaceReadLimitDescription).optional()
   })
   .strict();
 
@@ -223,7 +238,8 @@ export const workspaceExecOutputSchema = z.object({
 });
 
 export const workspaceListFilesOutputSchema = z.object({
-  workspaceId: z.string(),
+  // Absent while the conversation has no execution workspace; listing does not create one.
+  workspaceId: z.string().optional(),
   files: z.array(
     z.object({
       path: z.string(),
@@ -260,7 +276,16 @@ export const workspaceReadFileOutputSchema = z.object({
   mimeType: z.string().optional(),
   encoding: z.literal("utf-8"),
   contentPreview: z.string(),
-  truncated: z.boolean()
+  // True when the answer does not reach the end of the file.
+  truncated: z.boolean(),
+  // The lines `contentPreview` holds, counted from 1. Both are 0 for an empty file.
+  startLine: z.number().int().min(0),
+  endLine: z.number().int().min(0),
+  totalLines: z.number().int().min(0),
+  // The `offset` to continue with, when lines remain after `endLine`.
+  nextOffset: z.number().int().min(1).optional(),
+  // How to get the rest, in words. Present when `truncated` is true.
+  hint: z.string().optional()
 });
 
 export const workspaceApplyPatchOutputSchema = z.object({

@@ -284,7 +284,7 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
   },
   {
     "name": "workspace.list_files",
-    "description": "List internal files currently tracked in the conversation execution workspace.",
+    "description": "List the files tracked in this conversation's execution workspace, each with path, size and checksum. These are the internal working files of the conversation, not Collaboration Workspace assets. The list is empty until a tool has put a file there. Read a text file with workspace.read_file; search or look into directories with a command in workspace.exec.",
     "permission": null,
     "inputJsonSchema": {
       "type": "object",
@@ -362,7 +362,6 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
         }
       },
       "required": [
-        "workspaceId",
         "files"
       ],
       "additionalProperties": false
@@ -494,7 +493,7 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
   },
   {
     "name": "workspace.read_file",
-    "description": "Read a bounded UTF-8 preview of a text file from the conversation execution workspace.",
+    "description": "Read UTF-8 text from a file in this conversation's execution workspace, by lines. Without offset and limit the answer starts at line 1 and holds up to 400 lines or 16 KiB, whichever comes first. It always ends at a whole line and lines carry no number prefix. The answer says which lines it holds (startLine, endLine) and how many the file has (totalLines). When lines remain, truncated is true and nextOffset is the line to continue with: call again with offset set to nextOffset until nextOffset is absent. Binary files and files above 8 MiB are refused; read those with a command in workspace.exec.",
     "permission": null,
     "inputJsonSchema": {
       "type": "object",
@@ -503,6 +502,18 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
           "type": "string",
           "minLength": 1,
           "maxLength": 512
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "First line to return, counted from 1. Omit it to start at line 1. To continue, pass the nextOffset of the previous answer."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Number of lines to return. Omit it for up to 400 lines."
         }
       },
       "required": [
@@ -518,6 +529,18 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
           "type": "string",
           "minLength": 1,
           "maxLength": 512
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "First line to return, counted from 1. Omit it to start at line 1. To continue, pass the nextOffset of the previous answer."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Number of lines to return. Omit it for up to 400 lines."
         }
       },
       "required": [
@@ -550,6 +573,29 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
         },
         "truncated": {
           "type": "boolean"
+        },
+        "startLine": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "totalLines": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "nextOffset": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "hint": {
+          "type": "string"
         }
       },
       "required": [
@@ -558,7 +604,10 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
         "byteSize",
         "encoding",
         "contentPreview",
-        "truncated"
+        "truncated",
+        "startLine",
+        "endLine",
+        "totalLines"
       ],
       "additionalProperties": false
     }

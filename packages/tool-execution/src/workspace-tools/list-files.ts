@@ -7,13 +7,14 @@ import {
 } from "../workspace-tool-schemas";
 import { readPromotedFileArtifacts } from "../workspace-tool-results";
 import type { WorkspaceToolDependencies } from "./dependencies";
-import { resolveWorkspaceHandle } from "./workspace";
+import { findExistingWorkspace } from "./workspace";
 
 export function workspaceListFilesTool(deps: WorkspaceToolDependencies) {
   return defineTool({
     name: "workspace.list_files",
     effect: "reading",
-    description: "List internal files currently tracked in the conversation execution workspace.",
+    description:
+      "List the files tracked in this conversation's execution workspace, each with path, size and checksum. These are the internal working files of the conversation, not Collaboration Workspace assets. The list is empty until a tool has put a file there. Read a text file with workspace.read_file; search or look into directories with a command in workspace.exec.",
     inputSchema: workspaceListFilesInputSchema,
     outputSchema: workspaceListFilesOutputSchema,
     execute(input, context) {
@@ -27,17 +28,21 @@ export async function listWorkspaceFiles(
   _input: z.infer<typeof workspaceListFilesInputSchema>,
   context: ToolExecutionContext
 ): Promise<ToolHandlerResult<z.infer<typeof workspaceListFilesOutputSchema>>> {
-  const workspace = await resolveWorkspaceHandle(deps, context);
+  const workspace = await findExistingWorkspace(deps, context);
   if (workspace.status === "failed") {
     return workspace.result;
   }
-  const files = await deps.store.executionWorkspaces.listWorkspaceFiles({
-    clientInstanceId: context.clientInstanceId,
-    workspaceId: workspace.value.handle.id
-  });
+  const { conversationId, workspaceId } = workspace.value;
+  // A conversation without a workspace has no files. Listing is a read and creates none.
+  const files = workspaceId
+    ? await deps.store.executionWorkspaces.listWorkspaceFiles({
+        clientInstanceId: context.clientInstanceId,
+        workspaceId
+      })
+    : [];
   return toolSuccess(
     {
-      workspaceId: workspace.value.handle.id,
+      ...(workspaceId ? { workspaceId } : {}),
       files: files.map((file) => ({
         path: file.path,
         byteSize: file.byteSize,
@@ -51,7 +56,7 @@ export async function listWorkspaceFiles(
     {
       auditSummary: {
         action: "workspace.list_files",
-        subject: workspace.value.handle.id,
+        subject: workspaceId ?? conversationId,
         metadata: {
           count: files.length
         }

@@ -761,7 +761,7 @@ describe("workspace tools", () => {
     const oversized = await harness.runTool("workspace.read_file", { path: "large.txt" });
     expect(oversized.status).toBe("failed");
     if (oversized.status === "failed") {
-      expect(oversized.error.message).toMatch(/too large/u);
+      expect(oversized.error.message).toMatch(/maxReadFileBytes, 64 bytes/u);
     }
   });
 
