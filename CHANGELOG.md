@@ -1264,6 +1264,8 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- An open tool call in the work history shows an output that is only an error as wrapped text, so the whole sentence is readable: what happened, whether trying again helps and who can act. It was one line of JSON in a code box, cut at the right edge. The id of a tool call is no longer written into the page.
+
 - **Connections:** a Connection whose host is on the egress list and does not resolve, as with
   a stopped service or a resolver that is down, no longer reads as refused by the list. A call
   answers `connection_unavailable` with "the host <host>:<port> did not resolve to an address"

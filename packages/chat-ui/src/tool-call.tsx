@@ -116,7 +116,6 @@ export function ToolCallPart({
     return (
       <div className="chat-tool-part my-3 max-w-3xl" data-testid="tool-call-card">
         <ApprovalRequestCard requestId={approvalRequest.requestId} />
-        <span className="sr-only">{toolCallId}</span>
       </div>
     );
   }
@@ -147,7 +146,6 @@ export function ToolCallPart({
         statusLabel={statusLabel}
         artifacts={artifacts}
         surfacedArtifacts={surfacedArtifacts}
-        toolCallId={toolCallId}
         toolTitle={toolDisplay.title}
       />
     );
@@ -169,7 +167,6 @@ export function ToolCallPart({
         <span className="truncate font-medium text-foreground">{toolDisplay.title}</span>
         {actionLabel ? <span className="min-w-0 truncate">{actionLabel}</span> : null}
         <span className="shrink-0">{statusLabel}</span>
-        <span className="sr-only">{toolCallId}</span>
       </div>
     );
   }
@@ -182,7 +179,6 @@ export function ToolCallPart({
       statusLabel={statusLabel}
       summary={summary}
       surfacedArtifacts={surfacedArtifacts}
-      toolCallId={toolCallId}
       toolTitle={toolDisplay.title}
     />
   );
@@ -343,7 +339,6 @@ function SidePanelToolCall({
         className="border-t px-2.5 py-1"
       />
       <ToolArtifactList artifacts={artifacts} className="border-t px-2.5 py-2" />
-      <span className="sr-only">{toolCallId}</span>
     </div>
   );
 }
@@ -412,7 +407,6 @@ function DisplayToolCall({
   statusLabel,
   artifacts,
   surfacedArtifacts,
-  toolCallId,
   toolTitle
 }: {
   actionLabel?: string;
@@ -422,7 +416,6 @@ function DisplayToolCall({
   statusLabel: string;
   artifacts: ToolArtifactDownloadRef[];
   surfacedArtifacts: ToolArtifactDownloadRef[];
-  toolCallId: string;
   toolTitle: string;
 }) {
   const { t } = useTranslation();
@@ -466,7 +459,6 @@ function DisplayToolCall({
         defaultOpen={state === "failed"}
         className="mt-2"
       />
-      <span className="sr-only">{toolCallId}</span>
     </div>
   );
 }
@@ -552,13 +544,18 @@ function toolDetailSections({
     return projectWorkspaceToolDisplay({ args, result, toolName })?.sections ?? [];
   }
   const input = formatDetails(argsText && argsText.trim().length > 0 ? argsText : args);
-  const output = formatDetails(result);
+  const sentence = readErrorSentence(result);
+  const output = sentence ?? formatDetails(result);
   const sections: ToolDetailSection[] = [];
   if (input) {
     sections.push({ label: labels.input, value: input });
   }
   if (output) {
-    sections.push({ label: labels.output, value: output });
+    sections.push({
+      label: labels.output,
+      value: output,
+      ...(sentence === undefined ? {} : { kind: "text" as const })
+    });
   }
   return sections;
 }
@@ -715,6 +712,17 @@ function isWorkspaceToolName(toolName: string): boolean {
   return toolName.startsWith("workspace.");
 }
 
+/**
+ * The sentence of an output that is an error and nothing else: `{ "error": "…" }`. Such an
+ * output is read by a person, so it is shown as text and not as the JSON it arrived in.
+ */
+function readErrorSentence(result: unknown): string | undefined {
+  if (!isRecord(result) || Object.keys(result).length !== 1) {
+    return undefined;
+  }
+  return readTrimmedString(result.error);
+}
+
 function formatDetails(value: unknown): string | undefined {
   if (value === undefined || value === null || value === "") {
     return undefined;
@@ -752,7 +760,6 @@ function CompactToolCall({
   statusLabel,
   summary,
   surfacedArtifacts,
-  toolCallId,
   toolTitle
 }: {
   actionLabel?: string;
@@ -761,7 +768,6 @@ function CompactToolCall({
   statusLabel: string;
   summary: string | undefined;
   surfacedArtifacts: ToolArtifactDownloadRef[];
-  toolCallId: string;
   toolTitle: string;
 }) {
   const [open, setOpen] = useState(state === "failed");
@@ -805,7 +811,6 @@ function CompactToolCall({
           <ToolDetails sections={detailSections} />
         </div>
       ) : null}
-      <span className="sr-only">{toolCallId}</span>
     </div>
   );
 }
@@ -860,9 +865,18 @@ function ToolDetails({ sections }: { sections: ToolDetailSection[] }) {
       {sections.map((section) => (
         <div key={section.label} className="grid gap-1">
           <p className="font-medium text-muted-foreground">{section.label}</p>
-          <pre className="max-h-56 overflow-auto rounded-md bg-background/70 px-3 py-2 font-mono text-[0.75rem] leading-5 [overflow-wrap:anywhere]">
-            {section.value}
-          </pre>
+          {section.kind === "text" ? (
+            <p
+              className="text-body text-foreground [overflow-wrap:anywhere]"
+              data-testid="tool-detail-text"
+            >
+              {section.value}
+            </p>
+          ) : (
+            <pre className="max-h-56 overflow-auto rounded-md bg-background/70 px-3 py-2 font-mono text-[0.75rem] leading-5 [overflow-wrap:anywhere]">
+              {section.value}
+            </pre>
+          )}
         </div>
       ))}
     </div>

@@ -1,6 +1,11 @@
 export interface ToolDetailSection {
   label: string;
   value: string;
+  /**
+   * `text` is a sentence for a person and is shown wrapped, in the text face. Left out, the
+   * value is data and is shown as it is, in a code box.
+   */
+  kind?: "text";
 }
 
 export interface WorkspaceToolDisplayProjection {
