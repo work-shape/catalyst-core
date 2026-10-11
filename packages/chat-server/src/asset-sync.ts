@@ -140,6 +140,11 @@ export async function syncAssets(
   await authorizeInteractiveWrite(options, call.actor, call, call.audit, releaseSync);
   for (const entry of ready()) {
     const current = entry.asset?.status === "active" ? entry.asset.revision : null;
+    if (entry.asset?.status === "active") {
+      const stored = entry.asset.config;
+      entry.refusal = refusalOf(() => entry.kind.assertStoredWritable?.({ current: stored }));
+      if (entry.refusal) continue;
+    }
     if (entry.item.type === "delete") {
       if (releaseSync && current === null) {
         // A release says what the instance holds. An asset that is gone already is as it says.

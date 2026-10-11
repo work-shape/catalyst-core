@@ -9,6 +9,8 @@ import {
   CONNECTION_REFUSALS,
   CONNECTION_SECRET_HANDLE_PATTERN,
   CONNECTOR_TYPE_PATTERN,
+  EGRESS_PROTOCOLS,
+  secretRef,
   type ConnectionConfig,
   type JsonObject,
   type JsonValue
@@ -17,6 +19,17 @@ import { z } from "zod";
 
 // The definition of a Connection as a revision holds it. Every object is strict: a field this
 // schema does not name, such as a `secret` beside the handle, is refused and never stored.
+//
+// Where a secret may stand, and what guards it:
+// - A secret reaches a Connection in one place only: release config names it by reference in
+//   the one field `secret`. The value goes to the Secret Store and the revision holds a handle.
+// - `settings` are typed by the Connector type. Its strict settings schema names every field it
+//   reads, and a field it does not name is refused. A header or a query value that
+//   authenticates is no setting: the connector auth component makes it from the secret.
+// - The reading of names and shapes below (`findCredentialsInSettings`) is a second net under
+//   that, not the boundary. It catches a pasted key in a field a type does accept as text.
+// - `displayName` and `description` are free text for people. They are not read for
+//   credentials and are shown as written, so nothing secret belongs in them.
 
 const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([
@@ -235,3 +248,138 @@ export const connectionConfigSchema: z.ZodType<ConnectionConfig, unknown> = z
       }
     }
   });
+
+const releaseConnectionOperationSchema = z
+  .object({
+    name: connectionOperationSchema.shape.name,
+    /** Required: the operator decides what an operation does, a hint of the system never. */
+    effect: z.enum(["reading", "changing"]),
+    exposure: z.array(z.enum(CONNECTION_EXPOSURES)).default([]),
+    /** Only tightens: `deny` on any operation, `approval` on a changing one. */
+    policy: z.enum(["deny", "approval"]).optional(),
+    schemaFingerprint: z.string().min(1).max(200).optional()
+  })
+  .strict();
+
+/**
+ * One Connection of release config, `connections.<name>`. The start-up seed makes it an asset
+ * with `origin: release`. Its `secret` is the name of a secret, never a value, and it is the
+ * only place of the entry a secret is named in.
+ */
+export const releaseConnectionConfigSchema = z
+  .object({
+    connectorType: z.string().regex(CONNECTOR_TYPE_PATTERN),
+    displayName: z.string().trim().min(1).max(120).optional(),
+    description: z.string().max(2000).optional(),
+    /** Read by the Connector type's own strict schema when the instance starts. */
+    settings: settingsSchema.default({}),
+    authScheme: z.string().min(1).max(64),
+    secret: secretRef().optional(),
+    /** The accepted list. An operation that is not listed is callable by nobody. */
+    operations: z
+      .array(releaseConnectionOperationSchema)
+      .max(CONNECTION_MAX_ACCEPTED_OPERATIONS, {
+        message: `A Connection accepts at most ${CONNECTION_MAX_ACCEPTED_OPERATIONS} operations (CONNECTION_MAX_ACCEPTED_OPERATIONS)`
+      })
+      .default([])
+  })
+  .strict();
+
+export const releaseConnectionsConfigSchema = z
+  .record(connectionNameSchema, releaseConnectionConfigSchema)
+  .default({});
+
+export type ReleaseConnectionConfig = z.infer<typeof releaseConnectionConfigSchema>;
+
+const SECRET_STORE_KEY_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,31}$/u;
+
+/**
+ * The keys of the Secret Store. Each `ref` names a secret that holds 32 random bytes in
+ * base64. The first entry encrypts, every entry decrypts. A key is never part of config.
+ */
+export const secretStoreConfigSchema = z
+  .object({
+    keys: z
+      .array(
+        z
+          .object({
+            id: z.string().regex(SECRET_STORE_KEY_ID_PATTERN, {
+              message: "A key id is lowercase letters, digits, hyphens or underscores"
+            }),
+            ref: secretRef()
+          })
+          .strict()
+      )
+      .default([])
+  })
+  .strict()
+  .superRefine((secretStore, context) => {
+    const seen = new Set<string>();
+    for (const [index, key] of secretStore.keys.entries()) {
+      if (seen.has(key.id)) {
+        context.addIssue({
+          code: "custom",
+          path: ["keys", index, "id"],
+          message: `Duplicate key id: ${key.id}`
+        });
+      }
+      seen.add(key.id);
+    }
+  })
+  .prefault({});
+
+/** A host of the list: one exact name or one literal address. No wildcard and no path. */
+const EGRESS_HOST_PATTERN = /^(?:[a-z0-9_](?:[a-z0-9_.-]{0,251}[a-z0-9_])?|[0-9a-f:.]{2,45})$/iu;
+/** An IPv4 range, or one with a colon for IPv6. The egress checker reads it strictly at start. */
+const EGRESS_CIDR_PATTERN =
+  /^(?:\d{1,3}(?:\.\d{1,3}){3}\/(?:\d|[12]\d|3[0-2])|(?=[0-9a-f.]*:)[0-9a-f:.]{2,45}\/\d{1,3})$/iu;
+
+const egressAllowEntrySchema = z
+  .object({
+    protocol: z.enum(EGRESS_PROTOCOLS),
+    host: z.string().regex(EGRESS_HOST_PATTERN, {
+      message: "An egress host is one exact host name or address, without a wildcard"
+    }),
+    port: z.number().int().min(1).max(65_535),
+    /**
+     * `private` says the target is inside the operator's own network. Its addresses must then
+     * lie in `cidrs`. A `public` target is refused when it resolves to an inside address.
+     */
+    network: z.enum(["public", "private"]).default("public"),
+    cidrs: z
+      .array(z.string().regex(EGRESS_CIDR_PATTERN, { message: "A range is written as a CIDR" }))
+      .default([])
+  })
+  .strict()
+  .superRefine((entry, context) => {
+    if (entry.network === "private" && entry.cidrs.length === 0) {
+      context.addIssue({
+        code: "custom",
+        path: ["cidrs"],
+        message: "A private target names the address ranges it lies in"
+      });
+    }
+    if (entry.network === "public" && entry.cidrs.length > 0) {
+      context.addIssue({
+        code: "custom",
+        path: ["cidrs"],
+        message: "Only a private target names address ranges"
+      });
+    }
+    if (entry.protocol === "http" && entry.network !== "private") {
+      context.addIssue({
+        code: "custom",
+        path: ["protocol"],
+        message: "Plain http is allowed for a private target only. A public target uses https"
+      });
+    }
+  });
+
+/**
+ * Where Connections may connect. Deny by default: an empty list refuses every target. Each
+ * entry is one protocol, host and port.
+ */
+export const egressConfigSchema = z
+  .object({ allow: z.array(egressAllowEntrySchema).default([]) })
+  .strict()
+  .prefault({});

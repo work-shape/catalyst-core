@@ -1,6 +1,6 @@
 import type { AssetKindSchema, AssetValidationIssue } from "./asset-kinds";
 import { AppError } from "./errors";
-import { createPlatformId } from "./ids";
+import { createPlatformId, type ClientInstanceId } from "./ids";
 import type { JsonObject, JsonValue } from "./json";
 
 /**
@@ -129,9 +129,200 @@ export interface ConnectorLimits {
   maxParallelCalls: number;
 }
 
+/** The transports a Connection may open. Plain `http` only reaches a private target. */
+export const EGRESS_PROTOCOLS = ["https", "http", "postgres"] as const;
+export type EgressProtocol = (typeof EGRESS_PROTOCOLS)[number];
+
 /**
- * What a Connector type is handed for one test, discovery or call. It holds no credential and
- * no way to one: the credential of the call arrives with the credential resolver port.
+ * Where a Connection wants to connect. It is protocol, host and port and never an address
+ * with a path: a database target has no URL, and a check on text drifts from the connection.
+ */
+export interface EgressTarget {
+  protocol: EgressProtocol;
+  host: string;
+  port: number;
+}
+
+/**
+ * A target that passed the egress check, with the address that was checked. The connector
+ * connects to `address` and nowhere else, and keeps `host` as the TLS and `Host` name.
+ */
+export interface EgressGrant extends EgressTarget {
+  address: string;
+  family: 4 | 6;
+  /** Whether the operator's list names the target as a private one. */
+  network: "public" | "private";
+}
+
+/**
+ * The one check every outbound connection of a Connection passes before it is opened and
+ * before a credential is resolved. It throws `egress_denied` with the host and the port.
+ */
+export interface EgressChecker {
+  check(target: EgressTarget): Promise<EgressGrant>;
+}
+
+/** The reason and the code of a refused target. */
+export const EGRESS_DENIED = "egress_denied";
+
+/** The one subject a shared credential has. A credential per person names that person. */
+export const SHARED_CREDENTIAL_SUBJECT = "shared";
+
+/** Which Connection, and whose credential of it, a secret is bound to. */
+export interface SecretBinding {
+  connectionAssetId: string;
+  subject: string;
+}
+
+/** Where a stored secret came from. Only a `bootstrap` secret follows the environment. */
+export type SecretSource = "bootstrap" | "runtime";
+
+/** What anybody may learn of a secret: whether there is one, and its version. */
+export type SecretState = "set" | "not_set" | "unreadable";
+
+export interface SecretStatus {
+  state: SecretState;
+  handle?: ConnectionSecretHandle;
+  version?: number;
+  source?: SecretSource;
+}
+
+/**
+ * The Secret Store as the product writes to it. It has write, replace, state and delete, and
+ * no read: nothing here returns a secret value, to an instance admin as little as to anyone.
+ */
+export interface SecretStore {
+  /**
+   * Stores the value for the binding, encrypted, and answers its handle and version. A value
+   * equal to the stored one changes nothing and keeps the version. `handle` is the handle a
+   * first write takes, for a caller that named it in a revision already; a stored secret
+   * keeps the handle it has.
+   */
+  put(input: {
+    binding: SecretBinding;
+    value: string;
+    source: SecretSource;
+    handle?: ConnectionSecretHandle;
+  }): Promise<{ handle: ConnectionSecretHandle; version: number; changed: boolean }>;
+  status(binding: SecretBinding): Promise<SecretStatus>;
+  delete(binding: SecretBinding): Promise<void>;
+}
+
+/**
+ * What the connector auth component hands a Connector type for one call: the secret, and the
+ * headers the Connection's auth scheme makes of it. Neither is ever part of the settings.
+ */
+export interface ConnectionCredential {
+  scheme: string;
+  secret: string;
+  /** Request headers that authenticate, such as `authorization`. Empty for other schemes. */
+  headers: Readonly<Record<string, string>>;
+}
+
+/** Why a credential is not handed out. No refusal carries a value. */
+export const CREDENTIAL_REFUSALS = {
+  notConfigured: "connection_not_configured",
+  unreadable: "secret_unreadable"
+} as const;
+
+/**
+ * The connector auth component: the only code that turns a handle into a value. It is called
+ * inside one call, after the caller was authorized and the target passed the egress check,
+ * for the one binding of that call. It throws `connection_not_configured` where no secret is
+ * stored and `secret_unreadable` where the configured keys do not open the stored one.
+ */
+export interface ConnectionCredentialResolver {
+  resolve(input: { handle: ConnectionSecretHandle; binding: SecretBinding }): Promise<string>;
+}
+
+/** The health of a Connection as its page and its list show it. */
+export const CONNECTION_HEALTH_STATES = [
+  "unknown",
+  "ok",
+  "failed",
+  "needs_configuration",
+  "secret_unreadable"
+] as const;
+export type ConnectionHealth = (typeof CONNECTION_HEALTH_STATES)[number];
+
+/** Runtime state of one Connection. It has no revision and holds no secret. */
+export interface ConnectionStateRecord {
+  connectionAssetId: string;
+  clientInstanceId: ClientInstanceId;
+  health: ConnectionHealth;
+  lastTestedAt?: string;
+  lastErrorCode?: string;
+  /** What the last discovery read from the outside system. Untrusted data. */
+  catalog?: JsonValue;
+  updatedAt: string;
+}
+
+/** One stored secret as the database holds it: ciphertext and what is needed to open it. */
+export interface StoredSecretRecord {
+  handle: ConnectionSecretHandle;
+  clientInstanceId: ClientInstanceId;
+  connectionAssetId: string;
+  subject: string;
+  version: number;
+  /** The id of the key of `secretStore.keys` that encrypted the row. */
+  keyId: string;
+  nonce: Uint8Array;
+  /** The ciphertext followed by the authentication tag. */
+  ciphertext: Uint8Array;
+  source: SecretSource;
+}
+
+/** The rows behind Connections: stored secrets and runtime state. No method returns a value. */
+export interface ConnectionsStore {
+  /**
+   * Takes the lock of the release seed for this instance and holds it until the surrounding
+   * transaction ends. A second process that seeds waits here and then reads what the first
+   * one wrote.
+   */
+  lockReleaseSeed(input: { clientInstanceId: ClientInstanceId }): Promise<void>;
+  getSecret(input: {
+    clientInstanceId: ClientInstanceId;
+    handle: ConnectionSecretHandle;
+  }): Promise<StoredSecretRecord | undefined>;
+  findSecret(input: {
+    clientInstanceId: ClientInstanceId;
+    binding: SecretBinding;
+  }): Promise<StoredSecretRecord | undefined>;
+  /** Inserts the row, or replaces the one of the same Connection and subject. */
+  putSecret(record: StoredSecretRecord): Promise<void>;
+  deleteSecrets(input: {
+    clientInstanceId: ClientInstanceId;
+    connectionAssetId: string;
+    /** Only this subject's secret. Left out, every secret of the Connection. */
+    subject?: string;
+  }): Promise<void>;
+  getConnectionState(input: {
+    clientInstanceId: ClientInstanceId;
+    connectionAssetId: string;
+  }): Promise<ConnectionStateRecord | undefined>;
+  /** The state of every Connection of the instance, in one read. */
+  listConnectionStates(input: {
+    clientInstanceId: ClientInstanceId;
+  }): Promise<ConnectionStateRecord[]>;
+  /** Writes the health. Test time, error code and catalog stay unless they are named. */
+  putConnectionState(input: {
+    clientInstanceId: ClientInstanceId;
+    connectionAssetId: string;
+    health: ConnectionHealth;
+    lastTestedAt?: string;
+    lastErrorCode?: string | null;
+    catalog?: JsonValue;
+  }): Promise<void>;
+  deleteConnectionState(input: {
+    clientInstanceId: ClientInstanceId;
+    connectionAssetId: string;
+  }): Promise<void>;
+}
+
+/**
+ * What a Connector type is handed for one test, discovery or call. It exists only once the
+ * Connection's target passed the egress check, and it is the one way to the credential of
+ * the call.
  */
 export interface ConnectorContext {
   connection: {
@@ -141,6 +332,19 @@ export interface ConnectorContext {
     settings: JsonObject;
     authScheme: string;
   };
+  /** The checked target. The connector connects to `target.address`. */
+  target: EgressGrant;
+  /**
+   * Checks a further target of this call, such as a redirect or a returned download address.
+   * A connector follows no redirect by itself: it asks here first.
+   */
+  checkEgress(target: EgressTarget): Promise<EgressGrant>;
+  /**
+   * The credential of this call, for a checked target. It is refused for any target that is
+   * not the origin the Connection was configured for, so a redirect never carries it away.
+   * `undefined` for a Connection without authentication.
+   */
+  credentialFor(target: EgressGrant): ConnectionCredential | undefined;
   /** Ends when the call is cancelled or its deadline passes. */
   signal: AbortSignal;
 }
@@ -157,6 +361,16 @@ interface ConnectorTypeBase {
   authSchemes: readonly string[];
   /** The names of the secret fields a credential of this type has, never their values. */
   secretFields: readonly string[];
+  /**
+   * Where a Connection of this type connects, read from settings its schema accepted. The
+   * platform checks it before the type is handed a context.
+   */
+  target(settings: JsonObject): EgressTarget;
+  /**
+   * The request header that carries the secret under the auth scheme `header`. It is a name
+   * of the type's typed settings; the value is never a setting.
+   */
+  credentialHeaderName?(settings: JsonObject): string | undefined;
   /** A bounded check of reachability and authentication. It changes nothing outside. */
   test(context: ConnectorContext): Promise<{ status: ConnectorTestStatus }>;
   execute(operation: string, input: JsonValue, context: ConnectorContext): Promise<JsonValue>;
@@ -207,7 +421,9 @@ export function createConnectorTypeRegistry(
 export const CONNECTION_REFUSALS = {
   connectorTypeUnknown: "connector_type_unknown",
   credentialInSettings: "credential_in_settings",
-  runtimeAuthoringUnavailable: "connection_runtime_authoring_unavailable"
+  runtimeAuthoringUnavailable: "connection_runtime_authoring_unavailable",
+  /** A Connection of release config is changed in release config and nowhere else. */
+  readOnlyOrigin: "read_only_origin"
 } as const;
 
 /**

@@ -269,23 +269,39 @@ describe("a Connection through the asset operations", () => {
 
   it("refuses every write of a stored Connection: put, revert, delete and a batch", async () => {
     const t = await setupConnectionInstance();
+    // One that release config defines, and one as a later runtime flow will store it.
     await t.seed("outside");
-    const address = { params: { kind: "connection", name: "outside" } };
-    // A put that changes it, and one that leaves it as it is stored.
-    await t.expectRefused(
-      t.admin.id,
-      "assets.put",
-      put("outside", { enabled: false }),
-      authoringRefused
-    );
-    await t.expectRefused(t.admin.id, "assets.put", put("outside"), authoringRefused);
-    await t.expectRefused(
-      t.admin.id,
-      "assets.revert",
-      { ...address, payload: { revision: 1 } },
-      authoringRefused
-    );
-    await t.expectRefused(t.admin.id, "assets.delete", address, authoringRefused);
+    await t.seed("made-here", { origin: "runtime" });
+    const readOnly = { status: 403, code: "FORBIDDEN", details: { reason: "read_only_origin" } };
+    for (const [name, refused] of [
+      ["outside", readOnly],
+      ["made-here", authoringRefused]
+    ] as const) {
+      const address = { params: { kind: "connection", name } };
+      const origin = name === "outside" ? "release" : "runtime";
+      // A put that changes it, and one that leaves it as it is stored.
+      await t.expectRefused(
+        t.admin.id,
+        "assets.put",
+        put(name, { origin, enabled: false }),
+        refused
+      );
+      await t.expectRefused(t.admin.id, "assets.put", put(name, { origin }), refused);
+      await t.expectRefused(
+        t.admin.id,
+        "assets.revert",
+        { ...address, payload: { revision: 1, expectedRevision: 1 } },
+        refused
+      );
+      await t.expectRefused(
+        t.admin.id,
+        "assets.delete",
+        { ...address, payload: { expectedRevision: 1 } },
+        refused
+      );
+      // A superadmin is refused the same: neither refusal is a missing right.
+      await t.expectRefused(t.root.id, "assets.put", put(name, { origin }), refused);
+    }
     // A batch of a Namespace holder, and a release, which carries agents and skills only.
     await t.createNamespace("kai-");
     const batch = await t.call(t.admin.id, "assets.sync", {
@@ -307,7 +323,10 @@ describe("a Connection through the asset operations", () => {
       clientInstanceId,
       kind: "connection"
     });
-    expect(stored.map((asset) => [asset.name, asset.revision])).toEqual([["outside", 1]]);
+    expect(stored.map((asset) => [asset.name, asset.revision]).sort()).toEqual([
+      ["made-here", 1],
+      ["outside", 1]
+    ]);
   });
 
   it("says in validate what a put would be refused for", async () => {
@@ -487,7 +506,13 @@ describe("the module connections", () => {
     await on.stores.configAssets.applyConfigAssetMutations({
       clientInstanceId: asClientInstanceId(getTestConfig(on).clientInstance.id),
       mutations: [
-        { type: "upsert", kind: "connection", name: "outside", config: connection("outside") }
+        {
+          type: "upsert",
+          kind: "connection",
+          name: "outside",
+          // Not of release config: what release config defines follows it at every start.
+          config: connection("outside", { origin: "runtime" })
+        }
       ]
     });
     for (const enabled of [false, undefined]) {

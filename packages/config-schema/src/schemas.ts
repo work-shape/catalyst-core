@@ -27,6 +27,11 @@ import {
   SECRET_NAME_EXPECTATION,
   SKILL_RESOURCE_MEDIA_TYPES
 } from "@vivd-catalyst/core";
+import {
+  egressConfigSchema,
+  releaseConnectionsConfigSchema,
+  secretStoreConfigSchema
+} from "./connection-schema";
 import { infrastructureConfigSchema } from "./infrastructure";
 import { localizationConfigSchema, localizedStringSchema } from "./localization";
 
@@ -935,6 +940,12 @@ export const clientInstanceConfigSchema = z.object({
   tools: z.array(toolInstanceConfigSchema).default([]),
   views: viewsConfigSchema,
   dataSources: z.record(z.string(), dataSourceConfigSchema).default({}),
+  /** The Connections the release defines. Seeded as read-only assets when the API starts. */
+  connections: releaseConnectionsConfigSchema,
+  /** The keys Connection secrets are encrypted with. Needed once `connections` names one. */
+  secretStore: secretStoreConfigSchema,
+  /** The outside targets Connections may reach. Empty refuses all of them. */
+  egress: egressConfigSchema,
   ui: uiConfigSchema,
   policy: policyConfigSchema
 });

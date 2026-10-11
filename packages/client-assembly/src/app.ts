@@ -8,7 +8,6 @@ import {
   REASONING_EFFORTS,
   StoreBackedAuditRecorder,
   createAssetKindRegistry,
-  createConnectorTypeRegistry,
   type AgentConfig,
   type ApprovalRequestHandlerRegistry,
   type StructuredDataPublicationReviewer
@@ -29,6 +28,7 @@ import type {
 import { createManagedObjectAccess } from "@vivd-catalyst/capability-sdk";
 import {
   AppError,
+  type ConnectorTypeDefinition,
   type HttpRuntime,
   type JobWorker,
   type PlatformStores,
@@ -64,6 +64,7 @@ import { createInstanceModels } from "./capability-models";
 import { createConfigAssetSource } from "./config-asset-source";
 import { createInstanceAgentTools, createInstanceOperationCalls } from "./operation-calls";
 import { createClientInstanceAuth } from "./auth";
+import { createInstanceConnections, seedInstanceConnections } from "./connections";
 import { createClientInstanceMail } from "./mail";
 import type {
   ClientInstanceAttachmentHandler,
@@ -93,6 +94,8 @@ export interface CreateClientInstanceAppInput {
   /** Replaces the configured secret provider. For tests. */
   secrets?: SecretResolver;
   tools: ToolAssemblyDefinition[];
+  /** The Connector types of this build. A Connection of another type stops startup. */
+  connectorTypes?: ConnectorTypeDefinition[];
   capabilities?: ClientInstanceCapability[];
   structuredDataPublicationReviewer?: StructuredDataPublicationReviewer;
   approvalRequestHandlers?: ApprovalRequestHandlerRegistry;
@@ -134,6 +137,8 @@ export async function createClientInstanceApp(
     usageGovernance,
     modelGateway
   } = execution;
+  // Only the API process seeds, before it takes a request. A worker reads what is stored.
+  await seedInstanceConnections(execution);
   // A run is a row and a job. The API reads its events from the store; a worker executes it.
   // Where that worker is in this process, the two tell each other and need not poll.
   const inProcess =
@@ -257,6 +262,8 @@ export async function createClientInstanceExecutionAssembly(
     poolSize: config.infrastructure.database.poolSize,
     logger
   });
+  const connectionParts = { config, modules, clientInstanceId, secrets, stores: store, logger };
+  const connections = await createInstanceConnections(connectionParts, input.connectorTypes);
   const dataSources = await createDataSourceRegistry({ configs: config.dataSources, secrets });
   const workspaceObjectStore = config.executionWorkspaces.enabled
     ? await createWorkspacesStore(config, infrastructure.context)
@@ -361,9 +368,8 @@ export async function createClientInstanceExecutionAssembly(
         validateAgents
       }),
       createSkillAssetKind({ config }),
-      // No Connector type ships yet: the first one registers here with its assembly.
-      ...(modules.isEnabled("connections")
-        ? [createConnectionAssetKind({ connectorTypes: createConnectorTypeRegistry([]) })]
+      ...(connections
+        ? [createConnectionAssetKind({ connectorTypes: connections.connectorTypes })]
         : [])
     ]),
     validationRefs
@@ -521,6 +527,7 @@ export async function createClientInstanceExecutionAssembly(
     authorizer,
     operationCalls,
     approvalRequestHandlers: handlers,
+    connections,
     async close() {
       await closeCapabilityContributions(capabilityContributions);
       await store.close?.();

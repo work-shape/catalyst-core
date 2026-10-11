@@ -23,6 +23,7 @@ export const fixtureConnectorType: ConnectorTypeDefinition = {
   settingsSchema: z.object({ url: z.string().url() }).strict(),
   authSchemes: ["none", "bearer"],
   secretFields: ["token"],
+  target: () => ({ protocol: "https", host: "outside.example.test", port: 443 }),
   catalog: [
     {
       name: "echo",

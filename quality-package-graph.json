@@ -36,6 +36,7 @@
     "@vivd-catalyst/capability-sdk",
     "@vivd-catalyst/chat-server",
     "@vivd-catalyst/config-schema",
+    "@vivd-catalyst/connections",
     "@vivd-catalyst/core",
     "@vivd-catalyst/data-source",
     "@vivd-catalyst/mail",
@@ -54,6 +55,11 @@
     "@vivd-catalyst/core"
   ],
   "@vivd-catalyst/config-schema": ["@vivd-catalyst/core"],
+  "@vivd-catalyst/connections": [
+    "@vivd-catalyst/config-schema",
+    "@vivd-catalyst/core",
+    "@vivd-catalyst/web-access"
+  ],
   "@vivd-catalyst/core": [],
   "@vivd-catalyst/data-source": ["@vivd-catalyst/core", "@vivd-catalyst/tool-sdk"],
   "@vivd-catalyst/demo": [

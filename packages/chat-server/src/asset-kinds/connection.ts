@@ -11,7 +11,7 @@ import {
   findConnectorTypeIssues,
   type ConnectorTypeRegistry
 } from "@vivd-catalyst/core";
-import type { WorkflowAssetKind } from "./shared";
+import { readDefinitionField, type WorkflowAssetKind } from "./shared";
 
 export interface ConnectionAssetKindOptions {
   /** The Connector types of this build. A Connection of another type is refused. */
@@ -28,6 +28,18 @@ function runtimeAuthoringUnavailable(): AppError {
     "VALIDATION_FAILED",
     `${CONNECTION_REFUSALS.runtimeAuthoringUnavailable}: a Connection is defined in release config. It cannot be created, changed or deleted here yet`,
     { reason: CONNECTION_REFUSALS.runtimeAuthoringUnavailable }
+  );
+}
+
+/**
+ * The refusal of a write to a Connection that release config defines. It is changed in
+ * release config and by a restart, and nowhere in the product.
+ */
+function readOnlyOrigin(): AppError {
+  return new AppError(
+    "FORBIDDEN",
+    `${CONNECTION_REFUSALS.readOnlyOrigin}: this Connection is defined in release config and is read-only here. Change it in release config`,
+    { reason: CONNECTION_REFUSALS.readOnlyOrigin }
   );
 }
 
@@ -83,6 +95,13 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
     hasWorkspaceAvailability: false,
     prepareInteractiveUpsert: ({ next }) => next,
     missingUpsertRight: () => undefined,
+    // Asked before the definition is read: a seeded Connection answers `read_only_origin`
+    // also where this build ships no Connector type for what the caller sent.
+    assertStoredWritable({ current }) {
+      if (readDefinitionField(current, "origin") === "release") {
+        throw readOnlyOrigin();
+      }
+    },
     // A write that leaves the definition as it is stored changes nothing the check above
     // sees, and a revert is a write too: both are refused here.
     assertInteractiveUpsertAllowed() {

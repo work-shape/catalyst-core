@@ -45,6 +45,7 @@
     "@vivd-catalyst/capability-sdk": "workspace:*",
     "@vivd-catalyst/chat-server": "workspace:*",
     "@vivd-catalyst/config-schema": "workspace:*",
+    "@vivd-catalyst/connections": "workspace:*",
     "@vivd-catalyst/core": "workspace:*",
     "@vivd-catalyst/data-source": "workspace:*",
     "@vivd-catalyst/mail": "workspace:*",

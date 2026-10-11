@@ -73,6 +73,12 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
     next: unknown;
     namespaces: readonly Namespace[];
   }): void;
+  /**
+   * Throws where the stored asset may not be changed through any asset operation, whatever
+   * the caller sends and whoever calls: an asset that release config defines. It is asked of
+   * what is stored before the write is read, so its refusal comes before every other one.
+   */
+  assertStoredWritable?(input: { current: unknown }): void;
   /** Throws `FORBIDDEN` when the instance's editing policy refuses an interactive delete. */
   assertInteractiveDeleteAllowed(): void;
 }

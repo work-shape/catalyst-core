@@ -290,6 +290,7 @@ export class AssetWorkflow {
     const { kind } = target;
     call.access.require(kind.actions.write, target.resource);
     await this.authorizeEditing(call, "put");
+    assertStoredWritable(target);
     requireMatchingConfigName(input.config, input.name);
     requireOwnScope(target);
     requireExpectedRevision(target, input.expectedRevision ?? null);
@@ -307,6 +308,7 @@ export class AssetWorkflow {
     const target = await this.target(input);
     call.access.require(target.kind.actions.write, target.resource);
     await this.authorizeEditing(call, "revert");
+    assertStoredWritable(target);
     requireOwnScope(target);
     if (!target.asset) {
       throw notFound(target);
@@ -342,6 +344,7 @@ export class AssetWorkflow {
       call.access.require(right.action, target.resource);
     }
     await this.authorizeEditing(call, "delete");
+    assertStoredWritable(target);
     assertDeleteWithinLimits(call.access, "delete", kind);
     const asset = requireActive(target);
     if (asset.revision !== input.expectedRevision) {
@@ -406,8 +409,11 @@ export class AssetWorkflow {
           drafted,
           new Set([assetKey(kind.kind, name ?? "")])
         );
+    // What is stored and read-only is refused before the definition is read, as a put is.
+    const readOnly = storedWritableIssues(kind, current);
     const issues =
-      ofDefinition.length > 0 ? ofDefinition : await this.writeIssues(call, view.set, found);
+      readOnly ??
+      (ofDefinition.length > 0 ? ofDefinition : await this.writeIssues(call, view.set, found));
     return {
       valid: issues.length === 0,
       issues: issues.map(({ message, path }) => ({
@@ -460,6 +466,7 @@ export class AssetWorkflow {
     const kinds = this.options.configAssets.kinds.kinds;
     const stored = await loadStoredAssets(this.options);
     const current = findDefinition(stored.set, kind.kind, name);
+    kind.assertStoredWritable?.({ current });
     const setsDefault = setsInitialDefault(stored.set, kind);
     requireInstanceDefaultChange(call.access, kind, setsDefault);
     // A revert restores what was stored: nothing is adjusted on the way.
@@ -724,6 +731,32 @@ function requireExpectedRevision(target: AssetTarget, expected: number | null): 
   const current = target.asset?.status === "active" ? target.asset.revision : null;
   if (current !== expected) {
     throw conflict(target.kind.kind, target.name, current);
+  }
+}
+
+/**
+ * Asks the kind whether the stored asset takes a write at all. It runs once the caller holds
+ * the right and before the write is read, so a stale revision or a config that would not
+ * validate answers the same refusal.
+ */
+function assertStoredWritable(target: AssetTarget): void {
+  if (target.asset?.status === "active") {
+    target.kind.assertStoredWritable?.({ current: target.asset.config });
+  }
+}
+
+/** What the kind refuses a write of the stored asset for, whatever the write says. */
+function storedWritableIssues(
+  kind: WorkflowAssetKind,
+  current: unknown
+): AssetSetIssue[] | undefined {
+  if (current === undefined) return undefined;
+  try {
+    kind.assertStoredWritable?.({ current });
+    return undefined;
+  } catch (error) {
+    if (isAppError(error)) return errorIssues(error);
+    throw error;
   }
 }
 

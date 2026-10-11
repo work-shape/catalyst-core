@@ -34,12 +34,15 @@ export interface ToolExecutionRequest {
   input: unknown;
 }
 
+/**
+ * The narrow parameter a database executor takes for the one credential of its source. No
+ * tool receives it: a Connection's credential comes from the `ConnectionCredentialResolver`.
+ */
 export interface ScopedSecretResolver {
   getSecret(name: string): Promise<string | undefined>;
 }
 
 export interface ToolExecutionContext extends RuntimeCallContext {
-  secrets?: ScopedSecretResolver;
   toolRequest?: ToolExecutionRequest;
   /**
    * The Operation Run this call is, and the workspace it is in. A tool that calls a model

@@ -23,6 +23,7 @@ import { createPostgresJobsStore, notifyJobsEnqueued } from "./jobs/store";
 import { createPostgresOperationRunsStore } from "./stores/operationRuns";
 import { createPostgresInfrastructureChecksStore } from "./stores/infrastructure";
 import { createPostgresPagesStore } from "./stores/pages";
+import { createPostgresConnectionsStore } from "./stores/connections";
 
 export interface PostgresStoresOptions {
   databaseUrl: string;
@@ -87,6 +88,7 @@ function bindStores(
     operationRuns: createPostgresOperationRunsStore(db),
     infrastructureChecks: createPostgresInfrastructureChecksStore(db),
     pages: createPostgresPagesStore(db),
+    connections: createPostgresConnectionsStore(db),
     transaction: (fn) => transact((_tx, stores) => fn(stores))
   };
 }

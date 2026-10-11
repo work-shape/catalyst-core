@@ -8,6 +8,7 @@ import type {
 import type { CollaborationWorkspaceStore } from "./collaboration-workspace";
 import type { ApprovalDecisionStore, ApprovalRequestStore } from "./approval-requests";
 import type { ConfigAssetStore } from "./config-assets";
+import type { ConnectionsStore } from "./connections";
 import type {
   ExecutionWorkspaceCleanupStore,
   ExecutionWorkspaceFileStore,
@@ -69,6 +70,7 @@ export interface PlatformStores {
   operationRuns: OperationRunStore;
   infrastructureChecks: InfrastructureCheckStore;
   pages: PagesStore;
+  connections: ConnectionsStore;
   /** Resolves after commit; a rejected callback rolls back all domain writes. Nested calls use savepoints. */
   transaction<T>(fn: (stores: PlatformStores) => Promise<T>): Promise<T>;
   close?: () => Promise<void>;

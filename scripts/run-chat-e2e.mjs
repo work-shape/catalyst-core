@@ -28,6 +28,7 @@ const requiredBuilds = [
   ["packages/agent-runtime", "build"],
   ["packages/chat-server", "build"],
   ["packages/web-access", "build"],
+  ["packages/connections", "build"],
   ["packages/client-assembly", "build"],
   ["packages/api-client", "build"],
   ["packages/ui", "build"],
