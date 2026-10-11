@@ -42,6 +42,7 @@ interface FrameWindow {
 /**
  * The window of this Page, as the transport reads it. A Page that is no frame is its own
  * parent: its greeting comes back to it and is no message of an interface, so nothing answers.
+ * The transport reads `parent` and nothing else of it, so that a test can stand in for it.
  */
 function pageWindow(): FrameWindow {
   return {
@@ -58,14 +59,15 @@ function pageWindow(): FrameWindow {
  */
 function hostCandidates(self: FrameWindow): MessageSource[] {
   const candidates: MessageSource[] = [];
-  let current: unknown = self;
-  for (let level = 0; level < 2; level += 1) {
-    const parent: unknown = isWindowLike(current) ? current.parent : undefined;
-    if (!isWindowLike(parent) || parent === current) {
+  let current: unknown = self.parent;
+  for (let level = 0; level < 2 && isWindowLike(current); level += 1) {
+    candidates.push(current);
+    const above: unknown = current.parent;
+    // The window at the top is its own parent.
+    if (above === current) {
       break;
     }
-    candidates.push(parent);
-    current = parent;
+    current = above;
   }
   return candidates;
 }

@@ -222,9 +222,9 @@ describe("the transport of a Page in a frame", () => {
     const holder = windowNamed("holder", interfaceWindow);
     type Arrived = { data: unknown; origin: string; source: unknown };
     const listeners = new Set<(event: Arrived) => void>();
+    // What the kit reads of the Page's own window: its parent and its listeners, nothing else.
     const page = {
       parent: holder,
-      postMessage() {},
       addEventListener: (_type: "message", listener: (event: Arrived) => void) => {
         listeners.add(listener);
       },

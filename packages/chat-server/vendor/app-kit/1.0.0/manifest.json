@@ -8,8 +8,8 @@
     },
     {
       "file": "kit.js",
-      "bytes": 4469,
-      "sha256": "8b86cd5c45ab74f947969e641b7e2f7af8ff3b7e3f0b8133edc9ae1ad87bff79"
+      "bytes": 4463,
+      "sha256": "d36385c15bc0c4415fd7f32135bbb0020647fe48e0450e4c50f5c5ee114391eb"
     },
     {
       "file": "react.js",
@@ -28,8 +28,8 @@
     },
     {
       "file": "ui.js",
-      "bytes": 238826,
-      "sha256": "ff8bf00913c4395c06cfa55c9f5f236f04490f4d14c7576d154a437da745179f"
+      "bytes": 238907,
+      "sha256": "10d19113c91a2f87c6a5b0114ad6a32e973d9cf948411122b5d51e5efe8c9564"
     }
   ],
   "libraries": [
