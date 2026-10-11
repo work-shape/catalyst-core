@@ -340,6 +340,8 @@ Clients own their favicon and should serve it from `public/`, reference it from 
 
 OpenAI-compatible providers keep API-specific request shapes behind the model-provider boundary. Agents and tools still see Workshape Catalyst's provider-neutral messages, tools, tool calls, tool results, and usage.
 
+Tools reach an OpenAI-compatible provider under a readable name derived from the tool name (dots become underscores), shortened with a short suffix when the name is too long or would clash.
+
 Use `api: responses` for OpenAI reasoning models that combine reasoning, tool calling, or multi-turn workflows. Leave the field unset, or set `api: chat_completions`, for legacy OpenAI-compatible endpoints that still expect `/chat/completions`.
 
 ```yaml
