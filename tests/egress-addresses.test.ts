@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import { createInstanceConnections, resolveInstanceModules } from "@vivd-catalyst/client-assembly";
 import {
@@ -19,22 +19,34 @@ import { createTestInstance } from "./support/test-instance";
 describe("the Platform Store's address", () => {
   // Each test fails without the change: an address that could not be read gave an empty
   // deny list, silently.
-  it("is read as one target for each host, and as nothing where host and port cannot be read", () => {
+  it("is read as host and port, and as nothing where host and port cannot be read", () => {
     const password = generateTestSecret();
-    expect(platformStoreTargetsOf(`postgres://user:${password}@db.internal:6432/app`)).toEqual([
-      { host: "db.internal", port: 6432 }
-    ]);
-    expect(platformStoreTargetsOf("postgresql://DB.internal/app?sslmode=require")).toEqual([
+    const none = {};
+    expect(
+      platformStoreTargetsOf(`postgres://user:${password}@db.internal:6432/app`, none)
+    ).toEqual([{ host: "db.internal", port: 6432 }]);
+    expect(platformStoreTargetsOf("postgresql://DB.internal/app?sslmode=require", none)).toEqual([
       { host: "db.internal", port: 5432 }
     ]);
-    expect(platformStoreTargetsOf("postgres://user@[fd00::2]:5433/app")).toEqual([
+    expect(platformStoreTargetsOf("postgres://user@[fd00::2]:5433/app", none)).toEqual([
       { host: "fd00::2", port: 5433 }
     ]);
-    expect(
-      platformStoreTargetsOf(`postgres://u:${password}@a.internal:5432,b.internal/app`)
-    ).toEqual([
-      { host: "a.internal", port: 5432 },
-      { host: "b.internal", port: 5432 }
+    // Fails without the change: a second host without a port was read as port 5432, where
+    // the driver gives it the first host's port, and `PGPORT` was not looked at.
+    for (const address of [
+      `postgres://u:${password}@a.internal:6432,b.internal/app`,
+      "postgres://a.internal:5432,b.internal:5433/app",
+      "postgres://a.internal,b.internal/app"
+    ]) {
+      expect(platformStoreTargetsOf(address, none), address).toBeUndefined();
+    }
+    const elsewhere = { PGPORT: "6432" };
+    expect(platformStoreTargetsOf("postgres://db.internal/app", elsewhere)).toBeUndefined();
+    expect(platformStoreTargetsOf("postgres://db.internal:5432/app", elsewhere)).toEqual([
+      { host: "db.internal", port: 5432 }
+    ]);
+    expect(platformStoreTargetsOf("postgres://db.internal/app", { PGPORT: "" })).toEqual([
+      { host: "db.internal", port: 5432 }
     ]);
     for (const address of [
       "postgres:///app?host=/var/run/postgresql",
@@ -47,7 +59,7 @@ describe("the Platform Store's address", () => {
       "mysql://db.internal/app",
       ""
     ]) {
-      expect(platformStoreTargetsOf(address), address).toBeUndefined();
+      expect(platformStoreTargetsOf(address, none), address).toBeUndefined();
     }
   });
 
@@ -118,6 +130,23 @@ describe("the Platform Store's address", () => {
     expect(unknown.warnings[0]).toContain("could not be read as host and port");
     expect(unknown.warnings[0]).not.toContain(password);
     expect(unknown.warnings[0]).not.toContain("/var/run");
+
+    // Fails without the change: there was no warning, and the second host was read with
+    // port 5432 where the driver connects to it on 6432.
+    const several = await start(`postgres://user:${password}@172.28.0.2:6432,172.28.0.9/app`);
+    expect(several.granted).toBe(false);
+    expect(several.warnings).toHaveLength(1);
+    expect(several.warnings[0]).not.toContain("172.28.0.2");
+
+    // An address without a port is exact only while the process sets no PGPORT.
+    vi.stubEnv("PGPORT", "6432");
+    try {
+      const moved = await start(`postgres://user:${password}@172.28.0.2/app`);
+      expect(moved.granted).toBe(false);
+      expect(moved.warnings).toHaveLength(1);
+    } finally {
+      vi.unstubAllEnvs();
+    }
 
     // A Store at a literal address needs no resolver to be told apart from the target.
     const known = await start(`postgres://user:${password}@172.28.0.2:5432/app`);

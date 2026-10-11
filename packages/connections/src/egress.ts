@@ -418,13 +418,16 @@ export function egressTargetOfUrl(address: string): EgressTarget {
 }
 
 /**
- * Where the Platform Store listens, read from its connection address: one target for each
- * host, also of the form that names several (`postgres://a:5432,b:5433/db`). Answers
- * `undefined` where host and port cannot be read, as for a Unix socket or a host given as a
- * parameter. Only hosts and ports leave this function, never the address.
+ * Where the Platform Store listens, read from its connection address. Answers `undefined`
+ * where host and port cannot be read exactly as the driver will use them: a Unix socket, a
+ * host or port given as a parameter, an address that names several hosts (the driver hands a
+ * port on to the hosts that name none), and an address without a port while `PGPORT` is set
+ * (the driver then takes that one). `environment` is the environment of the process, which is
+ * where the driver reads from. Only host and port leave this function, never the address.
  */
 export function platformStoreTargetsOf(
-  databaseUrl: string
+  databaseUrl: string,
+  environment: { PGPORT?: string | undefined }
 ): { host: string; port: number }[] | undefined {
   const match = /^postgres(?:ql)?:\/\/(?:[^@/?#]*@)?([^/?#]*)([^#]*)/iu.exec(databaseUrl.trim());
   if (!match?.[1]) {
@@ -434,20 +437,20 @@ export function platformStoreTargetsOf(
   if (/[?&](?:host|hostaddr|port)=/iu.test(match[2] ?? "")) {
     return undefined;
   }
-  const targets: { host: string; port: number }[] = [];
-  for (const part of match[1].split(",")) {
-    const parsed = /^(\[[0-9a-f:.]+\]|[^:[\]%]+)(?::(\d{1,5}))?$/iu.exec(part);
-    if (!parsed?.[1]) {
-      return undefined;
-    }
-    const host = normalizeEgressHost(parsed[1]);
-    const port = parsed[2] === undefined ? DEFAULT_PORTS.postgres : Number(parsed[2]);
-    if (!(isHostName(host) || isIP(host) !== 0) || !isPort(port)) {
-      return undefined;
-    }
-    targets.push({ host, port });
+  // One host only: a comma is a second host, and it fails the pattern.
+  const parsed = /^(\[[0-9a-f:.]+\]|[^:[\],%]+)(?::(\d{1,5}))?$/iu.exec(match[1]);
+  if (!parsed?.[1]) {
+    return undefined;
   }
-  return targets;
+  if (parsed[2] === undefined && (environment.PGPORT ?? "") !== "") {
+    return undefined;
+  }
+  const host = normalizeEgressHost(parsed[1]);
+  const port = parsed[2] === undefined ? DEFAULT_PORTS.postgres : Number(parsed[2]);
+  if (!(isHostName(host) || isIP(host) !== 0) || !isPort(port)) {
+    return undefined;
+  }
+  return [{ host, port }];
 }
 
 /** Whether two targets are one origin. A credential stays with the origin it was set for. */

@@ -810,7 +810,7 @@ Every connection a Connection opens is checked against this list before a creden
 - The connection goes to the address that was checked, with the host name unchanged for TLS, so a second DNS answer changes nothing.
 - A redirect and a returned download address are checked as new targets, and the credential is sent to the origin it was configured for and to no other.
 - An address with a user name or a password is refused.
-- The instance's own database host and port are refused whatever the list says, by name and by address. While the database host does not resolve, every target on its port is refused. When the database address cannot be read as host and port, for example a Unix socket, startup logs a warning and every `postgres` target is refused.
+- The instance's own database host and port are refused whatever the list says, by name and by address. While the database host does not resolve, every target on its port is refused. When the database address cannot be read as one host and one port, startup logs a warning and every `postgres` target is refused. That is so for a Unix socket, for an address that names several hosts, and for an address without a port while `PGPORT` is set. Give the address as `postgres://host:port/database`.
 - Plain `http` is accepted for a `private` entry only.
 - Link-local addresses (`169.254.0.0/16`, `fe80::/10`) are reached by no entry. A `private` entry whose `cidrs` cover them stops startup with the range named. Loopback and the private ranges are reachable where a `private` entry names them.
 - An IPv4 address carried inside an IPv6 one (IPv4-mapped, IPv4-compatible, NAT64, 6to4, Teredo) is judged as that IPv4 address.

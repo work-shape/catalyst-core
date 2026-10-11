@@ -20,6 +20,7 @@ import {
   type SecretResolver
 } from "@vivd-catalyst/core";
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { readClientInstanceEnv } from "./env";
 import { PLATFORM_SECRET_NAMES } from "./infrastructure";
 
 /** What an instance with the module `connections` on has for its Connections. */
@@ -103,8 +104,11 @@ async function buildInstanceConnections(
         )
     });
   }
+  // The driver reads `PGPORT` from the process itself, so the guard reads it there too.
+  const { PGPORT } = readClientInstanceEnv();
   const platformStore = platformStoreTargetsOf(
-    await secrets.resolve(PLATFORM_SECRET_NAMES.databaseUrl)
+    await secrets.resolve(PLATFORM_SECRET_NAMES.databaseUrl),
+    { PGPORT }
   );
   if (!platformStore) {
     // Said once, at start. The address itself is never logged.
