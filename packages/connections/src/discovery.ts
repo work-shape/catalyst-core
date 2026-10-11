@@ -78,6 +78,12 @@ export interface ConnectionDiscoveryResult {
   /** How many of those were left out because they held the credential. Only with `discovered`. */
   rejectedCount?: number;
   /**
+   * With `skipped`: the Connection changed while it was discovered. What was read belongs to
+   * a revision that is no longer the Connection's, so nothing was written. The caller sees to
+   * a discovery of the revision that is.
+   */
+  superseded?: true;
+  /**
    * With `failed`: the caller stopped the discovery. Nothing was found out about the
    * Connection and nothing was written.
    */
@@ -345,7 +351,9 @@ async function discoverOperations(
  * Discovers one Connection and stores what was read as its catalog. A Connection that does
  * not exist, is off, or whose type has a static catalog or is not part of this build is
  * `skipped` and nothing is contacted. A failure writes its reason as `last_error_code` and
- * leaves the stored catalog as it is, so nothing that was accepted changes. A discovery its
+ * leaves the stored catalog as it is, so nothing that was accepted changes. The Connection is
+ * read once, and before a write its revision is read again: where it changed meanwhile,
+ * nothing is written and the answer says `superseded`. A discovery its
  * caller stopped writes nothing at all. Never throws for anything the type or the outside
  * system did.
  */
@@ -390,34 +398,52 @@ export async function discoverConnection(
   // A discovery its caller stopped says nothing about the Connection: no failure is written.
   if (input.signal.aborted) return { status: "failed", stopped: true };
 
-  // An error of a write is the store's or the job's and leaves as it is.
-  if (!found) {
-    await write((tx) =>
-      tx.connections.putConnectionState({
+  /**
+   * Writes the state where the Connection still is the revision that was discovered. The
+   * target, the credential and the accepted list are the revision's: what was read under
+   * another one is not this Connection's catalog, and its failure not this Connection's.
+   */
+  const writeState = (
+    state: Pick<
+      Parameters<PlatformStores["connections"]["putConnectionState"]>[0],
+      "health" | "lastErrorCode" | "catalog"
+    >
+  ): Promise<boolean> =>
+    write(async (tx) => {
+      const current = await readConnection({ ...input, stores: tx }, connectionName);
+      if (current?.assetId !== connection.assetId || current.revision !== connection.revision) {
+        return false;
+      }
+      await tx.connections.putConnectionState({
         clientInstanceId,
         connectionAssetId: connection.assetId,
-        health: healthOfFailure(reason, connection.state?.health),
-        lastErrorCode: reason ?? CONNECTION_DISCOVERY_FAILED_CODE
-      })
-    );
+        ...state
+      });
+      return true;
+    });
+
+  // An error of a write is the store's or the job's and leaves as it is.
+  if (!found) {
+    const written = await writeState({
+      health: healthOfFailure(reason, connection.state?.health),
+      lastErrorCode: reason ?? CONNECTION_DISCOVERY_FAILED_CODE
+    });
+    if (!written) return { status: "skipped", superseded: true };
     return { status: "failed", ...(reason === undefined ? {} : { reason }) };
   }
   const { catalog, leftOut, rejected } = found;
   // A discovery that listed its tools reached the system with the credential.
-  await write((tx) =>
-    tx.connections.putConnectionState({
-      clientInstanceId,
-      connectionAssetId: connection.assetId,
-      health: "ok",
-      lastErrorCode: rejected > 0 ? CONNECTION_DISCOVERY_REJECTED_CODE : null,
-      catalog: {
-        version: catalog.version,
-        discoveredAt: catalog.discoveredAt,
-        entries: catalog.entries.map((entry) => ({ ...entry })),
-        pinned: catalog.pinned
-      }
-    })
-  );
+  const written = await writeState({
+    health: "ok",
+    lastErrorCode: rejected > 0 ? CONNECTION_DISCOVERY_REJECTED_CODE : null,
+    catalog: {
+      version: catalog.version,
+      discoveredAt: catalog.discoveredAt,
+      entries: catalog.entries.map((entry) => ({ ...entry })),
+      pinned: catalog.pinned
+    }
+  });
+  if (!written) return { status: "skipped", superseded: true };
   if (leftOut > 0) {
     input.logger?.warn(
       { connection: connectionName, leftOut, rejected },

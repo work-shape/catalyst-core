@@ -214,7 +214,7 @@ async function buildInstanceConnections(
  * Queues the discovery of every enabled Connection whose type reads its operations from the
  * outside system. An operation accepted since the last discovery is pinned by the next one,
  * so one follows every seed and not only the first. A Connection that has one queued gets
- * no second. One read of the Connections and one insert each, and no call to the outside. A
+ * no second, and one whose discovery runs gets one queued behind it. One read of the Connections and one insert each, and no call to the outside. A
  * discovery that cannot be queued is logged and does not stop the start.
  */
 async function enqueueDiscoveries(
@@ -226,10 +226,13 @@ async function enqueueDiscoveries(
   try {
     for (const connection of await readConnections(deps)) {
       if (!connection.config.enabled || !connection.type?.discover) continue;
-      await enqueueConnectionDiscovery(stores.jobs, {
-        clientInstanceId,
-        connectionName: connection.config.name
-      });
+      const discovery = { clientInstanceId, connectionName: connection.config.name };
+      const job = await enqueueConnectionDiscovery(stores.jobs, discovery);
+      // A discovery that runs now may have read the Connection before this seed changed it.
+      // One is queued behind it, so a discovery always starts after a seed.
+      if (job.status === "running") {
+        await enqueueConnectionDiscovery(stores.jobs, { ...discovery, behind: job });
+      }
     }
   } catch (error) {
     logger.warn(

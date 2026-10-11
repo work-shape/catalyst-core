@@ -63,19 +63,31 @@ export const connectionDiscoverJob = defineJobKind({
 
 /**
  * Queues the discovery of one Connection. While one is queued or running for the Connection
- * this inserts nothing, so a second start, or a second API process, adds no second job.
+ * this inserts nothing and answers that job, so a second start, or a second API process, adds
+ * no second job.
+ *
+ * `behind` names a job that is running now and has read the Connection already. The
+ * discovery is then queued under the other of the Connection's two keys, so it is not taken
+ * for the running one, and it runs once that one ended. A Connection so has at most two live
+ * jobs: one running and one queued behind it.
  */
 export function enqueueConnectionDiscovery(
   jobs: Pick<JobsStore, "enqueue">,
-  input: { clientInstanceId: ClientInstanceId; connectionName: string }
+  input: {
+    clientInstanceId: ClientInstanceId;
+    connectionName: string;
+    behind?: Pick<Job, "dedupeKey">;
+  }
 ): Promise<Job<{ connectionName: string }>> {
+  const first = subjectDedupeKey(connectionDiscoverJob.kind, input.connectionName);
+  const second = `${first}:next`;
   return jobs.enqueue(
     connectionDiscoverJob,
     { connectionName: input.connectionName },
     {
       clientInstanceId: input.clientInstanceId,
       subject: input.connectionName,
-      dedupeKey: subjectDedupeKey(connectionDiscoverJob.kind, input.connectionName),
+      dedupeKey: input.behind?.dedupeKey === first ? second : first,
       concurrencyKey: input.connectionName
     }
   );
@@ -119,6 +131,18 @@ export function createConnectionDiscoveryJobs(options: ConnectionDiscoveryJobOpt
             signal: control.signal,
             transaction: (write) => control.transaction(write)
           });
+          if (outcome.superseded === true) {
+            // The Connection changed while it was read. A new discovery reads it as it is
+            // now. This job is still running, so the new one is queued behind it.
+            await control.transaction((stores) =>
+              enqueueConnectionDiscovery(stores.jobs, {
+                clientInstanceId: job.clientInstanceId,
+                connectionName,
+                behind: job
+              })
+            );
+            return;
+          }
           if (outcome.status === "skipped") return;
           // The worker stops or the lease is gone: nothing was decided and nothing written.
           // The attempt is given back.

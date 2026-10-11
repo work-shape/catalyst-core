@@ -19,6 +19,11 @@ export interface ConnectionDiscoveryOutcome {
   leftOutCount?: number;
   /** How many of those were left out because they held the Connection's credential. */
   rejectedCount?: number;
+  /**
+   * The Connection changed while it was discovered. Nothing was written, and a discovery of
+   * the revision it has now is owed.
+   */
+  superseded?: boolean;
   /** The discovery was stopped through its signal. Nothing was decided or written. */
   stopped?: boolean;
 }

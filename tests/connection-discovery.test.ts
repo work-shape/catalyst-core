@@ -496,6 +496,109 @@ describe("a second discovery", () => {
   });
 });
 
+describe("a Connection that changes while it is discovered", () => {
+  /** A discovery that waits until the test lets it answer. */
+  function held(w: ReturnType<typeof world>, listed = [lookup, list]) {
+    let release = () => {};
+    const waiting = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    w.connector.discover = async () => {
+      await waiting;
+      return listed;
+    };
+    return {
+      release() {
+        // What the outside system lists to every discovery after the held one.
+        w.connector.discover = () => Promise.resolve([lookup, list]);
+        release();
+      }
+    };
+  }
+
+  // Fails without the change: the catalog read under the old revision was stored for the
+  // new one, and no discovery of the new revision followed.
+  it("stores nothing of the old revision and discovers the new one", async () => {
+    const w = world();
+    const instance = await w.start();
+    const hold = held(w, [listedOperation("lookup", { description: "Of the old target." })]);
+    const pass = runJobs(instance);
+    await expect.poll(() => w.connector.discoveries, { timeout: 10_000 }).toBe(1);
+
+    // The Connection gets a new revision, as an edit or another process's seed gives it one.
+    const asset = required(
+      await instance.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: "connection",
+        name: "outside"
+      })
+    );
+    await instance.stores.configAssets.applyConfigAssetMutations({
+      clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "connection",
+          name: "outside",
+          config: { ...asset.config, displayName: "Outside, moved" }
+        }
+      ]
+    });
+    hold.release();
+    await pass;
+
+    expect((await storedState(instance)).catalog).toBeUndefined();
+    expect(await discoveryJobs()).toMatchObject([
+      { status: "succeeded", attempts: 1 },
+      { status: "queued", attempts: 0 }
+    ]);
+    expect(await auditEvents(instance)).toEqual([]);
+
+    await runJobs(instance);
+    expect(w.connector.discoveries).toBe(2);
+    expect(await statuses(instance)).toEqual({ lookup: "ready", list: "ready" });
+    expect(required((await storedState(instance)).catalog).entries[0]?.description).toBe(
+      "Reads lookup."
+    );
+  });
+
+  // Fails without the change: the seed of the second start found the running job under the
+  // Connection's key and queued nothing, so no discovery started after that seed.
+  it("gets a discovery queued behind the running one by a seed, so a newly accepted operation needs no restart", async () => {
+    const third = listedOperation("third");
+    const w = world([lookup, list, third]);
+    const first = await w.start();
+    const hold = held(w, [lookup, list, third]);
+    const pass = runJobs(first);
+    await expect.poll(() => w.connector.discoveries, { timeout: 10_000 }).toBe(1);
+
+    // A deployment starts a second API whose release config accepts one more operation.
+    const changed = {
+      connections: {
+        outside: outside({
+          operations: [operation("lookup"), operation("list"), operation("third")]
+        })
+      }
+    };
+    const second = await w.start(changed);
+    expect((await discoveryJobs()).map((job) => job.status)).toEqual(["running", "queued"]);
+    // A third start adds no third job.
+    await (await w.start(changed)).close();
+    expect(await discoveryJobs()).toHaveLength(2);
+
+    hold.release();
+    w.connector.discover = () => Promise.resolve([lookup, list, third]);
+    await pass;
+    // The running discovery had read the old revision. It stored nothing.
+    expect((await storedState(second)).catalog).toBeUndefined();
+
+    // The discovery queued behind it runs without another start.
+    await runJobs(second);
+    expect(await statuses(second)).toEqual({ lookup: "ready", list: "ready", third: "ready" });
+    expect(await discoveryJobs()).toMatchObject([{ status: "succeeded" }, { status: "succeeded" }]);
+  });
+});
+
 describe("what a discovery takes from an outside system", () => {
   it("leaves out what it cannot check or store, cuts a long description and keeps the rest", async () => {
     const long = "d".repeat(CONNECTION_DISCOVERY_DESCRIPTION_MAX_CHARS + 500);
