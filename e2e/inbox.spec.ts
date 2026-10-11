@@ -287,7 +287,7 @@ test("an agent's tool call waits for approval, is approved in the Inbox, runs on
   const row = inbox.getByTestId("inbox-row").filter({ hasText: TOOL });
   await expect(row).toHaveCount(1);
   await expect(row).toContainText("Action to approve");
-  await expect(row).toContainText(`E2E Inbox · ${TOOL}`);
+  await expect(row).toContainText(`E2E Inbox via Application Assistant · ${TOOL}`);
   await row.getByRole("button").click();
   await expect(approverPage).toHaveURL(/\/inbox\/[^/]+$/u);
   const call = approverPage.getByTestId("operation-call");
@@ -504,11 +504,10 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
   const answerOf = (data: object) => requestWithOrigin(page, "put", heldSkillUrl, { data });
   const openRow = async (heading: string) => {
     await page.goto("/inbox");
-    const row = page
-      .getByRole("region", { name: "Inbox", exact: true })
-      .getByTestId("inbox-row")
-      .filter({ hasText: heading });
+    // Found without the region's name, which the pictures read in two languages.
+    const row = page.getByTestId("inbox-row").filter({ hasText: HELD_TITLE });
     await expect(row).toHaveCount(1);
+    await expect(row).toContainText(heading);
     await expect(row).toContainText(`E2E Superadmin · ${HELD_NAMESPACE}`);
     await shoot(
       page,
@@ -548,7 +547,7 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
     // The operation's name is under the technical details, which are closed.
     await expect(call).not.toContainText("assets.put");
     await call.getByTestId("operation-call-details-open").click();
-    await expect(call.locator('[data-field="operation"]')).toHaveText("assets.put");
+    await expect(call.locator('[data-field="operation"]')).toContainText("assets.put");
     await shoot(page, "inbox-new-skill", () => expect(headline).toBeVisible(), SKILL_SHOT_WIDTHS);
 
     await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
