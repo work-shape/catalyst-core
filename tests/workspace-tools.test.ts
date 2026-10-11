@@ -1355,6 +1355,63 @@ describe("workspace tools", () => {
     ]);
   });
 
+  it("reuses the artifact of an unchanged preview image and adds one when the file changes", async () => {
+    const harness = await createWorkspaceHarness();
+    const workspace = await harness.store.executionWorkspaces.ensureExecutionWorkspace({
+      clientInstanceId: harness.clientInstanceId,
+      conversationId: harness.conversation.id,
+      ownerUserId: harness.ownerUserId,
+      now: "2026-06-29T12:00:00.000Z"
+    });
+    const putVersion = async (version: string) => {
+      const bytes = encode(`page-1 ${version}`);
+      const objectKey = `execution-workspaces/private/previews/report/page-1.${version}.png`;
+      harness.objectStore.seed(objectKey, bytes);
+      await harness.store.executionWorkspaces.upsertWorkspaceFile({
+        clientInstanceId: harness.clientInstanceId,
+        workspaceId: workspace.id,
+        path: "previews/report/page-1.png",
+        objectKey,
+        byteSize: bytes.byteLength,
+        checksum: `sha256:${version}`,
+        mimeType: "image/png",
+        updatedAt: "2026-06-29T12:01:00.000Z"
+      });
+    };
+    const look = async () => {
+      const previewed = await harness.runTool("workspace.preview_images", {
+        path: "previews/report/page-1.png"
+      });
+      if (previewed.status !== "success") {
+        throw new Error("Expected preview_images to succeed");
+      }
+      return text(array(jsonObject(previewed.output).images).map(jsonObject)[0]?.imageArtifactId);
+    };
+    const storedArtifacts = () =>
+      harness.store.files.listConversationManagedArtifacts({
+        clientInstanceId: harness.clientInstanceId,
+        conversationId: harness.conversation.id
+      });
+
+    await putVersion("first");
+    const firstLook = await look();
+    const secondLook = await look();
+
+    expect(secondLook).toBe(firstLook);
+    expect((await storedArtifacts()).map((artifact) => artifact.id)).toEqual([firstLook]);
+
+    await putVersion("second");
+    const changedLook = await look();
+
+    expect(changedLook).not.toBe(firstLook);
+    const stored = await storedArtifacts();
+    expect(stored.map((artifact) => artifact.id).sort()).toEqual([firstLook, changedLook].sort());
+    expect(stored.find((artifact) => artifact.id === changedLook)).toMatchObject({
+      checksum: "sha256:second",
+      metadata: { workspaceId: workspace.id, workspacePath: "previews/report/page-1.png" }
+    });
+  });
+
   it("does not register a ready preview artifact when workspace bytes are missing", async () => {
     const harness = await createWorkspaceHarness();
     const workspace = await harness.store.executionWorkspaces.ensureExecutionWorkspace({

@@ -1,9 +1,12 @@
+import { createHash } from "node:crypto";
 import { posix as path } from "node:path";
 import type { z } from "zod";
 import {
+  type ManagedArtifactId,
   type SupportedImageMimeType,
   type ToolExecutionContext,
   type ToolHandlerResult,
+  asManagedArtifactId,
   isAppError,
   readObjectBytes
 } from "@vivd-catalyst/core";
@@ -139,10 +142,22 @@ async function previewWorkspaceImagePaths(
         }
       );
     }
-    const artifact = await deps.store.files.createManagedArtifact({
+    const kind = previewImageKind(mimeType);
+    // The id names this version of the file, so looking at an unchanged file again finds the
+    // row of the first look by primary key instead of adding one per call.
+    const artifact = await deps.store.files.ensureManagedArtifact({
+      id: workspacePreviewImageArtifactId({
+        clientInstanceId: context.clientInstanceId,
+        conversationId: workspace.value.conversationId,
+        workspaceId: workspace.value.handle.id,
+        path: file.path,
+        checksum: file.checksum,
+        objectKey: file.objectKey,
+        kind
+      }),
       clientInstanceId: context.clientInstanceId,
       conversationId: workspace.value.conversationId,
-      kind: previewImageKind(mimeType),
+      kind,
       objectKey: file.objectKey,
       filename: path.basename(file.path),
       mimeType,
@@ -200,6 +215,36 @@ async function previewWorkspaceImagePaths(
       }
     }
   );
+}
+
+/**
+ * The artifact id of one version of a workspace image: the same workspace, path and checksum
+ * give the same id. The other parts are the fields `ensureManagedArtifact` compares, so a row
+ * found under the id always describes the same bytes at the same place.
+ */
+function workspacePreviewImageArtifactId(version: {
+  clientInstanceId: string;
+  conversationId: string;
+  workspaceId: string;
+  path: string;
+  checksum: string;
+  objectKey: string;
+  kind: string;
+}): ManagedArtifactId {
+  const digest = createHash("sha256")
+    .update(
+      JSON.stringify([
+        version.clientInstanceId,
+        version.conversationId,
+        version.workspaceId,
+        version.path,
+        version.checksum,
+        version.objectKey,
+        version.kind
+      ])
+    )
+    .digest("hex");
+  return asManagedArtifactId(`art_workspace_preview_${digest}`);
 }
 
 function readPreviewImageMimeType(
