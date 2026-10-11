@@ -1,4 +1,5 @@
 import type { PlatformEventOutcome } from "./events";
+import type { OperationRunDecisionReason } from "./operation-runs";
 import {
   POLICY_VALUES,
   type OperationEffect,
@@ -71,7 +72,13 @@ export type PolicySource =
 export type PolicyResolution = { source: PolicySource } & (
   | { value: "allow"; next: "run" }
   /** The caller's own call is the confirmation, recorded as the run's decision. */
-  | { value: "confirm"; next: "run"; decisionMode: "direct" }
+  | {
+      value: "confirm";
+      next: "run";
+      decisionMode: "direct";
+      /** The instance default asked for an approval, which a secret answer cannot wait for. */
+      decisionReason?: OperationRunDecisionReason;
+    }
   | { value: "confirm"; next: "await_confirmation" }
   | { value: "approval"; next: "await_approval" }
   | { value: "deny"; next: "refuse" }
@@ -96,6 +103,7 @@ export function resolvePolicy(input: PolicyInput): PolicyResolution {
 
   let value: PolicyValue = input.instanceDefaults[definition.effect];
   let source: PolicySource = "instance_default";
+  let inheritedApproval = false;
   if (!applies(value)) {
     // An instance default that names a waiting value for reads leaves them allowed.
     value = "allow";
@@ -106,6 +114,7 @@ export function resolvePolicy(input: PolicyInput): PolicyResolution {
     // the inherited value falls back to the caller's own confirmation. A setting that matches
     // the operation or a guardrail still asks for an approval, and the call is then refused.
     value = "confirm";
+    inheritedApproval = true;
   }
   if (applies(definition.defaultPolicy)) {
     value = definition.defaultPolicy;
@@ -145,7 +154,18 @@ export function resolvePolicy(input: PolicyInput): PolicyResolution {
     case "deny":
       return { value, next: "refuse", source };
     case "confirm":
-      if (input.callerCanConfirm) return { value, next: "run", decisionMode: "direct", source };
+      if (input.callerCanConfirm) {
+        return {
+          value,
+          next: "run",
+          decisionMode: "direct",
+          source,
+          // Only where the replaced default is what the call ran under.
+          ...(inheritedApproval && source === "instance_default"
+            ? { decisionReason: "inherited_approval_not_applied" as const }
+            : {})
+        };
+      }
       return input.canPause
         ? { value, next: "await_confirmation", source }
         : { value: "deny", next: "refuse", source: "surface_cannot_pause" };

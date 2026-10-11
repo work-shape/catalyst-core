@@ -571,6 +571,16 @@ policy:
   refused with 403 and the code `POLICY_DENIED`, like `deny`. The answers the API reference
   lists for a held call (`202` with the run, `DECLINED`, `OPERATION_EXPIRED`) do not occur yet.
 
+One operation does not follow an inherited `approval`: issuing an API key
+(`api_credentials.create`). Its answer is the key, shown once to the person who asks, so the
+call cannot wait for somebody else. Under `changing: approval` it is not refused: it runs on its
+caller's own word, as under `confirm`, and its run records the decision with the reason
+`inherited_approval_not_applied`. To require an approval for key creation on purpose, name the
+operation or its prefix in a policy setting (`api_credentials.create` or `api_credentials.*`
+with the value `approval`). Such a setting refuses the call with 403 and the code
+`POLICY_DENIED`, since a secret answer cannot wait: nobody issues a key while the setting
+stands. See also [Governance](/operate/governance/#inbox).
+
 ## Infrastructure
 
 The `infrastructure` section states what an instance runs on: one provider per port. It is

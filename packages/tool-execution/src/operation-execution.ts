@@ -31,6 +31,7 @@ import {
   type OperationResource,
   type OperationResult,
   type OperationRun,
+  type OperationRunDecisionReason,
   type OperationRunEnd,
   type OperationRunId,
   type OperationRunStore,
@@ -438,6 +439,12 @@ export async function denyRun(
  * throws ends the run as failed; a refusal it raises through `context.access.require` ends it
  * as denied.
  */
+/** The decision of a call that ran on its own caller's word, with why where that needs saying. */
+export interface DirectDecision {
+  mode: "direct";
+  reason?: OperationRunDecisionReason;
+}
+
 /** Thrown by the `begin` of `executeAdmitted`: the operation was not called. */
 export class OperationNotBegunError extends Error {
   constructor() {
@@ -467,7 +474,7 @@ export async function executeAdmitted(
   context: RunContext,
   access: ActorAccess,
   /** The decision of a call that ran on its own caller's word. An approved run has its own. */
-  decisionMode?: "direct",
+  decision?: DirectDecision,
   /**
    * Called as the last thing before the operation is, with nothing awaited between the two.
    * A caller that marks the run as started only now does it here. It throws
@@ -521,8 +528,15 @@ export async function executeAdmitted(
       output:
         definition.effect === "changing" && !definition.secret ? retainedOutput(output) : undefined,
       usage: tool?.usage,
-      ...(decisionMode
-        ? { decision: { mode: decisionMode, by: run.actor.id, at: now().toISOString() } }
+      ...(decision
+        ? {
+            decision: {
+              mode: decision.mode,
+              ...(decision.reason ? { reason: decision.reason } : {}),
+              by: run.actor.id,
+              at: now().toISOString()
+            }
+          }
         : {})
     });
     completed = { ...completed, run: done };

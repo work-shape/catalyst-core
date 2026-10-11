@@ -31,9 +31,18 @@ export interface OperationRunActor {
   delegatedActor?: DelegatedActor;
 }
 
+/**
+ * Why a decision was taken the way it was, where the mode alone does not say it.
+ * `inherited_approval_not_applied`: the instance default asked for another person's approval
+ * and the call ran on its caller's word instead, because the operation answers a secret that
+ * is shown once and so cannot wait.
+ */
+export type OperationRunDecisionReason = "inherited_approval_not_applied";
+
 export interface OperationRunDecision {
   /** `direct`: the caller's own call was the confirmation. */
   mode: "direct" | "confirmed" | "approved" | "declined";
+  reason?: OperationRunDecisionReason;
   by: string;
   /** The name of who decided, kept where the decision was another person's. */
   byLabel?: string;

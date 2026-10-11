@@ -276,6 +276,7 @@ describe("resolvePolicy: who can confirm and what can wait", () => {
       value: "confirm",
       next: "run",
       decisionMode: "direct",
+      decisionReason: "inherited_approval_not_applied",
       source: "instance_default"
     });
     // Nobody present made the call, so nobody confirmed it.

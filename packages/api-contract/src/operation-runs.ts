@@ -57,6 +57,11 @@ export const operationRunSchema = z.object({
   decision: z
     .object({
       mode: z.enum(["direct", "confirmed", "approved", "declined"]),
+      /**
+       * `inherited_approval_not_applied`: the instance default asked for an approval and the
+       * call ran on its caller's word, because its answer is a secret that is shown once.
+       */
+      reason: z.enum(["inherited_approval_not_applied"]).optional(),
       by: z.string(),
       /** The name of who decided, where the decision was another person's. */
       byLabel: z.string().optional(),

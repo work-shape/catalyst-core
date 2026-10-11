@@ -24,6 +24,7 @@ export function toOperationRunResource(run: OperationRun): OperationRunResource 
     attempt: run.attempt,
     decision: run.decision && {
       mode: run.decision.mode,
+      reason: run.decision.reason,
       by: run.decision.by,
       byLabel: run.decision.byLabel,
       at: run.decision.at,

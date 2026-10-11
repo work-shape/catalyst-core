@@ -28,6 +28,7 @@ import {
   hashInput,
   requireModuleOn,
   resolveGuardedPolicy,
+  type DirectDecision,
   unrecordedRun,
   type OperationEnding,
   type OperationOutcome,
@@ -303,11 +304,11 @@ async function admitAndExecute(
   }
   return "ending" in admitted
     ? admitted.ending
-    : executeAdmitted(context, admitted.access, admitted.decisionMode);
+    : executeAdmitted(context, admitted.access, admitted.decision);
 }
 
 /** A call that may run now, or how it ended before it could. */
-type Admission = { ending: OperationEnding } | { access: ActorAccess; decisionMode?: "direct" };
+type Admission = { ending: OperationEnding } | { access: ActorAccess; decision?: DirectDecision };
 
 async function admit(context: RunContext, surface: OperationAuthorization): Promise<Admission> {
   const { run, definition, call, deps, now } = context;
@@ -374,5 +375,11 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
       }
     };
   }
-  return { access, decisionMode: "decisionMode" in policy ? policy.decisionMode : undefined };
+  return {
+    access,
+    decision:
+      "decisionMode" in policy
+        ? { mode: policy.decisionMode, reason: policy.decisionReason }
+        : undefined
+  };
 }

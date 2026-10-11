@@ -16282,6 +16282,12 @@
                   "declined"
                 ]
               },
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "inherited_approval_not_applied"
+                ]
+              },
               "by": {
                 "type": "string"
               },

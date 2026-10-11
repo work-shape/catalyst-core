@@ -37,6 +37,9 @@ describe("operation over HTTP: an answer that holds a secret", () => {
     expect(first.json()).toEqual({ name: "key", filler: secret });
     const [run] = await runs();
     expect(run).toMatchObject({ status: "done", idempotencyKey: "key-1" });
+    // Under the usual default nothing was replaced, so the decision gives no reason.
+    expect(run?.decision).toMatchObject({ mode: "direct" });
+    expect(run?.decision?.reason).toBeUndefined();
     expect(run?.output).toBeUndefined();
     expect(JSON.stringify(run)).not.toContain(secret);
     expect(await auditTypes(run?.id ?? "")).toEqual([
@@ -95,7 +98,17 @@ describe("operation over HTTP: an answer that holds a secret", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ name: "issued", filler: secret });
     const [run] = await runs();
-    expect(run).toMatchObject({ status: "done", decision: { mode: "direct" } });
+    // The run says that the default asked for an approval and why the call did not wait.
+    expect(run).toMatchObject({
+      status: "done",
+      decision: { mode: "direct", reason: "inherited_approval_not_applied" }
+    });
+    const read = await server.call(
+      "operations.get_run",
+      { params: { runId: run?.id ?? "" } },
+      person()
+    );
+    expect(read.json()).toMatchObject({ decision: { reason: "inherited_approval_not_applied" } });
     expect(run?.output).toBeUndefined();
     expect(approvalRequests).toEqual([]);
     expect(executed).toEqual(["issued"]);
