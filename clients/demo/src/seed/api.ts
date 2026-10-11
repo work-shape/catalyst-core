@@ -75,7 +75,47 @@ export interface SeedApi {
   ): Promise<"done" | "pending_approval">;
   showAgentEverywhere(name: string): Promise<void>;
   listOwnApprovalRequests(): Promise<ApprovalRequestView[]>;
+  /** The workspaces the caller is a member of. */
+  listWorkspaces(): Promise<SeedWorkspace[]>;
+  createWorkspace(input: { name: string; description: string }): Promise<SeedWorkspace>;
+  /** The addresses of the members of a workspace, in lowercase. */
+  listWorkspaceMemberEmails(workspaceId: string): Promise<string[]>;
+  addWorkspaceMember(workspaceId: string, email: string): Promise<void>;
+  /** The Apps of a workspace, each with its newest and its published revision. */
+  listApps(workspaceId: string): Promise<SeedApp[]>;
+  /**
+   * Writes the source files of an App as its next revision, which is its draft. `revision` is
+   * the newest revision the App has; left out, the write creates the App.
+   */
+  writeApp(
+    workspaceId: string,
+    name: string,
+    files: SeedAppFile[],
+    revision: number | undefined
+  ): Promise<void>;
+  publishApp(workspaceId: string, name: string, revision: number): Promise<void>;
 }
+
+/** What the seed reads of a Shared Workspace. */
+interface SeedWorkspace {
+  id: string;
+  name: string;
+}
+
+/** What the seed reads of an App. */
+interface SeedApp {
+  name: string;
+  revision: number;
+  publishedRevision?: number;
+}
+
+/** One source file of an App, as text. */
+export interface SeedAppFile {
+  path: string;
+  text: string;
+}
+
+const APP_KIND = "app";
 
 /** `SeedApi` over the product's client, whose every call is one operation of the catalog. */
 export function createSeedApi(client: ApiClient): SeedApi {
@@ -152,6 +192,47 @@ export function createSeedApi(client: ApiClient): SeedApi {
       );
     },
     listOwnApprovalRequests: () =>
-      listAll((paging) => client.approval_requests.list_mine({ query: paging }))
+      listAll((paging) => client.approval_requests.list_mine({ query: paging })),
+    listWorkspaces: () => listAll((paging) => client.workspaces.list({ query: paging })),
+    createWorkspace: (input) => client.workspaces.create({ body: input }),
+    listWorkspaceMemberEmails: async (workspaceId) =>
+      (
+        await listAll((paging) =>
+          client.workspaces.members.list({
+            params: { collaborationWorkspaceId: workspaceId },
+            query: paging
+          })
+        )
+      ).flatMap((member) => (member.email ? [member.email.toLowerCase()] : [])),
+    async addWorkspaceMember(workspaceId, email) {
+      await client.workspaces.members.add({
+        params: { collaborationWorkspaceId: workspaceId },
+        body: { email }
+      });
+    },
+    listApps: (workspaceId) =>
+      listAll((paging) =>
+        client.assets.list({ params: { kind: APP_KIND }, query: { ...paging, workspaceId } })
+      ),
+    async writeApp(workspaceId, name, files, revision) {
+      completedOutput(
+        await client.assets.put({
+          params: { kind: APP_KIND, name },
+          body: {
+            files,
+            workspaceId,
+            ...(revision === undefined ? {} : { expectedRevision: revision })
+          }
+        })
+      );
+    },
+    async publishApp(workspaceId, name, revision) {
+      completedOutput(
+        await client.assets.publish({
+          params: { kind: APP_KIND, name },
+          body: { revision, workspaceId }
+        })
+      );
+    }
   };
 }

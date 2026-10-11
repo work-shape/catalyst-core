@@ -743,6 +743,9 @@ const config = [
       // Third-party files and released App Kit versions, served as published; tests hold hashes.
       "packages/chat-server/vendor/view-runtime/**",
       "packages/chat-server/vendor/app-kit/**",
+      // The source of the demo's seeded Apps: files the seed writes to an instance, built there
+      // against the App Kit, and no part of this workspace's own code.
+      "clients/demo/seed/apps/**",
       "**/.astro/**",
       "**/coverage/**",
       "**/playwright-report/**",

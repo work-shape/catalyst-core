@@ -49,6 +49,8 @@ The superadmin is the one of the demo's config, so the instance has eight people
 - Three grant rows on the Connection `sample-business`, which the release config brings and not the seed: Sven Olsen may see and use it, Tobias Keller may use it. The two admins hold every right on it by their role and the other users hold none, so an agent of Elif Aydin is refused when it calls one of the Connection's tools. See [docs/try-connections.md](docs/try-connections.md).
 - One service principal, `Local config CLI`, with one key.
 - One approval waiting in the Inbox: Elif Aydin saved the skill `hr-parental-leave-faq`, and the demo holds it, see below.
+- One Shared Workspace, `Nordlicht Beratung`: Mara Lindqvist owns it, and Jonas Brandt, Tobias Keller, Elif Aydin and Sven Olsen are its members.
+- Two Apps in that workspace, written from the source files under `seed/apps/`: `client-onboarding` is published, and `fee-estimate` is published with a draft one revision ahead, which adds a second route. A write of an App is built by the workspace command worker, so the seed needs that worker running. The Apps list shows them to Mara Lindqvist and Jonas Brandt, who hold the rights of the kind as admins.
 
 ### The approval setting in `hr-`
 
@@ -65,6 +67,8 @@ A rerun puts back what the seed owns and leaves everything else alone. The seed 
 - A seeded agent or skill that differs from `seed/` is replaced by the file with a new revision, like `pnpm config:push --force` does. Changes made in the interface are lost.
 - A seeded grant row that was removed is written again, the rows on the Connection too. Rows you added stay.
 - A decided approval request is not asked again once the skill exists.
+- The seeded workspace is found by its name. A seeded member who was removed is added again; members you added stay.
+- A seeded App that has all its revisions is left as it is, whatever was published or written since. One that an earlier run left half way gets the missing revision or the missing publish.
 - Other people, Namespaces, agents, skills, grants, keys and conversations are not touched. Something of yours that uses a seeded address, prefix or name counts as the seed's.
 
 The seed never sets a password after it created a person. It signs in as Mara Lindqvist, Jonas Brandt and Elif Aydin when it has to write something in their name. If one of them has a new password, that sign-in is refused and the run stops with the address it could not sign in as. The way out is to change that person's password back to the value of `DEMO_SEED_PASSWORD`, or to set `DEMO_SEED_PASSWORD` in `.env` to the new password if all three share it.

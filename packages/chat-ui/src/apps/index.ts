@@ -21,3 +21,11 @@ export { AppsHostProvider, type AppsHost } from "./apps-host";
 export { appRowRoute, AppsPageView } from "./apps-page";
 export { RevisionsDrawerView } from "./revisions-drawer";
 export { SaveAsAppAction, SaveAsAppDialogView } from "./save-as-app-dialog";
+// The address of the area and its row in the rail, which the same tests hold.
+export {
+  areaOfRoute,
+  workspaceRouteFromPath,
+  workspaceRouteNavigation,
+  workspaceRoutePath
+} from "../routes";
+export { railSections, shownRailSections } from "../workspace/rail-sections";

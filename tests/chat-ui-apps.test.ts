@@ -33,15 +33,14 @@ import {
   SaveAsAppAction,
   SaveAsAppDialogView,
   type AppRights,
-  type AppsHost
-} from "@vivd-catalyst/chat-ui/apps";
-import {
+  type AppsHost,
   areaOfRoute,
+  railSections,
+  shownRailSections,
   workspaceRouteFromPath,
   workspaceRouteNavigation,
   workspaceRoutePath
-} from "../packages/chat-ui/src/routes";
-import { railSections, shownRailSections } from "../packages/chat-ui/src/workspace/rail-sections";
+} from "@vivd-catalyst/chat-ui/apps";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // The Apps area: its addresses, what a reader is offered by the rights they hold, and what

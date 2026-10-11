@@ -36,7 +36,10 @@ describe("the demo seed on the demo's own config", () => {
       skills: 7,
       "grant rows": 16,
       "approval requests": 1,
-      "connection grant rows": 3
+      "connection grant rows": 3,
+      workspaces: 1,
+      "workspace members": 4,
+      apps: 2
     });
     expectSecondRunChangedNothing(seeded());
     // The demo's own agent stays the default, not the first agent of the company.

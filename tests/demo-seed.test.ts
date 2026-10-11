@@ -33,7 +33,9 @@ const seeded = useSeededInstance({
   origin: "http://127.0.0.1:5273",
   instanceAssets: resolve("tests/fixtures/e2e-assets"),
   superadmin: { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" },
-  tools: [recordNote]
+  tools: [recordNote],
+  // The Apps of the seed are built for real here, so a source that does not build fails.
+  appBuild: "sandbox"
 });
 
 describe("the demo seed on the fixture instance", () => {
@@ -48,8 +50,39 @@ describe("the demo seed on the fixture instance", () => {
       skills: 7,
       "grant rows": 16,
       "approval requests": 1,
-      "connection grant rows": 0
+      "connection grant rows": 0,
+      workspaces: 1,
+      "workspace members": 4,
+      apps: 2
     });
+  });
+
+  it("leaves the company's workspace with one published App and one with a draft ahead", () => {
+    const { workspace, apps } = seeded().before;
+    expect(workspace?.members).toEqual([
+      "elif.aydin@nordlicht-beratung.test: member",
+      "jonas.brandt@nordlicht-beratung.test: member",
+      "mara.lindqvist@nordlicht-beratung.test: owner",
+      "sven.olsen@nordlicht-beratung.test: member",
+      "tobias.keller@nordlicht-beratung.test: member"
+    ]);
+    const states = apps.map(({ id: _id, ...state }) => state);
+    expect(states).toEqual([
+      {
+        name: "client-onboarding",
+        revision: 1,
+        draftRevision: 1,
+        publishedRevision: 1,
+        title: "Client onboarding"
+      },
+      {
+        name: "fee-estimate",
+        revision: 2,
+        draftRevision: 2,
+        publishedRevision: 1,
+        title: "Fee estimate"
+      }
+    ]);
   });
 
   it("leaves people across the roles, one deactivated and one who never signed in", () => {

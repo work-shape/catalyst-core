@@ -1,0 +1,4 @@
+id: fee-estimate
+name: Fee estimate
+description: A first estimate of the monthly fee for a client, from hours and rate.
+kit: 1.0.0

@@ -82,6 +82,41 @@ export const namespaces: SeedNamespace[] = [
   { prefix: "sales-", displayName: "Vertrieb / Sales", registeredBy: "jonas" }
 ];
 
+/**
+ * The Shared Workspace of the company. Everything a workspace owns is seeded into it; the Apps
+ * are the first of that.
+ */
+export const workspace: {
+  name: string;
+  description: string;
+  createdBy: PersonKey;
+  members: PersonKey[];
+} = {
+  name: "Nordlicht Beratung",
+  description: "The whole firm: what every team uses.",
+  createdBy: "mara",
+  members: ["jonas", "tobias", "elif", "sven"]
+};
+
+interface SeedApp {
+  /** The id of the App, and its folder under `seed/apps`. */
+  name: string;
+  /**
+   * The source sets the App is written from, in order: the folders `seed/apps/<name>/<set>`.
+   * Each write is one revision.
+   */
+  sourceSets: string[];
+  /** How many of the source sets are written before the App is published. */
+  publishedAfter: number;
+  savedBy: PersonKey;
+}
+
+/** One App that is published, and one whose draft is a revision ahead of what is published. */
+export const apps: SeedApp[] = [
+  { name: "client-onboarding", sourceSets: ["1"], publishedAfter: 1, savedBy: "mara" },
+  { name: "fee-estimate", sourceSets: ["1", "2"], publishedAfter: 1, savedBy: "mara" }
+];
+
 type AssetKind = "agent" | "skill";
 type Verb = "read" | "write" | "delete";
 

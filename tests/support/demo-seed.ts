@@ -10,6 +10,19 @@ import {
   signInForSessionFetch,
   type ApiClient
 } from "@vivd-catalyst/api-client";
+import {
+  createPageBundleJobs,
+  createSandboxPageBuild,
+  type PageBuildRunner
+} from "@vivd-catalyst/chat-server";
+import {
+  getClientInstanceId,
+  loadClientInstanceConfigFromFile
+} from "@vivd-catalyst/config-schema";
+import type { JobWorker, Logger } from "@vivd-catalyst/core";
+import { createFilesystemObjectStorage } from "@vivd-catalyst/object-storage";
+import { createPostgresJobWorker } from "@vivd-catalyst/postgres-store";
+import { LocalWorkspaceCommandProcessExecutor } from "@vivd-catalyst/tool-execution";
 import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
 import { checkAsset, checkedAssetId } from "@vivd-catalyst/chat-ui/access";
 import {
@@ -20,9 +33,11 @@ import {
   demoTools,
   people,
   seedDemo,
+  workspace,
   type CheckReason,
   type SeedReport
 } from "@vivd-catalyst/demo/seed";
+import { pageBuildCommandFromSource } from "./page-build";
 import { createTestInstance, getTestRuntime } from "./test-instance";
 
 // What the tests of `pnpm demo:seed` share: an instance of the demo's assembly on a config
@@ -42,9 +57,52 @@ interface SeededInstanceInput {
   /** Tools the config enables beside the demo's own. */
   tools?: ToolAssemblyDefinition[];
   env?: Record<string, string>;
+  /**
+   * `sandbox` builds the seeded Apps with the real build command, as a process: the test then
+   * holds that the committed sources build. Left out, a stand-in reads the manifest and hands
+   * the files on, as `tests/support/app-instance.ts` does.
+   */
+  appBuild?: "sandbox";
   /** What is on the instance before the first run, put there as the superadmin. */
   prepare?: (client: ApiClient) => Promise<void>;
 }
+
+const silent: Logger = {
+  debug() {},
+  info() {},
+  warn() {},
+  error() {},
+  child: () => silent
+};
+
+/** The top-level `key: value` lines of a manifest. The seeded manifests hold nothing else. */
+function readFlatManifest(bytes: Uint8Array | undefined): Record<string, string> {
+  const lines = new TextDecoder().decode(bytes ?? new Uint8Array()).split("\n");
+  return Object.fromEntries(
+    lines.flatMap((line) => {
+      const found = /^([a-z]+):\s*(.+)$/u.exec(line);
+      return found?.[1] && found[2] ? [[found[1], found[2]]] : [];
+    })
+  );
+}
+
+/** A build that needs no sandbox. What a real build does is the subject of the build's tests. */
+const standInBuild: PageBuildRunner = async ({ files }) => {
+  const read = readFlatManifest(files.find((file) => file.path === "app.yaml")?.bytes);
+  const { id = "app", name = id, kit = "1.0.0", description } = read;
+  return {
+    status: "built",
+    manifest: {
+      id,
+      name,
+      kit,
+      entry: "index.html",
+      ...(description === undefined ? {} : { description })
+    },
+    kitVersion: kit,
+    files: [{ path: "index.html", bytes: new TextEncoder().encode("<!doctype html>") }]
+  };
+};
 
 type InstanceState = Awaited<ReturnType<typeof readInstance>>;
 
@@ -71,6 +129,24 @@ async function readInstance(input: SeededInstanceInput, fetchImpl: typeof fetch)
       fetchImpl
     })
   });
+  const workspaces = await listAll((paging) => client.workspaces.list({ query: paging }));
+  const seededWorkspace = workspaces.find((candidate) => candidate.name === workspace.name);
+  const [members, apps] = seededWorkspace
+    ? await Promise.all([
+        listAll((paging) =>
+          client.workspaces.members.list({
+            params: { collaborationWorkspaceId: seededWorkspace.id },
+            query: paging
+          })
+        ),
+        listAll((paging) =>
+          client.assets.list({
+            params: { kind: "app" },
+            query: { ...paging, workspaceId: seededWorkspace.id }
+          })
+        )
+      ])
+    : [[], []];
   const [users, namespaces, grants, principals, overview, approvals] = await Promise.all([
     listAll((paging) => client.users.list({ query: paging })),
     listAll((paging) => client.namespaces.list({ query: paging })),
@@ -105,6 +181,18 @@ async function readInstance(input: SeededInstanceInput, fetchImpl: typeof fetch)
     })),
     assetSummaries: overview.assets,
     defaultAgentName: overview.defaultAgentName,
+    workspace: seededWorkspace && {
+      id: seededWorkspace.id,
+      members: members.map((member) => `${member.email}: ${member.role}`).sort()
+    },
+    apps: apps.map(({ id, name, title, revision, draftRevision, publishedRevision }) => ({
+      id,
+      name,
+      title,
+      revision,
+      draftRevision,
+      publishedRevision
+    })),
     approvals: approvals.map((request) => ({
       id: request.id,
       kind: request.kind,
@@ -121,10 +209,26 @@ async function readInstance(input: SeededInstanceInput, fetchImpl: typeof fetch)
 export function useSeededInstance(input: SeededInstanceInput): () => SeededInstance {
   let seeded: SeededInstance | undefined;
   let directory: string | undefined;
+  let builds: JobWorker | undefined;
 
   beforeAll(async () => {
+    directory = await mkdtemp(join(tmpdir(), "catalyst-demo-seed-"));
+    // The files of the Apps go to a folder of the test: the config's own store is the
+    // machine's, and the demo's lies where only its containers write.
+    const loaded = await loadClientInstanceConfigFromFile(input.configPath);
+    const filesRoot = join(directory, "files");
+    const config = {
+      ...loaded,
+      infrastructure: {
+        ...loaded.infrastructure,
+        objectStorage: {
+          ...loaded.infrastructure.objectStorage,
+          files: { provider: "filesystem", root: filesRoot }
+        }
+      }
+    };
     const instance = await createTestInstance({
-      configPath: input.configPath,
+      config,
       tools: [...demoTools, ...(input.tools ?? [])],
       // The demo's own server runs with these.
       operations: demoOperations,
@@ -142,8 +246,32 @@ export function useSeededInstance(input: SeededInstanceInput): () => SeededInsta
     const runtime = await getTestRuntime(instance);
     const fetchImpl: typeof fetch = (resource, init) => runtime.fetch(new Request(resource, init));
 
+    // The seed writes Apps from files, and a write waits for its build. No process of a test
+    // instance serves `page.bundle`, so this worker does.
+    const clientInstanceId = getClientInstanceId(config);
+    builds = createPostgresJobWorker({
+      stores: instance.stores,
+      clientInstanceId,
+      logger: silent,
+      handlers: createPageBundleJobs({
+        clientInstanceId,
+        stores: instance.stores,
+        pages: { objects: createFilesystemObjectStorage(filesRoot) },
+        workspaceObjects: undefined,
+        logger: silent,
+        build:
+          input.appBuild === "sandbox"
+            ? createSandboxPageBuild({
+                sandbox: new LocalWorkspaceCommandProcessExecutor(),
+                tempRoot: join(directory, "builds"),
+                command: await pageBuildCommandFromSource()
+              })
+            : standInBuild
+      }).handlers
+    });
+    builds.start();
+
     // A push records its baseline beside the working copy, so the test pushes copies.
-    directory = await mkdtemp(join(tmpdir(), "catalyst-demo-seed-"));
     const assetsDir = join(directory, "seed");
     await cp(resolve("clients/demo/seed"), assetsDir, { recursive: true });
     const instanceAssetsDir = join(directory, "instance");
@@ -175,6 +303,7 @@ export function useSeededInstance(input: SeededInstanceInput): () => SeededInsta
   }, 120_000);
 
   afterAll(async () => {
+    await builds?.stop();
     if (directory) await rm(directory, { recursive: true, force: true });
   });
 
@@ -212,7 +341,10 @@ const NOTHING_CREATED = {
   skills: 0,
   "grant rows": 0,
   "approval requests": 0,
-  "connection grant rows": 0
+  "connection grant rows": 0,
+  workspaces: 0,
+  "workspace members": 0,
+  apps: 0
 };
 
 /** The second run made nothing, and the instance holds the same rows at the same revisions. */

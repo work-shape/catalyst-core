@@ -5,9 +5,11 @@ export { demoTools } from "../../tools";
 export { demoOperations } from "../policy";
 export {
   SEED_EMAIL_SUFFIX,
+  apps,
   checkQuestions,
   connectionCheckQuestions,
   people,
+  workspace,
   type CheckReason
 } from "./company";
 export { assertLocalDevelopmentHost } from "./adapters/local-network";
