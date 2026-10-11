@@ -16,7 +16,11 @@ export function describeWithoutMessage(error: unknown): { errorClass: string; co
  * The fixed reason code an error carries in its details, for a log beside its class and code:
  * `egress_denied`, `egress_unresolved`, `connection_unavailable`. Only a short word of lower
  * case letters, digits and underscores is a code. Anything else is left out, so no sentence
- * and no value of a call is written.
+ * is written.
+ *
+ * The check is of the shape, not of a fixed set: it cannot tell a code from other text of
+ * that shape. So `details.reason` is a contract. Whoever throws puts a code constant there
+ * and nothing else, never text of a caller and never text an outside system sent.
  */
 export function reasonCodeOf(error: unknown): string | undefined {
   if (typeof error !== "object" || error === null || !("details" in error)) return undefined;

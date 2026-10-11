@@ -461,8 +461,8 @@ describe("the egress checker", () => {
   });
 
   it("holds a refusal of the resolver for EGRESS_RESOLUTION_FAILURE_TTL_MS, one by rule for the full time", async () => {
-    // Fails without the change: a lookup that failed once kept the target refused for
-    // EGRESS_RESOLUTION_TTL_MS.
+    // The short hold is older than the reason `egress_unresolved`: a refusal of the resolver
+    // was held for five seconds before too. What is new here is only which refusal is held.
     expect(EGRESS_RESOLUTION_FAILURE_TTL_MS).toBe(5_000);
     let time = 1_000;
     const dns: Dns = { "blocked.example.com": ["10.0.0.5"], "empty.example.com": [] };
