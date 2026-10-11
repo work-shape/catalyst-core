@@ -55,7 +55,7 @@ export function PageHeader({
       className={cn(
         "flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2",
         detail
-          ? "sticky top-0 z-(--layer-sticky-header) min-h-(--layout-header) border-b bg-background px-(--layout-gutter) py-2"
+          ? "sticky top-0 z-(--layer-sticky-header) min-h-(--layout-header) border-b bg-background px-(--layout-gutter) py-1"
           : "pb-6",
         className
       )}
@@ -70,15 +70,23 @@ export function PageHeader({
       >
         {detail && back !== undefined ? (
           // In a head of several lines the way back stays on the first: at the middle of the
-          // head's least height, level with a control that floats beside the head.
-          <div className="flex h-[calc(var(--layout-header)-var(--spacing)*4)] shrink-0 items-center self-start">
+          // head's least height, level with a control that floats beside the head. The head's
+          // line is part of that height, so this box reaches one line's width into it.
+          <div className="-mb-px flex h-[calc(var(--layout-header)-var(--spacing)*2)] shrink-0 items-center self-start">
             {back}
           </div>
         ) : (
           back
         )}
         <div className="grid min-w-0 gap-0.5">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <div
+            className={cn(
+              "flex min-w-0 flex-wrap items-center gap-2",
+              // A list title's line is as tall as a control, so the title sits the same with
+              // or without an action beside it or a description under it.
+              !detail && "min-h-9"
+            )}
+          >
             <Heading
               // An area puts the focus here when it opens; a title is no control and shows no ring.
               className={cn(

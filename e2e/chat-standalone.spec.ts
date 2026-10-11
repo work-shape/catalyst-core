@@ -2887,10 +2887,11 @@ test("no page keeps room for the agent button: lists share one title line and a 
   await page.setViewportSize({ width: 1280, height: 720 });
   await signInViaApi(page, superadminUser);
   // The head of a list page: its title is set in the middle of it, beside the head's actions.
-  const title = page.locator("section header[data-variant]").first();
+  // The title sits at one height with or without an action beside it in the head.
+  const title = page.locator("section header[data-variant] h1").first();
   const titleTop = async (path: string) => {
     await page.goto(path);
-    await expect(title.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(title).toBeVisible();
     // Only a conversation has an agent to choose.
     await expect(page.getByRole("button", { name: "Select agent" })).toHaveCount(0);
     return (await title.boundingBox())?.y;
@@ -2911,15 +2912,31 @@ test("no page keeps room for the agent button: lists share one title line and a 
   });
   expect(settingsTitle ?? band).toBeLessThan(band);
 
-  // A detail head is the top band itself: at the top edge, at least as tall as the sidebar's
-  // first row. A title with a second line under it makes it taller.
+  // A detail head is the top band itself: at the top edge and exactly as tall as the sidebar's
+  // first row, its line included.
   await page.goto("/build/agents/research_assistant");
   const head = page.locator("header[data-variant=detail]");
   await expect(head).toBeVisible();
   await expect(page.getByRole("button", { name: "Select agent" })).toHaveCount(0);
-  const box = await head.boundingBox();
-  expect(box?.y).toBe(0);
-  expect(box?.height ?? 0).toBeGreaterThanOrEqual(band);
+  expect(await head.boundingBox()).toMatchObject({ y: 0, height: band });
+  // The way back is centred in the band.
+  const back = await head.locator("a, button").first().boundingBox();
+  expect((back?.y ?? 0) + (back?.height ?? 0) / 2).toBe(band / 2);
+
+  // The rail under the head is pinned where it rests: it does not move when the page scrolls.
+  const firstSection = page.locator('section nav a[href^="#"]').first();
+  await expect(firstSection).toBeVisible();
+  const restingTop = (await firstSection.boundingBox())?.y;
+  const scroller = page.locator("section .chat-scrollbar").first();
+  for (const top of SUB_RAIL_SCROLL_STEPS) {
+    expect(
+      await scroller.evaluate((element, to) => {
+        element.scrollTop = to;
+        return element.scrollTop;
+      }, top)
+    ).toBe(top);
+    expect((await firstSection.boundingBox())?.y).toBe(restingTop);
+  }
 });
 
 test("a Settings page that fits its window does not scroll", async ({ page }) => {
