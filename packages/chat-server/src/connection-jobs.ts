@@ -151,9 +151,13 @@ export function createConnectionDiscoveryJobs(options: ConnectionDiscoveryJobOpt
           }
           if (outcome.status === "discovered") {
             // What was found is counted. No name, description or schema of it is recorded.
+            // An operation left out for the credential gives the event its fixed reason, by
+            // which the timeline shows it.
+            const rejected = (outcome.rejectedCount ?? 0) > 0;
             await options.auditRecorder.record({
               type: "connection.discovered",
               status: "success",
+              ...(rejected ? { reason: "output_rejected" } : {}),
               subject: connectionName,
               correlationId: job.correlationId,
               metadata: {

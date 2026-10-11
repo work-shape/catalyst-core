@@ -288,11 +288,22 @@ function resolveTarget(event: AuditEvent): AuditActivityTarget | undefined {
   return undefined;
 }
 
+/**
+ * A discovery that stored its catalog and left out an operation that held the Connection's
+ * credential. It succeeded, and an operation that was accepted before can be `unknown` after
+ * it, so it is shown like a failure and not hidden with the discoveries that went well.
+ */
+function leftOutForTheCredential(event: AuditEvent): boolean {
+  const rejected = event.metadata?.rejectedCount;
+  return event.type === "connection.discovered" && typeof rejected === "number" && rejected > 0;
+}
+
 function aggregateOutcome(headline: AuditEvent, events: AuditEvent[]): AuditActivityOutcome {
   if (headline.status === "denied") return "denied";
   if (headline.status === "failed") return "failed";
   if (events.some((event) => event.status === "denied")) return "denied";
   if (events.some((event) => event.status === "failed")) return "warning";
+  if (leftOutForTheCredential(headline)) return "warning";
   return "success";
 }
 

@@ -174,6 +174,30 @@ describe("projectAuditActivities", () => {
     ).toEqual(["Connection discovery failed", "Read the operations of a Connection"]);
   });
 
+  // Fails without the change: the discovery was a success of the runtime tier and hidden,
+  // while an operation that was accepted before had gone unknown by it.
+  it("shows a discovery that left out an operation for the credential by default, as a warning", () => {
+    const clean = evt({
+      type: "connection.discovered",
+      correlationId: "d_clean",
+      metadata: { connectionName: "outside", operationCount: 3, leftOutCount: 1, rejectedCount: 0 }
+    });
+    const rejected = evt({
+      type: "connection.discovered",
+      correlationId: "d_rejected",
+      reason: "output_rejected",
+      metadata: { connectionName: "outside", operationCount: 1, leftOutCount: 2, rejectedCount: 2 }
+    });
+    expect(projectAuditActivities([clean, rejected])).toMatchObject([
+      {
+        correlationId: "d_rejected",
+        label: "Read the operations of a Connection",
+        outcome: "warning",
+        reason: "output_rejected"
+      }
+    ]);
+  });
+
   it("treats actorless events as system", () => {
     const [activity] = projectAuditActivities([
       evt({ type: "workspace_command.failed", correlationId: "c", status: "failed" })

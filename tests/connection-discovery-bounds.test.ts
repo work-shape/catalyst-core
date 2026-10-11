@@ -214,6 +214,8 @@ describe("what a discovery takes from an outside system", () => {
     expect(await auditEvents(instance)).toMatchObject([
       {
         type: "connection.discovered",
+        status: "success",
+        reason: "output_rejected",
         metadata: { operationCount: 1, leftOutCount: 2, rejectedCount: 2 }
       }
     ]);
