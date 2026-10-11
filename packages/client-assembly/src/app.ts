@@ -62,7 +62,7 @@ import {
 } from "./assembly-validation";
 import { createInstanceModels } from "./capability-models";
 import { createConfigAssetSource } from "./config-asset-source";
-import { createInstanceOperationCalls, createInstanceToolRunner } from "./operation-calls";
+import { createInstanceAgentTools, createInstanceOperationCalls } from "./operation-calls";
 import { createClientInstanceAuth } from "./auth";
 import { createClientInstanceMail } from "./mail";
 import type {
@@ -460,8 +460,7 @@ export async function createClientInstanceExecutionAssembly(
     defaultModelProvider,
     modelProviderContinuationStore: store.conversations,
     modelGateway,
-    toolRegistry,
-    runTool: createInstanceToolRunner(operationCalls, toolRegistry, toolOptions),
+    ...createInstanceAgentTools(operationCalls, toolRegistry, toolOptions),
     webAccess: config.webAccess,
     agentSkillChangesEnabled: skillPolicy.enabled,
     maxSteps: config.runtime.maxSteps,

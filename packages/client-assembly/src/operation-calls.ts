@@ -22,6 +22,7 @@ import type { ModelGateway } from "@vivd-catalyst/model-provider";
 import {
   createToolOperationRunner,
   registerToolOperations,
+  type DataToolSource,
   type ToolRegistry
 } from "@vivd-catalyst/tool-execution";
 
@@ -91,15 +92,30 @@ export function createInstanceOperationCalls(
   return { authorizer, operationCalls, approvalRequestCreator };
 }
 
+/** What an agent's runs get of the instance's tools. */
+export interface InstanceAgentTools {
+  toolRegistry: ToolRegistry;
+  /** Where the tools that exist as data are described. Without it an agent has release tools only. */
+  dataTools?: DataToolSource;
+  runTool: ToolOperationRunner;
+}
+
 /**
- * Registers every tool of the instance as an operation and answers the way an agent calls
- * them: through the call path, like every other caller of an operation.
+ * Registers every tool of the release as an operation and answers what an agent's runs need:
+ * the tools to offer the model and the way to call them, those that exist as data among them.
+ * A call takes the call path, like every other caller of an operation. The operations of the
+ * data tools come from an `OperationSource` of the same registry, never from here.
  */
-export function createInstanceToolRunner(
+export function createInstanceAgentTools(
   operationCalls: OperationCalls,
   tools: ToolRegistry,
-  options: { clientInstanceId: ClientInstanceId; logger: Logger }
-): ToolOperationRunner {
-  registerToolOperations(operationCalls.registry, tools.list(), options);
-  return createToolOperationRunner(operationCalls.deps, tools);
+  options: { clientInstanceId: ClientInstanceId; logger: Logger; dataTools?: DataToolSource }
+): InstanceAgentTools {
+  const { dataTools, ...toolOptions } = options;
+  registerToolOperations(operationCalls.registry, tools.list(), toolOptions);
+  return {
+    toolRegistry: tools,
+    ...(dataTools ? { dataTools } : {}),
+    runTool: createToolOperationRunner(operationCalls.deps, tools, dataTools)
+  };
 }
