@@ -17,8 +17,10 @@ import {
   type OperationDenial,
   type OperationEffect,
   type OperationExecutionContext,
+  type OperationListScope,
   type OperationRegistry,
   type PolicyValue,
+  type ToolDescriptor,
   type ToolExecutionContext,
   type ToolExecutionRequest,
   type ToolExecutionResult,
@@ -30,7 +32,7 @@ import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
 import type { OperationOutcome, RunOperationDeps } from "./operation-execution";
 import { runOperation } from "./run-operation";
 import { toolFailureLogRecord } from "./tool-failure-log";
-import type { ToolRegistry } from "./tool-registry";
+import { isDataToolName, type ToolRegistry } from "./tool-registry";
 import { failed } from "./tool-results";
 
 /**
@@ -331,21 +333,48 @@ const issuesSchema = z.object({
 });
 
 /**
+ * A tool an agent carries that exists as data: the projection of an operation an
+ * `OperationSource` contributes.
+ *
+ * Local until `core/src/data-tools.ts` exists (C1 slice K). Then both types come from core.
+ */
+export interface DataToolDescriptor extends ToolDescriptor {
+  effect: OperationEffect;
+}
+
+export interface DataToolSource {
+  /** Of the named tools, those that exist now and that an agent may carry. One read, never one per name. */
+  describe(toolNames: readonly string[], scope: OperationListScope): Promise<DataToolDescriptor[]>;
+}
+
+/** What the runner needs of the tool a call names: the operation it is and its effect. */
+interface CalledTool {
+  name: string;
+  effect: OperationEffect;
+  /** The reason a release tool's own definition gives for refusing every call. */
+  policyReason?: string;
+}
+
+/**
  * The one way an agent's tool call is executed: as a call of the operation the tool is, on the
- * path every operation takes. The tool registry says which tools this process has; a tool it
- * does not have, or one of a module that is off, is not registered for the agent.
+ * path every operation takes. The tool registry says which tools of the release this process
+ * has; a tool it does not have, or one of a module that is off, is not registered for the
+ * agent. A tool that exists as data is one its source describes now. Both are called through
+ * `runOperation` and nothing else, so the agent's own list, the actor's right and the policy
+ * decide for a data tool as for any other.
  */
 export function createToolOperationRunner(
   deps: RunOperationDeps,
-  tools: ToolRegistry
+  tools: ToolRegistry,
+  dataTools?: DataToolSource
 ): ToolOperationRunner {
   return async (request, context, options = {}) => {
-    const tool = tools.get(request.toolName);
+    const tool = await calledTool(request.toolName, tools, dataTools);
     const names: ToolCallNames = {
       toolName: request.toolName,
       agentName: request.agentName,
       correlationId: context.correlationId,
-      policyReason: tool?.permission?.mode === "deny" ? tool.permission.reason : undefined
+      policyReason: tool?.policyReason
     };
     if (!tool) {
       return failed("not_allowed", `Tool '${request.toolName}' is not registered`);
@@ -382,6 +411,32 @@ export function createToolOperationRunner(
       return refused;
     }
   };
+}
+
+/**
+ * The tool a call names. A tool of the release comes first and a data name is never one, as
+ * the registry refuses a release tool with a data prefix. A data tool costs one read of its
+ * source per call: the source alone knows whether the tool still exists.
+ */
+async function calledTool(
+  toolName: string,
+  tools: ToolRegistry,
+  dataTools: DataToolSource | undefined
+): Promise<CalledTool | undefined> {
+  const tool = tools.get(toolName);
+  if (tool) {
+    return {
+      name: tool.name,
+      effect: tool.effect,
+      policyReason: tool.permission?.mode === "deny" ? tool.permission.reason : undefined
+    };
+  }
+  if (!dataTools || !isDataToolName(toolName)) {
+    return undefined;
+  }
+  const described = await dataTools.describe([toolName], {});
+  const descriptor = described.find((candidate) => candidate.name === toolName);
+  return descriptor && { name: descriptor.name, effect: descriptor.effect };
 }
 
 /** What a call that was refused before it had a run answers, or nothing for any other error. */
