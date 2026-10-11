@@ -84,8 +84,11 @@ describe("built-in platform tools", () => {
     for (const rule of [
       "must not frame itself",
       "md:p-6",
-      "no max-width or centering container",
+      "Start directly with the content",
+      "no introductory heading or preamble",
       "no heading that repeats the title",
+      "no max-width or centering container",
+      "shadcn-style theme classes are available",
       "Only bordered cards carry inner padding",
       "gap-* or space-y-*",
       "never scrolls inside itself",
