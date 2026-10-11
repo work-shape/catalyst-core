@@ -2,13 +2,6 @@
   "version": 1,
   "entries": [
     {
-      "target": "format",
-      "rule": "prettier",
-      "scope": "root",
-      "count": 1,
-      "owner": "CB-8b"
-    },
-    {
       "target": "lint",
       "rule": "@typescript-eslint/ban-ts-comment",
       "scope": "tests",
