@@ -499,7 +499,10 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
   page,
   browser,
   baseURL,
-  pageErrors
+  pageErrors,
+  // The test registers a Namespace and writes a grant: it takes the turn of the specs that
+  // do so or that assert there is none, so none of them sees its rows.
+  accessState: _accessState
 }) => {
   let writerId: string | undefined;
   let grantId: string | undefined;
