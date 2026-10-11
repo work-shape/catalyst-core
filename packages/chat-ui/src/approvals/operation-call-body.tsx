@@ -52,6 +52,13 @@ function assetSentenceKey(asset: OperationCallAsset): TranslationKey {
   return asset.namespace ? "operations.callAssetChangeIn" : "operations.callAssetChange";
 }
 
+/** What approving and declining do: said of the skill, of another asset, or of the call. */
+function effectKey(asset: OperationCallAsset | undefined): TranslationKey {
+  if (!asset) return "operations.callEffect";
+  if (asset.kind !== SKILL_ASSET_KIND) return "operations.callAssetEffect";
+  return asset.isNew ? "operations.callSkillEffectNew" : "operations.callSkillEffectChange";
+}
+
 /**
  * An operation call that waits for another person's approval. While it waits, the item leads
  * with one sentence that says who wants what, what a decision does, and why one is needed. A
@@ -104,16 +111,13 @@ export function OperationCallBody({
                   { actor }
                 )}
           </p>
-          <p className="text-caption text-muted-foreground">
-            {t(asset ? "operations.callAssetEffect" : "operations.callEffect", { actor })}
-          </p>
-          <Banner layout="line" role="note" data-testid="operation-call-why">
-            {t(
-              asset?.kind === SKILL_ASSET_KIND && call.heldByRule
-                ? "operations.callWhySkillRule"
-                : "operations.callWhy"
-            )}
-          </Banner>
+          <p className="text-caption text-muted-foreground">{t(effectKey(asset), { actor })}</p>
+          {/* A reason is given only where it names the rule that holds the request. */}
+          {asset?.kind === SKILL_ASSET_KIND && call.heldByRule ? (
+            <Banner layout="line" role="note" data-testid="operation-call-why">
+              {t("operations.callWhySkillRule")}
+            </Banner>
+          ) : null}
         </div>
       ) : null}
       {outcome ? (

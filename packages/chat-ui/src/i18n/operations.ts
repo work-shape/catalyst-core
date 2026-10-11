@@ -109,7 +109,10 @@ export const operations = defineTranslations({
       "If you approve, it is saved as {actor}. If you decline, nothing changes.",
     "operations.callWhySkillRule":
       "Needs a decision because this instance holds new and changed skills for approval.",
-    "operations.callWhy": "Needs a decision before it runs.",
+    "operations.callSkillEffectNew":
+      "If you approve, the skill is saved. If you decline, nothing changes.",
+    "operations.callSkillEffectChange":
+      "If you approve, the change is saved. If you decline, nothing changes.",
     "operations.callSkillTitle": "Title",
     "operations.callSkillDescription": "Description",
     "operations.callSkillRemovedResources": "Removed references",
@@ -249,7 +252,10 @@ export const operations = defineTranslations({
       "Wenn du freigibst, wird das als {actor} gespeichert. Wenn du ablehnst, ändert sich nichts.",
     "operations.callWhySkillRule":
       "Braucht eine Entscheidung, weil diese Instanz neue und geänderte Fähigkeiten zur Freigabe vorlegt.",
-    "operations.callWhy": "Braucht eine Entscheidung, bevor es läuft.",
+    "operations.callSkillEffectNew":
+      "Wenn du freigibst, wird die Fähigkeit gespeichert. Wenn du ablehnst, ändert sich nichts.",
+    "operations.callSkillEffectChange":
+      "Wenn du freigibst, wird die Änderung gespeichert. Wenn du ablehnst, ändert sich nichts.",
     "operations.callSkillTitle": "Titel",
     "operations.callSkillDescription": "Beschreibung",
     "operations.callSkillRemovedResources": "Entfernte Referenzen",

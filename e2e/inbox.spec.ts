@@ -298,9 +298,8 @@ test("an agent's tool call waits for approval, is approved in the Inbox, runs on
   await expect(call).toContainText(
     "If you approve, it runs once as E2E Inbox. If you decline, nothing runs."
   );
-  await expect(call.getByTestId("operation-call-why")).toHaveText(
-    "Needs a decision before it runs."
-  );
+  // No rule can be named for this call, so the item gives no reason.
+  await expect(call.getByTestId("operation-call-why")).toHaveCount(0);
   await expect(call.locator('[data-field="operation"]')).toContainText(TOOL);
   await expect(call.locator('[data-input-key="text"]')).toContainText(NOTE);
   const runId = await call.getAttribute("data-run-id");
@@ -490,14 +489,28 @@ const heldSkill = (paragraph: string) => ({
   description: "Answers the questions people ask before they take parental leave.",
   content: `# Parental leave\n\n${KEPT_PARAGRAPH}\n\n${paragraph}\n`
 });
+const grantsUrl = `${apiBaseUrl}/api/v1/instance/access/grants`;
+/** The id of what an answer of the instance created. */
+function idOf(body: unknown): string {
+  if (typeof body !== "object" || body === null || !("id" in body) || typeof body.id !== "string") {
+    throw new Error("The answer names no id.");
+  }
+  return body.id;
+}
 /** The widths the item of a held skill is pictured at: a desk and a phone. */
 const SKILL_SHOT_WIDTHS = [1440, 390];
 
 // Fails without the skill view of a held save: the row named the operation `assets.put`, and
 // the item showed the skill's definition as one escaped line under "Approving runs this call".
 test("a held skill save reads in the Inbox as the skill it creates, then as the paragraph it changes", async ({
-  page
+  page,
+  browser,
+  baseURL,
+  pageErrors
 }) => {
+  let writerId: string | undefined;
+  let grantId: string | undefined;
+  let withheldRequestId: string | undefined;
   test.setTimeout(shotsDir ? 240_000 : 90_000);
   await page.setViewportSize({ width: 1280, height: 900 });
   await signIn(page, reviewer);
@@ -535,7 +548,7 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
       `E2E Superadmin wants to create the skill “${HELD_TITLE}” in the Namespace ${HELD_NAMESPACE}.`
     );
     await expect(call).toContainText(
-      "If you approve, it is saved as E2E Superadmin. If you decline, nothing changes."
+      "If you approve, the skill is saved. If you decline, nothing changes."
     );
     await expect(call.getByTestId("operation-call-why")).toHaveText(
       "Needs a decision because this instance holds new and changed skills for approval."
@@ -581,6 +594,9 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
     await expect(skill).toContainText(OLD_PARAGRAPH);
     await expect(skill).toContainText(NEW_PARAGRAPH);
     await expect(skill).not.toContainText(KEPT_PARAGRAPH);
+    await expect(call).toContainText(
+      "If you approve, the change is saved. If you decline, nothing changes."
+    );
     await shoot(
       page,
       "inbox-skill-change",
@@ -593,7 +609,82 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
     await expect(page.locator('button[data-decision="reject"]')).toHaveCount(0);
     const kept: unknown = await (await page.request.get(heldSkillUrl)).json();
     expect(JSON.stringify(kept)).toContain(OLD_PARAGRAPH);
+
+    // A person who may write skills here and may not read them asks for the same change. Their
+    // own request shows them the new text and says that nothing is compared: the paragraph
+    // the skill has now is not theirs to read.
+    const stamp = Date.now();
+    const writer = {
+      email: `e2e-held-writer-${stamp}@example.test`,
+      password: `e2e-held-writer-${stamp}`
+    };
+    const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/instance/users`, {
+      data: {
+        displayLabel: "E2E Held Writer",
+        email: writer.email,
+        roles: ["user"],
+        passwordSignIn: { password: writer.password }
+      }
+    });
+    expect(created.ok()).toBe(true);
+    writerId = idOf(await created.json());
+    const granted = await requestWithOrigin(page, "post", grantsUrl, {
+      data: {
+        holderKind: "user",
+        holderId: writerId,
+        action: "skill.write",
+        scopeKind: "namespace",
+        namespace: HELD_NAMESPACE
+      }
+    });
+    expect(granted.ok()).toBe(true);
+    grantId = idOf(await granted.json());
+    const writerContext = await browser.newContext({
+      baseURL,
+      viewport: { width: 1280, height: 900 }
+    });
+    await pageErrors.watch(writerContext);
+    const writerPage = await writerContext.newPage();
+    await signIn(writerPage, writer);
+    expect((await writerPage.request.get(heldSkillUrl)).status()).toBe(403);
+    const asked = await requestWithOrigin(writerPage, "put", heldSkillUrl, {
+      data: {
+        config: heldSkill(NEW_PARAGRAPH),
+        expectedRevision: await assetRevision(page, heldSkillUrl)
+      }
+    });
+    expect(asked.status()).toBe(202);
+    const asking: unknown = await asked.json();
+    withheldRequestId =
+      typeof asking === "object" && asking !== null && "approvalRequestId" in asking
+        ? String(asking.approvalRequestId)
+        : undefined;
+    expect(withheldRequestId).toBeTruthy();
+    await writerPage.goto(`/inbox/${withheldRequestId}`);
+    const withheld = writerPage.getByTestId("operation-call");
+    await expect(withheld.getByTestId("operation-call-no-before")).toBeVisible();
+    await expect(withheld).toContainText(NEW_PARAGRAPH);
+    await expect(withheld).not.toContainText(OLD_PARAGRAPH);
+    await shoot(
+      writerPage,
+      "inbox-skill-change-withheld",
+      () => expect(writerPage.getByTestId("operation-call-no-before")).toBeVisible(),
+      [1440]
+    );
+    await writerContext.close();
   } finally {
+    if (withheldRequestId) {
+      await requestWithOrigin(
+        page,
+        "post",
+        `${apiBaseUrl}/api/v1/approval-requests/${withheldRequestId}/decide`,
+        { data: { decision: "reject" } }
+      );
+    }
+    if (grantId) await requestWithOrigin(page, "delete", `${grantsUrl}/${grantId}`);
+    if (writerId) {
+      await requestWithOrigin(page, "delete", `${apiBaseUrl}/api/v1/instance/users/${writerId}`);
+    }
     const found = await page.request.get(heldSkillUrl);
     if (found.ok()) {
       await requestWithOrigin(page, "post", `${heldSkillUrl}/delete`, {

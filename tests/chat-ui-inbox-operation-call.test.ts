@@ -50,9 +50,8 @@ describe("inbox item of an operation call", () => {
     expect(markup).toContain(
       "Wenn du freigibst, läuft sie einmal als Anna Beispiel. Wenn du ablehnst, läuft nichts."
     );
-    expect(markup).toMatch(
-      /data-testid="operation-call-why"[^>]*>.*Braucht eine Entscheidung, bevor es läuft\./u
-    );
+    // No reason is given where no rule can be named.
+    expect(markup).not.toContain('data-testid="operation-call-why"');
     expect(markup).toMatch(/>Aktion zur Freigabe<\/h3>/u);
     expect(markup).not.toContain("Aufruf einer Operation");
     expect(markup).toMatch(/data-field="operation".*workspace\.apply_patch/u);
@@ -72,7 +71,7 @@ describe("inbox item of an operation call", () => {
     expect(english).toContain(
       "If you approve, it runs once as Anna Beispiel. If you decline, nothing runs."
     );
-    expect(english).toContain("Needs a decision before it runs.");
+    expect(english).not.toContain("Needs a decision");
     expect(english).toMatch(/>Action to approve<\/h3>/u);
     expect(english).not.toContain("Operation call");
     expect(english).toContain("Shortened. The call runs with the full value.");
@@ -345,7 +344,7 @@ describe("inbox item of an operation call", () => {
       /data-testid="operation-call-headline"[^>]*>Elif Aydin wants to create the skill “Elternzeit: häufige Fragen” in the Namespace hr-\.</u
     );
     expect(markup).toContain(
-      "If you approve, it is saved as Elif Aydin. If you decline, nothing changes."
+      "If you approve, the skill is saved. If you decline, nothing changes."
     );
     expect(markup).toMatch(
       /data-testid="operation-call-why"[^>]*>.*Needs a decision because this instance holds new and changed skills for approval\./u
@@ -370,7 +369,7 @@ describe("inbox item of an operation call", () => {
       "Elif Aydin möchte die Fähigkeit „Elternzeit: häufige Fragen“ im Namespace hr- anlegen."
     );
     expect(german).toContain(
-      "Wenn du freigibst, wird das als Elif Aydin gespeichert. Wenn du ablehnst, ändert sich nichts."
+      "Wenn du freigibst, wird die Fähigkeit gespeichert. Wenn du ablehnst, ändert sich nichts."
     );
     expect(german).toContain(
       "Braucht eine Entscheidung, weil diese Instanz neue und geänderte Fähigkeiten zur Freigabe vorlegt."
@@ -386,8 +385,8 @@ describe("inbox item of an operation call", () => {
     const { heldBy: _heldBy, ...unknown } = putPreview;
     for (const preview of [unknown, { ...putPreview, heldBy: "guardrail" }]) {
       const markup = put(newSkill, "en", preview);
-      expect(markup).toContain("Needs a decision before it runs.");
-      expect(markup).not.toContain("holds new and changed skills");
+      expect(markup).not.toContain('data-testid="operation-call-why"');
+      expect(markup).not.toContain("Needs a decision");
     }
   });
 
@@ -396,6 +395,12 @@ describe("inbox item of an operation call", () => {
 
     expect(markup).toContain(
       "Elif Aydin wants to change the skill “Urlaubsrichtlinie” in the Namespace hr-."
+    );
+    expect(markup).toContain(
+      "If you approve, the change is saved. If you decline, nothing changes."
+    );
+    expect(put(changedSkill, "de")).toContain(
+      "Wenn du freigibst, wird die Änderung gespeichert. Wenn du ablehnst, ändert sich nichts."
     );
     expect(markup).toMatch(/>Skill change: Urlaubsrichtlinie<\/h3>/u);
     expect(markup).toMatch(/Before<\/span>.*Krankmeldung ab dem dritten Tag\./u);
@@ -465,7 +470,10 @@ describe("inbox item of an operation call", () => {
     expect(markup).toContain(
       "Elif Aydin wants to change the agent “Abwesenheiten” in the Namespace hr-."
     );
-    expect(markup).toContain("Needs a decision before it runs.");
+    expect(markup).toContain(
+      "If you approve, it is saved as Elif Aydin. If you decline, nothing changes."
+    );
+    expect(markup).not.toContain('data-testid="operation-call-why"');
     expect(markup).toMatch(/>Action to approve<\/h3>/u);
     expect(markup).toMatch(/data-field="operation".*assets\.put/u);
     expect(markup).toMatch(

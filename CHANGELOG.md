@@ -448,12 +448,14 @@ id from config_assets where status = 'deleted')`.
   by one with it. `routes/config-asset-routes.ts` is deleted; the two reads that stay,
   `config_assets.get_overview` and `instance.workspaces.list`, keep their addresses.
 - **Inbox, held operation calls:** the item of a held call leads with a sentence that says who
-  wants what, what approving and declining do, and why a decision is needed. A held
+  wants what and what approving and declining do, and names the rule that holds the call
+  where one can be named. A held
   `assets.put` of a skill shows as the skill: all of a new one, before and after of a changed
   one, under "New skill" or "Skill change", with the Namespace in the row. The preview of such
   a request carries an `asset` block (`kind`, `name`, `title`, `namespace`, `isNew`, and for a
-  skill its text). The stored text is shown only to a reader who holds the kind's read right on
-  the asset; a list reads no asset. A new request records what held it as `heldBy`. Every other
+  skill its text). What is stored, its text and whether it exists, is shown only to a reader
+  who holds the kind's read right on the asset; every other reader is shown what the call
+  itself says. A list reads no asset. A new request records what held it as `heldBy`. Every other
   call is "Action to approve" and shows each input value in a block, a definition one row per
   field. Origin, expiry and the whole input are under "Technical details"; the dialog "Full
   input" is gone. `pnpm demo:seed` leaves two requests in the Inbox, a new skill and a change.
