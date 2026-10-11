@@ -173,6 +173,26 @@ export const grants: SeedGrant[] = [
   }
 ];
 
+/** The Connection of the demo's release config, the sample business system. */
+export const SEEDED_CONNECTION = "sample-business";
+
+interface SeedConnectionGrant {
+  holder: PersonKey;
+  verbs: ("read" | "use")[];
+  grantedBy: PersonKey;
+}
+
+/**
+ * Who may use the Connection beside the admins, who hold every right on it by their role. A
+ * user holds none, so an agent of anybody else is refused when it calls one of its tools.
+ */
+export const connectionGrants: SeedConnectionGrant[] = [
+  // Sales reads the business figures and sees the Connection under Build.
+  { holder: "sven", verbs: ["read", "use"], grantedBy: "jonas" },
+  // Tax may ask an agent for the figures and does not see the Connection itself.
+  { holder: "tobias", verbs: ["use"], grantedBy: "mara" }
+];
+
 /**
  * The agent with a second revision. A person saves this first draft in the interface; the
  * config push then brings the definition of the working copy as the second revision.

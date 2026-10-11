@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -182,6 +183,18 @@ export function useSeededInstance(input: SeededInstanceInput): () => SeededInsta
   };
 }
 
+/**
+ * What the demo's own config asks of the environment beside the model key: the key of the
+ * Secret Store and the secret of its Connection. Test values, made for one run of a file.
+ */
+export function demoConfigEnv(): Record<string, string> {
+  return {
+    OPENAI_API_KEY: "not-a-key",
+    DEMO_SECRET_STORE_KEY: randomBytes(32).toString("base64"),
+    DEMO_SAMPLE_MCP_KEY: randomBytes(32).toString("hex")
+  };
+}
+
 /** How many things each part of a run made, by the part's name. */
 export function createdBy(report: SeedReport): Record<string, number> {
   return Object.fromEntries(report.steps.map((step) => [step.name, step.created]));
@@ -198,7 +211,7 @@ const NOTHING_CREATED = {
   skills: 0,
   "grant rows": 0,
   "approval requests": 0,
-  connections: 0
+  "connection grant rows": 0
 };
 
 /** The second run made nothing, and the instance holds the same rows at the same revisions. */

@@ -48,7 +48,7 @@ describe("the demo seed on the fixture instance", () => {
       skills: 7,
       "grant rows": 16,
       "approval requests": 1,
-      connections: 0
+      "connection grant rows": 0
     });
   });
 
@@ -157,11 +157,12 @@ describe("the demo seed on the fixture instance", () => {
     expect(assets.some((asset) => asset.name === "hr-parental-leave-faq")).toBe(false);
   });
 
-  it("says that the instance has Connections and that it brings none yet", () => {
-    // The fixture config has the module on. The demo's own config has it off.
-    expect(seeded().first.steps.find((step) => step.name === "connections")?.note).toBe(
-      "This instance has Connections, and the seed brings none yet. See the demo README."
+  it("grants no right on a Connection the instance does not have, and says so", () => {
+    // The fixture config has the module on and not the Connection of the demo's release config.
+    expect(seeded().first.steps.find((step) => step.name === "connection grant rows")?.note).toBe(
+      "This instance has no Connection 'sample-business': the demo's release config brings it, so no right on it was granted."
     );
+    expect(seeded().before.grants.some((row) => row.action.startsWith("connection."))).toBe(false);
   });
 
   it("changes nothing when it runs a second time", () => {

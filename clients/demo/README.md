@@ -46,6 +46,7 @@ The superadmin is the one of the demo's config, so the instance has eight people
 - Three Namespaces: `tax-` (Steuern), `hr-` (Personal) and `sales-` (Vertrieb). `tax-` has a tool list (`read_skill`, `show_view`, `demo.workflow_summary`) and a model list (`primary`, `gpt56Luna`); the other two inherit everything.
 - Eight agents and seven skills from the working copy under `seed/`, pushed with the config CLI: two agents and two skills in each Namespace, and the agents `meeting-notes` and `travel-weather` and the skill `plain-language` outside every Namespace. The agent `tax-vat-checker` has two revisions: a draft Jonas Brandt saved in the interface's way, and the pushed definition over it.
 - Sixteen grant rows: allows in a Namespace, allows on one agent and one skill, a deny on one agent inside an allowed Namespace, and a deny in a Namespace against an admin.
+- Three grant rows on the Connection `sample-business`, which the release config brings and not the seed: Sven Olsen may see and use it, Tobias Keller may use it. The two admins hold every right on it by their role and the other users hold none, so an agent of Elif Aydin is refused when it calls one of the Connection's tools. See [docs/try-connections.md](docs/try-connections.md).
 - One service principal, `Local config CLI`, with one key.
 - One approval waiting in the Inbox: Elif Aydin saved the skill `hr-parental-leave-faq`, and the demo holds it, see below.
 
@@ -62,7 +63,7 @@ A rerun puts back what the seed owns and leaves everything else alone. The seed 
 - A seeded person gets the seeded label, role, rights and status again. So a seeded person you deactivated is active after a rerun, and Lena Hoffmann is deactivated again.
 - A seeded Namespace gets its seeded name, tool list and model list again.
 - A seeded agent or skill that differs from `seed/` is replaced by the file with a new revision, like `pnpm config:push --force` does. Changes made in the interface are lost.
-- A seeded grant row that was removed is written again. Rows you added stay.
+- A seeded grant row that was removed is written again, the rows on the Connection too. Rows you added stay.
 - A decided approval request is not asked again once the skill exists.
 - Other people, Namespaces, agents, skills, grants, keys and conversations are not touched. Something of yours that uses a seeded address, prefix or name counts as the seed's.
 
@@ -91,7 +92,7 @@ The table is `checkQuestions` in `src/seed/company.ts`, and `tests/demo-seed.tes
 ### What it leaves out
 
 - A conversation with a Page. A Page is saved by an agent's `page.save` during a run, and a run needs a model call, which the seed does not make.
-- Connections. The demo has the module `connections` off and the seed brings no Connection yet. It looks for the module and the kind `connection` and says in its output what it found; the Connection, its secret and its grants are added behind that check.
+- The Connection itself and its secret. Release config brings both when the instance starts; the seed only grants rights on the Connection, and says in its output when the instance has none of that name.
 
 ### Limits
 

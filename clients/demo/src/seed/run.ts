@@ -30,7 +30,9 @@ import {
 } from "./adapters/local-network";
 import {
   PERSON_PERMISSION_REFS,
+  SEEDED_CONNECTION,
   cliPrincipal,
+  connectionGrants,
   firstDraft,
   grants,
   heldSkill,
@@ -159,7 +161,7 @@ export async function seedDemo(options: SeedOptions): Promise<SeedReport> {
   await seedAssets(root, as, instance, apiKey, steps);
   await seedGrants(root, as, userIds, steps);
   await seedHeldCall(root, as, steps);
-  seedConnections(modules, steps);
+  await seedConnections(root, as, userIds, modules, steps);
   return { steps };
 }
 
@@ -549,21 +551,69 @@ const CONNECTIONS_MODULE = "connections";
 const CONNECTION_KIND = "connection";
 
 /**
- * The seed carries no Connection yet. Until it does, an instance that has the module and the
- * kind is told so instead of being left without a word.
+ * The Connection itself comes from release config: the instance creates it at start and stores
+ * its secret, and the seed creates neither. Where it is there, the seed gives the people of
+ * `connectionGrants` their rights on it.
  */
-function seedConnections(
+async function seedConnections(
+  root: SeedApi,
+  as: (key: PersonKey) => Promise<SeedApi>,
+  userIds: ReadonlyMap<PersonKey, string>,
   modules: Awaited<ReturnType<SeedApi["listModules"]>>,
   steps: SeedStep[]
-): void {
+): Promise<void> {
+  const name = "connection grant rows";
   const module = modules.find((candidate) => candidate.name === CONNECTIONS_MODULE);
-  const available = module?.enabled === true && module.kinds.includes(CONNECTION_KIND);
-  steps.push({
-    name: "connections",
-    created: 0,
-    existing: 0,
-    note: available
-      ? "This instance has Connections, and the seed brings none yet. See the demo README."
-      : "This instance has no Connections module, so none was seeded."
-  });
+  if (module?.enabled !== true || !module.kinds.includes(CONNECTION_KIND)) {
+    steps.push({
+      name,
+      created: 0,
+      existing: 0,
+      note: "This instance has no Connections module, so no right on a Connection was granted."
+    });
+    return;
+  }
+  const connection = await root.getAsset(CONNECTION_KIND, SEEDED_CONNECTION);
+  if (!connection) {
+    steps.push({
+      name,
+      created: 0,
+      existing: 0,
+      note: `This instance has no Connection '${SEEDED_CONNECTION}': the demo's release config brings it, so no right on it was granted.`
+    });
+    return;
+  }
+  const existing = await root.listGrants();
+  let created = 0;
+  let total = 0;
+  for (const grant of connectionGrants) {
+    const holderId = userIds.get(grant.holder);
+    if (!holderId) throw new Error(`The seed has no user for '${grant.holder}'`);
+    for (const verb of grant.verbs) {
+      total += 1;
+      const action = `${CONNECTION_KIND}.${verb}`;
+      const there = existing.some(
+        (row) =>
+          row.holderKind === "user" &&
+          row.holderId === holderId &&
+          row.action === action &&
+          row.effect === "allow" &&
+          row.scopeKind === "asset" &&
+          row.scopeId === connection.id
+      );
+      if (there) continue;
+      await (
+        await as(grant.grantedBy)
+      ).grant({
+        holderKind: "user",
+        holderId,
+        action,
+        effect: "allow",
+        scopeKind: "asset",
+        scopeId: connection.id
+      });
+      created += 1;
+    }
+  }
+  steps.push({ name, created, existing: total - created });
 }

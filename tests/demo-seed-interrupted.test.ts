@@ -1,7 +1,12 @@
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { completedOutput, listAll } from "@vivd-catalyst/api-client";
-import { createdBy, expectSecondRunChangedNothing, useSeededInstance } from "./support/demo-seed";
+import {
+  createdBy,
+  demoConfigEnv,
+  expectSecondRunChangedNothing,
+  useSeededInstance
+} from "./support/demo-seed";
 
 // A run of the seed that stopped after it created the invited person and before it mailed
 // them: the person is there, and no invitation was ever sent. The test fails without the
@@ -16,7 +21,7 @@ const seeded = useSeededInstance({
   origin: "http://127.0.0.1:5173",
   instanceAssets: resolve("clients/demo"),
   superadmin: { email: "superadmin@example.test", password: "demo-superadmin-password" },
-  env: { OPENAI_API_KEY: "not-a-key" },
+  env: demoConfigEnv(),
   prepare: async (client) => {
     completedOutput(
       await client.users.create({
