@@ -94,6 +94,10 @@ export const access = defineTranslations({
     "access.actionOnAgent": "{action} agents",
     "access.actionOnSkill": "{action} skills",
     "access.actionOnConnection": "{action} connections",
+    "access.actionReadConnectionDescription":
+      "See the connection and its status in Build. Never its credentials.",
+    "access.actionUseConnectionDescription":
+      "Let agents this person builds or runs call the outside system through it.",
     "access.actionUse": "Use",
     "access.kindConnection": "Connections",
     "access.scopeConnection": "Connection {name}",
@@ -324,6 +328,10 @@ export const access = defineTranslations({
     "access.actionOnAgent": "Agenten: {action}",
     "access.actionOnSkill": "Fähigkeiten: {action}",
     "access.actionOnConnection": "Verbindungen: {action}",
+    "access.actionReadConnectionDescription":
+      "Die Verbindung und ihren Status in Bauen sehen. Nie ihre Zugangsdaten.",
+    "access.actionUseConnectionDescription":
+      "Agenten, die diese Person baut oder ausführt, dürfen das externe System darüber aufrufen.",
     "access.actionUse": "Nutzen",
     "access.kindConnection": "Verbindungen",
     "access.scopeConnection": "Verbindung {name}",

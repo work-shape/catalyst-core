@@ -327,11 +327,11 @@ describe("Build frame", () => {
     const empty = (locale: LocaleCode) =>
       render({ kindPath: "connections" }, { locale, source: withConnections([]) });
     expect(empty("en")).toContain(
-      "No connections. A connection holds the access to an outside system; agents, apps and workflows use it."
+      "No connections yet. A connection holds the access to an outside system. Connections cannot be created here yet."
     );
     expect(empty("en")).not.toContain(">New ");
     expect(empty("de")).toContain(
-      "Keine Verbindungen. Eine Verbindung hält den Zugang zu einem externen System; Agenten, Apps und Workflows nutzen sie."
+      "Noch keine Verbindungen. Eine Verbindung hält den Zugang zu einem externen System. Verbindungen lassen sich hier noch nicht anlegen."
     );
     // The instance did not answer for the kind: no rail item.
     expect(render({ kindPath: "agents" })).not.toContain("Connections");

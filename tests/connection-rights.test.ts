@@ -12,7 +12,7 @@ import {
   type ActorAccess,
   type UserRecord
 } from "@vivd-catalyst/core";
-import { clientInstanceId, type AccessInstance } from "./support/access-instance";
+import { SCOPES_HEADER, clientInstanceId, type AccessInstance } from "./support/access-instance";
 import { assetPageSchema } from "./support/asset-operations";
 import { connection, setupConnectionInstance } from "./support/connections";
 
@@ -210,12 +210,45 @@ describe("a right on a Connection", () => {
     const t = await setupConnectionInstance();
     const a = await t.seed("alpha");
     await t.grant(t.kai.id, "connection.read", { assetId: a });
-    const actionsOf = async (userId: string) =>
-      (await t.expectOk(userId, "platform.context.get")).json<{ actions: string[] }>().actions;
-    expect(
-      (await actionsOf(t.admin.id)).filter((action) => action.startsWith("connection."))
-    ).toEqual(["connection.read", "connection.write", "connection.delete"]);
-    expect(await actionsOf(t.kai.id)).toEqual([]);
+    await t.grant(t.lena.id, "connection.use", { assetId: a });
+    const contextOf = async (userId: string) =>
+      (await t.expectOk(userId, "platform.context.get")).json<{
+        actions: string[];
+        assetActions: string[];
+      }>();
+    const admin = await contextOf(t.admin.id);
+    expect(admin.actions.filter((action) => action.startsWith("connection."))).toEqual([
+      "connection.read",
+      "connection.write",
+      "connection.delete"
+    ]);
+    expect(admin.assetActions).toEqual([]);
+    // A read grant on one Connection says that the kind has a list for its holder: Build
+    // shows Connections. A grant to use says nothing of the kind.
+    const kai = await contextOf(t.kai.id);
+    expect(kai.actions).toEqual([]);
+    expect(kai.assetActions).toEqual(["connection.read"]);
+    const lena = await contextOf(t.lena.id);
+    expect(lena.actions).toEqual([]);
+    expect(lena.assetActions).toEqual([]);
+  });
+
+  it("on one workspace's Connections, or denied on one, is named or not by the platform context", async () => {
+    const t = await setupConnectionInstance();
+    const a = await t.seed("alpha");
+    const workspaceId = await t.sharedWorkspace("Team");
+    await t.grant(t.kai.id, "connection.read", { workspaceId });
+    await t.grant(t.lena.id, "connection.read", { assetId: a }, "deny");
+    const assetActionsOf = async (userId: string, scopes?: string) =>
+      (
+        await t.expectOk(userId, "platform.context.get", {
+          ...(scopes === undefined ? {} : { headers: { [SCOPES_HEADER]: scopes } })
+        })
+      ).json<{ assetActions: string[] }>().assetActions;
+    expect(await assetActionsOf(t.kai.id)).toEqual(["connection.read"]);
+    expect(await assetActionsOf(t.lena.id)).toEqual([]);
+    // A credential whose scopes read no asset is told of no list.
+    expect(await assetActionsOf(t.kai.id, "chat:read")).toEqual([]);
   });
 
   it("to use is no right to read: the holder is shown nothing of the Connection", async () => {

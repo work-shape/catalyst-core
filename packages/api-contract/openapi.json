@@ -16930,6 +16930,12 @@
               "type": "string"
             }
           },
+          "assetActions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "namespaces": {
             "type": "array",
             "items": {
@@ -16942,6 +16948,7 @@
           "release",
           "kinds",
           "actions",
+          "assetActions",
           "namespaces"
         ]
       },

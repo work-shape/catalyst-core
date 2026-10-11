@@ -17,7 +17,8 @@ export interface BuildNamespace {
  * What the reader may do in Build, as far as the browser can know it: the rights on the whole
  * instance from the session and the platform context, and the rights per Namespace from the
  * platform context. A grant
- * on one single asset is in neither, so such an asset opens read-only here. The instance
+ * on one single asset tells that the kind has a list and nothing about the asset, so such an
+ * asset opens read-only here. The instance
  * decides every call itself; this only chooses what the page offers.
  */
 export interface BuildRights {
@@ -46,6 +47,9 @@ export function resolveBuildRights(
   // What the instance says the reader holds on all of a kind's assets. A kind is read by its
   // own actions: the session's keys name agents and skills and no kind that came later.
   const onInstance = context?.actions ?? [];
+  // The read actions a grant allows on one asset or one workspace's assets: the kind then has
+  // a list, and the instance decides which assets stand in it.
+  const onSingleAssets = context?.assetActions ?? [];
   const verbs = ["read", "write", "delete"] as const;
   const action = (kind: string, verb: AssetVerb): string | undefined =>
     context?.kinds.find((candidate) => candidate.kind === kind)?.actions[verb];
@@ -61,12 +65,19 @@ export function resolveBuildRights(
     held.filter((namespace) => holds(kind, "write", namespace.prefix)).map(toBuildNamespace);
 
   return {
-    readsAny: instanceRead || instanceWrite || onInstance.length > 0 || held.length > 0,
+    readsAny:
+      instanceRead ||
+      instanceWrite ||
+      onInstance.length > 0 ||
+      onSingleAssets.length > 0 ||
+      held.length > 0,
     reads: (kind) =>
       verbs.some((verb) => {
         const name = action(kind, verb);
         return name !== undefined && onInstance.includes(name);
-      }) || held.some((namespace) => verbs.some((verb) => holds(kind, verb, namespace.prefix))),
+      }) ||
+      onSingleAssets.includes(action(kind, "read") ?? "") ||
+      held.some((namespace) => verbs.some((verb) => holds(kind, verb, namespace.prefix))),
     instanceWrite,
     namespaces: held.map(toBuildNamespace),
     may: (verb, asset) => instanceWrite || holds(asset.kind, verb, asset.namespace),

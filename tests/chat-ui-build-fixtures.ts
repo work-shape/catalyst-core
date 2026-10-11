@@ -18,7 +18,8 @@ export function instanceActions(permissions: readonly string[]): string[] {
  */
 export function platformContext(
   namespaces: Namespaces = [],
-  actions: string[] = []
+  actions: string[] = [],
+  assetActions: string[] = []
 ): PlatformContext {
   return {
     instance: { id: "client", name: "Catalyst" },
@@ -36,6 +37,7 @@ export function platformContext(
       }
     ],
     actions,
+    assetActions,
     namespaces
   };
 }

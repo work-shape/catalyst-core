@@ -24,6 +24,12 @@ export const platformContextSchema = z.object({
    * whole, whatever their names. A right in one Namespace or on one asset is not among them.
    */
   actions: z.array(z.string()),
+  /**
+   * The read actions of the listed kinds a grant allows the caller on one asset or on what one
+   * workspace owns. Which assets those are, the kind's list says: a deny or a deleted asset can
+   * leave it empty.
+   */
+  assetActions: z.array(z.string()),
   namespaces: z.array(platformContextNamespaceSchema)
 });
 

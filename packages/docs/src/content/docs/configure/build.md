@@ -16,9 +16,9 @@ The Build row shows for a person who holds a right on at least one agent or skil
 
 A person with a grant in a Namespace sees the assets of that Namespace and nothing else. A person with no such right has no Build row, and the address says that Build is not available.
 
-A grant on one single asset is checked by the instance on every read and write, but the interface cannot see it in advance. Such a person has no Build row. The asset opens at its address, read-only.
+A grant on one single asset, or on what one workspace owns, is checked by the instance on every read and write. The interface learns only that the person may read some asset of the kind: a read grant gives the Build row and the list of the kind, which holds the assets the person may read. Such an asset opens read-only. A grant that allows another action and no reading gives no Build row.
 
-On an instance with the module [`connections`](/configure/modules/#connections) on, Build also lists Connections for a person who may read every Connection of the instance, which the administrator role allows. A row shows the connector type, whether the instance or a workspace owns the Connection, whether the release or the runtime wrote it, and whether it is enabled. The list opens no page and starts no Connection in this release, and it shows no setting and no reference to a credential.
+On an instance with the module [`connections`](/configure/modules/#connections) on, Build also lists Connections for a person who may read every Connection of the instance, which the administrator role allows, and for a person with a read grant on one Connection or on the Connections of one workspace, who sees those Connections. A grant to use a Connection gives no entry in Build. A row shows the connector type, whether the instance or a workspace owns the Connection, whether the release or the runtime wrote it, and whether it is enabled. The list opens no page and starts no Connection in this release, and it shows no setting and no reference to a credential.
 
 ## The list
 

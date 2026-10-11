@@ -102,6 +102,18 @@ describe("Build rights", () => {
     ]);
   });
 
+  it("lets the holder of a read grant on one asset see the kind, and write nothing", () => {
+    const holder = resolveBuildRights({ permissions: [] }, platformContext([], [], ["skill.read"]));
+
+    expect(holder.readsAny).toBe(true);
+    expect(holder.reads("skill")).toBe(true);
+    expect(holder.reads("agent")).toBe(false);
+    expect(holder.instanceWrite).toBe(false);
+    expect(holder.may("write", { kind: "skill" })).toBe(false);
+    expect(holder.mayCreate("skill")).toBe(false);
+    expect(holder.namespaces).toEqual([]);
+  });
+
   it("gives nobody anything: no permission, no Namespace, or no answer of the instance", () => {
     for (const nobody of [
       rights([]),

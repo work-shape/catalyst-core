@@ -45,6 +45,7 @@ describe("platform.context.get", () => {
     // No field for modules: the module slice adds it.
     expect(Object.keys(context).sort()).toEqual([
       "actions",
+      "assetActions",
       "instance",
       "kinds",
       "namespaces",
@@ -63,6 +64,7 @@ describe("platform.context.get", () => {
     expect(lena.kinds).toEqual(kinds);
     expect(lena.namespaces).toEqual([]);
     expect(lena.actions).toEqual([]);
+    expect(lena.assetActions).toEqual([]);
 
     const admin = platformContextSchema.parse(
       (await t.expectOk(t.admin.id, "platform.context.get")).json()

@@ -22,9 +22,9 @@ const member = { email: "e2e-connections@example.test", password: "e2e-connectio
 const shotsDir = process.env.E2E_SHOTS_DIR;
 
 const EMPTY_EN =
-  "No connections. A connection holds the access to an outside system; agents, apps and workflows use it.";
+  "No connections yet. A connection holds the access to an outside system. Connections cannot be created here yet.";
 const EMPTY_DE =
-  "Keine Verbindungen. Eine Verbindung hält den Zugang zu einem externen System; Agenten, Apps und Workflows nutzen sie.";
+  "Noch keine Verbindungen. Eine Verbindung hält den Zugang zu einem externen System. Verbindungen lassen sich hier noch nicht anlegen.";
 
 async function withSql<Result>(run: (sql: postgres.Sql) => Promise<Result>): Promise<Result> {
   const sql = postgres(databaseUrl, { max: 1 });
@@ -87,6 +87,15 @@ async function removeConnection(assetId: string): Promise<void> {
   });
 }
 
+/** The id of a user in an answer of the instance, read without trusting its shape. */
+function idOf(value: unknown): string | undefined {
+  const id: unknown =
+    typeof value === "object" && value !== null
+      ? Object.getOwnPropertyDescriptor(value, "id")?.value
+      : undefined;
+  return typeof id === "string" ? id : undefined;
+}
+
 /** The same view in both languages and both themes, 1280 wide. */
 async function shoot(page: Page, name: string, ready: () => Promise<void>): Promise<void> {
   if (!shotsDir) return;
@@ -114,8 +123,9 @@ async function shoot(page: Page, name: string, ready: () => Promise<void>): Prom
 }
 
 // The test writes a grant: it takes its turn with the other tests that write or count grants.
-test("an administrator sees Connections in Build, a planted Connection with its chips, and grants its use", async ({
+test("an administrator sees Connections in Build and grants its rights; a read grant on one Connection opens Build, a grant to use does not", async ({
   page,
+  browser,
   accessState: _accessState
 }) => {
   test.setTimeout(shotsDir ? 180_000 : 90_000);
@@ -125,13 +135,24 @@ test("an administrator sees Connections in Build, a planted Connection with its 
   };
   // A seeded user is listed once the user has signed in and asked who they are: the member
   // first, then the admin.
+  let memberId = "";
   for (const user of [member, admin]) {
     const signedIn = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
       data: { ...user, rememberMe: true }
     });
     expect(signedIn.ok()).toBe(true);
-    expect((await page.request.get(`${apiBaseUrl}/api/v1/me`)).ok()).toBe(true);
+    const me = await page.request.get(`${apiBaseUrl}/api/v1/me`);
+    expect(me.ok()).toBe(true);
+    if (user === member) {
+      const answer: unknown = await me.json();
+      memberId =
+        idOf(answer) ?? idOf(Object.getOwnPropertyDescriptor(Object(answer), "user")?.value) ?? "";
+      expect(memberId).not.toBe("");
+    }
   }
+  const memberContext = await browser.newContext();
+  const memberPage = await memberContext.newPage();
+  await memberPage.setViewportSize({ width: 1280, height: 800 });
   await page.setViewportSize({ width: 1280, height: 800 });
   const main = page.getByRole("region", { name: /^(Build|Bauen)$/u });
   const list = page.getByRole("list", { name: "Connections", exact: true });
@@ -153,7 +174,9 @@ test("an administrator sees Connections in Build, a planted Connection with its 
         await expect(page.getByRole("heading", { level: 1 })).toHaveText(
           /^(Connections|Verbindungen)$/u
         );
-        await expect(main.getByText(/^(No connections|Keine Verbindungen)\./u)).toBeVisible();
+        await expect(
+          main.getByText(/^(No connections yet|Noch keine Verbindungen)\./u)
+        ).toBeVisible();
       });
 
       await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
@@ -178,6 +201,12 @@ test("an administrator sees Connections in Build, a planted Connection with its 
       await shoot(page, "connections-list", async () => {
         await expect(page.getByText(connection.name, { exact: true })).toBeVisible();
       });
+      if (shotsDir) {
+        await page.setViewportSize({ width: 390, height: 844 });
+        await expect(page.getByText(connection.name, { exact: true })).toBeVisible();
+        await page.screenshot({ path: join(shotsDir, "connections-list-light-en-390.png") });
+        await page.setViewportSize({ width: 1280, height: 800 });
+      }
 
       await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
       await page.reload();
@@ -207,13 +236,34 @@ test("an administrator sees Connections in Build, a planted Connection with its 
       await expect(dialog.getByRole("radio", { name: /^In a Namespace/u })).toHaveCount(0);
       await expect(dialog.getByRole("radio", { name: /^In a shared workspace/u })).toBeVisible();
       await expect(dialog.getByRole("radio", { name: /^On one connection/u })).toBeChecked();
+      // Each action says what it allows.
+      await expect(
+        dialog.getByText("See the connection and its status in Build. Never its credentials.", {
+          exact: true
+        })
+      ).toBeVisible();
+      await expect(
+        dialog.getByText(
+          "Let agents this person builds or runs call the outside system through it.",
+          { exact: true }
+        )
+      ).toBeVisible();
       await dialog.getByLabel("Use", { exact: true }).check();
+      // The Connection is chosen by its name, with its id under it.
       await dialog.getByRole("button", { name: /^Connection/u }).click();
-      await page.getByRole("option", { name: new RegExp(connection.name, "u") }).click();
+      const option = page.getByRole("option", { name: /^Client records/u });
+      await expect(option).toContainText(connection.name);
+      await option.click();
       await expect(page.getByRole("listbox")).toHaveCount(0);
+      await expect(dialog.getByRole("button", { name: /^Connection/u })).toContainText(
+        "Client records"
+      );
       if (shotsDir) {
         await mkdir(shotsDir, { recursive: true });
         await page.screenshot({ path: join(shotsDir, "connections-grant-light-en-1280.png") });
+        await page.setViewportSize({ width: 390, height: 844 });
+        await page.screenshot({ path: join(shotsDir, "connections-grant-light-en-390.png") });
+        await page.setViewportSize({ width: 1280, height: 800 });
       }
       await dialog.getByRole("button", { name: "Create grant" }).click();
       await expect(dialog).toBeHidden();
@@ -223,7 +273,66 @@ test("an administrator sees Connections in Build, a planted Connection with its 
       await expect(grantRow).toContainText(`Connection ${connection.name}`);
       await expect(grantRow.locator('[data-effect="allow"]')).toHaveText("Use connections");
     });
+
+    await test.step("a grant to use the Connection gives its holder no Build entry", async () => {
+      const signedIn = await requestWithOrigin(
+        memberPage,
+        "post",
+        `${apiBaseUrl}/api/auth/sign-in/email`,
+        { data: { ...member, rememberMe: true } }
+      );
+      expect(signedIn.ok()).toBe(true);
+      await memberPage.goto("/");
+      await expect(memberPage.getByPlaceholder("Message")).toBeVisible();
+      await expect(memberPage.getByRole("button", { name: "Build", exact: true })).toHaveCount(0);
+      await memberPage.goto("/build/connections");
+      await expect(memberPage.getByRole("region", { name: "Build" })).toContainText(
+        "Build is not available to you."
+      );
+    });
+
+    await test.step("a read grant on the one Connection shows Connections with it", async () => {
+      const granted = await requestWithOrigin(
+        page,
+        "post",
+        `${apiBaseUrl}/api/v1/instance/access/grants`,
+        {
+          data: {
+            holderKind: "user",
+            holderId: memberId,
+            action: "connection.read",
+            scopeKind: "asset",
+            scopeId: connection.id
+          }
+        }
+      );
+      expect(granted.ok()).toBe(true);
+      await memberPage.goto("/");
+      await memberPage.getByRole("button", { name: "Build", exact: true }).click();
+      await expect(memberPage).toHaveURL(/\/build\/connections$/u);
+      await expect(
+        memberPage.getByRole("heading", { name: "Connections", level: 1 })
+      ).toBeVisible();
+      // Connections is the only kind this person has a list of: no rail names another.
+      await expect(memberPage.getByRole("navigation", { name: "Kinds in Build" })).toHaveCount(0);
+      const rows = memberPage
+        .getByRole("list", { name: "Connections", exact: true })
+        .getByRole("listitem");
+      await expect(rows).toHaveCount(1);
+      await expect(rows).toContainText("Client records");
+      await expect(rows).toContainText(connection.name);
+      const memberMain = memberPage.getByRole("region", { name: "Build" });
+      await expect(memberMain.getByRole("button", { name: /^New /u })).toHaveCount(0);
+      await expect(memberMain).not.toContainText("secret_");
+      await expect(memberMain).not.toContainText("records.example.test");
+      if (shotsDir) {
+        await memberPage.screenshot({
+          path: join(shotsDir, "connections-read-grant-light-en-1280.png")
+        });
+      }
+    });
   } finally {
+    await memberContext.close();
     await removeConnection(connection.id);
   }
 });

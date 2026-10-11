@@ -106,8 +106,9 @@ export function AccessPage() {
                 ? {
                     items: connectionsQuery.data?.map((connection) => ({
                       id: connection.id,
-                      name: connection.name,
-                      description: connection.title
+                      // The display name, with the id under it, as the row in Build shows it.
+                      name: connection.title,
+                      description: connection.name
                     })),
                     failed: Boolean(connectionsQuery.error)
                   }

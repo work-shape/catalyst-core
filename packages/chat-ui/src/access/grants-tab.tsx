@@ -87,6 +87,12 @@ const actionOnKindKeys: Record<GrantKind, TranslationKey> = {
   connection: "access.actionOnConnection"
 };
 
+/** What an action of a Connection allows, as the dialog says it under the action. */
+const connectionVerbDescriptionKeys: Partial<Record<GrantVerb, TranslationKey>> = {
+  read: "access.actionReadConnectionDescription",
+  use: "access.actionUseConnectionDescription"
+};
+
 /** The places a grant applies at, as the dialog offers them for one kind. */
 const scopeChoiceKeys: Record<
   GrantScopeKind,
@@ -547,6 +553,10 @@ function GrantDialog({
             : "access.referencesLoadFailed"
         );
   const asset = kindAssets.find((candidate) => candidate.id === form.assetId);
+  const verbDescription = (verb: GrantVerb): string | undefined => {
+    const key = ofConnection ? connectionVerbDescriptionKeys[verb] : undefined;
+    return key === undefined ? undefined : t(key);
+  };
   const workspace = workspaces?.items?.find((candidate) => candidate.id === form.workspaceId);
   const requests = grantRequests(form);
 
@@ -627,6 +637,7 @@ function GrantDialog({
             <Checkbox
               key={verb}
               label={t(verbLabelKeys[verb])}
+              description={verbDescription(verb)}
               checked={form.verbs.includes(verb)}
               onCheckedChange={(checked) =>
                 change({

@@ -1,6 +1,7 @@
 import { RELEASE_VERSION, apiOperations } from "@vivd-catalyst/api-contract";
 import {
   AppError,
+  accessHolderFromIdentity,
   hasAuthScope,
   type ActorAccess,
   type AssetKindActions,
@@ -44,6 +45,38 @@ function usableActions(
   );
 }
 
+/**
+ * The read actions of the registered kinds a grant row allows the caller on one asset or on one
+ * workspace's assets, where its credential's scopes let it read. One read of the caller's own
+ * grant rows: it grows with the rows one holder has, never with the assets of the instance.
+ */
+async function readActionsOnSingleAssets(
+  options: ChatServerOptions,
+  actor: AuthenticatedIdentity
+): Promise<string[]> {
+  if (!hasAuthScope(actor, SCOPE_OF_VERB.read)) {
+    return [];
+  }
+  const holder = accessHolderFromIdentity(actor);
+  const { holderActive, grants } = await options.stores.access.loadPersistedAccess({
+    clientInstanceId: options.clientInstanceId,
+    holder: { kind: holder.kind, id: holder.id }
+  });
+  if (!holderActive) {
+    return [];
+  }
+  return options.configAssets.kinds.kinds
+    .map((kind) => kind.actions.read)
+    .filter((action) =>
+      grants.some(
+        (grant) =>
+          grant.action === action &&
+          grant.effect === "allow" &&
+          (grant.scopeKind === "asset" || grant.scopeKind === "workspace")
+      )
+    );
+}
+
 export function registerPlatformRoutes(route: Route, options: ChatServerOptions): void {
   // Orientation for an outside editor, a person or a service principal. A Namespace is listed
   // for a caller who holds at least one action of a registered kind in it, through any grant
@@ -70,6 +103,7 @@ export function registerPlatformRoutes(route: Route, options: ChatServerOptions)
           actions: { ...kind.actions }
         })),
         actions: usableActions(options, { access, actor }),
+        assetActions: await readActionsOnSingleAssets(options, actor),
         namespaces: namespaces.flatMap((namespace) => {
           const actions = usableActions(options, { access, actor }, namespace.prefix);
           return actions.length > 0
