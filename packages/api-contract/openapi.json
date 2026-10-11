@@ -13331,6 +13331,9 @@
           "faviconUrl": {
             "type": "string"
           },
+          "docsUrl": {
+            "type": "string"
+          },
           "title": {
             "type": "string"
           },
@@ -18361,6 +18364,9 @@
                 "type": "boolean"
               },
               "faviconUrl": {
+                "type": "string"
+              },
+              "docsUrl": {
                 "type": "string"
               },
               "title": {

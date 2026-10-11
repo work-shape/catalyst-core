@@ -17,6 +17,8 @@ export interface ClientBranding {
   logoUrlDark?: string;
   logoInvertOnDark: boolean;
   faviconUrl?: string;
+  /** Where the documentation is read. Absent when the instance names none. */
+  docsUrl?: string;
   title: string;
   welcomeMessage: string;
   showAgentName: boolean;
@@ -69,6 +71,7 @@ export function createClientBranding(
     logoUrlDark: config.ui.logoUrlDark,
     logoInvertOnDark: config.ui.logoInvertOnDark,
     faviconUrl: config.ui.faviconUrl,
+    ...(config.ui.docsUrl ? { docsUrl: config.ui.docsUrl } : {}),
     title: resolveLocalizedString(config.ui.title, locale, config.localization.defaultLocale),
     welcomeMessage: resolveLocalizedString(
       config.ui.welcomeMessage,

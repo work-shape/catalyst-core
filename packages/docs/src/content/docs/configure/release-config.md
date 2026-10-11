@@ -336,6 +336,22 @@ A skill directory may also contain UTF-8 text resources such as `references/poli
 
 Clients own their favicon and should serve it from `public/`, reference it from `index.html`, and set `ui.faviconUrl` so runtime branding stays explicit. The platform includes `packages/chat-ui/assets/favicon.svg` as an optional fallback asset; pass it as `faviconPath` to `vivdCatalystChatUiPlugin()` when a client intentionally wants that default copied into its build. `ui.faviconUrl` may be an absolute URL or a root-relative path served by the client.
 
+### Documentation address
+
+`ui.docsUrl` is the address the interface's links to the documentation start from: the Documentation item of the account menu, and the "Learn more" links on pages such as Access.
+
+```yaml
+ui:
+  docsUrl: https://docs.workshape.ai/catalyst
+```
+
+- It has no default. An instance that leaves it out shows no Documentation item and no "Learn more" link, and no empty row in their place.
+- Set your own address to send people to your own handbook. The account menu opens the address as it is. A "Learn more" link adds the path of a page of this documentation to it, such as `/operate/how-rights-work/`, so an address of your own needs the pages at those paths.
+- `docsUrl: null` clears an address that a base file set, for one environment that [extends](#sharing-config-across-environments-with-extends) it.
+- Only an `http` or `https` address is taken. Anything else, such as a path, a bare host or a `javascript:` address, stops the start with a validation error.
+
+The address is part of the public branding the interface reads, so it is not a place for a link that carries a token.
+
 ## Model Provider Configuration
 
 OpenAI-compatible providers keep API-specific request shapes behind the model-provider boundary. Agents and tools still see Workshape Catalyst's provider-neutral messages, tools, tool calls, tool results, and usage.

@@ -725,9 +725,25 @@ function createUiThemeSchema(defaultTheme: typeof defaultLightUiTheme) {
 const lightUiThemeSchema = createUiThemeSchema(defaultLightUiTheme);
 const darkUiThemeSchema = createUiThemeSchema(defaultDarkUiTheme);
 
+/**
+ * Where the instance's documentation is read. Only `http` and `https` are taken: the interface
+ * renders the address as a link, and a `javascript:` or `data:` address there would run.
+ */
+const docsUrlSchema = z
+  .string()
+  .url()
+  .refine((value) => /^https?:\/\//iu.test(value), {
+    message: "'ui.docsUrl' must be an http or https address"
+  });
+
 export const uiConfigSchema = z
   .object({
     clientName: localizedStringSchema.optional(),
+    /**
+     * The address the interface's links to the documentation start from. It has no default:
+     * left out, or set to `null` over an inherited value, the interface shows no such link.
+     */
+    docsUrl: docsUrlSchema.nullable().optional(),
     logoUrl: z.string().url().or(z.string().startsWith("/")).optional(),
     logoUrlDark: z.string().url().or(z.string().startsWith("/")).optional(),
     logoInvertOnDark: z.boolean().default(false),

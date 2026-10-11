@@ -56,6 +56,8 @@ const clientUiBrandingSchema = z.object({
   logoUrlDark: z.string().optional(),
   logoInvertOnDark: z.boolean(),
   faviconUrl: z.string().optional(),
+  /** Where the instance's documentation is read. Absent when the instance names none. */
+  docsUrl: z.string().optional(),
   title: z.string(),
   welcomeMessage: z.string(),
   showAgentName: z.boolean(),

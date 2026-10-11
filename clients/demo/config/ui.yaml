@@ -4,4 +4,7 @@ clientName:
 title:
   de: Demo Chat
   en: Demo Chat
+# Where the Documentation item of the account menu and the "Learn more" links lead. The
+# platform has no default for it: an instance that leaves it out shows none of them.
+docsUrl: https://docs.workshape.ai/catalyst
 defaultThemeMode: system
