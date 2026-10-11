@@ -15,6 +15,9 @@ describe("provider addresses and secrets in product source", () => {
 
   it("reads the environment by a computed name only where listed, and a secret only in the resolver", async () => {
     expect([...new Set((await scanned).computedEnvReads)]).toEqual([
+      // The sign-in address of the seeded superadmin. Every password and key the seed reads
+      // comes from the resolver.
+      "clients/demo/src/seed/run.ts",
       // A numeric setting of the preview worker, read by its name.
       "packages/client-assembly/src/artifact-preview-worker.ts",
       // The sign-in address of a seed user. Its password comes from the resolver.

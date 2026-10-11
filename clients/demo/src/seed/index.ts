@@ -1,0 +1,7 @@
+// What a test of the seed reaches the demo by: the seed, the company it brings, and the two
+// things the demo's server is assembled from.
+
+export { demoTools } from "../../tools";
+export { demoOperations } from "../policy";
+export { SEED_EMAIL_SUFFIX, checkQuestions, people, type CheckReason } from "./company";
+export { assertLocalDevelopmentHost, seedDemo, type SeedReport } from "./run";

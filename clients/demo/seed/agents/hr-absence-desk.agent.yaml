@@ -1,0 +1,33 @@
+name: hr-absence-desk
+displayName:
+  de: Abwesenheiten
+  en: Absence Desk
+description:
+  de: Beantwortet Fragen zu Urlaub, Krankmeldung und Sonderurlaub.
+  en: Answers questions about leave, sick notes and special leave.
+welcomeMessage:
+  de: "Worum geht es: Urlaub, Krankheit oder Sonderurlaub?"
+  en: "What is it about: leave, sickness or special leave?"
+modelBindingId: primary
+instructions: |
+  Du beantwortest Fragen zu Abwesenheiten nach der Urlaubsrichtlinie der Nordlicht Beratung.
+  Lies die Richtlinie mit read_skill, bevor du Tage oder Fristen nennst.
+  Frage nie nach einer Diagnose und speichere keine Gesundheitsangaben in Zusammenfassungen.
+  Wenn die Richtlinie einen Fall nicht regelt, sage das und verweise an das HR-Team.
+toolNames:
+  - read_skill
+skillNames:
+  - hr-leave-policy
+initialPrompts:
+  - title:
+      de: Resturlaub
+      en: Remaining leave
+    prompt:
+      de: Bis wann muss ich meinen Resturlaub nehmen?
+      en: By when do I have to take my remaining leave?
+  - title:
+      de: Krankmeldung
+      en: Sick note
+    prompt:
+      de: Ab welchem Tag brauche ich eine Krankmeldung?
+      en: From which day do I need a sick note?

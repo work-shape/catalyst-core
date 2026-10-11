@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./sample-mcp": "./sample-mcp/index.ts"
+    "./sample-mcp": "./sample-mcp/index.ts",
+    "./seed": "./src/seed/index.ts"
   },
   "scripts": {
     "build": "tsup src/server.ts src/e2e-server.ts src/seed-auth.ts src/migrate.ts src/artifact-preview-worker.ts src/workspace-command-worker.ts src/sample-mcp-server.ts --format esm --out-dir dist && vite build",
@@ -12,6 +13,7 @@
     "build:ui": "vite build",
     "config:local-key": "pnpm --filter \"@vivd-catalyst/config-cli...\" build && node --env-file-if-exists=.env ../../packages/config-cli/dist/index.js config local-key --dir .",
     "config:diff": "pnpm --filter \"@vivd-catalyst/config-cli...\" build && node --env-file-if-exists=.env ../../packages/config-cli/dist/index.js config diff --dir .",
+    "demo:seed": "pnpm --filter \"@vivd-catalyst/config-cli...\" build && tsup src/demo-seed.ts --format esm --out-dir dist && node --env-file-if-exists=.env dist/demo-seed.js",
     "config:push": "pnpm --filter \"@vivd-catalyst/config-cli...\" build && node --env-file-if-exists=.env ../../packages/config-cli/dist/index.js config push --dir . --force",
     "dev": "node scripts/ensure-local-secrets.mjs && docker compose watch api ui artifact-preview-worker workspace-command-worker sample-mcp",
     "dev:down": "docker compose down",
@@ -29,8 +31,12 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
+    "@vivd-catalyst/api-client": "workspace:*",
     "@vivd-catalyst/chat-ui": "workspace:*",
     "@vivd-catalyst/client-assembly": "workspace:*",
+    "@vivd-catalyst/config-cli": "workspace:*",
+    "@vivd-catalyst/config-schema": "workspace:*",
+    "@vivd-catalyst/core": "workspace:*",
     "@vivd-catalyst/tool-sdk": "workspace:*",
     "@vivd-catalyst/ui": "workspace:*",
     "lucide-react": "^1.17.0",

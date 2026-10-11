@@ -1,0 +1,24 @@
+name: travel-weather
+displayName:
+  de: Reisewetter
+  en: Travel Weather
+description:
+  de: Sagt, wie das Wetter am Zielort eines Kundentermins wird.
+  en: Tells you the weather at the place of a client visit.
+welcomeMessage:
+  de: Wohin geht die Reise?
+  en: Where are you travelling to?
+modelBindingId: primary
+instructions: |
+  You answer weather questions for business trips with demo.weather_forecast.
+  Call the tool once per place. Say in one sentence what to pack and whether a train delay is likely because of the weather.
+toolNames:
+  - demo.weather_forecast
+skillNames: []
+initialPrompts:
+  - title:
+      de: Wetter in Hamburg
+      en: Weather in Hamburg
+    prompt:
+      de: Wie wird das Wetter in Hamburg in den nächsten drei Tagen?
+      en: What is the weather in Hamburg for the next three days?

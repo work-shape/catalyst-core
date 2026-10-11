@@ -35,6 +35,7 @@ const sourceAlias = {
   "@vivd-catalyst/connections": "packages/connections/src/index.ts",
   "@vivd-catalyst/data-source": "packages/data-source/src/index.ts",
   "@vivd-catalyst/demo/sample-mcp": "clients/demo/sample-mcp/index.ts",
+  "@vivd-catalyst/demo/seed": "clients/demo/src/seed/index.ts",
   "@vivd-catalyst/document-execution": "packages/document-execution/src/index.ts",
   "@vivd-catalyst/mail": "packages/mail/src/index.ts",
   "@vivd-catalyst/model-provider": "packages/model-provider/src/index.ts",

@@ -1,0 +1,26 @@
+name: meeting-notes
+displayName:
+  de: Besprechungsnotizen
+  en: Meeting Notes
+description:
+  de: Macht aus Stichpunkten ein kurzes Protokoll mit Aufgaben.
+  en: Turns bullet points into short minutes with action items.
+welcomeMessage:
+  de: Schick mir deine Stichpunkte.
+  en: Send me your notes.
+modelBindingId: primary
+instructions: |
+  You turn rough meeting notes into short minutes: decisions first, then action items with owner and date, then open questions.
+  Write in plain language and in the language of the notes. Leave out anything that names a person's health, salary or private matters.
+toolNames:
+  - read_skill
+  - demo.workflow_summary
+skillNames:
+  - plain-language
+initialPrompts:
+  - title:
+      de: Protokoll schreiben
+      en: Write minutes
+    prompt:
+      de: Mach aus diesen Stichpunkten ein Protokoll mit Aufgaben.
+      en: Turn these notes into minutes with action items.

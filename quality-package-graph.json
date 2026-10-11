@@ -63,8 +63,12 @@
   "@vivd-catalyst/core": [],
   "@vivd-catalyst/data-source": ["@vivd-catalyst/core", "@vivd-catalyst/tool-sdk"],
   "@vivd-catalyst/demo": [
+    "@vivd-catalyst/api-client",
     "@vivd-catalyst/chat-ui",
     "@vivd-catalyst/client-assembly",
+    "@vivd-catalyst/config-cli",
+    "@vivd-catalyst/config-schema",
+    "@vivd-catalyst/core",
     "@vivd-catalyst/tool-sdk",
     "@vivd-catalyst/ui"
   ],

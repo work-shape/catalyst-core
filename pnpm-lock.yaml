@@ -92,12 +92,24 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: 1.32.1
         version: 1.32.1(zod@4.4.3)
+      '@vivd-catalyst/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
       '@vivd-catalyst/chat-ui':
         specifier: workspace:*
         version: link:../../packages/chat-ui
       '@vivd-catalyst/client-assembly':
         specifier: workspace:*
         version: link:../../packages/client-assembly
+      '@vivd-catalyst/config-cli':
+        specifier: workspace:*
+        version: link:../../packages/config-cli
+      '@vivd-catalyst/config-schema':
+        specifier: workspace:*
+        version: link:../../packages/config-schema
+      '@vivd-catalyst/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@vivd-catalyst/tool-sdk':
         specifier: workspace:*
         version: link:../../packages/tool-sdk

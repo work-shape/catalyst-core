@@ -58,6 +58,8 @@
         "src/server.ts",
         "src/e2e-server.ts",
         "src/seed-auth.ts",
+        "src/demo-seed.ts",
+        "src/seed/index.ts",
         "src/migrate.ts",
         "src/*worker*.ts",
         "src/sample-mcp-server.ts",

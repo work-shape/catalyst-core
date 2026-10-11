@@ -1,3 +1,4 @@
 import client from "./client";
+import { demoOperations } from "./policy";
 
-await client.listen();
+await client.listen({ operations: demoOperations });

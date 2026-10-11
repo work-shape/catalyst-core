@@ -9,3 +9,8 @@ export function readSampleMcpEnvironment() {
     host: process.env.HOST
   };
 }
+
+/** The environment of a command of the demo that runs on the host, such as `pnpm demo:seed`. */
+export function hostEnvironment(): Readonly<Record<string, string | undefined>> {
+  return process.env;
+}
