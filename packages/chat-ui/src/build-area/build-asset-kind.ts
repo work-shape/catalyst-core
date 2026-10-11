@@ -99,18 +99,38 @@ export interface BuildAssetKind extends BuildKindBase {
   Editor: ComponentType<BuildAssetEditorProps>;
 }
 
+/** What the frame hands a page that shows one asset and changes nothing of it. */
+export interface BuildAssetViewProps {
+  page: BuildPageSlot;
+  /** The way back to the kind's list, for the start of the page head. */
+  back: ReactNode;
+  /** The open asset, as loaded. */
+  asset: BuildAsset;
+}
+
 /**
- * A kind the interface lists and does not yet open: it has a rail item and a list, and no
- * asset page, no button that starts one and no CLI entry. Its rows are not links.
+ * A kind the interface lists and does not edit: it has a rail item and a list, and no button
+ * that starts an asset and no CLI entry. Without `view` its rows are not links.
  */
 export interface BuildListedKind extends BuildKindBase {
   Editor?: undefined;
+  /**
+   * A page that shows one asset of the kind and writes nothing: no History, no delete, no save.
+   * With it the rows open, and `missingText` is the sentence at the address of an asset that
+   * does not exist, with `{name}`.
+   */
+  view?: { Page: ComponentType<BuildAssetViewProps>; missingText: TranslationKey };
 }
 
 /** One kind of the Build area. */
 export type BuildKind = BuildAssetKind | BuildListedKind;
 
-/** The kind has an asset page: its rows open and a new asset can be started. */
+/** The kind has an asset page that edits: its rows open and a new asset can be started. */
 export function isEditableKind(kind: BuildKind): kind is BuildAssetKind {
   return kind.Editor !== undefined;
+}
+
+/** An asset of the kind has an address of its own: a page that edits it or one that shows it. */
+export function opensAssets(kind: BuildKind): boolean {
+  return isEditableKind(kind) || kind.view !== undefined;
 }

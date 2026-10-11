@@ -16,15 +16,16 @@ import {
   PageHeader,
   SkeletonPage
 } from "@vivd-catalyst/ui";
-import { useTranslation } from "../i18n";
+import { useTranslation, type TranslationKey } from "../i18n";
 import { usePageShown } from "./asset-editor-shell";
 import type {
   BuildAsset,
   BuildAssetKind,
   BuildAssetStart,
+  BuildListedKind,
   BuildPageSlot
 } from "./build-asset-kind";
-import type { BuildAssetReload, BuildSource } from "./build-data";
+import type { BuildAssetRead, BuildAssetReload, BuildSource } from "./build-data";
 import { BuildHistory } from "./build-history";
 import type { VisibleBuildKind } from "./build-model";
 import { readBuildRefusal, type BuildWriteOutcome } from "./build-refusals";
@@ -98,7 +99,6 @@ export function ExistingAssetPage({
   name: string;
   onDeleted(): void;
 }) {
-  const { t } = useTranslation();
   const { entry } = kind;
   const read = page.source.useAsset(entry.kind, name);
   // The page starts again after a restore, so what it says of the restore is kept here.
@@ -121,16 +121,74 @@ export function ExistingAssetPage({
     );
   }
   return (
-    <Page ref={page.page.ref}>
-      {page.page.above}
+    <UnreadAssetPage
+      page={page.page}
+      back={page.back}
+      name={name}
+      read={read}
+      missingText={entry.missingText}
+    />
+  );
+}
+
+/**
+ * The page at the address of an asset whose kind shows it and changes nothing: the kind's own
+ * page once the asset is read, and every state before that.
+ */
+export function ViewedAssetPage({
+  source,
+  page,
+  back,
+  kind,
+  view,
+  name
+}: Pick<AssetPageProps, "source" | "page" | "back"> & {
+  kind: string;
+  view: NonNullable<BuildListedKind["view"]>;
+  name: string;
+}) {
+  const read = source.useAsset(kind, name);
+  usePageShown(page, read.status);
+  if (read.status === "ready") {
+    return <view.Page page={page} back={back} asset={read.asset} />;
+  }
+  return (
+    <UnreadAssetPage
+      page={page}
+      back={back}
+      name={name}
+      read={read}
+      missingText={view.missingText}
+    />
+  );
+}
+
+/** An asset page before its asset is read: loading, missing, refused or failed. */
+function UnreadAssetPage({
+  page,
+  back,
+  name,
+  read,
+  missingText
+}: {
+  page: BuildPageSlot;
+  back: ReactNode;
+  name: string;
+  read: Exclude<BuildAssetRead, { status: "ready" }>;
+  missingText: TranslationKey;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Page ref={page.ref}>
+      {page.above}
       {read.status === "loading" ? (
         <SkeletonPage />
       ) : (
         <>
-          <PageHeader back={page.back} title={name} />
+          <PageHeader back={back} title={name} />
           {read.status === "missing" ? (
             <EmptyState icon={<SearchX aria-hidden="true" />}>
-              {t(entry.missingText, { name })}
+              {t(missingText, { name })}
             </EmptyState>
           ) : read.status === "refused" ? (
             <EmptyState icon={<Lock aria-hidden="true" />}>{t("build.assetRefused")}</EmptyState>

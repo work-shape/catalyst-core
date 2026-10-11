@@ -1,5 +1,5 @@
 import type { LocaleCode } from "@vivd-catalyst/api-client";
-import { isEditableKind, type BuildKind } from "./build-asset-kind";
+import { opensAssets, type BuildKind } from "./build-asset-kind";
 import type { BuildKindState } from "./build-data";
 import type { BuildLocation } from "./build-route";
 
@@ -43,7 +43,7 @@ export function resolveBuildPlace(
 ): BuildPlace | undefined {
   const named = kinds.find((kind) => kind.entry.path === location.kindPath);
   if (named) {
-    return isEditableKind(named.entry) || location.name === undefined
+    return opensAssets(named.entry) || location.name === undefined
       ? { kind: named, name: location.name, corrected: false }
       : { kind: named, name: undefined, corrected: true };
   }

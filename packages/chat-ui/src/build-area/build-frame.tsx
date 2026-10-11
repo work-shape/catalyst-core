@@ -30,12 +30,13 @@ import { useTranslation } from "../i18n";
 import { holdLeaveGuard } from "../leave-guard";
 import {
   isEditableKind,
+  opensAssets,
   type BuildAssetRow,
   type BuildAssetStart,
   type BuildKind
 } from "./build-asset-kind";
 import { useBuildAssetKinds } from "./build-asset-kinds";
-import { ExistingAssetPage, NewAssetPage } from "./build-asset-page";
+import { ExistingAssetPage, NewAssetPage, ViewedAssetPage } from "./build-asset-page";
 import { BuildCreateDialog } from "./build-create-dialog";
 import { BUILD_SEARCH_DELAY_MS, type BuildListFilter, type BuildSource } from "./build-data";
 import {
@@ -219,18 +220,31 @@ export function BuildFrame({ source }: { source: BuildSource }) {
   };
 
   const assetName = creating ? undefined : place.name;
-  if (isEditableKind(entry) && (start !== undefined || assetName !== undefined)) {
-    const back = (
-      <Button
-        variant="ghost"
-        size="sm"
-        aria-label={t("build.backToList", { kind: t(entry.label) })}
-        onClick={openList}
-      >
-        <ArrowLeft aria-hidden="true" />
-        {t(entry.label)}
-      </Button>
+  const back = (
+    <Button
+      variant="ghost"
+      size="sm"
+      aria-label={t("build.backToList", { kind: t(entry.label) })}
+      onClick={openList}
+    >
+      <ArrowLeft aria-hidden="true" />
+      {t(entry.label)}
+    </Button>
+  );
+  if (!isEditableKind(entry) && entry.view && assetName !== undefined) {
+    return (
+      <ViewedAssetPage
+        key={assetName}
+        source={source}
+        kind={entry.kind}
+        view={entry.view}
+        name={assetName}
+        page={{ ref: pageRef, above: loadError, shown: pageShown }}
+        back={back}
+      />
     );
+  }
+  if (isEditableKind(entry) && (start !== undefined || assetName !== undefined)) {
     const leaveTo = (name: string | undefined) => {
       leaveAllowed.current = true;
       open({ kindPath: entry.path, name }, name === undefined ? { replace: true } : undefined);
@@ -383,8 +397,9 @@ function BuildList({
   const namespaceName = (prefix: string | undefined) =>
     namespaces.find((namespace) => namespace.prefix === prefix)?.displayName;
   const filtered = settledText.trim() !== "" || view.namespace !== undefined;
-  // A kind that only lists has no page to open, no asset to start and no CLI entry.
+  // A kind that only lists has no asset to start and no CLI entry, and a page only to show one.
   const editable = isEditableKind(entry) ? entry : undefined;
+  const opens = opensAssets(entry);
   const newButton =
     editable && state.canCreate ? (
       <Button onClick={onNew}>
@@ -506,7 +521,7 @@ function BuildList({
                       </time>
                     }
                     link={
-                      editable ? (
+                      opens ? (
                         <a
                           href={hrefOf(asset)}
                           onClick={(event) => {

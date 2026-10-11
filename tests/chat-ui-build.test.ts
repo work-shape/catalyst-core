@@ -278,7 +278,7 @@ describe("Build frame", () => {
     expect(render({ kindPath: "agents" }, { kinds })).not.toContain("API access");
   });
 
-  it("lists Connections without a page, a New button or the CLI entry, each row with its chips", () => {
+  it("lists Connections without a New button or the CLI entry, each row with its chips and a link to its page", () => {
     const base = source();
     const withConnections = (rows: BuildAssetRow[]) =>
       source({
@@ -316,15 +316,29 @@ describe("Build frame", () => {
     // Where a Connection comes from is no chip of the row.
     expect(list).not.toContain("Release config");
     expect(list).not.toContain(">Runtime<");
-    // No page opens and nothing is started or mirrored: no link, no New button, no menu.
-    expect(list).not.toContain("<a ");
+    // A row opens the Connection's page. Nothing is started or mirrored: no New button, no menu.
+    expect(list).toContain('href="/build/connections/crm"');
     expect(list).not.toContain(">New ");
     expect(list).not.toContain("More actions");
     // The list says where Connections come from, with rows and without.
     expect(list).toContain("Connections come from the release config and cannot be changed here.");
-    // The address of one Connection shows the list.
+    // The address of a Connection the instance does not hold says so, and names the way back.
+    const missing = render(
+      { kindPath: "connections", name: "crm" },
+      { source: withConnections(rows) }
+    );
+    expect(missing).toContain("There is no connection with the id crm.");
+    expect(missing).toContain('aria-label="Back to Connections"');
+    // A kind that only lists has no page: its rows are no links and an asset's address shows the list.
+    const listedOnly = [agentKind, skillKind, { ...connectionKind, view: undefined }];
     expect(
-      render({ kindPath: "connections", name: "crm" }, { source: withConnections(rows) })
+      render({ kindPath: "connections" }, { kinds: listedOnly, source: withConnections(rows) })
+    ).not.toContain("<a ");
+    expect(
+      render(
+        { kindPath: "connections", name: "crm" },
+        { kinds: listedOnly, source: withConnections(rows) }
+      )
     ).toContain('aria-label="Connections"');
 
     const empty = (locale: LocaleCode) =>
@@ -626,7 +640,7 @@ describe("Build addresses", () => {
     expect(resolveBuildPlace([], {}, undefined)).toBeUndefined();
     // A kind that only lists has no asset page: the address of an asset is corrected to its list.
     const listed = {
-      entry: connectionKind,
+      entry: { ...connectionKind, view: undefined },
       state: { kind: "connection", canCreate: false, canDelete: false }
     };
     expect(
@@ -637,6 +651,11 @@ describe("Build addresses", () => {
       name: undefined,
       corrected: false
     });
+    // A kind with a page that shows an asset keeps the asset's address.
+    const viewed = { ...listed, entry: connectionKind };
+    expect(
+      resolveBuildPlace([viewed], { kindPath: "connections", name: "crm" }, undefined)
+    ).toEqual({ kind: viewed, name: "crm", corrected: false });
   });
 
   it("maps a place in Build to its route and back", () => {
