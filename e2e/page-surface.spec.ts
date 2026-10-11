@@ -231,10 +231,88 @@ test("a save the build refuses says what it found, in the thread and under the P
   await expect(builtPage(page).getByRole("heading", { name: "Revenue overview" })).toBeVisible();
   const findings = surface.getByTestId("page-build-errors");
   await expect(findings).toContainText("1 build error");
+  // What the viewer is looking at and what to do stands under the count, without unfolding.
+  await expect(findings).toContainText(
+    "The preview still shows revision 1. Ask the agent to fix the error."
+  );
   await findings.getByRole("button", { name: "1 build error" }).click();
   await expect(findings).toContainText("src/routes/index.tsx, line 5");
   await expect(findings).toContainText('Expected ">" but found "}"');
   // The thread says the same on the card of the refused save.
   const refused = page.getByTestId("page-card").filter({ hasText: "The Page could not be built" });
   await expect(refused).toHaveAttribute("data-state", "errors");
+  await expect(refused).toContainText("Nothing was saved. Ask the agent to fix the error.");
+});
+
+test("a new save opens a closed Page again, and coming back to the conversation opens none", async ({
+  page
+}) => {
+  await openChat(page);
+  await writePageFiles(page, patchThatAdds(pageSource("Revenue overview")));
+  await savePage(page);
+  const surface = pageSurface(page);
+  await expect(surface).toContainText("Revision 1");
+
+  // Beside the Page the conversation has the same band and line on top as the Page, up to
+  // the seam, so the thread does not show under the agent's name.
+  const band = page.locator("header[data-beside-surface]");
+  const bandBox = await band.boundingBox();
+  const surfaceBox = await surface.boundingBox();
+  expect(bandBox?.height).toBe(64);
+  expect(Math.round((bandBox?.x ?? 0) + (bandBox?.width ?? 0))).toBe(
+    Math.round(surfaceBox?.x ?? -1)
+  );
+  expect(
+    await band.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return [style.borderBottomWidth, style.backgroundImage];
+    })
+  ).toEqual(["1px", "none"]);
+  // The messages hold long strings without a break, the patch and the answer to it. They wrap
+  // inside the conversation and none runs under the Page.
+  const seam = surfaceBox?.x ?? 0;
+  const texts = page.locator(".chat-markdown");
+  await expect(texts.first()).toBeVisible();
+  expect(
+    await texts.evaluateAll(
+      (elements, edge) =>
+        elements.filter(
+          (element) =>
+            element.scrollWidth > element.clientWidth ||
+            element.getBoundingClientRect().right > edge
+        ).length,
+      seam
+    )
+  ).toBe(0);
+
+  await surface.getByRole("button", { name: "Close display panel" }).click();
+  await expect(surface).toBeHidden();
+  await expect(band).toHaveCount(0);
+
+  // The agent saves again: the Page comes back, on the new revision.
+  await writePageFiles(
+    page,
+    patchThatRewrites(
+      "src/routes/index.tsx",
+      overviewRoute("Revenue overview"),
+      overviewRoute("Revenue this year")
+    )
+  );
+  await savePage(page);
+  await expect(surface).toContainText("Revision 2");
+  await expect(builtPage(page).getByRole("heading", { name: "Revenue this year" })).toBeVisible();
+
+  // Leaving the conversation and coming back shows its cards and opens nothing.
+  const conversation = new URL(page.url()).pathname;
+  expect(conversation).toMatch(/\/c\//u);
+  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  await expect(page.getByTestId("page-card")).toHaveCount(0);
+  await expect(surface).toBeHidden();
+  // The conversation that was used last stands first in the list.
+  await page.getByRole("button", { name: "Tool result review", exact: true }).first().click();
+  await expect.poll(() => new URL(page.url()).pathname).toBe(conversation);
+  await expect(page.getByTestId("page-card")).toHaveCount(2);
+  await expect(surface).toBeHidden();
+  await page.getByTestId("page-card").last().getByRole("button", { name: "Open" }).click();
+  await expect(surface).toContainText("Revision 2");
 });
