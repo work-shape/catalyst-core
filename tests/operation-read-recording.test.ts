@@ -207,6 +207,42 @@ describe("a read of an operation that does not record every call", () => {
   });
 });
 
+describe("a refused or failed read whose run cannot be written", () => {
+  const storeDown = "the store is down: insert into operation_runs";
+
+  // Fails without the change: the error of the store left `runOperation`, so the caller read
+  // 500 INTERNAL in place of the refusal or of the handler's own error.
+  it.each([
+    { path: "refusal", input: { readingDefault: "deny" }, status: 403, code: "POLICY_DENIED" },
+    {
+      path: "handler error",
+      input: { read: { fails: "not-found" } },
+      status: 404,
+      code: "NOT_FOUND"
+    }
+  ] as const)("answers the original $path and logs the failed write", async (expected) => {
+    const { server, runs, logged, executed } = await createServer(expected.input);
+    const write = vi
+      .spyOn(server.stores.operationRuns, "recordEnded")
+      .mockRejectedValue(new Error(storeDown));
+    const response = await server.call("testRunRead", { params: { itemId: "i" } }, person());
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(response.statusCode).toBe(expected.status);
+    expect(errorOf(response).code).toBe(expected.code);
+    expect(JSON.stringify(response.json())).not.toContain("store is down");
+    // No run was written, so the answer names none.
+    expect(response.headers["operation-run-id"]).toBeUndefined();
+    expect(await runs()).toEqual([]);
+    expect(executed).toEqual(expected.code === "NOT_FOUND" ? ["testRunRead"] : []);
+    expect(logged).toContainEqual(
+      expect.objectContaining({
+        operation: "testRunRead",
+        status: expected.code === "NOT_FOUND" ? "failed" : "denied"
+      })
+    );
+  });
+});
+
 describe("what recording a read sends to the database", () => {
   const read = { params: { itemId: "item-1" } };
   async function statementsOf(server: Awaited<ReturnType<typeof createServer>>["server"]) {

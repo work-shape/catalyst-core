@@ -36,7 +36,7 @@ export interface ServerInput {
   explicitCredentials?: boolean;
   authorizer?: Authorizer;
   /** How the fixture read is registered: marked to record every call, or with a failing handler. */
-  read?: { recordsEveryCall?: true; fails?: true };
+  read?: { recordsEveryCall?: true; fails?: true | "not-found" };
   register?: (route: TestRoute) => void;
 }
 
@@ -113,6 +113,9 @@ export async function createServer(input: ServerInput = {}) {
       resource: (item) => ({ kind: "test_item", id: item.itemId }),
       execute: (item) => {
         executed.push("testRunRead");
+        if (input.read?.fails === "not-found") {
+          throw new AppError("NOT_FOUND", "The item does not exist");
+        }
         if (input.read?.fails) throw new Error(secret);
         return Promise.resolve({ itemId: item.itemId, view: item.view });
       }

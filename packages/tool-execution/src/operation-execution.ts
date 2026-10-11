@@ -366,7 +366,8 @@ export async function endRun(context: RunContext, ended: OperationRunEnd): Promi
 /**
  * Ends a call that has left no run. Completed, it leaves none: nothing is sent to the store.
  * Refused or failed, its run is written now, ended, in one statement, and the after-events it
- * had are emitted behind it.
+ * had are emitted behind it. Where that write fails, the call still ends as it did: the caller
+ * is told the refusal or the error it met, never the store's, and the call stays without a run.
  */
 async function endUnrecorded(
   context: RunContext,
@@ -379,7 +380,29 @@ async function endUnrecorded(
   if (ended.status === "pending_approval") {
     throw new AppError("INTERNAL", "A reading call cannot wait for an approval");
   }
-  const recorded = await context.deps.runs.recordEnded({ ...unrecorded.start, end: ended });
+  let recorded: OperationRun;
+  try {
+    recorded = await context.deps.runs.recordEnded({ ...unrecorded.start, end: ended });
+  } catch (error) {
+    const { run, definition, call, deps } = context;
+    deps.logger.error(
+      {
+        operation: definition.name,
+        operationRunId: run.id,
+        correlationId: call.correlationId,
+        status: ended.status,
+        ...failureLogFields(error)
+      },
+      "A refused or failed read could not be recorded"
+    );
+    return {
+      ...run,
+      status: ended.status,
+      finishedAt: ended.finishedAt,
+      error: ended.error,
+      ...(ended.status === "denied" ? { denial: ended.denial } : {})
+    };
+  }
   context.unrecorded = undefined;
   for (const send of unrecorded.heldAfterEvents) {
     await send();
