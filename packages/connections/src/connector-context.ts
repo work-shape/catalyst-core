@@ -163,6 +163,9 @@ export async function openConnectorContext(
       handle: config.secretHandle,
       binding: { connectionAssetId: connection.id, subject: SHARED_CREDENTIAL_SUBJECT }
     });
+    // A call that ended while its credential was read is handed none: the secret stays where
+    // it was resolved and no type sees it.
+    if (signal.aborted) throw connectionCallError("upstream_timeout");
     credential = credentialOf(type, config.authScheme, settings.data, secret);
   }
 

@@ -3,6 +3,7 @@ import {
   CONNECTION_HEALTH_WRITE_TIMEOUT_MS,
   ConnectionCallSlots,
   callConnectionOperation,
+  openConnectorContext,
   readConnection
 } from "@vivd-catalyst/connections";
 import { AppError, connectionCallError, type JsonValue } from "@vivd-catalyst/core";
@@ -39,6 +40,10 @@ async function direct(
     input,
     { runtime: further.signal ? { signal: further.signal } : {} }
   );
+}
+
+function never(): never {
+  throw new Error("the Connection has a type");
 }
 
 /** The reason and the code a refused call carries. */
@@ -132,6 +137,40 @@ describe("the order inside a call", () => {
     expect(failed.reason).toBe("upstream_timeout");
     expect(t.sequence).toEqual(["read connection", "read connection", "check egress"]);
     expect(t.executed).toEqual([]);
+  });
+
+  // Fails without the change: a credential that resolved after the call had ended was still
+  // made into a context, which holds the secret for whoever is handed it.
+  it("opens no context for a call that ended while its credential was read", async () => {
+    const t = await fixture();
+    await t.seed("crm");
+    const stored = await readConnection(t.sourceDeps, "crm");
+    const credentials = t.sourceDeps.credentials;
+    if (!stored?.type || !credentials) throw new Error("the fixture stores a Connection");
+    const stop = new AbortController();
+    const resolved: string[] = [];
+    const open = (signal: AbortSignal, stopping: boolean) =>
+      openConnectorContext({
+        type: stored.type ?? never(),
+        connection: { id: stored.assetId, revision: stored.revision, config: stored.config },
+        egress: t.sourceDeps.egress,
+        credentials: {
+          async resolve(input) {
+            const secret = await credentials.resolve(input);
+            resolved.push(secret);
+            if (stopping) stop.abort();
+            return secret;
+          }
+        },
+        signal
+      });
+
+    expect(await refusal(open(stop.signal, true))).toMatchObject({ reason: "upstream_timeout" });
+    // The credential was read, so there was one to hand on.
+    expect(resolved).toEqual([t.secret]);
+    // A call that goes on is handed it.
+    const context = await open(new AbortController().signal, false);
+    expect(context.credentialFor(context.target)?.secret).toBe(t.secret);
   });
 
   // Fails without the change: a call that got its slot at once ran on what it had read
