@@ -127,7 +127,9 @@ To keep the tax agents to the tax team, somebody opens each agent in Build, goes
 
 Two exceptions. The default agent of the instance is always available everywhere. And an agent that arrives through a release push starts hidden when the same push deletes an agent that was limited to selected workspaces, because that is a rename and the new name must not reach more people than the old one did.
 
-Nothing links a Namespace to a workspace today. You cannot say "the agents of `tax-` belong to the workspace Tax team". The only connection is the **Available in** setting, agent by agent, and only a person with the instance-wide right sets it.
+Nothing links a Namespace to a workspace today. You cannot say "the agents of `tax-` belong to the workspace Tax team". The only bridge is the **Available in** setting, agent by agent, and only a person with the instance-wide right sets it.
+
+One kind of grant does name a workspace. With the module `connections` on, a grant to read or use Connections can be written "In a shared workspace", and it covers the Connections that workspace owns. It says nothing about agents, skills or conversations, and it has nothing to do with a Namespace.
 
 ## The four questions
 
@@ -162,7 +164,7 @@ The instance collects everything that speaks about you:
 
 1. Your **role** gives you a fixed set of rights on the whole instance.
 2. A **single right** on the Users page adds one right to that set or takes one away, also for the whole instance.
-3. A **grant** on the Access page allows or denies one action on agents or skills, in one Namespace or on one asset.
+3. A **grant** on the Access page allows or denies one action in one place. For agents and skills the place is one Namespace or one asset. For Connections it is one Connection or one Shared Workspace.
 
 Then it decides:
 
@@ -198,7 +200,7 @@ Catalyst has three roles. The interface calls the role of a person their **Acces
 | Role | What it carries |
 | --- | --- |
 | User | Chat, and nothing administrative. |
-| Admin | Read and change agents and skills, approve changes, manage users, see usage and the audit log. |
+| Admin | Read and change agents and skills, approve changes, manage users, see usage and the audit log. Every right on Connections, where the module is on. |
 | Superadmin | Everything an Admin has, plus managing API access and the model settings of agents. |
 
 The three roles are fixed. You cannot change what a role carries, and you cannot create a role of your own.
@@ -233,9 +235,9 @@ A role and a single right always apply to the whole instance. A grant is for eve
 | Part | Choices today |
 | --- | --- |
 | Who | One person. |
-| Kind | Agents, or skills. |
-| Action | Read, write, delete. |
-| Where | One Namespace, or one existing asset. |
+| Kind | Agents, or skills. Connections too, when the module `connections` is on. |
+| Action | Read, write, delete for agents and skills. Read and use for Connections. |
+| Where | For agents and skills, one Namespace or one existing asset. For Connections, one existing Connection or one Shared Workspace. |
 | Effect | Allow, or deny. |
 
 So the answer to "can rights only be given to single people" is yes, today. A grant names one person. There are no groups, and a role cannot hold a grant.
@@ -255,7 +257,7 @@ You register a prefix, for example `tax-`. From then on every agent and skill of
 <figure class="docs-diagram docs-diagram-wide">
 <svg viewBox="0 0 660 430" role="img" aria-labelledby="rights-fig-3-title rights-fig-3-desc">
 <title id="rights-fig-3-title">Where a right can sit</title>
-<desc id="rights-fig-3-desc">The Client Instance contains the agents and skills of the instance and the Collaboration Workspaces. Among the agents and skills, the Namespace tax- holds three assets and is covered by one grant. In the Namespace hr-, a grant sits on the single asset hr-onboarding. The asset helpdesk is in no Namespace. Workspaces hold conversations and take no grant yet.</desc>
+<desc id="rights-fig-3-desc">The Client Instance contains the agents and skills of the instance and the Collaboration Workspaces. Among the agents and skills, the Namespace tax- holds three assets and is covered by one grant. In the Namespace hr-, a grant sits on the single asset hr-onboarding. The asset helpdesk is in no Namespace. Workspaces hold conversations, and access to them comes from membership. A grant can name a workspace only for the Connections that workspace owns.</desc>
 <defs><marker id="rights-arrow-3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0 0 10 5 0 10z"/></marker></defs>
 <rect class="frame" x="8" y="8" width="644" height="414" rx="12"/>
 <text x="24" y="34" class="strong">Client Instance</text>
@@ -284,12 +286,12 @@ You register a prefix, for example `tax-`. From then on every agent and skill of
 <text x="456" y="98" class="strong">Workspaces</text>
 <text x="456" y="124" class="small">Collaboration Workspaces hold</text>
 <text x="456" y="144" class="small">conversations and their files.</text>
-<text x="456" y="184" class="small">Access comes from Workspace</text>
-<text x="456" y="204" class="small">Membership, not from a grant.</text>
-<text x="456" y="244" class="small">No grant can be written</text>
-<text x="456" y="264" class="small">for a workspace yet.</text>
+<text x="456" y="184" class="small">Access to conversations comes</text>
+<text x="456" y="204" class="small">from Workspace Membership.</text>
+<text x="456" y="244" class="small">A grant can name a workspace</text>
+<text x="456" y="264" class="small">only for its Connections.</text>
 </svg>
-<figcaption>The tinted boxes show the two places a grant can sit today: a whole Namespace, or one asset. Everything wider is a role or a single right on the Users page.</figcaption>
+<figcaption>The tinted boxes show where a grant on agents and skills can sit: a whole Namespace, or one asset. A grant on Connections sits on one Connection or on a Shared Workspace. Everything wider is a role or a single right on the Users page.</figcaption>
 </figure>
 
 ### An example
@@ -300,7 +302,7 @@ A company has a tax team. Its agents are named `tax-vat-helper` and `tax-year-en
 2. The administrator grants Mara read and write on agents in `tax-`.
 3. Mara opens **Build**. She sees the two tax agents and can change them. She does not see `hr-onboarding` or `helpdesk`.
 4. Mara creates `tax-travel-costs`. The name starts with the prefix, so her grant covers it at once.
-5. Jonas from the same team gets a grant on one asset instead, read on `tax-year-end`. He can open that one agent at its address and nothing else. Build does not list it for him, because the interface learns about a single-asset grant only when he opens the asset.
+5. Jonas from the same team gets a grant on one asset instead, read on `tax-year-end`. He sees **Build** with a list of agents that holds this one agent and nothing else. It opens read-only.
 
 ### Rules for a prefix
 
@@ -315,7 +317,7 @@ A Namespace can carry a list of allowed tools and a list of allowed models. An a
 
 ### A Namespace is not a workspace
 
-A grant in a Namespace covers the agents and skills of the instance itself. It gives no access to any conversation. [Namespace or workspace?](#namespace-or-workspace) puts the two side by side.
+A grant in a Namespace covers the agents and skills of the instance itself. It gives no access to any conversation and does not cover Connections. [Namespace or workspace?](#namespace-or-workspace) puts the two side by side.
 
 ## The path of one action
 
@@ -432,8 +434,8 @@ Three things about the order are worth knowing.
 
 Not every part of the product is on the full path yet.
 
-- **All 12 steps:** every tool call of an agent, reading and writing agents and skills, grants and Namespaces, and the retry of a background job.
-- **Steps 1 to 4, a simpler input check and step 7:** everything else, for example conversations, users, API access, usage and the audit log. These calls are refused the same way for a missing sign-in, module, scope or right. They have no policy step, cannot wait for an approval and leave no Operation Run.
+- **All 12 steps:** every tool call of an agent, reading and writing agents and skills, grants and Namespaces, creating and changing a Service Principal, creating and revoking an API key, and the retry of a background job.
+- **Steps 1 to 4, a simpler input check and step 7:** everything else, for example conversations, users, usage and the audit log. These calls are refused the same way for a missing sign-in, module, scope or right. They have no policy step, cannot wait for an approval and leave no Operation Run.
 
 ### Approvals
 
@@ -448,6 +450,8 @@ When the policy says `approval`, the action stops before it changes anything.
 A person who holds the approval right can approve their own call. The instance does not force a second person.
 
 Only a person's call can wait. A call made with an API key is refused with `POLICY_DENIED` where the policy asks for an approval, and that includes a release push.
+
+One action never waits: creating an API key. The key is shown once to the person who asks, so the answer cannot be held for somebody else. Under an instance default of `approval` the call runs on the caller's own word. See [operation policy](/configure/release-config/#operation-policy).
 
 There is an older, separate approval that works without the policy. An agent can propose a change to one of its skills. That proposal is an Approval Request of the kind "Skill change", and the same people decide it. The operator can add **Approval Checks** to it, which are rules a model evaluates and which warn the approver or block the proposal. See [config assets](/configure/config-assets/#agent-skill-changes).
 
@@ -537,9 +541,9 @@ You need "Manage users" yourself. Open **Settings > Instance > Access**.
 | Field | What you choose | What it means |
 | --- | --- | --- |
 | Person | One person from the list | The grant is for this person alone. To give it to three colleagues, send the dialog three times. |
-| Kind | Agents or Skills | One kind per dialog. A team that edits both needs the dialog twice. |
+| Kind | Agents or Skills | One kind per dialog. A team that edits both needs the dialog twice. With the module `connections` on, the dialog offers Connections as a third kind. |
 | Actions | Read, Write, Delete | Tick Read and Write for somebody who should edit. Tick Delete only if they should remove agents too. The dialog writes one row per tick. |
-| Where | "In a Namespace" or "On one asset" | "In a Namespace" covers every agent whose name starts with the prefix, future ones included. "On one asset" covers one agent that exists now. |
+| Where | "In a Namespace" or "On one asset" | "In a Namespace" covers every agent whose name starts with the prefix, future ones included. "On one asset" covers one agent that exists now. For Connections the two choices are "On one connection" and "In a shared workspace". |
 | Namespace, or Asset | The Namespace `tax-`, or the one agent | Only registered Namespaces are offered. If the list is empty, register one first. |
 | Effect | Allow or Deny | Allow gives the ticked actions there. Deny refuses them there and beats every allow and every role. For this task choose Allow. |
 
@@ -584,7 +588,7 @@ A Service Principal has no role, and no grant can be written for one. A release 
 - **Groups and teams.** A grant names one person. Nothing gives a right to a group.
 - **Custom roles.** The three roles are fixed, and no screen shows or edits what a role carries.
 - **Company sign-in with group mapping.** People are not signed in through a company identity provider with its groups.
-- **Grants for a workspace, and grants for other kinds.** A grant covers agents and skills, in a Namespace or on one asset.
+- **Grants on a workspace for agents and skills, and grants for other kinds.** A grant covers agents and skills, in a Namespace or on one asset, and Connections, on one Connection or in one Shared Workspace. Writing, deleting and approving a Connection stay with the Admin role.
 - **A policy per action or per Namespace.** The policy has two instance-wide defaults and the mode a tool states. An administrator cannot set "saving in `tax-` needs an approval" in the interface.
 - **Guardrails.** The step exists and nothing is plugged in.
 - **An agent that waits for a person.** A run cannot pause for a confirmation or an approval and continue.
