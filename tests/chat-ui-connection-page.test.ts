@@ -190,6 +190,21 @@ describe("Connection page", () => {
     const unreadable = renderPage({ detail: recordedStates.secretUnreadable });
     expect(unreadable).toContain('data-connection-credential="unreadable"');
     expect(unreadable).toContain(">Unreadable<");
+
+    // A Connection that sends no credential has none to set, and no account anybody shares.
+    const open = renderPage({ asset: connectionAsset("open-data", { authScheme: "none" }) });
+    expect(open).toContain('data-connection-credential="none_needed"');
+    expect(open).toContain(">None needed<");
+    expect(open).toContain("The outside system asks for no credential.");
+    expect(open).not.toContain(">Not set<");
+    expect(open).not.toContain("The credential stays in the Secret Store.");
+    expect(open).not.toContain("data-connection-shared");
+    const offen = renderPage({
+      asset: connectionAsset("open-data", { authScheme: "none" }),
+      locale: "de"
+    });
+    expect(offen).toContain(">Nicht nötig<");
+    expect(offen).toContain("Das externe System verlangt keine Zugangsdaten.");
   });
 
   it("says each recorded state in one sentence, in English and in German", () => {
@@ -353,7 +368,10 @@ describe("Connection page", () => {
     ).toBe("secret_unreadable");
     // A test that waits for somebody's approval ran nothing, and the page says so.
     expect(renderPage({ run: { status: "held" } })).toContain(
-      "The test waits for an approval. It has not run yet."
+      "The test waits for approval in the Inbox. It has not run yet."
+    );
+    expect(renderPage({ run: { status: "held" }, locale: "de" })).toContain(
+      "Der Test wartet auf eine Freigabe im Eingang. Er ist noch nicht gelaufen."
     );
   });
 

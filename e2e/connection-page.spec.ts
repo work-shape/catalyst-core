@@ -117,13 +117,15 @@ async function removeConnection(assetId: string): Promise<void> {
 
 /** What stands in for an answer of the instance: a state, or the code of a refusal. */
 type Refusal = "FORBIDDEN" | "INTERNAL";
+/** The call was accepted and waits for somebody's approval: nothing ran. */
+type Held = "HELD";
 const REFUSAL_STATUS: Record<Refusal, number> = { FORBIDDEN: 403, INTERNAL: 500 };
 
 interface ReplacedAnswers {
   /** Replaces what `connections.get` answers. */
   detail?: ConnectionDetail | Refusal;
   /** Refuses `connections.test`, or holds its real answer back for this long. */
-  test?: Refusal | { delayMs: number };
+  test?: Refusal | Held | { delayMs: number };
 }
 
 function refusalBody(code: Refusal) {
@@ -153,6 +155,33 @@ async function replaceAnswers(
   }
   if (tested !== undefined) {
     await page.route(testUrl, async (route) => {
+      if (tested === "HELD") {
+        // The instance's answer to a call it holds for an approval: 202 with the run that waits.
+        // The test itself is not sent on, so nothing runs and nothing is recorded.
+        const now = new Date().toISOString();
+        await route.fulfill({
+          status: 202,
+          headers: {
+            "access-control-allow-origin": new URL(page.url()).origin,
+            "access-control-allow-credentials": "true"
+          },
+          json: {
+            id: "oprun_e2e_held",
+            operation: "connections.test",
+            effect: "changing",
+            status: "pending_approval",
+            actor: { kind: "user", id: "e2e-admin", label: "E2E Admin" },
+            origin: { kind: "user" },
+            approvalRequestId: "apr_e2e_held",
+            inputHash: "e2e",
+            attempt: 1,
+            correlationId: "e2e",
+            createdAt: now,
+            href: "/api/v1/operation-runs/oprun_e2e_held"
+          }
+        });
+        return;
+      }
       if (typeof tested === "string") {
         const response = await route.fetch();
         await route.fulfill({
@@ -279,9 +308,13 @@ test("a Connection's page shows its definition, its state in every case and the 
     await setView(page, {});
   };
 
-  /** The page of the reachable Connection with answers of the instance replaced. */
-  const replaced = async (answers: ReplacedAnswers, run: () => Promise<void>) => {
-    const restore = await replaceAnswers(page, reachable.name, answers);
+  /** The page of a Connection with answers of the instance replaced. */
+  const replaced = async (
+    answers: ReplacedAnswers,
+    run: () => Promise<void>,
+    connection = reachable
+  ) => {
+    const restore = await replaceAnswers(page, connection.name, answers);
     try {
       await run();
     } finally {
@@ -310,11 +343,16 @@ test("a Connection's page shows its definition, its state in every case and the 
       await expect(main.getByText("Instance", { exact: true })).toBeVisible();
       await expect(main.getByText(reachable.name, { exact: true })).toBeVisible();
       await expect(main.getByText(ALLOWED_URL)).toBeVisible();
-      // No credential is stored for a Connection that sends none.
+      // A Connection that sends no credential has none to set, and no account anybody shares.
       await expect(main.locator("[data-connection-credential]")).toHaveAttribute(
         "data-connection-credential",
-        "not_set"
+        "none_needed"
       );
+      await expect(main.getByText("None needed", { exact: true })).toBeVisible();
+      await expect(
+        main.getByText("The outside system asks for no credential.", { exact: true })
+      ).toBeVisible();
+      await expect(main.locator("[data-connection-shared]")).toHaveCount(0);
       // The page writes nothing.
       await expect(main.getByRole("textbox")).toHaveCount(0);
       await expect(main.getByRole("button", { name: /^(History|Save|More actions)/u })).toHaveCount(
@@ -383,6 +421,7 @@ test("a Connection's page shows its definition, its state in every case and the 
       // The definition names a handle of the Secret Store. The page shows nothing of it.
       await expect(main).not.toContainText("secret_");
       await expect(main.getByText("Not set", { exact: true })).toBeVisible();
+      await expect(main.getByText("One shared account", { exact: true })).toBeVisible();
       await testButton.click();
       await expect(health).toHaveAttribute("data-connection-health", "not_configured");
       await expect(health).toContainText("The credential of this connection is missing.");
@@ -409,45 +448,61 @@ test("a Connection's page shows its definition, its state in every case and the 
     });
 
     await test.step("the states the suite's Connector type cannot bring about, each with its sentences", async () => {
+      // On the Connection that sends a credential: the page shows whether it is there.
       const recorded = (state: Partial<ConnectionDetail>) => ({
-        detail: connectionDetail(reachable.name, state)
+        detail: connectionDetail(keyless.name, state)
       });
-      await replaced(recorded(recordedStates.unauthorized), async () => {
-        await open(reachable);
-        await expect(health).toHaveAttribute("data-connection-health", "unauthorized");
-        await expect(health).toContainText("The outside system refused the credential.");
-        await expect(health).toContainText("The operator sets a new credential");
-        // The answer of `connections.get` in full: every status of an operation, and who uses it.
-        await expect(main.locator('[data-connection-operation="list_customers"]')).toContainText(
-          "Awaiting discovery"
-        );
-        await expect(
-          main
-            .getByRole("list", { name: "Used by" })
-            .getByRole("link", { name: /Workflow Assistant/u })
-        ).toHaveAttribute("href", "/build/agents/workflow_assistant");
-        await expect(main.getByText("One shared account", { exact: true })).toBeVisible();
-        await shoot("unauthorized", reachable);
-      });
-      await replaced(recorded(recordedStates.unavailable), async () => {
-        await open(reachable);
-        await expect(health).toContainText("The outside system did not answer the test.");
-        await shoot("unavailable", reachable);
-      });
-      await replaced(recorded(recordedStates.failedUnnamed), async () => {
-        await open(reachable);
-        await expect(health).toHaveAttribute("data-connection-health", "failed");
-        await expect(health).toContainText("Test again. If it fails again, ask the operator.");
-        await shoot("failed-unnamed", reachable);
-      });
-      await replaced(recorded(recordedStates.secretUnreadable), async () => {
-        await open(reachable);
-        await expect(health).toHaveAttribute("data-connection-health", "secret_unreadable");
-        await expect(health).toContainText("the instance cannot read it");
-        await expect(health).toContainText("The operator restores the Secret Store key");
-        await expect(main.getByText("Unreadable", { exact: true })).toBeVisible();
-        await shoot("secret-unreadable", reachable);
-      });
+      await replaced(
+        recorded(recordedStates.unauthorized),
+        async () => {
+          await open(keyless);
+          await expect(health).toHaveAttribute("data-connection-health", "unauthorized");
+          await expect(health).toContainText("The outside system refused the credential.");
+          await expect(health).toContainText("The operator sets a new credential");
+          // The answer of `connections.get` in full: every status of an operation, and who uses it.
+          await expect(main.locator('[data-connection-operation="list_customers"]')).toContainText(
+            "Awaiting discovery"
+          );
+          await expect(
+            main
+              .getByRole("list", { name: "Used by" })
+              .getByRole("link", { name: /Workflow Assistant/u })
+          ).toHaveAttribute("href", "/build/agents/workflow_assistant");
+          await shoot("unauthorized", keyless);
+        },
+        keyless
+      );
+      await replaced(
+        recorded(recordedStates.unavailable),
+        async () => {
+          await open(keyless);
+          await expect(health).toContainText("The outside system did not answer the test.");
+          await shoot("unavailable", keyless);
+        },
+        keyless
+      );
+      await replaced(
+        recorded(recordedStates.failedUnnamed),
+        async () => {
+          await open(keyless);
+          await expect(health).toHaveAttribute("data-connection-health", "failed");
+          await expect(health).toContainText("Test again. If it fails again, ask the operator.");
+          await shoot("failed-unnamed", keyless);
+        },
+        keyless
+      );
+      await replaced(
+        recorded(recordedStates.secretUnreadable),
+        async () => {
+          await open(keyless);
+          await expect(health).toHaveAttribute("data-connection-health", "secret_unreadable");
+          await expect(health).toContainText("the instance cannot read it");
+          await expect(health).toContainText("The operator restores the Secret Store key");
+          await expect(main.getByText("Unreadable", { exact: true })).toBeVisible();
+          await shoot("secret-unreadable", keyless);
+        },
+        keyless
+      );
     });
 
     await test.step("a refused test says so, and a state that cannot be read offers a retry", async () => {
@@ -457,6 +512,32 @@ test("a Connection's page shows its definition, its state in every case and the 
         await expect(
           main.getByText("You may not test this connection. You can read it.", { exact: true })
         ).toBeVisible();
+      });
+      await replaced({ test: "HELD" }, async () => {
+        const held = main.locator("[data-connection-test-held]");
+        await open(reachable);
+        await testButton.click();
+        await expect(held).toHaveText(
+          "The test waits for approval in the Inbox. It has not run yet."
+        );
+        // Nothing ran: the state is the one recorded before.
+        await expect(health).toHaveAttribute("data-connection-health", "ready");
+        if (shotsDir) {
+          for (const [width, locale, theme] of [
+            [1280, "en", "light"],
+            [390, "de", "dark"]
+          ] as const) {
+            await page.setViewportSize({ width, height: widths[width] });
+            await open(reachable, { locale, theme });
+            await testButton.click();
+            await expect(held).toBeVisible();
+            await page.screenshot({
+              path: join(shotsDir, `connection-test-held-${theme}-${locale}-${width}.png`)
+            });
+          }
+          await page.setViewportSize({ width: 1280, height: widths[1280] });
+          await setView(page, {});
+        }
       });
       await replaced({ detail: "INTERNAL" }, async () => {
         await open(reachable);

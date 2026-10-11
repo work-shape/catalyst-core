@@ -111,6 +111,9 @@ const RECORDED_FAILURES: Record<string, HealthView> = {
   unavailable: "unavailable"
 };
 
+/** The auth scheme of a Connection that sends no credential. */
+const AUTH_SCHEME_NONE = "none";
+
 const TEST_RESULTS: Record<ConnectionTestResult["status"], HealthView> = {
   ready: "ready",
   unauthorized: "unauthorized",
@@ -252,6 +255,7 @@ export function ConnectionPage({
             <ConnectionStatus
               name={asset.name}
               detail={read.detail}
+              needsCredential={textOf(config, "authScheme") !== AUTH_SCHEME_NONE}
               source={source}
               mayTest={source.mayTest(asset)}
             />
@@ -384,11 +388,14 @@ export function ConnectionPage({
 function ConnectionStatus({
   name,
   detail,
+  needsCredential,
   source,
   mayTest
 }: {
   name: string;
   detail: ConnectionDetail;
+  /** The Connection's auth scheme sends a credential. With `none` there is none to set. */
+  needsCredential: boolean;
   source: ConnectionSource;
   mayTest: boolean;
 }) {
@@ -431,7 +438,9 @@ function ConnectionStatus({
       {run.status === "refused" ? (
         <FormNotice tone="error">{t("connections.testRefused")}</FormNotice>
       ) : run.status === "held" ? (
-        <Banner layout="line">{t("connections.testHeld")}</Banner>
+        <Banner layout="line" data-connection-test-held="">
+          {t("connections.testHeld")}
+        </Banner>
       ) : run.status === "failed" ? (
         <FormNotice tone="error">{run.message ?? t("connections.testFailed")}</FormNotice>
       ) : mayTest ? null : (
@@ -442,33 +451,46 @@ function ConnectionStatus({
       <KeyValueList>
         <KeyValue label={t("connections.credential")}>
           <div className="grid justify-items-start gap-1">
-            <Badge
-              data-connection-credential={secret.state}
-              tone={
-                secret.state === "set"
-                  ? "success"
-                  : secret.state === "unreadable"
-                    ? "danger"
-                    : "neutral"
-              }
-            >
-              {secret.state === "set"
-                ? secret.version === undefined
-                  ? t("connections.credentialSet")
-                  : t("connections.credentialSetVersion", { version: secret.version })
-                : t(
-                    secret.state === "unreadable"
-                      ? "connections.credentialUnreadable"
-                      : "connections.credentialNotSet"
-                  )}
-            </Badge>
-            <span className="text-caption text-muted-foreground">
-              {t("connections.credentialNeverShown")}
-            </span>
+            {needsCredential ? (
+              <>
+                <Badge
+                  data-connection-credential={secret.state}
+                  tone={
+                    secret.state === "set"
+                      ? "success"
+                      : secret.state === "unreadable"
+                        ? "danger"
+                        : "neutral"
+                  }
+                >
+                  {secret.state === "set"
+                    ? secret.version === undefined
+                      ? t("connections.credentialSet")
+                      : t("connections.credentialSetVersion", { version: secret.version })
+                    : t(
+                        secret.state === "unreadable"
+                          ? "connections.credentialUnreadable"
+                          : "connections.credentialNotSet"
+                      )}
+                </Badge>
+                <span className="text-caption text-muted-foreground">
+                  {t("connections.credentialNeverShown")}
+                </span>
+              </>
+            ) : (
+              <>
+                <Badge data-connection-credential="none_needed" tone="neutral">
+                  {t("connections.credentialNoneNeeded")}
+                </Badge>
+                <span className="text-caption text-muted-foreground">
+                  {t("connections.credentialNoneNeededText")}
+                </span>
+              </>
+            )}
           </div>
         </KeyValue>
       </KeyValueList>
-      {detail.sharedCredential ? (
+      {needsCredential && detail.sharedCredential ? (
         <Banner layout="line" title={t("connections.sharedAccountTitle")} data-connection-shared="">
           {t("connections.sharedAccountText")}
         </Banner>

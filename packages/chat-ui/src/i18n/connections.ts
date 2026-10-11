@@ -30,6 +30,8 @@ export const connections = defineTranslations({
     "connections.credential": "Credential",
     "connections.credentialNeverShown":
       "The credential stays in the Secret Store. This page shows only whether it is there.",
+    "connections.credentialNoneNeeded": "None needed",
+    "connections.credentialNoneNeededText": "The outside system asks for no credential.",
     "connections.credentialNotSet": "Not set",
     "connections.credentialSet": "Set",
     "connections.credentialSetVersion": "Set, version {version}",
@@ -100,7 +102,7 @@ export const connections = defineTranslations({
       "The outside system does not offer this operation. It cannot be called.",
     "connections.test": "Test connection",
     "connections.testFailed": "The test could not be run.",
-    "connections.testHeld": "The test waits for an approval. It has not run yet.",
+    "connections.testHeld": "The test waits for approval in the Inbox. It has not run yet.",
     "connections.testNotAllowed":
       "You can read this connection. Testing it needs the right to change connections on the instance.",
     "connections.testRefused": "You may not test this connection. You can read it."
@@ -134,6 +136,8 @@ export const connections = defineTranslations({
     "connections.credential": "Zugangsdaten",
     "connections.credentialNeverShown":
       "Die Zugangsdaten bleiben im Secret Store. Diese Seite zeigt nur, ob sie vorhanden sind.",
+    "connections.credentialNoneNeeded": "Nicht nötig",
+    "connections.credentialNoneNeededText": "Das externe System verlangt keine Zugangsdaten.",
     "connections.credentialNotSet": "Nicht gesetzt",
     "connections.credentialSet": "Gesetzt",
     "connections.credentialSetVersion": "Gesetzt, Version {version}",
@@ -207,7 +211,8 @@ export const connections = defineTranslations({
       "Das externe System bietet diese Operation nicht an. Sie kann nicht aufgerufen werden.",
     "connections.test": "Verbindung testen",
     "connections.testFailed": "Der Test konnte nicht ausgeführt werden.",
-    "connections.testHeld": "Der Test wartet auf eine Freigabe. Er ist noch nicht gelaufen.",
+    "connections.testHeld":
+      "Der Test wartet auf eine Freigabe im Eingang. Er ist noch nicht gelaufen.",
     "connections.testNotAllowed":
       "Sie können diese Verbindung lesen. Zum Testen brauchen Sie das Recht, Verbindungen der Instanz zu ändern.",
     "connections.testRefused": "Sie dürfen diese Verbindung nicht testen. Lesen können Sie sie."
