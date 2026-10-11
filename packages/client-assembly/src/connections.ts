@@ -2,6 +2,7 @@ import {
   createConnectionCredentialResolver,
   createEgressChecker,
   loadSecretKeyring,
+  platformStoreTargetsOf,
   seedReleaseConnections,
   type ReleaseSeedResult,
   type SecretKeyring
@@ -30,20 +31,6 @@ export interface InstanceConnections {
   readonly credentials?: ConnectionCredentialResolver;
   /** Makes the stored release Connections equal to release config. The API process calls it. */
   seed(): Promise<ReleaseSeedResult>;
-}
-
-/**
- * Where the Platform Store listens, read from its address. Only host and port leave this
- * function: the egress checker refuses them for every Connection.
- */
-function platformStoreTargets(databaseUrl: string): { host: string; port: number }[] {
-  try {
-    const url = new URL(databaseUrl);
-    if (url.hostname === "") return [];
-    return [{ host: url.hostname, port: url.port === "" ? 5432 : Number(url.port) }];
-  } catch {
-    return [];
-  }
 }
 
 /**
@@ -116,9 +103,20 @@ async function buildInstanceConnections(
         )
     });
   }
+  const platformStore = platformStoreTargetsOf(
+    await secrets.resolve(PLATFORM_SECRET_NAMES.databaseUrl)
+  );
+  if (!platformStore) {
+    // Said once, at start. The address itself is never logged.
+    logger.warn(
+      { module: "connections" },
+      "The address of the Platform Store could not be read as host and port, so no Connection can be told apart from it. Every 'postgres' egress target is refused on this instance. Give the database address as postgres://host:port/database"
+    );
+  }
   const egress = createEgressChecker({
     allow: config.egress.allow,
-    platformStore: platformStoreTargets(await secrets.resolve(PLATFORM_SECRET_NAMES.databaseUrl))
+    platformStore: platformStore ?? [],
+    platformStoreUnknown: platformStore === undefined
   });
   return {
     connectorTypes,

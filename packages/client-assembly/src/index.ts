@@ -39,6 +39,7 @@ export {
   resolveInstanceModules,
   type InstanceModules
 } from "./modules";
+export { createInstanceConnections, type InstanceConnections } from "./connections";
 export { migrateClientInstanceDatabase } from "./migrate";
 export { createPlatformStore } from "./store";
 export {

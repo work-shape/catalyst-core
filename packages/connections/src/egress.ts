@@ -27,7 +27,8 @@ import { isBlockedIpAddress, nodeWebFetchAddressResolver } from "@vivd-catalyst/
 //   address checked and a second DNS answer changes nothing.
 // - The Platform Store's own host and port are refused whatever the list says, by name and by
 //   address. Its addresses are resolved with every judged target. Where they cannot be
-//   resolved, every target on the Store's port is refused.
+//   resolved, every target on the Store's port is refused. Where the Store's address itself
+//   could not be read as host and port, every `postgres` target is refused.
 // - Plain `http` reaches a private entry only. The release config schema refuses it for a
 //   public one, and so does this check.
 // - A redirect or a returned download address is a new target: `egressTargetOfUrl` reads it
@@ -71,6 +72,11 @@ export interface EgressCheckerOptions {
   allow: readonly EgressAllowEntry[];
   /** The Platform Store's own targets. They are refused always. */
   platformStore?: readonly { host: string; port: number }[];
+  /**
+   * The Platform Store's address could not be read as hosts and ports. Nobody can then say
+   * which database target is the Store, so every `postgres` target is refused.
+   */
+  platformStoreUnknown?: boolean;
   /** Resolves a host name to every address it has. The system resolver unless given. */
   resolve?: EgressAddressResolver;
   /** The clock of the answer cache, in milliseconds. */
@@ -354,6 +360,9 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
       ) {
         throw egressDenied(target);
       }
+      if (options.platformStoreUnknown === true && target.protocol === "postgres") {
+        throw egressDenied(target);
+      }
       if (platformStore.some((store) => store.host === target.host && store.port === target.port)) {
         throw egressDenied(target);
       }
@@ -406,6 +415,39 @@ export function egressTargetOfUrl(address: string): EgressTarget {
     throw egressDenied({ host, port });
   }
   return { protocol, host, port };
+}
+
+/**
+ * Where the Platform Store listens, read from its connection address: one target for each
+ * host, also of the form that names several (`postgres://a:5432,b:5433/db`). Answers
+ * `undefined` where host and port cannot be read, as for a Unix socket or a host given as a
+ * parameter. Only hosts and ports leave this function, never the address.
+ */
+export function platformStoreTargetsOf(
+  databaseUrl: string
+): { host: string; port: number }[] | undefined {
+  const match = /^postgres(?:ql)?:\/\/(?:[^@/?#]*@)?([^/?#]*)([^#]*)/iu.exec(databaseUrl.trim());
+  if (!match?.[1]) {
+    return undefined;
+  }
+  // A `host` or `port` parameter replaces what the authority says, and a socket is named so.
+  if (/[?&](?:host|hostaddr|port)=/iu.test(match[2] ?? "")) {
+    return undefined;
+  }
+  const targets: { host: string; port: number }[] = [];
+  for (const part of match[1].split(",")) {
+    const parsed = /^(\[[0-9a-f:.]+\]|[^:[\]%]+)(?::(\d{1,5}))?$/iu.exec(part);
+    if (!parsed?.[1]) {
+      return undefined;
+    }
+    const host = normalizeEgressHost(parsed[1]);
+    const port = parsed[2] === undefined ? DEFAULT_PORTS.postgres : Number(parsed[2]);
+    if (!(isHostName(host) || isIP(host) !== 0) || !isPort(port)) {
+      return undefined;
+    }
+    targets.push({ host, port });
+  }
+  return targets;
 }
 
 /** Whether two targets are one origin. A credential stays with the origin it was set for. */

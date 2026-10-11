@@ -7,64 +7,21 @@ import {
   createEgressChecker,
   egressTargetOfUrl,
   openConnectorContext,
-  pinnedLookup,
-  type EgressAllowEntry,
-  type EgressResolvedAddress
+  type EgressAllowEntry
 } from "@vivd-catalyst/connections";
 import {
-  AppError,
   type ConnectionConfig,
   type ConnectionCredentialResolver,
   type EgressChecker,
   type EgressTarget
 } from "@vivd-catalyst/core";
+import { checkerOf, denied, https, type Dns } from "./support/egress";
 import { required } from "./support/assertions";
 import { connection } from "./support/connections";
 import { createTestConnector, findLeak, generateTestSecret } from "./support/test-connector";
 
 // The egress checker, and the order the auth component keeps around it. Each test fails
 // without the checker: before it nothing judged a Connection's target.
-
-type Dns = Record<string, string[]>;
-
-function checkerOf(
-  allow: Array<Partial<EgressAllowEntry> & { host: string }>,
-  dns: Dns = {},
-  further: { platformStore?: { host: string; port: number }[]; now?: () => number } = {}
-) {
-  const asked: string[] = [];
-  const checker = createEgressChecker({
-    allow: egressConfigSchema.parse({
-      allow: allow.map((entry) => ({ protocol: "https", port: 443, ...entry }))
-    }).allow,
-    resolve(host) {
-      asked.push(host);
-      const answers = dns[host];
-      if (!answers) return Promise.reject(new Error("ENOTFOUND"));
-      return Promise.resolve(
-        answers.map((address): EgressResolvedAddress => ({
-          address,
-          family: address.includes(":") ? 6 : 4
-        }))
-      );
-    },
-    ...further
-  });
-  return { checker, asked };
-}
-
-const https = (host: string, port = 443): EgressTarget => ({ protocol: "https", host, port });
-
-async function denied(work: Promise<unknown>): Promise<AppError> {
-  const error: unknown = await work.then(
-    () => undefined,
-    (caught: unknown) => caught
-  );
-  if (!(error instanceof AppError)) throw new Error("Expected the target to be refused");
-  expect(error.code).toBe("FORBIDDEN");
-  expect(error.details).toMatchObject({ reason: "egress_denied" });
-  return error;
-}
 
 describe("the egress checker", () => {
   it("refuses everything on an empty list", async () => {
@@ -471,66 +428,6 @@ describe("the egress checker", () => {
     expect(error.message).toBe("egress_denied: api.example.com:443 is not allowed");
     const odd = await denied(checker.check(https("api.example.com/path?key=abc def")));
     expect(odd.message).toBe("egress_denied: (unreadable host):443 is not allowed");
-  });
-});
-
-describe("an address a connector was handed", () => {
-  it("is read as protocol, host and port, with the default port of its scheme", () => {
-    expect(egressTargetOfUrl("https://API.example.com/mcp?x=1")).toEqual(https("api.example.com"));
-    expect(egressTargetOfUrl("http://mcp-demo:8080/mcp")).toEqual({
-      protocol: "http",
-      host: "mcp-demo",
-      port: 8080
-    });
-    expect(egressTargetOfUrl("postgresql://db.example.com/sales")).toEqual({
-      protocol: "postgres",
-      host: "db.example.com",
-      port: 5432
-    });
-    expect(egressTargetOfUrl("https://[::ffff:127.0.0.1]/")).toMatchObject({ port: 443 });
-  });
-
-  it("is refused with a user name or a password, an unknown scheme or no host, without repeating it", () => {
-    const password = generateTestSecret();
-    for (const address of [
-      `https://user:${password}@api.example.com/`,
-      `https://${password}@api.example.com/`,
-      "ftp://api.example.com/",
-      "file:///etc/passwd",
-      "javascript:alert(1)",
-      "//api.example.com/",
-      "not a url",
-      ""
-    ]) {
-      let error: unknown;
-      try {
-        egressTargetOfUrl(address);
-      } catch (caught) {
-        error = caught;
-      }
-      if (!(error instanceof AppError)) throw new Error(`Expected a refusal of '${address}'`);
-      expect(error.details).toMatchObject({ reason: "egress_denied" });
-      expect(JSON.stringify([error.message, error.details])).not.toContain(password);
-    }
-  });
-
-  it("pins a socket to the checked address and resolves no other name", async () => {
-    const { checker } = checkerOf([{ host: "api.example.com" }], {
-      "api.example.com": ["93.184.216.34"]
-    });
-    const lookup = pinnedLookup(await checker.check(https("api.example.com")));
-    const one = await new Promise<unknown[]>((resolve) =>
-      lookup("api.example.com", {}, (...answer) => resolve(answer))
-    );
-    expect(one).toEqual([null, "93.184.216.34", 4]);
-    const all = await new Promise<unknown[]>((resolve) =>
-      lookup("API.example.com.", { all: true }, (...answer) => resolve(answer))
-    );
-    expect(all).toEqual([null, [{ address: "93.184.216.34", family: 4 }]]);
-    const other = await new Promise<unknown[]>((resolve) =>
-      lookup("evil.example.com", {}, (...answer) => resolve(answer))
-    );
-    expect(other[0]).toMatchObject({ code: "ENOTFOUND" });
   });
 });
 
