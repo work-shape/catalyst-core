@@ -194,9 +194,15 @@ const HOST_PATTERN = /^[A-Za-z0-9.:_[\]-]{1,255}$/u;
  * The error a failed call leaves with. Only a reason passes: the sentence is this module's
  * own, so no text an outside system sent and no text a Connector type composed reaches a run,
  * an audit row, a log or a caller. A refused target keeps its host and port, which the egress
- * checker names. Any other error becomes an internal failure that says nothing.
+ * checker names, unless they hold the credential of the call: a Connector type may have asked
+ * for a target it built from the secret. Any other error becomes an internal failure that
+ * says nothing.
  */
-function safeCallError(error: unknown, reason: ConnectionCallReason | undefined): AppError {
+function safeCallError(
+  error: unknown,
+  reason: ConnectionCallReason | undefined,
+  secret: string | undefined
+): AppError {
   if (reason === undefined) {
     return new AppError("INTERNAL", "The connector failed");
   }
@@ -204,7 +210,13 @@ function safeCallError(error: unknown, reason: ConnectionCallReason | undefined)
     const details: unknown = error.details;
     if (typeof details === "object" && details !== null && "host" in details && "port" in details) {
       const { host, port } = details;
-      if (typeof host === "string" && HOST_PATTERN.test(host) && typeof port === "number") {
+      if (
+        typeof host === "string" &&
+        HOST_PATTERN.test(host) &&
+        typeof port === "number" &&
+        Number.isInteger(port) &&
+        !namesSecret(`${host}:${port}`, secret)
+      ) {
         return new AppError(
           "FORBIDDEN",
           `${reason}: ${host}:${port} is not allowed by the instance's egress list`,
@@ -308,8 +320,13 @@ function holdsSecret(serialized: string, secret: string): boolean {
   if (bare.length >= CONNECTION_SECRET_ECHO_MIN_CHARS && unescaped(serialized).includes(bare)) {
     return true;
   }
+  return encodedForms(secret).some((form) => serialized.includes(form));
+}
+
+/** The credential as it is and in the encodings a result or a host may carry it in. */
+function encodedForms(secret: string): string[] {
   const hex = Buffer.from(secret, "utf8").toString("hex");
-  const forms = [
+  return [
     secret,
     JSON.stringify(secret).slice(1, -1),
     hex,
@@ -317,7 +334,19 @@ function holdsSecret(serialized: string, secret: string): boolean {
     encodeURIComponent(secret),
     ...base64Forms(secret)
   ];
-  return forms.some((form) => serialized.includes(form));
+}
+
+/**
+ * Whether a host and port hold the credential. A host is written in lower case by whoever
+ * checks it, so the search does not depend on case, in any encoding.
+ */
+function namesSecret(target: string, secret: string | undefined): boolean {
+  if (secret === undefined || secret.length < CONNECTION_SECRET_ECHO_MIN_CHARS) return false;
+  const lowered = target.toLowerCase();
+  return (
+    holdsSecret(target, secret) ||
+    encodedForms(secret).some((form) => lowered.includes(form.toLowerCase()))
+  );
 }
 
 /** Ends when the deadline passes or the caller stops the call, whichever is first. */
@@ -486,7 +515,7 @@ export async function callConnectionOperation(
           "A connector failed without a reason"
         );
       }
-      throw safeCallError(error, reason);
+      throw safeCallError(error, reason, secret);
     }
 
     const serialized = serializedOrUndefined(result);

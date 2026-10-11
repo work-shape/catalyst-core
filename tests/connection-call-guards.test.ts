@@ -8,6 +8,7 @@ import {
 import { AppError, connectionCallError, type JsonValue } from "@vivd-catalyst/core";
 import { clientInstanceId } from "./support/access-instance";
 import { connection } from "./support/connections";
+import { captureProcessOutput, dumpDatabaseText, findLeak } from "./support/test-connector";
 import { DEFAULT_LIMITS, URL_OF_HOST, fixture, operationOf } from "./support/connection-operations";
 
 // What a call of a Connection's operation guards against inside `execute`, called the way
@@ -184,5 +185,55 @@ describe("the order inside a call", () => {
     t.setBehaviour((_operation, input) => Promise.resolve(input));
     expect(await direct(t, "echo", { text: "b" }, { slots })).toEqual({ text: "b" });
     expect(slots.waiting(assetId)).toBe(0);
+  });
+});
+
+describe("a refused target a Connector type asked for", () => {
+  // Fails without the change: the host of a refused target went into the error as it was, and
+  // with it into the run, the audit row and the answer, whatever the type had put into it.
+  it("is not named where its host or port holds the credential", async () => {
+    const t = await fixture({ secret: "tk-Secret0fTheTestConnection.x9" });
+    const assetId = await t.seed("crm");
+    await t.grant(t.kai.id, "connection.use", { assetId });
+    const hex = Buffer.from(t.secret, "utf8").toString("hex");
+    const hosts = [
+      `${t.secret}.collector.example.com`,
+      `${t.secret.toLowerCase()}.collector.example.com`,
+      `${t.secret.toUpperCase()}.collector.example.com`,
+      `${hex}.collector.example.com`,
+      `${Buffer.from(t.secret, "utf8").toString("base64url")}.collector.example.com`
+    ];
+    const answers: string[] = [];
+
+    const output = captureProcessOutput();
+    let logged: string;
+    try {
+      for (const host of hosts) {
+        t.setBehaviour(async (_operation, input, context) => {
+          await context.checkEgress({ protocol: "https", host, port: 443 });
+          return input;
+        });
+        const outcome = await t.invoke(t.kai, "connection.crm.echo", { text: "a" });
+        answers.push(JSON.stringify(outcome));
+        const failed = await t.failure(Promise.resolve(outcome));
+        expect(failed, host).toMatchObject({ code: "FORBIDDEN", reason: "egress_denied" });
+        expect(failed.message, host).not.toContain("collector");
+      }
+    } finally {
+      logged = output.stop();
+    }
+    const stored = await dumpDatabaseText();
+    for (const [where, text] of Object.entries({ stored, logged, answers: answers.join("\n") })) {
+      expect(findLeak(text, t.secret), where).toBeUndefined();
+      expect(text.toLowerCase(), where).not.toContain(t.secret.toLowerCase());
+    }
+
+    // A refused target that holds nothing of the credential is still named.
+    t.setBehaviour(async (_operation, input, context) => {
+      await context.checkEgress({ protocol: "https", host: "elsewhere.example.com", port: 8443 });
+      return input;
+    });
+    const named = await t.failure(t.invoke(t.kai, "connection.crm.echo", { text: "a" }));
+    expect(named.message).toContain("elsewhere.example.com:8443");
   });
 });
