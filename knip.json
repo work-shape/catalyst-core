@@ -60,10 +60,13 @@
         "src/seed-auth.ts",
         "src/migrate.ts",
         "src/*worker*.ts",
+        "src/sample-mcp-server.ts",
+        "sample-mcp/index.ts",
         "*.config.{ts,js,mjs}"
       ],
       "project": [
         "src/**/*.{ts,tsx,mts,cts}",
+        "sample-mcp/**/*.ts",
         "widgets/**/*.{ts,tsx,mts,cts}",
         "tools/**/*.{ts,mts,cts}",
         "*.config.{ts,js,mjs}"

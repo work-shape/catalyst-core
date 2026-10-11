@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { dirname, relative, resolve, sep } from "node:path";
-import { createTypeScriptImportResolver } from "eslint-import-resolver-typescript";
 import { importX } from "eslint-plugin-import-x";
 import tseslint from "typescript-eslint";
 import { envBoundaryRule } from "./env-boundary-rule.mjs";
+import { importRules } from "./import-rules.mjs";
 import { moduleSnapshotBoundaryRule } from "./module-snapshot-rule.mjs";
 import { modelGatewayRules } from "./model-gateway-rules.mjs";
 import { runOperationBoundaryRule } from "./run-operation-rule.mjs";
@@ -757,19 +757,10 @@ const config = [
     // the collector counts that warning, so a directive is itself a baselined violation.
     linterOptions: { noInlineConfig: true },
     plugins: { catalyst: plugin, "import-x": importX },
-    settings: {
-      "import-x/extensions": [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"],
-      "import-x/resolver-next": [
-        createTypeScriptImportResolver({ project: resolve(root, "tsconfig.lint.json") })
-      ]
-    },
+    settings: importRules(root).settings,
     rules: {
       "max-lines": ["error", { max: 800 }],
-      // Sibling packages are reached through their package name, never by a relative path.
-      "import-x/no-relative-packages": ["error", { commonjs: true }],
-      // A path that a package does not export does not resolve: no deep imports.
-      // Astro supplies its `astro:` modules at build time.
-      "import-x/no-unresolved": ["error", { commonjs: true, ignore: ["^astro:"] }],
+      ...importRules(root).rules,
       ...Object.fromEntries(
         Object.keys(plugin.rules ?? {}).map((name) => [`catalyst/${name}`, "error"])
       )
