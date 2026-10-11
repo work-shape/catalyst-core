@@ -1,4 +1,4 @@
-import { Languages, LogOut, Moon, Sun, UserRound } from "lucide-react";
+import { CircleHelp, Languages, LogOut, Moon, Sun, UserRound } from "lucide-react";
 import type { ApiUser } from "@vivd-catalyst/api-client";
 import {
   Avatar,
@@ -18,13 +18,15 @@ import type { ResolvedThemeMode } from "../theme";
 
 /**
  * The account menu in the rail's footer: who is signed in, the ways to the user's own Settings
- * pages, the theme switch and sign out. It opens upward, and to the side of the collapsed rail.
+ * pages, the theme switch, the way to the documentation and sign out. It opens upward, and to
+ * the side of the collapsed rail.
  */
 export function UserMenu({
   user,
   signingOut,
   themeMode,
   platform,
+  docsUrl,
   onOpenProfile,
   onOpenLanguageAppearance,
   onToggleTheme,
@@ -35,6 +37,8 @@ export function UserMenu({
   themeMode: ResolvedThemeMode;
   /** The instance and its release, named at the foot of the menu once the instance answered. */
   platform?: PlatformIdentity;
+  /** Where the instance's documentation is read. Without it the menu has no such item. */
+  docsUrl?: string;
   onOpenProfile: () => void;
   onOpenLanguageAppearance: () => void;
   onToggleTheme: () => void;
@@ -92,6 +96,20 @@ export function UserMenu({
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
+        {docsUrl ? (
+          <>
+            <DropdownMenuGroup>
+              <DropdownMenuItem
+                icon={<CircleHelp aria-hidden="true" />}
+                href={docsUrl}
+                accessibleName={t("documentationOpensNewTab")}
+              >
+                {t("documentation")}
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
         <DropdownMenuItem
           icon={<LogOut aria-hidden="true" />}
           disabled={signingOut}

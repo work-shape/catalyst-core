@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { cn, SkipLink, Spinner, UiRoot } from "@vivd-catalyst/ui";
+import { cn, DocsAddressProvider, SkipLink, Spinner, UiRoot } from "@vivd-catalyst/ui";
 import { DEFAULT_THEME_INPUTS } from "@vivd-catalyst/ui/theme";
 import { ApprovalRevisionHostProvider } from "./approvals/approval-revision-host";
 import { AssistantRuntimePanel } from "./assistant/assistant-runtime-panel";
@@ -229,6 +229,7 @@ function ChatWorkspaceContent({
       signingOut={model.auth.signingOut}
       themeMode={themeMode}
       platform={model.controlPlane.platform}
+      docsUrl={model.config.config.ui.docsUrl}
       onOpenProfile={() => {
         model.chrome.closeSidebarDrawer();
         model.auth.openSettings("profile");
@@ -481,10 +482,13 @@ function ChatWorkspaceContent({
       </UiRoot>
     </TranslationProvider>
   );
-  // Every generated view below is shown under the instance's view policy of today.
+  // Every generated view below is shown under the instance's view policy of today, and every
+  // link into the documentation starts from the instance's docs address.
   return (
     <ViewPolicyProvider allowedScriptSrc={model.config.config.views.allowedScriptSrc}>
-      {workspace}
+      <DocsAddressProvider address={model.config.config.ui.docsUrl}>
+        {workspace}
+      </DocsAddressProvider>
     </ViewPolicyProvider>
   );
 }

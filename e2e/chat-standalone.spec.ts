@@ -4212,8 +4212,17 @@ test("the account menu names the account and holds the settings, the theme and s
     "Profile",
     "Language and appearance",
     /^Switch to (dark|light) theme$/u,
+    "Documentation",
     "Sign out"
   ]);
+  // The documentation is a link to the instance's docs address, in a new tab.
+  const documentation = menu.getByRole("menuitem", {
+    name: "Documentation, opens in a new tab",
+    exact: true
+  });
+  await expect(documentation).toHaveAttribute("href", "https://docs.workshape.ai/catalyst");
+  await expect(documentation).toHaveAttribute("target", "_blank");
+  await expect(documentation).toHaveAttribute("rel", "noopener noreferrer");
   // It opens upward from the footer of the rail.
   const menuBox = await menu.boundingBox();
   const triggerBox = await trigger.boundingBox();

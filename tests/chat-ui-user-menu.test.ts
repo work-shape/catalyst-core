@@ -22,8 +22,29 @@ vi.mock("@vivd-catalyst/ui", async (importOriginal) => {
       createElement("div", { role: "menu" }, children),
     DropdownMenuGroup: ({ label, children }: { label?: ReactNode; children?: ReactNode }) =>
       createElement("div", { role: "group" }, label, children),
-    DropdownMenuItem: ({ children }: { children?: ReactNode }) =>
-      createElement("div", { role: "menuitem" }, children),
+    // The library's link form: an item with an address is a link that opens a new tab.
+    DropdownMenuItem: ({
+      children,
+      href,
+      accessibleName
+    }: {
+      children?: ReactNode;
+      href?: string;
+      accessibleName?: string;
+    }) =>
+      href === undefined
+        ? createElement("div", { role: "menuitem" }, children)
+        : createElement(
+            "a",
+            {
+              role: "menuitem",
+              href,
+              target: "_blank",
+              rel: "noopener noreferrer",
+              "aria-label": accessibleName
+            },
+            children
+          ),
     DropdownMenuSeparator: () => createElement("hr")
   };
 });
@@ -32,7 +53,8 @@ const noop = () => undefined;
 
 function menu(
   platform: { instanceName: string; releaseVersion: string } | undefined,
-  locale: LocaleCode = "en"
+  locale: LocaleCode = "en",
+  docsUrl?: string
 ): string {
   const markup = renderToStaticMarkup(
     createElement(
@@ -43,6 +65,7 @@ function menu(
         signingOut: false,
         themeMode: "light",
         platform,
+        docsUrl,
         onOpenProfile: noop,
         onOpenLanguageAppearance: noop,
         onToggleTheme: noop,
@@ -86,5 +109,36 @@ describe("account menu", () => {
     expect(markup).not.toContain("Version");
     expect(markup).toContain("Sign out");
     expect(markup).toContain("felix@example.com");
+  });
+
+  it("links to the documentation in a group of its own between the settings and sign out", () => {
+    const markup = menu(undefined, "en", "https://docs.workshape.ai/catalyst");
+
+    expect(markup).toContain(
+      '<a role="menuitem" href="https://docs.workshape.ai/catalyst" target="_blank" rel="noopener noreferrer" aria-label="Documentation, opens in a new tab">Documentation</a>'
+    );
+    // A line above and a line below, and nothing else in the group.
+    expect(markup).toMatch(
+      /theme<\/div><\/div><hr\/><div role="group"><a role="menuitem"[^>]*>Documentation<\/a><\/div><hr\/><div role="menuitem">Sign out<\/div>/u
+    );
+    expect(markup.match(/<hr\/>/gu)).toHaveLength(2);
+  });
+
+  it("names the documentation in German", () => {
+    const markup = menu(undefined, "de", "https://docs.example.com/handbuch");
+
+    expect(markup).toContain(
+      'href="https://docs.example.com/handbuch" target="_blank" rel="noopener noreferrer" aria-label="Dokumentation, öffnet in neuem Tab">Dokumentation</a>'
+    );
+  });
+
+  it("has no documentation item and no lines for it on an instance without a docs address", () => {
+    const markup = menu(undefined);
+
+    expect(markup).not.toContain("Documentation");
+    expect(markup).not.toContain("<a ");
+    // The one line left stands between the settings and sign out.
+    expect(markup.match(/<hr\/>/gu)).toHaveLength(1);
+    expect(markup).toMatch(/theme<\/div><\/div><hr\/><div role="menuitem">Sign out<\/div>/u);
   });
 });
