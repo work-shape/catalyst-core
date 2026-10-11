@@ -519,6 +519,12 @@ describe("the space a page ends with", () => {
       ])
     );
   });
+
+  it("is enclosed by one line only: a section before the footer draws none", () => {
+    // Fails without the rule: the section's line and the footer's line enclosed the end space.
+    const markup = render(createElement(Section, { title: "LAST" }, "FIELDS"));
+    expect(markup).toMatch(/<section[^>]*class="[^"]*has-\[\+\[data-page-footer\]\]:border-b-0/u);
+  });
 });
 
 describe("a page with a head across its width", () => {

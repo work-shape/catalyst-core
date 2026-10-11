@@ -2881,6 +2881,23 @@ test("users, usage, audit and API access follow the German locale", async ({ pag
   await expect(panel.getByRole("heading", { name: "API-Zugang", exact: true })).toBeVisible();
 });
 
+test("a Settings page that fits its window does not scroll", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: TALL_WINDOW_HEIGHT });
+  await signInViaApi(page, superadminUser);
+  await page.goto("/settings/instance/api-access");
+  const area = page.getByRole("region", { name: "Settings" });
+  const scroller = area.locator("> div");
+  await expect(area.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(settingsPages(page).getByRole("button", { name: "Profile" })).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  // The space a page ends with is part of its content: it adds no scroll to a page that fits.
+  const sizes = await scroller.evaluate((element) => ({
+    content: element.scrollHeight,
+    room: element.clientHeight
+  }));
+  expect(sizes.content).toBe(sizes.room);
+});
+
 test("the Settings sub-rail stands still while the page scrolls up to the top edge", async ({
   page
 }) => {
@@ -4398,6 +4415,7 @@ const AGENT_CHIP_TAB_STOPS_MOST = 12;
 const COMPOSER_GROWTH_LINES = 6;
 /** A window too short for the Settings page and for its sub-rail: both scroll. */
 const SHORT_WINDOW_HEIGHT = 420;
+const TALL_WINDOW_HEIGHT = 1_600;
 /** How far the Settings page is scrolled: inside the room above its first element, then past it. */
 const SUB_RAIL_SCROLL_STEPS = [8, 24, 60, 200];
 

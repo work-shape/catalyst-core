@@ -41,7 +41,8 @@ export function Section({
     <section
       data-layout={layout}
       className={cn(
-        "@container min-w-0 border-b py-6 first:pt-0 last:border-b-0 [[data-variant=list]+&]:pt-0",
+        // The last section draws no line, nor does one a `PageFooter` follows: the bar's line ends the page.
+        "@container min-w-0 border-b py-6 first:pt-0 last:border-b-0 has-[+[data-page-footer]]:border-b-0 [[data-variant=list]+&]:pt-0",
         className
       )}
       {...props}
