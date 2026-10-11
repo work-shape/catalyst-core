@@ -185,7 +185,7 @@ export function createConnectionDiscoveryJobs(options: ConnectionDiscoveryJobOpt
           }
           // The reason is a code of this product. The job row holds nothing else of the failure.
           const message = `The discovery of a Connection failed: ${reason}`;
-          if (FAILURES_NOT_RETRIED.has(reason)) throw new NonRetryableJobError(message);
+          if (FAILURES_NOT_RETRIED.has(reason)) throw new NonRetryableJobError(message, { reason });
           throw new AppError("CONFLICT", message, { reason });
         }
       })
