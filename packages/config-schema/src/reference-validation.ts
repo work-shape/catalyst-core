@@ -103,11 +103,50 @@ export function findMissingAgentSkillReferences(
   return findMissingAgentReferences(agents, skillNames, (agent) => agent.skillNames);
 }
 
+/**
+ * The name of a tool that is an operation of a Connection: `connection.<name>.<operation>`.
+ * Neither part holds a dot, so a name reads one way only.
+ *
+ * Local until `core/src/connection-operations.ts` exists (C1 slice K). Then this is
+ * `parseConnectionOperationName` of core, and the rules of the two parts are the ones
+ * `core/src/connections.ts` names.
+ */
+const CONNECTION_OPERATION_PREFIX = "connection.";
+const CONNECTION_NAME_PATTERN = /^[a-z][a-z0-9]*([_-][a-z0-9]+)*$/u;
+const CONNECTION_OPERATION_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_-]*$/u;
+const CONNECTION_NAME_PART_MAX_LENGTH = 64;
+
+function isConnectionOperationName(name: string): boolean {
+  if (!name.startsWith(CONNECTION_OPERATION_PREFIX)) {
+    return false;
+  }
+  const parts = name.slice(CONNECTION_OPERATION_PREFIX.length).split(".");
+  const [connection, operation] = parts;
+  return (
+    parts.length === 2 &&
+    connection !== undefined &&
+    operation !== undefined &&
+    connection.length <= CONNECTION_NAME_PART_MAX_LENGTH &&
+    operation.length <= CONNECTION_NAME_PART_MAX_LENGTH &&
+    CONNECTION_NAME_PATTERN.test(connection) &&
+    CONNECTION_OPERATION_NAME_PATTERN.test(operation)
+  );
+}
+
+/**
+ * The tools an agent lists and this instance does not offer. A tool of the release is known
+ * from the release. A tool that is an operation of a Connection exists as data and comes and
+ * goes without a release, so a well-formed name of one is no missing reference: the run reads
+ * whether it exists and goes on without one that does not. Any other name with that prefix is
+ * a name of nothing and is reported.
+ */
 export function findMissingAgentToolReferences(
   agents: readonly AgentConfig[],
   enabledToolNames: readonly string[]
 ): MissingAgentReference[] {
-  return findMissingAgentReferences(agents, enabledToolNames, (agent) => agent.toolNames);
+  return findMissingAgentReferences(agents, enabledToolNames, (agent) =>
+    agent.toolNames.filter((toolName) => !isConnectionOperationName(toolName))
+  );
 }
 
 function findMissingAgentReferences(
