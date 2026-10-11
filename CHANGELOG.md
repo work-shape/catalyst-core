@@ -1316,6 +1316,9 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 - An open tool call in the work history shows an output that is only an error as wrapped text, so the whole sentence is readable: what happened, whether trying again helps and who can act. It was one line of JSON in a code box, cut at the right edge. The id of a tool call is no longer written into the page.
 
+- **Demo:** the rate card of the reference client has a price for GPT-5.6 Sol, Terra and Luna.
+  The composer offered all three, and under the demo's spend budget each run on them was
+  refused. A test holds that every model binding of the demo has a price.
 - **Chat:** the message above the composer after a failed or refused reply is the library's
   warning banner and follows the theme. It was a fixed pale yellow box with dark red text, which
   glared on the dark page. A run that is refused because its model has no price on the customer

@@ -169,14 +169,34 @@ usage:
   costs:
     customer:
       id: demo-customer
-      version: "2026-07"
+      version: "2026-10"
       currency: EUR
+      # Every model a binding above names needs a price here: under a spend budget a call to a
+      # model without one is refused. The amounts are OpenAI's standard list prices in USD for
+      # requests up to 272,000 input tokens (https://developers.openai.com/api/docs/pricing,
+      # read 2026-10-11), taken as they are. GPT-5.6 Sol is listed at its promotional price,
+      # which OpenAI promises until at least 2026-11-21; before it was 5 / 0.5 / 30.
       models:
         - providerId: openai
           model: gpt-5.5
           uncachedInputPricePerMillionTokens: 5
           cachedInputPricePerMillionTokens: 0.5
           outputPricePerMillionTokens: 30
+        - providerId: openai
+          model: gpt-5.6-sol
+          uncachedInputPricePerMillionTokens: 4
+          cachedInputPricePerMillionTokens: 0.4
+          outputPricePerMillionTokens: 20
+        - providerId: openai
+          model: gpt-5.6-terra
+          uncachedInputPricePerMillionTokens: 2
+          cachedInputPricePerMillionTokens: 0.2
+          outputPricePerMillionTokens: 12
+        - providerId: openai
+          model: gpt-5.6-luna
+          uncachedInputPricePerMillionTokens: 0.2
+          cachedInputPricePerMillionTokens: 0.02
+          outputPricePerMillionTokens: 1.2
         - providerId: openai
           model: gpt-5-nano
           uncachedInputPricePerMillionTokens: 0.05
