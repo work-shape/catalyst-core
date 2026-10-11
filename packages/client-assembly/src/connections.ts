@@ -5,8 +5,10 @@ import {
   createConnectionToolSource,
   createEgressChecker,
   createMcpConnectorType,
+  discoverConnection,
   loadSecretKeyring,
   platformStoreTargetsOf,
+  readConnections,
   seedReleaseConnections,
   type ReleaseSeedResult,
   type SecretKeyring
@@ -26,7 +28,7 @@ import {
   type PlatformStores,
   type SecretResolver
 } from "@vivd-catalyst/core";
-import type { ChatServerOptions } from "@vivd-catalyst/chat-server";
+import { enqueueConnectionDiscovery, type ChatServerOptions } from "@vivd-catalyst/chat-server";
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import { readClientInstanceEnv } from "./env";
 import { PLATFORM_SECRET_NAMES } from "./infrastructure";
@@ -38,7 +40,11 @@ export interface InstanceConnections {
   readonly egress: EgressChecker;
   /** Missing while release config names no Connection: nothing can be opened then. */
   readonly credentials?: ConnectionCredentialResolver;
-  /** Makes the stored release Connections equal to release config. The API process calls it. */
+  /**
+   * Makes the stored release Connections equal to release config, then queues one discovery
+   * for every Connection that reads its operations from its outside system. The API process
+   * calls it. It contacts no outside system itself.
+   */
   seed(): Promise<ReleaseSeedResult>;
   /** Every accepted operation of every Connection, as an operation of the call path. */
   readonly operationSource: OperationSource;
@@ -175,7 +181,11 @@ async function buildInstanceConnections(
     ...(credentials ? { credentials } : {}),
     operationSource: createConnectionOperationSource(operations),
     toolSource: createConnectionToolSource(operations),
-    management: createConnectionManagement(operations),
+    management: {
+      ...createConnectionManagement(operations),
+      discover: (connectionName, signal) =>
+        discoverConnection({ ...operations, connectionName, signal })
+    },
     async seed() {
       const result = await seedReleaseConnections({
         clientInstanceId,
@@ -194,7 +204,37 @@ async function buildInstanceConnections(
         // Names and versions only. No setting and no value of a Connection is logged.
         logger.info({ connections: result }, "Release Connections reconciled");
       }
+      await enqueueDiscoveries(operations);
       return result;
     }
   };
+}
+
+/**
+ * Queues the discovery of every enabled Connection whose type reads its operations from the
+ * outside system. An operation accepted since the last discovery is pinned by the next one,
+ * so one follows every seed and not only the first. A Connection that has one queued gets
+ * no second. One read of the Connections and one insert each, and no call to the outside. A
+ * discovery that cannot be queued is logged and does not stop the start.
+ */
+async function enqueueDiscoveries(
+  deps: Pick<InstanceConnectionParts, "clientInstanceId" | "stores" | "logger"> & {
+    connectorTypes: ConnectorTypeRegistry;
+  }
+): Promise<void> {
+  const { clientInstanceId, stores, logger } = deps;
+  try {
+    for (const connection of await readConnections(deps)) {
+      if (!connection.config.enabled || !connection.type?.discover) continue;
+      await enqueueConnectionDiscovery(stores.jobs, {
+        clientInstanceId,
+        connectionName: connection.config.name
+      });
+    }
+  } catch (error) {
+    logger.warn(
+      { module: "connections", err: error },
+      "The discovery of the Connections could not be queued. Their discovered operations stay as they were until the next start"
+    );
+  }
 }
