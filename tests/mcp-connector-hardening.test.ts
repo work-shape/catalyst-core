@@ -7,9 +7,14 @@ import {
   createMcpConnectorType,
   openConnectorContext
 } from "@vivd-catalyst/connections";
-import { type ConnectorContext, type JsonObject } from "@vivd-catalyst/core";
+import {
+  connectionCallReasonOf,
+  type ConnectorContext,
+  type JsonObject
+} from "@vivd-catalyst/core";
 import {
   MCP_CLEANUP_TIMEOUT_MS,
+  MCP_TRANSPORT_HEADER_NAMES,
   createMcpSocketPool
 } from "../packages/connections/src/mcp/client";
 import { connection } from "./support/connections";
@@ -71,6 +76,7 @@ describe("the Connector type mcp against a server that holds on", () => {
       });
     return {
       server,
+      open,
       execute: async (
         operation: string,
         input: JsonObject = {},
@@ -214,6 +220,49 @@ describe("the Connector type mcp against a server that holds on", () => {
       expect(first.destroyed).toHaveBeenCalledTimes(1);
       moved.agent.destroy();
       third.agent.destroy();
+    });
+  });
+
+  describe("the header of the key", () => {
+    const settings = (headerName: string) =>
+      type.settingsSchema.safeParse({ url: `https://${HOST}/mcp`, headerName });
+
+    it("refuses at the settings every header the transport writes itself, in any case", () => {
+      for (const name of MCP_TRANSPORT_HEADER_NAMES) {
+        expect(settings(name).success, name).toBe(false);
+        expect(settings(name.toUpperCase()).success, name).toBe(false);
+      }
+      for (const name of ["Host", "Content-Length", "Transfer-Encoding", "Connection"]) {
+        expect(settings(name).success, name).toBe(false);
+      }
+      for (const name of ["Mcp-Session-Id", "MCP-Protocol-Version", "Upgrade", "TE"]) {
+        expect(settings(name).success, name).toBe(false);
+      }
+      expect(settings("X-Api-Key").success).toBe(true);
+      expect(settings("Authorization").success).toBe(true);
+    });
+
+    it("sends no request where a credential names such a header all the same", async () => {
+      const w = await connect({ call: () => textResult("done") });
+      const context = await w.open(new AbortController().signal);
+      const work = type.execute(
+        "echo",
+        {},
+        {
+          ...context,
+          credentialFor: () => ({
+            scheme: "header",
+            secret: "a-name-and-no-key",
+            headers: { Host: "a-name-and-no-key" }
+          })
+        }
+      );
+      const reason = await work.then(
+        () => undefined,
+        (error: unknown) => connectionCallReasonOf(error)
+      );
+      expect(reason).toBe("connection_not_configured");
+      expect(w.server.requests).toHaveLength(0);
     });
   });
 });

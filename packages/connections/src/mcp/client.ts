@@ -262,8 +262,7 @@ function sendHop(hop: Hop): Promise<IncomingMessage> {
       return;
     }
     const literal = isIP(hop.grant.host) !== 0;
-    const send = hop.grant.protocol === "https" ? httpsRequest : httpRequest;
-    const request = send({
+    const options = {
       protocol: `${hop.grant.protocol}:`,
       // A name is resolved by the pinned lookup only. A literal address is the pinned one.
       host: literal ? hop.grant.address : hop.grant.host,
@@ -273,7 +272,14 @@ function sendHop(hop: Hop): Promise<IncomingMessage> {
       headers: hop.headers,
       lookup: pinnedLookup(hop.grant),
       agent: hop.agent
-    });
+    };
+    // The name the server's certificate is verified against is the checked host, said here
+    // and derived from no header. A literal address names itself: no name is sent, and the
+    // certificate is verified against the address.
+    const request =
+      hop.grant.protocol === "https"
+        ? httpsRequest({ ...options, servername: literal ? "" : hop.grant.host })
+        : httpRequest(options);
     // The signal is watched here and not handed to the request: a request that is ended
     // through its own signal reports that on streams nobody listens to any more, and an
     // error without a listener ends the process.
@@ -387,6 +393,31 @@ function discard(response: IncomingMessage): void {
 const FORWARDED_REQUEST_HEADERS = ["content-type", "accept", "mcp-protocol-version"] as const;
 
 /**
+ * The headers this file writes itself, and those that speak of the one connection a request
+ * travels on. A key is never sent under one of them: it would stand in the place of what the
+ * request is routed, framed or verified by. The names are in lower case.
+ */
+export const MCP_TRANSPORT_HEADER_NAMES: ReadonlySet<string> = new Set([
+  "host",
+  "content-length",
+  "content-type",
+  "accept",
+  "mcp-session-id",
+  "mcp-protocol-version",
+  "last-event-id",
+  "transfer-encoding",
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "proxy-connection",
+  "te",
+  "trailer",
+  "upgrade",
+  "expect"
+]);
+
+/**
  * The `fetch` the SDK is given. It is the only way a request of a session leaves: egress
  * check, pinned address, credential for the Connection's origin only, redirects by hand.
  */
@@ -432,8 +463,13 @@ function pinnedFetch(
       const sessionId = sent.get("mcp-session-id");
       if (own && sessionId !== null) headers["mcp-session-id"] = sessionId;
       if (body !== undefined) headers["content-length"] = String(Buffer.byteLength(body));
-      // Last, so that nothing above stands in the place of a credential header.
-      Object.assign(headers, credential?.headers);
+      // The settings refuse a key under a header of the transport. A credential that names
+      // one all the same is not sent, and neither is the request.
+      for (const [name, value] of Object.entries(credential?.headers ?? {})) {
+        const lower = name.toLowerCase();
+        if (MCP_TRANSPORT_HEADER_NAMES.has(lower)) throw fail(state, "connection_not_configured");
+        headers[lower] = value;
+      }
 
       // Another origin gets a socket for this one request, and so does the Connection's own
       // where the pool has no room. It is an agent of this file either way, never the

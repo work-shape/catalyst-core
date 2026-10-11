@@ -15,6 +15,7 @@ import { egressTargetOfUrl } from "../egress";
 import {
   MCP_RESPONSE_ENVELOPE_BYTES,
   MCP_SOCKETS_PER_CONNECTION,
+  MCP_TRANSPORT_HEADER_NAMES,
   createMcpSocketPool,
   withMcpSession
 } from "./client";
@@ -73,6 +74,10 @@ const settingsSchema = z
       .regex(
         /^[A-Za-z][A-Za-z0-9-]{0,63}$/u,
         "must be a header name of letters, digits and hyphens"
+      )
+      .refine(
+        (value) => !MCP_TRANSPORT_HEADER_NAMES.has(value.toLowerCase()),
+        "must not be a header the transport writes itself, such as Host or Content-Length"
       )
       .optional()
   })
