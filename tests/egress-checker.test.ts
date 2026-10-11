@@ -237,6 +237,40 @@ describe("the egress checker", () => {
     });
   });
 
+  it("lets no private entry reach a link-local address an IPv6 address carries", async () => {
+    // Fails without the change: a private entry for 64:ff9b::/96 was granted
+    // 64:ff9b::a9fe:a9fe, which a NAT64 translator delivers to 169.254.169.254.
+    const entry = {
+      protocol: "http" as const,
+      host: "inside",
+      port: 80,
+      network: "private" as const,
+      cidrs: ["64:ff9b::/96", "2002::/16", "2001::/32", "::ffff:0:0/96", "::/96"]
+    };
+    const target = { protocol: "http" as const, host: "inside", port: 80 };
+    for (const address of [
+      "64:ff9b::a9fe:a9fe",
+      "64:ff9b::169.254.169.254",
+      "2002:a9fe:a9fe::1",
+      "2001:0:a9fe:a9fe::1",
+      "2001:0:a00:1::5601:5601",
+      "::ffff:169.254.169.254",
+      "::ffff:a9fe:a9fe",
+      "::a9fe:a9fe"
+    ]) {
+      const { checker } = checkerOf([entry], { inside: [address] });
+      await denied(checker.check(target));
+      // One such answer among good ones refuses the target as well.
+      const mixed = checkerOf([entry], { inside: ["64:ff9b::a00:1", address] });
+      await denied(mixed.checker.check(target));
+    }
+    // What the operator named and is not link-local stays reachable.
+    for (const address of ["64:ff9b::a00:1", "2002:a00:1::1"]) {
+      const { checker } = checkerOf([entry], { inside: [address] });
+      expect((await checker.check(target)).address, address).toBe(address);
+    }
+  });
+
   it("takes plain http for a private entry only, and private ranges for no public entry", () => {
     const parse = (entry: Record<string, unknown>) =>
       egressConfigSchema.safeParse({ allow: [entry] }).success;

@@ -8,7 +8,11 @@ import {
   type EgressProtocol,
   type EgressTarget
 } from "@vivd-catalyst/core";
-import { isBlockedIpAddress, nodeWebFetchAddressResolver } from "@vivd-catalyst/web-access";
+import {
+  embeddedIpv4AddressesOf,
+  isBlockedIpAddress,
+  nodeWebFetchAddressResolver
+} from "@vivd-catalyst/web-access";
 
 // The one egress checker. Every connection a Connection opens passes `check` first, whatever
 // its Connector type. The list is the operator's and is deny by default.
@@ -21,7 +25,8 @@ import { isBlockedIpAddress, nodeWebFetchAddressResolver } from "@vivd-catalyst/
 //   as an IPv4-mapped IPv6 address. An entry with `network: private` is the operator saying
 //   the target is inside: then every answer must lie in the entry's `cidrs`. Loopback and
 //   private ranges are reachable that way. Link-local addresses are not, for any entry: a
-//   range that covers them stops startup.
+//   range that covers them stops startup, and an IPv6 answer that carries a link-local IPv4
+//   address (mapped, compatible, NAT64, 6to4, Teredo) is refused when it is judged.
 // - The check answers one address of those it judged. The connector connects to that address
 //   (`pinnedLookup`) and keeps the host as TLS and `Host` name, so the address used is the
 //   address checked and a second DNS answer changes nothing.
@@ -321,7 +326,12 @@ export function createEgressChecker(options: EgressCheckerOptions): EgressChecke
         throw egressDenied(target);
       }
       const family = answer.family === 4 ? "ipv4" : "ipv6";
-      if (LINK_LOCAL.check(answer.address, family)) {
+      // Link-local as itself, and as the IPv4 address an IPv6 one carries: a `private` range
+      // such as `64:ff9b::/96` holds the translated form of 169.254.169.254 too.
+      if (
+        LINK_LOCAL.check(answer.address, family) ||
+        embeddedIpv4AddressesOf(answer.address).some((carried) => LINK_LOCAL.check(carried, "ipv4"))
+      ) {
         throw egressDenied(target);
       }
       const inside = listed.ranges.check(answer.address, family);

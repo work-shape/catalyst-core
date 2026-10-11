@@ -223,6 +223,18 @@ function embeddedIpv4Addresses(bytes: number[]): string[] {
   return [];
 }
 
+/**
+ * The IPv4 addresses an IPv6 address carries, for a caller that judges them by rules of its
+ * own. Empty for an IPv4 address and for one that cannot be read.
+ */
+export function embeddedIpv4AddressesOf(address: string): string[] {
+  if (isIP(address) !== 6) {
+    return [];
+  }
+  const bytes = parseIpv6Bytes(address);
+  return bytes ? embeddedIpv4Addresses(bytes) : [];
+}
+
 function parseIpv6Bytes(address: string): number[] | undefined {
   const normalized = address.toLowerCase().replace(/^\[|\]$/gu, "");
   const expanded = expandEmbeddedIpv4(normalized);
