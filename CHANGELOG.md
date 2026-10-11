@@ -21,8 +21,44 @@ contain breaking changes; a patch version does not.
   it is empty by default and then refuses every target. The check resolves the host, refuses a
   loopback, link-local, metadata or private address unless the entry says `network: private`
   and names the range, pins the checked address and refuses the instance's own database.
-  Migration `0055_connection_secrets` adds `secrets` and `connection_state`. No connector type
-  ships yet, so no Connection can be configured before the next release adds one.
+  Migration `0055_connection_secrets` adds `secrets` and `connection_state`. The connector type
+  `mcp`, below, is the first one that ships.
+- **Connections, the `mcp` connector type:** a Connection with `connectorType: mcp` reaches a
+  remote MCP server over Streamable HTTP. Its `authScheme` is `none`, `bearer` or `header`; with
+  `header` the setting `headerName` names the header that carries the secret. OAuth is not
+  supported yet, and neither is a local stdio server. A call takes at most 30 seconds and a
+  result at most 2 MiB, 8 calls of one Connection run side by side in one process, a further
+  call waits up to 10 seconds for a slot and is then refused with `connection_busy`. A refused
+  or failed call names one of fifteen reasons in `details.reason`, such as `egress_denied`,
+  `upstream_unauthorized` or `output_invalid`. A result that holds the Connection's credential
+  is discarded with `output_rejected`.
+- **Connections, operations as agent tools:** each operation a Connection lists under
+  `operations` is an Operation named `connection.<name>.<tool>`, with its required `effect`
+  (`reading` or `changing`), its `exposure` and an optional stricter `policy`. An agent carries
+  it as a tool by that name when the operation is exposed to `agent`, and the person the agent
+  acts for needs `connection.use` on the Connection. Every call runs on the one operations path
+  and leaves an Operation Run, a reading call included. A tool the remote server lists and the
+  Connection does not accept cannot be called.
+- **Connections, discovery:** the API process queues a job of kind `connection.discover` for
+  every enabled Connection after it seeded them at start. The job reads the server's tools into
+  the Connection's catalog. An accepted operation is callable once a discovery has seen it and
+  pinned the fingerprint of its descriptor; until then its status is `awaiting_discovery`. A
+  descriptor that changes later stops that one operation with `operation_needs_review`. A
+  discovery takes at most 60 seconds, 500 operations and 4 MiB, and a failed one leaves the
+  stored catalog and everything accepted as it was. A tool whose name, description or schema
+  holds the Connection's credential is left out.
+- **Connections, the Connection page:** Build > Connections opens a read-only page for each
+  Connection: health with the time of the last test, the state of the credential (never its
+  value), the settings, the accepted operations with effect, who may call them and their
+  status, and the agents that carry one of its tools. "Test connection" runs the type's bounded
+  test and needs `connection.write`. The operations behind it are `connections.get`
+  (`GET /api/v1/connections/{name}`), `connections.test` (`POST /api/v1/connections/{name}/test`)
+  and `connections.list_tools` (`GET /api/v1/connection-tools`).
+- **Demo client:** `pnpm demo:seed` fills a local demo instance with a test company: people,
+  three Namespaces, agents, skills, grants and one approval waiting in the Inbox. It works only
+  through the API and the config CLI, talks to this machine only and can run any number of
+  times. `clients/demo/sample-mcp` is a sample MCP server that the demo's Compose file runs as
+  the service `sample-mcp`. The seed brings no Connection yet.
 - **Web access:** the public web fetcher refuses an IPv6 address that carries a blocked IPv4
   address in any form: IPv4-compatible, NAT64 `64:ff9b::/96`, 6to4 `2002::/16` and Teredo
   `2001:0::/32`, as it did IPv4-mapped ones.
