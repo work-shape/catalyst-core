@@ -653,7 +653,7 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
         },
         "content": {
           "type": "string",
-          "maxLength": 4194304,
+          "maxLength": 1048576,
           "description": "The whole text of the file."
         }
       },
@@ -745,19 +745,19 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
         },
         "edits": {
           "minItems": 1,
-          "maxItems": 1000,
+          "maxItems": 200,
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
               "oldText": {
                 "type": "string",
-                "maxLength": 4194304,
+                "maxLength": 1048576,
                 "description": "Exact text to replace, with the spaces, tabs and line breaks the file has."
               },
               "newText": {
                 "type": "string",
-                "maxLength": 4194304,
+                "maxLength": 1048576,
                 "description": "The text that takes its place."
               }
             },

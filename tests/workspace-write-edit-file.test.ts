@@ -4,6 +4,7 @@ import { StoreBackedAuditRecorder, type Logger } from "@vivd-catalyst/core";
 import {
   ToolRegistry,
   WORKSPACE_EDIT_MAX_EDITS,
+  WORKSPACE_FILE_TOOL_INPUT_MAX_CHARS,
   WORKSPACE_WRITE_FILE_MAX_BYTES
 } from "@vivd-catalyst/tool-execution";
 import { withTestSql } from "./support/test-sql";
@@ -210,6 +211,49 @@ describe("workspace.write_file", () => {
     expect((await workspaceFiles(harness)).map((file) => file.path)).toEqual(["docs/plan.md"]);
   });
 
+  // Each of the two left a row that a command cannot put on a disk beside its folders.
+  it("refuses a folder name with a blank behind its slash, and a folder every workspace has", async () => {
+    const harness = await createWorkspaceHarness();
+
+    const aliased = await refusal(harness, "workspace.write_file", {
+      path: "docs/ ",
+      content: "x"
+    });
+    const reserved = [];
+    for (const path of ["artifacts", "/workspace/tmp", "scripts/.", " previews "]) {
+      reserved.push(await refusal(harness, "workspace.write_file", { path, content: "x" }));
+    }
+
+    expect(aliased.code).toBe("validation_failed");
+    expect(aliased.message).toContain("must not end with a slash");
+    expect(aliased.message).toContain("relative to /workspace");
+    expect(reserved.map((error) => error.message)).toEqual([
+      expect.stringContaining("'artifacts' is a folder every workspace has"),
+      expect.stringContaining("'tmp' is a folder every workspace has"),
+      expect.stringContaining("'scripts' is a folder every workspace has"),
+      expect.stringContaining("'previews' is a folder every workspace has")
+    ]);
+    expect(reserved[0]?.message).toContain("artifacts/notes.md");
+    expect(await workspaceFiles(harness)).toEqual([]);
+    // A file inside such a folder is an ordinary file.
+    await expect(
+      harness.runTool("workspace.write_file", { path: "artifacts/report.md", content: "x" })
+    ).resolves.toMatchObject({ status: "success", output: { path: "artifacts/report.md" } });
+  });
+
+  it("refuses more text than one call may carry before the tool runs", async () => {
+    const harness = await createWorkspaceHarness();
+
+    const error = await refusal(harness, "workspace.write_file", {
+      path: "huge.txt",
+      content: "a".repeat(WORKSPACE_FILE_TOOL_INPUT_MAX_CHARS + 1)
+    });
+
+    expect(error.code).toBe("validation_failed");
+    expect(JSON.stringify(error.details)).toContain("content");
+    expect(await workspaceFiles(harness)).toEqual([]);
+  });
+
   it("turns a file that was not text into a text file, so that it can be read again", async () => {
     const harness = await createWorkspaceHarness();
     await harness.putWorkspaceFile({
@@ -382,6 +426,88 @@ describe("workspace.edit_file", () => {
       })
     ).resolves.toMatchObject({ status: "success", output: { editsApplied: 2 } });
     expect(await storedText(harness, "config.ini")).toBe("a\nb\ng = 3\nbeta_copy = 2\n");
+  });
+
+  it("deletes text when newText is empty", async () => {
+    const harness = await harnessWithFile();
+
+    const edited = await harness.runTool("workspace.edit_file", {
+      path: "config.ini",
+      edits: [{ oldText: "gamma = 3\n", newText: "" }]
+    });
+
+    expect(edited).toMatchObject({ status: "success", output: { editsApplied: 1 } });
+    expect(await storedText(harness, "config.ini")).toBe("alpha = 1\nbeta = 2\nbeta_copy = 2\n");
+  });
+
+  it("refuses an edit that lies inside another, and the same oldText given twice", async () => {
+    const harness = await harnessWithFile();
+
+    const inside = await refusal(harness, "workspace.edit_file", {
+      path: "config.ini",
+      edits: [
+        { oldText: "alpha = 1\nbeta = 2\ngamma = 3", newText: "x" },
+        { oldText: "beta = 2\ng", newText: "y" }
+      ]
+    });
+    const twice = await refusal(harness, "workspace.edit_file", {
+      path: "config.ini",
+      edits: [
+        { oldText: "gamma = 3", newText: "gamma = 4" },
+        { oldText: "gamma = 3", newText: "gamma = 5" }
+      ]
+    });
+
+    expect(inside.message).toContain("edits[0] and edits[1] change the same text");
+    expect(twice.message).toContain("edits[0] and edits[1] change the same text");
+    expect(await storedText(harness, "config.ini")).toBe(original);
+  });
+
+  it("keeps the byte order mark of a file it edits", async () => {
+    const harness = await createWorkspaceHarness();
+    const mark = [0xef, 0xbb, 0xbf];
+    await harness.putWorkspaceFile({
+      path: "export.csv",
+      objectKey: "workspace/export.csv",
+      bytes: new Uint8Array([...mark, ...new TextEncoder().encode("name;total\r\nAda;41\r\n")]),
+      mimeType: "text/plain"
+    });
+
+    const edited = await harness.runTool("workspace.edit_file", {
+      path: "export.csv",
+      edits: [{ oldText: "41", newText: "42" }]
+    });
+
+    // 3 bytes of the mark and 20 of text.
+    expect(edited).toMatchObject({ status: "success", output: { byteSize: 23 } });
+    const [file] = await workspaceFiles(harness);
+    if (!file) throw new Error("The edit left no file");
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of (await harness.objectStore.get(file.objectKey)).body) {
+      chunks.push(chunk);
+    }
+    const bytes = Buffer.concat(chunks);
+    expect([...bytes.subarray(0, 3)]).toEqual(mark);
+    expect(bytes.subarray(3).toString("utf8")).toBe("name;total\r\nAda;42\r\n");
+  });
+
+  it("refuses edits that together carry more text than one call may, before the tool runs", async () => {
+    const harness = await harnessWithFile();
+    const half = "n".repeat(WORKSPACE_FILE_TOOL_INPUT_MAX_CHARS / 2);
+
+    const error = await refusal(harness, "workspace.edit_file", {
+      path: "config.ini",
+      edits: [
+        { oldText: "alpha = 1", newText: half },
+        { oldText: "beta = 2", newText: half }
+      ]
+    });
+
+    expect(error.code).toBe("validation_failed");
+    const details = JSON.stringify(error.details);
+    expect(details).toContain("WORKSPACE_FILE_TOOL_INPUT_MAX_CHARS");
+    expect(details).toContain("Send the edits in several calls");
+    expect(await storedText(harness, "config.ini")).toBe(original);
   });
 
   it("says that the file does not exist, and how to find or create it", async () => {

@@ -17,10 +17,16 @@ export const WORKSPACE_WRITE_FILE_MAX_BYTES = 256 * 1024;
  */
 export const WORKSPACE_EDIT_MAX_EDITS = 50;
 
-// Validation accepts more than the two limits above, so that the tool itself can refuse with
-// the limit and the next step. Input beyond these bounds is refused as invalid input.
-const TEXT_INPUT_BOUND_CHARS = 16 * WORKSPACE_WRITE_FILE_MAX_BYTES;
-const EDITS_INPUT_BOUND = 20 * WORKSPACE_EDIT_MAX_EDITS;
+/**
+ * The most text one call of either tool may carry, in string units: `content`, or every
+ * `oldText` and `newText` of a call together. It is checked when the input is validated, before
+ * the input is hashed and before anything is built from it, so it bounds the memory one call
+ * takes. It is four times the write limit, so that a call somewhat above a limit still reaches
+ * the tool and is refused there with the limit and the next step.
+ */
+export const WORKSPACE_FILE_TOOL_INPUT_MAX_CHARS = 4 * WORKSPACE_WRITE_FILE_MAX_BYTES;
+// For the same reason validation takes more edits than the tool applies.
+const EDITS_INPUT_BOUND = 4 * WORKSPACE_EDIT_MAX_EDITS;
 
 const pathDescription = "File path relative to /workspace.";
 const contentDescription = "The whole text of the file.";
@@ -29,7 +35,7 @@ const oldTextDescription =
 const newTextDescription = "The text that takes its place.";
 
 const pathSchema = z.string().min(1).max(DEFAULT_LIMITS.maxPathLength);
-const textSchema = z.string().max(TEXT_INPUT_BOUND_CHARS);
+const textSchema = z.string().max(WORKSPACE_FILE_TOOL_INPUT_MAX_CHARS);
 
 export const workspaceWriteFileInputSchema = z
   .object({
@@ -60,7 +66,20 @@ export const workspaceEditFileInputSchema = z
       .min(1)
       .max(EDITS_INPUT_BOUND)
   })
-  .strict();
+  .strict()
+  .superRefine((input, context) => {
+    let chars = 0;
+    for (const edit of input.edits) {
+      chars += edit.oldText.length + edit.newText.length;
+    }
+    if (chars > WORKSPACE_FILE_TOOL_INPUT_MAX_CHARS) {
+      context.addIssue({
+        code: "custom",
+        path: ["edits"],
+        message: `The edits hold ${chars} characters of oldText and newText together, and one call takes at most ${WORKSPACE_FILE_TOOL_INPUT_MAX_CHARS} (WORKSPACE_FILE_TOOL_INPUT_MAX_CHARS). Send the edits in several calls, or change the file with a command in workspace.exec.`
+      });
+    }
+  });
 
 export const workspaceEditFileOutputSchema = z.object({
   path: z.string(),

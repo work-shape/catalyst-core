@@ -93,10 +93,8 @@ export async function editWorkspaceFile(
       }
     );
   }
-  const decoded = decodeTextFile(
-    await readObjectBytes(objectStore, existing.objectKey),
-    existing.mimeType
-  );
+  const storedBytes = await readObjectBytes(objectStore, existing.objectKey);
+  const decoded = decodeTextFile(storedBytes, existing.mimeType);
   if (decoded.status === "failed") {
     return failed(
       "handler_failed",
@@ -109,7 +107,11 @@ export async function editWorkspaceFile(
   if (edited.status === "failed") {
     return editRefusal(path.value, edited.failure);
   }
-  const bytes = new TextEncoder().encode(edited.text);
+  // Decoding drops a byte order mark. The file keeps the one it had.
+  const editedBytes = new TextEncoder().encode(edited.text);
+  const bytes = startsWithByteOrderMark(storedBytes)
+    ? concatBytes(UTF8_BYTE_ORDER_MARK, editedBytes)
+    : editedBytes;
   const room = checkWorkspaceRoom(deps, files, path.value, bytes.byteLength);
   if (room.status === "failed") {
     return room.result;
@@ -137,6 +139,19 @@ export async function editWorkspaceFile(
       }
     }
   );
+}
+
+const UTF8_BYTE_ORDER_MARK = new Uint8Array([0xef, 0xbb, 0xbf]);
+
+function startsWithByteOrderMark(bytes: Uint8Array): boolean {
+  return UTF8_BYTE_ORDER_MARK.every((byte, index) => bytes[index] === byte);
+}
+
+function concatBytes(first: Uint8Array, second: Uint8Array): Uint8Array {
+  const joined = new Uint8Array(first.byteLength + second.byteLength);
+  joined.set(first);
+  joined.set(second, first.byteLength);
+  return joined;
 }
 
 /**

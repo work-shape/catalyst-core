@@ -52,7 +52,8 @@ import { createWorkspaceChecksum } from "./workspace-tool-results";
 
 const DEFAULT_MAX_PATH_LENGTH = 512;
 const DEFAULT_WORKSPACE_BYTES = 100 * 1024 * 1024;
-const STANDARD_WORKSPACE_DIRECTORIES = ["scripts", "artifacts", "previews", "tmp"] as const;
+/** The folders every command finds in the workspace. None of them can be a file. */
+export const STANDARD_WORKSPACE_DIRECTORIES = ["scripts", "artifacts", "previews", "tmp"] as const;
 
 export type WorkspaceCommandRunnerStore = Pick<PlatformStores, "files" | "executionWorkspaces">;
 

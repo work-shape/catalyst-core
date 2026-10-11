@@ -5,6 +5,7 @@ import {
   createPlatformId,
   type ResolvedWorkspaceHandle
 } from "@vivd-catalyst/core";
+import { STANDARD_WORKSPACE_DIRECTORIES } from "../workspace-command-runner";
 import { putWorkspaceFile, upsertStoredWorkspaceFile } from "../workspace-file-bytes";
 import { normalizeWorkspaceFilePath } from "../workspace-paths";
 import { createWorkspaceChecksum, failed, isTextMimeType } from "../workspace-tool-results";
@@ -22,15 +23,34 @@ export function resolveTextFilePath(
   limits: WorkspaceToolDependencies["limits"]
 ): TextFileStep<string> {
   const normalized = normalizeWorkspaceFilePath(path, limits);
-  if (normalized.status === "success") {
-    return normalized;
+  if (normalized.status === "failed") {
+    return refused(
+      "validation_failed",
+      `${normalized.message}. ${SEND_FILE_PATH}`,
+      normalized.details
+    );
   }
-  return refused(
-    "validation_failed",
-    `${normalized.message}. Send a file path relative to /workspace, such as notes/plan.md.`,
-    normalized.details
-  );
+  // The shared rule looks at the path as it was sent. Blanks around it are dropped, so a
+  // folder name followed by a blank would pass as a file.
+  if (normalized.value.endsWith("/")) {
+    return refused(
+      "validation_failed",
+      `Workspace file path must not end with a slash. ${SEND_FILE_PATH}`,
+      { path }
+    );
+  }
+  const reserved = STANDARD_WORKSPACE_DIRECTORIES.find((name) => name === normalized.value);
+  if (reserved) {
+    return refused(
+      "validation_failed",
+      `'${reserved}' is a folder every workspace has, so it cannot be a file. Choose a file path inside it, such as ${reserved}/notes.md, or another name.`,
+      { path: normalized.value }
+    );
+  }
+  return normalized;
 }
+
+const SEND_FILE_PATH = "Send a file path relative to /workspace, such as notes/plan.md.";
 
 /**
  * Refuses a path that cannot stand beside the files the workspace has. Stored paths are flat,
