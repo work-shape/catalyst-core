@@ -451,17 +451,18 @@ describe("what the dialogs send", () => {
     expect(grantRequests({ ...form, verbs: [] })).toBeUndefined();
   });
 
-  it("offers a Connection reading and using, on one Connection or a workspace", () => {
+  it("offers a Connection reading and using, in a Namespace, on one Connection or a workspace", () => {
     expect(grantVerbs("connection")).toEqual(["read", "use"]);
-    expect(grantScopeKinds("connection")).toEqual(["asset", "workspace"]);
+    expect(grantScopeKinds("connection")).toEqual(["namespace", "asset", "workspace"]);
     // Agents and skills keep the verbs and the places they had.
     for (const kind of ["agent", "skill"] as const) {
       expect(grantVerbs(kind)).toEqual(["read", "write", "delete"]);
       expect(grantScopeKinds(kind)).toEqual(["namespace", "asset"]);
     }
 
-    // Another kind keeps no asset, no verb and no place it has no grant for.
-    const chosen = withGrantKind(
+    // Another kind keeps no asset and no verb it has no grant for. The Namespace stays: a
+    // Connection right is written there as an agent's is.
+    const inNamespace = withGrantKind(
       {
         ...emptyGrantForm,
         holderId: "user-1",
@@ -471,12 +472,23 @@ describe("what the dialogs send", () => {
       },
       "connection"
     );
-    expect(chosen).toMatchObject({
+    expect(inNamespace).toMatchObject({
       kind: "connection",
       verbs: ["read"],
-      scopeKind: "asset",
+      scopeKind: "namespace",
       assetId: undefined
     });
+    expect(grantRequests(inNamespace)).toEqual([
+      {
+        holderKind: "user",
+        holderId: "user-1",
+        action: "connection.read",
+        effect: "allow",
+        scopeKind: "namespace",
+        namespace: "kai-"
+      }
+    ]);
+    const chosen = { ...inNamespace, scopeKind: "asset" as const };
     expect(grantRequests(chosen)).toBeUndefined();
     expect(grantRequests({ ...chosen, verbs: ["use", "read"], assetId: "asset-crm" })).toEqual([
       {
@@ -508,9 +520,9 @@ describe("what the dialogs send", () => {
         scopeId: "ws-1"
       }
     ]);
-    // No row is asked for where the server writes none: a Namespace, or a verb the kind lacks.
+    // No row is asked for where the server writes none: a verb the kind lacks.
     expect(
-      grantRequests({ ...chosen, verbs: ["use"], scopeKind: "namespace", namespace: "kai-" })
+      grantRequests({ ...chosen, verbs: ["write"], scopeKind: "namespace", namespace: "kai-" })
     ).toBeUndefined();
     expect(grantRequests({ ...chosen, verbs: ["write"], assetId: "asset-crm" })).toBeUndefined();
     expect(

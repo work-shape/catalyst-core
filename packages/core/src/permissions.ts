@@ -182,10 +182,11 @@ export const GRANTABLE_ACTION_SCOPES = {
   "skill.read": ["namespace", "asset"],
   "skill.write": ["namespace", "asset"],
   "skill.delete": ["namespace", "asset"],
-  // Reading and using a Connection are granted on one Connection or on what a workspace owns.
-  // Writing, deleting and approving stay with the role until a slice opens them.
-  "connection.read": ["asset", "workspace"],
-  "connection.use": ["asset", "workspace"]
+  // Reading and using a Connection are granted in a Namespace, on one Connection or on what
+  // a workspace owns. Writing, deleting and approving stay with the role until a slice opens
+  // them.
+  "connection.read": ["namespace", "asset", "workspace"],
+  "connection.use": ["namespace", "asset", "workspace"]
 } as const satisfies Partial<
   Record<PlatformAction, readonly Exclude<PermissionGrant["scopeKind"], "instance">[]>
 >;
