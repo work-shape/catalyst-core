@@ -95,6 +95,7 @@ export default defineConfig({
             "operate/capacity-and-limits",
             "operate/auth-and-embedding",
             "operate/governance",
+            "operate/how-rights-work",
             "operate/rights-and-namespaces",
             "operate/execution-workspaces",
             "operate/runner-security",

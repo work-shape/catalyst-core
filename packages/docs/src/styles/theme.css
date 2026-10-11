@@ -216,3 +216,94 @@ starlight-toc a:focus-visible {
 .sidebar-content .caret {
   transition: none;
 }
+
+/* Diagrams are inline SVG drawn with the tokens above, so they follow light and dark. A wide
+   one scrolls inside its figure on a narrow screen, as a table does. */
+.docs-diagram {
+  margin-block: 1.5rem;
+  overflow-x: auto;
+}
+
+.docs-diagram svg {
+  display: block;
+  width: 100%;
+  max-width: 26rem;
+  height: auto;
+  font-family: var(--sl-font);
+}
+
+.docs-diagram-wide svg {
+  min-width: 36rem;
+  max-width: none;
+}
+
+.docs-diagram figcaption {
+  margin-top: 0.75rem;
+  font-size: var(--sl-text-sm);
+  color: var(--sl-color-gray-3);
+}
+
+.docs-diagram text {
+  fill: var(--sl-color-white);
+  font-size: 14px;
+}
+
+.docs-diagram .strong {
+  font-weight: 600;
+}
+
+.docs-diagram .small {
+  fill: var(--sl-color-gray-3);
+  font-size: 12px;
+}
+
+.docs-diagram .small-strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.docs-diagram .box {
+  fill: var(--sl-color-black);
+  stroke: var(--sl-color-gray-4);
+}
+
+.docs-diagram .box-accent {
+  fill: var(--sl-color-accent-low);
+  stroke: var(--sl-color-accent);
+}
+
+.docs-diagram .box-ok {
+  fill: var(--sl-color-green-low);
+  stroke: var(--sl-color-green);
+}
+
+.docs-diagram .box-wait {
+  fill: var(--sl-color-orange-low);
+  stroke: var(--sl-color-orange);
+}
+
+.docs-diagram .box-stop {
+  fill: var(--sl-color-red-low);
+  stroke: var(--sl-color-red);
+}
+
+.docs-diagram .frame {
+  fill: var(--sl-color-bg-inline-code);
+  stroke: var(--sl-color-gray-4);
+}
+
+.docs-diagram .line {
+  fill: none;
+  stroke: var(--sl-color-gray-3);
+  stroke-width: 1.5;
+}
+
+.docs-diagram .lifeline {
+  fill: none;
+  stroke: var(--sl-color-gray-4);
+  stroke-dasharray: 4 4;
+}
+
+.docs-diagram .arrowhead {
+  fill: var(--sl-color-gray-3);
+}
