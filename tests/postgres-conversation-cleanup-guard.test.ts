@@ -44,7 +44,8 @@ describe("Postgres hard deletes while conversation cleanup is pending", () => {
 
     fixture.byteStore.failDeletes = true;
     const accepted = await deleteWorkspace();
-    expect(accepted.statusCode).toBe(202);
+    expect(accepted.statusCode).toBe(200);
+    expect(accepted.json()).toEqual({ state: "deleting" });
     // The Conversations are deleted, and every row that leads to their data is still there.
     await expect(fixture.statusOf(first)).resolves.toBe("deleted");
     await expect(fixture.statusOf(second)).resolves.toBe("deleted");

@@ -11,7 +11,7 @@ import {
   Section,
   Textarea
 } from "@vivd-catalyst/ui";
-import { useCollaborationWorkspaceMutations } from "../../api/workspace-mutations";
+import { useCollaborationWorkspaceMutations } from "../../api/collaboration-workspace-mutations";
 import {
   useCollaborationWorkspaceDeletionImpactQuery,
   useCollaborationWorkspaceMembersQuery

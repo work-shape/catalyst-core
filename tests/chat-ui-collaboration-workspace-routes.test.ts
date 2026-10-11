@@ -17,7 +17,10 @@ import {
   workspaceRouteView
 } from "../packages/chat-ui/src/workspace/workspace-route";
 import { canonicalConversationRedirect } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-model";
-import { collaborationWorkspaceErrorKey } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-errors";
+import {
+  CollaborationWorkspaceChangeHeldError,
+  collaborationWorkspaceErrorKey
+} from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-errors";
 import { collaborationWorkspacesAvailableFor } from "../packages/chat-ui/src/chat-workspace";
 import {
   conversationListCacheKey,
@@ -263,6 +266,28 @@ describe("embedded auth mode", () => {
 
 describe("collaboration workspace error copy", () => {
   const apiError = (status: number) => new ApiError(status, "Server prose", undefined);
+
+  // Fails without the mapping: a change that waits read as "Something went wrong".
+  it("says that a change waits for an approval, and that a policy refused one", () => {
+    for (const action of [
+      "create",
+      "addMember",
+      "leave",
+      "deleteCollaborationWorkspace"
+    ] as const) {
+      expect(
+        collaborationWorkspaceErrorKey(action, new CollaborationWorkspaceChangeHeldError())
+      ).toBe("collaborationWorkspaceErrorWaitsForApproval");
+    }
+    for (const code of ["POLICY_DENIED", "GUARDRAIL_BLOCKED"] as const) {
+      expect(
+        collaborationWorkspaceErrorKey(
+          "addMember",
+          new ApiError(403, "Server prose", { error: { code, message: "Server prose" } })
+        )
+      ).toBe("collaborationWorkspaceErrorNotPermitted");
+    }
+  });
 
   it("explains the missing invitation flow for an unusable member email", () => {
     expect(collaborationWorkspaceErrorKey("addMember", apiError(422))).toBe(

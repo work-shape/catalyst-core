@@ -9608,7 +9608,7 @@
       },
       "post": {
         "operationId": "workspaces.create",
-        "summary": "Create a Shared Workspace",
+        "summary": "Create a Shared Workspace. Every signed-in user may; the caller becomes its Owner.",
         "tags": [
           "Collaboration Workspaces"
         ],
@@ -9624,7 +9624,19 @@
             ]
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -9644,6 +9656,35 @@
                   "$ref": "#/components/schemas/CollaborationWorkspaceWithRole"
                 }
               }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
             }
           },
           "400": {
@@ -9653,10 +9694,10 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
           },
           "409": {
-            "$ref": "#/components/responses/Conflict"
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
@@ -9882,7 +9923,7 @@
       },
       "patch": {
         "operationId": "workspaces.update",
-        "summary": "Change a workspace's settings",
+        "summary": "Change a workspace's settings. Needs the role Owner or Admin.",
         "tags": [
           "Collaboration Workspaces"
         ],
@@ -9905,6 +9946,17 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
             }
           }
         ],
@@ -9927,6 +9979,35 @@
                   "$ref": "#/components/schemas/CollaborationWorkspaceWithRole"
                 }
               }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
             }
           },
           "400": {
@@ -9936,13 +10017,13 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "$ref": "#/components/responses/Conflict"
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
@@ -9959,7 +10040,7 @@
       },
       "delete": {
         "operationId": "workspaces.delete",
-        "summary": "Delete a Shared Workspace and its conversations. Answers 202 when the workspace is closed and its data is still being removed.",
+        "summary": "Delete a Shared Workspace and its conversations. Answers `deleted`, or `deleting` while the data is still being removed. Needs the role Owner.",
         "tags": [
           "Collaboration Workspaces"
         ],
@@ -9983,6 +10064,17 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
           }
         ],
         "requestBody": {
@@ -10001,13 +10093,39 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CollaborationWorkspaceDeletionResult"
+                  "$ref": "#/components/schemas/CollaborationWorkspaceDeletionState"
                 }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
               }
             }
           },
           "202": {
-            "description": "The call was accepted and its work finishes by itself. The answer has no body."
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
@@ -10016,13 +10134,13 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "$ref": "#/components/responses/Conflict"
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
@@ -10139,7 +10257,7 @@
       },
       "post": {
         "operationId": "workspaces.access_requests.create",
-        "summary": "Ask to join a Shared Workspace",
+        "summary": "Ask to join a Shared Workspace that can be found. Every signed-in user may.",
         "tags": [
           "Collaboration Workspaces"
         ],
@@ -10163,6 +10281,17 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
           }
         ],
         "responses": {
@@ -10174,6 +10303,35 @@
                   "$ref": "#/components/schemas/WorkspaceAccessRequest"
                 }
               }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
             }
           },
           "400": {
@@ -10183,13 +10341,13 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "$ref": "#/components/responses/Conflict"
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
@@ -10208,7 +10366,7 @@
     "/api/v1/workspaces/{collaborationWorkspaceId}/access-requests/{userId}": {
       "delete": {
         "operationId": "workspaces.access_requests.decline",
-        "summary": "Decline a request to join a workspace",
+        "summary": "Decline a request to join a workspace. Needs the role Owner or Admin.",
         "tags": [
           "Collaboration Workspaces"
         ],
@@ -10240,6 +10398,17 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
           }
         ],
         "responses": {
@@ -10251,6 +10420,35 @@
                   "$ref": "#/components/schemas/WorkspaceAccessRequest"
                 }
               }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
             }
           },
           "400": {
@@ -10260,10 +10458,13 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
@@ -10282,7 +10483,7 @@
     "/api/v1/workspaces/{collaborationWorkspaceId}/access-requests/{userId}/approve": {
       "post": {
         "operationId": "workspaces.access_requests.approve",
-        "summary": "Approve a request to join a workspace",
+        "summary": "Approve a request to join a workspace. Needs the role Owner or Admin.",
         "tags": [
           "Collaboration Workspaces"
         ],
@@ -10314,6 +10515,17 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
           }
         ],
         "responses": {
@@ -10325,6 +10537,35 @@
                   "$ref": "#/components/schemas/WorkspaceMembership"
                 }
               }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
             }
           },
           "400": {
@@ -10334,13 +10575,13 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "$ref": "#/components/responses/Conflict"
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
@@ -10725,7 +10966,7 @@
       },
       "post": {
         "operationId": "workspaces.members.add",
-        "summary": "Add a user to a workspace by email",
+        "summary": "Add a user to a workspace by email. Needs the role Owner or Admin.",
         "tags": [
           "Collaboration Workspaces"
         ],
@@ -10748,6 +10989,17 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
             }
           }
         ],
@@ -10770,6 +11022,35 @@
                   "$ref": "#/components/schemas/WorkspaceMember"
                 }
               }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
             }
           },
           "400": {
@@ -10779,13 +11060,13 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "$ref": "#/components/responses/Conflict"
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
@@ -10804,7 +11085,7 @@
     "/api/v1/workspaces/{collaborationWorkspaceId}/members/me": {
       "delete": {
         "operationId": "workspaces.members.leave",
-        "summary": "Leave a workspace",
+        "summary": "Leave a workspace. Every member may, but its last active Owner.",
         "tags": [
           "Collaboration Workspaces"
         ],
@@ -10828,6 +11109,17 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
           }
         ],
         "responses": {
@@ -10839,6 +11131,35 @@
                   "$ref": "#/components/schemas/WorkspaceMembership"
                 }
               }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
             }
           },
           "400": {
@@ -10848,13 +11169,13 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "$ref": "#/components/responses/Conflict"
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
@@ -10873,7 +11194,7 @@
     "/api/v1/workspaces/{collaborationWorkspaceId}/members/{userId}": {
       "patch": {
         "operationId": "workspaces.members.update_role",
-        "summary": "Change a member's role in a workspace",
+        "summary": "Change a member's role in a workspace. Needs the role Owner or Admin. An Admin changes regular Members only.",
         "tags": [
           "Collaboration Workspaces"
         ],
@@ -10904,6 +11225,17 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
             }
           }
         ],
@@ -10926,6 +11258,35 @@
                   "$ref": "#/components/schemas/WorkspaceMembership"
                 }
               }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
             }
           },
           "400": {
@@ -10935,13 +11296,13 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "$ref": "#/components/responses/Conflict"
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
@@ -10958,7 +11319,7 @@
       },
       "delete": {
         "operationId": "workspaces.members.remove",
-        "summary": "Remove a member from a workspace",
+        "summary": "Remove a member from a workspace. Needs the role Owner or Admin. An Admin removes regular Members only.",
         "tags": [
           "Collaboration Workspaces"
         ],
@@ -10990,6 +11351,17 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
           }
         ],
         "responses": {
@@ -11001,6 +11373,35 @@
                   "$ref": "#/components/schemas/WorkspaceMembership"
                 }
               }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
             }
           },
           "400": {
@@ -11010,13 +11411,13 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "$ref": "#/components/responses/Conflict"
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
@@ -14271,33 +14672,19 @@
           "pendingAccessRequestCount"
         ]
       },
-      "CollaborationWorkspaceDeletionResult": {
+      "CollaborationWorkspaceDeletionState": {
         "type": "object",
         "properties": {
-          "collaborationWorkspaceId": {
-            "type": "string"
-          },
-          "conversationCount": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "fileCount": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "memberCount": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
+          "state": {
+            "type": "string",
+            "enum": [
+              "deleting",
+              "deleted"
+            ]
           }
         },
         "required": [
-          "collaborationWorkspaceId",
-          "conversationCount",
-          "fileCount",
-          "memberCount"
+          "state"
         ]
       },
       "CollaborationWorkspaceDirectoryItem": {

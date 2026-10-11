@@ -123,8 +123,8 @@ describe("a deletion against writes at the same moment, and cleanup that cannot 
               },
               superadmin.id
             );
-      // User deletion now answers 200 with its state; workspace deletion still defers.
-      expect(deleted.statusCode).toBe(subject === "account" ? 200 : 202);
+      // Both deletions answer 200 with their state.
+      expect(deleted.statusCode).toBe(200);
       await t.runDeletionJobs();
       if (subject === "account") await expect(t.userRow(author)).resolves.toEqual([]);
       else await expect(t.rowsOf(workspace)).resolves.toMatchObject({ workspaces: 0 });

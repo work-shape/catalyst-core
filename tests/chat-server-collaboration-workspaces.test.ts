@@ -611,14 +611,8 @@ describe("Collaboration Workspace API", () => {
       error: { message: expect.stringContaining("1 Shared Workspace") }
     });
 
-    const audit = await app.call("audit_events.list", {}, "owner");
-    expect(audit.statusCode).toBe(200);
-    const auditEvents = audit.json<{
-      items: Array<{
-        type: string;
-        metadata?: Record<string, unknown>;
-      }>;
-    }>().items;
+    // Every change is an Operation Run with rows of its own, so the log is read to its end.
+    const auditEvents = await listAuditEvents(app, "owner");
     expect(auditEvents.map((event) => event.type)).toEqual(
       expect.arrayContaining([
         "collaboration_workspace.created",
@@ -1433,13 +1427,9 @@ describe("Collaboration Workspace API", () => {
       },
       "owner"
     );
+    // The call answers the state. What was removed is counted in the audit row below.
     expect(deleted.statusCode).toBe(200);
-    expect(deleted.json()).toEqual({
-      collaborationWorkspaceId: workspaceId,
-      conversationCount: 2,
-      fileCount: 2,
-      memberCount: 3
-    });
+    expect(deleted.json()).toEqual({ state: "deleted" });
     await expect(access(objectPath)).rejects.toThrow();
     await expect(
       app.stores.workspaces.getWorkspace(clientInstanceId, asCollaborationWorkspaceId(workspaceId))
@@ -1484,9 +1474,7 @@ describe("Collaboration Workspace API", () => {
       ).toBe(404);
     }
 
-    const audit = (await app.call("audit_events.list", {}, "owner")).json<{
-      items: Array<{ type: string; subject: string; metadata?: Record<string, unknown> }>;
-    }>().items;
+    const audit = await listAuditEvents(app, "owner");
     expect(audit).toContainEqual(
       expect.objectContaining({
         type: "collaboration_workspace.deleted",
@@ -1525,7 +1513,8 @@ describe("Collaboration Workspace API", () => {
       "owner"
     );
     expect(deleted.statusCode).toBe(200);
-    expect(deleted.json()).toMatchObject({ conversationCount: 1 });
+    expect(deleted.json()).toEqual({ state: "deleted" });
+    await expect(deletedConversationCount(app, workspaceId)).resolves.toBe(1);
     await expect(
       app.stores.conversations.getConversation(clientInstanceId, asConversationId(first))
     ).resolves.toBeUndefined();
@@ -1582,7 +1571,8 @@ describe("Collaboration Workspace API", () => {
       "owner"
     );
     expect(deleted.statusCode).toBe(200);
-    expect(deleted.json()).toMatchObject({ conversationCount: 1 });
+    expect(deleted.json()).toEqual({ state: "deleted" });
+    await expect(deletedConversationCount(app, workspaceId)).resolves.toBe(1);
     await expect(
       app.stores.conversations.getConversation(clientInstanceId, asConversationId(moved))
     ).resolves.toMatchObject({ collaborationWorkspaceId: destinationId, status: "active" });
@@ -2346,6 +2336,43 @@ async function addWorkspaceMember(
     actor
   );
   expect(response.statusCode).toBe(200);
+}
+
+/** Every audit event the actor may read, newest first, read page by page to the end. */
+async function listAuditEvents(server: TestServer, actor: string) {
+  const page = z.object({
+    items: z.array(
+      z.object({
+        type: z.string(),
+        subject: z.string().optional(),
+        metadata: z.record(z.string(), z.unknown()).optional()
+      })
+    ),
+    nextCursor: z.string().optional()
+  });
+  const events: z.infer<typeof page>["items"] = [];
+  let cursor: string | undefined;
+  do {
+    const response = await server.call(
+      "audit_events.list",
+      { query: { limit: 200, cursor } },
+      actor
+    );
+    expect(response.statusCode).toBe(200);
+    const read = page.parse(response.json());
+    events.push(...read.items);
+    cursor = read.nextCursor;
+  } while (cursor !== undefined);
+  return events;
+}
+
+/** How many Conversations the deletion of a workspace removed, as its audit row counts them. */
+async function deletedConversationCount(server: TestServer, collaborationWorkspaceId: string) {
+  const deleted = (await listAuditEvents(server, "owner")).find(
+    (event) =>
+      event.type === "collaboration_workspace.deleted" && event.subject === collaborationWorkspaceId
+  );
+  return deleted?.metadata?.conversationCount;
 }
 
 async function createConversation(

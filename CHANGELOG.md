@@ -460,6 +460,21 @@ id from config_assets where status = 'deleted')`.
   field. Origin, expiry and the whole input are under "Technical details"; the dialog "Full
   input" is gone. `pnpm demo:seed` leaves two requests in the Inbox, a new skill and a change.
 
+- **Workspaces and members (breaking for callers of the typed client):** `workspaces.create`,
+  `workspaces.update`, `workspaces.delete`, `workspaces.members.add`,
+  `workspaces.members.update_role`, `workspaces.members.remove`, `workspaces.members.leave`,
+  `workspaces.access_requests.create`, `workspaces.access_requests.approve` and
+  `workspaces.access_requests.decline` are Operation Runs. They answer the header
+  `Operation-Run-Id`, take an `Idempotency-Key` and follow the instance's policy, so a call can
+  answer `202` with the run while it waits for an approval. The run names the workspace; a
+  creation names none. The typed client answers the ten calls as an operation outcome;
+  `completedOutput(outcome)` hands a caller the output. `DELETE
+  /api/v1/workspaces/{collaborationWorkspaceId}` answers `200` with `{ "state": "deleted" |
+  "deleting" }` in place of the counts or an empty `202`; what a deletion removed is counted
+  in its audit row `collaboration_workspace.deleted`. The caller's role in the workspace is
+  asked before the policy: a refusal answers `403 FORBIDDEN` with `details.action` naming the
+  operation, and a workspace the caller cannot reach answers `404` as before.
+  `workspaces.ensure_personal` stays a plain call, since the interface makes it on every load.
 - **User administration (breaking for callers of the typed client):** `users.create`,
   `users.update`, `users.delete`, `users.identities.upsert`, `users.identities.delete`,
   `users.password.reset` and `users.invitation.send` are Operation Runs. They answer the

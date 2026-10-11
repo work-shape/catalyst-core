@@ -3,7 +3,7 @@ import { z } from "zod";
 import {
   addWorkspaceMemberRequestSchema,
   collaborationWorkspaceDeletionImpactSchema,
-  collaborationWorkspaceDeletionResultSchema,
+  collaborationWorkspaceDeletionStateSchema,
   collaborationWorkspaceDirectoryItemSchema,
   collaborationWorkspaceWithRoleSchema,
   createCollaborationWorkspaceRequestSchema,
@@ -17,8 +17,11 @@ import {
   workspaceMembershipSchema
 } from "../collaboration-workspaces";
 import { collaborationWorkspaceAgentsSchema } from "../configuration";
-import { defineOperation, json, page } from "./define-operation";
+import { defineOperation, defineRegisteredOperation, json, page } from "./define-operation";
 
+// The ten changing operations but `workspaces.ensure_personal` are operations of the registry.
+// Their right is the caller's role in the workspace, which is no action a grant gives, so each
+// checks it itself and requires none.
 export const collaborationWorkspaceOperations = {
   "workspaces.ensure_personal": defineOperation({
     id: "workspaces.ensure_personal",
@@ -49,11 +52,11 @@ export const collaborationWorkspaceOperations = {
     errors: [],
     rateClass: "read"
   }),
-  "workspaces.create": defineOperation({
+  "workspaces.create": defineRegisteredOperation({
     id: "workspaces.create",
     method: "POST",
     path: "/api/v1/workspaces",
-    summary: "Create a Shared Workspace",
+    summary: "Create a Shared Workspace. Every signed-in user may; the caller becomes its Owner.",
     tag: "Collaboration Workspaces",
     auth: "user",
     scope: "collaboration_workspace:manage",
@@ -108,11 +111,11 @@ export const collaborationWorkspaceOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
-  "workspaces.update": defineOperation({
+  "workspaces.update": defineRegisteredOperation({
     id: "workspaces.update",
     method: "PATCH",
     path: "/api/v1/workspaces/:collaborationWorkspaceId",
-    summary: "Change a workspace's settings",
+    summary: "Change a workspace's settings. Needs the role Owner or Admin.",
     tag: "Collaboration Workspaces",
     auth: "user",
     scope: "collaboration_workspace:manage",
@@ -137,20 +140,19 @@ export const collaborationWorkspaceOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
-  "workspaces.delete": defineOperation({
+  "workspaces.delete": defineRegisteredOperation({
     id: "workspaces.delete",
     method: "DELETE",
     path: "/api/v1/workspaces/:collaborationWorkspaceId",
     summary:
-      "Delete a Shared Workspace and its conversations. Answers 202 when the workspace is closed and its data is still being removed.",
+      "Delete a Shared Workspace and its conversations. Answers `deleted`, or `deleting` while the data is still being removed. Needs the role Owner.",
     tag: "Collaboration Workspaces",
     auth: "user",
     scope: "collaboration_workspace:manage",
     requires: [],
     effect: "changing",
     body: deleteCollaborationWorkspaceRequestSchema,
-    response: json(collaborationWorkspaceDeletionResultSchema),
-    deferred: true,
+    response: json(collaborationWorkspaceDeletionStateSchema),
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
@@ -184,11 +186,11 @@ export const collaborationWorkspaceOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
-  "workspaces.members.add": defineOperation({
+  "workspaces.members.add": defineRegisteredOperation({
     id: "workspaces.members.add",
     method: "POST",
     path: "/api/v1/workspaces/:collaborationWorkspaceId/members",
-    summary: "Add a user to a workspace by email",
+    summary: "Add a user to a workspace by email. Needs the role Owner or Admin.",
     tag: "Collaboration Workspaces",
     auth: "user",
     scope: "collaboration_workspace:manage",
@@ -199,11 +201,12 @@ export const collaborationWorkspaceOperations = {
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  "workspaces.members.update_role": defineOperation({
+  "workspaces.members.update_role": defineRegisteredOperation({
     id: "workspaces.members.update_role",
     method: "PATCH",
     path: "/api/v1/workspaces/:collaborationWorkspaceId/members/:userId",
-    summary: "Change a member's role in a workspace",
+    summary:
+      "Change a member's role in a workspace. Needs the role Owner or Admin. An Admin changes regular Members only.",
     tag: "Collaboration Workspaces",
     auth: "user",
     scope: "collaboration_workspace:manage",
@@ -214,11 +217,12 @@ export const collaborationWorkspaceOperations = {
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  "workspaces.members.remove": defineOperation({
+  "workspaces.members.remove": defineRegisteredOperation({
     id: "workspaces.members.remove",
     method: "DELETE",
     path: "/api/v1/workspaces/:collaborationWorkspaceId/members/:userId",
-    summary: "Remove a member from a workspace",
+    summary:
+      "Remove a member from a workspace. Needs the role Owner or Admin. An Admin removes regular Members only.",
     tag: "Collaboration Workspaces",
     auth: "user",
     scope: "collaboration_workspace:manage",
@@ -228,11 +232,11 @@ export const collaborationWorkspaceOperations = {
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  "workspaces.members.leave": defineOperation({
+  "workspaces.members.leave": defineRegisteredOperation({
     id: "workspaces.members.leave",
     method: "DELETE",
     path: "/api/v1/workspaces/:collaborationWorkspaceId/members/me",
-    summary: "Leave a workspace",
+    summary: "Leave a workspace. Every member may, but its last active Owner.",
     tag: "Collaboration Workspaces",
     auth: "user",
     scope: "collaboration_workspace:manage",
@@ -242,11 +246,11 @@ export const collaborationWorkspaceOperations = {
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  "workspaces.access_requests.create": defineOperation({
+  "workspaces.access_requests.create": defineRegisteredOperation({
     id: "workspaces.access_requests.create",
     method: "POST",
     path: "/api/v1/workspaces/:collaborationWorkspaceId/access-requests",
-    summary: "Ask to join a Shared Workspace",
+    summary: "Ask to join a Shared Workspace that can be found. Every signed-in user may.",
     tag: "Collaboration Workspaces",
     auth: "user",
     scope: "collaboration_workspace:manage",
@@ -271,11 +275,11 @@ export const collaborationWorkspaceOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
-  "workspaces.access_requests.approve": defineOperation({
+  "workspaces.access_requests.approve": defineRegisteredOperation({
     id: "workspaces.access_requests.approve",
     method: "POST",
     path: "/api/v1/workspaces/:collaborationWorkspaceId/access-requests/:userId/approve",
-    summary: "Approve a request to join a workspace",
+    summary: "Approve a request to join a workspace. Needs the role Owner or Admin.",
     tag: "Collaboration Workspaces",
     auth: "user",
     scope: "collaboration_workspace:manage",
@@ -285,11 +289,11 @@ export const collaborationWorkspaceOperations = {
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
-  "workspaces.access_requests.decline": defineOperation({
+  "workspaces.access_requests.decline": defineRegisteredOperation({
     id: "workspaces.access_requests.decline",
     method: "DELETE",
     path: "/api/v1/workspaces/:collaborationWorkspaceId/access-requests/:userId",
-    summary: "Decline a request to join a workspace",
+    summary: "Decline a request to join a workspace. Needs the role Owner or Admin.",
     tag: "Collaboration Workspaces",
     auth: "user",
     scope: "collaboration_workspace:manage",

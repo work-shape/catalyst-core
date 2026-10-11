@@ -100,49 +100,9 @@
       "class": "identity",
       "reason": "This operation establishes the actor."
     },
-    "workspaces.access_requests.approve": {
-      "class": "pending",
-      "ticket": "CONV-7"
-    },
-    "workspaces.access_requests.create": {
-      "class": "pending",
-      "ticket": "CONV-7"
-    },
-    "workspaces.access_requests.decline": {
-      "class": "pending",
-      "ticket": "CONV-7"
-    },
-    "workspaces.create": {
-      "class": "pending",
-      "ticket": "CONV-7"
-    },
-    "workspaces.delete": {
-      "class": "pending",
-      "ticket": "CONV-7"
-    },
     "workspaces.ensure_personal": {
       "class": "own_account",
       "reason": "The interface calls this on every load, so an Operation Run per page load would record a hot path for no benefit."
-    },
-    "workspaces.members.add": {
-      "class": "pending",
-      "ticket": "CONV-7"
-    },
-    "workspaces.members.leave": {
-      "class": "pending",
-      "ticket": "CONV-7"
-    },
-    "workspaces.members.remove": {
-      "class": "pending",
-      "ticket": "CONV-7"
-    },
-    "workspaces.members.update_role": {
-      "class": "pending",
-      "ticket": "CONV-7"
-    },
-    "workspaces.update": {
-      "class": "pending",
-      "ticket": "CONV-7"
     }
   },
   "rightDecidedBy": {
@@ -207,24 +167,14 @@
     "session_tokens.issue": "public",
     "view_runtime.files.get": "public",
     "view_shell.files.get": "public",
-    "workspaces.access_requests.approve": "workspace_role",
-    "workspaces.access_requests.create": "own",
-    "workspaces.access_requests.decline": "workspace_role",
     "workspaces.access_requests.list": "workspace_role",
     "workspaces.agents.list": "workspace_role",
-    "workspaces.create": "own",
-    "workspaces.delete": "workspace_role",
     "workspaces.deletion_impact.get": "workspace_role",
     "workspaces.directory.list": "own",
     "workspaces.ensure_personal": "own",
     "workspaces.get": "workspace_role",
     "workspaces.list": "own",
     "workspaces.member_candidates.list": "workspace_role",
-    "workspaces.members.add": "workspace_role",
-    "workspaces.members.leave": "workspace_role",
-    "workspaces.members.list": "workspace_role",
-    "workspaces.members.remove": "workspace_role",
-    "workspaces.members.update_role": "workspace_role",
-    "workspaces.update": "workspace_role"
+    "workspaces.members.list": "workspace_role"
   }
 }

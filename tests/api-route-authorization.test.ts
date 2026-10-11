@@ -342,7 +342,8 @@ describe("a changing operation is registered or named as plain", () => {
     const recorded = baseline.entries
       .filter((entry) => entry.target === "operations" && entry.rule === "plain-changing")
       .find((entry) => entry.scope === kind);
-    expect({ class: kind, count: counted }).toEqual({ class: kind, count: recorded?.count });
+    // The baseline leaves out a count of zero.
+    expect({ class: kind, count: counted }).toEqual({ class: kind, count: recorded?.count ?? 0 });
   });
 
   it("names where the right of every plain operation without requires is decided", () => {

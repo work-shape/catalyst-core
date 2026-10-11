@@ -21,15 +21,33 @@ export type CollaborationWorkspaceAction =
   | "moveConversation"
   | "deleteCollaborationWorkspace";
 
+/**
+ * A workspace change that waits for somebody else's approval. Nothing has changed, and the
+ * screen says so in place of a result.
+ */
+export class CollaborationWorkspaceChangeHeldError extends Error {
+  constructor() {
+    super("The change waits for an approval and has changed nothing yet");
+    this.name = "CollaborationWorkspaceChangeHeldError";
+  }
+}
+
 export function collaborationWorkspaceErrorKey(
   action: CollaborationWorkspaceAction,
   error: unknown
 ): TranslationKey {
+  if (error instanceof CollaborationWorkspaceChangeHeldError) {
+    return "collaborationWorkspaceErrorWaitsForApproval";
+  }
   const code = apiErrorCode(error) ?? statusFallbackCode(apiErrorStatus(error));
 
   switch (code) {
     case "UNAUTHENTICATED":
       return "collaborationWorkspaceErrorSignedOut";
+    // The instance's policy or a guardrail refused the change.
+    case "POLICY_DENIED":
+    case "GUARDRAIL_BLOCKED":
+      return "collaborationWorkspaceErrorNotPermitted";
     case "FORBIDDEN":
       // A move only fails on membership, and naming the missing membership would
       // leak whether the target workspace exists.

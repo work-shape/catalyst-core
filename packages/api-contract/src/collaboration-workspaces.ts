@@ -137,11 +137,9 @@ export const collaborationWorkspaceDeletionImpactSchema = z.object({
   pendingAccessRequestCount: z.number().int().nonnegative()
 });
 
-export const collaborationWorkspaceDeletionResultSchema = z.object({
-  collaborationWorkspaceId: z.string(),
-  conversationCount: z.number().int().nonnegative(),
-  fileCount: z.number().int().nonnegative(),
-  memberCount: z.number().int().nonnegative()
+/** `deleted` means the rows are gone; `deleting` means the workspace is closed and a job removes the rest. */
+export const collaborationWorkspaceDeletionStateSchema = z.object({
+  state: z.enum(["deleting", "deleted"])
 });
 
 export type CollaborationWorkspace = z.infer<typeof collaborationWorkspaceSchema>;

@@ -4,10 +4,8 @@ import type {
   ConversationListItem
 } from "@vivd-catalyst/api-client";
 import { useCollaborationWorkspaceDirectoryQuery } from "../api/workspace-queries";
-import {
-  useCollaborationWorkspaceMutations,
-  useMoveConversationMutation
-} from "../api/workspace-mutations";
+import { useCollaborationWorkspaceMutations } from "../api/collaboration-workspace-mutations";
+import { useMoveConversationMutation } from "../api/workspace-mutations";
 import { BrowseCollaborationWorkspacesDialog } from "./browse-collaboration-workspaces-dialog";
 import { useCollaborationWorkspaceActionError } from "./collaboration-workspace-action-error";
 import type { CollaborationWorkspaceDialogState } from "./collaboration-workspace-model";

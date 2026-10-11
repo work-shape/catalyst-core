@@ -116,8 +116,8 @@ describe("a deletion that finishes by itself", () => {
 
     t.byteStore.failDeletes = true;
     const accepted = await deleteWorkspace();
-    expect(accepted.statusCode).toBe(202);
-    expect(accepted.body).toBe("");
+    expect(accepted.statusCode).toBe(200);
+    expect(accepted.json()).toEqual({ state: "deleting" });
 
     const selector = await t.api.call("workspaces.list", {}, owner.id);
     expect(selector.statusCode).toBe(200);
@@ -228,10 +228,9 @@ describe("a deletion that finishes by itself", () => {
     t.byteStore.failDeletes = true;
     for (const request of [deleteUser, deleteWorkspace, deleteUser, deleteWorkspace]) {
       const answer = await request();
-      // User deletion now answers its state; workspace deletion still defers with no body.
-      expect(answer.statusCode).toBe(request === deleteUser ? 200 : 202);
-      if (request === deleteUser) expect(answer.json()).toEqual({ state: "deleting" });
-      else expect(answer.body).toBe("");
+      // Both deletions answer their state, the first time and every time after.
+      expect(answer.statusCode).toBe(200);
+      expect(answer.json()).toEqual({ state: "deleting" });
     }
     await expect(t.jobs()).resolves.toEqual([
       { kind: "account.delete", status: "queued", attempts: 0 },

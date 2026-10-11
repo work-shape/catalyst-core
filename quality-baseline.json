@@ -604,13 +604,6 @@
       "owner": "CONV-1"
     },
     {
-      "target": "operations",
-      "rule": "plain-changing",
-      "scope": "pending",
-      "count": 10,
-      "owner": "CONV-1"
-    },
-    {
       "target": "types:packages",
       "rule": "typescript/unused",
       "scope": "clients/demo",

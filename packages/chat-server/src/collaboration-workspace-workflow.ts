@@ -6,14 +6,15 @@ import {
   asUserId,
   auditActorFromUser,
   getSubjectUserId,
+  type AuditRecorder,
   type AuthenticatedUser,
   type CollaborationWorkspace,
   type CollaborationWorkspaceId,
   type CollaborationWorkspaceWithRole,
   type ConversationVisibility,
+  type OperationAuthorization,
   type PlatformStores,
   type RuntimeAssetSnapshot,
-  type RuntimeCallContext,
   type UserRecord,
   type WorkspaceAccentColor,
   type WorkspaceMemberCandidate,
@@ -43,6 +44,19 @@ export interface WorkspaceAccess {
   role: WorkspaceMembershipRole;
   /** The user's own Workspace Membership role; null when only the superadmin role gives access. */
   membershipRole: WorkspaceMembershipRole | null;
+}
+
+/** The least role a workspace operation asks of its caller. `member` is any role. */
+export type WorkspaceRoleNeeded = "member" | "admin" | "owner";
+
+/** What a changing workspace operation takes from its Operation Run. */
+export interface WorkspaceChangeCall {
+  /** The operation, which a refusal names: no right a caller can be granted opens it. */
+  operationId: string;
+  user: AuthenticatedUser;
+  /** Writes audit rows that name the run. */
+  audit: AuditRecorder;
+  correlationId: string;
 }
 
 export interface WorkspaceListItem extends CollaborationWorkspaceWithRole {
@@ -132,6 +146,44 @@ export class CollaborationWorkspaceWorkflow {
     return { userId, role, membershipRole };
   }
 
+  /**
+   * Who may call a registered workspace operation. It is the operation's `authorize`, so the
+   * run records the check and a refusal, and a caller whose role is too low reaches neither the
+   * policy nor an approval. The role comes from `requireWorkspaceAccess`, which the operation
+   * asks again where it writes. A workspace the caller cannot reach is not available to them,
+   * as for a read: that throws, and the call fails before anything of it ran.
+   */
+  async authorizeChange(
+    operationId: string,
+    user: AuthenticatedUser,
+    collaborationWorkspaceId: CollaborationWorkspaceId,
+    needed: WorkspaceRoleNeeded
+  ): Promise<OperationAuthorization> {
+    const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
+    return authorizationOf(operationId, roleRefusal(access, needed));
+  }
+
+  /** The `authorize` of `workspaces.delete`: an Owner, also of a workspace already in deletion. */
+  async authorizeDeletion(
+    operationId: string,
+    user: AuthenticatedUser,
+    collaborationWorkspaceId: CollaborationWorkspaceId
+  ): Promise<OperationAuthorization> {
+    const { refusal } = await this.deletionAccess(user, collaborationWorkspaceId);
+    return authorizationOf(operationId, refusal);
+  }
+
+  /**
+   * The `authorize` of `workspaces.access_requests.create`. Whoever is signed in may ask to
+   * join a Shared Workspace that can be found; no other workspace is available to them.
+   */
+  async authorizeAccessRequest(
+    collaborationWorkspaceId: CollaborationWorkspaceId
+  ): Promise<OperationAuthorization> {
+    await this.requireDiscoverableWorkspace(collaborationWorkspaceId);
+    return { allowed: true };
+  }
+
   /** The runtime assets a member sees in this workspace. */
   async getAssetSnapshot(
     user: AuthenticatedUser,
@@ -173,10 +225,10 @@ export class CollaborationWorkspaceWorkflow {
   }
 
   async createSharedWorkspace(
-    user: AuthenticatedUser,
-    context: RuntimeCallContext,
+    call: WorkspaceChangeCall,
     command: CreateSharedWorkspaceCommand
   ): Promise<WorkspaceListItem> {
+    const { user } = call;
     const workspace = await this.options.stores.workspaces.createWorkspace({
       clientInstanceId: this.options.clientInstanceId,
       kind: "shared",
@@ -188,7 +240,7 @@ export class CollaborationWorkspaceWorkflow {
       accentColor: validateAccentColor(command.accentColor),
       creatorUserId: asUserId(getSubjectUserId(user))
     });
-    await this.record(context, user, workspace.id, "collaboration_workspace.created");
+    await this.record(call, workspace.id, "collaboration_workspace.created");
     return { ...workspace, role: "owner", membershipRole: "owner", pendingAccessRequestCount: 0 };
   }
 
@@ -235,24 +287,14 @@ export class CollaborationWorkspaceWorkflow {
    * workspace in deletion is answered `deferred` to the same people.
    */
   async deleteSharedWorkspace(
-    user: AuthenticatedUser,
-    context: RuntimeCallContext,
+    call: WorkspaceChangeCall,
     collaborationWorkspaceId: CollaborationWorkspaceId,
     confirmName: string
   ): Promise<DeletionOutcome<WorkspaceDeletionResult>> {
+    const { user } = call;
     const scope = { clientInstanceId: this.options.clientInstanceId, collaborationWorkspaceId };
-    const inDeletion = await this.options.stores.workspaces.getWorkspaceInDeletion(scope);
-    if (inDeletion) {
-      const userId = getSubjectUserId(user);
-      const ownsIt = inDeletion.memberships.some(
-        (membership) => membership.userId === userId && membership.role === "owner"
-      );
-      if (!ownsIt && !isSuperadmin(user)) {
-        throw new AppError("NOT_FOUND", "Collaboration Workspace is not available");
-      }
-    } else {
-      requireOwner(await this.requireWorkspaceAccess(user, collaborationWorkspaceId));
-    }
+    const { inDeletion, refusal } = await this.deletionAccess(user, collaborationWorkspaceId);
+    requireNoRefusal(call.operationId, refusal);
     const workspace =
       inDeletion?.workspace ?? (await this.requireSharedWorkspace(collaborationWorkspaceId));
     if (confirmName !== workspace.name) {
@@ -272,18 +314,44 @@ export class CollaborationWorkspaceWorkflow {
       collaborationWorkspaceId,
       actor: auditActorFromUser(user),
       actorUserId: asUserId(getSubjectUserId(user)),
-      correlationId: context.correlationId
+      correlationId: call.correlationId
     });
   }
 
-  async updateSettings(
+  /**
+   * Whether the user may delete the workspace, with the workspace in deletion where its
+   * deletion was requested before. Such a workspace has no memberships to ask any more, so its
+   * Owners are read from what the deletion kept, and nobody else finds it.
+   */
+  private async deletionAccess(
     user: AuthenticatedUser,
-    context: RuntimeCallContext,
+    collaborationWorkspaceId: CollaborationWorkspaceId
+  ) {
+    const inDeletion = await this.options.stores.workspaces.getWorkspaceInDeletion({
+      clientInstanceId: this.options.clientInstanceId,
+      collaborationWorkspaceId
+    });
+    if (!inDeletion) {
+      const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
+      return { inDeletion, refusal: roleRefusal(access, "owner") };
+    }
+    const userId = getSubjectUserId(user);
+    const ownsIt = inDeletion.memberships.some(
+      (membership) => membership.userId === userId && membership.role === "owner"
+    );
+    if (!ownsIt && !isSuperadmin(user)) {
+      throw new AppError("NOT_FOUND", "Collaboration Workspace is not available");
+    }
+    return { inDeletion, refusal: undefined };
+  }
+
+  async updateSettings(
+    call: WorkspaceChangeCall,
     collaborationWorkspaceId: CollaborationWorkspaceId,
     command: UpdateWorkspaceSettingsCommand
   ): Promise<WorkspaceListItem> {
-    const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
-    requireOwnerOrAdmin(access);
+    const { user } = call;
+    const access = await this.requireRole(call, collaborationWorkspaceId, "admin");
     const workspace = await this.requireWorkspace(collaborationWorkspaceId);
     if (workspace.kind === "personal") {
       throw new AppError("VALIDATION_FAILED", "Personal Workspace settings cannot be changed");
@@ -310,7 +378,7 @@ export class CollaborationWorkspaceWorkflow {
       return this.getWorkspace(user, collaborationWorkspaceId);
     }
     const updated = await this.options.stores.workspaces.updateWorkspace(update);
-    await this.record(context, user, collaborationWorkspaceId, "collaboration_workspace.updated", {
+    await this.record(call, collaborationWorkspaceId, "collaboration_workspace.updated", {
       changedFields
     });
     return this.toListItem(updated, access);
@@ -361,13 +429,11 @@ export class CollaborationWorkspaceWorkflow {
   }
 
   async addMemberByEmail(
-    user: AuthenticatedUser,
-    context: RuntimeCallContext,
+    call: WorkspaceChangeCall,
     collaborationWorkspaceId: CollaborationWorkspaceId,
     email: string
   ): Promise<WorkspaceMemberItem> {
-    const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
-    requireOwnerOrAdmin(access);
+    await this.requireRole(call, collaborationWorkspaceId, "admin");
     await this.requireSharedWorkspace(collaborationWorkspaceId);
     const normalizedEmail = email.trim().toLocaleLowerCase("en-US");
     if (!normalizedEmail) throw new AppError("VALIDATION_FAILED", CANNOT_ADD_MEMBER_MESSAGE);
@@ -414,15 +480,9 @@ export class CollaborationWorkspaceWorkflow {
         userId: target.id
       });
     }
-    await this.record(
-      context,
-      user,
-      collaborationWorkspaceId,
-      "collaboration_workspace.member_added",
-      {
-        targetUserId: target.id
-      }
-    );
+    await this.record(call, collaborationWorkspaceId, "collaboration_workspace.member_added", {
+      targetUserId: target.id
+    });
     return {
       userId: target.id,
       displayLabel: target.displayLabel,
@@ -432,22 +492,16 @@ export class CollaborationWorkspaceWorkflow {
   }
 
   async changeMemberRole(
-    user: AuthenticatedUser,
-    context: RuntimeCallContext,
+    call: WorkspaceChangeCall,
     collaborationWorkspaceId: CollaborationWorkspaceId,
     targetUserId: UserRecord["id"],
     role: WorkspaceMembershipRole
   ): Promise<WorkspaceMembership> {
-    const actor = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
-    if (actor.role !== "owner" && actor.role !== "admin") {
-      throw new AppError("FORBIDDEN", "Workspace Owner access is required");
-    }
+    const actor = await this.requireRole(call, collaborationWorkspaceId, "admin");
     await this.requireSharedWorkspace(collaborationWorkspaceId);
     const target = await this.requireMembership(collaborationWorkspaceId, targetUserId);
-    if (actor.role === "admin") {
-      if (target.role !== "member" || role !== "member") {
-        throw new AppError("FORBIDDEN", "Workspace Admins may manage regular Members only");
-      }
+    if (actor.role === "admin" && (target.role !== "member" || role !== "member")) {
+      throw refusalError(call.operationId, "Workspace Admins may manage regular Members only");
     }
     if (target.role === role) throw new AppError("CONFLICT", "Workspace role is unchanged");
     const updated = await this.underOwnerLock(collaborationWorkspaceId, target, (stores) =>
@@ -459,8 +513,7 @@ export class CollaborationWorkspaceWorkflow {
       })
     );
     await this.record(
-      context,
-      user,
+      call,
       collaborationWorkspaceId,
       "collaboration_workspace.member_role_changed",
       { targetUserId, oldRole: target.role, newRole: role }
@@ -469,19 +522,15 @@ export class CollaborationWorkspaceWorkflow {
   }
 
   async removeMember(
-    user: AuthenticatedUser,
-    context: RuntimeCallContext,
+    call: WorkspaceChangeCall,
     collaborationWorkspaceId: CollaborationWorkspaceId,
     targetUserId: UserRecord["id"]
   ): Promise<WorkspaceMembership> {
-    const actor = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
-    if (actor.role !== "owner" && actor.role !== "admin") {
-      throw new AppError("FORBIDDEN", "Workspace Owner or Admin access is required");
-    }
+    const actor = await this.requireRole(call, collaborationWorkspaceId, "admin");
     await this.requireSharedWorkspace(collaborationWorkspaceId);
     const target = await this.requireMembership(collaborationWorkspaceId, targetUserId);
     if (actor.role === "admin" && target.role !== "member") {
-      throw new AppError("FORBIDDEN", "Workspace Admins may remove regular Members only");
+      throw refusalError(call.operationId, "Workspace Admins may remove regular Members only");
     }
     const removed = await this.underOwnerLock(collaborationWorkspaceId, target, (stores) =>
       stores.workspaces.removeMembership({
@@ -490,22 +539,17 @@ export class CollaborationWorkspaceWorkflow {
         userId: targetUserId
       })
     );
-    await this.record(
-      context,
-      user,
-      collaborationWorkspaceId,
-      "collaboration_workspace.member_removed",
-      { targetUserId }
-    );
+    await this.record(call, collaborationWorkspaceId, "collaboration_workspace.member_removed", {
+      targetUserId
+    });
     return removed;
   }
 
   async leaveWorkspace(
-    user: AuthenticatedUser,
-    context: RuntimeCallContext,
+    call: WorkspaceChangeCall,
     collaborationWorkspaceId: CollaborationWorkspaceId
   ): Promise<WorkspaceMembership> {
-    const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
+    const access = await this.requireRole(call, collaborationWorkspaceId, "member");
     await this.requireSharedWorkspace(collaborationWorkspaceId);
     if (!access.membershipRole) {
       throw new AppError("CONFLICT", "User is not a workspace member");
@@ -520,13 +564,9 @@ export class CollaborationWorkspaceWorkflow {
           userId: access.userId
         })
     );
-    await this.record(
-      context,
-      user,
-      collaborationWorkspaceId,
-      "collaboration_workspace.member_left",
-      { targetUserId: access.userId }
-    );
+    await this.record(call, collaborationWorkspaceId, "collaboration_workspace.member_left", {
+      targetUserId: access.userId
+    });
     return removed;
   }
 
@@ -563,18 +603,11 @@ export class CollaborationWorkspaceWorkflow {
   }
 
   async requestAccess(
-    user: AuthenticatedUser,
-    context: RuntimeCallContext,
+    call: WorkspaceChangeCall,
     collaborationWorkspaceId: CollaborationWorkspaceId
   ) {
-    const subjectUserId = asUserId(getSubjectUserId(user));
-    const workspace = await this.options.stores.workspaces.getWorkspace(
-      this.options.clientInstanceId,
-      collaborationWorkspaceId
-    );
-    if (!workspace || workspace.kind !== "shared" || workspace.visibility !== "discoverable") {
-      throw new AppError("NOT_FOUND", "Collaboration Workspace is not available");
-    }
+    const subjectUserId = asUserId(getSubjectUserId(call.user));
+    await this.requireDiscoverableWorkspace(collaborationWorkspaceId);
     if (
       await this.options.stores.workspaces.getMembership({
         clientInstanceId: this.options.clientInstanceId,
@@ -598,13 +631,9 @@ export class CollaborationWorkspaceWorkflow {
       collaborationWorkspaceId,
       userId: subjectUserId
     });
-    await this.record(
-      context,
-      user,
-      collaborationWorkspaceId,
-      "collaboration_workspace.access_requested",
-      { targetUserId: subjectUserId }
-    );
+    await this.record(call, collaborationWorkspaceId, "collaboration_workspace.access_requested", {
+      targetUserId: subjectUserId
+    });
     return request;
   }
 
@@ -635,13 +664,11 @@ export class CollaborationWorkspaceWorkflow {
   }
 
   async approveAccessRequest(
-    user: AuthenticatedUser,
-    context: RuntimeCallContext,
+    call: WorkspaceChangeCall,
     collaborationWorkspaceId: CollaborationWorkspaceId,
     targetUserId: UserRecord["id"]
   ): Promise<WorkspaceMembership> {
-    const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
-    requireOwnerOrAdmin(access);
+    await this.requireRole(call, collaborationWorkspaceId, "admin");
     await this.requireSharedWorkspace(collaborationWorkspaceId);
     const request = await this.options.stores.workspaces.getAccessRequest({
       clientInstanceId: this.options.clientInstanceId,
@@ -669,8 +696,7 @@ export class CollaborationWorkspaceWorkflow {
       userId: targetUserId
     });
     await this.record(
-      context,
-      user,
+      call,
       collaborationWorkspaceId,
       "collaboration_workspace.access_request_approved",
       { targetUserId }
@@ -679,21 +705,18 @@ export class CollaborationWorkspaceWorkflow {
   }
 
   async declineAccessRequest(
-    user: AuthenticatedUser,
-    context: RuntimeCallContext,
+    call: WorkspaceChangeCall,
     collaborationWorkspaceId: CollaborationWorkspaceId,
     targetUserId: UserRecord["id"]
   ) {
-    const access = await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
-    requireOwnerOrAdmin(access);
+    await this.requireRole(call, collaborationWorkspaceId, "admin");
     const request = await this.options.stores.workspaces.deleteAccessRequest({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId,
       userId: targetUserId
     });
     await this.record(
-      context,
-      user,
+      call,
       collaborationWorkspaceId,
       "collaboration_workspace.access_request_declined",
       { targetUserId }
@@ -750,6 +773,33 @@ export class CollaborationWorkspaceWorkflow {
     return workspace;
   }
 
+  /** A Shared Workspace that can be found, or the refusal that it is not there for the caller. */
+  private async requireDiscoverableWorkspace(
+    collaborationWorkspaceId: CollaborationWorkspaceId
+  ): Promise<void> {
+    const workspace = await this.options.stores.workspaces.getWorkspace(
+      this.options.clientInstanceId,
+      collaborationWorkspaceId
+    );
+    if (!workspace || workspace.kind !== "shared" || workspace.visibility !== "discoverable") {
+      throw new AppError("NOT_FOUND", "Collaboration Workspace is not available");
+    }
+  }
+
+  /**
+   * The caller's access, asked again where the operation writes: the role may have changed
+   * since the call was admitted. The refusal ends the run as denied, like the one before it.
+   */
+  private async requireRole(
+    call: WorkspaceChangeCall,
+    collaborationWorkspaceId: CollaborationWorkspaceId,
+    needed: WorkspaceRoleNeeded
+  ): Promise<WorkspaceAccess> {
+    const access = await this.requireWorkspaceAccess(call.user, collaborationWorkspaceId);
+    requireNoRefusal(call.operationId, roleRefusal(access, needed));
+    return access;
+  }
+
   private async requireMembership(
     collaborationWorkspaceId: CollaborationWorkspaceId,
     userId: UserRecord["id"]
@@ -800,18 +850,18 @@ export class CollaborationWorkspaceWorkflow {
   }
 
   private async record(
-    context: RuntimeCallContext,
-    user: AuthenticatedUser,
+    call: WorkspaceChangeCall,
     collaborationWorkspaceId: CollaborationWorkspaceId,
     type: string,
     metadata?: Record<string, string | string[]>
   ): Promise<void> {
-    await this.options.auditRecorder.record({
+    const { audit: auditRecorder } = call;
+    await auditRecorder.record({
       type,
       status: "success",
-      actor: auditActorFromUser(user),
+      actor: auditActorFromUser(call.user),
       subject: collaborationWorkspaceId,
-      correlationId: context.correlationId,
+      correlationId: call.correlationId,
       metadata
     });
   }
@@ -826,16 +876,43 @@ function effectiveWorkspaceRole<Role extends WorkspaceMembershipRole | null>(
   return isSuperadmin(user) && workspace.kind === "shared" ? "owner" : membershipRole;
 }
 
-function requireOwnerOrAdmin(access: WorkspaceAccess): void {
-  if (access.role !== "owner" && access.role !== "admin") {
-    throw new AppError("FORBIDDEN", "Workspace Owner or Admin access is required");
+/**
+ * The one place a role is held against what an operation asks: the sentence a caller whose
+ * role is too low reads, or nothing where the role is enough.
+ */
+function roleRefusal(access: WorkspaceAccess, needed: WorkspaceRoleNeeded): string | undefined {
+  if (needed === "owner" && access.role !== "owner") return "Workspace Owner access is required";
+  if (needed === "admin" && access.role !== "owner" && access.role !== "admin") {
+    return "Workspace Owner or Admin access is required";
   }
+  return undefined;
+}
+
+/** A read asks the role and refuses with the same sentence as a change. */
+function requireOwnerOrAdmin(access: WorkspaceAccess): void {
+  const refusal = roleRefusal(access, "admin");
+  if (refusal !== undefined) throw new AppError("FORBIDDEN", refusal);
 }
 
 function requireOwner(access: WorkspaceAccess): void {
-  if (access.role !== "owner") {
-    throw new AppError("FORBIDDEN", "Workspace Owner access is required");
-  }
+  const refusal = roleRefusal(access, "owner");
+  if (refusal !== undefined) throw new AppError("FORBIDDEN", refusal);
+}
+
+/** What the `authorize` of an operation answers: a refusal names the operation and says the rule. */
+function authorizationOf(operationId: string, refusal: string | undefined): OperationAuthorization {
+  return refusal === undefined
+    ? { allowed: true }
+    : { allowed: false, action: operationId, reason: "no_grant", message: refusal };
+}
+
+/** The same refusal thrown inside the operation. With these details the run ends as denied. */
+function refusalError(operationId: string, message: string): AppError {
+  return new AppError("FORBIDDEN", message, { action: operationId, reason: "no_grant" });
+}
+
+function requireNoRefusal(operationId: string, refusal: string | undefined): void {
+  if (refusal !== undefined) throw refusalError(operationId, refusal);
 }
 
 function normalizeRequiredName(value: string): string {

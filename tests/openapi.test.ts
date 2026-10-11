@@ -246,8 +246,9 @@ describe("the released OpenAPI document", () => {
         expect(operation.responses["202"], operation.operationId).not.toHaveProperty("content");
       }
     }
-    // User deletion now answers a state through its Operation Run instead of an empty 202.
-    expect(deferred.sort()).toEqual(["me.delete", "workspaces.delete"]);
+    // The deletion of a user and of a workspace answer a state through their Operation Run
+    // instead of an empty 202.
+    expect(deferred.sort()).toEqual(["me.delete"]);
     expect(Object.keys(required(released.components.headers))).toEqual([
       "OperationRunId",
       "Location",

@@ -129,7 +129,10 @@ describe("a subject in deletion stays closed and loses only what is its own", ()
       message: "Conversation no longer accepts messages"
     });
 
-    expect((await deleteWorkspace()).statusCode).toBe(202);
+    // The workspace is closed and its job removes the rest: the call answers that state.
+    const accepted = await deleteWorkspace();
+    expect(accepted.statusCode).toBe(200);
+    expect(accepted.json()).toEqual({ state: "deleting" });
     await t.runDeletionJobs();
     await expect(t.runStatus(run)).resolves.toBe("cancelling");
     await expect(t.rowsOf(workspace)).resolves.toMatchObject({ workspaces: 1 });

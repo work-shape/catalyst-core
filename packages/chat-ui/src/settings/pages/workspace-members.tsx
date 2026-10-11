@@ -22,7 +22,7 @@ import {
   Select,
   SkeletonList
 } from "@vivd-catalyst/ui";
-import { useCollaborationWorkspaceMutations } from "../../api/workspace-mutations";
+import { useCollaborationWorkspaceMutations } from "../../api/collaboration-workspace-mutations";
 import {
   useCollaborationWorkspaceAccessRequestsQuery,
   useCollaborationWorkspaceMemberCandidatesQuery,

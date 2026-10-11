@@ -95,6 +95,8 @@ export const collaborationWorkspace = defineTranslations({
       "An access request for this workspace is already open.",
     collaborationWorkspaceErrorSignedOut: "Your session has expired. Please sign in again.",
     collaborationWorkspaceErrorUnexpected: "Something went wrong. Please try again.",
+    collaborationWorkspaceErrorWaitsForApproval:
+      "This change waits for an approval. Nothing has changed yet.",
     collaborationWorkspaceLeave: "Leave workspace",
     collaborationWorkspaceLeaveConfirm: "Leave",
     collaborationWorkspaceLeaveDescription:
@@ -257,6 +259,8 @@ export const collaborationWorkspace = defineTranslations({
       "Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.",
     collaborationWorkspaceErrorUnexpected:
       "Etwas ist schiefgelaufen. Bitte versuche es noch einmal.",
+    collaborationWorkspaceErrorWaitsForApproval:
+      "Diese Änderung wartet auf eine Freigabe. Bisher wurde nichts geändert.",
     collaborationWorkspaceLeave: "Arbeitsbereich verlassen",
     collaborationWorkspaceLeaveConfirm: "Verlassen",
     collaborationWorkspaceLeaveDescription:

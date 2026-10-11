@@ -1,18 +1,47 @@
 import { paginate, pageScope } from "../http/paging";
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import { createSafeConfigView } from "@vivd-catalyst/config-schema";
-import { asCollaborationWorkspaceId, asUserId, getSubjectUserId } from "@vivd-catalyst/core";
-import { CollaborationWorkspaceWorkflow } from "../collaboration-workspace-workflow";
+import {
+  AppError,
+  asCollaborationWorkspaceId,
+  asUserId,
+  getSubjectUserId,
+  isAuthenticatedServicePrincipal,
+  type AuthenticatedIdentity,
+  type AuthenticatedUser,
+  type OperationExecutionContext,
+  type OperationResource
+} from "@vivd-catalyst/core";
+import {
+  CollaborationWorkspaceWorkflow,
+  type WorkspaceChangeCall
+} from "../collaboration-workspace-workflow";
 import type { Route } from "../http/route";
-import { deletionAnswer } from "./deletion-answer";
+import { deletionState } from "./deletion-answer";
 import { requirePathParam, resolveRequestLocale } from "../request-context";
 import type { ChatServerOptions } from "../types";
 
+/**
+ * Collaboration Workspaces. The reads are plain routes, and so is `workspaces.ensure_personal`,
+ * which the interface calls on every load. The ten other changes are registered operations:
+ * each call is an Operation Run that names the workspace, and the caller's role in it is asked
+ * before the policy.
+ */
 export function registerCollaborationWorkspaceRoutes(
   route: Route,
   options: ChatServerOptions
 ): void {
   const workspaces = new CollaborationWorkspaceWorkflow(options);
+  const create = apiOperations["workspaces.create"];
+  const update = apiOperations["workspaces.update"];
+  const remove = apiOperations["workspaces.delete"];
+  const addMember = apiOperations["workspaces.members.add"];
+  const leave = apiOperations["workspaces.members.leave"];
+  const updateRole = apiOperations["workspaces.members.update_role"];
+  const removeMember = apiOperations["workspaces.members.remove"];
+  const requestAccess = apiOperations["workspaces.access_requests.create"];
+  const approveRequest = apiOperations["workspaces.access_requests.approve"];
+  const declineRequest = apiOperations["workspaces.access_requests.decline"];
 
   route(apiOperations["workspaces.ensure_personal"], async ({ user }) => {
     const workspace = await options.stores.workspaces.ensurePersonalWorkspace({
@@ -26,8 +55,19 @@ export function registerCollaborationWorkspaceRoutes(
     return workspaces.listWorkspaces(user);
   });
 
-  route(apiOperations["workspaces.create"], async ({ user, context, body }) => {
-    return workspaces.createSharedWorkspace(user, context, body);
+  route.operation(create, {
+    changeClass: "reversible",
+    // Whoever is signed in may create a Shared Workspace, and becomes its Owner.
+    authorize: () => ({ allowed: true }),
+    execute: (input, context) =>
+      workspaces.createSharedWorkspace(changeCall(create.id, context), {
+        name: input.name,
+        description: input.description,
+        visibility: input.visibility,
+        defaultConversationVisibility: input.defaultConversationVisibility,
+        emoji: input.emoji,
+        accentColor: input.accentColor
+      })
   });
 
   route(apiOperations["workspaces.directory.list"], async ({ user }) => {
@@ -62,23 +102,44 @@ export function registerCollaborationWorkspaceRoutes(
     };
   });
 
-  route(apiOperations["workspaces.update"], async ({ user, context, params, body }) => {
-    return workspaces.updateSettings(user, context, collaborationWorkspaceId(params), body);
+  route.operation(update, {
+    changeClass: "reversible",
+    authorize: (input, { actor }) =>
+      workspaces.authorizeChange(
+        update.id,
+        personOf(actor),
+        collaborationWorkspaceId(input),
+        "admin"
+      ),
+    resource: workspaceResource,
+    execute: (input, context) =>
+      workspaces.updateSettings(changeCall(update.id, context), collaborationWorkspaceId(input), {
+        name: input.name,
+        description: input.description,
+        visibility: input.visibility,
+        defaultConversationVisibility: input.defaultConversationVisibility,
+        emoji: input.emoji,
+        accentColor: input.accentColor
+      })
   });
 
   route(apiOperations["workspaces.deletion_impact.get"], async ({ user, params }) => {
     return workspaces.getDeletionImpact(user, collaborationWorkspaceId(params));
   });
 
-  route(apiOperations["workspaces.delete"], async ({ user, context, params, body }) => {
-    return deletionAnswer(
-      await workspaces.deleteSharedWorkspace(
-        user,
-        context,
-        collaborationWorkspaceId(params),
-        body.confirmName
+  route.operation(remove, {
+    // Deleting a workspace and its conversations is irreversible.
+    authorize: (input, { actor }) =>
+      workspaces.authorizeDeletion(remove.id, personOf(actor), collaborationWorkspaceId(input)),
+    resource: workspaceResource,
+    execute: async (input, context) =>
+      deletionState(
+        await workspaces.deleteSharedWorkspace(
+          changeCall(remove.id, context),
+          collaborationWorkspaceId(input),
+          input.confirmName
+        )
       )
-    );
   });
 
   route(apiOperations["workspaces.members.list"], async ({ user, params }) => {
@@ -89,60 +150,162 @@ export function registerCollaborationWorkspaceRoutes(
     return workspaces.searchMemberCandidates(user, collaborationWorkspaceId(params), query.q ?? "");
   });
 
-  route(apiOperations["workspaces.members.add"], async ({ user, context, params, body }) => {
-    return workspaces.addMemberByEmail(user, context, collaborationWorkspaceId(params), body.email);
+  route.operation(addMember, {
+    changeClass: "reversible",
+    authorize: (input, { actor }) =>
+      workspaces.authorizeChange(
+        addMember.id,
+        personOf(actor),
+        collaborationWorkspaceId(input),
+        "admin"
+      ),
+    resource: workspaceResource,
+    execute: (input, context) =>
+      workspaces.addMemberByEmail(
+        changeCall(addMember.id, context),
+        collaborationWorkspaceId(input),
+        input.email
+      )
   });
 
-  route(apiOperations["workspaces.members.leave"], async ({ user, context, params }) => {
-    return workspaces.leaveWorkspace(user, context, collaborationWorkspaceId(params));
+  route.operation(leave, {
+    changeClass: "reversible",
+    // Every member may leave. Who is the last active Owner is decided where the membership goes.
+    authorize: (input, { actor }) =>
+      workspaces.authorizeChange(
+        leave.id,
+        personOf(actor),
+        collaborationWorkspaceId(input),
+        "member"
+      ),
+    resource: workspaceResource,
+    execute: (input, context) =>
+      workspaces.leaveWorkspace(changeCall(leave.id, context), collaborationWorkspaceId(input))
   });
 
-  route(
-    apiOperations["workspaces.members.update_role"],
-    async ({ user, context, params, body }) => {
-      const member = workspaceUserParams(params);
+  route.operation(updateRole, {
+    changeClass: "reversible",
+    authorize: (input, { actor }) =>
+      workspaces.authorizeChange(
+        updateRole.id,
+        personOf(actor),
+        collaborationWorkspaceId(input),
+        "admin"
+      ),
+    resource: workspaceResource,
+    execute: (input, context) => {
+      const member = workspaceUserParams(input);
       return workspaces.changeMemberRole(
-        user,
-        context,
+        changeCall(updateRole.id, context),
         member.collaborationWorkspaceId,
         member.userId,
-        body.role
+        input.role
       );
     }
-  );
-
-  route(apiOperations["workspaces.members.remove"], async ({ user, context, params }) => {
-    const member = workspaceUserParams(params);
-    return workspaces.removeMember(user, context, member.collaborationWorkspaceId, member.userId);
   });
 
-  route(apiOperations["workspaces.access_requests.create"], async ({ user, context, params }) => {
-    return workspaces.requestAccess(user, context, collaborationWorkspaceId(params));
+  route.operation(removeMember, {
+    changeClass: "reversible",
+    authorize: (input, { actor }) =>
+      workspaces.authorizeChange(
+        removeMember.id,
+        personOf(actor),
+        collaborationWorkspaceId(input),
+        "admin"
+      ),
+    resource: workspaceResource,
+    execute: (input, context) => {
+      const member = workspaceUserParams(input);
+      return workspaces.removeMember(
+        changeCall(removeMember.id, context),
+        member.collaborationWorkspaceId,
+        member.userId
+      );
+    }
+  });
+
+  route.operation(requestAccess, {
+    changeClass: "reversible",
+    // The caller has no role in the workspace yet: the workspace must be one that can be found.
+    authorize: (input) => workspaces.authorizeAccessRequest(collaborationWorkspaceId(input)),
+    resource: workspaceResource,
+    execute: (input, context) =>
+      workspaces.requestAccess(
+        changeCall(requestAccess.id, context),
+        collaborationWorkspaceId(input)
+      )
   });
 
   route(apiOperations["workspaces.access_requests.list"], async ({ user, params }) => {
     return workspaces.listAccessRequests(user, collaborationWorkspaceId(params));
   });
 
-  route(apiOperations["workspaces.access_requests.approve"], async ({ user, context, params }) => {
-    const member = workspaceUserParams(params);
-    return workspaces.approveAccessRequest(
-      user,
-      context,
-      member.collaborationWorkspaceId,
-      member.userId
-    );
+  route.operation(approveRequest, {
+    changeClass: "reversible",
+    authorize: (input, { actor }) =>
+      workspaces.authorizeChange(
+        approveRequest.id,
+        personOf(actor),
+        collaborationWorkspaceId(input),
+        "admin"
+      ),
+    resource: workspaceResource,
+    execute: (input, context) => {
+      const member = workspaceUserParams(input);
+      return workspaces.approveAccessRequest(
+        changeCall(approveRequest.id, context),
+        member.collaborationWorkspaceId,
+        member.userId
+      );
+    }
   });
 
-  route(apiOperations["workspaces.access_requests.decline"], async ({ user, context, params }) => {
-    const member = workspaceUserParams(params);
-    return workspaces.declineAccessRequest(
-      user,
-      context,
-      member.collaborationWorkspaceId,
-      member.userId
-    );
+  route.operation(declineRequest, {
+    changeClass: "reversible",
+    authorize: (input, { actor }) =>
+      workspaces.authorizeChange(
+        declineRequest.id,
+        personOf(actor),
+        collaborationWorkspaceId(input),
+        "admin"
+      ),
+    resource: workspaceResource,
+    execute: (input, context) => {
+      const member = workspaceUserParams(input);
+      return workspaces.declineAccessRequest(
+        changeCall(declineRequest.id, context),
+        member.collaborationWorkspaceId,
+        member.userId
+      );
+    }
   });
+}
+
+/** The workspace a call changes: what its run names, and where the policy is asked. */
+function workspaceResource(input: { collaborationWorkspaceId: string }): OperationResource {
+  return {
+    kind: "collaboration_workspace",
+    id: input.collaborationWorkspaceId,
+    workspaceId: asCollaborationWorkspaceId(input.collaborationWorkspaceId)
+  };
+}
+
+/** What the workflow takes from the run of a changing call. */
+function changeCall(operationId: string, context: OperationExecutionContext): WorkspaceChangeCall {
+  return {
+    operationId,
+    user: personOf(context.actor),
+    audit: context.audit,
+    correlationId: context.correlationId
+  };
+}
+
+/** These operations authenticate a person, so no service principal reaches them. */
+function personOf(actor: AuthenticatedIdentity): AuthenticatedUser {
+  if (isAuthenticatedServicePrincipal(actor)) {
+    throw new AppError("FORBIDDEN", "Service principals cannot access user-scoped routes");
+  }
+  return actor;
 }
 
 function collaborationWorkspaceId(params: { collaborationWorkspaceId: string }) {
