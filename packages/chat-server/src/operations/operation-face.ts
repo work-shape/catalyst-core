@@ -47,6 +47,11 @@ export interface AssembledOperationBinding {
   changeClass?: OperationChangeClass;
   /** The release's own policy value. Without one the instance default of the effect applies. */
   defaultPolicy?: PolicyValue;
+  /**
+   * The answer holds a secret that is shown once. The run keeps no output, a repeated call
+   * answers OUTPUT_NOT_RETAINED, and the call is never held for an approval.
+   */
+  secret?: true;
   events?: OperationDefinition["events"];
   module?: string;
   timeoutMs?: number;
@@ -144,6 +149,7 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
         changeClass: binding.changeClass,
         defaultPolicy: binding.defaultPolicy,
         ...(binding.recordsEveryCall ? { recordsEveryCall: true } : {}),
+        ...(binding.secret ? { secret: true } : {}),
         ...rights,
         scope: operation.scope ?? null,
         auth: operation.auth,

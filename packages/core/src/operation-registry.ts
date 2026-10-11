@@ -113,6 +113,21 @@ export function assertOperationRecordingMark(definition: OperationDefinition): v
 }
 
 /**
+ * Refuses an operation whose answer holds a secret and whose own policy holds it for an
+ * approval: the two cannot both be meant, so the release does not start with it.
+ */
+export function assertSecretOperationIsNotHeld(
+  definition: Pick<OperationDefinition, "name" | "secret" | "defaultPolicy">
+): void {
+  if (definition.secret && definition.defaultPolicy === "approval") {
+    throw new AppError(
+      "INTERNAL",
+      `Operation '${definition.name}' answers a secret and cannot wait for an approval`
+    );
+  }
+}
+
+/**
  * Whether an allowed call that completes leaves an Operation Run and audit rows. Decided from
  * the definition alone, never from the caller.
  */
@@ -138,6 +153,13 @@ interface OperationDefinitionBase<Input, Output> {
   changeClass?: OperationChangeClass;
   /** The release's own policy value. Without one the instance default of the effect applies. */
   defaultPolicy?: PolicyValue;
+  /**
+   * The answer holds a secret that is shown once, such as a new key. The run keeps no output,
+   * so a repeated call with the same key answers OUTPUT_NOT_RETAINED and never the secret
+   * again. The call is never held for an approval: a held call is executed later, when nobody
+   * is there to be shown the answer.
+   */
+  secret?: true;
   /** The scope a credential must carry; `null` asks for none. Checked where a credential arrives. */
   scope: OperationScope | null;
   /** `user` refuses service principals. */
@@ -228,6 +250,7 @@ export function createOperationRegistry(): OperationRegistry {
       }
       assertOperationChecksRights(definition);
       assertOperationRecordingMark(definition);
+      assertSecretOperationIsNotHeld(definition);
       registered.set(definition.name, definition);
     },
     addSource(source) {

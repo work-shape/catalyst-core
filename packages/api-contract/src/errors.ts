@@ -43,7 +43,7 @@ export const API_ERROR_MEANINGS: Record<z.infer<typeof appErrorCodeSchema>, stri
   OPERATION_EXPIRED:
     "The call waited for an approval until it expired, and nothing was executed. Call again with a new key.",
   OUTPUT_NOT_RETAINED:
-    "The call with this `Idempotency-Key` completed, and its answer was too large to keep. Read the result from what the call changed.",
+    "The call with this `Idempotency-Key` completed, and its answer is not kept: it was too large, or it held a secret that is shown once. Read the result from what the call changed. A secret is not shown again.",
   INTERNAL: "The instance failed. The message never carries details."
 };
 

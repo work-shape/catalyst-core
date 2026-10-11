@@ -517,7 +517,9 @@ export async function executeAdmitted(
     const done = await endRun(context, {
       status: "done",
       finishedAt: now().toISOString(),
-      output: definition.effect === "changing" ? retainedOutput(output) : undefined,
+      // An answer that holds a secret is handed to the caller of this call and kept nowhere.
+      output:
+        definition.effect === "changing" && !definition.secret ? retainedOutput(output) : undefined,
       usage: tool?.usage,
       ...(decisionMode
         ? { decision: { mode: decisionMode, by: run.actor.id, at: now().toISOString() } }

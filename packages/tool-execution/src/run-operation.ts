@@ -227,14 +227,22 @@ function replay(
   inputHash: string
 ): OperationResult {
   if (!sameCall(held, definition, actor, inputHash)) throw keyReused();
-  return recordedResult(held);
+  return recordedResult(held, definition);
 }
 
 /** The result a run that has an outcome answers with, whoever asks again. */
-function recordedResult(held: OperationRun): OperationResult {
+function recordedResult(held: OperationRun, definition: OperationDefinition): OperationResult {
   const runId = held.id;
   switch (held.status) {
     case "done":
+      if (definition.secret) {
+        // The secret went to the first call alone. Nothing here could answer it again.
+        throw new AppError(
+          "OUTPUT_NOT_RETAINED",
+          "The call completed and its answer held a secret that is shown once and not kept. What the call created exists. If the secret is lost, revoke what the call created and call again with a new Idempotency-Key.",
+          { operationRunId: runId }
+        );
+      }
       if (!held.output) {
         throw new AppError(
           "OUTPUT_NOT_RETAINED",
@@ -331,6 +339,10 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     throw new AppError("INTERNAL", "This surface cannot hold a call for a confirmation");
   }
   if (policy.next === "await_approval") {
+    // A held call is executed later, when nobody is there to be shown the secret once.
+    if (definition.secret) {
+      return { ending: await denyRun(context, { kind: "policy", operation: definition.name }) };
+    }
     if (!deps.approvals) {
       return { ending: await denyRun(context, { kind: "policy", operation: definition.name }) };
     }

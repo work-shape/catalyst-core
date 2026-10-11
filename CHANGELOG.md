@@ -354,6 +354,12 @@ id from config_assets where status = 'deleted')`.
 
 ### Changed
 
+- **Operations:** an operation may be registered with `secret: true` when its answer holds a
+  secret that is shown once. Its run keeps no output, a repeated call with the same
+  `Idempotency-Key` answers `409 OUTPUT_NOT_RETAINED` and never the secret, and the call is never
+  held for an approval: a policy or guardrail that asks for one refuses it with `POLICY_DENIED`,
+  and a registration with the default policy `approval` stops startup. `api_credentials.create`
+  is the first. A key whose answer was lost is revoked and issued again under a new key.
 - **Document extraction (breaking config):** the extraction of the document processing
   capability calls its model through the model gateway. The block
   `capabilities.documentProcessing.extraction.provider` is gone, and startup of the API and of
