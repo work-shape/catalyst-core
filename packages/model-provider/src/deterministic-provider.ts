@@ -33,7 +33,12 @@ export class DeterministicModelProvider {
   }
 
   async complete(request: ModelCompletionRequest): Promise<ModelCompletion> {
-    const toolMessages = request.messages.filter((message) => message.role === "tool");
+    // Only the calls of this turn: a conversation that ran a tool in an earlier turn can run
+    // one again.
+    const lastUserIndex = request.messages.findLastIndex((message) => message.role === "user");
+    const toolMessages = request.messages
+      .slice(lastUserIndex + 1)
+      .filter((message) => message.role === "tool");
     if (toolMessages.length > 0) {
       return {
         text: `Tool work completed:\n\n${toolMessages.map((message) => modelContentText(message.content)).join("\n\n")}`,

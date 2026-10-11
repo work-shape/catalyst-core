@@ -1802,6 +1802,40 @@ describe("OpenAI-compatible model provider", () => {
     });
   });
 
+  it("lets the deterministic provider call a tool again in a later turn", async () => {
+    // Fails without the rule for the turn: a tool result anywhere in the conversation made the
+    // provider answer it again, so a conversation could run one tool only.
+    const complete = (
+      messages: Parameters<DeterministicModelProvider["complete"]>[0]["messages"]
+    ) =>
+      new DeterministicModelProvider("local").complete({
+        providerId: "local",
+        model: "deterministic-local",
+        messages,
+        tools: [{ name: "notes.record", description: "Records a note" }]
+      });
+    const firstTurn = [
+      { role: "user" as const, content: '/tool notes.record {"text":"one"}' },
+      {
+        role: "assistant" as const,
+        content: "I will run notes.record with the provided input.",
+        toolCalls: [{ toolCallId: "call-1", toolName: "notes.record", input: { text: "one" } }]
+      },
+      { role: "tool" as const, content: "recorded one", toolCallId: "call-1" }
+    ];
+
+    const answered = await complete(firstTurn);
+    expect(answered.toolCalls).toEqual([]);
+    expect(answered.text).toBe("Tool work completed:\n\nrecorded one");
+
+    const called = await complete([
+      ...firstTurn,
+      { role: "assistant", content: answered.text },
+      { role: "user", content: '/tool notes.record {"text":"two"}' }
+    ]);
+    expect(called.toolCalls).toMatchObject([{ toolName: "notes.record", input: { text: "two" } }]);
+  });
+
   it("streams the deterministic provider's answer in pieces", async () => {
     const clientInstanceId = asClientInstanceId("client-test");
     const registry = new DeterministicModelProvider("local");
