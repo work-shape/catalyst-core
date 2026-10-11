@@ -10,7 +10,6 @@ import {
   isAppError,
   isAuthenticatedServicePrincipal,
   liveRevisionId,
-  type AccessResource,
   type AuthenticatedIdentity,
   type ActorAccess,
   type AgentAvailability,
@@ -94,7 +93,6 @@ type MutationBatch = Omit<
   Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0],
   "clientInstanceId" | "actor"
 >;
-
 const conflictDetailsSchema = z.object({
   conflicts: z
     .array(z.object({ kind: z.string(), name: z.string(), currentRevision: z.number().nullable() }))
