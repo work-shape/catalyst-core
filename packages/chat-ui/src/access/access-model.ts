@@ -12,29 +12,66 @@ import {
   NAMESPACE_PREFIX_MAX_LENGTH,
   NAMESPACE_PREFIX_MIN_LENGTH,
   NAMESPACE_PREFIX_PATTERN,
+  GRANTABLE_ACTION_SCOPES,
+  GRANTABLE_ACTIONS,
   explainAccessEntries,
   type GrantableAction
 } from "@vivd-catalyst/core";
 
-/** The asset kinds a grant of this page names. */
+/** The asset kinds the Check tab asks about. */
 export const ACCESS_ASSET_KINDS = ["agent", "skill"] as const;
 export type AccessAssetKind = (typeof ACCESS_ASSET_KINDS)[number];
 
-/** What a grant of this page allows or denies on an asset, in the order the page lists it. */
-export const ACCESS_VERBS = ["read", "write", "delete"] as const;
-export type AccessVerb = (typeof ACCESS_VERBS)[number];
+/** What the Check tab decides on an asset, in the order the page lists it. */
+const ACCESS_VERBS = ["read", "write", "delete"] as const;
+type AccessVerb = (typeof ACCESS_VERBS)[number];
 
 function grantableAction(kind: AccessAssetKind, verb: AccessVerb): GrantableAction {
   return `${kind}.${verb}`;
 }
 
+/** The asset kinds a grant of this page names. A Connection is offered while its module is on. */
+export const GRANT_KINDS = ["agent", "skill", "connection"] as const;
+export type GrantKind = (typeof GRANT_KINDS)[number];
+
+/** What a grant allows or denies, in the order the page lists it. */
+const GRANT_VERBS = ["read", "use", "write", "delete"] as const;
+export type GrantVerb = (typeof GRANT_VERBS)[number];
+
+/** Where a grant row applies, in the order the dialog offers the places. */
+const GRANT_SCOPE_KINDS = ["namespace", "asset", "workspace"] as const;
+export type GrantScopeKind = (typeof GRANT_SCOPE_KINDS)[number];
+
+/** The action of a kind and a verb, where a grant row can be written for it. */
+function grantAction(kind: GrantKind, verb: GrantVerb): GrantableAction | undefined {
+  const name = `${kind}.${verb}`;
+  return GRANTABLE_ACTIONS.find((action) => action === name);
+}
+
+/** The verbs a grant of the kind can name: what the server writes a row for. */
+export function grantVerbs(kind: GrantKind): GrantVerb[] {
+  return GRANT_VERBS.filter((verb) => grantAction(kind, verb) !== undefined);
+}
+
+/** The places a grant of the kind can be written at. Every action of a kind has the same. */
+export function grantScopeKinds(kind: GrantKind): GrantScopeKind[] {
+  const action = grantVerbs(kind)
+    .map((verb) => grantAction(kind, verb))
+    .find((candidate) => candidate !== undefined);
+  if (action === undefined) {
+    return [];
+  }
+  const scopes: readonly string[] = GRANTABLE_ACTION_SCOPES[action];
+  return GRANT_SCOPE_KINDS.filter((scopeKind) => scopes.includes(scopeKind));
+}
+
 /** The kind and verb of an action this page writes; nothing for any other action. */
 export function splitGrantableAction(
   action: string
-): { kind: AccessAssetKind; verb: AccessVerb } | undefined {
-  for (const kind of ACCESS_ASSET_KINDS) {
-    for (const verb of ACCESS_VERBS) {
-      if (grantableAction(kind, verb) === action) {
+): { kind: GrantKind; verb: GrantVerb } | undefined {
+  for (const kind of GRANT_KINDS) {
+    for (const verb of GRANT_VERBS) {
+      if (grantAction(kind, verb) === action) {
         return { kind, verb };
       }
     }
@@ -164,11 +201,13 @@ export function assetNameValid(kind: AccessAssetKind, name: string): boolean {
 /** What the grant dialog holds while it is edited. */
 export interface GrantForm {
   holderId: string | undefined;
-  kind: AccessAssetKind;
-  verbs: AccessVerb[];
-  scopeKind: "namespace" | "asset";
+  kind: GrantKind;
+  verbs: GrantVerb[];
+  scopeKind: GrantScopeKind;
   namespace: string | undefined;
   assetId: string | undefined;
+  /** The Shared Workspace of a grant on what a workspace owns. */
+  workspaceId: string | undefined;
   effect: "allow" | "deny";
 }
 
@@ -179,27 +218,57 @@ export const emptyGrantForm: GrantForm = {
   scopeKind: "namespace",
   namespace: undefined,
   assetId: undefined,
+  workspaceId: undefined,
   effect: "allow"
 };
 
+/**
+ * The form after another kind was chosen. An asset belongs to its kind, so none is kept; a
+ * verb or a place the new kind has no grant for is dropped, and the first place it has is
+ * chosen instead.
+ */
+export function withGrantKind(form: GrantForm, kind: GrantKind): GrantForm {
+  const verbs = grantVerbs(kind);
+  const scopeKinds = grantScopeKinds(kind);
+  return {
+    ...form,
+    kind,
+    verbs: form.verbs.filter((verb) => verbs.includes(verb)),
+    scopeKind: scopeKinds.includes(form.scopeKind)
+      ? form.scopeKind
+      : (scopeKinds[0] ?? form.scopeKind),
+    assetId: undefined
+  };
+}
+
 /** One request per chosen action, in the page's order; nothing while the form is incomplete. */
 export function grantRequests(form: GrantForm): CreatePermissionGrantRequest[] | undefined {
+  if (!grantScopeKinds(form.kind).includes(form.scopeKind)) {
+    return undefined;
+  }
   const scope =
     form.scopeKind === "namespace"
       ? form.namespace === undefined
         ? undefined
         : { scopeKind: "namespace" as const, namespace: form.namespace }
-      : form.assetId === undefined
-        ? undefined
-        : { scopeKind: "asset" as const, scopeId: form.assetId };
-  if (form.holderId === undefined || scope === undefined || form.verbs.length === 0) {
+      : form.scopeKind === "workspace"
+        ? form.workspaceId === undefined
+          ? undefined
+          : { scopeKind: "workspace" as const, scopeId: form.workspaceId }
+        : form.assetId === undefined
+          ? undefined
+          : { scopeKind: "asset" as const, scopeId: form.assetId };
+  const holderId = form.holderId;
+  const actions = grantVerbs(form.kind)
+    .filter((verb) => form.verbs.includes(verb))
+    .flatMap((verb) => grantAction(form.kind, verb) ?? []);
+  if (holderId === undefined || scope === undefined || actions.length === 0) {
     return undefined;
   }
-  const holderId = form.holderId;
-  return ACCESS_VERBS.filter((verb) => form.verbs.includes(verb)).map((verb) => ({
+  return actions.map((action) => ({
     holderKind: "user",
     holderId,
-    action: grantableAction(form.kind, verb),
+    action,
     effect: form.effect,
     ...scope
   }));
@@ -259,9 +328,8 @@ export function groupGrants(
   const position = (grant: PermissionGrantRow) => {
     const parts = splitGrantableAction(grant.action);
     return parts
-      ? ACCESS_ASSET_KINDS.indexOf(parts.kind) * ACCESS_VERBS.length +
-          ACCESS_VERBS.indexOf(parts.verb)
-      : ACCESS_ASSET_KINDS.length * ACCESS_VERBS.length;
+      ? GRANT_KINDS.indexOf(parts.kind) * GRANT_VERBS.length + GRANT_VERBS.indexOf(parts.verb)
+      : GRANT_KINDS.length * GRANT_VERBS.length;
   };
   return [...groups.values()]
     .map((group) => ({

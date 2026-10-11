@@ -14,13 +14,17 @@ import {
   checkedAssetId,
   checkState,
   CheckTab,
+  emptyGrantForm,
   grantRequests,
+  grantScopeKinds,
   GrantsTab,
+  grantVerbs,
   groupGrants,
   namespaceLockedLists,
   namespacePrefixProblem,
   namespaceRequest,
-  NamespacesTab
+  NamespacesTab,
+  withGrantKind
 } from "@vivd-catalyst/chat-ui/access";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
@@ -437,6 +441,7 @@ describe("what the dialogs send", () => {
       scopeKind: "namespace",
       namespace: "kai-",
       assetId: undefined,
+      workspaceId: undefined,
       effect: "allow"
     } as const;
     expect(grantRequests({ ...form, verbs: [...form.verbs] })?.map((row) => row.action)).toEqual([
@@ -444,6 +449,111 @@ describe("what the dialogs send", () => {
       "agent.delete"
     ]);
     expect(grantRequests({ ...form, verbs: [] })).toBeUndefined();
+  });
+
+  it("offers a Connection reading and using, on one Connection or a workspace", () => {
+    expect(grantVerbs("connection")).toEqual(["read", "use"]);
+    expect(grantScopeKinds("connection")).toEqual(["asset", "workspace"]);
+    // Agents and skills keep the verbs and the places they had.
+    for (const kind of ["agent", "skill"] as const) {
+      expect(grantVerbs(kind)).toEqual(["read", "write", "delete"]);
+      expect(grantScopeKinds(kind)).toEqual(["namespace", "asset"]);
+    }
+
+    // Another kind keeps no asset, no verb and no place it has no grant for.
+    const chosen = withGrantKind(
+      {
+        ...emptyGrantForm,
+        holderId: "user-1",
+        verbs: ["read", "write"],
+        namespace: "kai-",
+        assetId: "asset-agent"
+      },
+      "connection"
+    );
+    expect(chosen).toMatchObject({
+      kind: "connection",
+      verbs: ["read"],
+      scopeKind: "asset",
+      assetId: undefined
+    });
+    expect(grantRequests(chosen)).toBeUndefined();
+    expect(grantRequests({ ...chosen, verbs: ["use", "read"], assetId: "asset-crm" })).toEqual([
+      {
+        holderKind: "user",
+        holderId: "user-1",
+        action: "connection.read",
+        effect: "allow",
+        scopeKind: "asset",
+        scopeId: "asset-crm"
+      },
+      {
+        holderKind: "user",
+        holderId: "user-1",
+        action: "connection.use",
+        effect: "allow",
+        scopeKind: "asset",
+        scopeId: "asset-crm"
+      }
+    ]);
+    expect(
+      grantRequests({ ...chosen, verbs: ["use"], scopeKind: "workspace", workspaceId: "ws-1" })
+    ).toEqual([
+      {
+        holderKind: "user",
+        holderId: "user-1",
+        action: "connection.use",
+        effect: "allow",
+        scopeKind: "workspace",
+        scopeId: "ws-1"
+      }
+    ]);
+    // No row is asked for where the server writes none: a Namespace, or a verb the kind lacks.
+    expect(
+      grantRequests({ ...chosen, verbs: ["use"], scopeKind: "namespace", namespace: "kai-" })
+    ).toBeUndefined();
+    expect(grantRequests({ ...chosen, verbs: ["write"], assetId: "asset-crm" })).toBeUndefined();
+    expect(
+      grantRequests({
+        ...emptyGrantForm,
+        holderId: "user-1",
+        verbs: ["read"],
+        scopeKind: "workspace",
+        workspaceId: "ws-1"
+      })
+    ).toBeUndefined();
+  });
+
+  it("names a Connection row and a workspace row in words", () => {
+    const onConnection: PermissionGrantRow = {
+      ...namespaceGrant,
+      id: "grant-c1",
+      action: "connection.use",
+      scopeKind: "asset",
+      namespace: undefined,
+      scopeId: "asset-crm",
+      scopeAsset: { kind: "connection", name: "crm", active: true }
+    };
+    const inWorkspace: PermissionGrantRow = {
+      ...namespaceGrant,
+      id: "grant-c2",
+      action: "connection.read",
+      scopeKind: "workspace",
+      namespace: undefined,
+      scopeId: "ws-1"
+    };
+    const named = render(
+      grantsTab({
+        grants: [onConnection, inWorkspace],
+        workspaces: { items: [{ id: "ws-1", name: "Team" }], failed: false }
+      })
+    );
+    expect(named).toContain("Connection crm");
+    expect(named).toContain("Use connections");
+    expect(named).toContain("Workspace Team");
+    expect(named).toContain("Read connections");
+    // Without the workspaces the row names the workspace by its id.
+    expect(render(grantsTab({ grants: [inWorkspace] }))).toContain("Workspace ws-1");
   });
 
   it("reads a conflict without a reason as a user who is being deleted", () => {

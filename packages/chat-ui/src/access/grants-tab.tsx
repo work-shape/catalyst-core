@@ -34,20 +34,23 @@ import {
 } from "@vivd-catalyst/ui";
 import { useTranslation, type TranslationContextValue, type TranslationKey } from "../i18n";
 import {
-  ACCESS_ASSET_KINDS,
-  ACCESS_VERBS,
+  GRANT_KINDS,
   accessWriteFailure,
   emptyGrantForm,
   grantRequests,
+  grantScopeKinds,
+  grantVerbs,
   grantableUsers,
   GrantWriteError,
   groupGrants,
   splitGrantableAction,
-  type AccessAssetKind,
-  type AccessVerb,
+  withGrantKind,
   type AccessWriteFailure,
   type GrantForm,
   type GrantGroup,
+  type GrantKind,
+  type GrantScopeKind,
+  type GrantVerb,
   type GrantWriteResult,
   type LoadFailure
 } from "./access-model";
@@ -65,16 +68,50 @@ const GRANT_COLUMNS = "@xl:grid-cols-[minmax(0,4fr)_minmax(0,4fr)_minmax(0,6fr)_
 
 type Translate = TranslationContextValue["t"];
 
-export const verbLabelKeys: Record<AccessVerb, TranslationKey> = {
+export const verbLabelKeys: Record<GrantVerb, TranslationKey> = {
   read: "access.actionRead",
+  use: "access.actionUse",
   write: "access.actionWrite",
   delete: "access.actionDelete"
 };
 
-export const kindLabelKeys: Record<AccessAssetKind, TranslationKey> = {
+export const kindLabelKeys: Record<GrantKind, TranslationKey> = {
   agent: "access.kindAgent",
-  skill: "access.kindSkill"
+  skill: "access.kindSkill",
+  connection: "access.kindConnection"
 };
+
+const actionOnKindKeys: Record<GrantKind, TranslationKey> = {
+  agent: "access.actionOnAgent",
+  skill: "access.actionOnSkill",
+  connection: "access.actionOnConnection"
+};
+
+/** The places a grant applies at, as the dialog offers them for one kind. */
+const scopeChoiceKeys: Record<
+  GrantScopeKind,
+  (kind: GrantKind) => { label: TranslationKey; description: TranslationKey }
+> = {
+  namespace: () => ({
+    label: "access.scopeInNamespace",
+    description: "access.scopeInNamespaceDescription"
+  }),
+  asset: (kind) =>
+    kind === "connection"
+      ? { label: "access.scopeOnConnection", description: "access.scopeOnConnectionDescription" }
+      : { label: "access.scopeOnAsset", description: "access.scopeOnAssetDescription" },
+  workspace: () => ({
+    label: "access.scopeInWorkspace",
+    description: "access.scopeInWorkspaceDescription"
+  })
+};
+
+/** What a picker of the grant dialog chooses from, such as the Connections of the instance. */
+interface GrantChoices {
+  /** Absent while the choices load and when they could not be loaded. */
+  items: readonly { id: string; name: string; description?: string }[] | undefined;
+  failed: boolean;
+}
 
 /** "Write agents" for an action of this page; the action's own name for any other. */
 function actionLabel(action: string, t: Translate): string {
@@ -82,9 +119,7 @@ function actionLabel(action: string, t: Translate): string {
   if (!parts) {
     return action;
   }
-  return t(parts.kind === "agent" ? "access.actionOnAgent" : "access.actionOnSkill", {
-    action: t(verbLabelKeys[parts.verb])
-  });
+  return t(actionOnKindKeys[parts.kind], { action: t(verbLabelKeys[parts.verb]) });
 }
 
 /** What one row says, with its effect in words: "Denied: Write agents". */
@@ -95,11 +130,21 @@ function grantLabel(grant: PermissionGrantRow, t: Translate): string {
 
 /**
  * Where a row applies, in one line. The server leaves an asset's name out for a reader who
- * may not read agents and skills; the row then names the asset by its id.
+ * may not read agents and skills; the row then names the asset by its id. A workspace is named
+ * when the page was told its name, else by its id.
  */
-function scopeLabel(grant: PermissionGrantRow, t: Translate): string {
+function scopeLabel(
+  grant: PermissionGrantRow,
+  t: Translate,
+  workspaceName: (workspaceId: string) => string | undefined
+): string {
   if (grant.scopeKind === "namespace" && grant.namespace !== undefined) {
     return t("access.scopeNamespace", { prefix: grant.namespace });
+  }
+  if (grant.scopeKind === "workspace" && grant.scopeId !== undefined) {
+    return t("access.scopeWorkspace", {
+      name: workspaceName(grant.scopeId) ?? grant.scopeId
+    });
   }
   if (grant.scopeKind !== "asset") {
     return grant.scopeKind;
@@ -112,7 +157,9 @@ function scopeLabel(grant: PermissionGrantRow, t: Translate): string {
     ? t("access.scopeAgent", { name: asset.name })
     : asset.kind === "skill"
       ? t("access.scopeSkill", { name: asset.name })
-      : asset.name;
+      : asset.kind === "connection"
+        ? t("access.scopeConnection", { name: asset.name })
+        : asset.name;
 }
 
 export interface GrantsTabProps {
@@ -128,6 +175,13 @@ export interface GrantsTabProps {
   assets: readonly ConfigAssetSummary[] | undefined;
   /** `forbidden` when the caller may not read the agents and skills of the instance. */
   assetsFailure: LoadFailure | undefined;
+  /**
+   * The Connections of the instance. Absent while the instance has no Connections: the dialog
+   * then offers agents and skills only.
+   */
+  connections?: GrantChoices;
+  /** The Shared Workspaces, for a grant on what a workspace owns and to name such a row. */
+  workspaces?: GrantChoices;
   /**
    * Writes the rows that do not exist yet and says how many it added. Rejects with a
    * `GrantWriteError` that names the refused row and how many were written before it.
@@ -146,6 +200,8 @@ export function GrantsTab({
   namespaces,
   assets,
   assetsFailure,
+  connections,
+  workspaces,
   onGrant,
   onRevoke
 }: GrantsTabProps) {
@@ -159,6 +215,8 @@ export function GrantsTab({
     userId === undefined ? undefined : users?.find((user) => user.id === userId);
   const holderName = (holderId: string) =>
     findUser(holderId)?.displayLabel ?? t("access.unknownUser");
+  const workspaceName = (workspaceId: string) =>
+    workspaces?.items?.find((workspace) => workspace.id === workspaceId)?.name;
 
   const newGrant = (
     <Button size="sm" onClick={() => setGranting(true)}>
@@ -218,6 +276,7 @@ export function GrantsTab({
                   holderName={holderName(group.holderId)}
                   grantedBy={grantedByText(group, findUser, t)}
                   grantedAt={formatDate(latest(group), locale)}
+                  scope={scopeLabel(group.scope, t, workspaceName)}
                   onRevoke={setPendingRevoke}
                 />
               ))}
@@ -232,6 +291,8 @@ export function GrantsTab({
           namespaces={namespaces}
           assets={assets}
           assetsFailure={assetsFailure}
+          connections={connections}
+          workspaces={workspaces}
           onGrant={(requests) =>
             onGrant(requests).then((result) => {
               setWritten(result);
@@ -268,7 +329,7 @@ export function GrantsTab({
             {
               name: holderName(pendingRevoke.holderId),
               action: actionLabel(pendingRevoke.action, t),
-              scope: scopeLabel(pendingRevoke, t)
+              scope: scopeLabel(pendingRevoke, t, workspaceName)
             }
           )}
         </ConfirmDialog>
@@ -307,6 +368,7 @@ function GrantGroupRow({
   holderName,
   grantedBy,
   grantedAt,
+  scope,
   onRevoke
 }: {
   group: GrantGroup;
@@ -314,6 +376,8 @@ function GrantGroupRow({
   holderName: string;
   grantedBy: string;
   grantedAt: string;
+  /** Where the rows apply, in one line. */
+  scope: string;
   onRevoke(grant: PermissionGrantRow): void;
 }) {
   const { t } = useTranslation();
@@ -364,7 +428,7 @@ function GrantGroupRow({
         </DropdownMenu>
       </div>
       <div className="col-span-2 grid min-w-0 justify-items-start gap-1 @xl:col-span-1">
-        <span className="max-w-full break-words">{scopeLabel(group.scope, t)}</span>
+        <span className="max-w-full break-words">{scope}</span>
         {assetGone ? (
           <>
             <Badge tone="warning" size="sm">
@@ -434,11 +498,20 @@ function GrantDialog({
   namespaces,
   assets,
   assetsFailure,
+  connections,
+  workspaces,
   onGrant,
   onClose
 }: Pick<
   GrantsTabProps,
-  "users" | "usersFailed" | "namespaces" | "assets" | "assetsFailure" | "onGrant"
+  | "users"
+  | "usersFailed"
+  | "namespaces"
+  | "assets"
+  | "assetsFailure"
+  | "connections"
+  | "workspaces"
+  | "onGrant"
 > & { onClose(): void }) {
   const { t } = useTranslation();
   const formId = useId();
@@ -450,10 +523,31 @@ function GrantDialog({
 
   const holders = grantableUsers(users ?? []);
   const holder = holders.find((user) => user.id === form.holderId);
-  const kindAssets = (assets ?? []).filter(
-    (asset) => asset.kind === form.kind && asset.id !== undefined
-  );
+  // A Connection is offered while the instance has Connections at all.
+  const kinds = GRANT_KINDS.filter((kind) => kind !== "connection" || connections !== undefined);
+  const ofConnection = form.kind === "connection";
+  // What the asset picker chooses from: the Connections, or the agents or skills.
+  const kindAssets = ofConnection
+    ? (connections?.items ?? [])
+    : (assets ?? []).flatMap((candidate) =>
+        candidate.kind === form.kind && candidate.id !== undefined
+          ? [{ id: candidate.id, name: candidate.name }]
+          : []
+      );
+  const assetsLoaded = ofConnection ? connections?.items !== undefined : assets !== undefined;
+  const assetsError = ofConnection
+    ? connections?.failed
+      ? t("access.connectionsLoadFailed")
+      : undefined
+    : assetsFailure === undefined
+      ? undefined
+      : t(
+          assetsFailure === "forbidden"
+            ? "access.referencesForbidden"
+            : "access.referencesLoadFailed"
+        );
   const asset = kindAssets.find((candidate) => candidate.id === form.assetId);
+  const workspace = workspaces?.items?.find((candidate) => candidate.id === form.workspaceId);
   const requests = grantRequests(form);
 
   const submit = (event: FormEvent) => {
@@ -519,17 +613,17 @@ function GrantDialog({
         <RadioGroup
           variant="plain"
           label={t("access.grantKind")}
-          options={ACCESS_ASSET_KINDS.map((kind) => ({
+          options={kinds.map((kind) => ({
             value: kind,
             label: t(kindLabelKeys[kind])
           }))}
           value={form.kind}
-          // An asset belongs to its kind: another kind starts without one.
-          onValueChange={(kind) => change({ kind, assetId: undefined })}
+          // An asset belongs to its kind, and a kind has its own actions and places.
+          onValueChange={(kind) => setForm((current) => withGrantKind(current, kind))}
         />
         <fieldset className="grid gap-2.5">
           <legend className="mb-2.5 text-label">{t("access.grantActions")}</legend>
-          {ACCESS_VERBS.map((verb) => (
+          {grantVerbs(form.kind).map((verb) => (
             <Checkbox
               key={verb}
               label={t(verbLabelKeys[verb])}
@@ -546,18 +640,10 @@ function GrantDialog({
         </fieldset>
         <RadioGroup
           label={t("access.grantScopeKind")}
-          options={[
-            {
-              value: "namespace",
-              label: t("access.scopeInNamespace"),
-              description: t("access.scopeInNamespaceDescription")
-            },
-            {
-              value: "asset",
-              label: t("access.scopeOnAsset"),
-              description: t("access.scopeOnAssetDescription")
-            }
-          ]}
+          options={grantScopeKinds(form.kind).map((scopeKind) => {
+            const keys = scopeChoiceKeys[scopeKind](form.kind);
+            return { value: scopeKind, label: t(keys.label), description: t(keys.description) };
+          })}
           value={form.scopeKind}
           onValueChange={(scopeKind) => change({ scopeKind })}
         />
@@ -585,34 +671,58 @@ function GrantDialog({
               />
             </Picker>
           </Field>
+        ) : form.scopeKind === "workspace" ? (
+          <Field
+            label={t("access.grantWorkspace")}
+            required
+            error={workspaces?.failed ? t("access.workspacesLoadFailed") : undefined}
+            hint={workspaces?.items?.length === 0 ? t("access.noWorkspaces") : undefined}
+          >
+            <Picker
+              search={(workspaces?.items?.length ?? 0) >= PICKER_SEARCH_FROM_COUNT}
+              options={(workspaces?.items ?? []).map((candidate) => ({
+                value: candidate.id,
+                label: candidate.name
+              }))}
+              value={form.workspaceId}
+              onValueChange={(workspaceId) => change({ workspaceId })}
+            >
+              <PickerButton
+                label={t("access.grantWorkspace")}
+                placeholder={t("access.chooseWorkspace")}
+                value={workspace?.name}
+                disabled={!workspaces?.items || workspaces.items.length === 0}
+              />
+            </Picker>
+          </Field>
         ) : (
           <Field
-            label={t("access.grantAsset")}
+            label={t(ofConnection ? "access.grantConnection" : "access.grantAsset")}
             required
-            error={
-              assetsFailure === undefined
-                ? undefined
-                : t(
-                    assetsFailure === "forbidden"
-                      ? "access.referencesForbidden"
-                      : "access.referencesLoadFailed"
-                  )
+            error={assetsError}
+            hint={
+              ofConnection && connections?.items?.length === 0
+                ? t("access.noConnections")
+                : undefined
             }
           >
             <Picker
               search={kindAssets.length >= PICKER_SEARCH_FROM_COUNT}
               options={kindAssets.map((candidate) => ({
-                value: candidate.id ?? candidate.name,
-                label: candidate.name
+                value: candidate.id,
+                label: candidate.name,
+                ...("description" in candidate && candidate.description
+                  ? { description: candidate.description }
+                  : {})
               }))}
               value={form.assetId}
               onValueChange={(assetId) => change({ assetId })}
             >
               <PickerButton
-                label={t("access.grantAsset")}
-                placeholder={t("access.chooseAsset")}
+                label={t(ofConnection ? "access.grantConnection" : "access.grantAsset")}
+                placeholder={t(ofConnection ? "access.chooseConnection" : "access.chooseAsset")}
                 value={asset?.name}
-                disabled={assets === undefined}
+                disabled={!assetsLoaded || (ofConnection && kindAssets.length === 0)}
               />
             </Picker>
           </Field>

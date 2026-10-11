@@ -55,14 +55,8 @@ export interface BuildAssetEditorProps {
   save(config: Record<string, unknown>): Promise<BuildWriteOutcome>;
 }
 
-/**
- * What the client knows about one kind of Build asset. The frame (the routes, the kind rail,
- * the list with search and pages, the dialog that starts an asset, the page's way back, its
- * History, the delete, the conflict answer and every state) is the same for every kind; a
- * slice that adds a kind adds a file of its own and one entry to `buildAssetKinds`. Whether a
- * kind is on, who may read or create it and what it holds come from the instance.
- */
-export interface BuildAssetKind {
+/** What every kind of the Build area names: its rail item and its list. */
+interface BuildKindBase {
   /** The asset kind, as the server stores it. */
   kind: string;
   /** The kind's segment in an address: `/build/<path>`. */
@@ -71,6 +65,23 @@ export interface BuildAssetKind {
   label: TranslationKey;
   /** Names the list's search field. */
   searchLabel: TranslationKey;
+  /** The sentence of the empty list. An editable kind says it to a person who may create. */
+  emptyText: TranslationKey;
+  icon: LucideIcon;
+  /** Rows show an avatar with the name's initials. Without it they show the kind's icon. */
+  avatar?: AvatarKind;
+  /** The row's badges, such as the default marker. */
+  badges?(asset: BuildAssetRow, t: (key: TranslationKey) => string): ReactNode;
+}
+
+/**
+ * What the client knows about one kind of Build asset. The frame (the routes, the kind rail,
+ * the list with search and pages, the dialog that starts an asset, the page's way back, its
+ * History, the delete, the conflict answer and every state) is the same for every kind; a
+ * slice that adds a kind adds a file of its own and one entry to `buildAssetKinds`. Whether a
+ * kind is on, who may read or create it and what it holds come from the instance.
+ */
+export interface BuildAssetKind extends BuildKindBase {
   /** The one button that starts a new asset, and the title of its dialog. */
   newLabel: TranslationKey;
   /** Names the field of the dialog that asks for the name people read. */
@@ -78,17 +89,26 @@ export interface BuildAssetKind {
   /** The question that confirms a delete, with `{name}`, and the sentence under it. */
   deleteTitle: TranslationKey;
   deleteDescription: TranslationKey;
-  /** The sentence of the empty list for a person who may create. */
-  emptyText: TranslationKey;
-  /** The sentence of the empty list for a person who may not. */
+  /** The sentence of the empty list for a person who may not create. */
   emptyReadOnlyText: TranslationKey;
   /** The sentence shown at the address of an asset that does not exist. */
   missingText: TranslationKey;
-  icon: LucideIcon;
-  /** Rows show an avatar with the name's initials. Without it they show the kind's icon. */
-  avatar?: AvatarKind;
-  /** The row's badges, such as the default marker. */
-  badges?(asset: BuildAssetRow, t: (key: TranslationKey) => string): ReactNode;
   /** The body of the asset page, for an existing asset and for a new one. */
   Editor: ComponentType<BuildAssetEditorProps>;
+}
+
+/**
+ * A kind the interface lists and does not yet open: it has a rail item and a list, and no
+ * asset page, no button that starts one and no CLI entry. Its rows are not links.
+ */
+export interface BuildListedKind extends BuildKindBase {
+  Editor?: undefined;
+}
+
+/** One kind of the Build area. */
+export type BuildKind = BuildAssetKind | BuildListedKind;
+
+/** The kind has an asset page: its rows open and a new asset can be started. */
+export function isEditableKind(kind: BuildKind): kind is BuildAssetKind {
+  return kind.Editor !== undefined;
 }

@@ -2,11 +2,13 @@ export { AgentAvailabilityEditor, AgentEditor } from "./agent-editor";
 export { AssetEditorShell } from "./asset-editor-shell";
 export { FieldRefusals } from "./asset-form-fields";
 export * from "./asset-form-model";
+export { isEditableKind } from "./build-asset-kind";
 export type {
   BuildAsset,
   BuildAssetEditorProps,
   BuildAssetKind,
-  BuildAssetRow
+  BuildAssetRow,
+  BuildKind
 } from "./build-asset-kind";
 export { buildAssetKinds, BuildAssetKindsProvider } from "./build-asset-kinds";
 export { type BuildAssetRead, type BuildList, type BuildSource } from "./build-data";

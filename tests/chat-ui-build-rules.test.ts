@@ -10,6 +10,7 @@ import {
 } from "@vivd-catalyst/chat-ui/build-area";
 import { createAssetWrites } from "../packages/chat-ui/src/api/asset-writes";
 import {
+  instanceActions,
   legalNamespace,
   platformContext,
   taxNamespace,
@@ -30,7 +31,7 @@ describe("Build ids", () => {
 
 describe("Build rights", () => {
   const rights = (permissions: string[], namespaces: Namespaces = []) =>
-    resolveBuildRights({ permissions }, platformContext(namespaces));
+    resolveBuildRights({ permissions }, platformContext(namespaces, instanceActions(permissions)));
   const taxAgent = { kind: "agent", namespace: "tax-" };
   const taxSkill = { kind: "skill", namespace: "tax-" };
 

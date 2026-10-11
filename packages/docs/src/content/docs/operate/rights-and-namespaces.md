@@ -26,6 +26,8 @@ A Namespace is deleted only when no grant names it. Until then its row says how 
 
 A grant gives one person one action on one scope. The form takes a person, a kind (agents or skills), the actions read, write and delete, the scope, and the effect. It writes one row per action. The scope is a Namespace or one existing asset.
 
+On an instance with the module `connections` on, the form also offers the kind Connections, with the actions read and use. Using a Connection is a right of its own: a person who may read a Connection may not use it, and a person who may use it is shown nothing of it. The scope is one existing Connection or a shared workspace, which covers the Connections that workspace owns. Writing, deleting and approving a Connection belong to the administrator role and are not granted.
+
 A row the person already has is left as it is, so the same form can be sent again after it stopped half way: it adds what is missing and says how many rows it added and how many were there already.
 
 The list shows one line per person and scope, with the actions as chips. A deny chip carries its own mark and the word "Denied". Each chip is revoked from the menu of its line.

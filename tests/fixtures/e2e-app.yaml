@@ -77,6 +77,15 @@ auth:
           - user
         permissionRefs:
           - demo-tools
+      # The member the Connections spec grants a right to. No other spec uses this member.
+      - email: e2e-connections@example.test
+        displayLabel: E2E Connections
+        passwordEnvName: E2E_CONNECTIONS_PASSWORD
+        developmentPassword: e2e-connections-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
   sessionToken:
     issuer: demo-e2e-client-instance
     ttlSeconds: 900
@@ -111,6 +120,10 @@ administration:
 # sandbox runs the build as a process of the suite's workspace command worker.
 modules:
   apps:
+    enabled: true
+  # Connections are on: Build lists them and the Access page grants their rights. The reference
+  # client ships no connector type, so no Connection reaches anything here.
+  connections:
     enabled: true
 executionWorkspaces:
   enabled: true

@@ -14,7 +14,8 @@ export const moduleTexts: Partial<
     name: "modules.userInvitations",
     description: "modules.userInvitationsDescription"
   },
-  apps: { name: "modules.apps", description: "modules.appsDescription" }
+  apps: { name: "modules.apps", description: "modules.appsDescription" },
+  connections: { name: "modules.connections", description: "modules.connectionsDescription" }
 };
 
 /** The name of a module as the interface says it, or the config name of one it does not know. */

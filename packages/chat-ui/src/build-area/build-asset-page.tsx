@@ -94,7 +94,7 @@ export function ExistingAssetPage({
   onDeleted,
   ...page
 }: AssetPageProps & {
-  kind: VisibleBuildKind;
+  kind: VisibleBuildKind<BuildAssetKind>;
   name: string;
   onDeleted(): void;
 }) {
@@ -165,7 +165,7 @@ function LoadedAssetPage({
   onRestored,
   onDeleted
 }: AssetPageProps & {
-  kind: VisibleBuildKind;
+  kind: VisibleBuildKind<BuildAssetKind>;
   loaded: BuildAsset;
   reload(): Promise<BuildAssetReload>;
   /** The revision a restore just made the content again. */

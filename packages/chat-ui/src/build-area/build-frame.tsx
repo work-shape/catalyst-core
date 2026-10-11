@@ -28,7 +28,12 @@ import {
 import { formatDateTime } from "../control-plane/locale-format";
 import { useTranslation } from "../i18n";
 import { holdLeaveGuard } from "../leave-guard";
-import type { BuildAssetKind, BuildAssetRow, BuildAssetStart } from "./build-asset-kind";
+import {
+  isEditableKind,
+  type BuildAssetRow,
+  type BuildAssetStart,
+  type BuildKind
+} from "./build-asset-kind";
 import { useBuildAssetKinds } from "./build-asset-kinds";
 import { ExistingAssetPage, NewAssetPage } from "./build-asset-page";
 import { BuildCreateDialog } from "./build-create-dialog";
@@ -214,7 +219,7 @@ export function BuildFrame({ source }: { source: BuildSource }) {
   };
 
   const assetName = creating ? undefined : place.name;
-  if (start !== undefined || assetName !== undefined) {
+  if (isEditableKind(entry) && (start !== undefined || assetName !== undefined)) {
     const back = (
       <Button
         variant="ghost"
@@ -247,7 +252,7 @@ export function BuildFrame({ source }: { source: BuildSource }) {
           <ExistingAssetPage
             key={assetName}
             source={source}
-            kind={place.kind}
+            kind={{ entry, state: place.kind.state }}
             name={assetName}
             page={page}
             back={back}
@@ -307,7 +312,7 @@ export function BuildFrame({ source }: { source: BuildSource }) {
         onOpen={(asset) => open({ kindPath: entry.path, name: asset.name })}
         onNew={() => setAsking(true)}
       />
-      {asking ? (
+      {asking && isEditableKind(entry) ? (
         <BuildCreateDialog
           entry={entry}
           namespaces={source.rights.creatableNamespaces(entry.kind)}
@@ -378,12 +383,15 @@ function BuildList({
   const namespaceName = (prefix: string | undefined) =>
     namespaces.find((namespace) => namespace.prefix === prefix)?.displayName;
   const filtered = settledText.trim() !== "" || view.namespace !== undefined;
-  const newButton = state.canCreate ? (
-    <Button onClick={onNew}>
-      <Plus aria-hidden="true" />
-      {t(entry.newLabel)}
-    </Button>
-  ) : undefined;
+  // A kind that only lists has no page to open, no asset to start and no CLI entry.
+  const editable = isEditableKind(entry) ? entry : undefined;
+  const newButton =
+    editable && state.canCreate ? (
+      <Button onClick={onNew}>
+        <Plus aria-hidden="true" />
+        {t(editable.newLabel)}
+      </Button>
+    ) : undefined;
   const listError = list.error ? <LoadError message={list.error} onRetry={list.retry} /> : null;
 
   return (
@@ -392,21 +400,23 @@ function BuildList({
         title={t(entry.label)}
         primaryAction={newButton}
         overflow={
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <IconButton label={t("build.listActions")} variant="outline">
-                <MoreHorizontal aria-hidden="true" />
-              </IconButton>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                icon={<Terminal aria-hidden="true" />}
-                onSelect={() => setCliOpen(true)}
-              >
-                {t("build.cliTitle")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          editable ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <IconButton label={t("build.listActions")} variant="outline">
+                  <MoreHorizontal aria-hidden="true" />
+                </IconButton>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  icon={<Terminal aria-hidden="true" />}
+                  onSelect={() => setCliOpen(true)}
+                >
+                  {t("build.cliTitle")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : undefined
         }
       />
       {loadError}
@@ -417,7 +427,7 @@ function BuildList({
         )
       ) : list.rows.length === 0 && !filtered ? (
         <EmptyState icon={<entry.icon aria-hidden="true" />} action={newButton}>
-          {t(state.canCreate ? entry.emptyText : entry.emptyReadOnlyText)}
+          {t(editable && !state.canCreate ? editable.emptyReadOnlyText : entry.emptyText)}
         </EmptyState>
       ) : (
         <div className="grid min-w-0 gap-3">
@@ -495,15 +505,17 @@ function BuildList({
                       </time>
                     }
                     link={
-                      <a
-                        href={hrefOf(asset)}
-                        onClick={(event) => {
-                          if (opensHere(event)) {
-                            event.preventDefault();
-                            onOpen(asset);
-                          }
-                        }}
-                      />
+                      editable ? (
+                        <a
+                          href={hrefOf(asset)}
+                          onClick={(event) => {
+                            if (opensHere(event)) {
+                              event.preventDefault();
+                              onOpen(asset);
+                            }
+                          }}
+                        />
+                      ) : undefined
                     }
                   />
                 );
@@ -547,7 +559,7 @@ function opensHere(event: MouseEvent): boolean {
 }
 
 /** What stands before a row's name: the asset's own avatar, or the mark of its kind. */
-function RowMark({ entry, title }: { entry: BuildAssetKind; title: string }) {
+function RowMark({ entry, title }: { entry: BuildKind; title: string }) {
   if (entry.avatar) {
     return <Avatar kind={entry.avatar} name={title} />;
   }

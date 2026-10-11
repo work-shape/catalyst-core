@@ -9,7 +9,15 @@ import {
   useNamespacesQuery,
   usePermissionGrantsQuery
 } from "../../access/access-queries";
-import { useConfigAssetsOverviewQuery, useWorkspaceUsersQuery } from "../../api/workspace-queries";
+import { useQuery } from "@tanstack/react-query";
+import { listAll } from "@vivd-catalyst/api-client";
+import {
+  useAdministeredCollaborationWorkspacesQuery,
+  useConfigAssetsOverviewQuery,
+  usePlatformContextQuery,
+  useWorkspaceUsersQuery
+} from "../../api/workspace-queries";
+import { workspaceQueryKeys } from "../../api/workspace-query-keys";
 import { useTranslation } from "../../i18n";
 import { useSettingsPage } from "../settings-page-context";
 
@@ -29,6 +37,22 @@ export function AccessPage() {
   // reader without it still sees and revokes rows; the pickers say what could not be loaded.
   const overviewQuery = useConfigAssetsOverviewQuery({ ...api, enabled: true });
   const effectiveQuery = useEffectivePermissionsQuery({ ...api, holderId: checkedHolderId });
+  // A grant names a Connection while the instance has the kind: its module is on.
+  const contextQuery = usePlatformContextQuery({ ...api, enabled: true });
+  const hasConnections = Boolean(
+    contextQuery.data?.kinds.some((kind) => kind.kind === "connection")
+  );
+  const connectionsQuery = useQuery({
+    queryKey: [...workspaceQueryKeys.assets(apiBaseUrl, authScope), "choice", "connection"],
+    queryFn: () =>
+      listAll((paging) => client.assets.list({ params: { kind: "connection" }, query: paging })),
+    enabled: hasConnections,
+    retry: false
+  });
+  const workspacesQuery = useAdministeredCollaborationWorkspacesQuery({
+    ...api,
+    enabled: hasConnections
+  });
   const mutations = useAccessMutations(api);
   const overview = overviewQuery.data;
   const overviewFailure = loadFailure(overviewQuery.error);
@@ -77,6 +101,29 @@ export function AccessPage() {
             namespaces={namespacesQuery.data}
             assets={overview?.assets}
             assetsFailure={overviewFailure}
+            connections={
+              hasConnections
+                ? {
+                    items: connectionsQuery.data?.map((connection) => ({
+                      id: connection.id,
+                      name: connection.name,
+                      description: connection.title
+                    })),
+                    failed: Boolean(connectionsQuery.error)
+                  }
+                : undefined
+            }
+            workspaces={
+              hasConnections
+                ? {
+                    items: workspacesQuery.data?.map((workspace) => ({
+                      id: workspace.id,
+                      name: workspace.name
+                    })),
+                    failed: Boolean(workspacesQuery.error)
+                  }
+                : undefined
+            }
             onGrant={(requests) => mutations.grant.mutateAsync(requests)}
             onRevoke={(grantId) => mutations.revoke.mutateAsync(grantId)}
           />

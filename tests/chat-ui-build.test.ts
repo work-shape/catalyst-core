@@ -8,6 +8,7 @@ import {
   buildLocationOfRoute,
   BuildNavigationProvider,
   buildRouteOfLocation,
+  isEditableKind,
   resolveBuildPlace,
   resolveBuildRights,
   SkillEditor,
@@ -17,11 +18,13 @@ import {
   type BuildAssetKind,
   type BuildAssetRead,
   type BuildAssetRow,
+  type BuildKind,
   type BuildList,
   type BuildLocation,
   type BuildSource
 } from "@vivd-catalyst/chat-ui/build-area";
 import {
+  instanceActions,
   legalNamespace,
   platformContext,
   taxNamespace,
@@ -29,9 +32,15 @@ import {
 } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
-const [agentKind, skillKind] = buildAssetKinds;
-if (!agentKind || !skillKind) {
-  throw new Error("The platform registry has no agent and skill entry.");
+const [agentKind, skillKind, connectionKind] = buildAssetKinds;
+if (
+  !agentKind ||
+  !skillKind ||
+  !connectionKind ||
+  !isEditableKind(agentKind) ||
+  !isEditableKind(skillKind)
+) {
+  throw new Error("The platform registry has no agent, skill and connection entry.");
 }
 
 function row(kind: string, name: string, overrides: Partial<BuildAssetRow> = {}): BuildAssetRow {
@@ -85,11 +94,9 @@ interface SourceInput {
  * test names who reads and the frame decides what that reader is offered.
  */
 function source(input: SourceInput = {}): BuildSource {
-  const context = platformContext(input.namespaces);
-  const rights = resolveBuildRights(
-    { permissions: input.permissions ?? ["config_assets.read", "config_assets.write"] },
-    context
-  );
+  const permissions = input.permissions ?? ["config_assets.read", "config_assets.write"];
+  const context = platformContext(input.namespaces, instanceActions(permissions));
+  const rights = resolveBuildRights({ permissions }, context);
   const rows: Record<string, BuildAssetRow[]> = { agent: agents, skill: skills };
   return {
     kinds: context.kinds
@@ -130,7 +137,7 @@ function ready(loaded: BuildAsset): BuildAssetRead {
 
 function render(
   location: BuildLocation,
-  input: { source?: BuildSource; kinds?: readonly BuildAssetKind[]; locale?: LocaleCode } = {}
+  input: { source?: BuildSource; kinds?: readonly BuildKind[]; locale?: LocaleCode } = {}
 ): string {
   return renderToStaticMarkup(
     createElement(
@@ -156,9 +163,9 @@ function render(
 }
 
 /** A kind no platform file knows: one entry, no change to the frame. */
-const connectionKind: BuildAssetKind = {
-  kind: "connection",
-  path: "connections",
+const plantedKind: BuildAssetKind = {
+  kind: "workflow",
+  path: "workflows",
   label: "settings.apiAccess",
   searchLabel: "build.agentsSearch",
   newLabel: "configNewAgent",
@@ -169,7 +176,7 @@ const connectionKind: BuildAssetKind = {
   emptyReadOnlyText: "build.agentsEmptyReadOnly",
   missingText: "build.agentMissing",
   icon: skillKind.icon,
-  Editor: ({ asset: open }) => createElement("p", null, `connection body of ${open?.name}`)
+  Editor: ({ asset: open }) => createElement("p", null, `workflow body of ${open?.name}`)
 };
 
 /**
@@ -247,31 +254,87 @@ describe("Build frame", () => {
   });
 
   it("shows a planted kind as a third rail item, with its list and its asset page", () => {
-    const kinds = [...buildAssetKinds, connectionKind];
+    const kinds = [...buildAssetKinds, plantedKind];
     const base = source();
-    const withConnections = source({
+    const withWorkflows = source({
       lists: {
-        connection: { rows: [row("connection", "crm", { title: "CRM" })] }
+        workflow: { rows: [row("workflow", "crm", { title: "CRM" })] }
       },
-      assets: { "connection/crm": ready(asset("connection", "crm")) },
+      assets: { "workflow/crm": ready(asset("workflow", "crm")) },
       overrides: {
-        kinds: [...base.kinds, { kind: "connection", canCreate: false, canDelete: false }]
+        kinds: [...base.kinds, { kind: "workflow", canCreate: false, canDelete: false }]
       }
     });
-    const list = render({ kindPath: "connections" }, { kinds, source: withConnections });
-    const page = render(
-      { kindPath: "connections", name: "crm" },
-      { kinds, source: withConnections }
-    );
+    const list = render({ kindPath: "workflows" }, { kinds, source: withWorkflows });
+    const page = render({ kindPath: "workflows", name: "crm" }, { kinds, source: withWorkflows });
 
-    expect(list).toContain('<option value="connections" selected="">API access</option>');
+    expect(list).toContain('<option value="workflows" selected="">API access</option>');
     expect(list).toContain(">CRM<");
     expect(list).toContain('<code class="font-mono">crm</code>');
     // Without the right to create, the list has no New button.
     expect(list).not.toContain("New agent");
-    expect(page).toContain("connection body of crm");
+    expect(page).toContain("workflow body of crm");
     // A kind the instance did not answer for has no rail item.
     expect(render({ kindPath: "agents" }, { kinds })).not.toContain("API access");
+  });
+
+  it("lists Connections without a page, a New button or the CLI entry, each row with its chips", () => {
+    const base = source();
+    const withConnections = (rows: BuildAssetRow[]) =>
+      source({
+        lists: { connection: { rows } },
+        overrides: {
+          // The reader may write every asset of the instance: a Connection is still only listed.
+          kinds: [...base.kinds, { kind: "connection", canCreate: true, canDelete: true }]
+        }
+      });
+    const rows = [
+      row("connection", "crm", {
+        title: "CRM",
+        attributes: { connectorType: "mcp", origin: "release", enabled: true }
+      }),
+      row("connection", "ledger", {
+        title: "Ledger",
+        scope: { kind: "workspace", workspaceId: "ws_1" },
+        attributes: { connectorType: "postgres", origin: "runtime", enabled: false }
+      })
+    ];
+    const list = render({ kindPath: "connections" }, { source: withConnections(rows) });
+
+    expect(list).toContain('<option value="connections" selected="">Connections</option>');
+    expect(list).toContain(">CRM<");
+    for (const chip of [
+      ">mcp<",
+      ">postgres<",
+      ">Instance<",
+      ">Workspace<",
+      ">Release config<",
+      ">Runtime<",
+      "Enabled",
+      "Disabled"
+    ]) {
+      expect(list, chip).toContain(chip);
+    }
+    // No page opens and nothing is started or mirrored: no link, no New button, no menu.
+    expect(list).not.toContain("<a ");
+    expect(list).not.toContain(">New ");
+    expect(list).not.toContain("More actions");
+    // The address of one Connection shows the list.
+    expect(
+      render({ kindPath: "connections", name: "crm" }, { source: withConnections(rows) })
+    ).toContain('aria-label="Connections"');
+
+    const empty = (locale: LocaleCode) =>
+      render({ kindPath: "connections" }, { locale, source: withConnections([]) });
+    expect(empty("en")).toContain(
+      "No connections. A connection holds the access to an outside system; agents, apps and workflows use it."
+    );
+    expect(empty("en")).not.toContain(">New ");
+    expect(empty("de")).toContain(
+      "Keine Verbindungen. Eine Verbindung hält den Zugang zu einem externen System; Agenten, Apps und Workflows nutzen sie."
+    );
+    // The instance did not answer for the kind: no rail item.
+    expect(render({ kindPath: "agents" })).not.toContain("Connections");
   });
 
   it("says in a sentence what an empty list is for, with the one button, or without the right", () => {
@@ -551,6 +614,19 @@ describe("Build addresses", () => {
       { kind: kinds[1], name: "tax-review", corrected: false }
     );
     expect(resolveBuildPlace([], {}, undefined)).toBeUndefined();
+    // A kind that only lists has no asset page: the address of an asset is corrected to its list.
+    const listed = {
+      entry: connectionKind,
+      state: { kind: "connection", canCreate: false, canDelete: false }
+    };
+    expect(
+      resolveBuildPlace([listed], { kindPath: "connections", name: "crm" }, undefined)
+    ).toEqual({ kind: listed, name: undefined, corrected: true });
+    expect(resolveBuildPlace([listed], { kindPath: "connections" }, undefined)).toEqual({
+      kind: listed,
+      name: undefined,
+      corrected: false
+    });
   });
 
   it("maps a place in Build to its route and back", () => {

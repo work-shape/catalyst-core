@@ -1,19 +1,19 @@
 import type { LocaleCode } from "@vivd-catalyst/api-client";
-import type { BuildAssetKind } from "./build-asset-kind";
+import { isEditableKind, type BuildKind } from "./build-asset-kind";
 import type { BuildKindState } from "./build-data";
 import type { BuildLocation } from "./build-route";
 
 const LAST_KIND_STORAGE_KEY = "vivd-catalyst:build-kind";
 
 /** A kind the frame shows: its entry with what the instance says about it. */
-export interface VisibleBuildKind {
-  entry: BuildAssetKind;
+export interface VisibleBuildKind<Entry extends BuildKind = BuildKind> {
+  entry: Entry;
   state: BuildKindState;
 }
 
 /** The kinds with a rail item: the entries the instance answered for, in the registry's order. */
 export function visibleBuildKinds(
-  entries: readonly BuildAssetKind[],
+  entries: readonly BuildKind[],
   states: readonly BuildKindState[]
 ): VisibleBuildKind[] {
   return entries.flatMap((entry) => {
@@ -27,13 +27,14 @@ export interface BuildPlace {
   kind: VisibleBuildKind;
   /** The id of the open asset. Absent on the list. */
   name: string | undefined;
-  /** The address did not name this kind: the frame corrects it. */
+  /** The address did not name this kind, or named an asset of a kind that only lists: the frame corrects it. */
   corrected: boolean;
 }
 
 /**
  * Resolves an address. `/build` and an address with a kind the reader has no item for open the
- * kind last visited, else the first one, so Build always lands on a list.
+ * kind last visited, else the first one, so Build always lands on a list. A kind that only
+ * lists has no asset page: the address of one of its assets opens its list.
  */
 export function resolveBuildPlace(
   kinds: readonly VisibleBuildKind[],
@@ -42,7 +43,9 @@ export function resolveBuildPlace(
 ): BuildPlace | undefined {
   const named = kinds.find((kind) => kind.entry.path === location.kindPath);
   if (named) {
-    return { kind: named, name: location.name, corrected: false };
+    return isEditableKind(named.entry) || location.name === undefined
+      ? { kind: named, name: location.name, corrected: false }
+      : { kind: named, name: undefined, corrected: true };
   }
   const fallback = kinds.find((kind) => kind.entry.path === lastKindPath) ?? kinds[0];
   return fallback ? { kind: fallback, name: undefined, corrected: true } : undefined;

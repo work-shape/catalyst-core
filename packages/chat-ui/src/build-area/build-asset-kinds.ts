@@ -1,6 +1,7 @@
 import { createContext, useContext } from "react";
 import { agentKind } from "./agent-kind";
-import type { BuildAssetKind } from "./build-asset-kind";
+import type { BuildKind } from "./build-asset-kind";
+import { connectionKind } from "./connection-kind";
 import { skillKind } from "./skill-kind";
 
 /**
@@ -8,14 +9,14 @@ import { skillKind } from "./skill-kind";
  * registry: an asset page changes how the instance behaves, so a client assembly must not
  * replace it.
  */
-export const buildAssetKinds: readonly BuildAssetKind[] = [agentKind, skillKind];
+export const buildAssetKinds: readonly BuildKind[] = [agentKind, skillKind, connectionKind];
 
-const BuildAssetKindsContext = createContext<readonly BuildAssetKind[]>(buildAssetKinds);
+const BuildAssetKindsContext = createContext<readonly BuildKind[]>(buildAssetKinds);
 
 /** Hands the frame another list of kinds than the platform's. Tests plant a kind through it. */
 export const BuildAssetKindsProvider = BuildAssetKindsContext.Provider;
 
 /** The kinds the frame knows, in rail order. */
-export function useBuildAssetKinds(): readonly BuildAssetKind[] {
+export function useBuildAssetKinds(): readonly BuildKind[] {
   return useContext(BuildAssetKindsContext);
 }

@@ -134,6 +134,9 @@ export const administration = defineTranslations({
     "modules.apps": "Apps",
     "modules.appsDescription":
       "The Pages of a conversation and the sandboxed frame that shows them.",
+    "modules.connections": "Connections",
+    "modules.connectionsDescription":
+      "Connections to outside systems: the asset kind, its rights and its list in Build.",
     newPasswordsDoNotMatch: "New passwords do not match",
     passwordUpdated: "Password updated",
     passwordUpdateFailed: "Password update failed",
@@ -308,6 +311,9 @@ export const administration = defineTranslations({
     "modules.apps": "Apps",
     "modules.appsDescription":
       "Die Pages einer Unterhaltung und der abgeschirmte Rahmen, der sie anzeigt.",
+    "modules.connections": "Verbindungen",
+    "modules.connectionsDescription":
+      "Verbindungen zu externen Systemen: die Asset-Art, ihre Rechte und ihre Liste in Bauen.",
     passwordUpdated: "Passwort aktualisiert",
     passwordUpdateFailed: "Passwortaktualisierung fehlgeschlagen",
     profile: "Profil",

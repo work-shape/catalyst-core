@@ -52,12 +52,19 @@ test("an operator reads the modules of the instance, in English and in German", 
       .getByRole("button", { name: "Modules" })
   ).toBeVisible();
   // Every module the product knows has a row, in the order of the registry.
-  await expect(page.locator("[data-module]")).toHaveCount(5);
+  await expect(page.locator("[data-module]")).toHaveCount(6);
   expect(
     await page
       .locator("[data-module]")
       .evaluateAll((rows) => rows.map((row) => row.getAttribute("data-module")))
-  ).toEqual(["documents", "resources", "assetManagement", "userInvitations", "apps"]);
+  ).toEqual([
+    "documents",
+    "resources",
+    "assetManagement",
+    "userInvitations",
+    "apps",
+    "connections"
+  ]);
 
   const resources = moduleRow(page, "resources");
   await expect(resources).toContainText("Resources");

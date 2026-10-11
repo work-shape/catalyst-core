@@ -7,9 +7,13 @@ export {
   checkAsset,
   checkedAssetId,
   checkState,
+  emptyGrantForm,
   grantRequests,
+  grantScopeKinds,
+  grantVerbs,
   groupGrants,
   namespaceLockedLists,
   namespacePrefixProblem,
-  namespaceRequest
+  namespaceRequest,
+  withGrantKind
 } from "./access-model";

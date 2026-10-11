@@ -7,6 +7,7 @@ import { build } from "./build";
 import { collaborationWorkspace } from "./collaboration-workspace";
 import { common } from "./common";
 import { configAssets } from "./config-assets";
+import { connections } from "./connections";
 import { conversation } from "./conversation";
 import { files } from "./files";
 import { inbox } from "./inbox";
@@ -32,6 +33,7 @@ export const translations = combineTranslations(common)
   .and(build)
   .and(collaborationWorkspace)
   .and(configAssets)
+  .and(connections)
   .and(conversation)
   .and(files)
   .and(inbox)
