@@ -14,20 +14,27 @@ export interface ShowViewPolicy {
   allowedScriptSrc: readonly string[];
 }
 
-const showViewColorGuidance =
-  "Use theme tokens for structure/layout: bg-background text-foreground, bg-card text-card-foreground border-border, text-muted-foreground, bg-primary text-primary-foreground. Use semantic tokens for status/severity/priority: text-success, text-warning, text-destructive, text-info, including translucent fills/borders like bg-success/10 border-success/30. Example: <span class=\"rounded-md border border-warning/30 bg-warning/10 px-2 py-1 text-warning\">needs review</span>. Do not make the view monochrome when status, severity, or priority matters. Never use color as the only signal -- pair it with labels or icons. Do not hard-code surfaces/text with bg-white, text-gray-*/text-slate-*, #fff, #ffffff, #111827, fixed dark backgrounds, or !important color overrides. For categorical or series data, use the ordered palette window.vivdCatalystTheme.chartPalette() (an array) or Tailwind classes text-chart-1 through text-chart-5 / bg-chart-2/20; window.vivdCatalystTheme.chartColors() returns a named object of theme colors, so never index it like an array. For canvas or Chart.js charts, read colors from window.vivdCatalystTheme.chartColors() (includes success, warning, info) or window.vivdCatalystTheme.color('foreground') for text, grid, and borders.";
-
+/**
+ * The layout and colour rules of a view. They are sent once, in the tool description; the
+ * `html` parameter points there instead of repeating them.
+ */
 const showViewLayoutGuidance =
-  "The view is embedded flush in the chat, so it must not frame itself: its content must touch the left and right edges of the view. Put no padding or margin (p-*/px-*/py-*/m-*, including responsive variants such as md:p-6) on the outermost element, on any wrapper around the whole view, or on top-level sections and grids; no max-width wrapper, no centering container, and no heading that repeats the title. Only bordered cards carry their own inner padding; separate top-level blocks with gap-* or space-y-*. Start directly with the content and let it span the full width. The view grows to its full content height and never scrolls inside itself, so do not set h-screen, min-h-screen, fixed heights, or overflow-y-auto on the outermost element.";
+  "Layout: the view is embedded flush in the chat and must not frame itself; its content touches the left and right edges. Put no padding or margin (p-*/px-*/py-*/m-*, including responsive variants such as md:p-6) on the outermost element, on a wrapper around the whole view, or on top-level sections and grids. Use no max-width or centering container and no heading that repeats the title. Only bordered cards carry inner padding; separate top-level blocks with gap-* or space-y-*. The view grows to its content height and never scrolls inside itself: set no h-screen, min-h-screen, fixed height, or overflow-y-auto on the outermost element.";
 
-function createShowViewInputSchema(scriptSourceHint: string) {
+const showViewColorGuidance =
+  "Color: use theme tokens for structure: bg-background text-foreground, bg-card text-card-foreground border-border, text-muted-foreground, bg-primary text-primary-foreground. Use semantic tokens for status, severity, and priority: text-success, text-warning, text-destructive, text-info, with translucent fills and borders such as bg-success/10 border-success/30. Example: <span class=\"rounded-md border border-warning/30 bg-warning/10 px-2 py-1 text-warning\">needs review</span>. Do not make the view monochrome when status, severity, or priority matters. Never use color as the only signal: pair it with a label or an icon. Do not hard-code surface or text colors: no bg-white, text-gray-*/text-slate-*, hex values such as #fff or #111827, fixed dark backgrounds, or !important color overrides. For categorical or series data use window.vivdCatalystTheme.chartPalette() (an ordered array) or the classes text-chart-1 through text-chart-5 and fills such as bg-chart-2/20. window.vivdCatalystTheme.chartColors() returns a named object of theme colors (includes success, warning, info), so never index it like an array; canvas and Chart.js charts read it, or window.vivdCatalystTheme.color('foreground'), for text, grid, and borders.";
+
+const showViewIconGuidance =
+  'Icons: Lucide icons render from elements such as <i data-lucide="chart-column"></i>.';
+
+function createShowViewInputSchema() {
   return z.object({
     html: z
       .string()
       .min(1)
       .max(200_000)
       .describe(
-        `Complete standalone HTML fragment or document to render for the user. ${showViewLayoutGuidance} ${showViewColorGuidance} Lucide icons are available with elements such as <i data-lucide="chart-column"></i>. ${scriptSourceHint}`
+        "Complete standalone HTML fragment or document to render for the user. Follow the layout, color, icon, and script rules in the tool description."
       ),
     mode: z
       .enum(["inline", "side_panel", "fullscreen"])
@@ -68,18 +75,17 @@ export const showViewTool = createShowViewTool();
 export function createShowViewTool(
   views: ShowViewPolicy = { allowedScriptSrc: [] }
 ): AnyToolDefinition {
-  const scriptSourceHint = viewScriptSourceHint(views.allowedScriptSrc);
-  const inputSchema = createShowViewInputSchema(scriptSourceHint);
+  const inputSchema = createShowViewInputSchema();
   return defineTool({
     name: "show_view",
     effect: "reading",
     description: [
       "Show model-authored HTML to the user as a visual view. Use this when a table, widget, chart, dashboard, or richer visual explanation would help.",
-      "Tailwind CSS, Lucide icons, Chart.js-compatible inline scripts, and shadcn-style app theme classes are available in the rendered iframe.",
       showViewLayoutGuidance,
       showViewColorGuidance,
-      scriptSourceHint
-    ].join(" "),
+      showViewIconGuidance,
+      `Scripts: ${viewScriptSourceHint(views.allowedScriptSrc)}`
+    ].join("\n\n"),
     inputSchema,
     outputSchema: showViewOutputSchema,
     async execute(input) {

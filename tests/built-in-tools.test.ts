@@ -77,25 +77,45 @@ describe("built-in platform tools", () => {
     expect(source).not.toMatch(/cdn\.tailwindcss\.com|unpkg\.com|externalRuntime/u);
   });
 
-  it("keeps show_view color guidance aligned between tool and JSON schema descriptions", () => {
+  it("gives the layout and color guidance once, in the tool description", () => {
+    const description = showViewTool.description;
     const htmlDescription = readHtmlSchemaDescription();
 
-    for (const description of [showViewTool.description, htmlDescription]) {
-      expect(description).toContain("text-success");
-      expect(description).toContain("bg-success/10");
-      expect(description).toContain("border-warning/30 bg-warning/10");
-      expect(description).toContain("Do not make the view monochrome");
-      expect(description).toContain("Never use color as the only signal");
-      expect(description).toContain("bg-white");
-      expect(description).toContain("text-gray-*/text-slate-*");
-      expect(description).toContain("success, warning, info");
-      expect(description).toContain("chartPalette()");
-      expect(description).toContain("text-chart-1");
-      expect(description).toContain("text-chart-5");
-      expect(description).toContain("bg-chart-2/20");
-      expect(description).toContain("chartColors() returns a named object");
-      expect(description).toContain("never index it like an array");
+    for (const rule of [
+      "must not frame itself",
+      "md:p-6",
+      "no max-width or centering container",
+      "no heading that repeats the title",
+      "Only bordered cards carry inner padding",
+      "gap-* or space-y-*",
+      "never scrolls inside itself",
+      "h-screen, min-h-screen, fixed height, or overflow-y-auto",
+      "bg-background text-foreground",
+      "text-success",
+      "text-destructive",
+      "bg-success/10",
+      "border-warning/30 bg-warning/10",
+      "Do not make the view monochrome",
+      "Never use color as the only signal",
+      "bg-white",
+      "text-gray-*/text-slate-*",
+      "!important",
+      "success, warning, info",
+      "chartPalette()",
+      "text-chart-1",
+      "text-chart-5",
+      "bg-chart-2/20",
+      "chartColors() returns a named object",
+      "never index it like an array",
+      "color('foreground')",
+      'data-lucide="chart-column"'
+    ]) {
+      expect(description).toContain(rule);
+      expect(description.split(rule)).toHaveLength(2);
+      expect(htmlDescription).not.toContain(rule);
     }
+    expect(htmlDescription).toContain("rules in the tool description");
+    expect(wordCount(description) + wordCount(htmlDescription)).toBeLessThan(400);
   });
 });
 
@@ -203,4 +223,8 @@ function createToolContext(): ToolExecutionContext {
       authSource: "test"
     }
   };
+}
+
+function wordCount(text: string): number {
+  return text.split(/\s+/u).filter(Boolean).length;
 }
