@@ -24,10 +24,13 @@ export function createAssistantMessageGroupBy(): (
   part: PartState,
   context: GroupByContext
 ) => readonly AssistantWorkGroupKey[] {
-  return groupPartByType({
+  const byType = groupPartByType({
     "tool-call": [ASSISTANT_WORK_GROUP],
     "standalone-tool-call": []
   });
+  // The card of a save says that a Page is being built, so it stands in the thread while the
+  // run goes on and does not fold into the count of tool calls.
+  return (part, context) => (isPageSaveCall(part) ? [] : byType(part, context));
 }
 
 export function createAssistantWorkTimelineItems(
@@ -128,8 +131,8 @@ export function createCompletedAssistantWorkIndices(
   if (finalTextIndex < 0) {
     return [];
   }
-  return parts.flatMap((part, index) =>
-    staysVisibleAfterRun(part, index, finalTextIndex) ? [] : [index]
+  return parts.flatMap((_part, index) =>
+    staysVisibleAfterRun(parts, index, finalTextIndex) ? [] : [index]
   );
 }
 
@@ -147,21 +150,25 @@ export function createVisibleFinalAssistantPartIndices(
   }
   return [
     finalTextIndex,
-    ...parts.flatMap((part, index) =>
-      index !== finalTextIndex && staysVisibleAfterRun(part, index, finalTextIndex) ? [index] : []
+    ...parts.flatMap((_part, index) =>
+      index !== finalTextIndex && staysVisibleAfterRun(parts, index, finalTextIndex) ? [index] : []
     )
   ];
 }
 
 function staysVisibleAfterRun(
-  part: AssistantPartOutline,
+  parts: readonly AssistantPartOutline[],
   index: number,
   finalTextIndex: number
 ): boolean {
+  const part = parts[index];
+  if (!part) {
+    return false;
+  }
   return (
     index === finalTextIndex ||
     isApprovalRequestToolCall(part) ||
-    isSavedPageToolCall(part) ||
+    isPageSaveOutcome(parts, index) ||
     (index > finalTextIndex && isVisibleFinalAssistantPart(part))
   );
 }
@@ -180,14 +187,22 @@ function isApprovalRequestToolCall(part: AssistantPartOutline): boolean {
 /**
  * A saved Page revision is a result of the run, not a step of it: its card is how the reader
  * opens the revision again, so it stays in the thread. A save the build refused folds away
- * with the other steps.
+ * with the other steps, unless it is the last save of the answer: then it is how the answer
+ * ended, and the card says what the build found.
  */
-function isSavedPageToolCall(part: AssistantPartOutline): boolean {
+function isPageSaveOutcome(parts: readonly AssistantPartOutline[], index: number): boolean {
+  const part = parts[index];
+  if (!part || !isPageSaveCall(part)) {
+    return false;
+  }
   return (
-    part.type === "tool-call" &&
-    part.toolName === PAGE_SAVE_TOOL_NAME &&
-    readPageSave({ args: part.args, result: part.result }).state === "built"
+    readPageSave({ args: part.args, result: part.result }).state === "built" ||
+    !parts.slice(index + 1).some(isPageSaveCall)
   );
+}
+
+function isPageSaveCall(part: { type: string; toolName?: string } | undefined): boolean {
+  return part?.type === "tool-call" && part.toolName === PAGE_SAVE_TOOL_NAME;
 }
 
 export function findFinalAssistantTextPartIndex(
@@ -249,6 +264,9 @@ function isStandaloneToolCall(
   context: GroupByContext
 ): boolean {
   if (part.mcp?.app?.resourceUri?.startsWith("ui://")) {
+    return true;
+  }
+  if (isPageSaveCall(part)) {
     return true;
   }
   return context.toolUIs?.[part.toolName]?.[0]?.standalone ?? false;

@@ -91,6 +91,37 @@ describe("assistant work grouping", () => {
     expect(createVisibleFinalAssistantPartIndices(parts, 2)).toEqual([2, 1]);
   });
 
+  it("shows a save on its own while the run goes on", () => {
+    // Fails without the rule for page.save: the call folded into "1 tool call", and nothing in
+    // the thread said that a Page was being built.
+    const parts = [
+      toolPart("call_patch", "workspace.apply_patch"),
+      toolPart("call_save", "page.save")
+    ];
+
+    expect(groupPaths(parts)).toEqual([[ASSISTANT_WORK_GROUP], []]);
+  });
+
+  it("keeps the card of a refused save when the answer ended with it", () => {
+    // Fails without the rule for the last save: the card folded into the work summary, and an
+    // answer whose Page was never built showed nothing of what the build found.
+    const refused = {
+      type: "tool-call" as const,
+      toolCallId: "call_refused",
+      toolName: "page.save",
+      args: { name: "Offers", directory: "offers" },
+      result: { output: { errors: [{ file: "app.yaml", message: "No kit version." }] } }
+    };
+    const parts = [
+      { ...refused, toolCallId: "call_first" },
+      refused,
+      textPart("The Page could not be built.")
+    ];
+
+    expect(createCompletedAssistantWorkIndices(parts, 2)).toEqual([0]);
+    expect(createVisibleFinalAssistantPartIndices(parts, 2)).toEqual([2, 1]);
+  });
+
   it("keeps web search tool work and source parts collapsible as one step", () => {
     const parts = [
       textPart("Final answer."),

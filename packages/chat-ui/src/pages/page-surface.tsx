@@ -197,16 +197,19 @@ function PageSurface({
                   : "pages.loading"
             )}
             action={
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  // The query keeps the failure; the pane shows it again.
-                  preview.refetch().catch(() => undefined);
-                }}
-              >
-                {t("pages.retry")}
-              </Button>
+              // A Page that is gone for the viewer stays gone: asking again changes nothing.
+              state !== "failed" ? undefined : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    // The query keeps the failure; the pane shows it again.
+                    preview.refetch().catch(() => undefined);
+                  }}
+                >
+                  {t("pages.retry")}
+                </Button>
+              )
             }
           />
         )
