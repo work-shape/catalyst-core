@@ -176,6 +176,14 @@ Schema changes expand before they contract. A new migration may hold the additiv
 
 A concurrent index build runs outside a transaction. When it fails, the migration is not recorded and the index stays behind as invalid; repair what stopped it and run the step again, which drops the invalid index and builds it anew.
 
+### Data Stores on the database server
+
+With the module `dataStores` on, each Data Store has a database of its own on this server and two roles, named `catalyst_ds_...`. The platform takes from those roles every way to the platform database and to each other's databases. It changes no grant of `postgres` and `template1`, because the server may hold more than this instance. Without a rule of your own a store role can connect to those two databases, where it reads the catalog and nothing else. To close that, add this line to `pg_hba.conf` above the lines that admit the platform, and reload Postgres:
+
+```text
+host postgres,template1 /^catalyst_ds_ all reject
+```
+
 ## Health And Readiness
 
 Two unversioned addresses answer without a credential.
@@ -191,13 +199,13 @@ The proxy has to forward `/ready` to the API like `/health`; it is outside `/api
 
 Everything else goes to the interface. A deployment with its own proxy routes these to the API:
 
-| Address | What it is |
-| --- | --- |
-| `/api/*` | The product API. |
-| `/auth/*` | Sign-in of an instance with standalone auth. |
-| `/health`, `/ready` | The two checks above. |
-| `/app-runtime/*` | The runtime and the shell of a generated view. |
-| `/app-content/*` | The files of a Page, when the module `apps` is on. |
+| Address             | What it is                                         |
+| ------------------- | -------------------------------------------------- |
+| `/api/*`            | The product API.                                   |
+| `/auth/*`           | Sign-in of an instance with standalone auth.       |
+| `/health`, `/ready` | The two checks above.                              |
+| `/app-runtime/*`    | The runtime and the shell of a generated view.     |
+| `/app-content/*`    | The files of a Page, when the module `apps` is on. |
 
 `docker/Caddyfile` routes all of them.
 

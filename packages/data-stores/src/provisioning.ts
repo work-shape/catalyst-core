@@ -15,21 +15,6 @@ const DATA_STORE_PROVISION_STEP_TIMEOUT_MS = 120_000;
 const SCRAM_ITERATIONS = 4_096;
 
 /**
- * `postgres` and `template1` while `PUBLIC` connects to them, where the platform's role owns
- * them or is a superuser. A database without an access list has the default one, which lets
- * `PUBLIC` connect.
- */
-const SERVER_DATABASES_OPEN = `
-  select d.datname as name from pg_catalog.pg_database d
-  where d.datname in ('postgres', 'template1')
-    and (pg_catalog.pg_has_role(current_user, d.datdba, 'USAGE')
-      or (select rolsuper from pg_catalog.pg_roles where rolname = current_user))
-    and (d.datacl is null or exists (
-      select 1 from pg_catalog.aclexplode(d.datacl) acl
-      where acl.grantee = 0 and acl.privilege_type = 'CONNECT'))
-`;
-
-/**
  * In the database of one store: nobody but a superuser lists sessions or ends one. The
  * catalog of a database is its own, so no other database of the server changes.
  */
@@ -68,9 +53,7 @@ async function ensureRole(
   sql: PostgresChangeStatements,
   name: string,
   role: DataStoreRole,
-  password: string,
-  /** The quoted name of the store's database. */
-  database: string
+  password: string
 ): Promise<void> {
   const quoted = quoteIdentifier(name);
   const limits = DATA_STORE_ROLE_LIMITS[role];
@@ -84,9 +67,19 @@ async function ensureRole(
   await sql.script(
     `alter role ${quoted} connection limit ${limits.connectionLimit} password '${scramVerifier(password)}'`
   );
-  // Exactly the settings of the role: whatever else it carried, also for one database, goes.
+  // Exactly the settings of the role: whatever else it carried goes, also what it carried for
+  // one database, whichever database that is.
   await sql.script(`alter role ${quoted} reset all`);
-  await sql.script(`alter role ${quoted} in database ${database} reset all`);
+  const elsewhere = await sql.run(
+    `select d.datname as name from pg_catalog.pg_db_role_setting s
+       join pg_catalog.pg_roles r on r.oid = s.setrole
+       join pg_catalog.pg_database d on d.oid = s.setdatabase
+       where r.rolname = $1`,
+    [name]
+  );
+  for (const other of z.array(z.object({ name: z.string() })).parse(elsewhere)) {
+    await sql.script(`alter role ${quoted} in database ${quoteIdentifier(other.name)} reset all`);
+  }
   for (const setting of roleSettings(role)) {
     await sql.script(`alter role ${quoted} set ${setting.replace("=", " = ")}`);
   }
@@ -99,11 +92,10 @@ async function ensureRole(
  */
 export async function assertStoreRoles(
   server: DataStoreServer,
-  record: Pick<DataStoreRecord, "location" | "roles">,
+  record: Pick<DataStoreRecord, "roles">,
   passwords: Record<DataStoreRole, string>,
   signal: AbortSignal
 ): Promise<void> {
-  const database = quoteIdentifier(record.location.database);
   await server.executor.change(
     {
       ...server.asPlatform(server.platformDatabase),
@@ -112,8 +104,8 @@ export async function assertStoreRoles(
       transaction: false
     },
     async (sql) => {
-      await ensureRole(sql, record.roles.app, "app", passwords.app, database);
-      await ensureRole(sql, record.roles.migration, "migration", passwords.migration, database);
+      await ensureRole(sql, record.roles.app, "app", passwords.app);
+      await ensureRole(sql, record.roles.migration, "migration", passwords.migration);
     }
   );
 }
@@ -130,8 +122,9 @@ export async function assertStoreRoles(
  *   platform's database;
  * - the migration role creates in `public`, and may add to `catalyst.migrations` and neither
  *   read nor change it; what it creates in `public` the app role reads and writes;
- * - where the platform's role is a superuser, no role of the store lists or ends a session,
- *   and where it owns `postgres` and `template1`, `PUBLIC` no longer connects to them.
+ * - where the platform's role is a superuser, no role of the store lists or ends a session.
+ *
+ * No grant of another database of the server is changed: the server may be shared.
  */
 export async function provisionDataStore(
   server: DataStoreServer,
@@ -155,21 +148,8 @@ export async function provisionDataStore(
       if (!existing) {
         await sql.script(`create database ${database} template template0 encoding 'UTF8'`);
       }
-      await ensureRole(sql, record.roles.app, "app", passwords.app, database);
-      await ensureRole(sql, record.roles.migration, "migration", passwords.migration, database);
-      // The databases every server has. Whoever owns them takes the store roles' way in there
-      // too; a platform role that owns neither leaves them as the server's operator set them.
-      const open = async () =>
-        z.array(z.object({ name: z.string() })).parse(await sql.run(SERVER_DATABASES_OPEN));
-      for (const other of await open()) {
-        try {
-          await sql.script(`revoke connect on database ${quoteIdentifier(other.name)} from public`);
-        } catch (error) {
-          // Another store that is provisioned now may have taken it at the same moment, which
-          // Postgres answers with an error for the one that came second.
-          if ((await open()).some((still) => still.name === other.name)) throw error;
-        }
-      }
+      await ensureRole(sql, record.roles.app, "app", passwords.app);
+      await ensureRole(sql, record.roles.migration, "migration", passwords.migration);
       await sql.script(
         `revoke all on database ${database} from public;
          grant connect on database ${database} to ${app}, ${migration};

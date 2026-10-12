@@ -106,9 +106,8 @@ describe("the roles of a Data Store", () => {
     expect(await sqlState(connect(otherRecord.location.database, appRole)`select 1`)).toBe(denied);
   });
 
-  it("keeps a reader of a store from seeing or ending another session, and out of the server's own databases", async () => {
+  it("keeps a reader of a store from seeing or ending another session", async () => {
     const world = await published("sessions");
-    const { record } = world;
     const denied = "needs a privilege its role does not hold (SQLSTATE 42501).";
 
     for (const sql of [
@@ -121,10 +120,27 @@ describe("the roles of a Data Store", () => {
         message: `The query ${denied}`
       });
     }
-    const [reach] = await db.sql<{ postgres: boolean; template1: boolean }[]>`
-      select has_database_privilege(${record.roles.app}, 'postgres', 'CONNECT') as postgres,
-        has_database_privilege(${record.roles.app}, 'template1', 'CONNECT') as template1`;
-    expect(reach).toEqual({ postgres: false, template1: false });
+  });
+
+  // What a suite that shares the server needs after this one ran: the tests of the executor
+  // make accounts of their own, which reach the server as every account does.
+  it("changes no grant of the server's own databases, so an account of another suite still connects", async () => {
+    const grants = () =>
+      db.sql<{ datname: string; acl: string | null }[]>`
+        select datname, datacl::text as acl from pg_database
+        where datname in ('postgres', 'template1') order by datname`;
+    const before = await grants();
+
+    await published("server_grants");
+
+    expect(await grants()).toEqual(before);
+    const account = await platformRole();
+    for (const database of ["postgres", "template1"]) {
+      const url = new URL(account.databaseUrl);
+      expect(
+        await sqlState(connect(database, { name: url.username, password: url.password })`select 1`)
+      ).toBe("no error");
+    }
   });
 
   it("lets the migration role change the schema and keeps it out of the platform database", async () => {

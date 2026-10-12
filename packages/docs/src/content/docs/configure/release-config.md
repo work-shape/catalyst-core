@@ -599,7 +599,7 @@ modelBindings:
 - `label` is the name people read for the model, in the picker, the agent editor and the
   Access page. Without it the name is made from the model id, which suits a vendor's own model
   name. Set it where `model` is a deployment name you chose, as on Azure: `model:
-  acme-gpt-5.6-sol` with `label: GPT-5.6 Sol`. Usage keeps the model id, which is what the
+acme-gpt-5.6-sol` with `label: GPT-5.6 Sol`. Usage keeps the model id, which is what the
   provider bills.
 - `vendor` names who makes the model, for its logo: `openai`, `anthropic`, `mistral` or
   `google`. Without it the picker reads the vendor from the model id, and shows a neutral icon
@@ -983,7 +983,7 @@ dataStores:
   poolMaxConnections: 5
 ```
 
-- `sizeLimit` is the most one store may hold, as a whole number of `MB` or `GB`. A store's own `sizeLimit` in `store.yaml` names less and never more. At the limit no rows are added and reading keeps working. Default `5GB`.
+- `sizeLimit` is the most one store may hold, as a whole number of `MB` or `GB`. A store's own `sizeLimit` in `store.yaml` names less and never more. At the limit no rows are added and reading keeps working. Every insert reads the size first, so a store passes the limit by at most what the inserts running at one moment add, under 256 MiB. Default `5GB`.
 - `poolMaxConnections` is the most connections one process holds to one store at once, between 1 and 10. Default 5.
 
 ## Config Is Not A Secret Store
