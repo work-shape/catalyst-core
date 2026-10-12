@@ -21,6 +21,8 @@ const DIRECT_SHARE_MINIMUM = 0.12;
 const DIRECT_BOOKINGS_MINIMUM = 20;
 /** The till's cash goes to the bank once in this many till bookings. */
 export const TILL_BOOKINGS_PER_DEPOSIT = 5;
+/** One payment in this many is booked in two bookings: less a cash discount, or in two parts. */
+export const PAYMENTS_PER_SPLIT = 8;
 const SUPPLIERS_PER_PURCHASE = 0.25;
 const SUPPLIERS_MAXIMUM = 150;
 const CUSTOMERS_PER_INVOICE = 0.6;
@@ -32,6 +34,11 @@ const SMALLEST_WITHDRAWAL_EUROS = 500;
 const SMALLEST_EMPLOYMENT = 0.4;
 
 type Random = () => number;
+
+/** How many bookings pay `invoices` invoices. */
+export function settlementBookings(invoices: number): number {
+  return invoices + Math.floor(invoices / PAYMENTS_PER_SPLIT);
+}
 
 /** One kind of purchase of a client. */
 export interface Purchase {
@@ -45,7 +52,7 @@ export interface Purchase {
 }
 
 /** A booking that comes once a month with the same amount. */
-interface StandingOrder {
+export interface StandingOrder {
   /** The booking text for a month named as `MM/YYYY`. */
   text(period: string): string;
   account: AccountRole;
@@ -71,6 +78,13 @@ export interface Business {
   usual: { salesInvoices: number; tillBookings: number; supplierInvoices: number };
   customers: number;
   purchases: { onAccount: readonly Purchase[]; direct: readonly Purchase[] };
+  /** The office supplies, which every client buys on account. */
+  officePurchase: Purchase;
+  /**
+   * The accounts of the purchases on account that the client's industry does not make. The
+   * consultancy has closed them in the client's chart.
+   */
+  blockedAccounts: readonly AccountRole[];
   standingOrders: readonly StandingOrder[];
 }
 
@@ -161,11 +175,12 @@ export function business(
     supplierInvoices: total(onAccount),
     employees: (profile.payroll * costOfRevenue) / employeeCostEuros(usualWageLevel)
   };
-  // An invoice is booked twice, when it is written and when it is paid.
+  // An invoice is booked when it is written and when it is paid.
+  const bookingsPerInvoice = 1 + settlementBookings(PAYMENTS_PER_SPLIT) / PAYMENTS_PER_SPLIT;
   const settledPerEuro =
-    2 * perEuroOf.salesInvoices +
+    bookingsPerInvoice * perEuroOf.salesInvoices +
     perEuroOf.tillBookings * (1 + 1 / TILL_BOOKINGS_PER_DEPOSIT) +
-    2 * perEuroOf.supplierInvoices +
+    bookingsPerInvoice * perEuroOf.supplierInvoices +
     payrollBookingCount(1) * perEuroOf.employees;
   const directBookingsMinimum = Math.max(
     DIRECT_SHARE_MINIMUM * usualPostingCount,
@@ -200,10 +215,12 @@ export function business(
   );
   const directBookings =
     usualPostingCount -
-    2 * usual.salesInvoices -
+    usual.salesInvoices -
+    settlementBookings(usual.salesInvoices) -
     usual.tillBookings -
     Math.floor(usual.tillBookings / TILL_BOOKINGS_PER_DEPOSIT) -
-    2 * usual.supplierInvoices -
+    usual.supplierInvoices -
+    settlementBookings(usual.supplierInvoices) -
     payrollBookingCount(employees) -
     orders.length;
   // The direct purchases fill what is left of the month, so their amounts are stretched to
@@ -220,6 +237,9 @@ export function business(
         Math.max(1, Math.ceil(revenueEuros * weight * SUPPLIERS_PER_PURCHASE))
       )
     });
+  const purchasesOnAccount = onAccount.map(purchase(1));
+  const officePurchase = purchasesOnAccount.find(({ kind }) => kind.account === "office");
+  if (officePurchase === undefined) throw new Error("Every industry buys office supplies.");
   return {
     profile,
     ownerRun,
@@ -231,10 +251,11 @@ export function business(
     customers: profile.invoices.rentRoll
       ? Math.min(CUSTOMERS_MAXIMUM, usual.salesInvoices)
       : Math.min(CUSTOMERS_MAXIMUM, Math.ceil(usual.salesInvoices * CUSTOMERS_PER_INVOICE)),
-    purchases: {
-      onAccount: onAccount.map(purchase(1)),
-      direct: direct.map(purchase(directStretch))
-    },
+    purchases: { onAccount: purchasesOnAccount, direct: direct.map(purchase(directStretch)) },
+    officePurchase,
+    blockedAccounts: EXPENSE_KINDS.filter(
+      (kind) => kind.settlement === "account" && !kinds.some((bought) => bought.kind === kind)
+    ).map(({ account }) => account),
     standingOrders: orders
   };
 }

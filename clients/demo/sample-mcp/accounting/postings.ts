@@ -1,9 +1,9 @@
-import { mixedSeed, seededGenerator } from "../random.js";
-import { LEDGERS, vatRate } from "./accounts.js";
+import { mixedSeed, pick } from "../random.js";
+import { vatRate } from "./accounts.js";
 import { activitiesOf } from "./activities.js";
-import { plan, plantedBooking, plantedCount } from "./anomalies.js";
+import { plan, plantedBooking, plantedCounts } from "./anomalies.js";
 import type { Booking } from "./booking.js";
-import { dayEnds, isoDate, type SampleMonth } from "./calendar.js";
+import { dayWeights, isoDate, OFFICE_WEEK, type SampleMonth } from "./calendar.js";
 import { fiscalYearOf, postingCount, STREAM, type SampleClient } from "./clients.js";
 import { schedule } from "./schedule.js";
 
@@ -17,13 +17,16 @@ import { schedule } from "./schedule.js";
 // which holds by construction:
 //
 // - Two clean bookings are never alike. A sales invoice, a till report and a deposit have a
-//   number of the client's own range, a purchase has a number its supplier gives once and a
-//   text with the supplier's name, a payment carries the number of the one invoice it settles,
-//   a payslip line names the employee and the line, and a standing order has its own text.
+//   number of the client's own range, and the bookings of one till report differ in their
+//   account. A purchase has a number its supplier gives once and a text with the supplier's
+//   name. The bookings that pay an invoice carry its number and differ in their first word:
+//   the payment, its discount, a part and the rest. A payslip line names the employee and
+//   the line, and a standing order has its own text.
 // - The only booking without a document number is the bank's monthly charge, far below the
 //   amount from which a round booking is a finding.
 // - An expense is booked in debit, with no key or an input VAT key, on an open account, with a
-//   cost centre when the client uses them. An expense in credit is a general reversal.
+//   cost centre when the client uses them. An expense in credit is a general reversal. A
+//   discount a supplier gave is booked on the supplier's account, against the discount account.
 // - A booking's date follows from its position, so the month is in date order as it is
 //   generated, and every clean booking is dated inside the month.
 
@@ -66,13 +69,16 @@ interface Month {
 }
 
 function row({ client, period, locked }: Month, date: string, booking: Booking): Posting {
-  const automaticKey = booking.account.automatic_vat_key;
+  // Whichever of the two accounts is an automatic one applies its key.
+  const automaticKey = booking.account.automatic_vat_key ?? booking.contra.automatic_vat_key;
   const rate = vatRate(automaticKey ?? booking.vatKey);
   const taxCents = Math.round((booking.cents * rate) / (100 + rate));
   return {
     client_id: client.row.client_id,
     date,
-    delivery_date: booking.account.account_class === "revenue" ? date : null,
+    // A sale has a day of delivery: a credit on a revenue account.
+    delivery_date:
+      booking.account.account_class === "revenue" && booking.side === "H" ? date : null,
     document_date: date,
     fiscal_year: fiscalYearOf(client, period),
     account_number: booking.account.account_number,
@@ -112,44 +118,39 @@ export function monthOfPostings(
 ) {
   const month = { client, period, locked };
   const clientId = client.row.client_id;
-  const count = postingCount(seed, client, period.index);
-  const { planted, plantedBefore } = plan(seed, client, period);
-  const cleanCount = count - planted.size;
   const business = activitiesOf(seed, client, period, (monthIndex) =>
-    plantedCount(seed, client, monthIndex)
+    plantedCounts(seed, client, monthIndex)
   );
   const order = schedule(
     business.activities,
-    dayEnds(period),
+    period.days,
     mixedSeed(seed, STREAM.schedule, clientId, period.index)
   );
-  const { activities } = business;
+  const officeDays = dayWeights(period, OFFICE_WEEK);
+  const { planted, plantedBefore } = plan(
+    seed,
+    client,
+    period,
+    (cleanPosition) => pick(officeDays, order.at(cleanPosition).day) > 0
+  );
+  const count = postingCount(seed, client, period.index);
 
   function posting(position: number): Posting {
     const plantedHere = planted.get(position);
-    // A duplicate is the booking before it, word for word. The plan keeps that one clean.
-    if (plantedHere?.rule === "duplicate-posting") return posting(position - 1);
     const cleanBefore = position - plantedBefore(position);
     if (plantedHere === undefined) {
       const { day, activity, rank } = order.at(cleanBefore);
-      const booking = activities[activity]?.booking(rank);
+      const booking = business.activities[activity]?.booking(rank);
       if (booking === undefined) throw new Error(`The month has no activity ${activity}.`);
       return row(month, isoDate(period, day), booking);
     }
-    // A planted booking is dated as the clean booking behind it, or as the month's last one.
-    const day = plantedHere.outsideDays ?? order.at(Math.min(cleanBefore, cleanCount - 1)).day;
-    const purchase = business.plantedPurchase(plantedHere.ordinal);
+    // A duplicate is the booking before it, word for word. The plan keeps that one clean.
+    if (plantedHere.rule === "duplicate-posting") return posting(position - 1);
+    // Any other planted booking is dated outside the month or as the clean booking behind it.
     return row(
       month,
-      isoDate(period, day),
-      plantedHere.rule === "date-outside-month"
-        ? purchase
-        : plantedBooking(
-            purchase,
-            plantedHere.rule,
-            LEDGERS[client.skr],
-            seededGenerator(mixedSeed(seed, STREAM.plan, clientId, period.index, position))
-          )
+      isoDate(period, plantedHere.outsideDay ?? order.at(cleanBefore).day),
+      plantedBooking(seed, client, period, plantedHere.rule, plantedHere, business.extra)
     );
   }
 

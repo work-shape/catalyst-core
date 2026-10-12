@@ -3,6 +3,10 @@
 // accounts under their own numbers, so a booking is written against a role (`bank`, `rent`)
 // and gets the number of the client's chart.
 //
+// An account may be blocked for bookings. Two are in every chart, and each client has more:
+// the accounts of purchases its industry does not make and the creditors it no longer buys
+// from (see business.ts and counterparties.ts).
+//
 // The general ledger accounts have four digits. With that length both charts keep the personal
 // accounts in the same five-digit ranges: a debtor (a customer) from 10000 to 69999, a creditor
 // (a supplier) from 70000 to 99999.
@@ -96,10 +100,24 @@ function ledger(skr: Skr) {
     revenue: account(8200, 4200, "Erlöse", "revenue"),
     revenue7: account(8300, 4300, "Erlöse 7 % USt", "revenue", { automatic_vat_key: 2 }),
     revenue19: account(8400, 4400, "Erlöse 19 % USt", "revenue", { automatic_vat_key: 3 }),
+    grantedDiscount: account(8730, 4730, "Gewährte Skonti", "revenue"),
+    grantedDiscount7: account(8731, 4731, "Gewährte Skonti 7 % USt", "revenue", {
+      automatic_vat_key: 2
+    }),
+    grantedDiscount19: account(8736, 4736, "Gewährte Skonti 19 % USt", "revenue", {
+      automatic_vat_key: 3
+    }),
     subcontractors: account(3100, 5900, "Fremdleistungen", "expense"),
     goods: account(3200, 5200, "Wareneingang", "expense"),
     goods7: account(3300, 5300, "Wareneingang 7 % Vorsteuer", "expense", { automatic_vat_key: 8 }),
     goods19: account(3400, 5400, "Wareneingang 19 % Vorsteuer", "expense", {
+      automatic_vat_key: 9
+    }),
+    receivedDiscount: account(3730, 5730, "Erhaltene Skonti", "expense"),
+    receivedDiscount7: account(3731, 5731, "Erhaltene Skonti 7 % Vorsteuer", "expense", {
+      automatic_vat_key: 8
+    }),
+    receivedDiscount19: account(3736, 5736, "Erhaltene Skonti 19 % Vorsteuer", "expense", {
       automatic_vat_key: 9
     }),
     wages: account(4100, 6000, "Löhne und Gehälter", "expense"),
@@ -162,9 +180,42 @@ export function personalAccount(
   };
 }
 
-/** A chart as `list_accounts` answers it: the general ledger and the personal accounts, by number. */
-export function chartOfAccounts(skr: Skr, personalAccounts: readonly Account[]): Account[] {
-  return [...Object.values(LEDGERS[skr]), ...personalAccounts].sort(
-    (left, right) => left.account_number - right.account_number
+/**
+ * The account a cash discount (Skonto) is booked on: one a customer was `granted` or one
+ * `received` from a supplier, on an invoice taxed at `rate` percent. The account of a taxed
+ * invoice corrects the tax by itself.
+ */
+export function discountAccount(
+  ledger: Ledger,
+  side: "granted" | "received",
+  rate: number
+): Account {
+  const accounts = {
+    granted: [ledger.grantedDiscount, ledger.grantedDiscount7, ledger.grantedDiscount19],
+    received: [ledger.receivedDiscount, ledger.receivedDiscount7, ledger.receivedDiscount19]
+  };
+  const account = accounts[side].find(
+    ({ automatic_vat_key }) => vatRate(automatic_vat_key ?? 0) === rate
   );
+  if (account === undefined) throw new Error(`The sample has no discount account for ${rate} %.`);
+  return account;
+}
+
+/**
+ * A chart as `list_accounts` answers it: the general ledger and the personal accounts, by
+ * number. The general ledger accounts of the roles in `blocked` are closed for this client.
+ */
+export function chartOfAccounts(
+  skr: Skr,
+  blocked: readonly AccountRole[],
+  personalAccounts: readonly Account[]
+): Account[] {
+  const ledger = LEDGERS[skr];
+  const closed = new Set(blocked.map((role) => ledger[role].account_number));
+  return [
+    ...Object.values(ledger).map((account) =>
+      closed.has(account.account_number) ? { ...account, blocked: true } : account
+    ),
+    ...personalAccounts
+  ].sort((left, right) => left.account_number - right.account_number);
 }

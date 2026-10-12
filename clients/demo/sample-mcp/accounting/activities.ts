@@ -1,148 +1,55 @@
-import { mixedSeed, pick, seededGenerator, shuffled, weighted } from "../random.js";
-import { LEDGERS, vatRate, type Account, type Ledger } from "./accounts.js";
-import { evenPlace, type Activity, type Booking } from "./booking.js";
-import { TILL_BOOKINGS_PER_DEPOSIT, type Purchase } from "./business.js";
-import { monthAt, periodLabel, type SampleMonth } from "./calendar.js";
-import { postingCount, STREAM, type SampleClient } from "./clients.js";
-import { customerOf, frequentPlace, supplierOf } from "./counterparties.js";
+import { pick, weighted } from "../random.js";
+import { vatRate, type Account } from "./accounts.js";
+import { evenDays, type Activity, type Booking } from "./booking.js";
+import type { Purchase, StandingOrder } from "./business.js";
 import {
-  documentLink,
-  invoiceDocument,
-  supplierDocument,
-  yearlyDocument,
-  type Issued
-} from "./documents.js";
+  dayAt,
+  dayWeights,
+  monthAt,
+  OFFICE_WEEK,
+  periodLabel,
+  type SampleMonth
+} from "./calendar.js";
+import { postingCount, type SampleClient } from "./clients.js";
+import { customerOf, frequentPlace, supplierOf, type Counterparty } from "./counterparties.js";
+import { invoiceDocument, supplierDocument, type Issued } from "./documents.js";
+import {
+  ACTIVITY,
+  AMOUNT,
+  drawsOf,
+  evenDraw,
+  frameOf,
+  grossCents,
+  issuedBefore,
+  LINE,
+  linkOf,
+  plain,
+  type Frame,
+  type PlantedCounts
+} from "./frame.js";
 import { BOOKINGS_PER_PAYSLIP, payrollBookingCount, payrollTotals, payslip } from "./payroll.js";
+import { settlements, type Invoice } from "./settlements.js";
+import { tillActivities } from "./tills.js";
 
 // The clean bookings of a client's month, as the activities of its business: it writes
-// invoices and is paid, takes money through the till, buys on account and pays, buys by direct
-// debit and in cash, runs the payroll and has its standing orders. Each booking is a pure
-// function of the seed, the client, the month, the activity and the booking's rank in it.
-//
-// An invoice goes through the personal account of its customer or supplier, and the payment
-// that settles it follows about two weeks later: the invoices of the first part of a month
-// are paid in that month, the others in the next. So some are open at each month's end, and a
-// payment names an invoice that exists, with its number, its counterparty and its amount.
+// invoices and is paid (settlements.ts), takes money through the till (tills.ts), buys on
+// account and pays, buys by direct debit and in cash, runs the payroll and has its standing
+// orders. An invoice goes through the personal account of its customer or supplier. What is
+// booked on which day follows the week of a ledger (calendar.ts): little at the weekend and
+// nothing on a public holiday, except by a till that is open then.
 
-/** The share of a month's invoices, the earliest ones, that are paid in the same month. */
-const SETTLED_IN_MONTH = 0.55;
 /** The share of direct purchases that are general reversals: a direct debit that was returned. */
 const GENERAL_REVERSAL_SHARE = 0.01;
-/** A till is booked once a day, so a client has one till for each so many till bookings a month. */
-const TILL_BOOKINGS_PER_TILL = 26;
 /** How many times its smallest amount the largest amount of a kind is: of a purchase, a sale and a flat's rent. */
 const PURCHASE_SPREAD = 20;
 const SALE_SPREAD = 8;
 const RENT_SPREAD = 3;
 /** The month a rent roll is drawn for: a flat keeps its tenant and its rent in every month. */
 const EVERY_MONTH = 0;
+/** Where in the month the payroll run books, from 0 to 1: the wage tax of the month before, the payslips, the health insurers and the net wages. */
+const PAYROLL_POINTS = { wageTax: 0.3, payslips: 0.84, socialSecurity: 0.9, wages: 0.95 } as const;
 
-/** What tells the draws and the document links of the activities apart. */
-const ACTIVITY = {
-  salesInvoices: 1,
-  tillBookings: 2,
-  purchasesOnAccount: 3,
-  directPurchases: 4,
-  payroll: 5
-} as const;
-
-type Random = () => number;
 type Channel = keyof SampleClient["business"]["purchases"];
-
-/** A client's month as far as the bookings of another month need it. */
-interface Frame {
-  seed: number;
-  client: SampleClient;
-  ledger: Ledger;
-  period: SampleMonth;
-  /** The month's revenue as a multiple of the usual month's, by the season of the industry. */
-  level: number;
-  /** How many documents of each kind the month has. */
-  issued: { salesInvoices: number; tillBookings: number; supplierInvoices: number };
-}
-
-/** How many bookings of a month are planted and not part of the client's business. */
-type PlantedCount = (monthIndex: number) => number;
-
-function frameOf(
-  seed: number,
-  client: SampleClient,
-  monthIndex: number,
-  plantedCount: PlantedCount
-): Frame {
-  const { business, usualPostingCount } = client;
-  const volume =
-    (postingCount(seed, client, monthIndex) - plantedCount(monthIndex)) / usualPostingCount;
-  const period = monthAt(monthIndex);
-  return {
-    seed,
-    client,
-    ledger: LEDGERS[client.skr],
-    period,
-    level: pick(business.profile.season, period.month - 1),
-    issued: {
-      salesInvoices: Math.max(2, Math.round(business.usual.salesInvoices * volume)),
-      tillBookings:
-        business.usual.tillBookings === 0
-          ? 0
-          : Math.max(1, Math.round(business.usual.tillBookings * volume)),
-      supplierInvoices: Math.max(2, Math.round(business.usual.supplierInvoices * volume))
-    }
-  };
-}
-
-function drawsOf(frame: Frame, activity: number, rank: number, monthIndex = frame.period.index) {
-  return seededGenerator(
-    mixedSeed(frame.seed, STREAM.booking, frame.client.row.client_id, monthIndex, activity, rank)
-  );
-}
-
-/** The two even draws of a booking: for its account, and for its amount. */
-const LINE = 0;
-const AMOUNT = 1;
-
-/**
- * A draw in [0, 1) for the booking at `rank` of an activity's `count` bookings. Together the
- * draws of a month cover the range evenly, each booking in a share of its own, so the split
- * over accounts and the month's total come out as the profile says however few bookings
- * there are. `what` tells the draws of one booking apart.
- */
-function evenDraw(
-  frame: Frame,
-  activity: number,
-  what: number,
-  rank: number,
-  count: number,
-  random: Random
-): number {
-  // A planted purchase stands behind the month's own and draws freely.
-  if (rank >= count) return random();
-  const { seed, client, period } = frame;
-  const share = shuffled(
-    rank,
-    count,
-    mixedSeed(seed, STREAM.evenDraw, client.row.client_id, period.index, activity, what)
-  );
-  return (share + random()) / count;
-}
-
-function linkOf(frame: Frame, activity: number, rank: number): string {
-  return documentLink(
-    frame.seed,
-    STREAM.documentLink,
-    frame.client.row.client_id,
-    frame.period.index,
-    activity,
-    rank
-  );
-}
-
-/** A net amount around the usual one, as gross cents at the tax rate. Its mean is the usual amount. */
-function grossCents(usualEuros: number, rate: number, draw: number, spread: number) {
-  const lowest = Math.log(spread) / (spread - 1);
-  const netEuros = usualEuros * lowest * Math.pow(spread, draw);
-  return Math.max(1, Math.round(netEuros * (100 + rate)));
-}
 
 /** The cost centre an account's booking carries: one of the client's for an expense, else none. */
 function costCentreOf(client: SampleClient, account: Account, draw: number): string {
@@ -151,68 +58,27 @@ function costCentreOf(client: SampleClient, account: Account, draw: number): str
     : "";
 }
 
-const plain = { generalReversal: false, costCentre: "", documentLink: "", origin: "RE" } as const;
-
-/** How many of `count` invoices of a month are paid in that month. */
-function settledInMonth(count: number): number {
-  return Math.floor(SETTLED_IN_MONTH * count);
+/** The account a counterparty's invoice is booked against. */
+function personalAccountOf({ name, account }: Counterparty): Account {
+  if (account === null) throw new Error(`${name} has no personal account.`);
+  return account;
 }
 
-/**
- * The payments of a month, where `payment` gives the one for the invoice at a rank of a
- * month: first for the invoices the month before left open, then for the first ones of the
- * month itself. Each payment lies after its invoice, since both are spread evenly over their
- * month.
- */
-function settlements(
-  previous: { frame: Frame; count: number },
-  current: { frame: Frame; count: number },
-  payment: (frame: Frame, rank: number) => Booking
-): Activity {
-  const paidBefore = settledInMonth(previous.count);
-  const carried = previous.count - paidBefore;
-  const count = carried + settledInMonth(current.count);
+/** An invoice as it is booked, and what its payment needs to know of it. */
+function invoiced(booking: Booking, personal: Account): { booking: Booking; invoice: Invoice } {
   return {
-    count,
-    place: evenPlace(count),
-    booking: (rank) =>
-      rank < carried
-        ? payment(previous.frame, paidBefore + rank)
-        : payment(current.frame, rank - carried)
+    booking,
+    invoice: {
+      personal,
+      cents: booking.cents,
+      taxRate: vatRate(booking.account.automatic_vat_key ?? booking.vatKey),
+      text: booking.text,
+      document: booking.document
+    }
   };
 }
 
-/** What `countOf` has counted in the months from `from` up to but not `to`. */
-function issuedBetween(
-  frame: Frame,
-  plantedCount: PlantedCount,
-  from: number,
-  to: number,
-  countOf: (issued: Frame["issued"]) => number
-): number {
-  let sum = 0;
-  for (let index = from; index < to; index += 1) {
-    sum += countOf(frameOf(frame.seed, frame.client, index, plantedCount).issued);
-  }
-  return sum;
-}
-
-/** What the client has issued in a running range before the frame's month. */
-function issuedBefore(
-  frame: Frame,
-  plantedCount: PlantedCount,
-  countOf: (issued: Frame["issued"]) => number
-): Issued {
-  const { index, month } = frame.period;
-  const between = (from: number, to: number) =>
-    issuedBetween(frame, plantedCount, from, to, countOf);
-  return {
-    thisYear: between(index - (month - 1), index),
-    ever: index >= 0 ? between(0, index) : -between(index, 0)
-  };
-}
-
-/** A sales invoice of the frame's month, as the invoice and its payment book it. */
+/** The sales invoice at `rank` of the frame's month. `before` is what the client has numbered before the month. */
 function salesInvoice(frame: Frame, before: Issued, rank: number) {
   const { client, ledger, period } = frame;
   const { invoices } = client.business.profile;
@@ -241,128 +107,52 @@ function salesInvoice(frame: Frame, before: Issued, rank: number) {
     { thisYear: before.thisYear + rank, ever: before.ever + rank },
     client.business.usual.salesInvoices
   );
-  return {
-    account,
-    customer,
-    vatKey: line.vatKey,
-    cents: grossCents(
-      invoices.euros * frame.level,
-      vatRate(account.automatic_vat_key ?? line.vatKey),
-      draw(AMOUNT),
-      invoices.rentRoll ? RENT_SPREAD : SALE_SPREAD
-    ),
-    document,
-    text: invoices.rentRoll
-      ? `Miete ${periodLabel(period)} WE ${String(rank + 1).padStart(4, "0")} ${customer.name}`
-      : `AR ${document} ${customer.name}`
-  };
-}
-
-/** The account a counterparty's invoice is booked against. */
-function personalAccountOf({ name, account }: { name: string; account: Account | null }): Account {
-  if (account === null) throw new Error(`${name} has no personal account.`);
-  return account;
-}
-
-function salesInvoiceBooking(frame: Frame, before: Issued, rank: number): Booking {
-  const invoice = salesInvoice(frame, before, rank);
-  return {
-    ...plain,
-    account: invoice.account,
-    contra: personalAccountOf(invoice.customer),
-    side: "H",
-    vatKey: invoice.vatKey,
-    cents: invoice.cents,
-    text: invoice.text,
-    document: invoice.document,
-    documentLink: linkOf(frame, ACTIVITY.salesInvoices, rank)
-  };
-}
-
-function customerPayment(frame: Frame, before: Issued, rank: number): Booking {
-  const invoice = salesInvoice(frame, before, rank);
-  return {
-    ...plain,
-    account: frame.ledger.bank,
-    contra: personalAccountOf(invoice.customer),
-    side: "S",
-    vatKey: 0,
-    cents: invoice.cents,
-    text: `Zahlungseingang ${invoice.text}`,
-    document: invoice.document
-  };
-}
-
-/** One till's takings of a day at one tax rate, booked with the number of the till report. */
-function tillBooking(frame: Frame, before: Issued, rank: number): Booking {
-  const { client, ledger, period } = frame;
-  const { till } = client.business.profile;
-  if (till === null) throw new Error("A client without a till has no till bookings.");
-  const random = drawsOf(frame, ACTIVITY.tillBookings, rank);
-  const draw = (what: number) =>
-    evenDraw(frame, ACTIVITY.tillBookings, what, rank, frame.issued.tillBookings, random);
-  const line = weighted(till.lines(period.year), ({ share }) => share, draw(LINE));
-  const account = ledger[line.account];
-  const tills = Math.max(
-    1,
-    Math.round(client.business.usual.tillBookings / TILL_BOOKINGS_PER_TILL)
+  const personal = personalAccountOf(customer);
+  return invoiced(
+    {
+      ...plain,
+      account,
+      contra: personal,
+      side: "H",
+      vatKey: line.vatKey,
+      cents: grossCents(
+        invoices.euros * frame.level,
+        vatRate(account.automatic_vat_key ?? line.vatKey),
+        draw(AMOUNT),
+        invoices.rentRoll ? RENT_SPREAD : SALE_SPREAD
+      ),
+      text: invoices.rentRoll
+        ? `Miete ${periodLabel(period)} WE ${String(rank + 1).padStart(4, "0")} ${customer.name}`
+        : `AR ${document} ${customer.name}`,
+      document,
+      documentLink: linkOf(frame, ACTIVITY.salesInvoices, rank)
+    },
+    personal
   );
-  return {
-    ...plain,
-    account,
-    contra: ledger.cash,
-    side: "H",
-    vatKey: line.vatKey,
-    cents: grossCents(
-      till.euros * frame.level,
-      vatRate(account.automatic_vat_key ?? line.vatKey),
-      draw(AMOUNT),
-      SALE_SPREAD
-    ),
-    text: `Tageseinnahmen Kasse ${1 + Math.floor(random() * tills)}`,
-    document: yearlyDocument("Z", period, before.thisYear + rank),
-    documentLink: linkOf(frame, ACTIVITY.tillBookings, rank)
-  };
-}
-
-/** The till's cash brought to the bank, in whole fifties and with the number of the deposit slip. */
-function cashDeposit(frame: Frame, before: Issued, rank: number): Booking {
-  const { client, ledger, period } = frame;
-  const usualEuros =
-    (client.business.profile.till?.euros ?? 0) * TILL_BOOKINGS_PER_DEPOSIT * frame.level;
-  const document = yearlyDocument("EZ", period, before.thisYear + rank);
-  return {
-    ...plain,
-    account: ledger.bank,
-    contra: ledger.cash,
-    side: "S",
-    vatKey: 0,
-    cents: Math.max(1, Math.round(usualEuros / 50)) * 5_000,
-    text: `Bareinzahlung ${document}`,
-    document
-  };
 }
 
 /**
  * A purchase of the frame's month through one channel, which has `count` of them. `slots` is
  * how many purchases the channel may number in the month, which the supplier's number is
- * taken from. `purchase` names the kind, and is drawn by the weights of the client's
- * purchases when left out.
+ * taken from. The kind of purchase is drawn by the weights of the client's purchases and its
+ * supplier from the suppliers of the kind, unless `from` names them.
  */
 function purchaseOf(
   frame: Frame,
   channel: Channel,
   rank: number,
   { count, slots }: { count: number; slots: number },
-  purchase?: Purchase
+  from?: { purchase: Purchase; supplier?: Counterparty }
 ) {
   const { client, ledger, period } = frame;
   const activity = channel === "onAccount" ? ACTIVITY.purchasesOnAccount : ACTIVITY.directPurchases;
   const random = drawsOf(frame, activity, rank);
   const draw = (what: number) => evenDraw(frame, activity, what, rank, count, random);
   const drawn = weighted(client.business.purchases[channel], ({ weight }) => weight, draw(LINE));
-  const { kind, euros, suppliers } = purchase ?? drawn;
-  const supplier = supplierOf(client, purchase ?? drawn, frequentPlace(suppliers, random()));
+  const purchase = from?.purchase ?? drawn;
+  const { kind, euros, suppliers } = purchase;
+  const usualSupplier = supplierOf(client, purchase, frequentPlace(suppliers, random()));
+  const supplier = from?.supplier ?? usualSupplier;
   const account = ledger[kind.account];
   // An automatic account always carries its tax. On any other account the purchase is
   // deductible by the share of the client's industry, and booked gross without a key if not.
@@ -386,45 +176,36 @@ function purchaseOf(
   };
 }
 
-function supplierInvoiceBooking(
+/** The supplier's invoice at `rank` of the frame's month, of `slots` the suppliers number in it. */
+function supplierInvoice(
   frame: Frame,
   rank: number,
   slots: number,
-  purchase?: Purchase
-): Booking {
-  const invoice = purchaseOf(
+  from?: { purchase: Purchase; supplier?: Counterparty }
+) {
+  const bought = purchaseOf(
     frame,
     "onAccount",
     rank,
     { count: frame.issued.supplierInvoices, slots },
-    purchase
+    from
   );
-  return {
-    ...plain,
-    account: invoice.account,
-    contra: personalAccountOf(invoice.supplier),
-    side: "S",
-    vatKey: invoice.vatKey,
-    cents: invoice.cents,
-    text: `ER ${invoice.document} ${invoice.supplier.name}`,
-    document: invoice.document,
-    documentLink: invoice.documentLink,
-    costCentre: invoice.costCentre
-  };
-}
-
-function supplierPayment(frame: Frame, rank: number, slots: number): Booking {
-  const invoice = supplierInvoiceBooking(frame, rank, slots);
-  return {
-    ...plain,
-    account: invoice.contra,
-    contra: frame.ledger.bank,
-    side: "S",
-    vatKey: 0,
-    cents: invoice.cents,
-    text: `Zahlung ${invoice.text}`,
-    document: invoice.document
-  };
+  const personal = personalAccountOf(bought.supplier);
+  return invoiced(
+    {
+      ...plain,
+      account: bought.account,
+      contra: personal,
+      side: "S",
+      vatKey: bought.vatKey,
+      cents: bought.cents,
+      text: `ER ${bought.document} ${bought.supplier.name}`,
+      document: bought.document,
+      documentLink: bought.documentLink,
+      costCentre: bought.costCentre
+    },
+    personal
+  );
 }
 
 function directPurchase(frame: Frame, rank: number, count: number): Booking {
@@ -453,11 +234,11 @@ function statementDocument(period: SampleMonth): string {
 }
 
 /**
- * The payroll run of the month: the wage tax of the month before is paid on the 10th, the
- * payslips are booked near the end, then the health insurers and the net wages are paid. The
- * lines of the payslips are one document, the payroll journal, and come from the payroll.
+ * The payroll run of the month: the wage tax of the month before is paid around the 10th,
+ * the payslips are booked near the end, then the health insurers and the net wages are paid.
+ * The lines of the payslips are one document, the payroll journal, and come from the payroll.
  */
-function payrollRun(frame: Frame): Activity {
+function payrollRun(frame: Frame, officeDay: (point: number) => number): Activity {
   const { client, ledger, period } = frame;
   const { employees, wageLevel } = client.business;
   const totals = payrollTotals(wageLevel, employees);
@@ -505,8 +286,16 @@ function payrollRun(frame: Frame): Activity {
 
   return {
     count: payrollBookingCount(employees),
-    place: (rank) =>
-      rank === 0 ? 0.3 : rank <= payslipLines ? 0.84 : rank === payslipLines + 1 ? 0.9 : 0.95,
+    day: (rank) =>
+      officeDay(
+        rank === 0
+          ? PAYROLL_POINTS.wageTax
+          : rank <= payslipLines
+            ? PAYROLL_POINTS.payslips
+            : rank === payslipLines + 1
+              ? PAYROLL_POINTS.socialSecurity
+              : PAYROLL_POINTS.wages
+      ),
     booking(rank) {
       if (rank === 0) {
         return {
@@ -545,55 +334,51 @@ function payrollRun(frame: Frame): Activity {
   };
 }
 
-/** The client's standing orders, each once in the month and paid from the bank. */
-function standingOrders(frame: Frame): Activity {
-  const { client, ledger, period } = frame;
-  const orders = client.business.standingOrders;
+/** A standing order of the frame's month, paid from the bank. */
+function standingOrder({ client, ledger, period }: Frame, order: StandingOrder): Booking {
+  const account = ledger[order.account];
   return {
-    count: orders.length,
-    place: (rank) => pick(orders, rank).place,
-    booking(rank) {
-      const order = pick(orders, rank);
-      const account = ledger[order.account];
-      return {
-        ...plain,
-        account,
-        contra: ledger.bank,
-        side: "S",
-        vatKey: 0,
-        cents: Math.round(order.euros * 100),
-        text: order.text(periodLabel(period)),
-        document: order.onStatement ? statementDocument(period) : "",
-        costCentre: costCentreOf(client, account, 0)
-      };
-    }
+    ...plain,
+    account,
+    contra: ledger.bank,
+    side: "S",
+    vatKey: 0,
+    cents: Math.round(order.euros * 100),
+    text: order.text(periodLabel(period)),
+    document: order.onStatement ? statementDocument(period) : "",
+    costCentre: costCentreOf(client, account, 0)
   };
 }
 
 /**
- * The activities of a client's month and the purchase a planted booking is made of. Together
- * they have the month's count less its planted bookings: the direct purchases take the
- * bookings the others leave.
+ * The activities of a client's month and what a planted booking is made of. Together the
+ * activities have the month's count less its planted bookings: the direct purchases take the
+ * bookings the others leave. `plantedIn` says what is planted in a month.
  */
 export function activitiesOf(
   seed: number,
   client: SampleClient,
   period: SampleMonth,
-  plantedCount: PlantedCount
+  plantedIn: (monthIndex: number) => PlantedCounts
 ) {
-  const frame = frameOf(seed, client, period.index, plantedCount);
-  const previous = frameOf(seed, client, period.index - 1, plantedCount);
+  const frame = frameOf(seed, client, period.index, plantedIn);
+  const previous = frameOf(seed, client, period.index - 1, plantedIn);
   const { issued } = frame;
-  // A planted booking is a purchase on account behind the month's last one, so the suppliers
-  // number the month's purchases and the planted ones together.
-  const invoiceSlots = (month: Frame) =>
-    month.issued.supplierInvoices + plantedCount(month.period.index);
-  const invoicesBefore = (month: Frame) =>
-    issuedBefore(month, plantedCount, ({ salesInvoices }) => salesInvoices);
+  const { officePurchase, standingOrders } = client.business;
+  const officeDay = dayAt(dayWeights(period, OFFICE_WEEK));
+  // A planted purchase stands behind the month's last one and a planted sales invoice behind
+  // the month's last, so the suppliers and the client number them together with the month's own.
   const numbering = new Map(
     [frame, previous].map((month) => [
       month,
-      { invoicesBefore: invoicesBefore(month), invoiceSlots: invoiceSlots(month) }
+      {
+        invoicesBefore: issuedBefore(
+          month,
+          plantedIn,
+          (earlier) => earlier.issued.salesInvoices + earlier.planted.salesInvoices
+        ),
+        supplierSlots: month.issued.supplierInvoices + month.planted.bookings
+      }
     ])
   );
   const numberingOf = (month: Frame) => {
@@ -601,49 +386,57 @@ export function activitiesOf(
     if (found === undefined) throw new Error("Only this month and the one before are numbered.");
     return found;
   };
-  const tillBefore = issuedBefore(frame, plantedCount, (month) => month.tillBookings);
-  const deposits = (month: Frame["issued"]) =>
-    Math.floor(month.tillBookings / TILL_BOOKINGS_PER_DEPOSIT);
-  const depositsBefore = issuedBefore(frame, plantedCount, deposits);
-  const office = client.business.purchases.onAccount.find(({ kind }) => kind.account === "office");
+  const salesInvoiceOf = (month: Frame, rank: number) =>
+    salesInvoice(month, numberingOf(month).invoicesBefore, rank);
+  const supplierInvoiceOf = (month: Frame, rank: number) =>
+    supplierInvoice(month, rank, numberingOf(month).supplierSlots);
 
   const settled: Activity[] = [
     {
       count: issued.salesInvoices,
-      place: evenPlace(issued.salesInvoices),
-      booking: (rank) => salesInvoiceBooking(frame, numberingOf(frame).invoicesBefore, rank)
+      day: evenDays(issued.salesInvoices, officeDay),
+      booking: (rank) => salesInvoiceOf(frame, rank).booking
     },
     settlements(
+      {
+        from: "customers",
+        activity: ACTIVITY.customerPayments,
+        word: "Zahlungseingang",
+        discounts: !client.business.profile.invoices.rentRoll,
+        invoice: (month, rank) => salesInvoiceOf(month, rank).invoice
+      },
       { frame: previous, count: previous.issued.salesInvoices },
       { frame, count: issued.salesInvoices },
-      (invoiced, rank) => customerPayment(invoiced, numberingOf(invoiced).invoicesBefore, rank)
+      officeDay
     ),
-    {
-      count: issued.tillBookings,
-      place: evenPlace(issued.tillBookings),
-      booking: (rank) => tillBooking(frame, tillBefore, rank)
-    },
-    {
-      count: deposits(issued),
-      place: evenPlace(deposits(issued)),
-      booking: (rank) => cashDeposit(frame, depositsBefore, rank)
-    },
+    ...tillActivities(frame, plantedIn),
     {
       count: issued.supplierInvoices,
-      place: evenPlace(issued.supplierInvoices),
-      booking: (rank) => supplierInvoiceBooking(frame, rank, numberingOf(frame).invoiceSlots)
+      day: evenDays(issued.supplierInvoices, officeDay),
+      booking: (rank) => supplierInvoiceOf(frame, rank).booking
     },
     settlements(
+      {
+        from: "suppliers",
+        activity: ACTIVITY.supplierPayments,
+        word: "Zahlung",
+        discounts: true,
+        invoice: (month, rank) => supplierInvoiceOf(month, rank).invoice
+      },
       { frame: previous, count: previous.issued.supplierInvoices },
       { frame, count: issued.supplierInvoices },
-      (invoiced, rank) => supplierPayment(invoiced, rank, numberingOf(invoiced).invoiceSlots)
+      officeDay
     ),
-    payrollRun(frame),
-    standingOrders(frame)
+    payrollRun(frame, officeDay),
+    {
+      count: standingOrders.length,
+      day: (rank) => officeDay(pick(standingOrders, rank).place),
+      booking: (rank) => standingOrder(frame, pick(standingOrders, rank))
+    }
   ];
   const directCount =
     postingCount(seed, client, period.index) -
-    plantedCount(period.index) -
+    frame.planted.bookings -
     settled.reduce((sum, activity) => sum + activity.count, 0);
   if (directCount < 0) {
     throw new Error(
@@ -655,19 +448,31 @@ export function activitiesOf(
       ...settled,
       {
         count: directCount,
-        place: evenPlace(directCount),
+        day: evenDays(directCount, officeDay),
         booking: (rank: number) => directPurchase(frame, rank, directCount)
       }
     ],
-    /** The office purchase on account at `ordinal` behind the month's last purchase. */
-    plantedPurchase(ordinal: number): Booking {
-      if (office === undefined) throw new Error("A client without office purchases has none.");
-      return supplierInvoiceBooking(
-        frame,
-        issued.supplierInvoices + ordinal,
-        numberingOf(frame).invoiceSlots,
-        office
-      );
+    /** The ordinary bookings a planted one is made of. Each is one more than the month's own. */
+    extra: {
+      /**
+       * The office purchase on account at `ordinal` behind the month's last purchase, from
+       * the client's usual supplier unless one is named.
+       */
+      purchase: (ordinal: number, supplier?: Counterparty): Booking =>
+        supplierInvoice(
+          frame,
+          issued.supplierInvoices + ordinal,
+          numberingOf(frame).supplierSlots,
+          { purchase: officePurchase, supplier }
+        ).booking,
+      /** The sales invoice at `ordinal` behind the month's last, with the next number of the client's range. */
+      salesInvoice: (ordinal: number): Booking =>
+        salesInvoiceOf(frame, issued.salesInvoices + ordinal).booking,
+      /** The client's first standing order, as the month books it. */
+      standingOrder: (): Booking => standingOrder(frame, pick(standingOrders, 0))
     }
   };
 }
+
+/** What a planted booking is made of (see `activitiesOf`). */
+export type ExtraBookings = ReturnType<typeof activitiesOf>["extra"];

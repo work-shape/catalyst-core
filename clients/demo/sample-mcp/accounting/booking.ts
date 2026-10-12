@@ -24,15 +24,15 @@ export interface Booking {
  */
 export interface Activity {
   count: number;
-  /**
-   * Where in the month the booking at `rank` is dated, from 0 (the start of the first day) to
-   * 1 (the end of the last). It never falls as `rank` rises.
-   */
-  place(rank: number): number;
+  /** The day of the month (from 0) the booking at `rank` is dated on. It never falls as `rank` rises. */
+  day(rank: number): number;
   booking(rank: number): Booking;
 }
 
-/** Bookings spread evenly over the month. */
-export function evenPlace(count: number): Activity["place"] {
-  return (rank) => (rank + 0.5) / count;
+/**
+ * The days of `count` bookings spread evenly over the month, where `dayAt` gives the day of a
+ * point of the month from 0 to 1 (see calendar.ts).
+ */
+export function evenDays(count: number, dayAt: (point: number) => number): Activity["day"] {
+  return (rank) => dayAt((rank + 0.5) / count);
 }

@@ -1,15 +1,26 @@
-import { mixedSeed, pick, seededGenerator } from "../random.js";
-import type { Ledger } from "./accounts.js";
+import { mixedSeed, pick, seededGenerator, shuffled } from "../random.js";
+import { LEDGERS } from "./accounts.js";
+import type { ExtraBookings } from "./activities.js";
 import type { Booking } from "./booking.js";
-import type { SampleMonth } from "./calendar.js";
+import { daysOutside, MONTHS_PER_YEAR, type SampleMonth } from "./calendar.js";
 import { postingCount, STREAM, type SampleClient } from "./clients.js";
+import { formerSupplierOf } from "./counterparties.js";
+import type { PlantedCounts, Random } from "./frame.js";
 import { ACCOUNTING_RULES, type AccountingRuleId } from "./rules.js";
 
 // The planted bookings of a month: how many break each rule, where they stand, and what each
 // says. A planted booking is added to the client's business and replaces none of it, so the
-// clean bookings around it still add up. It is an office purchase on account with one thing
-// wrong, and so it breaks exactly one rule of rules.ts. Its supplier numbers it behind the
-// month's last purchase, whatever day it is dated on: the one number that does not fit its day.
+// clean bookings around it still add up. It is an ordinary booking of the client with one
+// thing wrong: the text and the pair of accounts of each are those of clean bookings, and
+// only the rule it breaks tells it apart.
+//
+// No planted booking is like another booking of the month, clean or planted, so none is a
+// duplicate by accident:
+//
+// - A purchase and a sales invoice carry a document number of their own, behind the month's
+//   last: the one number that does not fit its day.
+// - A booking without a document number has an amount that no other one of the month has.
+// - A duplicate copies the clean booking before it, and no clean booking is copied twice.
 
 /** A month with fewer bookings than this plants at most one booking per rule, and seldom. */
 const SMALL_MONTH = 300;
@@ -19,9 +30,7 @@ const RULE_PRESENCE = { small: 0.25, other: 0.6 } as const;
 const POSTINGS_PER_FURTHER_FINDING = 2_500;
 /** How many days before or after the month a planted date may lie. */
 const OUTSIDE_DAYS = 5;
-const MONTHS_PER_YEAR = 12;
 
-type Random = () => number;
 type Findings = Record<AccountingRuleId, number>;
 
 function drawn<T>(items: readonly T[], random: Random): T {
@@ -54,67 +63,97 @@ export function expectedFindings(seed: number, client: SampleClient, monthIndex:
   };
 }
 
-export function plantedCount(seed: number, client: SampleClient, monthIndex: number): number {
-  return Object.values(expectedFindings(seed, client, monthIndex)).reduce(
-    (sum, count) => sum + count,
-    0
-  );
+/** What of a month is planted, as the numbering of its documents needs it. It reads no booking. */
+export function plantedCounts(
+  seed: number,
+  client: SampleClient,
+  monthIndex: number
+): PlantedCounts {
+  const findings = expectedFindings(seed, client, monthIndex);
+  return {
+    bookings: Object.values(findings).reduce((sum, count) => sum + count, 0),
+    salesInvoices: salesInvoicesAmong(findings["vat-key-account-mismatch"])
+  };
 }
 
-/** A planted booking: the rule it breaks and its number among the month's planted bookings. */
+/**
+ * Of the bookings of a month that break the rule of the VAT keys, the first is a purchase,
+ * the second a sales invoice, and so on in turn. So many of the first `count` are invoices.
+ */
+function salesInvoicesAmong(count: number): number {
+  return Math.floor(count / 2);
+}
+
+/** A planted booking: the rule it breaks and its numbers among the month's planted bookings. */
 interface Planted {
   rule: AccountingRuleId;
   ordinal: number;
-  /** For a booking dated outside the month: how many days before its first day (negative) or after its last. */
-  outsideDays?: number;
+  /** Its number among the `of` bookings of the month that break the same rule. */
+  index: number;
+  of: number;
+  /** For a booking dated outside the month: its day, counted from the month's first day. */
+  outsideDay?: number;
 }
 
 /**
  * Where the month's planted bookings stand. It costs time in proportion to their number.
  *
- * A booking dated outside the month stands at the month's start or end, where its date keeps
- * the order. Its date never leaves the fiscal year: in the first month of a fiscal year all
- * of them lie after the month, in the last all before it. Every other planted booking takes a
- * free position, and a duplicate also keeps the position before it free, so that it copies a
- * clean booking and with it that booking's date.
+ * A planted booking stands before a clean one and takes its date, which `datable` must allow
+ * for the clean booking: a planted booking is dated on no day the client's office is closed.
+ * No two stand before the same clean booking, so each has clean neighbours and a duplicate
+ * copies the clean booking before it. A booking dated outside the month stands before the
+ * month's first booking or behind its last, where its date keeps the order, and on no public
+ * holiday. Its date never leaves the fiscal year: in the first month of a fiscal year all of
+ * them lie after the month, in the last all before it.
  */
-export function plan(seed: number, client: SampleClient, period: SampleMonth) {
-  const count = postingCount(seed, client, period.index);
+export function plan(
+  seed: number,
+  client: SampleClient,
+  period: SampleMonth,
+  datable: (cleanPosition: number) => boolean
+) {
   const findings = expectedFindings(seed, client, period.index);
+  const { bookings } = plantedCounts(seed, client, period.index);
+  const cleanCount = postingCount(seed, client, period.index) - bookings;
   const random = seededGenerator(mixedSeed(seed, STREAM.plan, client.row.client_id, period.index));
-  const planted = new Map<number, Planted>();
-  const originals = new Set<number>();
-  const free = (position: number) => !planted.has(position) && !originals.has(position);
-  const plant = (position: number, rule: AccountingRuleId, outsideDays?: number) =>
-    planted.set(position, { rule, ordinal: planted.size, outsideDays });
+  /** Each with the position, among the clean bookings, of the clean booking it stands before. */
+  const placed: (Planted & { before: number })[] = [];
+  const taken = new Set<number>();
+  const plant = (before: number, rule: AccountingRuleId, outsideDay?: number) =>
+    placed.push({
+      before,
+      rule,
+      ordinal: placed.length,
+      index: placed.filter((other) => other.rule === rule).length,
+      of: findings[rule],
+      outsideDay
+    });
 
   const outside = findings["date-outside-month"];
   const startsFiscalYear = period.month === client.fiscalYearStartMonth;
   const endsFiscalYear = period.month % MONTHS_PER_YEAR === client.fiscalYearStartMonth - 1;
   const early = startsFiscalYear ? 0 : endsFiscalYear ? outside : Math.ceil(outside / 2);
-  const late = outside - early;
-  for (let position = 0; position < early; position += 1) {
-    plant(position, "date-outside-month", -1 - Math.min(OUTSIDE_DAYS - 1, early - 1 - position));
-  }
-  for (let position = count - late; position < count; position += 1) {
-    plant(
-      position,
-      "date-outside-month",
-      period.days + Math.min(OUTSIDE_DAYS - 1, position - (count - late))
-    );
+  const daysBefore = daysOutside(period, -1, OUTSIDE_DAYS);
+  const daysAfter = daysOutside(period, 1, OUTSIDE_DAYS);
+  // The farthest day takes all that the nearer days leave.
+  const farthest = (days: number) => Math.min(OUTSIDE_DAYS - 1, days);
+  for (let number = 0; number < outside; number += 1) {
+    if (number < early) {
+      plant(0, "date-outside-month", pick(daysBefore, farthest(early - 1 - number)));
+    } else {
+      plant(cleanCount, "date-outside-month", pick(daysAfter, farthest(number - early)));
+    }
   }
 
   /** Ends, because the planted bookings are a small share of even the smallest month. */
   function place(rule: AccountingRuleId) {
     for (let remaining = findings[rule]; remaining > 0;) {
-      const position = early + Math.floor(random() * (count - early - late));
-      if (!free(position)) continue;
-      if (rule === "duplicate-posting") {
-        const original = position - 1;
-        if (original < early || !free(original)) continue;
-        originals.add(original);
-      }
-      plant(position, rule);
+      const before = Math.floor(random() * cleanCount);
+      if (taken.has(before) || !datable(before)) continue;
+      // A duplicate needs a clean booking before it.
+      if (rule === "duplicate-posting" && before === 0) continue;
+      taken.add(before);
+      plant(before, rule);
       remaining -= 1;
     }
   }
@@ -125,9 +164,16 @@ export function plan(seed: number, client: SampleClient, period: SampleMonth) {
   place("expense-in-credit");
   place("missing-cost-centre");
 
-  const positions = [...planted.keys()].sort((left, right) => left - right);
+  // The ones dated before the month were planted first and keep their place before the others.
+  const inOrder = [...placed].sort(
+    (left, right) => left.before - right.before || left.ordinal - right.ordinal
+  );
+  const positions = inOrder.map(({ before }, number) => before + number);
   return {
-    planted,
+    /** The planted bookings by their position in the month. */
+    planted: new Map<number, Planted>(
+      inOrder.map((planted, number) => [pick(positions, number), planted])
+    ),
     /** How many planted bookings stand before `position`. */
     plantedBefore(position: number): number {
       let low = 0;
@@ -142,52 +188,64 @@ export function plan(seed: number, client: SampleClient, period: SampleMonth) {
   };
 }
 
-/** The booking that breaks `rule` and no other, made of a clean office purchase on account. */
+/**
+ * The planted booking that breaks `rule` and no other, made of an ordinary booking of the
+ * client's month.
+ */
 export function plantedBooking(
-  purchase: Booking,
-  rule: Exclude<AccountingRuleId, "duplicate-posting" | "date-outside-month">,
-  ledger: Ledger,
-  random: Random
+  seed: number,
+  client: SampleClient,
+  period: SampleMonth,
+  rule: Exclude<AccountingRuleId, "duplicate-posting">,
+  { ordinal, index, of }: Planted,
+  extra: ExtraBookings
 ): Booking {
+  const ledger = LEDGERS[client.skr];
+  const monthSeed = mixedSeed(seed, STREAM.plan, client.row.client_id, period.index);
+  const random = seededGenerator(mixedSeed(monthSeed, ordinal));
   switch (rule) {
+    case "date-outside-month":
+      return extra.purchase(ordinal);
     case "vat-key-account-mismatch": {
       const { inputVatKeys, vatKeys } = ACCOUNTING_RULES[rule].parameters;
-      // Either the purchase carries a key of sales, or it is booked on a revenue account.
-      return random() < 0.5
-        ? { ...purchase, vatKey: drawn(vatKeys, random) }
-        : {
-            ...purchase,
-            account: ledger.revenue,
-            vatKey: drawn(inputVatKeys, random),
-            costCentre: ""
-          };
-    }
-    case "blocked-account":
-      return random() < 0.5
-        ? { ...purchase, account: ledger.otherExpenses }
-        : { ...purchase, contra: ledger.clearing };
-    case "round-amount-no-document": {
-      const { thresholdEuros, roundingUnitEuros } = ACCOUNTING_RULES[rule].parameters;
-      // From the threshold up to three times it: a payment a small business would still make.
-      const units = (2 * thresholdEuros) / roundingUnitEuros;
+      // A purchase with a key of sales, or a sales invoice with a key of purchases.
+      const invoicesBefore = salesInvoicesAmong(index);
+      if (salesInvoicesAmong(index + 1) === invoicesBefore) {
+        return { ...extra.purchase(ordinal), vatKey: drawn(vatKeys, random) };
+      }
+      // An automatic account would apply its own key, so the invoice is booked on an account
+      // without one: the first such of the client's industry, or `Erlöse`.
+      const account = client.business.profile.invoices
+        .lines(period.year)
+        .map((line) => ledger[line.account])
+        .find(({ automatic_vat_key }) => automatic_vat_key === null);
       return {
-        ...purchase,
-        account: ledger.legal,
-        contra: ledger.bank,
-        vatKey: 0,
-        cents:
-          (thresholdEuros / roundingUnitEuros + Math.floor(random() * units)) *
-          roundingUnitEuros *
-          100,
-        // The creditor's account is labelled with the supplier's name.
-        text: `Abschlagszahlung ${purchase.contra.label}`,
-        document: "",
-        documentLink: ""
+        ...extra.salesInvoice(invoicesBefore),
+        account: account ?? ledger.revenue,
+        vatKey: drawn(inputVatKeys, random)
       };
     }
+    case "blocked-account":
+      // A purchase on an account the consultancy has closed for the client, or from a
+      // supplier whose creditor it has closed.
+      return random() < 0.5
+        ? {
+            ...extra.purchase(ordinal),
+            account: ledger[drawn(client.business.blockedAccounts, random)]
+          }
+        : extra.purchase(ordinal, formerSupplierOf(client, random()));
+    case "round-amount-no-document": {
+      const { thresholdEuros, roundingUnitEuros } = ACCOUNTING_RULES[rule].parameters;
+      // A standing order paid once more, by hand: no statement number, and a round amount
+      // from the threshold up to three times it or, where a month has more such bookings
+      // than that gives amounts, further. Each takes an amount of its own.
+      const amounts = Math.max((2 * thresholdEuros) / roundingUnitEuros, of);
+      const units = thresholdEuros / roundingUnitEuros + shuffled(index, amounts, monthSeed);
+      return { ...extra.standingOrder(), cents: units * roundingUnitEuros * 100, document: "" };
+    }
     case "expense-in-credit":
-      return { ...purchase, side: "H" };
+      return { ...extra.purchase(ordinal), side: "H" };
     case "missing-cost-centre":
-      return { ...purchase, costCentre: "" };
+      return { ...extra.purchase(ordinal), costCentre: "" };
   }
 }

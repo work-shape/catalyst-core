@@ -13,16 +13,14 @@ import { isJsonObject, unknownToJsonValue } from "@vivd-catalyst/core";
 import {
   ACCOUNTING_DEFAULT_PAGE_SIZE,
   ACCOUNTING_MAXIMUM_PAGE_SIZE,
-  ACCOUNTING_RULES,
   accountingOutputSchemas,
-  connectSampleMcpClient,
   createAccountingSample,
+  connectSampleMcpClient,
   createSampleMcpServer,
   SIZE_GROUPS
 } from "@vivd-catalyst/demo/sample-mcp";
 import { required } from "./support/assertions";
 import {
-  cents,
   clientIdsOf,
   everyPosting,
   isCreditor,
@@ -45,7 +43,6 @@ const PAGE_TIME_BOUND_MS = MCP_CALL_TIMEOUT_MS / 6;
 
 type SampleClient = Awaited<ReturnType<typeof connectSampleMcpClient>>;
 type ToolName = keyof typeof accountingOutputSchemas;
-type RuleId = keyof typeof ACCOUNTING_RULES;
 type ToolResult = Awaited<ReturnType<SampleClient["callTool"]>>;
 
 const servers: ReturnType<typeof createSampleMcpServer>[] = [];
@@ -97,72 +94,6 @@ function connectionBytes(result: ToolResult): number {
   return Buffer.byteLength(
     JSON.stringify({ content: result.content, structuredContent: result.structuredContent })
   );
-}
-
-/**
- * The places of the bookings that break each rule, checked as the rule's sentence in
- * `ACCOUNTING_RULES` says and with its parameters. It knows nothing of how the bookings were made.
- */
-function referenceFindings(
-  rows: Posting[],
-  accounts: Account[],
-  month: string
-): Record<RuleId, number[]> {
-  const chart = new Map(accounts.map((account) => [account.account_number, account]));
-  const accountOf = (number: number) => required(chart.get(number));
-  const duplicate = ACCOUNTING_RULES["duplicate-posting"].parameters;
-  const vat = ACCOUNTING_RULES["vat-key-account-mismatch"].parameters;
-  const round = ACCOUNTING_RULES["round-amount-no-document"].parameters;
-  const someBookingHasCostCentre = rows.some((row) => row.kost1 !== "");
-  const seen = new Set<string>();
-  const found: Record<RuleId, number[]> = {
-    "duplicate-posting": [],
-    "vat-key-account-mismatch": [],
-    "blocked-account": [],
-    "round-amount-no-document": [],
-    "date-outside-month": [],
-    "expense-in-credit": [],
-    "missing-cost-centre": []
-  };
-  for (const [index, row] of rows.entries()) {
-    const accountClass = accountOf(row.account_number).account_class;
-    const key = row.accounting_transaction_key;
-
-    const alike = JSON.stringify(duplicate.fields.map((field) => row[field]));
-    if (seen.has(alike)) found["duplicate-posting"].push(index);
-    seen.add(alike);
-
-    if (
-      (vat.inputVatKeys.some((inputKey) => inputKey === key) && accountClass === "revenue") ||
-      (vat.vatKeys.some((vatKey) => vatKey === key) && accountClass === "expense")
-    ) {
-      found["vat-key-account-mismatch"].push(index);
-    }
-    if (accountOf(row.account_number).blocked || accountOf(row.contra_account_number).blocked) {
-      found["blocked-account"].push(index);
-    }
-    if (
-      row.document_field_1 === "" &&
-      cents(row.amount) >= cents(round.thresholdEuros) &&
-      cents(row.amount) % cents(round.roundingUnitEuros) === 0
-    ) {
-      found["round-amount-no-document"].push(index);
-    }
-    if (row.date < `${month}-01` || row.date > `${month}-31`) {
-      found["date-outside-month"].push(index);
-    }
-    if (
-      accountClass === "expense" &&
-      row.debit_credit_indicator === "H" &&
-      row.general_reversal === 0
-    ) {
-      found["expense-in-credit"].push(index);
-    }
-    if (accountClass === "expense" && row.kost1 === "" && someBookingHasCostCentre) {
-      found["missing-cost-centre"].push(index);
-    }
-  }
-  return found;
 }
 
 afterEach(async () => {
@@ -334,12 +265,25 @@ describe("demo sample accounting", () => {
       for (const account of personal) {
         expect(account).toMatchObject({
           account_class: isDebtor(account.account_number) ? "asset" : "liability",
-          automatic_vat_key: null,
-          blocked: false
+          automatic_vat_key: null
         });
       }
+      // The creditors the client no longer buys from stay in its chart, blocked, behind the others.
+      expect(personal.filter(({ blocked }) => blocked)).toEqual(personal.slice(-3));
+      expect(personal.slice(-3).every(({ account_number }) => isCreditor(account_number))).toBe(
+        true
+      );
       expect(new Set(personal.map(({ label }) => label)).size).toBe(personal.length);
-      expect(chart.some(({ blocked }) => blocked)).toBe(true);
+      // Of the general ledger, the two accounts closed in every chart and the purchase
+      // accounts the client's industry has no use for.
+      const closed = chart.filter(
+        ({ blocked, account_number }) => blocked && account_number < 10_000
+      );
+      expect(closed.map(({ label }) => label)).toEqual(
+        expect.arrayContaining(["Durchlaufende Posten", "Sonstige betriebliche Aufwendungen"])
+      );
+      expect(closed.length).toBeGreaterThan(2);
+      expect(closed.every(({ account_class }) => account_class !== "revenue")).toBe(true);
       expect(chart.some(({ automatic_vat_key }) => automatic_vat_key !== null)).toBe(true);
       // The tax-free export and the tax-free intra-community delivery are two accounts.
       const labelOf = (number: number) =>
@@ -457,77 +401,6 @@ describe("demo sample accounting", () => {
     // A month is the same whenever it is asked for: the server has no clock in its data.
     expect(firstRows[2]).toEqual(sample.postings(clientId, MONTH, 0, ACCOUNTING_DEFAULT_PAGE_SIZE));
   });
-
-  it("plants exactly the findings it expects, one rule per booking, in an otherwise clean ledger", () => {
-    const ruleIds = Object.keys(ACCOUNTING_RULES);
-    expect(ruleIds).toEqual([
-      "duplicate-posting",
-      "vat-key-account-mismatch",
-      "blocked-account",
-      "round-amount-no-document",
-      "date-outside-month",
-      "expense-in-credit",
-      "missing-cost-centre"
-    ]);
-    for (const rule of Object.values(ACCOUNTING_RULES)) {
-      expect(rule.de).toMatch(/^Eine Buchung ist ein Befund, wenn .+\.$/u);
-      expect(rule.en).toMatch(/^A booking is a finding when .+\.$/u);
-    }
-    const sampled = [
-      ...clientIdsOf("micro").slice(0, 6),
-      ...clientIdsOf("micro").slice(-6),
-      ...clientIdsOf("small").slice(0, 6),
-      ...clientIdsOf("small").slice(-6),
-      ...clientIdsOf("medium").slice(0, 3),
-      ...clientIdsOf("large").slice(0, 1)
-    ];
-    const totals = new Map<string, number>();
-    let monthsWithoutSomeRule = 0;
-    for (const clientId of sampled) {
-      const accounts = sample.accounts(clientId);
-      for (const month of MONTHS) {
-        const rows = everyPosting(clientId, month);
-        const found = referenceFindings(rows, accounts, month);
-        const counts = Object.fromEntries(
-          Object.entries(found).map(([rule, places]) => [rule, places.length])
-        );
-        expect(counts, `client ${clientId} in ${month}`).toEqual(
-          sample.expectedFindings(clientId, month)
-        );
-        const places = Object.values(found).flat();
-        expect(new Set(places).size).toBe(places.length);
-        for (const [rule, count] of Object.entries(counts)) {
-          totals.set(rule, (totals.get(rule) ?? 0) + count);
-        }
-        if (Object.values(counts).includes(0)) monthsWithoutSomeRule += 1;
-
-        // What a ledger keeps whatever was planted.
-        const chart = new Map(accounts.map((account) => [account.account_number, account]));
-        const [fiscalYear] = sample
-          .fiscalYears(clientId)
-          .filter((year) => String(year.fiscal_year_start) === required(rows[0]).fiscal_year);
-        const { fiscal_year_start: yearStart, fiscal_year_end: yearEnd } = required(fiscalYear);
-        for (const row of rows) {
-          // Whatever its date, a booking lies in the fiscal year it names.
-          const day = Number(row.date.replaceAll("-", ""));
-          expect(day >= yearStart && day <= yearEnd, `${clientId} ${row.date}`).toBe(true);
-          expect(row.fiscal_year).toBe(String(yearStart));
-          expect(row.follow_up_index).toBe(0);
-          expect(row.document_link).toMatch(/^$|^[0-9A-F]{8}(-[0-9A-F]{4}){3}-[0-9A-F]{12}$/u);
-          expect(cents(row.net_amount) + cents(row.tax_amount)).toBe(cents(row.amount));
-          expect(cents(row.tax_amount)).toBe(
-            Math.round((cents(row.amount) * row.tax_rate) / (100 + row.tax_rate))
-          );
-          if (required(chart.get(row.account_number)).automatic_vat_key !== null) {
-            expect(row.accounting_transaction_key).toBe(0);
-          }
-        }
-      }
-    }
-    // The sample is no empty proof: every rule is broken somewhere, and no month by every rule.
-    for (const rule of ruleIds) expect(totals.get(rule), rule).toBeGreaterThan(0);
-    expect(monthsWithoutSomeRule).toBeGreaterThan(0);
-  }, 120_000);
 
   it("refuses an unknown client and a month outside the range as invalid input that names the range", async () => {
     const { client } = await start();

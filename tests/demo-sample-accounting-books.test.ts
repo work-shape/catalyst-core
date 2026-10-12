@@ -2,21 +2,20 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import {
-  ACCOUNTING_MAXIMUM_PAGE_SIZE,
-  ACCOUNTING_RULES,
-  SIZE_GROUPS
-} from "@vivd-catalyst/demo/sample-mcp";
+import { ACCOUNTING_MAXIMUM_PAGE_SIZE, SIZE_GROUPS } from "@vivd-catalyst/demo/sample-mcp";
 import { required } from "./support/assertions";
 import {
   cents,
   chartOf,
+  clientsOf,
   everyPosting,
+  INDUSTRIES,
   isCreditor,
   isDebtor,
   MONTH,
   MONTHS,
   sample,
+  type Industry,
   type Posting
 } from "./support/sample-accounting";
 
@@ -29,29 +28,6 @@ const SEPTEMBER = "2026-09";
 const OCTOBER = "2026-10";
 const YEAR = Array.from({ length: 12 }, (_, month) => `2025-${String(month + 1).padStart(2, "0")}`);
 const OWNER_RUN_FORMS = ["Einzelunternehmen", "Freiberufler", "GbR", "e. K."];
-const INDUSTRIES = [
-  "retail",
-  "crafts",
-  "restaurant",
-  "medicalPractice",
-  "propertyManagement",
-  "consulting",
-  "manufacturing",
-  "freelancer"
-] as const;
-type Industry = (typeof INDUSTRIES)[number];
-
-/** The first clients of an industry, by `client_id`, whose month has at most `maximum` bookings. */
-function clientsOf(industry: Industry, howMany: number, maximum = 1_500): number[] {
-  return sample.clients
-    .map(({ client_id }) => client_id)
-    .filter(
-      (id) =>
-        sample.businessOf(id).industry === industry && sample.postingCount(id, MONTH) <= maximum
-    )
-    .slice(0, howMany);
-}
-
 /** A period's net revenue and net expenses, as the accounts' classes and the booking sides say. */
 function profitAndLoss(clientId: number, months: readonly string[]) {
   const chart = chartOf(clientId);
@@ -122,6 +98,10 @@ describe("demo sample accounting books", () => {
     const years = new Set(sample.clients.map(({ created_at }) => created_at.slice(0, 4)));
     expect(years.size).toBeGreaterThanOrEqual(15);
     for (const { created_at } of sample.clients) expect(created_at < "2024-01-01").toBe(true);
+    // A client is entered at some time of a working day, not all at one.
+    const times = sample.clients.map(({ created_at }) => created_at.slice(11));
+    expect(new Set(times).size).toBeGreaterThan(590);
+    for (const time of times) expect(time >= "06:00" && time < "19:00", time).toBe(true);
   });
 
   it("gives each industry margins of its own: most clients profitable, some not, none absurd", () => {
@@ -140,9 +120,17 @@ describe("demo sample accounting books", () => {
       }
       expect(median(values), industry).toBeGreaterThan(0);
     }
-    const profitable = all.filter((margin) => margin > 0).length / all.length;
-    expect(profitable).toBeGreaterThan(0.7);
-    expect(profitable).toBeLessThan(1);
+    expect(all.filter((margin) => margin > 0).length).toBeGreaterThan(0.7 * all.length);
+    // In any one month a few clients in a hundred lose money.
+    const smaller = sample.clients
+      .map(({ client_id }) => client_id)
+      .filter((id) => sample.postingCount(id, SEPTEMBER) <= 4_000);
+    const lossMaking = smaller.filter((id) => {
+      const { revenue, expenses } = profitAndLoss(id, [SEPTEMBER]);
+      return expenses > revenue;
+    });
+    expect(lossMaking.length).toBeGreaterThan(0.02 * smaller.length);
+    expect(lossMaking.length).toBeLessThan(0.25 * smaller.length);
     // Where the owner's income is the profit, the margin is far above a trader's.
     const medianOf = (industry: Industry) => median(required(margins.get(industry)));
     expect(medianOf("freelancer")).toBeGreaterThan(medianOf("retail") + 0.15);
@@ -308,9 +296,11 @@ describe("demo sample accounting books", () => {
         ...new Set(
           rows
             .filter(
+              // A sale credits a revenue account against a debtor. A discount debits one.
               (row) =>
                 isDebtor(row.contra_account_number) &&
-                required(chart.get(row.account_number)).account_class === "revenue"
+                required(chart.get(row.account_number)).account_class === "revenue" &&
+                row.debit_credit_indicator === "H"
             )
             .map((row) => numberOf(row.document_field_1))
         )
@@ -330,6 +320,31 @@ describe("demo sample accounting books", () => {
     ).toBeGreaterThan(required(customers[1]).size * 0.5);
   });
 
+  it("staffs a restaurant as its revenue can pay", () => {
+    const restaurants = sample.clients
+      .map(({ client_id }) => client_id)
+      .filter((id) => sample.businessOf(id).industry === "restaurant");
+    expect(restaurants.length).toBeGreaterThan(40);
+    let mostEmployees = 0;
+    for (const clientId of restaurants) {
+      const rows = everyPosting(clientId, SEPTEMBER);
+      // Each employee's net wage is transferred once a month.
+      const employees = rows.filter(
+        ({ posting_description }, index) =>
+          /^Lohn .+ Überweisung$/u.test(posting_description) &&
+          posting_description !== rows[index - 1]?.posting_description
+      ).length;
+      mostEmployees = Math.max(mostEmployees, employees);
+      if (employees === 0) continue;
+      const { revenue } = profitAndLoss(clientId, [SEPTEMBER]);
+      // A head in a restaurant brings in a few thousand euros a month, not tens of thousands.
+      expect(revenue / 100 / employees, `client ${clientId}`).toBeGreaterThan(3_000);
+      expect(revenue / 100 / employees, `client ${clientId}`).toBeLessThan(20_000);
+    }
+    expect(mostEmployees).toBeGreaterThan(10);
+    expect(mostEmployees).toBeLessThan(100);
+  });
+
   it("books receivables and payables through personal accounts: the invoice first, the payment later, some open at month end", () => {
     const planted = (clientId: number, month: string) =>
       Object.values(sample.expectedFindings(clientId, month)).reduce(
@@ -337,10 +352,13 @@ describe("demo sample accounting books", () => {
         0
       );
     for (const industry of ["crafts", "manufacturing", "medicalPractice"] as const) {
-      const [clientId] = clientsOf(industry, 1, 4_000);
+      const [clientId] = clientsOf(industry, 100, 4_000).filter(
+        (id) => sample.postingCount(id, SEPTEMBER) >= 300
+      );
       const chart = chartOf(required(clientId));
       const classOf = (number: number) => required(chart.get(number)).account_class;
       const labelOf = (number: number) => required(chart.get(number)).label;
+      const isDiscount = (number: number) => / Skonti/u.test(labelOf(number));
       const [september, october] = [SEPTEMBER, OCTOBER].map((month) =>
         everyPosting(required(clientId), month)
       );
@@ -349,60 +367,115 @@ describe("demo sample accounting books", () => {
         "Verbindlichkeiten aus Lieferungen und Leistungen"
       ];
       const invoices = new Map<string, Posting>();
-      const paid = new Set<string>();
+      /** By invoice: what has been paid of it, in cents, and the dates of the bookings that paid. */
+      const settled = new Map<string, { cents: number; dates: string[]; words: string[] }>();
       const keyOf = (personal: number, row: Posting) => `${personal} ${row.document_field_1}`;
       let openAtMonthEnd = 0;
       for (const rows of [required(september), required(october)]) {
-        const paidBefore = paid.size;
+        const settledBefore = settled.size;
         for (const [index, row] of rows.entries()) {
           // A planted duplicate repeats the booking before it and settles nothing.
           if (JSON.stringify(row) === JSON.stringify(rows[index - 1])) continue;
           // Nothing is booked on the collective accounts themselves.
           expect(collective).not.toContain(labelOf(row.account_number));
           expect(collective).not.toContain(labelOf(row.contra_account_number));
-          const invoiced =
-            classOf(row.account_number) === "revenue" || classOf(row.account_number) === "expense";
-          if (invoiced && row.contra_account_number > 9_999) {
-            // A sale goes against a debtor, a purchase against a creditor. The one exception
-            // is planted: a purchase booked on a revenue account with an input VAT key.
-            if (
-              isDebtor(row.contra_account_number) !==
-              (classOf(row.account_number) === "revenue")
-            ) {
-              expect(
-                ACCOUNTING_RULES["vat-key-account-mismatch"].parameters.inputVatKeys
-              ).toContain(row.accounting_transaction_key);
+          const [word] = row.posting_description.split(" ");
+          // A discount takes the bank's place in the booking of the payment it belongs to.
+          const fromCustomer =
+            isDebtor(row.contra_account_number) &&
+            (labelOf(row.account_number) === "Bank" || isDiscount(row.account_number));
+          const toSupplier =
+            isCreditor(row.account_number) &&
+            (labelOf(row.contra_account_number) === "Bank" ||
+              isDiscount(row.contra_account_number));
+          if (!fromCustomer && !toSupplier) {
+            const invoiced =
+              classOf(row.account_number) === "revenue" ||
+              classOf(row.account_number) === "expense";
+            if (invoiced && row.contra_account_number > 9_999) {
+              // A sale goes against a debtor, a purchase against a creditor.
+              expect(isDebtor(row.contra_account_number)).toBe(
+                classOf(row.account_number) === "revenue"
+              );
+              invoices.set(keyOf(row.contra_account_number, row), row);
             }
-            invoices.set(keyOf(row.contra_account_number, row), row);
+            continue;
           }
-          const receipt =
-            labelOf(row.account_number) === "Bank" && isDebtor(row.contra_account_number);
-          const payment =
-            isCreditor(row.account_number) && labelOf(row.contra_account_number) === "Bank";
-          if (!receipt && !payment) continue;
-          const key = keyOf(receipt ? row.contra_account_number : row.account_number, row);
+          const key = keyOf(fromCustomer ? row.contra_account_number : row.account_number, row);
           const invoice = invoices.get(key);
           // September's first payments settle invoices of August, which this test did not read.
           if (rows === september && invoice === undefined) continue;
           expect(invoice, `${industry} ${row.posting_description}`).toBeDefined();
-          expect(row.amount).toBe(required(invoice).amount);
           expect(row.date > required(invoice).date, row.posting_description).toBe(true);
           expect(row.debit_credit_indicator).toBe("S");
-          expect(paid.has(key)).toBe(false);
-          paid.add(key);
+          expect(row.posting_description).toBe(`${word} ${required(invoice).posting_description}`);
+          const paid = settled.get(key) ?? { cents: 0, dates: [], words: [] };
+          settled.set(key, {
+            cents: paid.cents + cents(row.amount),
+            dates: [...paid.dates, row.date],
+            words: [...paid.words, required(word)]
+          });
+          if (word === "Skonto") {
+            // The discount is a few percent of the invoice and corrects its tax at its rate.
+            expect(row.amount / required(invoice).amount).toBeGreaterThan(0.015);
+            expect(row.amount / required(invoice).amount).toBeLessThan(0.035);
+            expect(row.tax_rate).toBe(required(invoice).tax_rate);
+            expect(row.accounting_transaction_key).toBe(0);
+            expect(labelOf(fromCustomer ? row.account_number : row.contra_account_number)).toMatch(
+              row.tax_rate === 0
+                ? /^(Gewährte|Erhaltene) Skonti$/u
+                : new RegExp(`^(Gewährte|Erhaltene) Skonti ${row.tax_rate} % (USt|Vorsteuer)$`, "u")
+            );
+          }
         }
         if (rows === september) {
-          openAtMonthEnd = invoices.size - paid.size;
-          expect(paid.size - paidBefore).toBeGreaterThan(0);
+          openAtMonthEnd = invoices.size - settled.size;
+          expect(settled.size - settledBefore).toBeGreaterThan(0);
         }
       }
+      // An invoice is paid whole: at once, less a discount booked on the same day, or in two
+      // parts. Most are paid at once.
+      // The bookings of one day stand in no order of their own.
+      const paidAs = (...words: string[]) =>
+        [...settled.values()].filter(
+          (paid) => [...paid.words].sort().join(" ") === [...words].sort().join(" ")
+        );
+      const atOnce = [...paidAs("Zahlung"), ...paidAs("Zahlungseingang")];
+      const discounted = [...paidAs("Zahlung", "Skonto"), ...paidAs("Zahlungseingang", "Skonto")];
+      const inParts = paidAs("Teilzahlung", "Restzahlung");
+      expect(atOnce.length + discounted.length + inParts.length).toBe(settled.size);
+      expect(discounted.length, industry).toBeGreaterThan(0);
+      expect(inParts.length, industry).toBeGreaterThan(0);
+      expect(atOnce.length).toBeGreaterThan(settled.size * 0.7);
+      for (const [key, paid] of settled) {
+        expect(paid.cents, key).toBe(cents(required(invoices.get(key)).amount));
+      }
+      for (const { dates } of discounted) expect(new Set(dates).size).toBe(1);
       // Some of September's invoices are open at its end, and October settles them all but
       // the planted ones, which nobody pays.
       expect(openAtMonthEnd).toBeGreaterThan(0);
       const septemberInvoices = [...invoices].filter(([, row]) => row.date.startsWith(SEPTEMBER));
-      const stillOpen = septemberInvoices.filter(([key]) => !paid.has(key)).length;
+      const stillOpen = septemberInvoices.filter(([key]) => !settled.has(key)).length;
       expect(stillOpen).toBeLessThanOrEqual(planted(required(clientId), SEPTEMBER));
       expect(openAtMonthEnd).toBeGreaterThan(stillOpen);
+
+      // Nobody pays in the strict order of the invoices: a later invoice is sometimes paid on
+      // an earlier day than one before it, by the customers and by the client itself.
+      for (const fromCustomers of [true, false]) {
+        const payments = [...settled].flatMap(([key, paid]) => {
+          const invoice = required(invoices.get(key));
+          return isDebtor(invoice.contra_account_number) === fromCustomers
+            ? [{ invoiced: invoice.date, paid: required(paid.dates[0]) }]
+            : [];
+        });
+        expect(payments.length).toBeGreaterThan(10);
+        expect(
+          payments.some((earlier) =>
+            payments.some((later) => earlier.invoiced < later.invoiced && earlier.paid > later.paid)
+          ),
+          `${industry} ${fromCustomers ? "customers" : "suppliers"}`
+        ).toBe(true);
+      }
     }
   });
 

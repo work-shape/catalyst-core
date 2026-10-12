@@ -7,35 +7,31 @@ import type { Activity } from "./booking.js";
 // booking at one position costs the same in a month of a hundred bookings and of a hundred
 // thousand.
 
-/** How many of the activity's bookings are placed before `end`. */
-function placedBefore({ count, place }: Activity, end: number): number {
+/** How many of the activity's bookings are dated on `day` or before it. */
+function datedUpTo({ count, day: dayOf }: Activity, day: number): number {
   let low = 0;
   let high = count;
   while (low < high) {
     const middle = (low + high) >>> 1;
-    if (place(middle) < end) low = middle + 1;
+    if (dayOf(middle) <= day) low = middle + 1;
     else high = middle;
   }
   return low;
 }
 
 /**
- * The order of a month's bookings. `dayEnds` gives where each day ends on the line from 0 to
- * 1 that the activities place their bookings on. Inside a day the bookings of the activities
- * are mixed, the same way for a seed.
+ * The order of a month of `days` days: its bookings by date, and inside a day the bookings of
+ * the activities mixed, the same way for a seed.
  */
-export function schedule(
-  activities: readonly Activity[],
-  dayEnds: readonly number[],
-  seed: number
-) {
-  const lastDay = dayEnds.length - 1;
+export function schedule(activities: readonly Activity[], days: number, seed: number) {
   /** By activity and day: the bookings of the activity up to the end of that day. */
   const upTo = activities.map((activity) =>
-    dayEnds.map((end, day) => (day === lastDay ? activity.count : placedBefore(activity, end)))
+    Array.from({ length: days }, (_, day) => datedUpTo(activity, day))
   );
   /** By day: the bookings of all activities up to the end of that day. */
-  const dayTotals = dayEnds.map((_, day) => upTo.reduce((sum, ranks) => sum + pick(ranks, day), 0));
+  const dayTotals = Array.from({ length: days }, (_, day) =>
+    upTo.reduce((sum, ranks) => sum + pick(ranks, day), 0)
+  );
   const before = (ranks: readonly number[], day: number) => (day === 0 ? 0 : pick(ranks, day - 1));
 
   return {

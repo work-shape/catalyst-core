@@ -143,8 +143,11 @@ const CONSULTANT_NUMBER = 2_906_417;
 const FIRST_CLIENT_ID = 1001;
 const DAY_MS = 86_400_000;
 /** The first day a client may have come to the consultancy, and how many days the last may lie after it. */
-const FIRST_MANDATE_DAY = Date.UTC(2004, 0, 1, 8);
+const FIRST_MANDATE_DAY = Date.UTC(2004, 0, 1);
 const MANDATE_DAYS = 7_000;
+/** The hours of a day, in UTC, in which the consultancy enters a new client. */
+const OFFICE_HOURS = { opens: 7, closes: 18 } as const;
+const HOUR_MS = 3_600_000;
 
 /** What separates the draws of one seed, so that no two kinds of data share a sequence. */
 export const STREAM = {
@@ -156,7 +159,8 @@ export const STREAM = {
   booking: 6,
   evenDraw: 7,
   schedule: 8,
-  documentLink: 9
+  documentLink: 9,
+  paymentOrder: 10
 } as const;
 
 const FIRST_WORDS = [
@@ -285,6 +289,17 @@ function industryOf(form: LegalForm, size: SizeName, random: Random): Industry {
   );
 }
 
+/** When a client was entered: the day a draw in [0, 1) falls on, at a time of the office hours. */
+function mandateStart(draw: number): string {
+  const day = Math.floor(draw * MANDATE_DAYS);
+  // What the draw leaves behind the day decides the time, so no two clients share one.
+  const time =
+    (OFFICE_HOURS.opens +
+      (draw * MANDATE_DAYS - day) * (OFFICE_HOURS.closes - OFFICE_HOURS.opens)) *
+    HOUR_MS;
+  return new Date(FIRST_MANDATE_DAY + day * DAY_MS + Math.floor(time)).toISOString();
+}
+
 export function createClients(seed: number): SampleClient[] {
   const order = seededGenerator(mixedSeed(seed, STREAM.order));
   // The seed decides which client has which form and size, and which pair of words. Each
@@ -323,9 +338,7 @@ export function createClients(seed: number): SampleClient[] {
           pick(SECOND_WORDS, Math.floor(wordPair / FIRST_WORDS.length)),
           pick(profile.trades, Math.floor(random() * profile.trades.length))
         ),
-        created_at: new Date(
-          FIRST_MANDATE_DAY + Math.floor(random() * MANDATE_DAYS) * DAY_MS
-        ).toISOString()
+        created_at: mandateStart(random())
       },
       legalForm: form.name,
       industry,

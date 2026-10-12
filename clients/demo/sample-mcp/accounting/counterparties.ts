@@ -57,6 +57,8 @@ const COMPANY_FORMS = ["GmbH", "GmbH", "KG", "OHG", "e. K.", "GmbH & Co. KG", "A
 const INITIALS = "ABCDEFGHIJKLMNOPRSTUVW";
 /** How strongly a client's business gathers at the first counterparties of its list. */
 const CONCENTRATION = 2.5;
+/** The suppliers of office supplies a client no longer buys from. Their creditors stay in its chart, blocked. */
+const FORMER_SUPPLIERS = 3;
 /** What tells a client's lists apart, so each starts at its own word. */
 const CUSTOMER_LIST = 0;
 const FIRST_SUPPLIER_LIST = 1;
@@ -93,19 +95,43 @@ export function customerOf(client: SampleClient, place: number): Counterparty {
   return { name, account: personalAccount("debtor", place, name), key };
 }
 
-/** The client's supplier at `place` among the suppliers of one kind of purchase. */
-export function supplierOf(client: SampleClient, purchase: Purchase, place: number): Counterparty {
-  const { kind } = purchase;
+/** The supplier at `place` of the list of one kind of purchase, before it has an account. */
+function supplierAt(client: SampleClient, { kind }: Purchase, place: number) {
   const list = FIRST_SUPPLIER_LIST + EXPENSE_KINDS.indexOf(kind);
   const key = mixedSeed(client.row.client_id, list, place);
-  const name = `${inventedWord(client, list, place)} ${pick(kind.trades, key)}`;
-  if (kind.settlement !== "account") return { name, account: null, key };
+  return { name: `${inventedWord(client, list, place)} ${pick(kind.trades, key)}`, key };
+}
+
+/** How many creditors the client has for the first `kinds` kinds of its purchases on account. */
+function creditorsOf(client: SampleClient, kinds: number): number {
+  return client.business.purchases.onAccount
+    .slice(0, kinds)
+    .reduce((sum, { suppliers }) => sum + suppliers, 0);
+}
+
+/** The client's supplier at `place` among the suppliers of one kind of purchase. */
+export function supplierOf(client: SampleClient, purchase: Purchase, place: number): Counterparty {
+  const supplier = supplierAt(client, purchase, place);
+  if (purchase.kind.settlement !== "account") return { ...supplier, account: null };
   // The creditors are numbered kind after kind in the order of the client's purchases.
-  const { onAccount } = client.business.purchases;
-  const before = onAccount
-    .slice(0, onAccount.indexOf(purchase))
-    .reduce((sum, earlier) => sum + earlier.suppliers, 0);
-  return { name, account: personalAccount("creditor", before + place, name), key };
+  const before = creditorsOf(client, client.business.purchases.onAccount.indexOf(purchase));
+  return { ...supplier, account: personalAccount("creditor", before + place, supplier.name) };
+}
+
+/**
+ * A supplier of office supplies the client no longer buys from, the one a draw in [0, 1)
+ * falls on. It stands behind the suppliers of today in the list and in the chart, and its
+ * creditor is blocked.
+ */
+export function formerSupplierOf(client: SampleClient, draw: number): Counterparty {
+  const { officePurchase, purchases } = client.business;
+  const place = Math.floor(draw * FORMER_SUPPLIERS);
+  const supplier = supplierAt(client, officePurchase, officePurchase.suppliers + place);
+  const creditor = creditorsOf(client, purchases.onAccount.length) + place;
+  return {
+    ...supplier,
+    account: { ...personalAccount("creditor", creditor, supplier.name), blocked: true }
+  };
 }
 
 /** Every debtor and creditor account of the client. */
@@ -115,6 +141,9 @@ export function personalAccounts(client: SampleClient): Account[] {
     ...Array.from({ length: customers }, (_, place) => customerOf(client, place)),
     ...purchases.onAccount.flatMap((purchase) =>
       Array.from({ length: purchase.suppliers }, (_, place) => supplierOf(client, purchase, place))
+    ),
+    ...Array.from({ length: FORMER_SUPPLIERS }, (_, place) =>
+      formerSupplierOf(client, place / FORMER_SUPPLIERS)
     )
   ];
   return counterparties.flatMap(({ account }) => (account === null ? [] : [account]));

@@ -76,7 +76,7 @@ export function createAccountingSample({
     fiscalYears: (client_id) => fiscalYears(clientOf(client_id), monthAt(months.length - 1)),
     accounts(client_id) {
       const client = clientOf(client_id);
-      return chartOfAccounts(client.skr, personalAccounts(client));
+      return chartOfAccounts(client.skr, client.business.blockedAccounts, personalAccounts(client));
     },
     postingCount: (client_id, month) =>
       postingCount(seed, clientOf(client_id), monthOf(month).index),

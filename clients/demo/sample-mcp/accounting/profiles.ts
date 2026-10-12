@@ -1,4 +1,5 @@
 import type { AccountRole } from "./accounts.js";
+import type { Week } from "./calendar.js";
 
 // What kind of business a client is. A profile says where the revenue comes from, what it is
 // spent on and how the year runs, in money: shares of the net revenue and the usual size of one
@@ -241,8 +242,11 @@ export interface Profile {
     /** Every customer is invoiced once a month with the same amount, as a tenant is. */
     rentRoll: boolean;
   };
-  /** What goes through the till, as one booking per till and day; `null` without a till. */
-  till: (RevenueChannel & { share: number }) | null;
+  /**
+   * What goes through the till, `null` without one: its share of the revenue and the week it
+   * is open. A till reports once a day it is open, in one booking for each of its lines.
+   */
+  till: (RevenueChannel & { share: number; week: Week }) | null;
   /** What a year costs, each as a share of the revenue in percent, before the client's margin. */
   costs: Readonly<Partial<Record<ExpenseRole, number>>>;
   payroll: number;
@@ -297,11 +301,13 @@ export const PROFILES = {
     },
     till: {
       share: 0.6,
-      euros: 900,
+      euros: 450,
       lines: () => [
         { account: "revenue19", share: 0.75, vatKey: 0 },
         { account: "revenue7", share: 0.25, vatKey: 0 }
-      ]
+      ],
+      // A shop is closed on Sundays and public holidays, and Saturday is its best day.
+      week: { days: [1, 1, 1, 1, 1.1, 1.4, 0], holiday: 0 }
     },
     costs: {
       goods19: 48,
@@ -329,7 +335,13 @@ export const PROFILES = {
     premises: "Werkstatt",
     sizes: ["micro", "small", "medium"],
     invoices: { euros: 2_400, lines: taxed19, privateCustomers: false, rentRoll: false },
-    till: { share: 0.06, euros: 380, lines: taxed19 },
+    // What is sold over the counter of the workshop, on working days.
+    till: {
+      share: 0.06,
+      euros: 380,
+      lines: taxed19,
+      week: { days: [1, 1, 1, 1, 1, 0.3, 0], holiday: 0 }
+    },
     costs: {
       goods: 22,
       goods19: 8,
@@ -354,13 +366,16 @@ export const PROFILES = {
   restaurant: {
     trades: ["Gasthaus", "Restaurant", "Wirtshaus", "Bistro"],
     premises: "Gaststätte",
-    sizes: ["micro", "small", "medium"],
+    // One house or a few: a restaurant has no ledger of tens of thousands of bookings a
+    // month, which would be the staff of a corporation.
+    sizes: ["micro", "small"],
     invoices: { euros: 1_100, lines: taxed19, privateCustomers: false, rentRoll: false },
     till: {
       share: 0.92,
-      euros: 1_500,
-      // Food eaten in the restaurant was taxed at 19 % until the end of 2025 and at 7 % from
-      // 2026. Before that only food taken away had the reduced rate. Drinks stay at 19 %.
+      euros: 750,
+      // A day's report has the food and the drinks. Food eaten in the restaurant was taxed at
+      // 19 % until the end of 2025 and at 7 % from 2026. Before that only food taken away had
+      // the reduced rate. Drinks stay at 19 %.
       lines: (year) =>
         year < 2026
           ? [
@@ -370,7 +385,9 @@ export const PROFILES = {
           : [
               { account: "revenue19", share: 0.35, vatKey: 0 },
               { account: "revenue7", share: 0.65, vatKey: 0 }
-            ]
+            ],
+      // Open every day, public holidays as well, with the weekend as the best days.
+      week: { days: [0.6, 0.8, 0.9, 1, 1.3, 1.6, 1.3], holiday: 1.3 }
     },
     costs: {
       goods7: 22,
