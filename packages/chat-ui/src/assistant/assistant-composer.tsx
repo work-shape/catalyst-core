@@ -3,7 +3,7 @@ import { AlertCircle, CheckCircle2, Paperclip, RotateCcw, Send, Square, X } from
 import type { FormEvent, KeyboardEvent } from "react";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { DraftAttachment } from "@vivd-catalyst/api-client";
-import { Button, cn, Spinner } from "@vivd-catalyst/ui";
+import { Button, cn, scrollEdgeFadeStyle, Spinner, useScrollEdgeFade } from "@vivd-catalyst/ui";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
 import { AttachmentPreview } from "../attachment-preview";
 import { ContextIndicator } from "./context-indicator";
@@ -140,6 +140,14 @@ export function AssistantComposer({
     [currentText, onSubmitMessage, queueSend, runtimeReady, submitBlocked]
   );
 
+  const inputFade = useScrollEdgeFade<HTMLTextAreaElement>();
+  // Text scrolled out above fades at the top edge; the lower edge stays clear. The field takes
+  // the mask alone: its own style type knows no other property of the library's.
+  const inputFadeMask = scrollEdgeFadeStyle({ above: inputFade.overflow.above, below: false });
+  const inputFadeStyle = inputFadeMask && {
+    maskImage: inputFadeMask.maskImage,
+    WebkitMaskImage: inputFadeMask.WebkitMaskImage
+  };
   useComposerFocusRequest(composerInputRef, focusRequestId);
 
   useLayoutEffect(() => {
@@ -268,12 +276,21 @@ export function AssistantComposer({
             </>
           ) : null}
           <ComposerPrimitive.Input
-            ref={composerInputRef}
+            ref={(node) => {
+              composerInputRef.current = node;
+              inputFade.ref.current = node;
+            }}
             className={cn(
-              "row-start-1 max-h-40 min-h-9 min-w-0 resize-none bg-transparent px-2 py-1.5 text-sm leading-6 outline-none placeholder:text-muted-foreground",
+              // The field starts 8 px under the composer's top line (the shell's padding and
+              // this margin), so text that scrolls is cut clear of the rounded corner. Margin
+              // and padding together keep a single line where it was. The field grows to the
+              // library's cap and scrolls from there.
+              "row-start-1 mt-0.5 max-h-(--layout-composer-max) min-h-8.5 min-w-0 resize-none bg-transparent px-2 pt-1 pb-1.5 text-sm leading-6 outline-none placeholder:text-muted-foreground",
               attachmentsEnabled ? "col-start-2" : "col-span-2 col-start-1",
-              composerExpanded && "col-span-3 col-start-1 min-h-12 w-full"
+              composerExpanded && "col-span-3 col-start-1 min-h-11.5 w-full"
             )}
+            style={inputFadeStyle}
+            onScroll={inputFade.onScroll}
             placeholder={t("messagePlaceholder")}
             rows={1}
             submitMode={onSubmitMessage ? "none" : "enter"}

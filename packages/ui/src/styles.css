@@ -146,6 +146,9 @@
   --layout-content-narrow: 44rem;
   --layout-content: 64rem;
   --layout-split-min: 23.75rem;
+  /* How tall a message field grows before its text scrolls: 10 lines of body text on a wide
+     window and 6 on a phone, plus the field's own padding above and below the text. */
+  --layout-composer-max: calc(1.5rem * 10 + 0.625rem);
 
   /* The room a Page needs to keep a SubRail beside its content: the rail, one gutter and the
      40rem the content keeps. Below it the SubRail is a Select above the content. */
@@ -180,6 +183,7 @@
   :host {
     --layout-gutter: 1rem;
     --layout-page-end: 4rem;
+    --layout-composer-max: calc(1.5rem * 6 + 0.625rem);
   }
 }
 
