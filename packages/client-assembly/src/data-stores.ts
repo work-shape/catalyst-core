@@ -1,7 +1,12 @@
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import type { RouteRegistration, WorkflowAssetKind } from "@vivd-catalyst/chat-server";
 import { loadSecretKeyring } from "@vivd-catalyst/connections";
-import { AppError } from "@vivd-catalyst/core";
+import {
+  AppError,
+  DATA_STORE_OPERATION_RIGHTS,
+  dataStoreOperationName,
+  type DataStoreOperationVerb
+} from "@vivd-catalyst/core";
 import {
   createDataStores,
   dataStoresModule,
@@ -31,15 +36,27 @@ function workflowAssetKind(dataStores: DataStores): WorkflowAssetKind {
   };
 }
 
-/** The four verbs of a store as operations of the HTTP API, each named by the store in its path. */
-function routesOf({ httpOperations }: DataStores): RouteRegistration {
-  return (routes) => {
-    routes.operation(apiOperations["data_stores.query"], httpOperations.query);
-    routes.operation(apiOperations["data_stores.insert"], httpOperations.insert);
-    routes.operation(apiOperations["data_stores.describe"], httpOperations.describe);
-    routes.operation(apiOperations["data_stores.preview_rows"], httpOperations.preview_rows);
-  };
-}
+/** What a caller who may read stores is told of an id no store has. */
+const STORE_NOT_AVAILABLE = "Data Store is not available";
+
+/**
+ * The routes to the rows of a store. Each names the store in its path and runs as that
+ * store's own operation, `data_store.<id>.<verb>`: the verb is the route's, never the caller's.
+ */
+const dataStoreRoutes: RouteRegistration = (routes) => {
+  const bind = (verb: DataStoreOperationVerb) => ({
+    target: ({ store, ...input }: { store: string }) => ({
+      operation: dataStoreOperationName(store, verb),
+      input
+    }),
+    right: DATA_STORE_OPERATION_RIGHTS[verb],
+    notFound: STORE_NOT_AVAILABLE
+  });
+  routes.resourceOperation(apiOperations["data_stores.query"], bind("query"));
+  routes.resourceOperation(apiOperations["data_stores.insert"], bind("insert"));
+  routes.resourceOperation(apiOperations["data_stores.describe"], bind("describe"));
+  routes.resourceOperation(apiOperations["data_stores.preview_rows"], bind("preview_rows"));
+};
 
 /**
  * What an instance with the module `dataStores` on has for its Data Stores: the kind, the
@@ -73,7 +90,7 @@ export const assembleDataStores: ModuleSeam = async (parts) => {
       jobHandlers: dataStores.jobHandlers,
       schedules: dataStores.schedules,
       jobRetries: dataStores.jobRetries,
-      routes: [routesOf(dataStores)],
+      routes: [dataStoreRoutes],
       dataToolSources: [dataStores.toolSource],
       close: () => dataStores.close()
     })

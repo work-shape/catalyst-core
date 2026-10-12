@@ -27,12 +27,7 @@ import {
   readDataStoreFiles
 } from "./definition";
 import { createDataStoreJobs, publishDataStore, retireDataStore } from "./jobs";
-import {
-  createDataStoreHttpOperations,
-  createDataStoreOperationSource,
-  createDataStoreToolSource,
-  type DataStoreHttpOperations
-} from "./operations";
+import { createDataStoreOperationSource, createDataStoreToolSource } from "./operations";
 import type { DataStoreLimits, DataStoreRuntime } from "./runtime";
 
 export { sizeLimitBytes } from "./definition";
@@ -82,8 +77,6 @@ export interface DataStores {
   /** What deleting the asset does to the store, in the transaction of the delete: it is retired. */
   retire(stores: PlatformStores, assetId: string): Promise<void>;
   readonly operationSource: OperationSource;
-  /** The verbs the HTTP API has, each to be bound to its operation of the API contract. */
-  readonly httpOperations: DataStoreHttpOperations;
   /** Describes the operations to an agent that lists them as tools. */
   readonly toolSource: DataToolSource;
   readonly jobHandlers: readonly RegisteredJobHandler[];
@@ -155,7 +148,6 @@ export function createDataStores(input: {
       }),
     retire: (bound, assetId) => retireDataStore(runtime, bound, assetId),
     operationSource: createDataStoreOperationSource(runtime),
-    httpOperations: createDataStoreHttpOperations(runtime),
     toolSource: createDataStoreToolSource(runtime),
     jobHandlers: jobs.handlers,
     schedules: jobs.schedules,

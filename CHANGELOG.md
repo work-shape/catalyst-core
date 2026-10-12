@@ -91,15 +91,16 @@ contain breaking changes; a patch version does not.
   schema, 10 minutes, 2 connections), or applies the migrations that database lacks, each in
   its own transaction. The jobs are `data_store.provision`, `data_store.migrate` and the daily
   `data_store.measure_size`. The rows are reached through `data_store.<id>.<verb>`, which a
-  Workflow step and an agent call, and through the HTTP operations `data_stores.<verb>` under
-  `/api/v1/data-stores/:store/`: `query` (one read-only statement with bound parameters, at
+  Workflow step and an agent call, and which the routes `data_stores.<verb>` under
+  `/api/v1/data-stores/:store/` run under that same name (a key needs `data_store_rows:read`
+  or `data_store_rows:write`, and `config_assets:read` for `describe`): `query` (one read-only statement with bound parameters, at
   most 1,000 rows and 2 MiB), `describe` (tables, columns and types) and `preview_rows` (at
   most 50 rows of one table) need `data_store.read` and record every call; `insert` (at most
   1,000 rows and 1 MiB per call, `onConflict: fail | skip`, answers `inserted` and `skipped`)
   needs `data_store.insert`. `load` is reserved and answers `not_supported_yet`. Release
   config `dataStores.sizeLimit` (default `5GB`) is the most one store may hold and
   `dataStores.poolMaxConnections` (default 5) the connections one process holds to one store.
-  Migration `0059_data_stores` adds the table `data_stores`, the platform's record of each
+  Migration `0060_data_stores` adds the table `data_stores`, the platform's record of each
   store; a store's own database is made at runtime and is no platform migration. With the
   module off nothing of it exists.
   - **New privileges of the platform's database role:** `CREATEDB` and `CREATEROLE`, and
@@ -1705,6 +1706,7 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   hosted runner; it is tested from Compose 2.29. `verify/compose-helpers.mjs` gains
   `resolveCompose`, `assertWorkerIsolation`, `reachesDockerSocket`, `serviceNames` and
   `modelSecretNames`.
+
 - **A command no worker takes fails after 30 seconds:** `workspace.exec` waited without a limit
   for a worker to claim its command; with the workspace command worker down the run stood
   still until the idle limit of 30 minutes ended it. The tool call now fails when its command

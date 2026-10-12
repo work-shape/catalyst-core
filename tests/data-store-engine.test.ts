@@ -238,7 +238,10 @@ describe("a Data Store on Postgres", () => {
     const world = await published("load");
 
     const refused = await refusal(
-      call(world, "load", { table: "findings", dataset: { id: "ds_1" } })
+      call(world, "load", {
+        table: "findings",
+        dataset: { $dataset: "ds_1", rowCount: 2, bytes: 120 }
+      })
     );
 
     expect(refused).toMatchObject({
@@ -638,6 +641,7 @@ describe("a Data Store on Postgres", () => {
       clientInstanceId,
       kind: DATA_STORE_ASSET_KIND,
       name: "findings",
+      assetId: asset.id,
       expectedRevision: asset.revision
     });
     await expect(publish(world, [manifest(), init])).rejects.toMatchObject({

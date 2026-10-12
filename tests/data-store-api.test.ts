@@ -4,12 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import postgres from "postgres";
 import { afterEach, describe, expect, it } from "vitest";
+import { apiOperations } from "@vivd-catalyst/api-contract";
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import {
   DATA_STORE_ACTIONS,
   DATA_STORE_ASSET_KIND,
   DATA_STORE_JOB_KINDS,
   DATA_STORE_MANIFEST_FILE,
+  DATA_STORE_OPERATION_SCOPES,
   DATA_STORE_OPERATION_VERBS,
   asClientInstanceId,
   asUserId,
@@ -357,8 +359,8 @@ describe("a Data Store on an assembled instance", () => {
     );
     expect(runs.map((run) => [run.operation, run.effect, run.status]).sort()).toEqual([
       ["data_store.findings.insert", "changing", "done"],
-      ["data_store.findings.query", "reading", "done"],
-      ["data_stores.preview_rows", "reading", "done"]
+      ["data_store.findings.preview_rows", "reading", "done"],
+      ["data_store.findings.query", "reading", "done"]
     ]);
     const audit = await instance.stores.audit.listAuditEvents({ clientInstanceId });
     const rowsOf = (operation: string) =>
@@ -373,8 +375,11 @@ describe("a Data Store on an assembled instance", () => {
     ];
     expect(rowsOf("data_store.findings.insert")).toEqual(three(record.id, "data_store.insert"));
     expect(rowsOf("data_store.findings.query")).toEqual(three(record.id, "data_store.read"));
-    // The HTTP operation names the store as its path does, and decides the right itself.
-    expect(rowsOf("data_stores.preview_rows")).toEqual(three("findings"));
+    // A call over HTTP is the store's own operation: one name per act, in the run and the trail.
+    expect(rowsOf("data_store.findings.preview_rows")).toEqual(three(record.id, "data_store.read"));
+    expect(
+      audit.filter((event) => String(event.metadata?.operation).startsWith("data_stores."))
+    ).toEqual([]);
     const kept = JSON.stringify({ runs, audit, record });
     expect(kept).not.toContain("client-secret-7");
     expect(kept).not.toContain("select client_id");
@@ -439,6 +444,81 @@ describe("a Data Store on an assembled instance", () => {
     expect(await outcome("insert", insert)).toEqual(denied(DATA_STORE_ACTIONS.insert));
     await grant(DATA_STORE_ACTIONS.insert);
     expect(await outcome("insert", insert)).toBe("done");
+  });
+
+  it("declares for each verb the scope, the caller and the effect the contract names", async () => {
+    const instance = await start(true);
+    await publishStore(instance);
+
+    const declared = await Promise.all(
+      DATA_STORE_OPERATION_VERBS.map(async (verb) => {
+        const operation = required(
+          await instance.execution.operationCalls.registry.resolve(
+            dataStoreOperationName("findings", verb)
+          )
+        );
+        return [verb, operation.scope, operation.auth, operation.effect];
+      })
+    );
+
+    // The routes ask the same scopes of a key as the operations they run.
+    expect(
+      (["query", "insert", "describe", "preview_rows"] as const).map(
+        (verb) => apiOperations[`data_stores.${verb}`].scope
+      )
+    ).toEqual([
+      DATA_STORE_OPERATION_SCOPES.query,
+      DATA_STORE_OPERATION_SCOPES.insert,
+      DATA_STORE_OPERATION_SCOPES.describe,
+      DATA_STORE_OPERATION_SCOPES.preview_rows
+    ]);
+    expect(declared).toEqual([
+      ["query", DATA_STORE_OPERATION_SCOPES.query, "principal", "reading"],
+      ["insert", DATA_STORE_OPERATION_SCOPES.insert, "principal", "changing"],
+      ["load", DATA_STORE_OPERATION_SCOPES.load, "principal", "changing"],
+      ["describe", DATA_STORE_OPERATION_SCOPES.describe, "principal", "reading"],
+      ["preview_rows", DATA_STORE_OPERATION_SCOPES.preview_rows, "principal", "reading"]
+    ]);
+  });
+
+  it("never runs a changing operation through a reading route", async () => {
+    const instance = await start(true);
+    await publishStore(instance);
+    const count = async () =>
+      (
+        await overHttp(instance, "data_stores.query", {
+          payload: { sql: "select count(*)::integer as count from findings" }
+        })
+      ).json();
+    const viaReadingRoute = (store: string, payload: JsonObject) =>
+      instance.api.call("data_stores.query", { params: { store }, payload });
+    const insert = { table: "findings", rows: [finding] };
+
+    // The route names its verb itself: an id that carries another verb is no store.
+    const smuggled = await viaReadingRoute("findings.insert", { sql: "select 1" });
+    expect(smuggled.statusCode).toBe(404);
+    expect(smuggled.json<ErrorBody>().error.message).toBe("Data Store is not available");
+    // And the body of an insert is no query: it is refused before anything runs.
+    const asQuery = await viaReadingRoute("findings", insert);
+    expect(asQuery.statusCode).toBeGreaterThanOrEqual(400);
+    expect(asQuery.statusCode).toBeLessThan(500);
+    expect(await count()).toMatchObject({ rows: [{ count: 0 }] });
+
+    const runs = await instance.stores.operationRuns.list({ clientInstanceId });
+    expect(
+      runs.filter((run) => run.effect === "changing" && run.operation.startsWith("data_store"))
+    ).toEqual([]);
+  });
+
+  it("answers an id no store has as not available, to a caller who holds the right", async () => {
+    const instance = await start(true);
+
+    const response = await instance.api.call("data_stores.describe", {
+      params: { store: "nowhere" }
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json<ErrorBody>().error.message).toBe("Data Store is not available");
   });
 
   it("offers the operations of a store to an agent as tools, each with a description of its use", async () => {

@@ -11,6 +11,7 @@ import {
   DATA_STORE_ASSET_KIND,
   DATA_STORE_OPERATION_PREFIX,
   DATA_STORE_OPERATION_RIGHTS,
+  DATA_STORE_OPERATION_SCOPES,
   DATA_STORE_PREVIEW_ROW_LIMIT,
   DATA_STORE_SCALAR_TYPES,
   dataStoreInsertConflictSchema,
@@ -18,8 +19,6 @@ import {
   dataStoreLoadInputSchema,
   dataStoreLoadResultSchema,
   dataStoreOperationName,
-  type AccessResource,
-  type ActorAccess,
   type ConfigAssetRecord,
   type DataStoreInsertResult,
   type DataStoreOperationVerb,
@@ -29,7 +28,6 @@ import {
   type DataToolDescriptor,
   type DataToolSource,
   type JsonObject,
-  type OperationAuthorization,
   type OperationChangeClass,
   type OperationDefinition,
   type OperationEffect,
@@ -46,9 +44,9 @@ import { quoteIdentifier } from "./server";
 
 // The operations on the rows of one store. Each is called through `runOperation` like every
 // other operation: this file says who may call it and what it does, as the app role of the
-// store. The database decides what that role may do; nothing here stands in for that. A verb
-// is written once and reached by two names: `data_store.<id>.<verb>`, which a Workflow step
-// and an agent call, and `data_stores.<verb>` of the HTTP API, which names the store in its path.
+// store. The database decides what that role may do; nothing here stands in for that. Each
+// has one name, `data_store.<id>.<verb>`, whoever calls it: a Workflow step, an agent, or the
+// route of the HTTP API that names the store in its path.
 
 /** The module the operations belong to. */
 const DATA_STORES_MODULE = "dataStores";
@@ -133,7 +131,7 @@ interface VerbCall {
  * One verb: what it takes, what it does and how an agent is told to use it. The right it asks
  * is the contract's (`DATA_STORE_OPERATION_RIGHTS`).
  */
-interface StoreVerb<Output = unknown> {
+interface StoreVerb {
   verb: DataStoreOperationVerb;
   effect: OperationEffect;
   changeClass?: OperationChangeClass;
@@ -141,12 +139,7 @@ interface StoreVerb<Output = unknown> {
   outputSchema: z.ZodType;
   /** What an agent reads of the tool, after the sentence that names the store. Missing where no agent is offered it. */
   use?: string;
-  run(call: VerbCall, input: unknown): Promise<Output>;
-}
-
-/** Keeps what a verb answers as its type, so its HTTP operation answers the same. */
-function defineVerb<Output>(verb: StoreVerb<Output>): StoreVerb<Output> {
-  return verb;
+  run(call: VerbCall, input: unknown): Promise<unknown>;
 }
 
 function tableUnknown(table: string): AppError {
@@ -176,7 +169,7 @@ function sharedColumns(rows: readonly JsonObject[]): string[] {
 
 const insertedRow = z.object({ count: z.number().int() });
 
-const query = defineVerb({
+const query: StoreVerb = {
   verb: "query",
   effect: "reading",
   inputSchema: queryInputSchema,
@@ -192,9 +185,9 @@ const query = defineVerb({
       })
     );
   }
-});
+};
 
-const insert = defineVerb({
+const insert: StoreVerb = {
   verb: "insert",
   effect: "changing",
   // An added row is removed again with a statement, and nothing outside is told of it.
@@ -261,9 +254,9 @@ const insert = defineVerb({
       skipped: input.rows.length - inserted
     } satisfies DataStoreInsertResult;
   }
-});
+};
 
-const load = defineVerb({
+const load: StoreVerb = {
   verb: "load",
   effect: "changing",
   inputSchema: dataStoreLoadInputSchema,
@@ -278,9 +271,9 @@ const load = defineVerb({
       )
     );
   }
-});
+};
 
-const describe = defineVerb({
+const describe: StoreVerb = {
   verb: "describe",
   effect: "reading",
   inputSchema: describeInputSchema,
@@ -297,9 +290,9 @@ const describe = defineVerb({
       }))
     } satisfies DataStoreSchema;
   }
-});
+};
 
-const previewRows = defineVerb({
+const previewRows: StoreVerb = {
   verb: "preview_rows",
   effect: "reading",
   inputSchema: previewInputSchema,
@@ -317,7 +310,7 @@ const previewRows = defineVerb({
       })
     );
   }
-});
+};
 
 const VERBS: readonly StoreVerb[] = [query, insert, load, describe, previewRows];
 
@@ -403,13 +396,13 @@ function parseOperationName(name: string): { store: string; verb: StoreVerb } | 
  * refused with what an author does next, and a failure of the database is answered as a
  * sentence and its SQLSTATE.
  */
-async function runVerb<Output>(
+async function runVerb(
   runtime: DataStoreRuntime,
   store: PublishedStore,
-  verb: StoreVerb<Output>,
+  verb: StoreVerb,
   input: unknown,
   signal: AbortSignal | undefined
-): Promise<Output> {
+): Promise<unknown> {
   const { record } = store;
   if (record.status !== "ready") {
     throw new AppError(
@@ -448,7 +441,8 @@ function operationOf(
     ...(verb.effect === "reading" ? { recordsEveryCall: true as const } : {}),
     ...(verb.changeClass ? { changeClass: verb.changeClass } : {}),
     action: DATA_STORE_OPERATION_RIGHTS[verb.verb],
-    scope: null,
+    // What a key must carry to call the verb over HTTP. The grants of its holder still decide.
+    scope: DATA_STORE_OPERATION_SCOPES[verb.verb],
     auth: "principal",
     inputSchema: verb.inputSchema,
     outputSchema: verb.outputSchema,
@@ -532,68 +526,5 @@ export function createDataStoreToolSource(runtime: DataStoreRuntime): DataToolSo
         ];
       });
     }
-  };
-}
-
-/**
- * One verb as an operation of the HTTP API binds it: the store is the `store` of its input,
- * and the right is asked on that store before anything else of the call.
- */
-interface DataStoreHttpOperation<Output> {
-  readonly recordsEveryCall?: true;
-  readonly changeClass?: OperationChangeClass;
-  readonly module: string;
-  readonly timeoutMs: number;
-  resource(input: { store: string }): OperationResource;
-  authorize(
-    input: { store: string },
-    context: { access: ActorAccess }
-  ): Promise<OperationAuthorization>;
-  /** Throws `NOT_FOUND` for a store that is not published. Answers what the verb answers. */
-  execute(
-    input: { store: string },
-    context: { runtime: { signal?: AbortSignal } }
-  ): Promise<Output>;
-}
-
-/** What each verb of the HTTP API answers. */
-export interface DataStoreHttpOperations {
-  query: DataStoreHttpOperation<ReturnType<typeof rowsOf>>;
-  insert: DataStoreHttpOperation<DataStoreInsertResult>;
-  describe: DataStoreHttpOperation<Awaited<ReturnType<typeof describe.run>>>;
-  preview_rows: DataStoreHttpOperation<ReturnType<typeof rowsOf>>;
-}
-
-export function createDataStoreHttpOperations(runtime: DataStoreRuntime): DataStoreHttpOperations {
-  const bind = <Output>(verb: StoreVerb<Output>): DataStoreHttpOperation<Output> => ({
-    ...(verb.effect === "reading" ? { recordsEveryCall: true as const } : {}),
-    ...(verb.changeClass ? { changeClass: verb.changeClass } : {}),
-    module: DATA_STORES_MODULE,
-    timeoutMs: RUN_TIMEOUT_MS,
-    // The run and its events name the store as the call does: by its id.
-    resource: ({ store }) => ({ kind: DATA_STORE_ASSET_KIND, id: store, name: store }),
-    async authorize({ store }, { access }) {
-      const action = DATA_STORE_OPERATION_RIGHTS[verb.verb];
-      // Decided on the stored store, or on the name alone where none carries it.
-      const resource: AccessResource = (await readStore(runtime, store))?.resource ?? {
-        kind: DATA_STORE_ASSET_KIND,
-        name: store
-      };
-      const decision = access.authorize(action, resource);
-      return decision.allowed
-        ? { allowed: true }
-        : { allowed: false, action, reason: decision.reason };
-    },
-    async execute({ store: name, ...input }, context) {
-      const store = await readStore(runtime, name);
-      if (!store) throw new AppError("NOT_FOUND", "Data Store is not available");
-      return runVerb(runtime, store, verb, input, context.runtime.signal);
-    }
-  });
-  return {
-    query: bind(query),
-    insert: bind(insert),
-    describe: bind(describe),
-    preview_rows: bind(previewRows)
   };
 }

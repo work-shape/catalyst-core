@@ -180,12 +180,23 @@ export function useDataStoreWorld(prefix: string) {
       mutations: [{ type: "upsert", kind: DATA_STORE_ASSET_KIND, name, config, draft: true }]
     });
     const revision = required(written.revisions[key]);
+    const assetId = required(written.assetIds[key]);
+    const stored = required(
+      await db.store.configAssets.getConfigAssetRevision({
+        clientInstanceId,
+        kind: DATA_STORE_ASSET_KIND,
+        name,
+        revision
+      })
+    );
     return db.store.transaction(async (stores) => {
       const moved = await stores.configAssets.publishConfigAssetRevision({
         clientInstanceId,
         kind: DATA_STORE_ASSET_KIND,
         name,
-        revision
+        assetId,
+        revision,
+        revisionId: stored.id
       });
       await dataStores.publish(stores, { assetId: moved.assetId, revision, config });
       return moved.assetId;
