@@ -26,6 +26,7 @@ const principal = {
   id: "sp_local",
   clientInstanceId: "demo-e2e",
   displayLabel: "Local config CLI",
+  name: "local-config-cli",
   status: "active",
   permissionRefs: [],
   permissions: ["config_assets.read", "config_assets.release"],
