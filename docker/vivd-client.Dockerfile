@@ -228,10 +228,16 @@ ENV VITE_CHAT_API_URL=${VITE_CHAT_API_URL}
 ENV VITE_CHAT_API_PORT=${VITE_CHAT_API_PORT}
 ENV NODE_ENV=development
 
-# The Vite plugin of chat-ui runs in Node and imports these three from their built output.
-RUN pnpm --filter @vivd-catalyst/core build \
-  && pnpm --filter @vivd-catalyst/config-schema build \
-  && pnpm --filter @vivd-catalyst/ui build
+# The Vite plugin of chat-ui runs in Node and imports these three from their built output, and
+# they import the packages they depend on the same way, so those are built with them. The last
+# line loads the plugin as Vite does at start: the image fails to build when a package it needs
+# has no built output, instead of the container stopping when it starts.
+RUN pnpm \
+    --filter "@vivd-catalyst/core..." \
+    --filter "@vivd-catalyst/config-schema..." \
+    --filter "@vivd-catalyst/ui..." \
+    build \
+  && pnpm --filter "${UI_PACKAGE}" exec node --input-type=module -e "await import('@vivd-catalyst/chat-ui/vite');"
 
 EXPOSE 5173
 CMD ["sh", "-c", "pnpm --filter \"${UI_PACKAGE}\" exec vite --host 0.0.0.0 --port ${UI_DEV_PORT}"]

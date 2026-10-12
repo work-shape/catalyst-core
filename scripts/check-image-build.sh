@@ -9,6 +9,9 @@
 # `pnpm check`, but not in an image. This script builds in that layout, from the files Git
 # knows and with the committed lockfile, so such a package fails before a deployment meets it.
 #
+# The development UI image (`ui-dev`) builds a few packages by name instead of everything the
+# client depends on, so it is built as well.
+#
 # The two worker images add a Docker client and system packages to the same two build stages.
 # The runner image, in which commands and Page builds run, is built too: it installs
 # `catalyst-page-build` from this repository and fails to build when the command does not run.
@@ -93,6 +96,9 @@ build() {
 
 build api
 build ui
+# The image `pnpm dev` runs the UI from. Its build loads the Vite plugin of chat-ui, which fails
+# when the stage leaves out a package the plugin imports from built output.
+build ui-dev
 # The runner image carries the command that builds a saved Page; its build runs the command.
 build workspace-command-runner
-echo "==> The API, UI and runner images build"
+echo "==> The API, UI, development UI and runner images build"

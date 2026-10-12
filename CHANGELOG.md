@@ -1527,6 +1527,12 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   comes back. The other regular reads (Jobs, Operations, Infrastructure, Inbox, approvals, a
   Page's access check) still pause while the page is hidden: none of them holds an action
   back, and each reads again on return.
+- **Local development, UI image:** the development UI image (`ui-dev` in
+  `docker/vivd-client.Dockerfile`, the one `pnpm dev` starts) builds the packages that `core`,
+  `config-schema` and `ui` depend on. Before, it built `core` without `asset-schemas`, the
+  image built, and the UI container stopped at start with `Cannot find module
+  .../asset-schemas/dist/index.js`. The image build now loads the Vite plugin and fails when
+  a package is missing, and `pnpm check:images` builds this image too.
 
 - **Deployment kit, worker guards:** the Compose checks under `verify/` judge what a worker
   must not have on the stack as `docker compose config` resolves it: the
