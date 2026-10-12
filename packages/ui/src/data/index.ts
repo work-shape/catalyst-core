@@ -27,5 +27,10 @@ export {
   TableCellDetail,
   TableHead,
   TableHeader,
-  TableRow
+  TableRow,
+  type TableAlign,
+  type TableCellProps,
+  type TableDensity,
+  type TableHeadProps,
+  type TableProps
 } from "./table";

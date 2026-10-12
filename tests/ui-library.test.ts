@@ -581,4 +581,11 @@ describe("scrollEdgeFadeStyle", () => {
     expect(both?.WebkitMaskImage).toBe(both?.maskImage);
     expect(scrollEdgeFadeStyle({ above: false, below: false })).toBeUndefined();
   });
+
+  it("fades the left and right edge of a container that scrolls sideways", () => {
+    expect(scrollEdgeFadeStyle({ above: false, below: true }, "x")?.maskImage).toBe(
+      "linear-gradient(to right, black 0, black calc(100% - 1rem), transparent 100%)"
+    );
+    expect(scrollEdgeFadeStyle({ above: false, below: false }, "x")).toBeUndefined();
+  });
 });

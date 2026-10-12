@@ -151,6 +151,16 @@ export interface LayoutGalleryText {
   keyInline: string;
   keyStacked: string;
   codeFileName: string;
+  tableData: string;
+  tableCustomer: string;
+  tableRule: string;
+  tableAmount: string;
+  tableDetails: string;
+  tableNote: string;
+  tableRuleDuplicate: string;
+  tableRuleAllowance: string;
+  tableRuleRounding: string;
+  tableNoteValue: string;
   codeWhole: string;
   codeScrolling: string;
   codeCut: string;
@@ -316,6 +326,16 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     keyInline: "Inline",
     keyStacked: "Stacked",
     codeFileName: "src/routes/index.tsx",
+    tableData: "Compact, with a head row that stays, numbers at the end and cut cells",
+    tableCustomer: "Customer",
+    tableRule: "Rule",
+    tableAmount: "Amount",
+    tableDetails: "Details",
+    tableNote: "Note",
+    tableRuleDuplicate: "Duplicate receipt number",
+    tableRuleAllowance: "Amount above the allowance",
+    tableRuleRounding: "Rounding difference",
+    tableNoteValue: "Found in the monthly check and not yet looked at by anyone in the team.",
     codeWhole: "Whole file",
     codeScrolling: "In a low box",
     codeCut: "Cut to six lines, without numbers, with a footer",
@@ -479,6 +499,16 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     keyInline: "Nebeneinander",
     keyStacked: "Gestapelt",
     codeFileName: "src/routes/index.tsx",
+    tableData: "Kompakt, mit stehender Kopfzeile, Zahlen am Ende und gekürzten Zellen",
+    tableCustomer: "Kunde",
+    tableRule: "Regel",
+    tableAmount: "Betrag",
+    tableDetails: "Einzelheiten",
+    tableNote: "Anmerkung",
+    tableRuleDuplicate: "Doppelte Belegnummer in der Buchhaltung",
+    tableRuleAllowance: "Betrag über der Freigrenze für Sachzuwendungen",
+    tableRuleRounding: "Rundungsdifferenz",
+    tableNoteValue: "Bei der Monatsprüfung gefunden und noch von niemandem im Team angesehen.",
     codeWhole: "Ganze Datei",
     codeScrolling: "In einem niedrigen Kasten",
     codeCut: "Auf sechs Zeilen gekürzt, ohne Nummern, mit Fußzeile",

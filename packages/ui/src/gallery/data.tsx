@@ -56,6 +56,48 @@ const jsonSample = JSON.stringify(
   2
 );
 
+/** Rows of data as a store holds them: many, with a number to compare and one long value. */
+const dataRowRules = ["tableRuleDuplicate", "tableRuleAllowance", "tableRuleRounding"] as const;
+const dataRows = Array.from({ length: 24 }, (_, index) => ({
+  customer: String(10432 + index * 37),
+  rule: dataRowRules[index % dataRowRules.length] ?? "tableRuleDuplicate",
+  amount: 1240 / (index + 1) + index * 0.03,
+  details: JSON.stringify({ account: String(4400 - index * 100), receipt: `R-${2031 + index}` })
+}));
+
+function DataTable({ text }: { text: GalleryText }) {
+  const amount = new Intl.NumberFormat(text.chartLocale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+  return (
+    <Table density="compact" stickyHeader data-gallery-sample="table-data">
+      <TableHeader>
+        <TableRow>
+          <TableHead>{text.tableCustomer}</TableHead>
+          <TableHead>{text.tableRule}</TableHead>
+          <TableHead align="end">{text.tableAmount}</TableHead>
+          <TableHead>{text.tableDetails}</TableHead>
+          <TableHead>{text.tableNote}</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {dataRows.map((row) => (
+          <TableRow key={row.customer}>
+            <TableCell>{row.customer}</TableCell>
+            <TableCell truncate={24}>{text[row.rule]}</TableCell>
+            <TableCell align="end">{amount.format(row.amount)}</TableCell>
+            <TableCell truncate={18} title={row.details}>
+              <code className="font-mono text-code">{row.details}</code>
+            </TableCell>
+            <TableCell truncate={32}>{text.tableNoteValue}</TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
 const rowSizes: readonly ListRowSize[] = ["default", "compact"];
 const keyValueLayouts: readonly KeyValueLayout[] = ["inline", "stacked"];
 
@@ -339,38 +381,43 @@ export const dataGallery: GalleryGroup = {
         "TableCellDetail"
       ],
       render: (text) => (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{text.tableName}</TableHead>
-              <TableHead>{text.tableState}</TableHead>
-              <TableHead>{text.tableUpdated}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow>
-              <TableCell>{text.rowAgent}</TableCell>
-              <TableCell>
-                <Badge tone="success">{text.statePublished}</Badge>
-              </TableCell>
-              <TableCell className="text-muted-foreground">{text.today}</TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell>{text.rowWorkflow}</TableCell>
-              <TableCell>
-                <Badge tone="info">{text.stateRunning}</Badge>
-              </TableCell>
-              <TableCell className="text-muted-foreground">{text.today}</TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell>{text.rowKnowledge}</TableCell>
-              <TableCell>
-                <Badge>{text.stateDraft}</Badge>
-              </TableCell>
-              <TableCell className="text-muted-foreground">{text.yesterday}</TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
+        <>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{text.tableName}</TableHead>
+                <TableHead>{text.tableState}</TableHead>
+                <TableHead>{text.tableUpdated}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow>
+                <TableCell>{text.rowAgent}</TableCell>
+                <TableCell>
+                  <Badge tone="success">{text.statePublished}</Badge>
+                </TableCell>
+                <TableCell className="text-muted-foreground">{text.today}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell>{text.rowWorkflow}</TableCell>
+                <TableCell>
+                  <Badge tone="info">{text.stateRunning}</Badge>
+                </TableCell>
+                <TableCell className="text-muted-foreground">{text.today}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell>{text.rowKnowledge}</TableCell>
+                <TableCell>
+                  <Badge>{text.stateDraft}</Badge>
+                </TableCell>
+                <TableCell className="text-muted-foreground">{text.yesterday}</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+          <Samples label={text.tableData}>
+            <DataTable text={text} />
+          </Samples>
+        </>
       )
     },
     {

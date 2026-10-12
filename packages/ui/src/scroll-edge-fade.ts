@@ -23,13 +23,19 @@ import {
 const SCROLL_EDGE_FADE_HEIGHT = "1rem";
 
 export interface ScrollEdgeOverflow {
-  /** Content is hidden above the top edge. */
+  /** Content is hidden above the top edge, or left of the left edge of a sideways scroll. */
   above: boolean;
-  /** Content is hidden below the bottom edge. */
+  /** Content is hidden below the bottom edge, or right of the right edge of a sideways scroll. */
   below: boolean;
 }
 
-function scrollEdgeFadeMask(overflow: ScrollEdgeOverflow): string | undefined {
+/** The direction a container scrolls in: `y` down its length, `x` sideways. */
+export type ScrollEdgeAxis = "x" | "y";
+
+function scrollEdgeFadeMask(
+  overflow: ScrollEdgeOverflow,
+  axis: ScrollEdgeAxis
+): string | undefined {
   if (!overflow.above && !overflow.below) {
     return undefined;
   }
@@ -39,16 +45,18 @@ function scrollEdgeFadeMask(overflow: ScrollEdgeOverflow): string | undefined {
       ? `black calc(100% - ${SCROLL_EDGE_FADE_HEIGHT}), transparent 100%`
       : "black 100%"
   ];
-  return `linear-gradient(to bottom, ${stops.join(", ")})`;
+  return `linear-gradient(to ${axis === "y" ? "bottom" : "right"}, ${stops.join(", ")})`;
 }
 
 /**
  * Wire a scroll container to the fade. Spread `ref`, `onScroll` and `style`
  * onto the scrolling element; pass anything that changes its content length in
  * `dependencies` so the edges are re-measured when rows appear or disappear.
+ * `axis` names the direction it scrolls in.
  */
 export function useScrollEdgeFade<Element extends HTMLElement>(
-  dependencies: readonly unknown[] = []
+  dependencies: readonly unknown[] = [],
+  axis: ScrollEdgeAxis = "y"
 ): {
   ref: RefObject<Element | null>;
   overflow: ScrollEdgeOverflow;
@@ -64,12 +72,16 @@ export function useScrollEdgeFade<Element extends HTMLElement>(
       return;
     }
     // The 1px slack absorbs fractional scroll offsets on scaled displays.
-    const above = node.scrollTop > 1;
-    const below = node.scrollTop + node.clientHeight < node.scrollHeight - 1;
+    const [offset, visible, length] =
+      axis === "y"
+        ? [node.scrollTop, node.clientHeight, node.scrollHeight]
+        : [node.scrollLeft, node.clientWidth, node.scrollWidth];
+    const above = offset > 1;
+    const below = offset + visible < length - 1;
     setOverflow((previous) =>
       previous.above === above && previous.below === below ? previous : { above, below }
     );
-  }, []);
+  }, [axis]);
 
   // A change in any dependency re-measures the edges. The list has no fixed length, so it
   // cannot be an effect's dependency list itself; a revision number stands in for it.
@@ -101,12 +113,15 @@ export function useScrollEdgeFade<Element extends HTMLElement>(
     return () => observer.disconnect();
   }, [syncOverflow, revision]);
 
-  return { ref, overflow, onScroll: syncOverflow, style: scrollEdgeFadeStyle(overflow) };
+  return { ref, overflow, onScroll: syncOverflow, style: scrollEdgeFadeStyle(overflow, axis) };
 }
 
 /** The fade for the edges named, for a container that keeps one of its edges clear itself. */
-export function scrollEdgeFadeStyle(overflow: ScrollEdgeOverflow): CSSProperties | undefined {
-  const mask = scrollEdgeFadeMask(overflow);
+export function scrollEdgeFadeStyle(
+  overflow: ScrollEdgeOverflow,
+  axis: ScrollEdgeAxis = "y"
+): CSSProperties | undefined {
+  const mask = scrollEdgeFadeMask(overflow, axis);
   return mask ? { maskImage: mask, WebkitMaskImage: mask } : undefined;
 }
 
