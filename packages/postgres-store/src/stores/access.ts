@@ -169,6 +169,28 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
             );
           }
         }
+        if (input.scopeKind === "asset") {
+          // Held until the row is written: the deletion of the asset removes the allows on
+          // it and waits for this lock, so a row written beside a delete is removed by it,
+          // and none is written for an asset that is already gone. The row of a deleted
+          // asset is reused by the next asset of that name.
+          const [asset] = await tx
+            .select({ id: configAssets.id })
+            .from(configAssets)
+            .where(
+              and(
+                eq(configAssets.clientInstanceId, input.clientInstanceId),
+                eq(configAssets.id, input.scopeId ?? ""),
+                eq(configAssets.status, "active")
+              )
+            )
+            .for("share");
+          if (!asset) {
+            throw new AppError("VALIDATION_FAILED", "The asset is not an asset of this instance", {
+              reason: "invalid_scope"
+            });
+          }
+        }
         const [row] = await tx
           .insert(permissionGrants)
           .values({
