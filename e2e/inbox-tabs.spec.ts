@@ -1,8 +1,12 @@
 import { apiBaseUrl, reviewer, signIn } from "./inbox-fixtures";
 import { expect, test } from "./test";
 
-// How the Inbox behaves while a tab's list is read for the first time. The test reads the
-// reviewer's lists and writes nothing, so it needs no place in the serial Inbox file.
+// How the Inbox behaves while a tab's list is read for the first time. The test writes
+// nothing, so it needs no place in the serial Inbox file. A reviewer's lists are the whole
+// instance's, whichever account reads them, and only a reviewer has tabs: an account of its
+// own would not keep other tests' requests out. The test therefore reads each list and the
+// counts once and keeps those answers, so what other tests write while it runs never reaches
+// its page.
 
 /**
  * A list answer held this long is one the reader does not wait for on a machine with room. How
@@ -19,16 +23,43 @@ test("a tab opened for the first time flashes no loading layout for a fast answe
 }) => {
   await signIn(page, reviewer);
   let answerAfterMs = INBOX_FAST_ANSWER_MS;
+  // The first answer of each list and of the counts, by address: every later read gets the same.
+  const listAnswers = new Map<
+    string,
+    { status: number; headers: Record<string, string>; body: Buffer }
+  >();
   await page.route(
     (url) =>
       url.origin === new URL(apiBaseUrl).origin &&
-      /^\/api\/v1\/approval-requests(?:\/mine)?$/u.test(url.pathname),
+      /^\/api\/v1\/approval-requests(?:\/mine|\/pending-count)?$/u.test(url.pathname),
     async (route) => {
-      await new Promise((resolve) => setTimeout(resolve, answerAfterMs));
-      await route.continue();
+      const request = route.request();
+      // The lists are held; the counts on the tabs are only kept.
+      if (!new URL(request.url()).pathname.endsWith("/pending-count")) {
+        await new Promise((resolve) => setTimeout(resolve, answerAfterMs));
+      }
+      if (request.method() !== "GET") {
+        await route.continue();
+        return;
+      }
+      let answer = listAnswers.get(request.url());
+      if (!answer) {
+        const response = await route.fetch();
+        answer = {
+          status: response.status(),
+          headers: response.headers(),
+          body: await response.body()
+        };
+        listAnswers.set(request.url(), answer);
+      }
+      await route.fulfill(answer);
     }
   );
   const inbox = page.getByRole("region", { name: "Inbox", exact: true });
+  // A tab by its label. The reviewer's own open requests, which another test may have made
+  // before this one read the counts, stand as a number after the label.
+  const tabNamed = (label: string) =>
+    inbox.getByRole("tab", { name: new RegExp(`^${label}(?:\\s*\\d+\\+?)?$`, "u") });
   const openInbox = async () => {
     await page.goto("/inbox");
     await expect(inbox.getByRole("tab")).toHaveCount(3);
@@ -121,12 +152,9 @@ test("a tab opened for the first time flashes no loading layout for a fast answe
   for (const name of ["My requests", "Decided"]) {
     const before = await emptyTextNow();
     const frames = watch();
-    await inbox.getByRole("tab", { name, exact: true }).click();
+    await tabNamed(name).click();
     const seen = await frames;
-    await expect(inbox.getByRole("tab", { name, exact: true })).toHaveAttribute(
-      "aria-selected",
-      "true"
-    );
+    await expect(tabNamed(name)).toHaveAttribute("aria-selected", "true");
     expect(seen.frames).toBeGreaterThan(10);
     expectUnseenForTheDelay(seen);
     // Beside a whole suite on a loaded machine the answer can take longer than the delay: the
@@ -145,7 +173,7 @@ test("a tab opened for the first time flashes no loading layout for a fast answe
   answerAfterMs = INBOX_SLOW_ANSWER_MS;
   await openInbox();
   const frames = watch();
-  await inbox.getByRole("tab", { name: "My requests", exact: true }).click();
+  await tabNamed("My requests").click();
   const slow = await frames;
   expect(slow.loadingFrames).toBeGreaterThan(0);
   expectUnseenForTheDelay(slow);
