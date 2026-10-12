@@ -1,11 +1,6 @@
 import { z } from "zod";
 import type { JsonValue } from "./json";
-import {
-  WORKFLOW_ERROR_CODES,
-  type WorkflowInputValue,
-  type WorkflowReference,
-  type WorkflowStep
-} from "./workflows";
+import { WORKFLOW_ERROR_CODES, WORKFLOW_STEP_TYPES, type WorkflowStep } from "./workflows";
 
 /** The step types that are reserved and that no engine of this release runs. */
 export const WORKFLOW_RESERVED_STEP_TYPES = ["condition", "parallel"] as const;
@@ -59,103 +54,159 @@ export interface WorkflowBlockIssue {
   code:
     | typeof WORKFLOW_ERROR_CODES.blockDepth
     | typeof WORKFLOW_ERROR_CODES.referenceOutOfScope
+    | typeof WORKFLOW_ERROR_CODES.duplicateStepId
     | typeof WORKFLOW_ERROR_CODES.notSupported;
   /** The step the issue is at. */
   step: string;
   message: string;
 }
 
-/** The lists of steps a block holds, each with the name its step runs carry as `branch`. */
-function listsOf(step: WorkflowStep): readonly (readonly WorkflowStep[])[] {
-  if (step.type === "loop") return [step.steps];
-  if (step.type === "condition") return [step.then, ...(step.else ? [step.else] : [])];
-  if (step.type === "parallel") return step.branches.map((branch) => branch.steps);
+/**
+ * A step as the check reads it: a definition is checked before or beside its schema, so a
+ * type no release knows and a field that is missing must be answered and never thrown on.
+ */
+type ReadStep = { id: string; type: string } & Readonly<Record<string, unknown>>;
+
+const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const stepsOf = (value: unknown): ReadStep[] =>
+  Array.isArray(value)
+    ? value.filter(
+        (step): step is ReadStep =>
+          isRecord(step) && typeof step.id === "string" && typeof step.type === "string"
+      )
+    : [];
+
+const BLOCK_TYPES: readonly string[] = ["loop", "condition", "parallel"];
+
+/**
+ * The lists of steps a block holds. A step of any other type holds none. A block is one level
+ * whatever it holds, so the depth is asked of the type and not of these lists: a `parallel`
+ * without a branch is as deep as one with ten.
+ */
+function listsOf(step: ReadStep): ReadStep[][] {
+  if (step.type === "loop") return [stepsOf(step.steps)];
+  if (step.type === "condition") return [stepsOf(step.then), stepsOf(step.else)];
+  if (step.type === "parallel" && Array.isArray(step.branches)) {
+    return step.branches.map((branch) => stepsOf(isRecord(branch) ? branch.steps : undefined));
+  }
   return [];
 }
 
-const refsOf = (values: readonly WorkflowInputValue[]): WorkflowReference[] =>
-  values.flatMap((value) => (value.ref ? [value.ref] : []));
+const referenceOf = (value: unknown): string[] =>
+  isRecord(value) && typeof value.step === "string" ? [value.step] : [];
+
+const mappedReferences = (values: unknown): string[] =>
+  (Array.isArray(values) ? values : isRecord(values) ? Object.values(values) : []).flatMap(
+    (value) => (isRecord(value) ? referenceOf(value.ref) : [])
+  );
 
 /**
- * Every reference a step makes itself, without those of the steps it holds and without the
- * `collect` of a loop, which reads into the loop.
+ * The ids of the steps a step references itself, without those of the steps it holds and
+ * without the `collect` of a loop, which reads into the loop.
  */
-function referencesOf(step: WorkflowStep): WorkflowReference[] {
-  switch (step.type) {
-    case "trigger":
-    case "parallel":
-      return [];
-    case "loop":
-      return [step.items];
-    case "condition":
-      return [step.when.ref];
-    case "workflow":
-      return [...refsOf(Object.values(step.input)), ...refsOf(step.key ?? [])];
-    default:
-      return refsOf(Object.values(step.input));
-  }
-}
-
-function everyStepId(steps: readonly WorkflowStep[], into = new Set<string>()): Set<string> {
-  for (const step of steps) {
-    into.add(step.id);
-    for (const list of listsOf(step)) everyStepId(list, into);
-  }
-  return into;
+function referencesOf(step: ReadStep): string[] {
+  return [
+    ...mappedReferences(step.input),
+    ...mappedReferences(step.key),
+    ...(step.type === "loop" ? referenceOf(step.items) : []),
+    ...(step.type === "condition" && isRecord(step.when) ? referenceOf(step.when.ref) : [])
+  ];
 }
 
 /**
- * What the nesting of a definition's blocks refuses. A step references the steps before it in
- * its own list and in the lists that contain it, and the loop it is in, whose id names the
- * current item. A reference to any other step of the definition is `reference_out_of_scope`:
- * into a block from outside, into a sibling branch, or to a step that comes later. The
- * `collect` of a loop alone reads into the loop's own steps. A reference to an id no step has
- * is not judged here. A block deeper than `WORKFLOW_MAX_BLOCK_DEPTH` is `block_depth` and is
- * not read further. `condition` and `parallel` are `not_supported_yet` until an engine runs them.
+ * What the nesting of a definition's blocks refuses. It never throws, whatever it is given.
+ *
+ * A step references the steps before it in its own list and in the lists that contain it, and
+ * the loop it is in, whose id names the current item. A reference to any other step of the
+ * definition is `reference_out_of_scope`: into a block from outside, into a sibling branch, or
+ * to a step that comes later. The `collect` of a loop reads the loop's last step and no other.
+ * A reference to an id no step has is not judged here.
+ *
+ * An id two steps have is `duplicate_step_id` at the second, and a reference to such an id is
+ * `reference_out_of_scope`, since it names no one step. A block deeper than
+ * `WORKFLOW_MAX_BLOCK_DEPTH` is `block_depth` and is not read further, so its steps count for
+ * nothing. A step whose type is not in `WORKFLOW_STEP_TYPES` is `not_supported_yet`: the
+ * reserved `condition` and `parallel`, and a type no release knows.
  */
 export function workflowBlockIssues(steps: readonly WorkflowStep[]): WorkflowBlockIssue[] {
-  const all = everyStepId(steps);
+  const known: readonly string[] = WORKFLOW_STEP_TYPES;
   const issues: WorkflowBlockIssue[] = [];
-  const reserved: readonly string[] = WORKFLOW_RESERVED_STEP_TYPES;
+  const all = new Set<string>();
+  const duplicate = new Set<string>();
+  const issue = (code: WorkflowBlockIssue["code"], step: ReadStep, message: string) =>
+    issues.push({ code, step: step.id, message: `${message} (${code})` });
 
-  const walk = (list: readonly WorkflowStep[], inherited: ReadonlySet<string>, depth: number) => {
+  // Both walks stop at the depth before they go down, so neither recurses deeper than it.
+  const within = (depth: number) => depth + 1 <= WORKFLOW_MAX_BLOCK_DEPTH;
+
+  const nesting = (list: ReadStep[], depth: number) => {
+    for (const step of list) {
+      if (all.has(step.id)) {
+        duplicate.add(step.id);
+        issue("duplicate_step_id", step, `The step id '${step.id}' is used more than once`);
+      }
+      all.add(step.id);
+      if (!known.includes(step.type)) {
+        issue(
+          "not_supported_yet",
+          step,
+          `Step '${step.id}' has the type '${step.type}', which is not supported yet`
+        );
+      }
+      if (!BLOCK_TYPES.includes(step.type)) continue;
+      if (within(depth)) for (const inner of listsOf(step)) nesting(inner, depth + 1);
+      else {
+        issue(
+          "block_depth",
+          step,
+          `Step '${step.id}' is nested deeper than ${String(WORKFLOW_MAX_BLOCK_DEPTH)} blocks`
+        );
+      }
+    }
+  };
+
+  const check = (step: ReadStep, reference: string, sees: (id: string) => boolean) => {
+    if (!all.has(reference)) return;
+    if (duplicate.has(reference)) {
+      issue(
+        "reference_out_of_scope",
+        step,
+        `Step '${step.id}' references the step id '${reference}', which more than one step has`
+      );
+    } else if (!sees(reference)) {
+      issue(
+        "reference_out_of_scope",
+        step,
+        `Step '${step.id}' references step '${reference}', which it does not see from its place`
+      );
+    }
+  };
+
+  const references = (list: ReadStep[], inherited: ReadonlySet<string>, depth: number) => {
     const visible = new Set(inherited);
     for (const step of list) {
+      for (const reference of referencesOf(step)) check(step, reference, (id) => visible.has(id));
       const lists = listsOf(step);
-      if (reserved.includes(step.type)) {
-        issues.push({
-          code: WORKFLOW_ERROR_CODES.notSupported,
-          step: step.id,
-          message: `Step '${step.id}' has the type '${step.type}', which is not supported yet (not_supported_yet)`
-        });
+      if (step.type === "loop") {
+        const last = lists[0]?.at(-1)?.id;
+        for (const reference of referenceOf(step.collect)) {
+          check(step, reference, (id) => id === last);
+        }
       }
-      const outOfScope = (reference: WorkflowReference, seen: ReadonlySet<string>) => {
-        if (!all.has(reference.step) || seen.has(reference.step)) return;
-        issues.push({
-          code: WORKFLOW_ERROR_CODES.referenceOutOfScope,
-          step: step.id,
-          message: `Step '${step.id}' references step '${reference.step}', which is not before it in its own list or in a list that contains it (reference_out_of_scope)`
-        });
-      };
-      for (const reference of referencesOf(step)) outOfScope(reference, visible);
-      if (step.type === "loop" && step.collect) {
-        outOfScope(step.collect, new Set(step.steps.map((inner) => inner.id)));
-      }
-      if (lists.length > 0 && depth + 1 > WORKFLOW_MAX_BLOCK_DEPTH) {
-        issues.push({
-          code: WORKFLOW_ERROR_CODES.blockDepth,
-          step: step.id,
-          message: `Step '${step.id}' is nested deeper than ${String(WORKFLOW_MAX_BLOCK_DEPTH)} blocks (block_depth)`
-        });
-      } else {
+      if (lists.length > 0 && within(depth)) {
         // Inside a loop its id names the current item. A condition or parallel has no output
         // until it has ended, so its own steps do not see it.
-        const within = step.type === "loop" ? new Set([...visible, step.id]) : visible;
-        for (const inner of lists) walk(inner, within, depth + 1);
+        const inner = step.type === "loop" ? new Set([...visible, step.id]) : visible;
+        for (const held of lists) references(held, inner, depth + 1);
       }
       visible.add(step.id);
     }
   };
-  walk(steps, new Set(), 0);
+
+  const top = stepsOf(steps);
+  nesting(top, 0);
+  references(top, new Set(), 0);
   return issues;
 }

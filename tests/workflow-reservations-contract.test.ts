@@ -307,7 +307,8 @@ describe("what the contract reserves for datasets, child runs and run keys", () 
       rateLimited: "rate_limited",
       notSupported: "not_supported_yet",
       blockDepth: "block_depth",
-      referenceOutOfScope: "reference_out_of_scope"
+      referenceOutOfScope: "reference_out_of_scope",
+      duplicateStepId: "duplicate_step_id"
     });
   });
 });

@@ -683,6 +683,7 @@ export const WORKFLOW_RUN_MAX_DEPTH = 2;
  * its operation; it is retryable. `not_supported_yet`: a definition names a field this
  * engine does not run. `block_depth`: blocks nest deeper than `WORKFLOW_MAX_BLOCK_DEPTH`.
  * `reference_out_of_scope`: a step references a step inside a block it is not in.
+ * `duplicate_step_id`: two steps of a definition have one id.
  */
 export const WORKFLOW_ERROR_CODES = {
   datasetLimit: "dataset_limit",
@@ -691,7 +692,8 @@ export const WORKFLOW_ERROR_CODES = {
   rateLimited: "rate_limited",
   notSupported: "not_supported_yet",
   blockDepth: "block_depth",
-  referenceOutOfScope: "reference_out_of_scope"
+  referenceOutOfScope: "reference_out_of_scope",
+  duplicateStepId: "duplicate_step_id"
 } as const;
 
 /**

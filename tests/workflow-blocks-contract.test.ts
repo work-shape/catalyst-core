@@ -12,6 +12,7 @@ import {
   type WorkflowParallelOutput,
   type WorkflowStep
 } from "@vivd-catalyst/core";
+import { z } from "zod";
 
 // The file form of branches and parallel paths: nested blocks in the step list. The two block
 // types are reserved and no engine runs them, so the tests pin the names and the two refusals
@@ -63,6 +64,19 @@ describe("the blocks of a Workflow definition", () => {
     expect(issues).toEqual([expect.objectContaining({ code: "block_depth", step: "loop-17" })]);
   });
 
+  // Fails with the depth asked of the lists a block holds: a block that held none had no depth.
+  it("refuses an empty parallel at level 17 with block_depth", () => {
+    const empty = (id: string): WorkflowStep => ({ id, name: id, type: "parallel", branches: [] });
+    const at = (level: number) => {
+      let steps: WorkflowStep[] = [empty("fork")];
+      for (let outer = level - 1; outer >= 1; outer -= 1)
+        steps = [loop(`l${String(outer)}`, steps)];
+      return [start, ...steps];
+    };
+    expect(codes(at(16))).toEqual(["not_supported_yet"]);
+    expect(codes(at(17))).toEqual(["not_supported_yet", "block_depth"]);
+  });
+
   it("refuses a reference from one branch into a step of a sibling branch", () => {
     const fork: WorkflowStep = {
       id: "fork",
@@ -112,6 +126,54 @@ describe("the blocks of a Workflow definition", () => {
       steps: [read("one")]
     };
     expect(codes([start, collected])).toEqual([]);
+  });
+
+  // Each of the four fails on the check as it first stood: it took any step of the loop for
+  // `collect`, resolved a reference through whichever step had the id, recursed over the
+  // whole definition before it looked at the depth, and read `input` of a type it did not know.
+  it("refuses a collect that names a step of the loop that is not its last", () => {
+    const collecting = (step: string): WorkflowStep => ({
+      id: "all",
+      name: "All",
+      type: "loop",
+      items: { step: "start", path: "input.items" },
+      collect: { step, path: "" },
+      steps: [read("one"), read("two")]
+    });
+    expect(codes([start, collecting("two")])).toEqual([]);
+    expect(workflowBlockIssues([start, collecting("one")])).toEqual([
+      expect.objectContaining({ code: "reference_out_of_scope", step: "all" })
+    ]);
+  });
+
+  it("refuses an id two steps have, and a reference that names it", () => {
+    const steps = [start, read("same"), loop("each", [read("same")]), read("after", "same")];
+    expect(workflowBlockIssues(steps)).toEqual([
+      expect.objectContaining({ code: "duplicate_step_id", step: "same" }),
+      expect.objectContaining({ code: "reference_out_of_scope", step: "after" })
+    ]);
+  });
+
+  it("answers a definition nested 20000 deep with block_depth and does not throw", () => {
+    let steps: WorkflowStep[] = [read("leaf")];
+    for (let level = 20_000; level >= 1; level -= 1) steps = [loop(`l${String(level)}`, steps)];
+    expect(codes([start, ...steps])).toEqual(["block_depth"]);
+  });
+
+  it("answers a step type no release knows with not_supported_yet and does not throw", () => {
+    const parsed: unknown = [
+      { id: "start", name: "Start", type: "trigger", triggers: [] },
+      { id: "wait", name: "Wait", type: "delay" },
+      { id: "odd", name: "Odd", type: "parallel" },
+      "no step",
+      { id: "bare", name: "Bare", type: "operation" }
+    ];
+    // What a file holds is not typed. The check is given it as it was read.
+    const steps = z.custom<WorkflowStep[]>().parse(parsed);
+    expect(workflowBlockIssues(steps)).toEqual([
+      expect.objectContaining({ code: "not_supported_yet", step: "wait" }),
+      expect.objectContaining({ code: "not_supported_yet", step: "odd" })
+    ]);
   });
 
   it("counts the step runs of each step directly inside a block on the block's step run", () => {
