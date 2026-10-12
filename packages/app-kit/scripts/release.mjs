@@ -21,7 +21,7 @@ import { compile, optimize } from "@tailwindcss/node";
 import { Scanner } from "@tailwindcss/oxide";
 import { build } from "esbuild";
 
-const KIT_VERSION = "1.1.0";
+const KIT_VERSION = "1.2.0";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const platformRoot = resolve(packageRoot, "../..");
@@ -33,6 +33,7 @@ const require = createRequire(join(packageRoot, "package.json"));
 const REACT_MODULES = ["react", "react-dom", "react-dom/client", "react/jsx-runtime"];
 const CHART_ENGINE = resolve(uiRoot, "src/data/chart-engine.ts");
 const UI_ENTRY = resolve(uiRoot, "src/index.ts");
+const UI_THEME_ENTRY = resolve(uiRoot, "src/theme/index.ts");
 
 /**
  * The libraries a kit version is built from, for its manifest: name, version and licence. What
@@ -85,7 +86,9 @@ const files = [
   { file: "router.js", entry: resolve(packageRoot, "src/router-entry.ts") },
   { file: "charts.js", entry: CHART_ENGINE },
   { file: "ui.js", entry: UI_ENTRY },
-  { file: "kit.js", entry: resolve(packageRoot, "src/index.ts") }
+  { file: "kit.js", entry: resolve(packageRoot, "src/index.ts") },
+  // Stands alone: a plain Page loads it without React, the library or the rest of the kit.
+  { file: "theme.js", entry: resolve(packageRoot, "src/theme-entry.ts") }
 ];
 
 /**
@@ -119,6 +122,11 @@ function kitFiles(current) {
       pluginBuild.onResolve({ filter: new RegExp("^@vivd-catalyst/ui$") }, () =>
         current === "ui.js" ? { path: UI_ENTRY } : external("ui.js")
       );
+      // The token mapping, from its source like the library itself, and inside the file that
+      // imports it: it is a few lines, and `ui.js` would bring every component with it.
+      pluginBuild.onResolve({ filter: new RegExp("^@vivd-catalyst/ui/theme$") }, () => ({
+        path: UI_THEME_ENTRY
+      }));
       pluginBuild.onResolve({ filter: new RegExp("chart-engine$") }, (args) =>
         resolve(args.resolveDir, `${args.path}.ts`) === CHART_ENGINE
           ? external("charts.js")
@@ -155,8 +163,12 @@ async function bundle({ file, entry }) {
   return output.contents;
 }
 
-async function stylesheet() {
-  const entry = resolve(packageRoot, "src/kit.css");
+/**
+ * One stylesheet of the kit. `utilities` says whether it holds the utility classes the library
+ * and the kit use: the library's components need them, a plain Page must not get them.
+ */
+async function stylesheet(file, { utilities }) {
+  const entry = resolve(packageRoot, "src", file);
   const base = dirname(entry);
   const compiler = await compile(readFileSync(entry, "utf8"), {
     base,
@@ -169,10 +181,10 @@ async function stylesheet() {
       : compiler.root === null
         ? [{ base, pattern: "**/*", negated: false }]
         : [{ ...compiler.root, negated: false }];
-  const scanner = new Scanner({ sources: [...root, ...compiler.sources] });
-  const css = optimize(compiler.build(scanner.scan()), { minify: true }).code;
+  const classes = utilities ? new Scanner({ sources: [...root, ...compiler.sources] }).scan() : [];
+  const css = optimize(compiler.build(classes), { minify: true }).code;
   if (/url\(\s*["']?(?:https?:)?\/\//iu.test(css) || /@import/iu.test(css)) {
-    throw new Error("ui.css names an address outside the instance");
+    throw new Error(`${file} names an address outside the instance`);
   }
   return Buffer.from(css);
 }
@@ -194,7 +206,8 @@ const written = [];
 for (const item of files) {
   written.push({ file: item.file, bytes: await bundle(item) });
 }
-written.push({ file: "ui.css", bytes: await stylesheet() });
+written.push({ file: "ui.css", bytes: await stylesheet("kit.css", { utilities: true }) });
+written.push({ file: "page.css", bytes: await stylesheet("page.css", { utilities: false }) });
 
 const manifest = {
   version: KIT_VERSION,

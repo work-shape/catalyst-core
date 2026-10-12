@@ -4,10 +4,12 @@
 export {
   APP_KIT_PACKAGE,
   KIT_IMPORT_NAMES,
+  KIT_PLAIN_PAGE_FILES,
   KIT_RUNTIME_PATH,
   RELEASED_KIT_VERSIONS,
   kitFilePath,
-  kitImportPath
+  kitImportPath,
+  kitStylesPlainPages
 } from "./kit";
 export {
   DEFAULT_PAGE_BUILD_LIMITS,

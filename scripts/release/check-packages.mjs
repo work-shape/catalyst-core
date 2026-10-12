@@ -23,8 +23,8 @@ const DEPLOYMENT_KIT = "deployment-kit";
 const MAX_TARBALL_BYTES = 300_000;
 // chat-ui and ui ship src/ next to dist/ for Tailwind scanning. chat-server ships the pinned
 // view runtime it serves, about 230 kB packed, its own code, about 150 kB packed, and every
-// released App Kit version, about 385 kB packed each, most of it the chart engine. Two versions
-// are released, and the limit has room for two more. A version repeats the chart engine and
+// released App Kit version, about 385 kB packed each, most of it the chart engine. Three versions
+// are released, and the limit has room for one more. A version repeats the chart engine and
 // React byte for byte, about 258 kB packed, so sharing those between versions is the way to
 // stop the growth before the limit moves again. postgres-store ships its migrations with one
 // schema snapshot each, about 9 kB packed per migration.

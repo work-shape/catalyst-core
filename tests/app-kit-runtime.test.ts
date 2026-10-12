@@ -3,8 +3,13 @@ import { appendFile, cp, mkdtemp, readdir, readFile, rm, writeFile } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { kitFilePath, kitImportPath, RELEASED_KIT_VERSIONS } from "@vivd-catalyst/app-build";
-import { APP_KIT_FILES, deriveAppContentKey, loadAppKitFiles } from "@vivd-catalyst/chat-server";
+import {
+  kitFilePath,
+  kitImportPath,
+  kitStylesPlainPages,
+  RELEASED_KIT_VERSIONS
+} from "@vivd-catalyst/app-build";
+import { appKitFilesOf, deriveAppContentKey, loadAppKitFiles } from "@vivd-catalyst/chat-server";
 import { resolveInstanceModules } from "@vivd-catalyst/client-assembly";
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import { z } from "zod";
@@ -63,14 +68,16 @@ describe("the released App Kit versions", () => {
     for (const version of versions) {
       const manifest = await readManifest(version);
       expect(manifest.version).toBe(version);
-      expect(manifest.files.map((file) => file.file).sort()).toEqual([...APP_KIT_FILES].sort());
+      expect(manifest.files.map((file) => file.file).sort()).toEqual(
+        [...appKitFilesOf(version)].sort()
+      );
       for (const file of manifest.files) {
         const bytes = await readFile(join(kitRoot, version, file.file));
         expect({ file: file.file, bytes: bytes.byteLength, sha256: sha256(bytes) }).toEqual(file);
       }
       // Nothing lies in the directory that the manifest does not account for.
       expect((await readdir(join(kitRoot, version))).sort()).toEqual(
-        ["manifest.json", ...APP_KIT_FILES].sort()
+        ["manifest.json", ...appKitFilesOf(version)].sort()
       );
       for (const library of manifest.libraries) {
         expect(library.version).toMatch(/^\d+\.\d+\.\d+$/u);
@@ -103,7 +110,7 @@ describe("the released App Kit versions", () => {
 
   it("names no host: the files reach each other by relative addresses only", async () => {
     for (const version of RELEASED_KIT_VERSIONS) {
-      for (const file of APP_KIT_FILES.filter((name) => name.endsWith(".js"))) {
+      for (const file of appKitFilesOf(version).filter((name) => name.endsWith(".js"))) {
         const text = await readFile(join(kitRoot, version, file), "utf8");
         const imported = [
           ...text.matchAll(/\bfrom\s*"([^"]+)"/gu),
@@ -120,6 +127,60 @@ describe("the released App Kit versions", () => {
       }
       const css = await readFile(join(kitRoot, version, "ui.css"), "utf8");
       expect(css).not.toMatch(/@import|url\(\s*["']?(?:https?:)?\/\//iu);
+    }
+  });
+
+  it("holds a stylesheet for a plain Page without a utility class, whose base rules have no specificity", async () => {
+    /** A selector without its `:where(...)` parts: what is left is what gives it specificity. */
+    const outsideWhere = (selector: string): string => {
+      let rest = "";
+      let depth = 0;
+      for (let index = 0; index < selector.length; index += 1) {
+        if (depth === 0 && selector.startsWith(":where(", index)) {
+          depth = 1;
+          index += ":where(".length - 1;
+        } else if (depth > 0) {
+          depth += selector[index] === "(" ? 1 : selector[index] === ")" ? -1 : 0;
+        } else {
+          rest += selector[index];
+        }
+      }
+      return rest;
+    };
+
+    for (const version of RELEASED_KIT_VERSIONS.filter(kitStylesPlainPages)) {
+      const css = await readFile(join(kitRoot, version, "page.css"), "utf8");
+      // The layer after the reset, where the base rules are, up to the brace that closes it.
+      const layerStart = css.indexOf("@layer components{");
+      expect(layerStart).toBeGreaterThan(css.indexOf("@layer base{"));
+      let layerEnd = layerStart + "@layer components{".length;
+      for (let depth = 1; depth > 0; layerEnd += 1) {
+        depth += css[layerEnd] === "{" ? 1 : css[layerEnd] === "}" ? -1 : 0;
+      }
+      // The base rules all start at the document. The layer also holds the library's rules for
+      // the scrollbar, which set nothing else.
+      const rules = [...css.slice(layerStart, layerEnd).matchAll(/(?<=[{}])[^{}@]+(?=\{)/gu)]
+        .map((rule) => rule[0])
+        .filter((selector) => selector.startsWith(":where(html)"));
+      expect(rules).toContain(":where(html) :where(body)");
+      for (const selector of rules) {
+        // No specificity, but for a pseudo-element, which cannot stand inside `:where()`.
+        expect(outsideWhere(selector).replace("::placeholder", "").trim(), selector).toBe("");
+      }
+      // No utility class: a class name of an author means what the author's rule says. The
+      // classes left are the library's own marks: for the mode, and for an icon and its size.
+      expect(css).not.toContain("@layer utilities{");
+      const classes = [
+        ...css.replace(/\/\*[^]*?\*\//gu, "").matchAll(/\.(-?[A-Za-z_][\w-]*)(?=[^{}]*\{)/gu)
+      ].map((match) => match[1]);
+      expect([...new Set(classes)].sort()).toEqual(["dark", "lucide", "size-3"]);
+      // The library's stylesheet holds its utilities and none of the base rules.
+      const library = await readFile(join(kitRoot, version, "ui.css"), "utf8");
+      expect(library).toContain("@layer utilities{");
+      expect(library).not.toContain(":where(body)");
+      // The theme script stands alone: it loads nothing of the kit.
+      const theme = await readFile(join(kitRoot, version, "theme.js"), "utf8");
+      expect(theme).not.toMatch(/\bfrom\s*"|\bimport\s*[("]/u);
     }
   });
 

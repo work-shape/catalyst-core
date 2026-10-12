@@ -2,8 +2,17 @@ import { context, transform, type Loader, type Message, type Plugin } from "esbu
 import { fileSetPathIssue } from "@vivd-catalyst/core";
 import type { CompiledAppAction } from "./action-input";
 import { compileActions } from "./actions";
-import { resolveReference, rewriteHtml } from "./html";
-import { APP_KIT_PACKAGE, KIT_IMPORT_NAMES, kitFilePath, kitImportPath } from "./kit";
+import { resolveReference, rewriteHtml, withHeadStart } from "./html";
+import {
+  APP_KIT_PACKAGE,
+  KIT_IMPORT_NAMES,
+  KIT_STYLESHEET_FILE,
+  htmlPageHead,
+  kitFilePath,
+  kitImportPath,
+  kitStylesPlainPages,
+  rendersKitComponents
+} from "./kit";
 import {
   PAGE_BUILD_MAX_ERRORS,
   PAGE_BUILD_MAX_MESSAGE_CHARS,
@@ -202,6 +211,8 @@ async function buildHtmlPage(
   const built = new Map<string, Uint8Array>();
   const errors: PageBuildError[] = [];
   const entries = new Map<string, string>();
+  /** Per HTML file, its text and the module scripts it loads. */
+  const documents = new Map<string, { html: string; modules: string[] }>();
   // An inline block that became a file, for errors that are reported against that file.
   const inlineOrigins = new Map<string, { file: string; line: number }>();
 
@@ -216,8 +227,10 @@ async function buildHtmlPage(
     });
     errors.push(...rewritten.errors);
     built.set(file.path, encoder.encode(rewritten.html));
-    for (const script of rewritten.moduleScripts) {
-      entries.set(script.source, withoutExtension(script.source));
+    const modules = rewritten.moduleScripts.map((script) => script.source);
+    documents.set(file.path, { html: rewritten.html, modules });
+    for (const source of modules) {
+      entries.set(source, withoutExtension(source));
     }
     for (const block of rewritten.extracted) {
       inlineOrigins.set(block.path, { file: file.path, line: block.line });
@@ -225,6 +238,7 @@ async function buildHtmlPage(
       if (block.kind === "module_script") {
         sources.set(block.path, bytes);
         entries.set(block.path, withoutExtension(block.path));
+        modules.push(block.path);
         continue;
       }
       built.set(block.path, bytes);
@@ -241,6 +255,7 @@ async function buildHtmlPage(
     return failed(errors);
   }
   const bundled = new Set<string>();
+  const componentEntries = new Set<string>();
   if (entries.size > 0) {
     const bundle = await bundleEntries({
       kitVersion: manifest.kit,
@@ -256,6 +271,16 @@ async function buildHtmlPage(
       built.set(file.path, file.bytes);
     }
     bundle.inputs.forEach((path) => bundled.add(path));
+    bundle.componentEntries.forEach((path) => componentEntries.add(path));
+  }
+  if (kitStylesPlainPages(manifest.kit)) {
+    // Nothing else gives an HTML file a stylesheet of the kit or the theme: an author cannot
+    // link an address outside the Page's folder, and a script that imports the kit loads no
+    // styles.
+    for (const [path, { html, modules }] of documents) {
+      const look = modules.some((source) => componentEntries.has(source)) ? "components" : "plain";
+      built.set(path, encoder.encode(withHeadStart(html, htmlPageHead(manifest.kit, look))));
+    }
   }
   for (const file of files) {
     if (
@@ -303,7 +328,13 @@ function finish(
 }
 
 type Bundle =
-  | { status: "bundled"; files: PageFile[]; inputs: string[] }
+  | {
+      status: "bundled";
+      files: PageFile[];
+      inputs: string[];
+      /** The entries whose script renders components of the kit. */
+      componentEntries: string[];
+    }
   | { status: "errors"; errors: PageBuildError[] };
 
 /** One script per entry, with the kit left as imports of paths on the instance. */
@@ -351,7 +382,13 @@ async function bundleEntries(input: {
         path: file.path.slice(OUT_DIRECTORY.length + 1).replaceAll("\\", "/"),
         bytes: file.contents
       })),
-      inputs: Object.keys(result.metafile?.inputs ?? {}).map(withoutNamespace)
+      inputs: Object.keys(result.metafile?.inputs ?? {}).map(withoutNamespace),
+      componentEntries: Object.values(result.metafile?.outputs ?? {}).flatMap((output) =>
+        output.entryPoint !== undefined &&
+        output.imports.some((imported) => rendersKitComponents(imported.path))
+          ? [withoutNamespace(output.entryPoint)]
+          : []
+      )
     };
   } catch (error) {
     const messages = buildMessages(error);
@@ -523,7 +560,7 @@ function reactDocument(manifest: PageManifest, options: { withStyles: boolean })
     '<html><head><meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
     `<title>${escapeText(manifest.name)}</title>`,
-    `<link rel="stylesheet" href="${kitFilePath(manifest.kit, "ui.css")}">`,
+    `<link rel="stylesheet" href="${kitFilePath(manifest.kit, KIT_STYLESHEET_FILE)}">`,
     ...(options.withStyles ? ['<link rel="stylesheet" href="./app.css">'] : []),
     '</head><body><div id="root"></div>',
     '<script type="module" src="./app.js"></script>',

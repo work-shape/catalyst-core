@@ -7,6 +7,25 @@ contain breaking changes; a patch version does not.
 
 ### Added
 
+- **Pages, plain HTML:** App Kit version `1.2.0`, with two new files, `page.css` and `theme.js`.
+  A plain HTML Page that names it comes out with the look of the platform: the build links
+  `page.css` and `theme.js` first into every HTML file of a Page with an `entry`, also one whose
+  script imports the kit to call an action. `page.css` holds the library's tokens and reset and
+  base rules for plain elements (room around the body, font, type sizes, and plain headings,
+  links, lists, tables, buttons and fields) and no utility class, so a class name of the Page
+  such as `table` or `hidden` means only what the Page's own rule says. An HTML file whose
+  script mounts components (it imports `react`, `react-dom`, the kit's `ui` or a router) gets
+  `ui.css` in place of `page.css`, as a React Page does, and none of the base rules; one that
+  imports only the kit itself or its `charts` stays a plain Page. `theme.js` asks the
+  interface for its theme and mode and keeps the tokens on `<html>`, so the Page follows light
+  and dark. Every base rule has no specificity and sits in the layer `components`, so a rule of
+  the Page's own wins when it stands outside any layer or in a layer of the Page's own; one the
+  Page writes into `@layer base` loses. A React Page and a Page that names `1.0.0` or `1.1.0`
+  build to the files they built to before. **Operators:** the build runs in the runner image, so
+  a runner image of an earlier release refuses `kit: 1.2.0` with "an exact released kit version:
+  1.0.0, 1.1.0"; roll out the runner image with the instance. **Rollback:** an earlier release
+  does not serve `/app-runtime/kit/1.2.0/`, so a Page saved with `1.2.0` shows nothing there
+  until it is saved again with `kit: 1.1.0`.
 - **Documentation links:** release config `ui.docsUrl` names where an instance's documentation
   is read. With it the account menu has a "Documentation" item in a group of its own above
   Sign out, and the Access page, the New right dialog, the rights check and the read-only

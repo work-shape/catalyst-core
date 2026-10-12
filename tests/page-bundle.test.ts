@@ -366,6 +366,173 @@ describe("a plain HTML Page", () => {
     ]);
   });
 
+  describe("on a kit version that styles plain Pages", () => {
+    const styled = (html: string, more: Record<string, string> = {}) =>
+      pageFiles({
+        "app.yaml": "id: demo-page\nname: Demo Page\nkit: 1.2.0\nentry: index.html\n",
+        "index.html": html,
+        ...more
+      });
+    const baseStyles = '<link rel="stylesheet" href="/app-runtime/kit/1.2.0/page.css">';
+    const themeScript = '<script type="module" src="/app-runtime/kit/1.2.0/theme.js"></script>';
+
+    it("links the stylesheet of a plain Page and the theme script first in every HTML file", async () => {
+      const files = built(
+        await buildPage({
+          files: styled(
+            `<!doctype html>
+<html lang="en">
+  <head>
+    <title>Calculator</title>
+    <style>body { padding: 0; }</style>
+  </head>
+  <body><h1>Calculator</h1></body>
+</html>
+`,
+            { "help/index.html": "<h1>Help</h1>\n" }
+          )
+        })
+      );
+
+      // Before the author's own style sheet, so a rule of the author is the later one.
+      expect(files.get("index.html")).toContain(
+        `<head>${baseStyles}${themeScript}\n    <title>Calculator</title>\n    <link rel="stylesheet" href="./index.inline-1.css">`
+      );
+      // A file without `<html>` and `<head>` gets them at its start.
+      expect(files.get("help/index.html")).toBe(`${baseStyles}${themeScript}<h1>Help</h1>\n`);
+    });
+
+    it("writes them after the doctype or the html tag of a file that has no head tag", async () => {
+      const withDoctype = built(
+        await buildPage({ files: styled("<!-- tool -->\n<!DOCTYPE html>\n<p>Hi</p>\n") })
+      );
+      const withHtml = built(
+        await buildPage({ files: styled('<!doctype html><html lang="de"><body>Hi</body></html>') })
+      );
+
+      expect(withDoctype.get("index.html")).toBe(
+        `<!-- tool -->\n<!DOCTYPE html>${baseStyles}${themeScript}\n<p>Hi</p>\n`
+      );
+      expect(withHtml.get("index.html")).toBe(
+        `<!doctype html><html lang="de">${baseStyles}${themeScript}<body>Hi</body></html>`
+      );
+    });
+
+    it("styles an HTML file whose script imports the kit only to call an action", async () => {
+      const files = built(
+        await buildPage({
+          files: styled(
+            `<!doctype html>
+<head><title>Rows</title></head>
+<body>
+  <script type="module" src="./src/main.ts"></script>
+</body>
+`,
+            {
+              "src/main.ts":
+                'import { actions } from "@work-shape/catalyst-app-kit";\nvoid actions.call("rows");\n'
+            }
+          )
+        })
+      );
+
+      // Such a script renders nothing of the kit, so the file is one of plain elements.
+      expect(files.get("index.html")).toBe(`<!doctype html>
+<head>${baseStyles}${themeScript}<title>Rows</title></head>
+<body>
+  <script type="module" src="./src/main.js"></script>
+</body>
+`);
+      expect(files.get("src/main.js")).toContain('"/app-runtime/kit/1.2.0/kit.js"');
+    });
+
+    it("links the library's stylesheet, and no base rules, into an HTML file whose script renders components", async () => {
+      const files = built(
+        await buildPage({
+          files: styled(
+            `<!doctype html>
+<head><title>Chart</title></head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="./src/main.tsx"></script>
+</body>
+`,
+            {
+              "src/main.tsx": `import { createRoot } from "react-dom/client";
+import { Button } from "@work-shape/catalyst-app-kit";
+createRoot(document.getElementById("root")!).render(<Button>Go</Button>);
+`,
+              // Beside it, a file of the same Page with plain elements only.
+              "about.html": "<p>About</p>\n"
+            }
+          )
+        })
+      );
+
+      expect(files.get("index.html")).toContain(
+        `<head><link rel="stylesheet" href="/app-runtime/kit/1.2.0/ui.css">${themeScript}<title>Chart</title></head>`
+      );
+      expect(files.get("index.html")).not.toContain("page.css");
+      expect(files.get("about.html")).toBe(`${baseStyles}${themeScript}<p>About</p>\n`);
+    });
+
+    // The rule the `page.save` description gives the model, one case for each name a Page may
+    // import from the kit. Reported in review: a plain dashboard that only drew a chart with
+    // `drawChart` was counted as one of components and lost its margin and its base rules.
+    it.each([
+      ["@work-shape/catalyst-app-kit", "page.css"],
+      ["@work-shape/catalyst-app-kit/charts", "page.css"],
+      ["@work-shape/catalyst-app-kit/ui", "ui.css"],
+      ["@work-shape/catalyst-app-kit/router", "ui.css"],
+      ["@tanstack/react-router", "ui.css"],
+      ["react", "ui.css"],
+      ["react/jsx-runtime", "ui.css"],
+      ["react-dom", "ui.css"],
+      ["react-dom/client", "ui.css"]
+    ])("gives an HTML file whose script imports %s the stylesheet %s", async (name, stylesheet) => {
+      const files = built(
+        await buildPage({
+          files: styled(
+            '<head><title>Tool</title></head><h1>Tool</h1><script type="module" src="./main.ts"></script>\n',
+            { "main.ts": `import * as imported from "${name}";\nconsole.log(imported);\n` }
+          )
+        })
+      );
+
+      expect(files.get("index.html")).toContain(
+        `<head><link rel="stylesheet" href="/app-runtime/kit/1.2.0/${stylesheet}">${themeScript}<title>Tool</title></head>`
+      );
+      expect(files.get("index.html")).not.toContain(
+        stylesheet === "page.css" ? "ui.css" : "page.css"
+      );
+    });
+
+    it("leaves the document of a React Page with the kit's stylesheet alone", async () => {
+      const files = built(
+        await buildPage({
+          files: pageFiles({
+            "app.yaml": "id: demo-page\nname: Demo Page\nkit: 1.2.0\n",
+            "src/routes/__root.tsx": rootRoute,
+            "src/routes/index.tsx": fileRoute("/")
+          })
+        })
+      );
+
+      expect(files.get("index.html")).toContain(
+        '<link rel="stylesheet" href="/app-runtime/kit/1.2.0/ui.css">'
+      );
+      expect(files.get("index.html")).not.toContain("page.css");
+      expect(files.get("index.html")).not.toContain("theme.js");
+    });
+  });
+
+  it("builds a Page of a kit version without the base rules to the files it built to before", async () => {
+    // A stored Page names the version it was built with, and 1.0.0 and 1.1.0 hold no theme script.
+    const html = "<!doctype html>\n<head><title>Old</title></head>\n<p>Hi</p>\n";
+
+    expect(built(await buildPage({ files: page(html) })).get("index.html")).toBe(html);
+  });
+
   it("refuses a script and a style sheet from another host", async () => {
     const result = await buildPage({
       files: page(`<!doctype html>

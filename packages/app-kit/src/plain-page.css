@@ -1,0 +1,206 @@
+/* The base rules of a plain Page: an HTML file an author wrote with plain elements, whether or
+   not its script imports the kit for data. They are part of `page.css` and of no other file, so
+   they reach no document that renders the library's components.
+
+   They give the page the platform's margin, font and type scale and give each plain element the
+   look of the library's part for it, from the same tokens. They add no class and no component.
+
+   Every selector is inside `:where()`, so each rule has no specificity, and the rules sit in
+   the layer `components`. An author's rule outside any layer wins, whatever its selector, and
+   so does a rule in a layer of the author's own, which comes later. A rule the author writes
+   into `@layer base` loses, and one in `@layer components` wins only by coming later. The layer
+   is `components` because it comes after `base`: there the library's reset sets margins,
+   heading sizes and list markers to nothing, with selectors that would win over `:where()`
+   inside one layer.
+
+   An author may set a surface of their own, such as a light `body` or a white card, and leave
+   everything else. Two rules keep text readable there in both modes. A rule that sets a fill
+   from a token sets the text colour of that token too, so a control never shows the author's
+   text on the platform's fill. And text that stands on whatever lies beneath takes its colour
+   from the text around it: a link is that colour, underlined, and quiet text is that colour
+   thinned. The accent and the muted token would be the platform's colours on a surface the
+   platform did not choose. */
+@layer components {
+  :where(html) {
+    /* How much of the surrounding text colour quiet text keeps. Dark grey on white still reads
+       at 4.5 to 1 with it. */
+    --page-quiet-text: 70%;
+
+    :where(body) {
+      @apply p-(--layout-gutter) font-sans text-body antialiased;
+    }
+
+    :where(h1) {
+      @apply text-title-lg;
+    }
+
+    :where(h2) {
+      @apply text-title;
+    }
+
+    :where(h3) {
+      @apply text-title-sm;
+    }
+
+    :where(h4, h5, h6) {
+      @apply text-heading;
+    }
+
+    :where(h1, h2, h3, h4, h5, h6) {
+      @apply mt-6 mb-2;
+    }
+
+    :where(p, ul, ol, dl, pre, table, blockquote, figure, fieldset, form, details) {
+      @apply mb-3;
+    }
+
+    :where(hr) {
+      @apply my-4;
+    }
+
+    /* A block opens and closes flush with what holds it: the room around it is its holder's. */
+    :where(:first-child) {
+      margin-block-start: 0;
+    }
+
+    :where(:last-child) {
+      margin-block-end: 0;
+    }
+
+    :where(ul) {
+      @apply list-disc pl-5;
+    }
+
+    :where(ol) {
+      @apply list-decimal pl-5;
+    }
+
+    :where(a) {
+      @apply underline underline-offset-2;
+      color: inherit;
+    }
+
+    /* Quiet text: the colour of the text around it, thinned. */
+    :where(small, figcaption, caption, blockquote, th) {
+      color: color-mix(in srgb, currentColor var(--page-quiet-text), transparent);
+    }
+
+    /* Quiet text inside quiet text is thinned once: it takes the colour around it as it is. */
+    :where(small, figcaption, caption, blockquote, th)
+      :where(small, figcaption, caption, blockquote, th) {
+      color: inherit;
+    }
+
+    :where(small, figcaption, caption) {
+      @apply text-caption;
+    }
+
+    :where(label, legend, summary, dt) {
+      @apply text-label;
+    }
+
+    :where(blockquote) {
+      @apply border-l-2 pl-3;
+    }
+
+    :where(code, kbd, samp, pre) {
+      @apply font-mono text-code;
+    }
+
+    :where(:not(pre) > code, kbd) {
+      @apply rounded-sm bg-muted px-1 text-foreground;
+    }
+
+    :where(pre) {
+      @apply overflow-x-auto rounded-md bg-muted p-3 text-foreground;
+    }
+
+    :where(table) {
+      @apply w-full text-left;
+    }
+
+    :where(th, td) {
+      @apply border-b px-3 py-2.5 align-middle;
+    }
+
+    :where(th) {
+      @apply text-caption font-medium whitespace-nowrap;
+    }
+
+    :where(tbody tr:last-child > *) {
+      @apply border-b-0;
+    }
+
+    :where(fieldset) {
+      @apply rounded-lg border p-4;
+    }
+
+    :where(button, input:is([type="button"], [type="submit"], [type="reset"])) {
+      @apply inline-flex h-control-md items-center justify-center gap-2 rounded-full border border-input bg-background px-4 text-label whitespace-nowrap text-foreground shadow-control transition-[color,background-color,border-color,box-shadow];
+
+      /* The state tints are see-through. They lie over the button's own fill, as a layer above
+         it, so the text keeps the fill it was chosen for. */
+      &:where(:hover) {
+        @apply border-input-strong;
+        background-image: linear-gradient(var(--state-hover), var(--state-hover));
+      }
+
+      &:where(:active) {
+        @apply shadow-none;
+        background-image: linear-gradient(var(--state-pressed), var(--state-pressed));
+      }
+
+      &:where(:focus-visible) {
+        @apply focus-ring;
+      }
+
+      &:where(:disabled) {
+        @apply pointer-events-none opacity-50;
+      }
+    }
+
+    :where(
+      select,
+      textarea,
+      input:not(
+        [type="button"],
+        [type="submit"],
+        [type="reset"],
+        [type="checkbox"],
+        [type="radio"],
+        [type="range"],
+        [type="color"],
+        [type="file"],
+        [type="image"]
+      )
+    ) {
+      @apply h-control-md rounded-md border border-input bg-background px-3 text-body text-foreground transition-colors;
+
+      /* A pseudo-element cannot stand inside `:where()`. The layer alone keeps this one below an
+         author's rule. */
+      &::placeholder {
+        @apply text-muted-foreground;
+      }
+
+      &:where(:hover) {
+        @apply border-input-strong;
+      }
+
+      &:where(:focus-visible) {
+        @apply focus-field;
+      }
+
+      &:where(:disabled) {
+        @apply pointer-events-none opacity-50;
+      }
+    }
+
+    :where(textarea) {
+      @apply h-auto min-h-20 py-2;
+    }
+
+    :where(input:is([type="checkbox"], [type="radio"], [type="range"]), progress, meter) {
+      accent-color: var(--primary);
+    }
+  }
+}

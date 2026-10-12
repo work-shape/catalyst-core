@@ -1,0 +1,107 @@
+{
+  "version": "1.2.0",
+  "files": [
+    {
+      "file": "charts.js",
+      "bytes": 572513,
+      "sha256": "f6201667924111a80748d12a56a595314501a0a54872cfc15a67b211b7a1d377"
+    },
+    {
+      "file": "kit.js",
+      "bytes": 6794,
+      "sha256": "e81c5b68595705fbde5ee682649f8946b6262914063de711c8da8cfdd555f9ff"
+    },
+    {
+      "file": "page.css",
+      "bytes": 21808,
+      "sha256": "1d6d5c32a020f577cae1fac6dc87894f865f169d9eae23dcab5ba62ff7062f52"
+    },
+    {
+      "file": "react.js",
+      "bytes": 196817,
+      "sha256": "854b07c6ec08ccfd474c419c97214d1acb8cdcc813443b1b9969d41c581e5e05"
+    },
+    {
+      "file": "router.js",
+      "bytes": 112073,
+      "sha256": "e8b7c2ee728f3779862571eb4d15d4948659c9d61d7437263330553c4ba94726"
+    },
+    {
+      "file": "theme.js",
+      "bytes": 8902,
+      "sha256": "c89d36fae061cb4e9318747c705ca5305c13dd7a34bce4a2966664e6ee449d5b"
+    },
+    {
+      "file": "ui.css",
+      "bytes": 57853,
+      "sha256": "8da80acff23ea80327bb48407d66c9457f5070cdf7e6888c6000bbc9d20dbf76"
+    },
+    {
+      "file": "ui.js",
+      "bytes": 245029,
+      "sha256": "b0610773e3f4166f7702671f91e218995bdf3230d02fced2581b1cbb4560c9a0"
+    }
+  ],
+  "libraries": [
+    {
+      "name": "react",
+      "version": "19.2.7",
+      "licence": "MIT"
+    },
+    {
+      "name": "react-dom",
+      "version": "19.2.7",
+      "licence": "MIT"
+    },
+    {
+      "name": "@tanstack/react-router",
+      "version": "1.170.16",
+      "licence": "MIT"
+    },
+    {
+      "name": "echarts",
+      "version": "6.1.0",
+      "licence": "Apache-2.0"
+    },
+    {
+      "name": "radix-ui",
+      "version": "1.6.2",
+      "licence": "MIT"
+    },
+    {
+      "name": "cmdk",
+      "version": "1.1.1",
+      "licence": "MIT"
+    },
+    {
+      "name": "lucide-react",
+      "version": "1.17.0",
+      "licence": "ISC"
+    },
+    {
+      "name": "class-variance-authority",
+      "version": "0.7.1",
+      "licence": "Apache-2.0"
+    },
+    {
+      "name": "clsx",
+      "version": "2.1.1",
+      "licence": "MIT"
+    },
+    {
+      "name": "tailwind-merge",
+      "version": "3.6.0",
+      "licence": "MIT"
+    },
+    {
+      "name": "tailwindcss",
+      "version": "4.3.0",
+      "licence": "MIT"
+    },
+    {
+      "name": "tw-animate-css",
+      "version": "1.4.0",
+      "licence": "MIT"
+    }
+  ]
+}

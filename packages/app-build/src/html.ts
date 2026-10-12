@@ -227,6 +227,28 @@ export function rewriteHtml(input: {
   return { html: rewritten, extracted, moduleScripts, staticReferences, errors };
 }
 
+/**
+ * The HTML with `text` written where its head starts: after the `<head>` tag, or, in a file
+ * without one, after `<html>`, after the doctype or at the very start. Wherever that is, the
+ * parser has opened no body yet, so what is written becomes the first of the head.
+ */
+export function withHeadStart(html: string, text: string): string {
+  const document = parse(html, { sourceCodeLocationInfo: true });
+  const root = document.childNodes.find(
+    (node): node is Element => "tagName" in node && node.tagName === "html"
+  );
+  const head = root?.childNodes.find(
+    (node): node is Element => "tagName" in node && node.tagName === "head"
+  );
+  const doctype = document.childNodes.find((node) => node.nodeName === "#documentType");
+  const offset =
+    head?.sourceCodeLocation?.startTag?.endOffset ??
+    root?.sourceCodeLocation?.startTag?.endOffset ??
+    doctype?.sourceCodeLocation?.endOffset ??
+    0;
+  return html.slice(0, offset) + text + html.slice(offset);
+}
+
 function attribute(element: Element, name: string): string | undefined {
   return element.attrs.find((candidate) => candidate.name === name)?.value;
 }

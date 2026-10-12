@@ -123,6 +123,128 @@ export const pageSource = (heading: string): Record<string, string> => ({
   "src/routes/data.tsx": dataRoute
 });
 
+/**
+ * A Page as plain HTML that sets one rule of its own, on the heading's margin, and leaves
+ * everything else about its look to the platform. Four of its class names are also names of
+ * utility classes of the library, and its only rule for one of them changes the letters. Its
+ * script imports the kit the way a Page that reads data does and draws a chart with the kit's
+ * `drawChart`, and shows nothing by a component.
+ */
+export const plainPageSource: Record<string, string> = {
+  "app.yaml": "id: revenue\nname: Revenue\nkit: 1.2.0\nentry: index.html\n",
+  "index.html": `<!doctype html>
+<html>
+  <head>
+    <title>Margin calculator</title>
+    <style>
+      h1 { margin-bottom: 40px; }
+      .hidden { text-transform: uppercase; }
+    </style>
+  </head>
+  <body>
+    <h1>Margin calculator</h1>
+    <p>Price and cost give the <a href="#margin">margin</a>.</p>
+    <label for="price">Price</label>
+    <input id="price" value="120">
+    <button id="calculate">Calculate</button>
+    <p id="viewer"></p>
+    <div id="names">
+      <div class="table">Rows</div>
+      <div class="collapse">Details</div>
+      <div class="container">Frame</div>
+      <div class="hidden">Later</div>
+    </div>
+    <table>
+      <thead><tr><th>Month</th><th>Margin</th></tr></thead>
+      <tbody><tr><td>January</td><td>32 %</td></tr><tr><td>February</td><td>35 %</td></tr></tbody>
+    </table>
+    <div id="chart" style="height: 200px"></div>
+    <script type="module">
+      import { getContext } from "@work-shape/catalyst-app-kit";
+      import { drawChart } from "@work-shape/catalyst-app-kit/charts";
+      const context = await getContext();
+      document.getElementById("viewer").textContent = "Shown to " + context.viewer.displayName;
+
+      const container = document.getElementById("chart");
+      const spec = {
+        type: "bar",
+        categories: ["January", "February", "March"],
+        series: [{ label: "Margin", values: [32, 35, 31] }],
+        stacked: false,
+        formatValue: (value) => value + " %"
+      };
+      const palette = () => {
+        const probe = document.createElement("span");
+        container.append(probe);
+        const token = (name) => {
+          probe.style.color = "var(" + name + ")";
+          return getComputedStyle(probe).color;
+        };
+        const text = getComputedStyle(container);
+        const colours = {
+          series: [token("--chart-1"), token("--chart-2")],
+          text: token("--muted-foreground"),
+          line: token("--border"),
+          surface: token("--background"),
+          tooltipSurface: token("--popover"),
+          tooltipText: token("--popover-foreground"),
+          fontFamily: text.fontFamily,
+          fontSize: Number.parseFloat(text.fontSize)
+        };
+        probe.remove();
+        return colours;
+      };
+      const chart = drawChart(container, spec, palette());
+      // A drawn chart keeps its size, so the Page fits it to its element again.
+      new ResizeObserver(() => chart.resize()).observe(container);
+      new MutationObserver(() => chart.update(spec, palette())).observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["class", "style"]
+      });
+    </script>
+  </body>
+</html>
+`
+};
+
+/**
+ * The plain Page of an author who chose a light surface and dark text and nothing else: a grey
+ * body, a white card, and every plain element the platform gives a look to.
+ */
+export const ownSurfacePageSource: Record<string, string> = {
+  "app.yaml": plainPageSource["app.yaml"] ?? "",
+  "index.html": `<!doctype html>
+<html>
+  <head>
+    <title>Margin calculator</title>
+    <style>
+      body { background: #f5f5f5; color: #333; }
+      .card { background: #fff; }
+    </style>
+  </head>
+  <body>
+    <h1>Margin calculator</h1>
+    <div class="card">
+      <p>Price and cost give the <a href="#margin">margin</a>, as <code>price - cost</code>.</p>
+      <small>Figures of this year</small>
+      <label for="price">Price</label>
+      <input id="price" value="120">
+      <select aria-label="Month"><option>January</option></select>
+      <textarea aria-label="Note">A note</textarea>
+      <button id="calculate">Calculate</button>
+      <pre>margin = price - cost</pre>
+      <blockquote>Quoted from the plan <small>and its footnote</small></blockquote>
+      <figure><figcaption>Margin by month, <small>in percent</small></figcaption></figure>
+      <table>
+        <thead><tr><th>Month</th><th>Margin</th></tr></thead>
+        <tbody><tr><td>January</td><td>32 %</td></tr></tbody>
+      </table>
+    </div>
+  </body>
+</html>
+`
+};
+
 const linesOf = (text: string) => text.replace(/\n$/u, "").split("\n");
 
 /** A patch that writes new files into the Page's folder. */

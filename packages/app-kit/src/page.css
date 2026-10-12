@@ -1,0 +1,7 @@
+/* `page.css` of a kit version: the stylesheet of a plain Page. It holds the library's tokens,
+   its reset and the base rules for plain elements, and no utility class: the release script
+   compiles it without the classes the library's components use. A class name of an author,
+   such as `table` or `hidden`, therefore means what the author's own rule says and nothing
+   else. The build links it into an HTML file that renders no component of the kit. */
+@import "./kit.css";
+@import "./plain-page.css";

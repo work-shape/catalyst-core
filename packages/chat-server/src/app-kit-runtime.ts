@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { KIT_PLAIN_PAGE_FILES, kitStylesPlainPages } from "@vivd-catalyst/app-build";
 import { z } from "zod";
 
 // The App Kit a Page loads from the instance: one frozen directory per released version under
@@ -12,14 +13,19 @@ import { z } from "zod";
 const appKitRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../vendor/app-kit");
 
 /** The files every kit version has. A Page's bundle names them by these names. */
-export const APP_KIT_FILES = [
+const APP_KIT_FILES: readonly string[] = [
   "kit.js",
   "react.js",
   "router.js",
   "ui.js",
   "ui.css",
   "charts.js"
-] as const;
+];
+
+/** The files of one kit version: those of every version, and what a later version added. */
+export function appKitFilesOf(version: string): readonly string[] {
+  return kitStylesPlainPages(version) ? [...APP_KIT_FILES, ...KIT_PLAIN_PAGE_FILES] : APP_KIT_FILES;
+}
 
 const APP_KIT_MANIFEST_FILE = "manifest.json";
 
@@ -69,7 +75,7 @@ export function loadAppKitFiles(root: string = appKitRoot): AppKitFiles {
       throw new Error(`App Kit manifest in '${entry.name}' names version '${manifest.version}'`);
     }
     const pinned = manifest.files.map((file) => file.file).sort();
-    const expected = [...APP_KIT_FILES].sort();
+    const expected = [...appKitFilesOf(manifest.version)].sort();
     if (pinned.join("\n") !== expected.join("\n")) {
       throw new Error(
         `App Kit version '${manifest.version}' pins the files ${pinned.join(", ")}. A kit version has ${expected.join(", ")}.`
