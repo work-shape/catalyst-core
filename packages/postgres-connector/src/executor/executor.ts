@@ -3,6 +3,7 @@ import type { JsonObject, ScopedSecretResolver } from "@vivd-catalyst/core";
 import { describePostgres, type PostgresDescribeResult } from "./describe";
 import { PostgresExecutorError, toPostgresExecutorError } from "./errors";
 import {
+  POSTGRES_CHANGE_MAX_TIMEOUT_MS,
   POSTGRES_CURSOR_BATCH_ROWS,
   POSTGRES_DEADLINE_GRACE_MS,
   POSTGRES_READ_MARGIN_BYTES,
@@ -19,6 +20,7 @@ import {
 import {
   PostgresConnection,
   PostgresPool,
+  type PostgresChangeSession,
   type PostgresSession,
   type PostgresTextRow
 } from "./pool";
@@ -70,14 +72,44 @@ export interface PostgresDescribeInput extends PostgresTarget {
   relation?: string;
 }
 
+/** A change of a database the platform manages itself: which database, as whom, how long. */
+export interface PostgresChangeInput extends PostgresTarget {
+  /**
+   * How long the change may take before the platform cancels it, at most
+   * `POSTGRES_CHANGE_MAX_TIMEOUT_MS`. The statement timeout of the role applies beside it.
+   */
+  timeoutMs: number;
+  /** `false` for statements the database refuses inside a transaction, such as `create database`. */
+  transaction?: false;
+}
+
+/** The statements of one change. Each runs on the connection and in the transaction of the change. */
+export interface PostgresChangeStatements {
+  /** Runs one statement with bound parameters and returns its rows. */
+  run(sql: string, parameters?: readonly PostgresParameter[]): Promise<JsonObject[]>;
+  /** Runs a text of one or more statements that binds nothing, such as a migration file. */
+  script(sql: string): Promise<void>;
+}
+
 /**
  * Runs every query against a database outside the platform. Each call takes a connection from
  * a bounded pool, works in a read-only transaction under a statement timeout and the
  * configured search path, and ends with a rollback. The platform's own timer cancels a call
  * the database did not end. Every failure is a `PostgresExecutorError`.
+ *
+ * `change` is the one call that writes, for a database the platform manages itself.
  */
 export interface PostgresExecutor {
   query(input: PostgresQueryInput): Promise<PostgresQueryResult>;
+  /**
+   * Runs `work` in one transaction that commits when it returns and rolls back when it throws.
+   * Nothing screens its statements: its caller is platform code on a database of the
+   * platform, and the role of the target is what bounds it.
+   */
+  change<T>(
+    input: PostgresChangeInput,
+    work: (statements: PostgresChangeStatements) => Promise<T>
+  ): Promise<T>;
   describe(input: PostgresDescribeInput): Promise<PostgresDescribeResult>;
   /** What the account may read and change. Data about the role only, never a business row. */
   readPrivileges(target: PostgresTarget): Promise<PostgresPrivileges>;
@@ -118,10 +150,11 @@ export function createPostgresExecutor(input: CreatePostgresExecutorInput): Post
   async function guarded<T>(
     target: PostgresTarget,
     work: (
-      session: PostgresSession,
+      session: PostgresConnection,
       limits: ResolvedPostgresLimits,
       location: PostgresLocation
-    ) => Promise<T>
+    ) => Promise<T>,
+    shape: CallShape = READ_ONLY_CALL
   ): Promise<T> {
     // Read once, before anything is awaited. What the address check saw is what is dialled,
     // whatever the caller does to its object meanwhile.
@@ -130,14 +163,15 @@ export function createPostgresExecutor(input: CreatePostgresExecutorInput): Post
     const { signal } = target;
     const pool = poolFor(location, target.credentialHandle);
     const connection = await pool.acquire(limits.maxConnections, signal);
-    const interruption = watchInterruption(
-      limits.statementTimeoutMs + POSTGRES_DEADLINE_GRACE_MS,
-      signal
-    );
+    const timeoutMs = shape.timeoutMs ?? limits.statementTimeoutMs;
+    const interruption = watchInterruption(timeoutMs + POSTGRES_DEADLINE_GRACE_MS, signal);
     const first = await Promise.race([
       interruption.raised,
-      rolledBack(connection, limits.maxBytes + POSTGRES_READ_MARGIN_BYTES, async () => {
-        await applySettings(connection, location.schemas, limits.statementTimeoutMs);
+      transacted(connection, limits.maxBytes + POSTGRES_READ_MARGIN_BYTES, shape, async () => {
+        // A change runs under the settings of its role, which the platform set on it.
+        if (shape === READ_ONLY_CALL) {
+          await applySettings(connection, location.schemas, limits.statementTimeoutMs);
+        }
         return work(connection, limits, location);
       })
     ]);
@@ -185,6 +219,19 @@ export function createPostgresExecutor(input: CreatePostgresExecutorInput): Post
         };
       });
     },
+    change(change, work) {
+      const timeoutMs = Math.min(
+        POSTGRES_CHANGE_MAX_TIMEOUT_MS,
+        Math.max(1, Math.trunc(change.timeoutMs))
+      );
+      return guarded(
+        change,
+        (session) => work(changeStatements(session)),
+        change.transaction === false
+          ? { opening: "select 1", timeoutMs }
+          : { opening: "begin", onSuccess: "commit", onFailure: "rollback", timeoutMs }
+      );
+    },
     describe(describe) {
       const { relation } = describe;
       return guarded(describe, (session, limits, location) =>
@@ -203,6 +250,34 @@ export function createPostgresExecutor(input: CreatePostgresExecutorInput): Post
       await Promise.all([...pools.values()].map((pool) => pool.close()));
       pools.clear();
     }
+  };
+}
+
+/** How a call opens and ends on its connection. */
+interface CallShape {
+  /** The first statement of the call. It begins the transaction where the call has one. */
+  opening: string;
+  /** What ends the transaction of a call whose work went through, and of one whose work failed. */
+  onSuccess?: string;
+  onFailure?: string;
+  /** The platform's own deadline, where it is not the statement timeout of the limits. */
+  timeoutMs?: number;
+}
+
+const READ_ONLY_CALL: CallShape = {
+  opening: "begin read only",
+  onSuccess: "rollback",
+  onFailure: "rollback"
+};
+
+/** The statements of a change, with their parameters bound and their failures the caller's. */
+function changeStatements(session: PostgresChangeSession): PostgresChangeStatements {
+  return {
+    run: (sql, parameters = []) => {
+      const bound = bindPostgresParameters(parameters);
+      return callerStatement(() => session.run(sql, bound));
+    },
+    script: (sql) => callerStatement(() => session.script(sql))
   };
 }
 
@@ -234,18 +309,20 @@ function frozenLocation(location: PostgresLocation): PostgresLocation {
 type Outcome<T> = { ok: true; value: T } | { ok: false; error: unknown };
 
 /**
- * Runs `work` in a read-only transaction that always ends with a rollback, so nothing a query
- * set on the session outlives it. What a rollback leaves on a session, such as an advisory
- * lock a query took for the session, is discarded after it. It never rejects. `clean` says
- * whether both went through, which is what makes the connection fit for the next call.
+ * Runs `work` in the transaction of its call shape. A read-only call always ends with a
+ * rollback, so nothing a query set on the session outlives it. What the end of a transaction
+ * leaves on a session, such as an advisory lock a query took for the session, is discarded
+ * after it. It never rejects. `clean` says whether both went through, which is what makes the
+ * connection fit for the next call. A commit the database refuses is the failure of the call.
  */
-async function rolledBack<T>(
+async function transacted<T>(
   connection: PostgresConnection,
   readLimitBytes: number,
+  shape: CallShape,
   work: () => Promise<T>
 ): Promise<{ outcome: Outcome<T>; clean: boolean }> {
   try {
-    await connection.beginReadOnly(readLimitBytes);
+    await connection.begin(shape.opening, readLimitBytes);
   } catch (error) {
     return { outcome: { ok: false, error }, clean: false };
   }
@@ -257,12 +334,19 @@ async function rolledBack<T>(
   }
   // A connection that read too much is closed, and asking it again would open another.
   if (connection.readLimitPassed) return { outcome, clean: false };
+  const ending = outcome.ok ? shape.onSuccess : shape.onFailure;
   try {
     // Sent together, so that the two cost one round trip.
-    await Promise.all([connection.run("rollback"), connection.run("discard all")]);
+    await Promise.all([
+      ...(ending === undefined ? [] : [connection.run(ending)]),
+      connection.run("discard all")
+    ]);
     return { outcome, clean: true };
-  } catch {
-    return { outcome, clean: false };
+  } catch (error) {
+    return {
+      outcome: outcome.ok && ending === "commit" ? { ok: false, error } : outcome,
+      clean: false
+    };
   }
 }
 

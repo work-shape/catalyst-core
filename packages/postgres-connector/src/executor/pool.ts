@@ -44,6 +44,14 @@ export interface PostgresSession {
   readonly readLimitPassed: boolean;
 }
 
+/** What a change of a database the platform manages does on its connection. */
+export interface PostgresChangeSession {
+  /** Runs one statement with bound parameters and returns its rows. */
+  run(text: string, parameters?: readonly BoundPostgresParameter[]): Promise<JsonObject[]>;
+  /** Runs a text of one or more statements that binds nothing, such as a migration file. */
+  script(text: string): Promise<void>;
+}
+
 export interface PostgresConnectionSource extends PostgresSocketRoute {
   secrets: ScopedSecretResolver;
   credentialHandle: string;
@@ -69,7 +77,7 @@ const TEXT_ONLY = {
  * One connection to a customer's database. It opens lazily, through the address check, and
  * asks for the password only when the server asks for it, so the password is in no field.
  */
-export class PostgresConnection implements PostgresSession {
+export class PostgresConnection implements PostgresSession, PostgresChangeSession {
   private readonly source: PostgresConnectionSource;
   private readonly closed = new AbortController();
   private readonly sql: ReturnType<typeof postgres<typeof TEXT_ONLY>>;
@@ -133,16 +141,17 @@ export class PostgresConnection implements PostgresSession {
   }
 
   /**
-   * Opens the read-only transaction and notes which backend runs it. From here the call may
-   * read `readLimitBytes` from the socket. One byte more closes the connection.
+   * Opens the call with `opening`, the statement that begins its transaction, and notes which
+   * backend runs it. From here the call may read `readLimitBytes` from the socket. One byte
+   * more closes the connection.
    */
-  async beginReadOnly(readLimitBytes: number): Promise<void> {
+  async begin(opening: string, readLimitBytes: number): Promise<void> {
     this.readBytes = 0;
     this.readLimitBytes = readLimitBytes;
     // The driver may have reconnected since the last call, to another backend.
     this.backend = undefined;
     this.mayOpenSocket = true;
-    const begun = await this.sql.unsafe("begin read only");
+    const begun = await this.sql.unsafe(opening);
     // From here every answer comes from the session that authenticated. A connection that
     // drops fails the call. It is not replaced by one that would have to authenticate again.
     this.mayOpenSocket = false;
@@ -161,6 +170,12 @@ export class PostgresConnection implements PostgresSession {
       read: postgresValueReader({ oid: column.type })
     }));
     return result.map((row) => readPostgresRow(row, columns));
+  }
+
+  async script(text: string): Promise<void> {
+    // Without parameters the driver sends the text as it is, which is what lets it hold
+    // several statements.
+    await this.sql.unsafe(text);
   }
 
   async columns(
