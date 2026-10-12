@@ -316,6 +316,14 @@ contain breaking changes; a patch version does not.
 - **Database:** migration `0065_asset_repo_commit_request` adds the columns `request` and
   `result` to `asset_repo_bundles`: what a pending save commits, without bytes, and how its
   commit ended. **Rollback:** an earlier release ignores them.
+- **Agents page:** the main rail has a row "Agents" directly under New chat, for everyone in a
+  session with workspaces. It opens `/w/<workspace>/agents`, a page with one card per agent the
+  person may use in that workspace: the name, the description, the first three starter prompts
+  and "Start chat". Start chat opens a new conversation with that agent selected; a starter
+  prompt opens one with its text in the composer. The workspace's default agent is marked. The
+  card shows the description whatever `ui.showAgentDescriptions` says. Nothing is edited there:
+  a person who may read agents in Studio gets "Edit in Studio" on each card. The page reads the
+  list the agent picker already reads and adds no call. `@vivd-catalyst/ui` gains `CardFooter`.
 - **Pages, plain HTML:** App Kit version `1.2.0`, with two new files, `page.css` and `theme.js`.
   A plain HTML Page that names it comes out with the look of the platform: the build links
   `page.css` and `theme.js` first into every HTML file of a Page with an `entry`, also one whose

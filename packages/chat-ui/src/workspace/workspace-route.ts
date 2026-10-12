@@ -17,6 +17,7 @@ export function collaborationWorkspaceHomeRoute(collaborationWorkspaceId: string
 export function routeCollaborationWorkspaceId(route: WorkspaceRoute): string | undefined {
   return route.kind === "new-conversation" ||
     route.kind === "conversation" ||
+    route.kind === "agents" ||
     route.kind === "apps" ||
     route.kind === "app" ||
     route.kind === "app-edit"

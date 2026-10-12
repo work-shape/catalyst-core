@@ -5,6 +5,9 @@ const INSTANCE_READ_PERMISSION = "config_assets.read";
 /** The right that writes and deletes every agent and skill of the instance. */
 const INSTANCE_WRITE_PERMISSION = "config_assets.write";
 
+/** The asset kind of agents, as the instance names it. */
+export const AGENT_ASSET_KIND = "agent";
+
 type AssetVerb = "read" | "write" | "delete";
 
 /** A Namespace the reader holds a right in, as the picker and the filter name it. */

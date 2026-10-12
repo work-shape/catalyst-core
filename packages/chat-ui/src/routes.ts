@@ -1,7 +1,8 @@
 import { appInterfacePath, type AppMode } from "@vivd-catalyst/api-client";
 
 /** The areas of the interface: what a route shows. */
-export type WorkspaceRouteView = "chat" | "apps" | "settings" | "inbox" | "build" | "ui-library";
+export type WorkspaceRouteView =
+  "chat" | "agents" | "apps" | "settings" | "inbox" | "build" | "ui-library";
 
 /**
  * `collaboration-workspace-root` and `legacy-conversation` are unresolved chat
@@ -13,6 +14,8 @@ export type WorkspaceRoute =
   | { kind: "legacy-conversation"; conversationId: string }
   | { kind: "new-conversation"; collaborationWorkspaceId: string }
   | { kind: "conversation"; collaborationWorkspaceId: string; conversationId: string }
+  /** The agents a person may use in one workspace. */
+  | { kind: "agents"; collaborationWorkspaceId: string }
   /** The Apps of one workspace. */
   | { kind: "apps"; collaborationWorkspaceId: string }
   /**
@@ -92,6 +95,10 @@ export const areaRoutes: readonly AreaRoute[] = [
       },
       { path: "/conversations", redirectTo: "/" }
     ]
+  },
+  {
+    area: "agents",
+    paths: [{ path: "/w/$collaborationWorkspaceId/agents", route: "agents" }]
   },
   {
     area: "apps",
@@ -246,6 +253,7 @@ function routeOf(
         ? { kind, assetKind: params.assetKind, name: params.name }
         : undefined;
     case "new-conversation":
+    case "agents":
     case "apps":
       return collaborationWorkspaceId ? { kind, collaborationWorkspaceId } : undefined;
     case "app-edit":

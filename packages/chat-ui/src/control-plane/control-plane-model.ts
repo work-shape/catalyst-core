@@ -6,6 +6,7 @@ import type {
   LocaleCode,
   SafeConfig
 } from "@vivd-catalyst/api-client";
+import { AGENT_ASSET_KIND, resolveBuildRights } from "../build-area/build-rights";
 import {
   buildLocationOfRoute,
   buildRouteOfLocation,
@@ -72,6 +73,8 @@ export interface ControlPlaneModel {
   canViewAdministration: boolean;
   /** The viewer may open Build: the rail shows its row. */
   canViewBuild: boolean;
+  /** The viewer may open agents in Build: the Agents page links each agent to its page there. */
+  canOpenAgentsInBuild: boolean;
   /** True while the UI library gallery's route is active for a user who may open it. */
   showUiLibrary: boolean;
   /** Where the command palette's "Go to" group leads for this viewer. */
@@ -224,9 +227,13 @@ export function useControlPlaneModel({
     [buildAssetName, buildKindPath, inBuild, showRoute]
   );
 
+  const canViewBuild = Boolean(build.enabled && build.page?.visible(viewer));
+
   return {
     canViewAdministration: firstAdministrationRoute(catalog, build, viewer) !== undefined,
-    canViewBuild: Boolean(build.enabled && build.page?.visible(viewer)),
+    canViewBuild,
+    canOpenAgentsInBuild:
+      canViewBuild && resolveBuildRights(user, platformContext).reads(AGENT_ASSET_KIND),
     showUiLibrary: view === "ui-library" && canViewUiLibrary,
     goToTargets: settingsGoToTargets(catalog, build, viewer),
     settings:

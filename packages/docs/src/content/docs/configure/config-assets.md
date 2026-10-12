@@ -107,6 +107,15 @@ selector when the pointer is on it. `ui.showAgentDescriptions` is `false` by
 default; with `true` the selector lists each description, and otherwise, or
 without a description, only the display name.
 
+The **Agents** page, the row under New chat in the main rail, shows every agent
+a person may use in the open workspace as a card: the display name, the
+description, the first three starter prompts and **Start chat**. Start chat
+opens a new conversation with that agent selected, and a starter prompt opens
+one with its text in the composer. The card always shows the description,
+whatever `ui.showAgentDescriptions` says, and it marks the workspace's default
+agent. A person who may read agents in Studio also finds **Edit in Studio** on
+each card.
+
 People with the `config_assets.write` permission, or with a grant in a Namespace, edit assets in [Studio](/configure/build/). The module `assetManagement` turns that on, and release config decides how much of an agent is interactively editable:
 
 ```yaml

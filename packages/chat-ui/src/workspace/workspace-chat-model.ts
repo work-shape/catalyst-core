@@ -61,6 +61,7 @@ import { useChatFileDropzone } from "../chat-file-dropzone";
 import { useToolDisplayPanel } from "../tool-display-panel";
 import type { ResolvedThemeMode } from "../theme";
 import type { WorkspaceView } from "./workspace-rail";
+import { agentListStatus, type AgentListStatus } from "../agents/agents-model";
 import { NO_APP_RIGHTS, resolveAppRights, type AppRights } from "../apps/app-model";
 import { inboxRailEntry } from "../inbox/inbox-model";
 import type { WorkspaceRoute } from "./workspace-route";
@@ -182,7 +183,20 @@ export interface WorkspaceChatModel {
   controlPlane: ControlPlaneModel;
   toolDisplay: ToolDisplayModel;
   approvalRevision: ApprovalRevisionHost;
+  agents: AgentsModel;
   apps: AppsModel;
+}
+
+/** What the workspace knows for the Agents page. The agents themselves are the picker's. */
+interface AgentsModel {
+  /** How the open workspace's own list of agents stands. */
+  status: AgentListStatus;
+  retry(): void;
+  /**
+   * Opens a new conversation of the open workspace with this agent selected. With `prompt`,
+   * that text stands in its composer.
+   */
+  startChat(agentName: string, prompt?: string): void;
 }
 
 /** What the workspace knows about Apps: the module's state and the reader's rights. */
@@ -271,6 +285,8 @@ export interface ConversationRailModel {
   canViewAdministration: boolean;
   /** Present for a person who may decide requests or has made one: the Inbox row shows. */
   inbox: { toDecide: number } | undefined;
+  /** The session has workspaces: the Agents row shows. */
+  agents: boolean;
   /** The Apps module is on: the Apps row shows. */
   apps: boolean;
   view: WorkspaceView;
@@ -861,6 +877,15 @@ export function useWorkspaceChatModel({
     chrome.requestComposerFocus();
   }
 
+  /** A new conversation of the open workspace, with this text in its composer. */
+  function startNewConversationWith(prompt: string) {
+    draftController.setDraft(
+      { authScope: WORKSPACE_AUTH_SCOPE, conversationId: undefined },
+      prompt
+    );
+    startNewConversation();
+  }
+
   function conversationStarted(conversationId: string) {
     showConversationInActiveCollaborationWorkspace(conversationId, {
       replace: route.kind === "new-conversation"
@@ -1010,6 +1035,7 @@ export function useWorkspaceChatModel({
       selectedConversationId,
       canViewAdministration,
       inbox,
+      agents: collaborationWorkspacesAvailable,
       apps: appsEnabled,
       view,
       creatingConversation: false,
@@ -1030,10 +1056,10 @@ export function useWorkspaceChatModel({
       },
       deleteConversation: (conversationId) => deleteConversationMutation.mutate(conversationId),
       selectWorkspaceView: (nextView) => {
-        // The Apps of the open workspace: the row has no address without one.
-        if (nextView === "apps" && activeCollaborationWorkspaceId) {
+        // The agents and the Apps of the open workspace: the row has no address without one.
+        if ((nextView === "agents" || nextView === "apps") && activeCollaborationWorkspaceId) {
           routeState.showRoute({
-            kind: "apps",
+            kind: nextView,
             collaborationWorkspaceId: activeCollaborationWorkspaceId
           });
           return;
@@ -1041,16 +1067,29 @@ export function useWorkspaceChatModel({
         routeState.selectWorkspaceView(nextView);
       }
     },
+    agents: {
+      status: agentListStatus({
+        // While another workspace's list stands in, this workspace's has not arrived.
+        loaded: workspaceAgentsQuery.data !== undefined && !workspaceAgentsQuery.isPlaceholderData,
+        failed: workspaceAgentsQuery.isError
+      }),
+      // A reload that fails again shows in the state of the query.
+      retry: () => {
+        workspaceAgentsQuery.refetch().catch(() => undefined);
+      },
+      startChat: (agentName, prompt) => {
+        setSelectedAgentName(agentName);
+        if (prompt === undefined) {
+          startNewConversation();
+        } else {
+          startNewConversationWith(prompt);
+        }
+      }
+    },
     apps: {
       enabled: appsEnabled,
       rights: appRights,
-      startChat: (prompt) => {
-        draftController.setDraft(
-          { authScope: WORKSPACE_AUTH_SCOPE, conversationId: undefined },
-          prompt
-        );
-        startNewConversation();
-      }
+      startChat: startNewConversationWith
     },
     selectedChat: {
       client,

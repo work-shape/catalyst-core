@@ -100,7 +100,7 @@ describe("workspace rail without a Chat row", () => {
   const inbox = { toDecide: 0 };
 
   it("has no Chat row: New chat is the one entry for a chat", () => {
-    expect(railSections.map((section) => section.id)).toEqual(["apps", "inbox"]);
+    expect(railSections.map((section) => section.id)).toEqual(["agents", "apps", "inbox"]);
 
     for (const markup of [renderRail(), renderRail([], { inbox })]) {
       expect(markup).not.toContain(">Chat<");

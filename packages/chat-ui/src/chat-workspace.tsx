@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cn, DocsAddressProvider, SkipLink, Spinner, UiRoot, useExit } from "@vivd-catalyst/ui";
 import { DEFAULT_THEME_INPUTS } from "@vivd-catalyst/ui/theme";
+import { AgentsPage } from "./agents/agents-page";
 import { ApprovalRevisionHostProvider } from "./approvals/approval-revision-host";
 import { AssistantRuntimePanel } from "./assistant/assistant-runtime-panel";
 import { AttachmentContentProvider } from "./attachment-content";
@@ -149,6 +150,7 @@ function ChatWorkspaceContent({
   const displayPanel = useToolDisplayPanel();
   // The slot reports its placement a render late; a surface that has closed covers nothing at once.
   const inboxRoute = model.route.view === "inbox" ? model.route.route : undefined;
+  const agentsRoute = model.route.route.kind === "agents" ? model.route.route : undefined;
   // With the module off the model leads an Apps address to the chat; nothing shows meanwhile.
   const appsRoute =
     model.apps.enabled && isAppsRoute(model.route.route) ? model.route.route : undefined;
@@ -378,6 +380,7 @@ function ChatWorkspaceContent({
             canViewAdministration={rail.canViewAdministration}
             canViewBuild={model.controlPlane.canViewBuild}
             inbox={rail.inbox}
+            agents={rail.agents}
             apps={rail.apps}
             view={rail.view}
             deletingConversation={rail.deletingConversation}
@@ -415,14 +418,17 @@ function ChatWorkspaceContent({
               agentDisplay={agentChipDisplayFor(model.config.config.ui)}
               // An App takes the whole main area: the surface of the conversation it was opened
               // from stands beside nothing there, so the header is no band over the App's head.
-              // The Inbox has a page title where the band would stand: the band would cover it.
-              surfaceBesideWidth={appsRoute || inboxRoute ? 0 : surfaceBesideWidth}
+              // The Inbox and the Agents page have a page title where the band would stand: the
+              // band would cover it.
+              surfaceBesideWidth={appsRoute || inboxRoute || agentsRoute ? 0 : surfaceBesideWidth}
               covered={chatCovered}
               selectedAgentName={model.config.activeAgentName}
-              // Only a conversation has an agent to choose: not the Inbox, Apps, Build or Settings.
+              // Only a conversation has an agent to choose: not the Inbox, the Agents page, Apps,
+              // Build or Settings.
               showAgentSelector={
                 !onStartPage &&
                 !inboxRoute &&
+                !agentsRoute &&
                 !appsRoute &&
                 !model.controlPlane.build &&
                 !model.controlPlane.settings
@@ -454,6 +460,22 @@ function ChatWorkspaceContent({
               <AppsHostProvider value={appsHost}>
                 <ControlPlaneRoutes
                   controlPlane={model.controlPlane}
+                  agentsArea={
+                    agentsRoute ? (
+                      <AgentsPage
+                        agents={model.config.config.agents}
+                        defaultAgentName={model.config.config.defaultAgentName}
+                        status={model.agents.status}
+                        onRetry={model.agents.retry}
+                        onStartChat={model.agents.startChat}
+                        onOpenStudio={
+                          model.controlPlane.canOpenAgentsInBuild
+                            ? model.route.showRoute
+                            : undefined
+                        }
+                      />
+                    ) : undefined
+                  }
                   appsArea={
                     appsRoute ? (
                       // An App is told who looks at it and how the interface looks, as a Page is.

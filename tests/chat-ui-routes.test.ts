@@ -54,7 +54,7 @@ describe("area route table", () => {
   it("has one row per area", () => {
     const areas = areaRoutes.map((row) => row.area);
 
-    expect(areas).toEqual(["chat", "apps", "settings", "inbox", "build", "ui-library"]);
+    expect(areas).toEqual(["chat", "agents", "apps", "settings", "inbox", "build", "ui-library"]);
   });
 
   it.each(addresses)("resolves %s to the view it had before", (path, route, view) => {

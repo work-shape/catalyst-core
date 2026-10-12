@@ -35,6 +35,7 @@ test("every page's title line starts under the frame's top room, and the area's 
     { path: "/settings/instance/users", title: "Users", area: "Settings" },
     { path: "/settings/you/profile", title: "Profile", area: "Settings" },
     { path: "/inbox", title: "Inbox" },
+    { path: `/w/${workspace}/agents`, title: "Agents" },
     { path: `/w/${workspace}/apps`, title: "Apps" }
   ];
   for (const { path, title, area } of lists) {

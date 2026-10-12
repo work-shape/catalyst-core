@@ -6,6 +6,7 @@ import type { ControlPlaneModel } from "./control-plane-model";
 export function ControlPlaneRoutes({
   controlPlane,
   inboxArea,
+  agentsArea,
   appsArea,
   children
 }: {
@@ -15,6 +16,8 @@ export function ControlPlaneRoutes({
    * areas, but it is not part of the administration and needs no administration access.
    */
   inboxArea?: ReactNode;
+  /** The Agents page, present while its route is open. */
+  agentsArea?: ReactNode;
   /** The Apps area, present while one of its routes is open and the module is on. */
   appsArea?: ReactNode;
   children: ReactNode;
@@ -23,6 +26,10 @@ export function ControlPlaneRoutes({
 
   if (inboxArea) {
     return <>{inboxArea}</>;
+  }
+
+  if (agentsArea) {
+    return <>{agentsArea}</>;
   }
 
   if (appsArea) {

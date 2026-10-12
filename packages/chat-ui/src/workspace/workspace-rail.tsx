@@ -51,6 +51,8 @@ interface WorkspaceRailProps {
   canViewBuild?: boolean;
   /** Present for a person who may decide requests or has made one: the Inbox row shows. */
   inbox?: RailSectionsGiven["inbox"];
+  /** The session has workspaces: the Agents row shows. */
+  agents?: boolean;
   /** The Apps module is on: the Apps row shows. */
   apps?: boolean;
   view: WorkspaceView;
@@ -81,6 +83,7 @@ interface WorkspaceRailProps {
 export function WorkspaceRail(props: WorkspaceRailProps) {
   const { t } = useTranslation();
   const sections = shownRailSections(props.sections ?? railSections, {
+    agents: props.agents,
     inbox: props.inbox,
     apps: props.apps
   });

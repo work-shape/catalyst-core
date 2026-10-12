@@ -3,6 +3,7 @@ import { defineTranslations } from "./translation-area";
 /** The rail, the command palette and the frame of a surface. */
 export const navigation = defineTranslations({
   en: {
+    "nav.agents": "Agents",
     "nav.apps": "Apps",
     "nav.collapse": "Collapse sidebar",
     "nav.expand": "Expand sidebar",
@@ -25,6 +26,7 @@ export const navigation = defineTranslations({
     "nav.surfaceNoRenderer": "This content cannot be shown yet."
   },
   de: {
+    "nav.agents": "Agenten",
     "nav.apps": "Apps",
     "nav.collapse": "Seitenleiste einklappen",
     "nav.expand": "Seitenleiste ausklappen",
