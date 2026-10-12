@@ -232,22 +232,46 @@ export const resourceRouteTestOperations = {
     id: "test_box.red.read",
     method: "POST",
     path: "/api/v1/test/operations/internal/red",
-    scope: "governance:read",
+    scope: "config_assets:read",
     requires: ["audit.view"],
     effect: "reading",
     body: z.object({ shelf: z.string() }),
     response: json(z.object({ box: z.string(), shelf: z.string() }))
   }),
-  /** A box whose operation changes, is a person's alone and asks a scope of its own. */
+  /** A box whose operation changes, with the scope and the caller of the route. */
   testBoxGreenRead: defineRegisteredOperation({
     ...registeredTestOperation,
     id: "test_box.green.read",
-    auth: "user",
     method: "POST",
     path: "/api/v1/test/operations/internal/green",
-    scope: "governance:write",
+    scope: "config_assets:read",
     requires: ["audit.view"],
     effect: "changing",
+    body: z.object({ shelf: z.string() }),
+    response: json(z.object({ box: z.string(), shelf: z.string() }))
+  }),
+  /** A box registered wrongly: its operation asks another scope than its route admits with. */
+  testBoxGreyRead: defineRegisteredOperation({
+    ...registeredTestOperation,
+    id: "test_box.grey.read",
+    method: "POST",
+    path: "/api/v1/test/operations/internal/grey",
+    scope: "governance:write",
+    requires: ["audit.view"],
+    effect: "reading",
+    body: z.object({ shelf: z.string() }),
+    response: json(z.object({ box: z.string(), shelf: z.string() }))
+  }),
+  /** A box registered wrongly: its operation is a person's alone and its route is not. */
+  testBoxPinkRead: defineRegisteredOperation({
+    ...registeredTestOperation,
+    id: "test_box.pink.read",
+    auth: "user",
+    method: "POST",
+    path: "/api/v1/test/operations/internal/pink",
+    scope: "config_assets:read",
+    requires: ["audit.view"],
+    effect: "reading",
     body: z.object({ shelf: z.string() }),
     response: json(z.object({ box: z.string(), shelf: z.string() }))
   }),

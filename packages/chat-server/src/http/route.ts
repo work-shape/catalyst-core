@@ -14,6 +14,7 @@ import {
   createPlatformId,
   hasAuthScope,
   isAppError,
+  type OperationDefinition,
   isAuthenticatedServicePrincipal,
   normalizeAuthenticatedUser,
   requireAuthScope,
@@ -479,20 +480,10 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
           ...params
         });
         const resolved = await face.registry.resolve(target.operation);
-        if (!resolved) {
-          // Asked without a resource, so only a right on the instance answers: who holds it
-          // on single resources alone learns of no other id.
-          requireAccess(await options.authorizer.forActor(caller.identity)).require(binding.right);
-          throw new AppError("NOT_FOUND", binding.notFound);
-        }
-        // The descriptor admitted the request. What the resource's operation asks of a caller
-        // and of its key is asked here as well, since that operation is the one that runs.
-        if (resolved.auth === "user" && isAuthenticatedServicePrincipal(caller.identity)) {
-          throw new AppError("FORBIDDEN", "Service principals cannot access user-scoped routes");
-        }
-        if (resolved.scope) {
-          requireAuthScope(caller.identity, resolved.scope);
-        }
+        if (resolved) requireAdmittedAsTheRoute(operation, resolved);
+        // An id that has no such operation takes the same path as one that has: the call
+        // runs under the same name and the right is asked there, so a caller without it
+        // gets the same refusal, with the same recorded run, whichever id it names.
         return face.answer(
           operation,
           {
@@ -501,8 +492,9 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
             correlationId,
             input: target.input,
             idempotencyKey: readIdempotencyKey(request),
-            effect: resolved.effect,
-            runs: target.operation
+            effect: resolved?.effect,
+            runs: target.operation,
+            ...(resolved ? {} : { absent: { right: binding.right, notFound: binding.notFound } })
           },
           reply
         );
@@ -514,6 +506,23 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
     operation: registerOperation,
     resourceOperation: registerResourceOperation
   });
+}
+
+/**
+ * The route of a family admits the caller and the key for every operation of the family, so
+ * an operation it resolves may ask no other scope and no narrower caller than the route does.
+ * One that did would be refused where an unknown id is not, and that difference would tell
+ * which ids exist. It is a fault of the registration and fails as one.
+ */
+function requireAdmittedAsTheRoute(route: Operation, target: OperationDefinition): void {
+  const scope = target.scope === null || target.scope === (route.scope ?? null);
+  const caller = target.auth === "principal" || route.auth === "user";
+  if (!scope || !caller) {
+    throw new AppError(
+      "INTERNAL",
+      `Operation '${target.name}' asks another scope or caller than its route '${route.id}'`
+    );
+  }
 }
 
 /**

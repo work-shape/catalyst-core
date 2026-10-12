@@ -95,6 +95,12 @@ export interface OperationFace {
       runs?: string;
       /** The effect of that operation, where it is not the descriptor's own. */
       effect?: OperationEffect;
+      /**
+       * Set where `runs` names an operation no resource has. The call then runs as that name
+       * all the same: a caller without `right` on the instance is refused and the refusal is
+       * recorded, as for a resource that exists, and a caller who holds it reads `notFound`.
+       */
+      absent?: { right: string; notFound: string };
     },
     reply: FastifyReply
   ): Promise<unknown>;
@@ -197,9 +203,11 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
       });
     },
     async answer(operation, call, reply) {
+      const name = call.runs ?? operation.id;
+      const absent = call.absent && absentOperation(operation, name, call.absent);
       const outcome = await runOperation(
         {
-          operation: call.runs ?? operation.id,
+          operation: name,
           effect: call.effect ?? operation.effect,
           input: call.input,
           actor: call.identity,
@@ -207,7 +215,9 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
           idempotencyKey: call.idempotencyKey,
           correlationId: call.correlationId
         },
-        deps
+        absent
+          ? { ...deps, registry: { ...registry, resolve: () => Promise.resolve(absent) } }
+          : deps
       ).catch((error: unknown) => {
         // A repeated call that cannot be answered still names the run that holds its key.
         const run = isAppError(error) ? runReferenceSchema.safeParse(error.details) : undefined;
@@ -246,6 +256,37 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
           throw new AppError("INTERNAL", "A direct call cannot wait for a confirmation");
       }
     }
+  };
+}
+
+/**
+ * The operation of a resource that is not there, for the one call that named it. It asks the
+ * right of the kind on the instance, as the registry would ask the resource's operation of a
+ * caller who holds nothing on that resource, and records the refusal the same way. A caller
+ * who holds the right may know that the resource does not exist and reads so.
+ */
+function absentOperation(
+  route: Operation,
+  name: string,
+  absent: { right: string; notFound: string }
+): OperationDefinition {
+  return {
+    name,
+    effect: route.effect,
+    action: null,
+    authorize(_input, context) {
+      const decision = context.access.authorize(absent.right);
+      if (decision.allowed) throw new AppError("NOT_FOUND", absent.notFound);
+      return { allowed: false, action: absent.right, reason: decision.reason };
+    },
+    scope: null,
+    auth: route.auth === "user" ? "user" : "principal",
+    inputSchema: z.unknown(),
+    outputSchema: z.unknown(),
+    resource: () => undefined,
+    http: { method: route.method, path: route.path },
+    timeoutMs: DEFAULT_OPERATION_TIMEOUT_MS,
+    execute: () => Promise.reject(new AppError("NOT_FOUND", absent.notFound))
   };
 }
 
