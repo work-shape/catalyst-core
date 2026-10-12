@@ -1,6 +1,13 @@
-import { ApiError } from "@vivd-catalyst/api-client";
-import { describe, expect, it } from "vitest";
 import {
+  QueryClient,
+  QueryObserver,
+  environmentManager,
+  focusManager
+} from "@tanstack/react-query";
+import { ApiError, type DraftAttachment } from "@vivd-catalyst/api-client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  draftAttachmentPolling,
   uploadErrorMessage,
   uploadFileWithRetry,
   withoutDraftAttachment
@@ -228,5 +235,91 @@ describe("the notice of a run that ended as failed or cancelled", () => {
     expect(terminalRunNotice(failed, en)).toBe("Budget is used up");
     expect(terminalRunNotice({ class: "send_failed", message: "Offline" }, en)).toBeUndefined();
     expect(terminalRunNotice(undefined, en)).toBeUndefined();
+  });
+});
+
+type DraftAttachmentStatus = DraftAttachment["status"];
+
+/** The composer's read of the draft attachments, with the instance answering from `answers`. */
+function observeDraftAttachments(answers: DraftAttachmentStatus[]) {
+  const read = vi.fn((): Promise<DraftAttachment[]> =>
+    Promise.resolve([
+      {
+        id: "att_1",
+        conversationId: "conv_1",
+        fileId: "file_1",
+        filename: "Perso.pdf",
+        byteSize: 7,
+        status: answers.shift() ?? "ready",
+        artifactRefs: {},
+        processingMetadata: {},
+        warnings: [],
+        createdAt: "2026-10-12T08:00:00.000Z",
+        updatedAt: "2026-10-12T08:00:00.000Z"
+      }
+    ])
+  );
+  const client = new QueryClient();
+  // As the provider does: from here the cache hears the page come back.
+  client.mount();
+  const observer = new QueryObserver(client, {
+    queryKey: ["draft-attachments"],
+    queryFn: read,
+    ...draftAttachmentPolling
+  });
+  const unsubscribe = observer.subscribe(() => undefined);
+  return {
+    read,
+    status: () => observer.getCurrentResult().data?.[0]?.status,
+    close: () => {
+      unsubscribe();
+      client.unmount();
+      client.clear();
+    }
+  };
+}
+
+describe("draft attachment polling", () => {
+  const page = { visibilityState: "hidden" };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // The tests run without a browser: the page is a stub, and the library is told it is in one.
+    page.visibilityState = "hidden";
+    vi.stubGlobal("document", page);
+    environmentManager.setIsServer(() => false);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("learns that a file is ready while the page is hidden", async () => {
+    const composer = observeDraftAttachments(["queued", "preprocessing", "ready"]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(composer.status()).toBe("queued");
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(composer.status()).toBe("preprocessing");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(composer.status()).toBe("ready");
+
+    // Nothing is processed any more, so nothing is asked.
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(composer.read).toHaveBeenCalledTimes(3);
+    composer.close();
+  });
+
+  it("reads the list again when the page comes back", async () => {
+    const composer = observeDraftAttachments(["ready", "failed"]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(composer.read).toHaveBeenCalledTimes(1);
+
+    page.visibilityState = "visible";
+    focusManager.onFocus();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(composer.status()).toBe("failed");
+    composer.close();
   });
 });

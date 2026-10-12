@@ -35,6 +35,7 @@ const GATEWAY_FAILURE_STATUSES = [0, 502, 503, 504];
 // A dropped folder can run into the instance's limit on changing calls. Each file waits as
 // long as the API says and goes on, a bounded number of times.
 const RATE_LIMIT_WAITS = 5;
+const DRAFT_ATTACHMENT_POLL_MS = 1000;
 
 export function useDraftAttachmentController(
   input: DraftAttachmentControllerInput
@@ -62,10 +63,7 @@ export function useDraftAttachmentController(
         })
       ),
     enabled: input.enabled && input.isAuthenticated && Boolean(input.selectedConversationId),
-    refetchInterval: (query) =>
-      hasProcessingDraftAttachments((query.state.data as DraftAttachment[] | undefined) ?? [])
-        ? 1000
-        : false
+    ...draftAttachmentPolling
   });
   const draftAttachments = input.selectedConversationId ? (draftAttachmentsQuery.data ?? []) : [];
   const visibleUploadingAttachments = input.selectedConversationId
@@ -213,6 +211,19 @@ export function useDraftAttachmentController(
     clearConversationUploads
   };
 }
+
+/**
+ * How the list of draft attachments is kept current. A message cannot be sent while one of its
+ * files is processed, so the list is read once a second until none is, also while the page is
+ * hidden: a tab in the background would otherwise show "Queued" until somebody looked at it
+ * again. It is read once more when the page comes back, whatever its age.
+ */
+export const draftAttachmentPolling = {
+  refetchInterval: (query: { state: { data: DraftAttachment[] | undefined } }) =>
+    hasProcessingDraftAttachments(query.state.data ?? []) ? DRAFT_ATTACHMENT_POLL_MS : false,
+  refetchIntervalInBackground: true,
+  refetchOnWindowFocus: "always"
+} as const;
 
 export function withoutDraftAttachment<Attachment extends { id: string }>(
   attachments: readonly Attachment[],

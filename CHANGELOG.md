@@ -1480,6 +1480,15 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- **Chat, attachments:** a file added to a message no longer stays on "Queued" while the
+  browser tab is in the background. The composer asked for the file's state once a second
+  only while the page was visible, so a file the instance had finished in two seconds still
+  read "Queued" on return, and the message could not be sent until the next answer came. It
+  now asks in the background too while a file is being processed, and once more when the page
+  comes back. The other regular reads (Jobs, Operations, Infrastructure, Inbox, approvals, a
+  Page's access check) still pause while the page is hidden: none of them holds an action
+  back, and each reads again on return.
+
 - **Deployment kit, worker guards:** the Compose checks under `verify/` judge what a worker
   must not have on the stack as `docker compose config` resolves it: the
   files the deploy script passes with `-f`, and locally `docker-compose.yml` with
