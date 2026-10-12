@@ -32,6 +32,10 @@ Derived from `INSTANCE`:
 | Database dumps          | `<instance>-<database>-<timestamp>[-<label>].sql.gz`             |
 | Backup units            | `vivd-catalyst-<instance>-backup.service` and `.timer`           |
 
+`INSTANCE` is lowercase letters, digits and dashes, and may start with a digit (`exampletax`): a
+directory, a Compose project, a container, a dump and a unit all take such a name. The kit
+derives no database name and no shell variable from it.
+
 The SSH user is `deploy`. `EXECUTION_WORKSPACES=1` makes a deploy pull the runner image and
 start `workspace-command-worker`.
 

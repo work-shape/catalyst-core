@@ -57,8 +57,11 @@ load_deployment_env() {
     esac
   done < "$file"
 
-  [[ "$INSTANCE" =~ ^[a-z][a-z0-9-]*$ ]] \
-    || deployment_env_fail "$file: INSTANCE must be lowercase letters, digits and dashes"
+  # The name becomes the checkout directory, the host paths, the Compose project (and with it
+  # the container names), the dump names and the unit names. Each of them takes a leading
+  # digit. The kit derives no database name and no shell variable from it, which would not.
+  [[ "$INSTANCE" =~ ^[a-z0-9][a-z0-9-]*$ ]] \
+    || deployment_env_fail "$file: INSTANCE must be lowercase letters, digits and dashes, and start with a letter or a digit"
   [[ "$IMAGE_REPOSITORY" =~ ^[a-z0-9][a-z0-9./_-]*$ ]] \
     || deployment_env_fail "$file: IMAGE_REPOSITORY must be an image name without tag"
   [[ "$APP_PACKAGE" =~ ^(@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*$ ]] \

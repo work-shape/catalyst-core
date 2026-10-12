@@ -340,13 +340,16 @@ write_fixture_manifest() {
     }' > "$file"
 }
 
-# A deployment repo named deployment.fixture with an origin, on main.
+# The instance of the fixture deployment. A test sets it as a local to run under another name.
+fixture_instance="fixture"
+
+# A deployment repo named deployment.<fixture instance> with an origin, on main.
 init_fixture_deployment() {
-  local root="$1" deployment="$1/deployment.fixture"
+  local root="$1" deployment="$1/deployment.$fixture_instance"
   mkdir -p "$deployment/deploy" "$deployment/.github/workflows"
   cat > "$deployment/deploy/deployment.env" <<ENV
 # The one input of the deployment kit.
-INSTANCE=fixture
+INSTANCE=$fixture_instance
 IMAGE_REPOSITORY=$fixture_repository
 APP_PACKAGE=@example/fixture
 EXECUTION_WORKSPACES=1
@@ -387,9 +390,12 @@ test_deployment_env() {
   printf '%s\nSERVICES=api\n' "$original" > "$env_file"
   expect_failure env DEPLOYMENT_ROOT="$deployment" "$catalyst_deploy" prepare-workspace
   assert_contains "$scratch/failure-output" "unknown key SERVICES"
-  printf '%s\n' "${original/INSTANCE=fixture/INSTANCE=Fixture/..}" > "$env_file"
-  expect_failure env DEPLOYMENT_ROOT="$deployment" "$catalyst_deploy" prepare-workspace
-  assert_contains "$scratch/failure-output" "INSTANCE must be"
+  local refused
+  for refused in Fixture/.. -fixture fixture_one; do
+    printf '%s\n' "${original/INSTANCE=fixture/INSTANCE=$refused}" > "$env_file"
+    expect_failure env DEPLOYMENT_ROOT="$deployment" "$catalyst_deploy" prepare-workspace
+    assert_contains "$scratch/failure-output" "INSTANCE must be"
+  done
   printf '%s\n' "${original/EXECUTION_WORKSPACES=1/EXECUTION_WORKSPACES=yes}" > "$env_file"
   expect_failure env DEPLOYMENT_ROOT="$deployment" "$catalyst_deploy" prepare-workspace
   assert_contains "$scratch/failure-output" "EXECUTION_WORKSPACES must be 0 or 1"
@@ -522,7 +528,7 @@ test_publish() {
 
 # Runs the kit's deploy against a fake ssh and rsync; the capture lands in $1.
 capture_fixture_deploy() {
-  local capture="$1" root="$1/workspace" deployment="$1/workspace/deployment.fixture"
+  local capture="$1" root="$1/workspace" deployment="$1/workspace/deployment.$fixture_instance"
   shift
   mkdir -p "$capture"
   init_fixture_deployment "$root"
@@ -832,6 +838,62 @@ SH
   assert_contains "$scratch/failure-output" "verify/artifact-preview-worker-compose.mjs"
 }
 
+# A customer name may start with a digit. Every command that reads INSTANCE runs under such a
+# name here, and so do the files a deploy renders for the host.
+test_digit_leading_instance() {
+  local fixture_instance="exampletax"
+  local capture="$scratch/digit-capture" host="$scratch/digit-host"
+  capture_fixture_deploy "$capture"
+  local root="$capture/workspace" deployment="$capture/workspace/deployment.exampletax"
+  local app_dir=/opt/vivd-catalyst/exampletax commit
+  commit="$(git -C "$deployment" rev-parse HEAD)"
+
+  # deploy: host paths, unit names and the dump name carry the instance as it is.
+  assert_contains "$capture/ssh-2.command" \
+    "REMOTE_APP_DIR=$app_dir REMOTE_ENV_FILE=/etc/vivd-catalyst/exampletax/app.env"
+  assert_contains "$capture/rsync.log" " $app_dir/deploy/systemd/vivd-catalyst-exampletax-backup.timer "
+  assert_contains "$capture/host$app_dir/deploy/systemd/vivd-catalyst-exampletax-backup.service" \
+    "ExecStart=$app_dir/backup-postgres.sh"
+  run_remote_deploy "$capture" "$host" || { cat "$host/output" >&2; fail "remote deploy failed"; }
+  assert_contains "$host/output" "All services run the images of staging-2026.10.06-1."
+
+  # The rendered backup script names its dumps after the instance.
+  mkdir -p "$host/backup-bin"
+  printf '#!/usr/bin/env bash\n[[ "$*" != *pg_dump* ]] || echo "-- dump"\n' > "$host/backup-bin/docker"
+  chmod +x "$host/backup-bin/docker"
+  printf 'POSTGRES_USER=catalyst\nPOSTGRES_DB=agent_chat\nBACKUP_OBJECT_STORE_ENDPOINT=https://objects.example.test\nBACKUP_OBJECT_STORE_BUCKET=backups\nBACKUP_OBJECT_STORE_REGION=eu\nBACKUP_AWS_ACCESS_KEY_ID=key\nBACKUP_AWS_SECRET_ACCESS_KEY=secret\n' \
+    > "$host/backup.env"
+  local run=(env "PATH=$host/backup-bin:$PATH" "APP_DIR=$host/app" "ENV_FILE=$host/backup.env")
+  "${run[@]}" "$capture/host$app_dir/backup-postgres.sh" > "$host/backup-output"
+  grep -Eq '^Backup uploaded: postgres/exampletax-agent_chat-[0-9]{8}T[0-9]{6}Z\.sql\.gz \(' \
+    "$host/backup-output" || fail "the dump of a digit-leading instance is not named after it"
+  # restore accepts that dump key and goes on to its next refusal.
+  expect_failure "${run[@]}" "$capture/host$app_dir/restore-postgres.sh" recover \
+    postgres/exampletax-agent_chat-20261006T021514Z.sql.gz --replace-database not_the_live_database
+  assert_contains "$scratch/failure-output" "must name the live database of this host"
+
+  # manifest and publish, on the clean checkout.
+  local manifest="$capture/written.json" fixtures="$capture/gh"
+  (cd "$deployment" && "$catalyst_deploy" manifest write --release staging-2026.10.06-1 \
+    --images "$(jq -c '.images' "$capture/manifest.json")") > "$manifest"
+  "$catalyst_deploy" manifest check "$manifest" --commit "$commit"
+  mkdir -p "$fixtures"
+  env "PATH=$fakes:$PATH" "GH_FIXTURES=$fixtures" "GH_LOG=$fixtures/gh.log" \
+    "DEPLOYMENT_ROOT=$deployment" "$catalyst_deploy" publish staging --skip-local-checks \
+    --tag staging-2026.10.06-1 > "$scratch/digit-publish"
+  assert_contains "$scratch/digit-publish" "Published staging tag: staging-2026.10.06-1"
+
+  # prepare-workspace, update-refs and check find the checkout by the instance name.
+  mkdir -p "$root/platform" "$root/capabilities" "$deployment/deploy/workspace"
+  printf "lockfileVersion: '9.0'\n" > "$deployment/deploy/workspace/pnpm-lock.yaml"
+  DEPLOYMENT_ROOT="$deployment" "$catalyst_deploy" prepare-workspace
+  assert_contains "$root/pnpm-workspace.yaml" '  - "deployment.exampletax"'
+  DEPLOYMENT_ROOT="$deployment" "$catalyst_deploy" update-refs --help > "$scratch/digit-help"
+  assert_contains "$scratch/digit-help" "update-release.sh --deployment-root DIR"
+  expect_failure env "DEPLOYMENT_ROOT=$deployment" "$catalyst_deploy" check
+  assert_contains "$scratch/failure-output" "must require a successful staging deployment"
+}
+
 # pnpm pack keeps the executable bit of the bin only. The commands must not depend
 # on any other file being executable.
 test_packed_layout() {
@@ -889,5 +951,6 @@ test_deploy
 test_remote_deploy
 test_host_backup_scripts
 test_deployment_policy
+test_digit_leading_instance
 test_packed_layout
 echo "deployment-kit tests passed"
