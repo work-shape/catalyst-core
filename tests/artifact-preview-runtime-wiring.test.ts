@@ -179,6 +179,18 @@ describe("artifact preview runtime wiring", () => {
     );
     expect(workspaceRunner).toContain("/usr/local/bin/catalyst-page-build");
     expect(workspaceRunner).toContain("catalyst-page-build --check");
+    // The command that keeps repositories reaches the runner the same way, with the git it
+    // runs. Git is installed in the runner's own stage: every other image builds on a stage
+    // before it and carries none.
+    expect(pageBuild).toContain('pnpm --filter "@vivd-catalyst/asset-repo..." build');
+    expect(workspaceRunner).toContain(
+      "COPY --from=page-build-command /opt/catalyst-asset-repo /opt/catalyst-asset-repo"
+    );
+    expect(workspaceRunner).toContain("catalyst-asset-repo --check");
+    expect(workspaceRunner).toContain("apt-get install -y --no-install-recommends git");
+    for (const stage of [api, workspaceWorker, artifactRuntime, previewRuntime, artifactWorker]) {
+      expect(stage).not.toMatch(/\bgit\b/u);
+    }
     // Nothing else of the build workspace reaches the image agent commands run in.
     expect(workspaceRunner).not.toContain("COPY . ");
     expect(workspaceRunner).not.toContain("COPY --from=deps");

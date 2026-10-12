@@ -86,13 +86,33 @@ RUN --mount=type=cache,id=vivd-pnpm-store,target=/root/.local/share/pnpm/store \
   && pnpm --filter "@vivd-catalyst/app-build..." build \
   && pnpm --config.inject-workspace-packages=true --filter "@vivd-catalyst/app-build" deploy --prod --offline /opt/catalyst-page-build
 
+# The command that keeps the repository of an asset. It is built beside the Page build and
+# reaches the runner image the same way.
+RUN --mount=type=cache,id=vivd-pnpm-store,target=/root/.local/share/pnpm/store \
+  pnpm --filter "@vivd-catalyst/asset-repo..." install --offline --frozen-lockfile \
+  && pnpm --filter "@vivd-catalyst/asset-repo..." build \
+  && pnpm --config.inject-workspace-packages=true --filter "@vivd-catalyst/asset-repo" deploy --prod --offline /opt/catalyst-asset-repo
+
 FROM workspace-artifact-runtime AS workspace-command-runner
 
+# Git is in this image alone: `catalyst-asset-repo` runs it here, in a container without a
+# network. The API image and the worker images, which build on other stages, carry none.
+RUN --mount=type=cache,id=vivd-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+  --mount=type=cache,id=vivd-apt-cache,target=/var/cache/apt,sharing=locked \
+  apt-get update \
+  && apt-get install -y --no-install-recommends git \
+  && git --version \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY --from=page-build-command /opt/catalyst-page-build /opt/catalyst-page-build
-RUN chmod +x /opt/catalyst-page-build/dist/cli.js \
+COPY --from=page-build-command /opt/catalyst-asset-repo /opt/catalyst-asset-repo
+RUN chmod +x /opt/catalyst-page-build/dist/cli.js /opt/catalyst-asset-repo/dist/cli.js \
   && ln -s /opt/catalyst-page-build/dist/cli.js /usr/local/bin/catalyst-page-build \
+  && ln -s /opt/catalyst-asset-repo/dist/cli.js /usr/local/bin/catalyst-asset-repo \
   && catalyst-page-build --version \
-  && catalyst-page-build --check
+  && catalyst-page-build --check \
+  && catalyst-asset-repo --version \
+  && catalyst-asset-repo --check
 
 # Commands run as this user, never as root. The worker names the same ids on `docker run`
 # (RUNNER_USER_ID in packages/tool-execution/src/docker-workspace-command-runner.ts); the image
@@ -105,7 +125,8 @@ ENV HOME=/workspace
 USER 10001:10001
 WORKDIR /workspace
 RUN test "$(id -u)" = "10001" \
-  && catalyst-page-build --check
+  && catalyst-page-build --check \
+  && catalyst-asset-repo --check
 CMD ["/bin/bash"]
 
 FROM base AS deps

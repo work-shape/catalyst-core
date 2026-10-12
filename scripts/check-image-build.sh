@@ -14,7 +14,9 @@
 #
 # The two worker images add a Docker client and system packages to the same two build stages.
 # The runner image, in which commands and Page builds run, is built too: it installs
-# `catalyst-page-build` from this repository and fails to build when the command does not run.
+# `catalyst-page-build` and `catalyst-asset-repo` from this repository and fails to build when
+# either command does not run. The API and worker images are also asked whether they carry git,
+# which only the runner image may.
 #
 # With RUNNER_IMAGE_TAG set, the runner image is kept under that tag in the local engine, for
 # the tests that run commands in it. Whoever sets it removes the image.
@@ -74,9 +76,14 @@ awk '
 
 build() {
   local target="$1"
+  # A second argument keeps the image under that tag in the local engine.
+  local tag="${2:-}"
   local output=(--output type=cacheonly)
   if [[ "$target" == "workspace-command-runner" && -n "${RUNNER_IMAGE_TAG:-}" ]]; then
-    output=(--tag "$RUNNER_IMAGE_TAG" --load)
+    tag="$RUNNER_IMAGE_TAG"
+  fi
+  if [[ -n "$tag" ]]; then
+    output=(--tag "$tag" --load)
   fi
   echo "==> Build the $target image of $client_package"
   docker buildx build \
@@ -99,6 +106,20 @@ build ui
 # The image `pnpm dev` runs the UI from. Its build loads the Vite plugin of chat-ui, which fails
 # when the stage leaves out a package the plugin imports from built output.
 build ui-dev
-# The runner image carries the command that builds a saved Page; its build runs the command.
+# Git runs in the runner image alone, as the fixed command `catalyst-asset-repo`. An API or
+# worker image that carries a git binary fails here.
+for target in api workspace-command-worker artifact-preview-worker; do
+  image="catalyst-check-no-git-$target:local"
+  build "$target" "$image"
+  found="$(docker run --rm --network none --entrypoint sh "$image" -c 'command -v git || true')"
+  docker rmi "$image" >/dev/null
+  if [[ -n "$found" ]]; then
+    echo "check-image-build: the $target image carries git at $found" >&2
+    exit 1
+  fi
+  echo "==> The $target image carries no git"
+done
+# The runner image carries the commands that build a saved Page and keep a repository; its
+# build runs both.
 build workspace-command-runner
 echo "==> The API, UI, development UI and runner images build"
