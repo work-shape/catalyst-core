@@ -7,6 +7,7 @@ import { assetOperations } from "./assets";
 import { collaborationWorkspaceOperations } from "./collaboration-workspaces";
 import { configAssetOperations } from "./config-assets";
 import { connectionOperations } from "./connections";
+import { dataStoreOperations } from "./data-stores";
 import { conversationFileOperations } from "./conversation-files";
 import { conversationOperations } from "./conversations";
 import { credentialOperations } from "./credentials";
@@ -38,6 +39,7 @@ export const apiOperations = {
   ...assetOperations,
   ...connectionOperations,
   ...workflowOperations,
+  ...dataStoreOperations,
   ...userOperations,
   ...apiAccessOperations,
   ...accessOperations,
