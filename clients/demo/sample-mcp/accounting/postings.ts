@@ -349,7 +349,10 @@ const TEMPLATES: readonly Template[] = [
     document: "KA"
   }
 ];
-const TEMPLATE_WEIGHT = TEMPLATES.reduce((sum, template) => sum + template.weight, 0);
+/** Where each template ends on the line from 0 to the sum of all weights. */
+const TEMPLATE_ENDS = TEMPLATES.map((_, index) =>
+  TEMPLATES.slice(0, index + 1).reduce((sum, template) => sum + template.weight, 0)
+);
 
 /** What one booking says, before it is written as a row. */
 interface Booking {
@@ -424,9 +427,11 @@ function costCentreOf({ client }: Month, account: Account, random: Random): stri
 }
 
 function cleanBooking(month: Month, index: number, random: Random): Booking {
-  let ticket = random() * TEMPLATE_WEIGHT;
-  const template =
-    TEMPLATES.find((candidate) => (ticket -= candidate.weight) < 0) ?? pick(TEMPLATES, 0);
+  const ticket = random() * pick(TEMPLATE_ENDS, TEMPLATE_ENDS.length - 1);
+  const template = pick(
+    TEMPLATES,
+    TEMPLATE_ENDS.findIndex((end) => ticket < end)
+  );
   const account = month.ledger[template.account];
   const reversed =
     account.account_class === "expense" &&
