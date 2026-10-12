@@ -55,6 +55,28 @@ async function lockConfigAssetRow(
   return row;
 }
 
+/**
+ * The active asset of the name, where it is the one the caller checked its right on. Another
+ * asset under the name was created after that one was removed, and nobody was asked for it.
+ */
+async function lockAuthorizedAsset(
+  tx: PostgresTransaction,
+  input: Parameters<ConfigAssetStore["getConfigAsset"]>[0] & { assetId: string }
+): Promise<ConfigAssetRow> {
+  const asset = await lockConfigAssetRow(tx, input);
+  if (!asset || asset.status !== "active") {
+    throw assetNotFound(input);
+  }
+  if (asset.id !== input.assetId) {
+    throw new AppError(
+      "CONFLICT",
+      `Config ${input.kind} '${input.name}' is no longer the asset that was read: the name was removed and created again`,
+      { reason: "revision_changed" }
+    );
+  }
+  return asset;
+}
+
 function assetNotFound(input: { kind: string; name: string }): AppError {
   return new AppError("NOT_FOUND", `Config ${input.kind} '${input.name}' was not found`);
 }
@@ -64,10 +86,7 @@ export async function publishConfigAssetRevision(
   input: Parameters<ConfigAssetStore["publishConfigAssetRevision"]>[0]
 ): ReturnType<ConfigAssetStore["publishConfigAssetRevision"]> {
   return db.transaction(async (tx) => {
-    const asset = await lockConfigAssetRow(tx, input);
-    if (!asset || asset.status !== "active") {
-      throw assetNotFound(input);
-    }
+    const asset = await lockAuthorizedAsset(tx, input);
     const [target] = await tx
       .select({
         id: configAssetRevisions.id,
@@ -136,10 +155,7 @@ export async function discardConfigAssetDraft(
 ): ReturnType<ConfigAssetStore["discardConfigAssetDraft"]> {
   return db.transaction(async (tx) => {
     await lockConfigAssetWrites(tx, input.clientInstanceId);
-    const asset = await lockConfigAssetRow(tx, input);
-    if (!asset || asset.status !== "active") {
-      throw assetNotFound(input);
-    }
+    const asset = await lockAuthorizedAsset(tx, input);
     const pointers = [asset.activeRevisionId, asset.publishedRevisionId].flatMap((id) => id ?? []);
     const numbers = new Map(
       (
@@ -181,10 +197,7 @@ export async function removeConfigAsset(
 ): ReturnType<ConfigAssetStore["removeConfigAsset"]> {
   return db.transaction(async (tx) => {
     await lockConfigAssetWrites(tx, input.clientInstanceId);
-    const asset = await lockConfigAssetRow(tx, input);
-    if (!asset || asset.status !== "active") {
-      throw assetNotFound(input);
-    }
+    const asset = await lockAuthorizedAsset(tx, input);
     const [draft] = await tx
       .select({ revision: configAssetRevisions.revision })
       .from(configAssetRevisions)

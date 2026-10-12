@@ -53,6 +53,7 @@ describe("one batch of the asset store", () => {
     const created = await write(null, "one");
     expect(created.revisions).toEqual({ "skill:guide": 1 });
     expect(created.assetIds).toEqual({ "skill:guide": expect.stringMatching(/^cfga_/u) });
+    const guideId = created.assetIds["skill:guide"] ?? "";
     const first = await assets.getConfigAssetRevision({
       clientInstanceId,
       kind: "skill",
@@ -66,6 +67,7 @@ describe("one batch of the asset store", () => {
         clientInstanceId,
         kind: "skill",
         name: "guide",
+        assetId: guideId,
         revision: 1,
         revisionId: "cfgr_another"
       })
@@ -74,6 +76,7 @@ describe("one batch of the asset store", () => {
       clientInstanceId,
       kind: "skill",
       name: "guide",
+      assetId: guideId,
       revision: 1,
       revisionId: first?.id ?? ""
     });
@@ -82,6 +85,7 @@ describe("one batch of the asset store", () => {
       clientInstanceId,
       kind: "skill",
       name: "guide",
+      assetId: guideId,
       expectedRevision: 2
     });
 
@@ -98,6 +102,45 @@ describe("one batch of the asset store", () => {
       mutations: [{ type: "delete", kind: "skill", name: "never" }]
     });
     expect(absent.revisions).toEqual({});
+  });
+
+  // Fails without the asset id in the three writes: each resolved the name again under its
+  // lock, so a right checked on an asset that was then removed opened the asset created under
+  // the name after it, at the same revision number and with nobody asked.
+  it("refuses a publish, a discard and a removal of another asset than the one that was read", async () => {
+    const clientInstanceId = createClientInstanceId();
+    const assets = store.configAssets;
+    const create = async () => {
+      const written = await assets.applyConfigAssetMutations({
+        clientInstanceId,
+        baseRevisions: { "skill:guide": null },
+        mutations: [{ ...put("guide", "one"), draft: true }]
+      });
+      return written.assetIds["skill:guide"] ?? "";
+    };
+    const address = { clientInstanceId, kind: "skill" as const, name: "guide" };
+    const authorized = await create();
+    await assets.removeConfigAsset({ ...address, assetId: authorized, expectedRevision: 1 });
+    const recreated = await create();
+    expect(recreated).not.toBe(authorized);
+    const revision = await assets.getConfigAssetRevision({ ...address, revision: 1 });
+    const changed = { code: "CONFLICT", details: { reason: "revision_changed" } };
+
+    await expect(
+      assets.publishConfigAssetRevision({
+        ...address,
+        assetId: authorized,
+        revision: 1,
+        revisionId: revision?.id ?? ""
+      })
+    ).rejects.toMatchObject(changed);
+    await expect(
+      assets.discardConfigAssetDraft({ ...address, assetId: authorized, expectedRevision: 1 })
+    ).rejects.toMatchObject(changed);
+    await expect(
+      assets.removeConfigAsset({ ...address, assetId: authorized, expectedRevision: 1 })
+    ).rejects.toMatchObject(changed);
+    await expect(assets.getConfigAsset(address)).resolves.toMatchObject({ id: recreated });
   });
 
   // Fails without the change: a base was a number alone, so another asset of the same name at

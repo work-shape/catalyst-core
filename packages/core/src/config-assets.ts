@@ -296,6 +296,13 @@ export interface ConfigAssetStore {
     clientInstanceId: ClientInstanceId;
     kind: ConfigAssetKind;
     name: string;
+    /**
+     * The id of the asset whose right the caller checked. The name is resolved again under
+     * the lock, and an asset of another id there, one created after the name was removed, is
+     * refused with `CONFLICT` and the reason `revision_changed`: no write reaches an asset
+     * nobody was authorized for.
+     */
+    assetId: string;
     revision: number;
     /**
      * The id of the revision the caller read and checked. The pointer moves only to that
@@ -323,6 +330,8 @@ export interface ConfigAssetStore {
     clientInstanceId: ClientInstanceId;
     kind: ConfigAssetKind;
     name: string;
+    /** The asset whose right was checked, as in `publishConfigAssetRevision`. */
+    assetId: string;
     expectedRevision: number;
   }): Promise<{ revision: number }>;
   /**
@@ -335,6 +344,8 @@ export interface ConfigAssetStore {
     clientInstanceId: ClientInstanceId;
     kind: ConfigAssetKind;
     name: string;
+    /** The asset whose right was checked, as in `publishConfigAssetRevision`. */
+    assetId: string;
     expectedRevision: number;
   }): Promise<{ assetId: string; fileSetCount: number }>;
   /** Availability of every active agent that has a record, keyed by agent name. */

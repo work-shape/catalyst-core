@@ -235,8 +235,9 @@ export class AssetDraftWorkflow {
       clientInstanceId: this.options.clientInstanceId,
       kind: kind.kind,
       name,
+      // The asset the right was checked on, and the revision that was checked above.
+      assetId: asset.id,
       revision: input.revision,
-      // The revision that was checked above, and no other of the same number.
       revisionId: revision.id,
       ...(kind.representation === "files" ? { requireFiles: true as const } : {})
     });
@@ -279,6 +280,7 @@ export class AssetDraftWorkflow {
         clientInstanceId: this.options.clientInstanceId,
         kind: kind.kind,
         name,
+        assetId: asset.id,
         expectedRevision: expectedRevision
       });
     } catch (error) {
@@ -311,6 +313,7 @@ export class AssetDraftWorkflow {
         clientInstanceId: this.options.clientInstanceId,
         kind: kind.kind,
         name,
+        assetId: requireActive(target).id,
         expectedRevision
       });
     } catch (error) {

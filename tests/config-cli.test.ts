@@ -1882,10 +1882,15 @@ describe("config CLI against an instance", () => {
     // and as other assets.
     const { configAssets } = fixture.store;
     for (const config of held("An admin's text").skills) {
-      await configAssets.removeConfigAsset({
+      const address = {
         clientInstanceId: fixture.clientInstanceId,
-        kind: "skill",
-        name: config.name,
+        kind: "skill" as const,
+        name: config.name
+      };
+      const before = await configAssets.getConfigAsset(address);
+      await configAssets.removeConfigAsset({
+        ...address,
+        assetId: before?.id ?? "",
         expectedRevision: 1
       });
       await applyAtCurrentRevisions(configAssets, {
