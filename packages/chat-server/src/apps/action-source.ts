@@ -324,6 +324,12 @@ export function requirePublishedRevision(
 
 const titleSchema = z.object({ title: z.string() });
 
+/** What people read as the name of an App, from the config of one of its revisions. */
+export function appTitleOf(config: unknown, appName: string): string {
+  const title = titleSchema.safeParse(config);
+  return title.success ? title.data.title : appName;
+}
+
 /** The resource a right on an App is decided on. */
 export function appResourceOf(asset: {
   id: string;
@@ -355,6 +361,25 @@ export function authorizePublishedApp(
   return decide(context.access, APP_ACTIONS.use, resource);
 }
 
+/**
+ * The host of the actions of one revision of an App. The published revision is for whoever is
+ * served it, the draft for whoever writes the App.
+ */
+export function appRevisionHost(
+  appName: string,
+  resource: OperationResource,
+  view: "published" | "draft"
+): AppActionHost {
+  return {
+    operationName: (action) => appActionOperationName(appName, action),
+    resource,
+    authorize: (context) =>
+      view === "published"
+        ? authorizePublishedApp(context, resource)
+        : decide(context.access, APP_ACTIONS.write, resource)
+  };
+}
+
 function publishedApp(asset: ConfigAssetRecord | undefined): PublishedApp | undefined {
   const revisionId = asset && liveRevisionId(asset, { lifecycle: "draft_published" });
   if (
@@ -371,18 +396,16 @@ function publishedApp(asset: ConfigAssetRecord | undefined): PublishedApp | unde
     name: asset.name,
     workspaceId: asset.scope.workspaceId
   });
-  const title = titleSchema.safeParse(asset.publishedConfig);
   return {
     host: {
-      operationName: (action) => appActionOperationName(asset.name, action),
-      resource,
+      ...appRevisionHost(asset.name, resource, "published"),
       authorize(context) {
         requirePublishedRevision(context.origin, revisionId);
         return authorizePublishedApp(context, resource);
       }
     },
     revisionId,
-    title: title.success ? title.data.title : asset.name,
+    title: appTitleOf(asset.publishedConfig, asset.name),
     actions: compiledActionsOf(asset.publishedConfig.manifest)
   };
 }

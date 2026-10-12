@@ -107,3 +107,70 @@ export const appActionCallResultSchema = z.object({
 
 export type AppSessionContextResponse = z.infer<typeof appSessionContextSchema>;
 export type AppActionCallResult = z.infer<typeof appActionCallResultSchema>;
+
+export const appActionsListQuerySchema = z
+  .object({
+    /**
+     * The id of one App. Named, the answer holds that App alone: its draft for whoever writes
+     * it, the published revision for everybody else who reads it. Left out, it holds the
+     * published revision of every App the caller reads.
+     */
+    app: z.string().min(1).max(63).optional()
+  })
+  .strict();
+
+/** Why a call of an action cannot reach the operation it stands for, whoever calls. */
+export const appActionUnavailableSchema = z.enum([
+  "connection_missing",
+  "connection_disabled",
+  "operation_missing",
+  "operation_disabled",
+  /** The operation is not exposed to Apps (`bridge`). */
+  "not_exposed"
+]);
+
+export type AppActionUnavailable = z.infer<typeof appActionUnavailableSchema>;
+
+/** One named action of a revision, with what a call of it would come to for the caller. */
+export const appActionSchema = z.object({
+  name: z.string(),
+  kind: z.literal("connection"),
+  effect: z.enum(["reading", "changing"]),
+  description: z.string().optional(),
+  /** The operation the action is, as an agent lists it: `app.<id>.<action>`. */
+  toolName: z.string(),
+  /** The Connection by its name, with its label where the caller may read the Connection. */
+  connection: z.object({ name: z.string(), title: z.string().optional() }),
+  /** The operation of the Connection the action stands for, by its name. */
+  operation: z.string(),
+  /** What the action takes, as JSON Schema. */
+  inputSchema: z.record(z.string(), z.unknown()),
+  /**
+   * What a call of the action would come to for the caller now, by the caller's rights and
+   * the policy. A draft runs in safe mode: a changing action is refused there whatever this
+   * says, which `view` tells.
+   */
+  policy: appActionPermissionSchema,
+  unavailable: appActionUnavailableSchema.optional(),
+  /** An agent that lists `toolName` carries the action as a tool now. */
+  agentTool: z.boolean()
+});
+
+export type AppAction = z.infer<typeof appActionSchema>;
+
+export const appActionsSchema = z.object({
+  apps: z.array(
+    z.object({
+      name: z.string(),
+      title: z.string(),
+      /** Which revision the actions are read from, and its number. */
+      view: appModeSchema,
+      revision: z.number().int().positive(),
+      actions: z.array(appActionSchema)
+    })
+  ),
+  /** More Apps are published than one answer lists. The answer holds the first by name. */
+  truncated: z.boolean()
+});
+
+export type AppActions = z.infer<typeof appActionsSchema>;

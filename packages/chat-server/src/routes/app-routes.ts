@@ -1,6 +1,7 @@
 import { APP_ASSET_KIND, apiOperations } from "@vivd-catalyst/api-contract";
 import { AppError, asCollaborationWorkspaceId } from "@vivd-catalyst/core";
 import { AppActionCalls } from "../apps/action-call";
+import { AppActionList } from "../apps/action-list";
 import { AppWorkflow } from "../apps/app-workflow";
 import type { Route } from "../http/route";
 import type { ResolvedChatServerOptions } from "../types";
@@ -16,6 +17,7 @@ const APPS_MODULE = "apps";
 export function registerAppRoutes(route: Route, options: ResolvedChatServerOptions): void {
   const workflow = new AppWorkflow(options);
   const actions = new AppActionCalls(options);
+  const actionList = new AppActionList(options);
 
   route.operation(apiOperations["apps.create_from_page"], {
     authorize: (input, { access }) => workflow.authorizeCreate(access, input),
@@ -28,6 +30,16 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
     changeClass: "reversible",
     module: APPS_MODULE,
     execute: (input, context) => workflow.createFromPage(context, input)
+  });
+
+  route.operation(apiOperations["apps.actions.list"], {
+    authorize: (input, { access }) => actionList.authorize(access, input),
+    resource: (input) =>
+      input.app === undefined
+        ? undefined
+        : { kind: APP_ASSET_KIND, id: input.app, name: input.app },
+    module: APPS_MODULE,
+    execute: (input, context) => actionList.list(context, input)
   });
 
   // Where a caller's right to an App is checked with the caller present. The address this

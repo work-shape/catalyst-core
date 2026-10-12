@@ -18,7 +18,6 @@ import {
   AppError,
   CONNECTION_ACTIONS,
   CONNECTION_ASSET_KIND,
-  appActionOperationName,
   connectionCallError,
   connectionOperationName,
   getSubjectUserId,
@@ -29,6 +28,7 @@ import {
   pageActionOperationName,
   type ActorAccess,
   type AppActionRefusal,
+  type AuthenticatedIdentity,
   type AuthenticatedUser,
   type CollaborationWorkspaceId,
   type OperationDefinition,
@@ -38,19 +38,18 @@ import {
 import { runOperation, type OperationOutcome } from "@vivd-catalyst/tool-execution";
 import { z } from "zod";
 import { checkAppContentToken } from "../app-content";
-import { decide, mayOpenAssetFileSet } from "../asset-access";
+import { mayOpenAssetFileSet } from "../asset-access";
 import { ConversationWorkflow } from "../conversations/conversation-workflow";
 import type { ResolvedChatServerOptions } from "../types";
 import {
   appActionDefinition,
   appActionPermission,
   appResourceOf,
-  authorizePublishedApp,
+  appRevisionHost,
   preloadedEnvironment,
   type AppActionEnvironment,
   type AppActionHost
 } from "./action-source";
-import { APP_ACTIONS } from "./app-kind";
 
 // A call a frame makes through the bridge. The frame holds no credential: it posts a message
 // to the interface, and the interface makes the call here with the viewer's own session. So
@@ -65,9 +64,12 @@ import { APP_ACTIONS } from "./app-kind";
  */
 type FrameMode = "page" | "draft" | "published";
 
-/** The frame a call comes from, once its address and its viewer were checked. */
-export interface FrameSession {
-  viewer: AuthenticatedUser;
+/**
+ * A revision as one viewer is shown it: what a call from its frame is decided on. The list of
+ * an App's actions reads it for a viewer who has no frame open and names no page session.
+ */
+export interface ShownRevision {
+  viewer: AuthenticatedIdentity;
   access: ActorAccess;
   pageSessionId: string;
   mode: FrameMode;
@@ -84,6 +86,11 @@ export interface FrameSession {
   workspaceId: CollaborationWorkspaceId | undefined;
   conversationId?: ServedFileSet["conversationId"];
   actions: CompiledAppAction[];
+}
+
+/** The frame a call comes from, once its address and its viewer were checked. */
+export interface FrameSession extends ShownRevision {
+  viewer: AuthenticatedUser;
   connections: string[];
 }
 
@@ -220,14 +227,7 @@ export class AppActionCalls {
       mode: published ? "published" : "draft",
       appName: asset.name,
       workspaceId: resource.workspaceId,
-      host: {
-        operationName: (action) => appActionOperationName(asset.name, action),
-        resource,
-        authorize: (context) =>
-          published
-            ? authorizePublishedApp(context, resource)
-            : decide(context.access, APP_ACTIONS.write, resource)
-      },
+      host: appRevisionHost(asset.name, resource, published ? "published" : "draft"),
       revisionId:
         published && asset.publishedRevisionId !== undefined
           ? asset.publishedRevisionId
@@ -241,27 +241,10 @@ export class AppActionCalls {
    * of 100 actions on one Connection costs three reads, not 200. No outside system is called.
    */
   async can(session: FrameSession): Promise<Record<string, AppActionPermission>> {
-    const environment = await preloadedEnvironment(this.environment, session.actions);
-    const can: Record<string, AppActionPermission> = {};
-    for (const action of session.actions) {
-      const permission =
-        action.effect === "changing" && session.mode !== "published"
-          ? "deny"
-          : await appActionPermission(
-              environment,
-              await appActionDefinition(environment, session.host, action),
-              {
-                actor: session.viewer,
-                origin: this.origin(session, action.name, action),
-                workspaceId: session.workspaceId,
-                correlationId: "",
-                access: session.access,
-                resource: session.host.resource
-              }
-            );
-      Object.defineProperty(can, action.name, { value: permission, enumerable: true });
-    }
-    return can;
+    return appActionPermissions(
+      await preloadedEnvironment(this.environment, session.actions),
+      session
+    );
   }
 
   /** Calls one named action of the shown manifest: one call, one Operation Run. */
@@ -278,7 +261,7 @@ export class AppActionCalls {
     }
     this.requireOutsideSafeMode(session, action.effect);
     const { definition } = await appActionDefinition(this.environment, session.host, action);
-    return this.run(session, definition, input, this.origin(session, action.name, action), call);
+    return this.run(session, definition, input, appOrigin(session, action.name, action), call);
   }
 
   /**
@@ -322,25 +305,9 @@ export class AppActionCalls {
       session,
       definition,
       input,
-      this.origin(session, APP_CONNECTION_CALL_ACTION_NAME, target),
+      appOrigin(session, APP_CONNECTION_CALL_ACTION_NAME, target),
       call
     );
-  }
-
-  private origin(
-    session: FrameSession,
-    actionName: string,
-    target: { connection: string; operation: string }
-  ): Extract<OperationOrigin, { kind: "app" }> {
-    return {
-      kind: "app",
-      ...(session.appName === undefined ? {} : { appName: session.appName }),
-      appRevisionId: session.revisionId,
-      actionName,
-      pageSessionId: session.pageSessionId,
-      ...(session.conversationId === undefined ? {} : { conversationId: session.conversationId }),
-      target: { connection: target.connection, operation: target.operation }
-    };
   }
 
   /** The limit of one page session and the size of one input, before anything is read. */
@@ -517,6 +484,55 @@ export class AppActionCalls {
       ...(readable && label.success ? { connectionLabel: label.data.displayName } : {})
     };
   }
+}
+
+/** The origin of a call from the frame of a shown revision, as its run names it. */
+function appOrigin(
+  shown: ShownRevision,
+  actionName: string,
+  target: { connection: string; operation: string }
+): Extract<OperationOrigin, { kind: "app" }> {
+  return {
+    kind: "app",
+    ...(shown.appName === undefined ? {} : { appName: shown.appName }),
+    appRevisionId: shown.revisionId,
+    actionName,
+    pageSessionId: shown.pageSessionId,
+    ...(shown.conversationId === undefined ? {} : { conversationId: shown.conversationId }),
+    target: { connection: target.connection, operation: target.operation }
+  };
+}
+
+/**
+ * What each action of a shown revision would come to for its viewer, by the rule a call from
+ * its frame is decided by: a changing action outside a published revision is refused, and
+ * every other one is asked of the App, of the Connection and of the policy. `environment` is
+ * one that holds the operations the actions stand for (`preloadedEnvironment`).
+ */
+export async function appActionPermissions(
+  environment: AppActionEnvironment,
+  shown: ShownRevision
+): Promise<Record<string, AppActionPermission>> {
+  const can: Record<string, AppActionPermission> = {};
+  for (const action of shown.actions) {
+    const permission =
+      action.effect === "changing" && shown.mode !== "published"
+        ? "deny"
+        : await appActionPermission(
+            environment,
+            await appActionDefinition(environment, shown.host, action),
+            {
+              actor: shown.viewer,
+              origin: appOrigin(shown, action.name, action),
+              workspaceId: shown.workspaceId,
+              correlationId: "",
+              access: shown.access,
+              resource: shown.host.resource
+            }
+          );
+    Object.defineProperty(can, action.name, { value: permission, enumerable: true });
+  }
+  return can;
 }
 
 function detailsOf(details: unknown): Record<string, unknown> {

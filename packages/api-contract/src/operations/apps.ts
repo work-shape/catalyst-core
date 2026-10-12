@@ -1,6 +1,8 @@
 import {
   appActionCallRequestSchema,
   appActionCallResultSchema,
+  appActionsListQuerySchema,
+  appActionsSchema,
   appConnectionCallRequestSchema,
   appPreviewRequestSchema,
   appSessionContextRequestSchema,
@@ -95,6 +97,25 @@ export const appOperations = {
     effect: "reading",
     body: appSessionContextRequestSchema,
     response: json(appSessionContextSchema),
+    errors: ["NOT_FOUND"],
+    rateClass: "read"
+  }),
+  // A path of its own: `actions` beside `/apps/:app` would read an App named `actions`. The
+  // right is `app.read` on each App, decided where the answer is built: on the App the call
+  // names, and per App where it names none.
+  "apps.actions.list": defineRegisteredOperation({
+    id: "apps.actions.list",
+    method: "GET",
+    path: "/api/v1/app-actions",
+    summary:
+      "List the named actions of one App or of every published App the caller reads, with what a call of each would come to for the caller",
+    tag: "Apps",
+    auth: "user",
+    scope: "config_assets:read",
+    requires: [],
+    effect: "reading",
+    query: appActionsListQuerySchema,
+    response: json(appActionsSchema),
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),

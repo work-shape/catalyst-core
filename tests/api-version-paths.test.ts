@@ -70,6 +70,7 @@ describe("the operation catalog", () => {
         "approval_requests.list_mine  GET /api/v1/approval-requests/mine",
         "approval_requests.revert  POST /api/v1/approval-requests/:requestId/revert",
         "approval_requests.withdraw  POST /api/v1/approval-requests/:requestId/withdraw",
+        "apps.actions.list  GET /api/v1/app-actions",
         "apps.create_from_page  POST /api/v1/apps",
         "apps.preview  POST /api/v1/apps/:app/preview",
         "apps.sessions.call_action  POST /api/v1/app-content-sessions/:pageSessionId/actions/:name",
@@ -228,6 +229,7 @@ describe("the operation catalog", () => {
     }
     const scopes = new Set(versioned.map((name) => descriptor(name).path.split("/")[3]));
     expect([...scopes].sort()).toEqual([
+      "app-actions",
       "app-content-sessions",
       "approval-requests",
       "apps",
@@ -413,7 +415,8 @@ describe("a running instance", () => {
       "apps.preview",
       "apps.sessions.context",
       "apps.sessions.call_action",
-      "apps.sessions.call_connection"
+      "apps.sessions.call_connection",
+      "apps.actions.list"
     ];
     // The export, import and validation of a release went when the CLI moved to `assets.sync`.
     const removed = 3;

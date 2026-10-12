@@ -1,0 +1,296 @@
+import {
+  APP_ASSET_KIND,
+  type AppAction,
+  type AppActionUnavailable,
+  type AppActions,
+  type AppMode
+} from "@vivd-catalyst/api-contract";
+import { compiledActionsOf, type CompiledAppAction } from "@vivd-catalyst/app-build";
+import {
+  AppError,
+  CONNECTION_ACTIONS,
+  CONNECTION_ASSET_KIND,
+  appActionOperationName,
+  connectionOperationName,
+  liveRevisionId,
+  type ActorAccess,
+  type AuthenticatedIdentity,
+  type ConfigAssetRecord,
+  type ConnectionExposure,
+  type OperationAuthorization
+} from "@vivd-catalyst/core";
+import { z } from "zod";
+import { decide } from "../asset-access";
+import type { ResolvedChatServerOptions } from "../types";
+import { appActionPermissions } from "./action-call";
+import {
+  appResourceOf,
+  appRevisionHost,
+  appTitleOf,
+  preloadedEnvironment,
+  type AppActionEnvironment
+} from "./action-source";
+import { APP_ACTIONS } from "./app-kind";
+
+// The named actions of an App as a person reads them: what each reaches, what a call of it
+// would come to for the reader, and why a call cannot reach its operation where it cannot.
+// Nothing is called here and no outside system is contacted. The policy is resolved by the
+// rule a call from the revision's frame is decided by, so the list and the call agree.
+
+/**
+ * How many published Apps one answer without a named App lists, in one query. Where more are
+ * published, the answer holds the first so many by name and says so in `truncated`.
+ */
+const APP_ACTIONS_LIST_MAX_APPS = 200;
+
+/** The exposure a call from the frame of an App needs of a Connection's operation. */
+const APP_EXPOSURE: ConnectionExposure = "bridge";
+
+/** What the list reads of a Connection's config. A config of another shape counts as missing. */
+const connectionFactsSchema = z.object({
+  displayName: z.string(),
+  enabled: z.boolean(),
+  operations: z.array(
+    z.object({ name: z.string(), enabled: z.boolean(), exposure: z.array(z.string()) })
+  )
+});
+
+interface ConnectionFacts extends z.infer<typeof connectionFactsSchema> {
+  /** The reader may read the Connection, so its label is told. */
+  readable: boolean;
+}
+
+const manifestOfConfigSchema = z.object({ manifest: z.unknown() });
+
+/** One revision of an App, as the list reads it. */
+interface ListedRevision {
+  asset: ConfigAssetRecord;
+  view: AppMode;
+  revision: number;
+  revisionId: string;
+  title: string;
+  actions: CompiledAppAction[];
+}
+
+function listedRevision(asset: ConfigAssetRecord, view: AppMode): ListedRevision | undefined {
+  if (asset.status !== "active" || asset.scope.kind !== "workspace") return undefined;
+  const live = liveRevisionId(asset, { lifecycle: "draft_published" });
+  const shown =
+    view === "draft"
+      ? { config: asset.config, revision: asset.revision, revisionId: asset.activeRevisionId }
+      : live !== undefined && live === asset.publishedRevisionId
+        ? { config: asset.publishedConfig, revision: asset.publishedRevision, revisionId: live }
+        : undefined;
+  const config = manifestOfConfigSchema.safeParse(shown?.config);
+  if (!shown || shown.revision === undefined || !config.success) return undefined;
+  return {
+    asset,
+    view,
+    revision: shown.revision,
+    revisionId: shown.revisionId,
+    title: appTitleOf(shown.config, asset.name),
+    actions: compiledActionsOf(config.data.manifest)
+  };
+}
+
+function unavailableOf(
+  action: CompiledAppAction,
+  connection: ConnectionFacts | undefined
+): AppActionUnavailable | undefined {
+  if (!connection) return "connection_missing";
+  if (!connection.enabled) return "connection_disabled";
+  const operation = connection.operations.find((candidate) => candidate.name === action.operation);
+  if (!operation) return "operation_missing";
+  if (!operation.enabled) return "operation_disabled";
+  return operation.exposure.includes(APP_EXPOSURE) ? undefined : "not_exposed";
+}
+
+export class AppActionList {
+  private readonly options: ResolvedChatServerOptions;
+  private readonly environment: AppActionEnvironment;
+
+  constructor(options: ResolvedChatServerOptions) {
+    this.options = options;
+    this.environment = {
+      registry: options.operationCalls.registry,
+      policy: options.operationCalls.deps.policy
+    };
+  }
+
+  /**
+   * The right to read the App the call names, decided on the stored App or on the name alone
+   * where none carries it. A call that names none is decided per App where the list is built.
+   */
+  async authorize(access: ActorAccess, input: { app?: string }): Promise<OperationAuthorization> {
+    if (input.app === undefined) return { allowed: true };
+    const asset = await this.app(input.app);
+    return decide(
+      access,
+      APP_ACTIONS.read,
+      asset ? appResourceOf(scoped(asset)) : { kind: APP_ASSET_KIND, name: input.app }
+    );
+  }
+
+  /**
+   * The actions of the App the call names: of its draft for whoever writes the App, of the
+   * published revision for every other reader. Without a name, the actions of the published
+   * revision of every App the caller reads, at most `APP_ACTIONS_LIST_MAX_APPS` Apps.
+   */
+  async list(
+    caller: { actor: AuthenticatedIdentity; access: ActorAccess },
+    input: { app?: string }
+  ): Promise<AppActions> {
+    const reads = (asset: ConfigAssetRecord, action: string) =>
+      caller.access.authorize(action, appResourceOf(scoped(asset))).allowed;
+    let revisions: ListedRevision[];
+    let truncated = false;
+    if (input.app !== undefined) {
+      const asset = await this.app(input.app);
+      const view = asset && reads(asset, APP_ACTIONS.write) ? "draft" : "published";
+      const revision = asset && listedRevision(asset, view);
+      if (!revision) {
+        throw asset?.status === "active"
+          ? new AppError("NOT_FOUND", "The App is not published", { reason: "not_published" })
+          : new AppError("NOT_FOUND", "App is not available");
+      }
+      revisions = [revision];
+    } else {
+      // One more than is listed, so that an answer that leaves Apps out knows it.
+      const assets = await this.options.stores.configAssets.listPublishedConfigAssets({
+        clientInstanceId: this.options.clientInstanceId,
+        kind: APP_ASSET_KIND,
+        limit: APP_ACTIONS_LIST_MAX_APPS + 1
+      });
+      truncated = assets.length > APP_ACTIONS_LIST_MAX_APPS;
+      revisions = assets
+        .slice(0, APP_ACTIONS_LIST_MAX_APPS)
+        .filter((asset) => reads(asset, APP_ACTIONS.read))
+        .flatMap((asset) => listedRevision(asset, "published") ?? []);
+    }
+    const actions = revisions.flatMap((revision) => revision.actions);
+    const [environment, connections, agentTools] = await Promise.all([
+      preloadedEnvironment(this.environment, actions),
+      this.connections(caller.access, actions),
+      this.agentTools(revisions)
+    ]);
+    const apps: AppActions["apps"] = [];
+    for (const revision of revisions) {
+      const { asset } = revision;
+      const resource = appResourceOf(scoped(asset));
+      const can = await appActionPermissions(environment, {
+        viewer: caller.actor,
+        access: caller.access,
+        // The reader has no frame open. Nothing of the decision reads the page session.
+        pageSessionId: "",
+        // The policy's word, for a changing action of a draft too: that a draft carries none
+        // out is a fact of the view, which the answer names.
+        mode: "published",
+        host: appRevisionHost(asset.name, resource, revision.view),
+        revisionId: revision.revisionId,
+        appName: asset.name,
+        workspaceId: resource.workspaceId,
+        actions: revision.actions
+      });
+      apps.push({
+        name: asset.name,
+        title: revision.title,
+        view: revision.view,
+        revision: revision.revision,
+        actions: revision.actions.map((action): AppAction => {
+          const connection = connections.get(action.connection);
+          const unavailable = unavailableOf(action, connection);
+          const target = agentTools.get(
+            connectionOperationName(action.connection, action.operation)
+          );
+          return {
+            name: action.name,
+            kind: action.kind,
+            effect: action.effect,
+            ...(action.description === undefined ? {} : { description: action.description }),
+            toolName: appActionOperationName(asset.name, action.name),
+            connection: {
+              name: action.connection,
+              ...(connection?.readable ? { title: connection.displayName } : {})
+            },
+            operation: action.operation,
+            inputSchema: action.input.schema,
+            policy: can[action.name] ?? "deny",
+            ...(unavailable === undefined ? {} : { unavailable }),
+            // The rule of the tool source: an action that says it reads and stands for a
+            // changing operation is no tool.
+            agentTool:
+              revision.view === "published" &&
+              target !== undefined &&
+              !(target === "changing" && action.effect === "reading")
+          };
+        })
+      });
+    }
+    return { apps, truncated };
+  }
+
+  private app(name: string): Promise<ConfigAssetRecord | undefined> {
+    return this.options.stores.configAssets.getConfigAsset({
+      clientInstanceId: this.options.clientInstanceId,
+      kind: APP_ASSET_KIND,
+      name
+    });
+  }
+
+  /** Each Connection the actions name, read once. */
+  private async connections(
+    access: ActorAccess,
+    actions: readonly CompiledAppAction[]
+  ): Promise<Map<string, ConnectionFacts>> {
+    const names = [...new Set(actions.map((action) => action.connection))];
+    const read = await Promise.all(
+      names.map(async (name) => {
+        const asset = await this.options.stores.configAssets.getConfigAsset({
+          clientInstanceId: this.options.clientInstanceId,
+          kind: CONNECTION_ASSET_KIND,
+          name
+        });
+        const facts = connectionFactsSchema.safeParse(asset?.config);
+        if (!asset || asset.status !== "active" || !facts.success) return [];
+        const readable = access.authorize(CONNECTION_ACTIONS.read, {
+          kind: CONNECTION_ASSET_KIND,
+          assetId: asset.id,
+          name: asset.name
+        }).allowed;
+        return [[name, { ...facts.data, readable }] as const];
+      })
+    );
+    return new Map(read.flat());
+  }
+
+  /**
+   * The Connection operations an agent can carry now, each with its effect, as the
+   * Connections say it. Asked only where a published revision is listed: no agent carries an
+   * action of a draft.
+   */
+  private async agentTools(
+    revisions: readonly ListedRevision[]
+  ): Promise<Map<string, "reading" | "changing">> {
+    const { connections } = this.options;
+    if (!connections || revisions.every((revision) => revision.view === "draft")) {
+      return new Map();
+    }
+    // Whether an operation is a tool is no fact of the Connection's page: it is told of
+    // every Connection an App the caller reads names.
+    const listed = await connections.listTools(() => true);
+    return new Map(
+      listed.connections.flatMap((connection) =>
+        connection.tools.map((tool) => [tool.toolName, tool.effect] as const)
+      )
+    );
+  }
+}
+
+/** The App with its workspace as a right is decided on it. */
+function scoped(asset: ConfigAssetRecord): { id: string; name: string; workspaceId?: string } {
+  return {
+    id: asset.id,
+    name: asset.name,
+    ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
+  };
+}

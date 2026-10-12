@@ -77,6 +77,79 @@
     }
   ],
   "paths": {
+    "/api/v1/app-actions": {
+      "get": {
+        "operationId": "apps.actions.list",
+        "summary": "List the named actions of one App or of every published App the caller reads, with what a call of each would come to for the caller",
+        "tags": [
+          "Apps"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "app",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 63
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppActions"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/app-content-sessions/{pageSessionId}/actions/{name}": {
       "post": {
         "operationId": "apps.sessions.call_action",
@@ -13174,6 +13247,81 @@
           "authSource"
         ]
       },
+      "AppAction": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "const": "connection"
+          },
+          "effect": {
+            "type": "string",
+            "enum": [
+              "reading",
+              "changing"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "toolName": {
+            "type": "string"
+          },
+          "connection": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "operation": {
+            "type": "string"
+          },
+          "inputSchema": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          },
+          "policy": {
+            "type": "string",
+            "enum": [
+              "allow",
+              "confirm",
+              "approval",
+              "deny"
+            ]
+          },
+          "unavailable": {
+            "$ref": "#/components/schemas/AppActionUnavailable"
+          },
+          "agentTool": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "effect",
+          "toolName",
+          "connection",
+          "operation",
+          "inputSchema",
+          "policy",
+          "agentTool"
+        ]
+      },
       "AppActionCallRequestInput": {
         "type": "object",
         "properties": {
@@ -13220,6 +13368,63 @@
         "required": [
           "runId",
           "status"
+        ]
+      },
+      "AppActionUnavailable": {
+        "type": "string",
+        "enum": [
+          "connection_missing",
+          "connection_disabled",
+          "operation_missing",
+          "operation_disabled",
+          "not_exposed"
+        ]
+      },
+      "AppActions": {
+        "type": "object",
+        "properties": {
+          "apps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "view": {
+                  "$ref": "#/components/schemas/AppMode"
+                },
+                "revision": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "actions": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AppAction"
+                  }
+                }
+              },
+              "required": [
+                "name",
+                "title",
+                "view",
+                "revision",
+                "actions"
+              ]
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "apps",
+          "truncated"
         ]
       },
       "AppConnectionCallRequest": {
