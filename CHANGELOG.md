@@ -434,8 +434,7 @@ id from config_assets where status = 'deleted')`.
   **`catalyst config push --force` no longer exists** and is refused with the conflict
   procedure: pull the assets the conflict names, re-apply the edits, push. A working copy that
   never pulled pushes every asset as a creation; `pull` records the delete of an asset it sees
-  gone, and the next push may create it again. `--prune` needs the delete right on each asset
-  it deletes. Remove `.catalyst-state.json` of an instance whose database was reset. In Build
+  gone, and the next push may create it again. Remove `.catalyst-state.json` of an instance whose database was reset. In Build
   the conflict notice names who saved first and when and offers the history; the demo's
   `pnpm config:push` pushes without `--force`. **Upgrade CLI and server together.**
 - **Access wording:** in English a row of the Access page is a "right", as it already is in
