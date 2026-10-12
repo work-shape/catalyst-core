@@ -319,7 +319,8 @@ export function FlowNode({
                 data-exit={row.id}
                 className={cn(
                   "relative flex h-7.5 items-center border-b px-3 font-medium last:border-b-0",
-                  compact ? "text-title-sm font-medium" : "text-caption"
+                  // Compact, a row is read from as far away as the title.
+                  compact ? "text-title-lg leading-6" : "text-caption"
                 )}
               >
                 <span className="truncate">{row.label}</span>

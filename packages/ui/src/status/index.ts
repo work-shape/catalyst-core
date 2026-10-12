@@ -14,3 +14,13 @@ export {
 } from "./badge";
 export { Chip, ScopeChip, type ChipProps, type ChipSize, type ScopeChipProps } from "./chip";
 export { CountBadge, type CountBadgeProps, type CountBadgeTone } from "./count-badge";
+export {
+  IconRegistryProvider,
+  RegistryIcon,
+  genericIcons,
+  type GenericIconKey,
+  type IconComponent,
+  type IconFamily,
+  type IconRegistry,
+  type RegistryIconProps
+} from "./registry-icon";

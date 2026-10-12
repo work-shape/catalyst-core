@@ -7,14 +7,14 @@ import {
   FlowEdge,
   FlowGroup,
   FlowHandle,
-  FlowIcon,
-  FlowIconProvider,
   FlowMinimap,
+  IconRegistryProvider,
+  RegistryIcon,
   FlowNode,
   SidePanel,
   UiRoot,
   flowEdgePath,
-  flowGenericIcons,
+  genericIcons,
   uiLabelsDe,
   uiLabelsEn,
   type FlowEdgeState,
@@ -108,6 +108,19 @@ describe("FlowNode", () => {
     expect(open).toContain('tabindex="0"');
     expect(open).toContain('aria-label="Reads data, Load the clients, Done"');
     expect(slot(node({}), "flow-node")).not.toContain("tabindex");
+  });
+
+  it("shows its rows as large as its title when compact", () => {
+    const rows = [{ id: "yes", label: "Yes" }];
+    const row = (compact: boolean) => classesOf(slot(node({ compact, rows }), "flow-row"));
+    const title = classesOf(
+      slot(node({ compact: true, rows }).split('data-slot="flow-compact"')[1] ?? "", "flow-title")
+    );
+
+    expect(title).toContain("text-title-lg");
+    expect(row(true)).toContain("text-title-lg");
+    expect(row(false)).toContain("text-caption");
+    expect(row(false)).not.toContain("text-title-lg");
   });
 
   it("shows one row per way out, each with its handle, and no status footer under them", () => {
@@ -334,24 +347,49 @@ describe("FlowMinimap", () => {
   });
 });
 
-describe("FlowIcon", () => {
-  it("shows the registered icon, then the fallback, then the generic step", () => {
-    const Mark = () => createElement("svg", { "data-mark": "ledger" });
-    const icons = (name: string, fallback?: string) =>
-      renderToStaticMarkup(
-        createElement(FlowIconProvider, {
-          icons: { ledger: Mark },
-          children: createElement(FlowIcon, { name, fallback })
-        })
-      );
-    const generic = (key: keyof typeof flowGenericIcons) =>
-      renderToStaticMarkup(createElement(flowGenericIcons[key], { "aria-hidden": true }));
-    const shape = (markup: string) => markup.replace(/^<svg[^>]*>/u, "");
+describe("RegistryIcon", () => {
+  const Mark = () => createElement("svg", { "data-mark": "ledger" });
+  const icon = (props: Parameters<typeof RegistryIcon>[0], icons = {}) =>
+    renderToStaticMarkup(
+      createElement(IconRegistryProvider, {
+        icons: { ledger: Mark, ...icons },
+        children: createElement(RegistryIcon, props)
+      })
+    );
+  const generic = (key: keyof typeof genericIcons) =>
+    renderToStaticMarkup(createElement(genericIcons[key], { "aria-hidden": true }));
+  const shape = (markup: string) => markup.replace(/^<svg[^>]*>/u, "");
 
-    expect(icons("ledger")).toContain('data-mark="ledger"');
-    expect(shape(icons("outlook", "mail"))).toBe(shape(generic("mail")));
-    expect(shape(icons("unknown"))).toBe(shape(generic("step")));
-    expect(shape(icons("database"))).toBe(shape(generic("database")));
+  it("shows the registered icon, then the fallback, then the generic step", () => {
+    expect(icon({ name: "ledger" })).toContain('data-mark="ledger"');
+    expect(shape(icon({ name: "outlook", fallback: "mail" }))).toBe(shape(generic("mail")));
+    expect(shape(icon({ name: "unknown" }))).toBe(shape(generic("step")));
+    expect(shape(icon({ name: "database" }))).toBe(shape(generic("database")));
+    expect(icon({ name: "database" })).toContain('aria-hidden="true"');
+  });
+
+  it.each(["file", "service", "skill", "tool"] as const)(
+    "resolves an unknown key of the family %s to the family's generic icon",
+    (family) => {
+      expect(shape(icon({ name: "unknown", family }))).toBe(shape(generic(family)));
+      expect(shape(icon({ family }))).toBe(shape(generic(family)));
+      // A registered key and a registered fallback come before the family.
+      expect(icon({ name: "ledger", family })).toContain('data-mark="ledger"');
+      expect(shape(icon({ name: "unknown", fallback: "mail", family }))).toBe(
+        shape(generic("mail"))
+      );
+    }
+  );
+
+  it("gives every family an icon of its own, and lets an application replace one", () => {
+    const shapes = (["file", "service", "skill", "tool"] as const).map((family) =>
+      shape(icon({ family }))
+    );
+
+    expect(new Set([...shapes, shape(generic("step"))]).size).toBe(5);
+    expect(icon({ name: "unknown", family: "skill" }, { skill: Mark })).toContain(
+      'data-mark="ledger"'
+    );
   });
 });
 

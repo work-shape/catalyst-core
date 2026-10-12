@@ -6,9 +6,18 @@ import { Avatar, type AvatarKind, type AvatarSize } from "../status/avatar";
 import { Badge, type BadgeAppearance, type BadgeTone } from "../status/badge";
 import { Chip, ScopeChip, type ChipSize } from "../status/chip";
 import { CountBadge, type CountBadgeTone } from "../status/count-badge";
+import {
+  genericIcons,
+  IconRegistryProvider,
+  RegistryIcon,
+  type IconFamily
+} from "../status/registry-icon";
 import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
 
+const iconFamilies: readonly IconFamily[] = ["file", "service", "skill", "tool"];
+const iconSample =
+  "flex items-center gap-2 text-caption text-muted-foreground [&_svg]:size-4 [&_svg]:text-foreground";
 const badgeTones: readonly BadgeTone[] = [
   "neutral",
   "info",
@@ -238,6 +247,48 @@ export const statusGallery: GalleryGroup = {
               </Button>
               <CountBadge count={3} className="absolute -top-1 -right-1" />
             </span>
+          </Samples>
+        </>
+      )
+    },
+    {
+      name: "RegistryIcon",
+      components: ["RegistryIcon", "IconRegistryProvider"],
+      render: (text) => (
+        <>
+          <Samples label={text.iconsGeneric}>
+            {Object.keys(genericIcons).map((name) => (
+              <span key={name} data-gallery-sample={`icon-${name}`} className={iconSample}>
+                <RegistryIcon name={name} />
+                {name}
+              </span>
+            ))}
+          </Samples>
+          <Samples label={text.iconsFamilies}>
+            {iconFamilies.map((family) => (
+              <span
+                key={family}
+                data-gallery-sample={`icon-family-${family}`}
+                className={iconSample}
+              >
+                <RegistryIcon name="unknown" family={family} />
+                {family}
+              </span>
+            ))}
+          </Samples>
+          <Samples label={text.iconsFallback}>
+            <IconRegistryProvider icons={{ ledger: genericIcons.files }}>
+              {[
+                ["outlook", "mail"],
+                ["ledger", "database"],
+                ["unknown", undefined]
+              ].map(([name, fallback]) => (
+                <span key={name} className={iconSample}>
+                  <RegistryIcon name={name} fallback={fallback} />
+                  {name}
+                </span>
+              ))}
+            </IconRegistryProvider>
           </Samples>
         </>
       )

@@ -6,11 +6,11 @@ import { FlowCanvas } from "../flow/flow-canvas";
 import { FlowControls } from "../flow/flow-controls";
 import { FlowEdge, flowEdgePath } from "../flow/flow-edge";
 import { FlowGroup } from "../flow/flow-group";
-import { FlowIcon, flowGenericIcons, FlowIconProvider } from "../flow/flow-icons";
 import { FlowMinimap, type FlowMinimapItem } from "../flow/flow-minimap";
 import { FlowHandle, FlowNode } from "../flow/flow-node";
 import type { FlowEdgeState, FlowGraph, FlowStatus } from "../flow/flow-types";
 import { SidePanel } from "../overlays/side-panel";
+import { RegistryIcon } from "../status/registry-icon";
 import { useUiLabels } from "../ui-root";
 import { Samples, type GalleryEntry, type GalleryGroup } from "./entry";
 import { largeGraph, linearGraph } from "./flow-graphs";
@@ -74,7 +74,7 @@ function SelectableCanvas({
               open
               leading={
                 <span className="grid size-7 shrink-0 place-items-center rounded-md bg-secondary [&_svg]:size-4">
-                  <FlowIcon name={selected.icon} />
+                  <RegistryIcon name={selected.icon} />
                 </span>
               }
               eyebrow={selected.eyebrow}
@@ -217,13 +217,13 @@ function NodeSamples({ text }: { text: GalleryText }) {
     <FlowNode
       key={`${status}-${String(compact)}`}
       data-gallery-sample={`flow-node-${status}${compact ? "-compact" : ""}`}
-      icon={<FlowIcon name="database" />}
+      icon={<RegistryIcon name="database" />}
       eyebrow={text.flowKindRead}
       title={text.flowLoadTitle}
       summary={text.flowLoadSummary}
       chip={
         <>
-          <FlowIcon name="connection" />
+          <RegistryIcon name="connection" />
           <span className="truncate">{text.flowChipBookings}</span>
         </>
       }
@@ -245,7 +245,7 @@ function NodeSamples({ text }: { text: GalleryText }) {
         <div className="flex w-full min-w-0 flex-wrap items-start gap-6 rounded-lg bg-muted p-6">
           <FlowNode
             selected
-            icon={<FlowIcon name="schedule" />}
+            icon={<RegistryIcon name="schedule" />}
             eyebrow={text.flowKindStart}
             title={text.flowTriggerTitle}
             summary={text.flowTriggerSummary}
@@ -253,7 +253,7 @@ function NodeSamples({ text }: { text: GalleryText }) {
             onOpen={() => undefined}
           />
           <FlowNode
-            icon={<FlowIcon name="branch" />}
+            icon={<RegistryIcon name="branch" />}
             eyebrow={text.flowKindCondition}
             title={text.flowConditionTitle}
             rows={[
@@ -283,7 +283,7 @@ function NodeSamples({ text }: { text: GalleryText }) {
           />
           <FlowNode
             stacked
-            icon={<FlowIcon name="subflow" />}
+            icon={<RegistryIcon name="subflow" />}
             eyebrow={text.flowKindSubflow}
             title={text.flowSubflowTitle}
             action={
@@ -295,7 +295,7 @@ function NodeSamples({ text }: { text: GalleryText }) {
           />
           <FlowNode
             accent
-            icon={<FlowIcon name="agent" />}
+            icon={<RegistryIcon name="agent" />}
             eyebrow={text.flowKindAgent}
             title={text.flowAgentTitle}
             summary={text.flowAgentSummary}
@@ -316,34 +316,6 @@ function NodeSamples({ text }: { text: GalleryText }) {
           </span>
         ))}
       </Samples>
-      <Samples label={text.flowIconsGeneric}>
-        {Object.keys(flowGenericIcons).map((name) => (
-          <span
-            key={name}
-            className="flex items-center gap-2 text-caption text-muted-foreground [&_svg]:size-4 [&_svg]:text-foreground"
-          >
-            <FlowIcon name={name} />
-            {name}
-          </span>
-        ))}
-      </Samples>
-      <Samples label={text.flowIconsFallback}>
-        <FlowIconProvider icons={{ ledger: flowGenericIcons.files }}>
-          {[
-            ["outlook", "mail"],
-            ["ledger", "database"],
-            ["unknown", undefined]
-          ].map(([name, fallback]) => (
-            <span
-              key={name}
-              className="flex items-center gap-2 text-caption text-muted-foreground [&_svg]:size-4 [&_svg]:text-foreground"
-            >
-              <FlowIcon name={name} fallback={fallback} />
-              {name}
-            </span>
-          ))}
-        </FlowIconProvider>
-      </Samples>
     </>
   );
 }
@@ -353,7 +325,7 @@ function GroupSamples({ text }: { text: GalleryText }) {
   const child = (
     <FlowNode
       className="w-full"
-      icon={<FlowIcon name="code" />}
+      icon={<RegistryIcon name="code" />}
       eyebrow={text.flowKindScript}
       title={text.flowCheckTitle}
       summary={text.flowCheckSummary}
@@ -365,7 +337,7 @@ function GroupSamples({ text }: { text: GalleryText }) {
       <div className="flex w-full min-w-0 flex-wrap items-start gap-6 rounded-lg bg-muted p-6">
         <FlowGroup
           data-gallery-sample="flow-group-running"
-          icon={<FlowIcon name="repeat" />}
+          icon={<RegistryIcon name="repeat" />}
           eyebrow={text.flowKindLoop}
           title={text.flowLoopTitle}
           status="running"
@@ -400,7 +372,7 @@ function GroupSamples({ text }: { text: GalleryText }) {
         </FlowGroup>
         <FlowGroup
           selected
-          icon={<FlowIcon name="branch" />}
+          icon={<RegistryIcon name="branch" />}
           eyebrow={text.flowKindParallel}
           title={text.flowParallelTitle}
           label={`${text.flowKindParallel}, ${text.flowParallelTitle}, ${text.flowSelected}`}
@@ -411,7 +383,7 @@ function GroupSamples({ text }: { text: GalleryText }) {
         </FlowGroup>
         <FlowGroup
           data-gallery-sample="flow-group-collapsed"
-          icon={<FlowIcon name="repeat" />}
+          icon={<RegistryIcon name="repeat" />}
           eyebrow={text.flowKindLoop}
           title={text.flowLoopTitle}
           summary={text.flowLoopSummary}
@@ -516,7 +488,7 @@ const flowEntries: readonly GalleryEntry[] = [
   },
   {
     name: "FlowNode",
-    components: ["FlowNode", "FlowHandle", "FlowIcon", "FlowIconProvider"],
+    components: ["FlowNode", "FlowHandle"],
     render: (text) => <NodeSamples text={text} />
   },
   {
@@ -560,7 +532,7 @@ export function SidePanelSamples({ text }: { text: GalleryText }) {
         mode={mode}
         leading={
           <span className="grid size-7 shrink-0 place-items-center rounded-md bg-secondary [&_svg]:size-4">
-            <FlowIcon name="database" />
+            <RegistryIcon name="database" />
           </span>
         }
         eyebrow={text.flowKindRead}

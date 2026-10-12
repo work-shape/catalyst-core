@@ -17,8 +17,9 @@ export interface FlowGalleryText {
   flowGroupStates: string;
   flowEdgeStates: string;
   flowHandleStates: string;
-  flowIconsGeneric: string;
-  flowIconsFallback: string;
+  iconsGeneric: string;
+  iconsFallback: string;
+  iconsFamilies: string;
   flowControlsFull: string;
   flowControlsNarrow: string;
   flowMinimapSample: string;
@@ -111,8 +112,9 @@ export const flowGalleryText: Record<"en" | "de", FlowGalleryText> = {
     flowGroupStates: "Open with progress, selected, folded, done",
     flowEdgeStates: "Rest, done, active, skipped",
     flowHandleStates: "Handles take the state of their edge",
-    flowIconsGeneric: "The generic icons",
-    flowIconsFallback: "An unknown key shows its fallback, a registered one its own icon",
+    iconsFamilies: "A key nobody registered shows the generic icon of its family",
+    iconsGeneric: "The generic icons",
+    iconsFallback: "An unknown key shows its fallback, a registered one its own icon",
     flowControlsFull: "With the search field and tidy",
     flowControlsNarrow: "Under 600 px: zoom and fit",
     flowMinimapSample: "The whole graph with the visible part marked",
@@ -204,8 +206,10 @@ export const flowGalleryText: Record<"en" | "de", FlowGalleryText> = {
     flowGroupStates: "Offen mit Fortschritt, ausgewählt, zugeklappt, fertig",
     flowEdgeStates: "Ruhend, fertig, aktiv, übersprungen",
     flowHandleStates: "Anschlüsse übernehmen den Zustand ihrer Kante",
-    flowIconsGeneric: "Die generischen Symbole",
-    flowIconsFallback:
+    iconsFamilies:
+      "Ein Schlüssel, den niemand registriert hat, zeigt das generische Symbol seiner Familie",
+    iconsGeneric: "Die generischen Symbole",
+    iconsFallback:
       "Ein unbekannter Schlüssel zeigt seinen Ersatz, ein registrierter sein eigenes Symbol",
     flowControlsFull: "Mit Suchfeld und Aufräumen",
     flowControlsNarrow: "Unter 600 px: Zoom und Einpassen",

@@ -8,8 +8,8 @@ import {
 } from "react";
 import { cn } from "../cn";
 import { Skeleton } from "../feedback/skeleton";
+import { IconRegistryProvider, type IconRegistry } from "../status/registry-icon";
 import { useUiLabels } from "../ui-root";
-import { FlowIconProvider, type FlowIconRegistry } from "./flow-icons";
 import type { FlowSize } from "./flow-layout";
 import type { FlowDirection, FlowGraph } from "./flow-types";
 
@@ -37,7 +37,7 @@ export interface FlowCanvasProps extends Omit<HTMLAttributes<HTMLDivElement>, "o
   /** Called with the id of the node or group whose `action` was pressed. */
   onAction?(id: string): void;
   /** Icons by key, over the generic ones the library ships. */
-  icons?: FlowIconRegistry;
+  icons?: IconRegistry;
   /**
    * The canvas stands in a page that scrolls: the wheel scrolls the page, and pinching and the
    * controls zoom. Without it the wheel moves the view.
@@ -151,7 +151,7 @@ export function FlowCanvas({
         skeleton
       ) : (
         <Suspense fallback={skeleton}>
-          <FlowIconProvider icons={icons ?? noIcons}>
+          <IconRegistryProvider icons={icons ?? noIcons}>
             <LoadedEngine
               engine={engine}
               fallback={<CanvasNotice>{labels.flowLoadFailed}</CanvasNotice>}
@@ -169,14 +169,14 @@ export function FlowCanvas({
               searchLabel={searchLabel}
               panel={panel}
             />
-          </FlowIconProvider>
+          </IconRegistryProvider>
         </Suspense>
       )}
     </div>
   );
 }
 
-const noIcons: FlowIconRegistry = {};
+const noIcons: IconRegistry = {};
 
 type EngineProps = Parameters<FlowEngineModule["FlowEngine"]>[0];
 

@@ -3,15 +3,6 @@ export { FlowControls, type FlowControlsProps, type FlowControlsSearch } from ".
 export { FlowEdge, flowEdgePath, type FlowEdgeEnd, type FlowEdgeProps } from "./flow-edge";
 export { FlowGroup, type FlowGroupProps } from "./flow-group";
 export {
-  FlowIcon,
-  FlowIconProvider,
-  flowGenericIcons,
-  type FlowGenericIconKey,
-  type FlowIconComponent,
-  type FlowIconProps,
-  type FlowIconRegistry
-} from "./flow-icons";
-export {
   FlowMinimap,
   type FlowBox,
   type FlowMinimapItem,

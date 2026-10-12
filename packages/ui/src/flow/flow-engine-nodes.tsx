@@ -14,10 +14,10 @@ import { Button } from "../actions/button";
 import { cn } from "../cn";
 import { Progress, type ProgressPart } from "../feedback/progress";
 import type { UiLabels } from "../labels";
+import { RegistryIcon } from "../status/registry-icon";
 import { useUiLabels } from "../ui-root";
 import { FlowEdge, flowEdgePath, type FlowEdgeEnd } from "./flow-edge";
 import { FlowGroup } from "./flow-group";
-import { FlowIcon } from "./flow-icons";
 import type { FlowPoint, FlowSize } from "./flow-layout";
 import { flowHandleClassName, FlowNode, flowStatusPresentations } from "./flow-node";
 import type { FlowDirection, FlowEdgeState, FlowGraphGroup, FlowGraphNode } from "./flow-types";
@@ -151,7 +151,7 @@ function StepNode({ id, data }: NodeProps<StepRfNode>) {
       data-flow-id={id}
       frameRef={frameRef}
       className={direction === "vertical" ? "w-75" : undefined}
-      icon={<FlowIcon name={item.icon} fallback={item.iconFallback} />}
+      icon={<RegistryIcon name={item.icon} fallback={item.iconFallback} />}
       accent={item.accent}
       eyebrow={item.eyebrow}
       title={item.title}
@@ -159,7 +159,7 @@ function StepNode({ id, data }: NodeProps<StepRfNode>) {
       chip={
         item.chip === undefined ? undefined : (
           <>
-            <FlowIcon name={item.chip.icon} fallback="connection" />
+            <RegistryIcon name={item.chip.icon} family="service" />
             <span className="truncate">{item.chip.label}</span>
           </>
         )
@@ -218,7 +218,7 @@ function GroupNode({ id, data }: NodeProps<GroupRfNode>) {
       data-flow-id={id}
       headRef={headRef}
       style={box}
-      icon={<FlowIcon name={item.icon} fallback={item.iconFallback ?? "repeat"} />}
+      icon={<RegistryIcon name={item.icon} fallback={item.iconFallback ?? "repeat"} />}
       accent={item.accent}
       eyebrow={item.eyebrow}
       title={item.title}
