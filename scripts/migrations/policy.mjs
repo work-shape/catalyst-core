@@ -101,7 +101,7 @@ const additiveColumnAction =
  * Lints one new migration against an allow list of additive forms: new tables, types, schemas
  * and sequences; a nullable or defaulted column; a column default; a relaxed NOT NULL; a
  * constraint added NOT VALID and its later validation; a concurrent index in a migration of its
- * own; inserts and updates; comments. A table created unconditionally earlier in the same
+ * own; inserts and updates; comments; a lock timeout for the transaction of the migration. A table created unconditionally earlier in the same
  * migration takes any change. Every other statement is a contract step: it passes only under
  * `-- contract-after: <tag>` naming a release at or before the oldest supported one, the release
  * from which nothing depends on the old shape. A required column without a default and a
@@ -176,6 +176,9 @@ export function lintMigration({ name, text, oldestSupportedRelease }) {
     } else if (additiveCreate.test(shape)) {
       if (createdTable !== undefined) newTables.add(createdTable);
     } else if (/^(?:INSERT|UPDATE)\b/u.test(shape) && !/\b(?:DELETE|TRUNCATE)\b/u.test(shape)) {
+      continue;
+    } else if (/^SET LOCAL lock_timeout\b/iu.test(shape)) {
+      // Ends with the transaction of the migration, and makes a change stop rather than queue.
       continue;
     } else if (/^COMMENT ON\b/u.test(shape) || repeatableConcurrentIndex.test(shape)) {
       continue;

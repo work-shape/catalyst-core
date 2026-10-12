@@ -47,6 +47,18 @@ describe("migration lint", () => {
     ).toEqual([]);
   });
 
+  it("passes a lock timeout that ends with the migration and no other setting", () => {
+    expect(
+      rules(`
+        SET LOCAL lock_timeout = '5s';--> statement-breakpoint
+        ALTER TABLE "conversations" ADD COLUMN "summary" text;
+      `)
+    ).toEqual([]);
+    expect(rules(`SET lock_timeout = '5s';`)).toEqual(["not-additive"]);
+    expect(rules(`SET LOCAL statement_timeout = 0;`)).toEqual(["not-additive"]);
+    expect(rules(`SET LOCAL session_replication_role = 'replica';`)).toEqual(["not-additive"]);
+  });
+
   it("rejects drops, renames, required columns and blocking index builds", () => {
     expect(rules(`DROP TABLE "conversations";`)).toEqual(["drop"]);
     expect(rules(`DROP INDEX "conversations_owner_idx";`)).toEqual(["drop"]);
