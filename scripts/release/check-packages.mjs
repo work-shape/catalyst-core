@@ -14,13 +14,16 @@ const CONSUMER_SET = ["core", "config-schema", "api-contract", "api-client", "co
 const DEPLOYMENT_KIT = "deployment-kit";
 const MAX_TARBALL_BYTES = 300_000;
 // chat-ui and ui ship src/ next to dist/ for Tailwind scanning. chat-server ships the pinned
-// view runtime it serves, about 230 kB packed, and every released App Kit version, about 380 kB
-// packed each, most of it the chart engine. postgres-store ships its migrations with one
+// view runtime it serves, about 230 kB packed, its own code, about 150 kB packed, and every
+// released App Kit version, about 385 kB packed each, most of it the chart engine. Two versions
+// are released, and the limit has room for two more. A version repeats the chart engine and
+// React byte for byte, about 258 kB packed, so sharing those between versions is the way to
+// stop the growth before the limit moves again. postgres-store ships its migrations with one
 // schema snapshot each, about 9 kB packed per migration.
 const MAX_TARBALL_BYTES_BY_DIR = {
   "chat-ui": 1_000_000,
   ui: 500_000,
-  "chat-server": 1_100_000,
+  "chat-server": 2_000_000,
   "postgres-store": 600_000
 };
 const FORBIDDEN_FILES = [
