@@ -22,7 +22,24 @@ export interface TableProps extends HTMLAttributes<HTMLTableElement> {
    * high, that scrolls in both directions: a head row can only stay inside what scrolls.
    */
   stickyHeader?: boolean;
+  /**
+   * What the table does in room too narrow for its columns. `scroll` moves sideways under
+   * the reader's finger, which fits a table read row by row. `stack` shows each row as a
+   * block instead: the head is left out, and the cells stand in two columns in their order,
+   * a cell with `stacked="full"` on a line of its own. Use it where the last column holds
+   * what the reader acts with, which sideways scrolling would hide. The table measures the
+   * room it is given itself, so it stacks in a narrow window and in a narrow column alike.
+   */
+  narrow?: "scroll" | "stack";
 }
+
+/** One rule for every part of a stacked table, set on the table so no part repeats it. */
+const stackClasses =
+  "@max-2xl/table:block @max-2xl/table:[&_thead]:hidden @max-2xl/table:[&_tbody]:block " +
+  "@max-2xl/table:[&_tr]:grid @max-2xl/table:[&_tr]:grid-cols-[minmax(0,1fr)_auto] " +
+  "@max-2xl/table:[&_tr]:items-center @max-2xl/table:[&_tr]:gap-x-3 @max-2xl/table:[&_tr]:py-2 " +
+  "@max-2xl/table:[&_td]:block @max-2xl/table:[&_td]:py-1 " +
+  "@max-2xl/table:[&_td[data-stacked=full]]:col-span-2";
 
 /**
  * Figures compared across rows. A table wider than its box scrolls sideways inside the box; the
@@ -31,7 +48,7 @@ export interface TableProps extends HTMLAttributes<HTMLTableElement> {
  * shows nothing where the cut falls between two columns.
  */
 export const Table = forwardRef<HTMLTableElement, TableProps>(function Table(
-  { className, density = "default", stickyHeader = false, ...props },
+  { className, density = "default", stickyHeader = false, narrow = "scroll", ...props },
   ref
 ) {
   const sideways = useScrollEdgeFade<HTMLDivElement>([], "x");
@@ -71,13 +88,21 @@ export const Table = forwardRef<HTMLTableElement, TableProps>(function Table(
               }
         }
         data-slot="table-box"
-        className={cn("w-full", stickyHeader ? "max-h-128 overflow-auto" : "overflow-x-auto")}
+        className={cn(
+          "w-full",
+          stickyHeader ? "max-h-128 overflow-auto" : "overflow-x-auto",
+          narrow === "stack" && "@container/table"
+        )}
       >
         <table
           ref={ref}
           data-density={density}
           data-sticky-header={stickyHeader ? "" : undefined}
-          className={cn("group/table w-full caption-bottom text-body", className)}
+          className={cn(
+            "group/table w-full caption-bottom text-body",
+            narrow === "stack" && stackClasses,
+            className
+          )}
           {...props}
         />
       </div>
@@ -169,16 +194,19 @@ export interface TableCellProps extends Omit<TdHTMLAttributes<HTMLTableCellEleme
    * cell with neither has no tooltip. A cell with a tooltip needs a `UiRoot` above it.
    */
   truncate?: number;
+  /** In a table with `narrow="stack"`, the cell takes a line of its own once the rows stack. */
+  stacked?: "full";
 }
 
 export const TableCell = forwardRef<HTMLTableCellElement, TableCellProps>(function TableCell(
-  { className, align = "start", truncate, title, children, ...props },
+  { className, align = "start", truncate, title, stacked, children, ...props },
   ref
 ) {
   return (
     <td
       ref={ref}
       title={truncate === undefined ? title : undefined}
+      data-stacked={stacked}
       className={cn(
         "px-3 py-2.5 align-middle group-data-[density=compact]/table:py-1.5",
         cellAligns[align],

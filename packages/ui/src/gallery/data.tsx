@@ -418,6 +418,34 @@ export const dataGallery: GalleryGroup = {
           <Samples label={text.tableData}>
             <DataTable text={text} />
           </Samples>
+          {/* The same rows in narrow room: each row a block, the name on a line of its own. */}
+          <div className="max-w-xs">
+            <Table narrow="stack">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{text.tableName}</TableHead>
+                  <TableHead>{text.tableState}</TableHead>
+                  <TableHead>{text.tableUpdated}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow>
+                  <TableCell stacked="full">{text.rowAgent}</TableCell>
+                  <TableCell>
+                    <Badge tone="success">{text.statePublished}</Badge>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{text.today}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell stacked="full">{text.rowWorkflow}</TableCell>
+                  <TableCell>
+                    <Badge tone="info">{text.stateRunning}</Badge>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{text.today}</TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
         </>
       )
     },
