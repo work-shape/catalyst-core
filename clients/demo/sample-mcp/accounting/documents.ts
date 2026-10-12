@@ -1,9 +1,11 @@
-import { mixedSeed } from "../random.js";
+import { mixedSeed, pick } from "../random.js";
 import { MONTHS_PER_YEAR, twoDigits, type SampleMonth } from "./calendar.js";
 
 // The numbers and links of documents. A supplier numbers its invoices in its own format and
 // its numbers rise over the months. A client numbers what it issues itself in one running
-// range. No number is a booking's place in the month.
+// range. A number is given in a turn, and the turns of a month follow its days, but not
+// strictly: some documents are booked out of their turn. No number is a booking's place in
+// the month.
 
 /** How many formats a supplier's invoice numbers come in. */
 const SUPPLIER_FORMATS = 4;
@@ -11,9 +13,51 @@ const SUPPLIER_FORMATS = 4;
 const SUPPLIER_VOLUMES = 12;
 /** The months a supplier with one running range has numbered before the sample's first month, at least. */
 const SUPPLIER_HISTORY_MONTHS = 14;
+/** One pair of documents in this many has changed turns: an invoice that came late, and one booked ahead of it. */
+const OUT_OF_TURN_ONE_IN = 12;
+/** How far apart the two of a pair are, as a share of the month's documents: about three days. */
+const OUT_OF_TURN_REACH = 0.1;
 
 function padded(value: number, width: number): string {
   return String(value).padStart(width, "0");
+}
+
+/**
+ * The turns in which a month's documents of one kind are numbered. `own` of them are the
+ * month's own, which their rank puts in the order of their dates. A planted one is dated at a
+ * point of the month from 0 to 1 (`plantedAt`) and stands among the own ones of that day, so
+ * its number fits its date as theirs do. Every document has a turn of its own. Where a pair
+ * has changed turns, a document carries a higher number than one dated days after it.
+ */
+export function numbering(own: number, plantedAt: readonly number[], seed: number) {
+  /** For each planted document, the rank of the own one it stands before: the first dated behind its point. */
+  const before = plantedAt.map((point) => Math.round(point * own));
+  const turns = own + plantedAt.length;
+  const reach = Math.max(1, Math.round(turns * OUT_OF_TURN_REACH));
+
+  /** The turn of the document at `place` in the order of the dates: its place, or that of the other of its pair. */
+  function turnAt(place: number): number {
+    // The places come in stretches of `reach`: each place of an even stretch pairs with the
+    // one `reach` behind it.
+    const first = place - (Math.floor(place / reach) % 2) * reach;
+    const second = first + reach;
+    if (second >= turns || mixedSeed(seed, first) % OUT_OF_TURN_ONE_IN !== 0) return place;
+    return place === first ? second : first;
+  }
+
+  return {
+    turns,
+    /** The turn of the month's own document at `rank`. */
+    own: (rank: number): number => turnAt(rank + before.filter((stands) => stands <= rank).length),
+    /** The turn of the planted document at `number` of `plantedAt`. */
+    planted(number: number): number {
+      const stands = pick(before, number);
+      const earlier = before.filter(
+        (other, at) => other < stands || (other === stands && at < number)
+      );
+      return turnAt(stands + earlier.length);
+    }
+  };
 }
 
 /**

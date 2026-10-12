@@ -14,7 +14,7 @@ import {
   plain,
   spreadAround,
   type Frame,
-  type PlantedCounts
+  type PlantedPoints
 } from "./frame.js";
 
 // The tills of a client and the cash they take. A till reports once a day it is open (the
@@ -67,7 +67,7 @@ function reportDays({ client, period, issued }: Frame, week: Week) {
 /** The bookings of the client's tills in the frame's month: the reports, then the deposits. None for a client without a till. */
 export function tillActivities(
   frame: Frame,
-  plantedIn: (monthIndex: number) => PlantedCounts
+  plantedIn: (monthIndex: number) => PlantedPoints
 ): Activity[] {
   const { client, ledger, period, issued } = frame;
   const { till } = client.business.profile;

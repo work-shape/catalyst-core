@@ -35,6 +35,11 @@ export function schedule(activities: readonly Activity[], days: number, seed: nu
   const before = (ranks: readonly number[], day: number) => (day === 0 ? 0 : pick(ranks, day - 1));
 
   return {
+    /** The positions of the bookings dated on `day`: the first, and how many. */
+    on(day: number): { first: number; count: number } {
+      const first = before(dayTotals, day);
+      return { first, count: pick(dayTotals, day) - first };
+    },
     /** The day (from 0), the activity and the rank in it of the booking at `position`. */
     at(position: number): { day: number; activity: number; rank: number } {
       const day = dayTotals.findIndex((total) => position < total);
@@ -55,3 +60,5 @@ export function schedule(activities: readonly Activity[], days: number, seed: nu
     }
   };
 }
+
+export type Schedule = ReturnType<typeof schedule>;

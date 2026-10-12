@@ -23,12 +23,14 @@ export const ACTIVITY = {
 } as const;
 
 /**
- * The bookings of a month that are planted and not part of the client's business: how many,
- * and how many of them are sales invoices, which take numbers of the client's own range.
+ * The bookings of a month that are planted and not part of the client's business, each as
+ * the point of the month, from 0 to 1, at which it is dated and its document is numbered.
  */
-export interface PlantedCounts {
-  bookings: number;
-  salesInvoices: number;
+export interface PlantedPoints {
+  /** In the order the bookings are planted. */
+  bookings: readonly number[];
+  /** Those of them that are sales invoices, which take numbers of the client's own range. */
+  salesInvoices: readonly number[];
 }
 
 /** A client's month as far as the bookings of another month need it. */
@@ -47,19 +49,20 @@ export interface Frame {
     tillBookings: number;
     supplierInvoices: number;
   };
-  planted: PlantedCounts;
+  planted: PlantedPoints;
 }
 
 export function frameOf(
   seed: number,
   client: SampleClient,
   monthIndex: number,
-  plantedIn: (monthIndex: number) => PlantedCounts
+  plantedIn: (monthIndex: number) => PlantedPoints
 ): Frame {
   const { business, usualPostingCount } = client;
   const { till } = business.profile;
   const planted = plantedIn(monthIndex);
-  const volume = (postingCount(seed, client, monthIndex) - planted.bookings) / usualPostingCount;
+  const volume =
+    (postingCount(seed, client, monthIndex) - planted.bookings.length) / usualPostingCount;
   const period = monthAt(monthIndex);
   const tillLines = till === null ? 0 : till.lines(period.year).length;
   const tillReports =
@@ -110,7 +113,7 @@ export function evenDraw(
   count: number,
   random: Random
 ): number {
-  // A planted booking stands behind the month's own and draws freely.
+  // A planted booking has a rank behind the month's own and draws freely.
   if (rank >= count) return random();
   const { seed, client, period } = frame;
   const share = shuffled(
@@ -156,7 +159,7 @@ export const plain = {
 /** What `countOf` counts in the months of the frame's year before its own, and since the sample's first month. */
 export function issuedBefore(
   frame: Frame,
-  plantedIn: (monthIndex: number) => PlantedCounts,
+  plantedIn: (monthIndex: number) => PlantedPoints,
   countOf: (month: Frame) => number
 ): Issued {
   const { index, month } = frame.period;

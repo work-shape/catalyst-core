@@ -160,7 +160,9 @@ export const STREAM = {
   evenDraw: 7,
   schedule: 8,
   documentLink: 9,
-  paymentOrder: 10
+  paymentOrder: 10,
+  plantedPoint: 11,
+  numbering: 12
 } as const;
 
 const FIRST_WORDS = [

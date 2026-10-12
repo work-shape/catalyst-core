@@ -104,10 +104,11 @@ contain breaking changes; a patch version does not.
   seed, so a month answers the same forever. The books run from 2024-01 to 2026-09, a fixed
   month and not the clock, and a later month is refused; `SAMPLE_ACCOUNTING_LAST_MONTH` moves
   the end. A month has the noise of real books: cash discounts with their tax correction, part
-  payments, payments out of the order of the invoices, till reports in one booking per tax
-  rate with a restaurant's best days at the weekend, and no booking on a nationwide public
-  holiday. A planted booking has the text and the accounts of clean ones, so only its rule
-  tells it apart. See "The sample accounting system and its Connection" in
+  payments, payments out of the order of the invoices, invoice numbers out of the order of
+  the days, till reports in one booking per tax rate with a restaurant's best days at the
+  weekend, and no booking on a nationwide public holiday. A planted booking has the text and
+  the accounts of clean ones and a document number that fits its day as theirs do, so only
+  its rule tells it apart. See "The sample accounting system and its Connection" in
   `clients/demo/README.md`.
 - **Web access:** the public web fetcher refuses an IPv6 address that carries a blocked IPv4
   address in any form: IPv4-compatible, NAT64 `64:ff9b::/96`, 6to4 `2002::/16` and Teredo

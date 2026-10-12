@@ -1,9 +1,9 @@
-import { mixedSeed, pick } from "../random.js";
+import { mixedSeed } from "../random.js";
 import { vatRate } from "./accounts.js";
 import { activitiesOf } from "./activities.js";
-import { plan, plantedBooking, plantedCounts } from "./anomalies.js";
+import { plan, plantedBooking, plantedPoints } from "./anomalies.js";
 import type { Booking } from "./booking.js";
-import { dayWeights, isoDate, OFFICE_WEEK, type SampleMonth } from "./calendar.js";
+import { isoDate, type SampleMonth } from "./calendar.js";
 import { fiscalYearOf, postingCount, STREAM, type SampleClient } from "./clients.js";
 import { schedule } from "./schedule.js";
 
@@ -12,7 +12,8 @@ import { schedule } from "./schedule.js";
 // proportion to the page and not to the month.
 //
 // A month is the clean bookings of the client's business (activities.ts), in the order of
-// their dates (schedule.ts), with the planted bookings standing between them (anomalies.ts).
+// their dates (schedule.ts), with the planted bookings standing between them on the days
+// they are dated on (anomalies.ts).
 // A planted booking breaks exactly one rule of rules.ts, and no clean booking breaks any,
 // which holds by construction:
 //
@@ -119,20 +120,14 @@ export function monthOfPostings(
   const month = { client, period, locked };
   const clientId = client.row.client_id;
   const business = activitiesOf(seed, client, period, (monthIndex) =>
-    plantedCounts(seed, client, monthIndex)
+    plantedPoints(seed, client, monthIndex)
   );
   const order = schedule(
     business.activities,
     period.days,
     mixedSeed(seed, STREAM.schedule, clientId, period.index)
   );
-  const officeDays = dayWeights(period, OFFICE_WEEK);
-  const { planted, plantedBefore } = plan(
-    seed,
-    client,
-    period,
-    (cleanPosition) => pick(officeDays, order.at(cleanPosition).day) > 0
-  );
+  const { planted, plantedBefore } = plan(seed, client, period, order);
   const count = postingCount(seed, client, period.index);
 
   function posting(position: number): Posting {
@@ -146,10 +141,10 @@ export function monthOfPostings(
     }
     // A duplicate is the booking before it, word for word. The plan keeps that one clean.
     if (plantedHere.rule === "duplicate-posting") return posting(position - 1);
-    // Any other planted booking is dated outside the month or as the clean booking behind it.
+    // Any other planted booking is dated on the day the plan gives it.
     return row(
       month,
-      isoDate(period, plantedHere.outsideDay ?? order.at(cleanBefore).day),
+      isoDate(period, plantedHere.day),
       plantedBooking(seed, client, period, plantedHere.rule, plantedHere, business.extra)
     );
   }

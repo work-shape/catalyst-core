@@ -1,4 +1,4 @@
-import { pick, weighted } from "../random.js";
+import { mixedSeed, pick, weighted } from "../random.js";
 import { vatRate, type Account } from "./accounts.js";
 import { evenDays, type Activity, type Booking } from "./booking.js";
 import type { Purchase, StandingOrder } from "./business.js";
@@ -10,9 +10,9 @@ import {
   periodLabel,
   type SampleMonth
 } from "./calendar.js";
-import { postingCount, type SampleClient } from "./clients.js";
+import { postingCount, STREAM, type SampleClient } from "./clients.js";
 import { customerOf, frequentPlace, supplierOf, type Counterparty } from "./counterparties.js";
-import { invoiceDocument, supplierDocument, type Issued } from "./documents.js";
+import { invoiceDocument, numbering, supplierDocument, type Issued } from "./documents.js";
 import {
   ACTIVITY,
   AMOUNT,
@@ -25,7 +25,7 @@ import {
   linkOf,
   plain,
   type Frame,
-  type PlantedCounts
+  type PlantedPoints
 } from "./frame.js";
 import { BOOKINGS_PER_PAYSLIP, payrollBookingCount, payrollTotals, payslip } from "./payroll.js";
 import { settlements, type Invoice } from "./settlements.js";
@@ -78,8 +78,11 @@ function invoiced(booking: Booking, personal: Account): { booking: Booking; invo
   };
 }
 
-/** The sales invoice at `rank` of the frame's month. `before` is what the client has numbered before the month. */
-function salesInvoice(frame: Frame, before: Issued, rank: number) {
+/**
+ * The sales invoice at `rank` of the frame's month, numbered in `turn` of the month. `before`
+ * is what the client has numbered before the month.
+ */
+function salesInvoice(frame: Frame, before: Issued, rank: number, turn: number) {
   const { client, ledger, period } = frame;
   const { invoices } = client.business.profile;
   const random = drawsOf(
@@ -104,7 +107,7 @@ function salesInvoice(frame: Frame, before: Issued, rank: number) {
   const document = invoiceDocument(
     client.row.client_id,
     period,
-    { thisYear: before.thisYear + rank, ever: before.ever + rank },
+    { thisYear: before.thisYear + turn, ever: before.ever + turn },
     client.business.usual.salesInvoices
   );
   const personal = personalAccountOf(customer);
@@ -131,17 +134,23 @@ function salesInvoice(frame: Frame, before: Issued, rank: number) {
   );
 }
 
+/** The turn a purchase is numbered in, of the `turns` its channel numbers in the month. */
+interface Turn {
+  turn: number;
+  turns: number;
+}
+
 /**
- * A purchase of the frame's month through one channel, which has `count` of them. `slots` is
- * how many purchases the channel may number in the month, which the supplier's number is
- * taken from. The kind of purchase is drawn by the weights of the client's purchases and its
- * supplier from the suppliers of the kind, unless `from` names them.
+ * A purchase of the frame's month through one channel, which has `count` of them. The
+ * supplier's number is taken from the turn. The kind of purchase is drawn by the weights of
+ * the client's purchases and its supplier from the suppliers of the kind, unless `from`
+ * names them.
  */
 function purchaseOf(
   frame: Frame,
   channel: Channel,
   rank: number,
-  { count, slots }: { count: number; slots: number },
+  { count, turn, turns }: Turn & { count: number },
   from?: { purchase: Purchase; supplier?: Counterparty }
 ) {
   const { client, ledger, period } = frame;
@@ -169,25 +178,25 @@ function purchaseOf(
       draw(AMOUNT),
       PURCHASE_SPREAD
     ),
-    document: supplierDocument(supplier.key, client.size.maximum, period, rank, slots),
+    document: supplierDocument(supplier.key, client.size.maximum, period, turn, turns),
     costCentre: costCentreOf(client, account, random()),
     documentLink: linkOf(frame, activity, rank),
     random
   };
 }
 
-/** The supplier's invoice at `rank` of the frame's month, of `slots` the suppliers number in it. */
+/** The supplier's invoice at `rank` of the frame's month, numbered in a turn of the month. */
 function supplierInvoice(
   frame: Frame,
   rank: number,
-  slots: number,
+  turn: Turn,
   from?: { purchase: Purchase; supplier?: Counterparty }
 ) {
   const bought = purchaseOf(
     frame,
     "onAccount",
     rank,
-    { count: frame.issued.supplierInvoices, slots },
+    { count: frame.issued.supplierInvoices, ...turn },
     from
   );
   const personal = personalAccountOf(bought.supplier);
@@ -209,7 +218,7 @@ function supplierInvoice(
 }
 
 function directPurchase(frame: Frame, rank: number, count: number): Booking {
-  const bought = purchaseOf(frame, "direct", rank, { count, slots: count });
+  const bought = purchaseOf(frame, "direct", rank, { count, turn: rank, turns: count });
   const byDebit = bought.kind.settlement === "bank";
   const text = `${byDebit ? "Lastschrift" : "Barbeleg"} ${bought.supplier.name} ${bought.document}`;
   const reversed = bought.random() < GENERAL_REVERSAL_SHARE;
@@ -359,37 +368,59 @@ export function activitiesOf(
   seed: number,
   client: SampleClient,
   period: SampleMonth,
-  plantedIn: (monthIndex: number) => PlantedCounts
+  plantedIn: (monthIndex: number) => PlantedPoints
 ) {
   const frame = frameOf(seed, client, period.index, plantedIn);
   const previous = frameOf(seed, client, period.index - 1, plantedIn);
   const { issued } = frame;
   const { officePurchase, standingOrders } = client.business;
   const officeDay = dayAt(dayWeights(period, OFFICE_WEEK));
-  // A planted purchase stands behind the month's last one and a planted sales invoice behind
-  // the month's last, so the suppliers and the client number them together with the month's own.
-  const numbering = new Map(
+  // The client numbers a planted sales invoice together with the month's own, and the
+  // suppliers a planted purchase. Every planted booking has a turn among the purchases,
+  // whether it is one or not: a supplier's numbers have gaps.
+  const turnsOf = (month: Frame, activity: number, own: number, plantedAt: readonly number[]) =>
+    numbering(
+      own,
+      plantedAt,
+      mixedSeed(seed, STREAM.numbering, client.row.client_id, month.period.index, activity)
+    );
+  const numbered = new Map(
     [frame, previous].map((month) => [
       month,
       {
         invoicesBefore: issuedBefore(
           month,
           plantedIn,
-          (earlier) => earlier.issued.salesInvoices + earlier.planted.salesInvoices
+          (earlier) => earlier.issued.salesInvoices + earlier.planted.salesInvoices.length
         ),
-        supplierSlots: month.issued.supplierInvoices + month.planted.bookings
+        salesInvoices: turnsOf(
+          month,
+          ACTIVITY.salesInvoices,
+          month.issued.salesInvoices,
+          month.planted.salesInvoices
+        ),
+        supplierInvoices: turnsOf(
+          month,
+          ACTIVITY.purchasesOnAccount,
+          month.issued.supplierInvoices,
+          month.planted.bookings
+        )
       }
     ])
   );
-  const numberingOf = (month: Frame) => {
-    const found = numbering.get(month);
+  const numberedIn = (month: Frame) => {
+    const found = numbered.get(month);
     if (found === undefined) throw new Error("Only this month and the one before are numbered.");
     return found;
   };
-  const salesInvoiceOf = (month: Frame, rank: number) =>
-    salesInvoice(month, numberingOf(month).invoicesBefore, rank);
-  const supplierInvoiceOf = (month: Frame, rank: number) =>
-    supplierInvoice(month, rank, numberingOf(month).supplierSlots);
+  const salesInvoiceOf = (month: Frame, rank: number) => {
+    const { invoicesBefore, salesInvoices } = numberedIn(month);
+    return salesInvoice(month, invoicesBefore, rank, salesInvoices.own(rank));
+  };
+  const supplierInvoiceOf = (month: Frame, rank: number) => {
+    const { turns, own } = numberedIn(month).supplierInvoices;
+    return supplierInvoice(month, rank, { turn: own(rank), turns });
+  };
 
   const settled: Activity[] = [
     {
@@ -436,7 +467,7 @@ export function activitiesOf(
   ];
   const directCount =
     postingCount(seed, client, period.index) -
-    frame.planted.bookings -
+    frame.planted.bookings.length -
     settled.reduce((sum, activity) => sum + activity.count, 0);
   if (directCount < 0) {
     throw new Error(
@@ -452,22 +483,34 @@ export function activitiesOf(
         booking: (rank: number) => directPurchase(frame, rank, directCount)
       }
     ],
-    /** The ordinary bookings a planted one is made of. Each is one more than the month's own. */
+    /**
+     * The ordinary bookings a planted one is made of. Each is one more than the month's own,
+     * and a document among them is numbered at the planted booking's point of the month.
+     */
     extra: {
       /**
-       * The office purchase on account at `ordinal` behind the month's last purchase, from
-       * the client's usual supplier unless one is named.
+       * The office purchase on account of the planted booking at `ordinal`, from the client's
+       * usual supplier unless one is named.
        */
-      purchase: (ordinal: number, supplier?: Counterparty): Booking =>
-        supplierInvoice(
+      purchase(ordinal: number, supplier?: Counterparty): Booking {
+        const { turns, planted } = numberedIn(frame).supplierInvoices;
+        return supplierInvoice(
           frame,
           issued.supplierInvoices + ordinal,
-          numberingOf(frame).supplierSlots,
+          { turn: planted(ordinal), turns },
           { purchase: officePurchase, supplier }
-        ).booking,
-      /** The sales invoice at `ordinal` behind the month's last, with the next number of the client's range. */
-      salesInvoice: (ordinal: number): Booking =>
-        salesInvoiceOf(frame, issued.salesInvoices + ordinal).booking,
+        ).booking;
+      },
+      /** The planted sales invoice at `number` of the month's, in the client's own range. */
+      salesInvoice(number: number): Booking {
+        const { invoicesBefore, salesInvoices } = numberedIn(frame);
+        return salesInvoice(
+          frame,
+          invoicesBefore,
+          issued.salesInvoices + number,
+          salesInvoices.planted(number)
+        ).booking;
+      },
       /** The client's first standing order, as the month books it. */
       standingOrder: (): Booking => standingOrder(frame, pick(standingOrders, 0))
     }

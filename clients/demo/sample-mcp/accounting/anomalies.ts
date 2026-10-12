@@ -2,11 +2,20 @@ import { mixedSeed, pick, seededGenerator, shuffled } from "../random.js";
 import { LEDGERS } from "./accounts.js";
 import type { ExtraBookings } from "./activities.js";
 import type { Booking } from "./booking.js";
-import { daysOutside, MONTHS_PER_YEAR, type SampleMonth } from "./calendar.js";
+import {
+  dayAt,
+  daysOutside,
+  dayWeights,
+  monthAt,
+  MONTHS_PER_YEAR,
+  OFFICE_WEEK,
+  type SampleMonth
+} from "./calendar.js";
 import { postingCount, STREAM, type SampleClient } from "./clients.js";
 import { formerSupplierOf } from "./counterparties.js";
-import type { PlantedCounts, Random } from "./frame.js";
+import type { PlantedPoints, Random } from "./frame.js";
 import { ACCOUNTING_RULES, type AccountingRuleId } from "./rules.js";
+import type { Schedule } from "./schedule.js";
 
 // The planted bookings of a month: how many break each rule, where they stand, and what each
 // says. A planted booking is added to the client's business and replaces none of it, so the
@@ -17,8 +26,8 @@ import { ACCOUNTING_RULES, type AccountingRuleId } from "./rules.js";
 // No planted booking is like another booking of the month, clean or planted, so none is a
 // duplicate by accident:
 //
-// - A purchase and a sales invoice carry a document number of their own, behind the month's
-//   last: the one number that does not fit its day.
+// - A purchase and a sales invoice carry a document number of their own, the one their
+//   supplier or the client gives at the point of the month they are dated at (documents.ts).
 // - A booking without a document number has an amount that no other one of the month has.
 // - A duplicate copies the clean booking before it, and no clean booking is copied twice.
 
@@ -63,26 +72,16 @@ export function expectedFindings(seed: number, client: SampleClient, monthIndex:
   };
 }
 
-/** What of a month is planted, as the numbering of its documents needs it. It reads no booking. */
-export function plantedCounts(
-  seed: number,
-  client: SampleClient,
-  monthIndex: number
-): PlantedCounts {
-  const findings = expectedFindings(seed, client, monthIndex);
-  return {
-    bookings: Object.values(findings).reduce((sum, count) => sum + count, 0),
-    salesInvoices: salesInvoicesAmong(findings["vat-key-account-mismatch"])
-  };
-}
-
-/**
- * Of the bookings of a month that break the rule of the VAT keys, the first is a purchase,
- * the second a sales invoice, and so on in turn. So many of the first `count` are invoices.
- */
-function salesInvoicesAmong(count: number): number {
-  return Math.floor(count / 2);
-}
+/** The rules in the order their bookings are planted. A booking's place in that order is its `ordinal`. */
+const PLANTING_ORDER: readonly AccountingRuleId[] = [
+  "date-outside-month",
+  "duplicate-posting",
+  "vat-key-account-mismatch",
+  "blocked-account",
+  "round-amount-no-document",
+  "expense-in-credit",
+  "missing-cost-centre"
+];
 
 /** A planted booking: the rule it breaks and its numbers among the month's planted bookings. */
 interface Planted {
@@ -91,89 +90,118 @@ interface Planted {
   /** Its number among the `of` bookings of the month that break the same rule. */
   index: number;
   of: number;
-  /** For a booking dated outside the month: its day, counted from the month's first day. */
-  outsideDay?: number;
+  /**
+   * The point of the month, from 0 to 1, at which it is dated and its document is numbered.
+   * One dated before the month has 0 and one dated after it 1. A duplicate stands with the
+   * booking it copies, whatever its point.
+   */
+  point: number;
 }
 
 /**
- * Where the month's planted bookings stand. It costs time in proportion to their number.
- *
- * A planted booking stands before a clean one and takes its date, which `datable` must allow
- * for the clean booking: a planted booking is dated on no day the client's office is closed.
- * No two stand before the same clean booking, so each has clean neighbours and a duplicate
- * copies the clean booking before it. A booking dated outside the month stands before the
- * month's first booking or behind its last, where its date keeps the order, and on no public
- * holiday. Its date never leaves the fiscal year: in the first month of a fiscal year all of
- * them lie after the month, in the last all before it.
+ * Of the bookings of a month that break the rule of the VAT keys, the first is a purchase,
+ * the second a sales invoice, and so on in turn.
  */
-export function plan(
+function isSalesInvoice({ rule, index }: Planted): boolean {
+  return rule === "vat-key-account-mismatch" && index % 2 === 1;
+}
+
+/**
+ * The month's planted bookings in the order they are planted. It reads no booking.
+ *
+ * The date of one that is dated outside the month never leaves the fiscal year: in the first
+ * month of a fiscal year all of them lie after the month, in the last all before it, and in
+ * any other month half of them on either side.
+ */
+function plantedIn(seed: number, client: SampleClient, monthIndex: number): Planted[] {
+  const findings = expectedFindings(seed, client, monthIndex);
+  const { month } = monthAt(monthIndex);
+  const outside = findings["date-outside-month"];
+  const startsFiscalYear = month === client.fiscalYearStartMonth;
+  const endsFiscalYear = month % MONTHS_PER_YEAR === client.fiscalYearStartMonth - 1;
+  const early = startsFiscalYear ? 0 : endsFiscalYear ? outside : Math.ceil(outside / 2);
+  const random = seededGenerator(
+    mixedSeed(seed, STREAM.plantedPoint, client.row.client_id, monthIndex)
+  );
+  return PLANTING_ORDER.flatMap((rule) =>
+    Array.from({ length: findings[rule] }, (_, index) => ({ rule, index, of: findings[rule] }))
+  ).map((planted, ordinal) => ({
+    ...planted,
+    ordinal,
+    point: planted.rule === "date-outside-month" ? (planted.index < early ? 0 : 1) : random()
+  }));
+}
+
+/** What of a month is planted, as the numbering of its documents needs it. It reads no booking. */
+export function plantedPoints(
   seed: number,
   client: SampleClient,
-  period: SampleMonth,
-  datable: (cleanPosition: number) => boolean
-) {
-  const findings = expectedFindings(seed, client, period.index);
-  const { bookings } = plantedCounts(seed, client, period.index);
-  const cleanCount = postingCount(seed, client, period.index) - bookings;
-  const random = seededGenerator(mixedSeed(seed, STREAM.plan, client.row.client_id, period.index));
-  /** Each with the position, among the clean bookings, of the clean booking it stands before. */
-  const placed: (Planted & { before: number })[] = [];
-  const taken = new Set<number>();
-  const plant = (before: number, rule: AccountingRuleId, outsideDay?: number) =>
-    placed.push({
-      before,
-      rule,
-      ordinal: placed.length,
-      index: placed.filter((other) => other.rule === rule).length,
-      of: findings[rule],
-      outsideDay
-    });
+  monthIndex: number
+): PlantedPoints {
+  const planted = plantedIn(seed, client, monthIndex);
+  return {
+    bookings: planted.map(({ point }) => point),
+    salesInvoices: planted.filter(isSalesInvoice).map(({ point }) => point)
+  };
+}
 
-  const outside = findings["date-outside-month"];
-  const startsFiscalYear = period.month === client.fiscalYearStartMonth;
-  const endsFiscalYear = period.month % MONTHS_PER_YEAR === client.fiscalYearStartMonth - 1;
-  const early = startsFiscalYear ? 0 : endsFiscalYear ? outside : Math.ceil(outside / 2);
+/**
+ * Where the month's planted bookings stand among its clean ones, which `order` puts in the
+ * order of their dates. It costs time in proportion to their number.
+ *
+ * A planted booking stands among the clean bookings of the day its point of the month falls
+ * on, a day the client's office is open, so the month stays in the order of its dates and the
+ * number of its document fits the day. A booking dated outside the month stands before the
+ * month's first booking or behind its last, on no public holiday. A duplicate stands behind
+ * the clean booking it copies, and no clean booking is copied twice.
+ */
+export function plan(seed: number, client: SampleClient, period: SampleMonth, order: Schedule) {
+  const bookings = plantedIn(seed, client, period.index);
+  const cleanCount = postingCount(seed, client, period.index) - bookings.length;
+  const random = seededGenerator(mixedSeed(seed, STREAM.plan, client.row.client_id, period.index));
+  const officeDay = dayAt(dayWeights(period, OFFICE_WEEK));
+  const early = bookings.filter(
+    ({ rule, point }) => rule === "date-outside-month" && point === 0
+  ).length;
   const daysBefore = daysOutside(period, -1, OUTSIDE_DAYS);
   const daysAfter = daysOutside(period, 1, OUTSIDE_DAYS);
   // The farthest day takes all that the nearer days leave.
   const farthest = (days: number) => Math.min(OUTSIDE_DAYS - 1, days);
-  for (let number = 0; number < outside; number += 1) {
-    if (number < early) {
-      plant(0, "date-outside-month", pick(daysBefore, farthest(early - 1 - number)));
-    } else {
-      plant(cleanCount, "date-outside-month", pick(daysAfter, farthest(number - early)));
+  const copied = new Set<number>();
+
+  /** The clean booking a planted one stands before, by its position among the clean ones, and the day it is dated on. */
+  function placeOf({ rule, index, point }: Planted): { before: number; day: number } {
+    if (rule === "date-outside-month") {
+      return index < early
+        ? { before: 0, day: pick(daysBefore, farthest(early - 1 - index)) }
+        : { before: cleanCount, day: pick(daysAfter, farthest(index - early)) };
     }
+    if (rule === "duplicate-posting") {
+      // Ends, because the duplicates are a small share of even the smallest month.
+      for (;;) {
+        const before = 1 + Math.floor(random() * (cleanCount - 1));
+        if (copied.has(before)) continue;
+        copied.add(before);
+        return { before, day: order.at(before - 1).day };
+      }
+    }
+    const day = officeDay(point);
+    const { first, count } = order.on(day);
+    return { before: first + Math.floor(random() * (count + 1)), day };
   }
 
-  /** Ends, because the planted bookings are a small share of even the smallest month. */
-  function place(rule: AccountingRuleId) {
-    for (let remaining = findings[rule]; remaining > 0;) {
-      const before = Math.floor(random() * cleanCount);
-      if (taken.has(before) || !datable(before)) continue;
-      // A duplicate needs a clean booking before it.
-      if (rule === "duplicate-posting" && before === 0) continue;
-      taken.add(before);
-      plant(before, rule);
-      remaining -= 1;
-    }
-  }
-  place("duplicate-posting");
-  place("vat-key-account-mismatch");
-  place("blocked-account");
-  place("round-amount-no-document");
-  place("expense-in-credit");
-  place("missing-cost-centre");
-
-  // The ones dated before the month were planted first and keep their place before the others.
-  const inOrder = [...placed].sort(
-    (left, right) => left.before - right.before || left.ordinal - right.ordinal
-  );
+  // Where several stand before the same clean booking, the earlier date comes first, and a
+  // duplicate, the first to be planted there, follows the booking it copies at once.
+  const inOrder = bookings
+    .map((planted) => ({ ...planted, ...placeOf(planted) }))
+    .sort(
+      (left, right) =>
+        left.before - right.before || left.day - right.day || left.ordinal - right.ordinal
+    );
   const positions = inOrder.map(({ before }, number) => before + number);
   return {
-    /** The planted bookings by their position in the month. */
-    planted: new Map<number, Planted>(
-      inOrder.map((planted, number) => [pick(positions, number), planted])
-    ),
+    /** The planted bookings by their position in the month, each with the day (from 0) it is dated on. */
+    planted: new Map(inOrder.map((planted, number) => [pick(positions, number), planted])),
     /** How many planted bookings stand before `position`. */
     plantedBefore(position: number): number {
       let low = 0;
@@ -197,9 +225,10 @@ export function plantedBooking(
   client: SampleClient,
   period: SampleMonth,
   rule: Exclude<AccountingRuleId, "duplicate-posting">,
-  { ordinal, index, of }: Planted,
+  planted: Planted,
   extra: ExtraBookings
 ): Booking {
+  const { ordinal, index, of } = planted;
   const ledger = LEDGERS[client.skr];
   const monthSeed = mixedSeed(seed, STREAM.plan, client.row.client_id, period.index);
   const random = seededGenerator(mixedSeed(monthSeed, ordinal));
@@ -209,8 +238,7 @@ export function plantedBooking(
     case "vat-key-account-mismatch": {
       const { inputVatKeys, vatKeys } = ACCOUNTING_RULES[rule].parameters;
       // A purchase with a key of sales, or a sales invoice with a key of purchases.
-      const invoicesBefore = salesInvoicesAmong(index);
-      if (salesInvoicesAmong(index + 1) === invoicesBefore) {
+      if (!isSalesInvoice(planted)) {
         return { ...extra.purchase(ordinal), vatKey: drawn(vatKeys, random) };
       }
       // An automatic account would apply its own key, so the invoice is booked on an account
@@ -220,7 +248,7 @@ export function plantedBooking(
         .map((line) => ledger[line.account])
         .find(({ automatic_vat_key }) => automatic_vat_key === null);
       return {
-        ...extra.salesInvoice(invoicesBefore),
+        ...extra.salesInvoice(Math.floor(index / 2)),
         account: account ?? ledger.revenue,
         vatKey: drawn(inputVatKeys, random)
       };

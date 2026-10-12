@@ -10,6 +10,7 @@ import {
   referenceFindings,
   sample,
   sizeGroupOf,
+  type Posting,
   type RuleId
 } from "./support/sample-accounting";
 
@@ -26,6 +27,8 @@ const RULE_IDS: readonly RuleId[] = [
   "expense-in-credit",
   "missing-cost-centre"
 ];
+/** The most of the invoices numbered out of order that may be planted: no more than any hundred invoices hold. */
+const PLANTED_OUT_OF_ORDER_BOUND = 0.02;
 /** Two planted round bookings were alike here once, so one of them was a duplicate as well. */
 const PINNED = { clientId: 1457, month: "2025-02" };
 const SAMPLE_SEED = 20261012;
@@ -56,6 +59,41 @@ function shapeOf(row: {
   return `${word} on ${kindOf(row.account_number)} against ${kindOf(row.contra_account_number)}`;
 }
 
+/** The digits of a document number as one number, to compare two numbers of one counterparty. */
+const numberOf = (document: string) => Number(document.replace(/\D/gu, ""));
+
+/**
+ * The places of the invoices that are numbered out of order: one with a higher number than a
+ * later-dated invoice of the same customer or supplier. `invoices` are the places of all
+ * invoices of a month, in its order.
+ */
+function numberedOutOfOrder(rows: readonly Posting[], invoices: readonly number[]): number[] {
+  const byCounterparty = new Map<number, number[]>();
+  for (const place of invoices) {
+    const counterparty = required(rows[place]).contra_account_number;
+    byCounterparty.set(counterparty, [...(byCounterparty.get(counterparty) ?? []), place]);
+  }
+  const found: number[] = [];
+  for (const places of byCounterparty.values()) {
+    // From the last invoice back: the lowest number among those dated on a later day.
+    let lowestLater = Infinity;
+    let lowestOfDay = Infinity;
+    let day = "";
+    for (const place of places.toReversed()) {
+      const { date, document_field_1 } = required(rows[place]);
+      if (date !== day) {
+        lowestLater = Math.min(lowestLater, lowestOfDay);
+        lowestOfDay = Infinity;
+        day = date;
+      }
+      const number = numberOf(document_field_1);
+      if (number > lowestLater) found.push(place);
+      lowestOfDay = Math.min(lowestOfDay, number);
+    }
+  }
+  return found;
+}
+
 function recount(clientMonths: readonly ClientMonth[]) {
   const result = {
     bookings: 0,
@@ -70,7 +108,10 @@ function recount(clientMonths: readonly ClientMonth[]) {
     sizes: new Set<string>(),
     /** The shapes of the bookings that break no rule, and of those that break one. */
     ordinaryShapes: new Set<string>(),
-    plantedShapes: new Set<string>()
+    plantedShapes: new Set<string>(),
+    /** The invoices on a personal account, and those of them numbered out of order: all, and the planted ones. */
+    invoices: { all: 0, planted: 0 },
+    outOfOrder: { all: 0, planted: 0 }
   };
   for (const { clientId, month } of clientMonths) {
     const where = `client ${clientId} in ${month}`;
@@ -119,6 +160,22 @@ function recount(clientMonths: readonly ClientMonth[]) {
         (automatic === null || row.accounting_transaction_key === 0);
       if (!kept) result.unkept.push(`${where}: ${JSON.stringify(row)}`);
     }
+
+    // An invoice books revenue or an expense against a customer or a supplier. A discount
+    // does so too and carries the number of the invoice it belongs to, so it is left out.
+    const invoices = rows.flatMap((row, place) =>
+      row.contra_account_number > 9_999 &&
+      row.document_field_1 !== "" &&
+      !row.posting_description.startsWith("Skonto ") &&
+      ["revenue", "expense"].includes(required(chart.get(row.account_number)).account_class)
+        ? [place]
+        : []
+    );
+    const outOfOrder = numberedOutOfOrder(rows, invoices);
+    result.invoices.all += invoices.length;
+    result.invoices.planted += invoices.filter((place) => planted.has(place)).length;
+    result.outOfOrder.all += outOfOrder.length;
+    result.outOfOrder.planted += outOfOrder.filter((place) => planted.has(place)).length;
   }
   return result;
 }
@@ -160,5 +217,16 @@ describe("demo sample accounting findings", () => {
     expect(
       [...counted.plantedShapes].filter((shape) => !counted.ordinaryShapes.has(shape))
     ).toEqual([]);
+  });
+
+  it("numbers invoices out of order whether they are planted or not, so the pattern names no planted one", () => {
+    const { invoices, outOfOrder } = counted;
+    expect(invoices.all).toBeGreaterThan(500_000);
+    expect(invoices.planted).toBeGreaterThan(1_000);
+    // Common among all invoices: one in fifty at the least.
+    expect(outOfOrder.all).toBeGreaterThan(invoices.all / 50);
+    // Some of them are planted, and few: about the share planted invoices have of all.
+    expect(outOfOrder.planted).toBeGreaterThan(0);
+    expect(outOfOrder.planted / outOfOrder.all).toBeLessThan(PLANTED_OUT_OF_ORDER_BOUND);
   });
 });
