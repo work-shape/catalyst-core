@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { pick, seededGenerator } from "./random.js";
 
 const SAMPLE_SEED = 0x7a31b295;
 const DAY_MS = 86_400_000;
@@ -44,22 +45,6 @@ export function utcMonthAnchor(date: Date): string {
   return anchorSchema.parse(date.toISOString().slice(0, 7));
 }
 
-function seededGenerator(): () => number {
-  let state = SAMPLE_SEED;
-  return () => {
-    state += 0x6d2b79f5;
-    let value = Math.imul(state ^ (state >>> 15), state | 1);
-    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
-    return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296;
-  };
-}
-
-function pick<T>(items: readonly T[], index: number): T {
-  const value = items[index % items.length];
-  if (value === undefined) throw new Error("The sample list is empty.");
-  return value;
-}
-
 function isoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
@@ -73,7 +58,7 @@ function newestFirst(
 
 export function createSampleData(anchor: string): SampleData {
   const start = new Date(`${anchorSchema.parse(anchor)}-01T00:00:00.000Z`);
-  const random = seededGenerator();
+  const random = seededGenerator(SAMPLE_SEED);
   const prefixes = [
     "Velunara",
     "Tavolumi",

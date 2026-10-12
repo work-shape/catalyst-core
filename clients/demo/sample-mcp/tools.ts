@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { SampleData } from "./data.js";
+import { toolError, toolResult } from "./result.js";
 
 export const DEFAULT_LIMIT = 50;
 export const MINIMUM_LIMIT = 1;
@@ -89,13 +90,6 @@ function page<T>(rows: T[], { limit, offset }: { limit: number; offset: number }
   return { rows: rows.slice(offset, offset + limit), total: rows.length };
 }
 
-function result(structuredContent: Record<string, unknown>) {
-  return {
-    structuredContent,
-    content: [{ type: "text" as const, text: JSON.stringify(structuredContent) }]
-  };
-}
-
 export function registerSampleTools(server: McpServer, data: SampleData): void {
   server.registerTool(
     "list_customers",
@@ -111,7 +105,7 @@ export function registerSampleTools(server: McpServer, data: SampleData): void {
       outputSchema: outputSchemas.list_customers
     },
     (input) =>
-      result(
+      toolResult(
         page(
           data.customers.filter(
             (customer) =>
@@ -135,12 +129,8 @@ export function registerSampleTools(server: McpServer, data: SampleData): void {
     },
     ({ id }) => {
       const customer = data.customers.find((row) => row.id === id);
-      if (!customer)
-        return {
-          isError: true,
-          content: [{ type: "text", text: "The sample customer was not found." }]
-        };
-      return result({
+      if (!customer) return toolError("The sample customer was not found.");
+      return toolResult({
         customer,
         recentOrders: data.orders.filter((order) => order.customerId === id).slice(0, 10),
         openInvoices: data.invoices.filter(
@@ -166,7 +156,7 @@ export function registerSampleTools(server: McpServer, data: SampleData): void {
       outputSchema: outputSchemas.list_orders
     },
     (input) =>
-      result(
+      toolResult(
         page(
           data.orders.filter(
             (order) =>
@@ -195,7 +185,7 @@ export function registerSampleTools(server: McpServer, data: SampleData): void {
       outputSchema: outputSchemas.list_invoices
     },
     (input) =>
-      result(
+      toolResult(
         page(
           data.invoices.filter(
             (invoice) =>
@@ -230,7 +220,7 @@ export function registerSampleTools(server: McpServer, data: SampleData): void {
           customers.has(order.customerId) &&
           inRange(order.date, input)
       );
-      return result({
+      return toolResult({
         rows: data.months.map((month) => {
           const monthlyOrders = orders.filter((order) => order.date.startsWith(month));
           return {
@@ -277,7 +267,7 @@ export function registerSampleTools(server: McpServer, data: SampleData): void {
             right.revenueCents - left.revenueCents ||
             left.customer.id.localeCompare(right.customer.id)
         );
-      return result({
+      return toolResult({
         rows: ranked.slice(0, input.limit).map((row, index) => ({ rank: index + 1, ...row })),
         total: ranked.length
       });
