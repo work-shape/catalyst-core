@@ -17,9 +17,10 @@ import {
   AppFrame,
   AppHeader,
   AppStateBadge,
+  CopyAppLinkButton,
   CopyAppLinkItem
 } from "./app-header";
-import { APP_START_ROUTE, appDraftShown, appTitle, type AppRights } from "./app-model";
+import { APP_START_ROUTE, appBuilder, appDraftShown, appTitle, type AppRights } from "./app-model";
 import { AppPreview } from "./app-preview";
 import { useAppsHost, type AppsWorkspace } from "./apps-host";
 
@@ -158,9 +159,9 @@ export function AppViewFrame({
       header={
         <AppHeader
           name={name}
-          workspace={workspace}
+          // The number of a revision is a builder's: whoever uses the App is shown the App.
           state={
-            publishedRevision === undefined ? undefined : (
+            publishedRevision === undefined || !appBuilder(rights) ? undefined : (
               <AppStateBadge
                 state={{ kind: "published", revision: publishedRevision, draftAhead: false }}
               />
@@ -177,19 +178,21 @@ export function AppViewFrame({
             ) : undefined
           }
           overflow={
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <IconButton label={t("apps.moreActions")} variant="outline">
-                  <MoreHorizontal aria-hidden="true" />
-                </IconButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {rights.read ? (
+            rights.read ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <IconButton label={t("apps.moreActions")} variant="outline">
+                    <MoreHorizontal aria-hidden="true" />
+                  </IconButton>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
                   <DropdownMenuItem onSelect={onDetails}>{t("apps.details")}</DropdownMenuItem>
-                ) : null}
-                <CopyAppLinkItem workspaceId={workspace.id} app={app} />
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <CopyAppLinkItem workspaceId={workspace.id} app={app} />
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <CopyAppLinkButton workspaceId={workspace.id} app={app} />
+            )
           }
         />
       }

@@ -227,7 +227,6 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await memberPage.goto(appsPath);
   const memberArea = memberPage.getByTestId("apps-area");
   await expect(memberArea).toContainText(appName);
-  await expect(memberArea).toContainText("Published · revision 1");
   await memberArea.getByText(appName, { exact: true }).click();
   await expect(memberPage).toHaveURL(new RegExp(`${appPath}$`, "u"));
   const memberView = memberPage.getByTestId("app-view");
@@ -275,7 +274,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   // waiting, and the open App has no way to a draft.
   await memberPage.goto(appsPath);
   const memberListReady = async () => {
-    await expect(memberArea).toContainText(/(?:Published · revision|Veröffentlicht · Revision) 1/u);
+    await expect(memberArea.getByText(appName, { exact: true })).toBeVisible();
   };
   await memberListReady();
   await expect(memberArea).toContainText(appName);

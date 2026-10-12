@@ -330,7 +330,6 @@ export function AppEditFrame({
       header={
         <AppHeader
           name={name}
-          workspace={workspace}
           state={
             known ? (
               <Badge tone={ahead ? "warning" : "neutral"} size="sm" dot>

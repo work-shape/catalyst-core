@@ -274,7 +274,8 @@ describe("the Apps list", () => {
     expect(markup).toContain(">Apps</h1>");
     expect(markup).toContain("Angebotsrechner");
     expect(markup).toContain("Rechnet ein Angebot aus Tagessatz und Tagen.");
-    expect(markup).toContain("Nordlicht Beratung");
+    // The list is the one of the open workspace: no row names it.
+    expect(markup).not.toContain("Nordlicht Beratung");
     expect(markup).toContain("Published · revision 2");
     expect(markup).toContain("Unpublished changes");
     expect(markup).toContain('href="/w/cw_1/apps/angebotsrechner"');
@@ -286,10 +287,39 @@ describe("the Apps list", () => {
   });
 
   it("keeps the draft's news from a reader who does not write", () => {
-    const markup = render(appsPage([summary()], NO_APP_RIGHTS));
+    const markup = render(appsPage([summary()], { ...NO_APP_RIGHTS, publish: true }));
 
     expect(markup).toContain("Published · revision 2");
     expect(markup).not.toContain("Unpublished changes");
+  });
+
+  it("shows whoever only uses Apps the App, without its revision, its id or its workspace", () => {
+    const markup = render(
+      appsPage(
+        [summary(), summary({ name: "urlaubsplaner", title: "Urlaubsplaner", description: "" })],
+        NO_APP_RIGHTS
+      )
+    );
+
+    expect(markup).toContain("Angebotsrechner");
+    expect(markup).toContain("Rechnet ein Angebot aus Tagessatz und Tagen.");
+    expect(markup).toContain("Urlaubsplaner");
+    expect(markup).toContain('href="/w/cw_1/apps/urlaubsplaner"');
+    expect(markup).not.toContain("Published");
+    expect(markup).not.toContain("<code");
+    expect(markup).not.toContain("Nordlicht Beratung");
+    // The right to read the record alone makes nobody a builder.
+    expect(render(appsPage([summary()], { ...NO_APP_RIGHTS, read: true }))).not.toContain(
+      "Published"
+    );
+  });
+
+  it("says to everybody that an App has nothing published", () => {
+    const markup = render(
+      appsPage([summary({ publishedRevision: undefined, draftRevision: undefined })], NO_APP_RIGHTS)
+    );
+
+    expect(markup).toContain("Draft only");
   });
 
   it("tells a builder how an App comes to be, with the way into the chat and two starts", () => {
@@ -350,12 +380,11 @@ describe("an open App (layout 2)", () => {
       })
     );
 
-  it("heads the App with the way back, its name, its workspace and the published number", () => {
-    const markup = frame(NO_APP_RIGHTS);
+  it("heads the App with the way back, its name and the published number for a builder", () => {
+    const markup = frame(WRITER);
     const order = [
       'href="/w/cw_1/apps"',
       ">Angebotsrechner</h1>",
-      "Nordlicht Beratung",
       "Published · revision 2",
       'aria-label="More actions"',
       "the app"
@@ -364,6 +393,21 @@ describe("an open App (layout 2)", () => {
     expect(order).not.toContain(-1);
     expect(order).toEqual([...order].sort((left, right) => left - right));
     expect(markup).toContain('aria-label="Back to Apps"');
+    // The App is open inside its workspace: the head does not name it.
+    expect(markup).not.toContain("Nordlicht Beratung");
+  });
+
+  it("heads the App for whoever uses it with its name and one button that copies its link", () => {
+    const markup = frame(NO_APP_RIGHTS);
+
+    expect(markup).toContain(">Angebotsrechner</h1>");
+    expect(markup).not.toContain("Published");
+    expect(markup).not.toContain("Nordlicht Beratung");
+    expect(markup).not.toContain('aria-label="More actions"');
+    expect(markup).toMatch(/<button[^>]*>(?:<svg.*?<\/svg>)?Copy link<\/button>/u);
+    expect(markup).not.toContain("Details");
+    // A publisher is a builder and reads the number, also without the right to write.
+    expect(frame({ ...NO_APP_RIGHTS, publish: true })).toContain("Published · revision 2");
   });
 
   it("offers Edit to a writer and to nobody else", () => {
@@ -374,7 +418,7 @@ describe("an open App (layout 2)", () => {
   });
 
   it("shows no number before the instance said which revision is served", () => {
-    expect(frame(NO_APP_RIGHTS, {})).not.toContain("Published");
+    expect(frame(WRITER, {})).not.toContain("Published");
   });
 });
 

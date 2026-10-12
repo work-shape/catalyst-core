@@ -45,6 +45,14 @@ export function resolveAppRights(context: Pick<PlatformContext, "actions"> | und
 }
 
 /**
+ * Whether the reader builds Apps here: writes them or publishes them. Everybody else uses an
+ * App, and is not shown what only its builders work with: its id and its revision numbers.
+ */
+export function appBuilder(rights: Pick<AppRights, "write" | "publish">): boolean {
+  return rights.write || rights.publish;
+}
+
+/**
  * Whether the instance showed this reader the draft of an App. Whoever may not read the draft
  * is answered the published view, which names no draft: nothing of a draft is offered then.
  */

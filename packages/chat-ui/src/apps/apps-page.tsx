@@ -30,12 +30,12 @@ import { useApp, useAppList, useAppWrites, type AppList } from "./app-data";
 import {
   AppDeleteDialog,
   AppDetailsDialog,
-  AppScope,
   AppStateBadge,
   CopyAppLinkItem,
   opensHere
 } from "./app-header";
 import {
+  appBuilder,
   appDraftShown,
   appRefusalText,
   appRowActions,
@@ -311,37 +311,42 @@ function AppRow({
   const state = appState(app);
   const route = appRowRoute(workspace.id, app, state, rights);
   const actions = appRowActions(rights, state, appDraftShown(app));
-  const stateChips = (
-    <>
-      <AppStateBadge state={state} />
-      {rights.write && state.kind === "published" && state.draftAhead ? (
-        <Badge tone="warning" size="sm">
-          {t("apps.unpublishedChanges")}
-        </Badge>
-      ) : null}
-    </>
-  );
+  const builder = appBuilder(rights);
+  // Whoever uses Apps is shown the App: the number of its revision and its id are a builder's.
+  // That nothing is published yet is said to everybody, since such a row opens nothing.
+  const stateChips =
+    builder || state.kind === "draft_only" ? (
+      <>
+        <AppStateBadge state={state} />
+        {rights.write && state.kind === "published" && state.draftAhead ? (
+          <Badge tone="warning" size="sm">
+            {t("apps.unpublishedChanges")}
+          </Badge>
+        ) : null}
+      </>
+    ) : undefined;
+  const about =
+    app.description?.trim() ||
+    (builder ? <code className="font-mono">{app.name}</code> : undefined);
   return (
     <ListRow
       leading={<Avatar kind="app" name={name} />}
       title={name}
       // A phone gives the first line to the name: the state stands under it, where a wider
-      // window has the description or the id. The list names its workspace above.
+      // window has the description or the id. The list is the one of the open workspace, so
+      // no row names it.
       description={
-        <>
-          <span className="flex flex-wrap gap-1.5 py-0.5 sm:hidden">{stateChips}</span>
-          <span className="max-sm:hidden">
-            {app.description?.trim() || <code className="font-mono">{app.name}</code>}
-          </span>
-        </>
+        stateChips ? (
+          <>
+            <span className="flex flex-wrap gap-1.5 py-0.5 sm:hidden">{stateChips}</span>
+            <span className="max-sm:hidden">{about}</span>
+          </>
+        ) : (
+          about
+        )
       }
       descriptionWraps
-      chips={
-        <span className="hidden sm:contents">
-          <AppScope workspace={workspace} />
-          {stateChips}
-        </span>
-      }
+      chips={stateChips ? <span className="hidden sm:contents">{stateChips}</span> : undefined}
       time={
         <time
           className="hidden sm:inline"

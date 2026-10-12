@@ -1,4 +1,4 @@
-import { ArrowLeft, Check } from "lucide-react";
+import { ArrowLeft, Check, Link } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Asset } from "@vivd-catalyst/api-client";
 import {
@@ -11,13 +11,11 @@ import {
   KeyValue,
   KeyValueList,
   PageHeader,
-  ScopeChip,
   SkeletonList
 } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
 import { workspaceRoutePath } from "../routes";
 import { appDescription, appManifestSummary, type AppState } from "./app-model";
-import type { AppsWorkspace } from "./apps-host";
 
 /** The address of an App for its users, as a link another person can follow. */
 export function appLink(workspaceId: string, app: string, origin: string): string {
@@ -31,11 +29,10 @@ export function appLink(workspaceId: string, app: string, origin: string): strin
 const LINK_COPIED_MS = 1500;
 
 /**
- * The menu item that puts the link of an App on the clipboard. The menu stays open and the
- * item says for a moment that it copied, in its label and to a screen reader.
+ * Puts the link of an App on the clipboard, and says for a moment that it did. Whatever copies
+ * answers in place, in its label and to a screen reader.
  */
-export function CopyAppLinkItem({ workspaceId, app }: { workspaceId: string; app: string }) {
-  const { t } = useTranslation();
+function useCopyAppLink(workspaceId: string, app: string): { copied: boolean; copy(): void } {
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     if (!copied) {
@@ -44,17 +41,27 @@ export function CopyAppLinkItem({ workspaceId, app }: { workspaceId: string; app
     const timeout = setTimeout(() => setCopied(false), LINK_COPIED_MS);
     return () => clearTimeout(timeout);
   }, [copied]);
+  return {
+    copied,
+    copy() {
+      navigator.clipboard.writeText(appLink(workspaceId, app, window.location.origin)).then(
+        () => setCopied(true),
+        () => setCopied(false)
+      );
+    }
+  };
+}
+
+/** The menu item that copies the link of an App. The menu stays open while the item answers. */
+export function CopyAppLinkItem({ workspaceId, app }: { workspaceId: string; app: string }) {
+  const { t } = useTranslation();
+  const { copied, copy } = useCopyAppLink(workspaceId, app);
   return (
     <>
       <DropdownMenuItem
         keepOpen
         icon={copied ? <Check aria-hidden="true" /> : undefined}
-        onSelect={() => {
-          navigator.clipboard.writeText(appLink(workspaceId, app, window.location.origin)).then(
-            () => setCopied(true),
-            () => setCopied(false)
-          );
-        }}
+        onSelect={copy}
       >
         {copied ? t("apps.linkCopied") : t("apps.copyLink")}
       </DropdownMenuItem>
@@ -65,9 +72,24 @@ export function CopyAppLinkItem({ workspaceId, app }: { workspaceId: string; app
   );
 }
 
-/** The chip that says which workspace an App belongs to. */
-export function AppScope({ workspace }: { workspace: AppsWorkspace }) {
-  return <ScopeChip scope="workspace" size="sm" name={workspace.name} emoji={workspace.emoji} />;
+/**
+ * The button that copies the link of an App, where copying is all the reader is offered: a
+ * menu of one item would hide it behind a second press.
+ */
+export function CopyAppLinkButton({ workspaceId, app }: { workspaceId: string; app: string }) {
+  const { t } = useTranslation();
+  const { copied, copy } = useCopyAppLink(workspaceId, app);
+  return (
+    <>
+      <Button variant="outline" onClick={copy}>
+        {copied ? <Check aria-hidden="true" /> : <Link aria-hidden="true" />}
+        {copied ? t("apps.linkCopied") : t("apps.copyLink")}
+      </Button>
+      <span role="status" className="sr-only">
+        {copied ? t("apps.linkCopied") : null}
+      </span>
+    </>
+  );
 }
 
 /** Where an App stands, as a list row and the header of the App say it. */
@@ -85,13 +107,13 @@ export function AppStateBadge({ state }: { state: AppState }) {
 }
 
 /**
- * The head of an open App: the way back to the list, the name, the workspace and the state,
- * then the actions of the screen. It is one band of the header's height at the top edge; the
- * App's frame takes everything under it.
+ * The head of an open App: the way back to the list, the name and the state, then the actions
+ * of the screen. The App is shown inside its workspace, so the head does not name it again. It
+ * is one band of the header's height at the top edge; the App's frame takes everything under
+ * it.
  */
 export function AppHeader({
   name,
-  workspace,
   state,
   description,
   secondaryActions,
@@ -101,8 +123,7 @@ export function AppHeader({
   onBack
 }: {
   name: string;
-  workspace: AppsWorkspace;
-  /** The badge after the workspace: the published or the draft revision. */
+  /** The badge after the name: the published or the draft revision. */
   state?: ReactNode;
   description?: ReactNode;
   secondaryActions?: ReactNode;
@@ -134,7 +155,6 @@ export function AppHeader({
         </Button>
       }
       title={name}
-      scope={<AppScope workspace={workspace} />}
       state={state}
       description={description}
       secondaryActions={secondaryActions}
