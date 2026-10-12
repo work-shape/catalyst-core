@@ -1,16 +1,11 @@
-// The months the accounting sample serves. The range is fixed, so a month gives the same
-// bookings forever, whenever it is asked for.
+// The months the accounting sample serves. The range starts with a fixed month and ends with
+// the month the sample is given, never with the clock, so a month gives the same bookings
+// whenever it is asked for.
 
 export const FIRST_MONTH = "2024-01";
-export const LAST_MONTH = "2026-12";
 
 const FIRST_YEAR = Number(FIRST_MONTH.slice(0, 4));
 export const MONTHS_PER_YEAR = 12;
-const MONTH_COUNT =
-  (Number(LAST_MONTH.slice(0, 4)) - FIRST_YEAR) * MONTHS_PER_YEAR +
-  Number(LAST_MONTH.slice(5)) -
-  Number(FIRST_MONTH.slice(5)) +
-  1;
 const DAY_MS = 86_400_000;
 // A ledger has few bookings dated on a weekend.
 const SATURDAY_WEIGHT = 0.25;
@@ -41,16 +36,24 @@ export function monthAt(index: number): SampleMonth {
   return { index, year, month, days: new Date(Date.UTC(year, month, 0)).getUTCDate() };
 }
 
-/** The months of the range as a request names them (`YYYY-MM`), oldest first. */
-export const SAMPLE_MONTHS: readonly string[] = Array.from({ length: MONTH_COUNT }, (_, index) => {
-  const { year, month } = monthAt(index);
-  return `${year}-${twoDigits(month)}`;
-});
-
-/** The month of the range that `text` names as `YYYY-MM`, or `undefined` outside it. */
-export function sampleMonth(text: string): SampleMonth | undefined {
-  const index = SAMPLE_MONTHS.indexOf(text);
-  return index === -1 ? undefined : monthAt(index);
+/**
+ * The months from the first one to `lastMonth` as a request names them (`YYYY-MM`), oldest
+ * first. The index of a month in the list is the one `monthAt` counts by.
+ */
+export function monthsUntil(lastMonth: string): string[] {
+  const named = /^(\d{4})-(0[1-9]|1[0-2])$/u.exec(lastMonth);
+  const count =
+    named === null
+      ? 0
+      : (Number(named[1]) - FIRST_YEAR) * MONTHS_PER_YEAR +
+        Number(named[2]) -
+        Number(FIRST_MONTH.slice(5)) +
+        1;
+  if (count < 1) throw new Error(`lastMonth must be a month from ${FIRST_MONTH} on as YYYY-MM.`);
+  return Array.from({ length: count }, (_, index) => {
+    const { year, month } = monthAt(index);
+    return `${year}-${twoDigits(month)}`;
+  });
 }
 
 /** A month as a booking text names it: `MM/YYYY`. */

@@ -58,10 +58,14 @@ export interface Posting {
   capitalisation_number: number;
 }
 
-/** The months of the range that are locked (festgeschrieben); the last three are still open. */
-const LOCKED_MONTHS = 33;
+/** What every booking of a client's month says alike. `locked` is whether the month is closed for changes. */
+interface Month {
+  client: SampleClient;
+  period: SampleMonth;
+  locked: boolean;
+}
 
-function row(client: SampleClient, period: SampleMonth, date: string, booking: Booking): Posting {
+function row({ client, period, locked }: Month, date: string, booking: Booking): Posting {
   const automaticKey = booking.account.automatic_vat_key;
   const rate = vatRate(automaticKey ?? booking.vatKey);
   const taxCents = Math.round((booking.cents * rate) / (100 + rate));
@@ -95,12 +99,18 @@ function row(client: SampleClient, period: SampleMonth, date: string, booking: B
     document_link: booking.documentLink,
     kost1: booking.costCentre,
     kost2: "",
-    capitalisation_number: period.index < LOCKED_MONTHS ? period.index + 1 : 0
+    capitalisation_number: locked ? period.index + 1 : 0
   };
 }
 
 /** Any run of the rows of one client's month. */
-export function monthOfPostings(seed: number, client: SampleClient, period: SampleMonth) {
+export function monthOfPostings(
+  seed: number,
+  client: SampleClient,
+  period: SampleMonth,
+  locked: boolean
+) {
+  const month = { client, period, locked };
   const clientId = client.row.client_id;
   const count = postingCount(seed, client, period.index);
   const { planted, plantedBefore } = plan(seed, client, period);
@@ -124,14 +134,13 @@ export function monthOfPostings(seed: number, client: SampleClient, period: Samp
       const { day, activity, rank } = order.at(cleanBefore);
       const booking = activities[activity]?.booking(rank);
       if (booking === undefined) throw new Error(`The month has no activity ${activity}.`);
-      return row(client, period, isoDate(period, day), booking);
+      return row(month, isoDate(period, day), booking);
     }
     // A planted booking is dated as the clean booking behind it, or as the month's last one.
     const day = plantedHere.outsideDays ?? order.at(Math.min(cleanBefore, cleanCount - 1)).day;
     const purchase = business.plantedPurchase(plantedHere.ordinal);
     return row(
-      client,
-      period,
+      month,
       isoDate(period, day),
       plantedHere.rule === "date-outside-month"
         ? purchase

@@ -1,7 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { toolResult } from "../result.js";
-import { FIRST_MONTH, LAST_MONTH, SAMPLE_MONTHS } from "./calendar.js";
 import type { AccountingSample } from "./sample.js";
 
 // The tools of `/accounting/mcp`. They mirror the reading endpoints of the Exampledata
@@ -102,7 +101,7 @@ const PAGING_ADVICE = `Rows come in pages: page starts at 1, page_size is at mos
 
 /**
  * The input of the tools that name a client or a month. The sample's clients have consecutive
- * ids and its months are a fixed range, so the schema itself holds both ranges: a caller that
+ * ids and its months are one range, so the schema itself holds both ranges: a caller that
  * validates against the advertised schema, as a Connection does, refuses any other client or
  * month as invalid input before it calls, and the server refuses it the same way with a
  * sentence that names the range.
@@ -111,17 +110,16 @@ function selectors(sample: AccountingSample) {
   const ids = sample.clients.map(({ client_id }) => client_id);
   const [first, last] = [Math.min(...ids), Math.max(...ids)];
   const outside = `client_id must be a whole number from ${first} to ${last}, the clients of the sample.`;
+  const months = `from ${sample.months[0]} to ${sample.months.at(-1)}`;
   return {
     client_id: z.number().int().min(first, outside).max(last, outside),
-    month: z.enum(
-      SAMPLE_MONTHS,
-      `month must be a month from ${FIRST_MONTH} to ${LAST_MONTH} as YYYY-MM.`
-    )
+    month: z.enum(sample.months, `month must be a month ${months} as YYYY-MM.`),
+    months
   };
 }
 
 export function registerAccountingTools(server: McpServer, sample: AccountingSample): void {
-  const { client_id, month } = selectors(sample);
+  const { client_id, month, months } = selectors(sample);
   const answer = (rows: unknown[]) => toolResult({ rows });
   server.registerTool(
     "list_accounting_clients",
@@ -152,7 +150,7 @@ export function registerAccountingTools(server: McpServer, sample: AccountingSam
     "list_postings",
     {
       title: "List postings",
-      description: `List the bookings of one client in one month (YYYY-MM, from ${FIRST_MONTH} to ${LAST_MONTH}), ordered by date and stable between calls. A month holds between fifty and 100,000 bookings, so read it page by page with the largest page_size. ${PAGING_ADVICE} Amounts are euros with two decimals; net_amount plus tax_amount is amount. A booking has no id and no field that is unique: document_link names the document behind it, which several bookings may share.`,
+      description: `List the bookings of one client in one month (YYYY-MM, ${months}; no later month has bookings), ordered by date and stable between calls. A month holds between fifty and 100,000 bookings, so read it page by page with the largest page_size. ${PAGING_ADVICE} Amounts are euros with two decimals; net_amount plus tax_amount is amount. A booking has no id and no field that is unique: document_link names the document behind it, which several bookings may share.`,
       annotations: { readOnlyHint: true },
       inputSchema: z.strictObject({ client_id, month, ...paging }),
       outputSchema: accountingOutputSchemas.list_postings

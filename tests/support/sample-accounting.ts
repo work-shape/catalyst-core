@@ -13,7 +13,7 @@ export type Posting = z.output<typeof accountingOutputSchemas.list_postings>["ro
 export type Account = z.output<typeof accountingOutputSchemas.list_accounts>["rows"][number];
 
 export const sample = createAccountingSample();
-export const MONTHS = ["2024-02", "2026-11"] as const;
+export const MONTHS = ["2024-02", "2026-10"] as const;
 export const [MONTH] = MONTHS;
 
 export function sizeGroupOf(count: number) {

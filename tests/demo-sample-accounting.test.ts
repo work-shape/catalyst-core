@@ -16,6 +16,7 @@ import {
   ACCOUNTING_RULES,
   accountingOutputSchemas,
   connectSampleMcpClient,
+  createAccountingSample,
   createSampleMcpServer,
   SIZE_GROUPS
 } from "@vivd-catalyst/demo/sample-mcp";
@@ -293,7 +294,7 @@ describe("demo sample accounting", () => {
       startMonths.add(Math.floor(first.fiscal_year_start / 100) % 100);
       // The fiscal years follow one another without a gap and cover the sample's months.
       expect(first.fiscal_year_start).toBeLessThanOrEqual(20240101);
-      expect(required(years.at(-1)).fiscal_year_end).toBeGreaterThanOrEqual(20261231);
+      expect(required(years.at(-1)).fiscal_year_end).toBeGreaterThanOrEqual(20261031);
       for (const [index, year] of years.entries()) {
         expect(year).toMatchObject({
           client_id,
@@ -561,14 +562,18 @@ describe("demo sample accounting", () => {
         );
       }
     }
-    for (const month of ["2024-01", "2026-12"]) {
+    // The range ends with the sample's last month. No month after it has bookings.
+    for (const month of ["2024-01", "2026-10"]) {
       expect(refusedByConnection("list_postings", { client_id: first, month })).toBe(false);
     }
-    for (const month of ["2023-12", "2027-01", "2026-13", "2026-3"]) {
+    for (const month of ["2023-12", "2026-11", "2026-12", "2027-01", "2026-13", "2026-3"]) {
       expect(await refusal("list_postings", { client_id: first, month })).toContain(
-        "month must be a month from 2024-01 to 2026-12 as YYYY-MM."
+        "month must be a month from 2024-01 to 2026-10 as YYYY-MM."
       );
     }
+    expect(required(tools.find(({ name }) => name === "list_postings")).description).toContain(
+      "from 2024-01 to 2026-10"
+    );
     for (const invalid of [
       { page: 0 },
       { page_size: 0 },
@@ -589,12 +594,35 @@ describe("demo sample accounting", () => {
     ).toEqual([]);
   });
 
-  it("opens every month of every client with the month's exact count", () => {
-    const everyMonth = [2024, 2025, 2026].flatMap((year) =>
-      Array.from({ length: 12 }, (_, month) => `${year}-${String(month + 1).padStart(2, "0")}`)
+  it("ends with the month it is given, 2026-10 when left out, whatever the clock says", () => {
+    expect(sample.months).toHaveLength(34);
+    expect(sample.months[0]).toBe("2024-01");
+    expect(sample.months.at(-1)).toBe("2026-10");
+    const earlier = createAccountingSample({ lastMonth: "2025-06" });
+    expect(earlier.months).toEqual(sample.months.slice(0, 18));
+    const { client_id } = required(sample.clients[0]);
+    // A month keeps its bookings when the range grows. Only its lock follows the last month.
+    expect(earlier.postings(client_id, MONTH, 0, 50)).toEqual(
+      sample.postings(client_id, MONTH, 0, 50)
     );
+    expect(() => earlier.postingCount(client_id, "2025-07")).toThrow(
+      "The sample has bookings for the months 2024-01 to 2025-06 only."
+    );
+    expect(required(earlier.fiscalYears(client_id).at(-1)).year).toBe(2025);
+    for (const lastMonth of ["2023-12", "2026-13", "2026-1", "October"]) {
+      expect(() => createAccountingSample({ lastMonth })).toThrow(
+        "lastMonth must be a month from 2024-01 on as YYYY-MM."
+      );
+    }
+    // The last three months are open, the ones before are locked.
+    const capitalisation = (month: string) =>
+      required(sample.postings(client_id, month, 0, 1)[0]).capitalisation_number;
+    expect(sample.months.map(capitalisation).slice(-4)).toEqual([31, 0, 0, 0]);
+  });
+
+  it("opens every month of every client with the month's exact count", () => {
     for (const { client_id } of sample.clients) {
-      for (const month of everyMonth) {
+      for (const month of sample.months) {
         const count = sample.postingCount(client_id, month);
         // The last booking exists and nothing stands behind it.
         expect(sample.postings(client_id, month, count - 1, 2)).toHaveLength(1);

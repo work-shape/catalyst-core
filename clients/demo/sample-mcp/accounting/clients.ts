@@ -1,7 +1,7 @@
 import { mixedSeed, pick, seededGenerator } from "../random.js";
 import type { Skr } from "./accounts.js";
 import { business, type Business } from "./business.js";
-import { compactDate, FIRST_MONTH, LAST_MONTH, type SampleMonth } from "./calendar.js";
+import { compactDate, FIRST_MONTH, type SampleMonth } from "./calendar.js";
 import { INDUSTRIES, PROFILES, SIZE_NAMES, type Industry, type Profile } from "./profiles.js";
 
 // The clients (Mandanten) of one invented tax consultancy: who they are, how they keep their
@@ -360,11 +360,11 @@ export function fiscalYearOf(client: SampleClient, month: SampleMonth): string {
   return compactDate(startYear, client.fiscalYearStartMonth, 1);
 }
 
-/** The client's fiscal years that hold a month of the sample's range, oldest first. */
-export function fiscalYears(client: SampleClient): FiscalYearRow[] {
+/** The client's fiscal years that hold a month of the sample's range, which ends with `lastMonth`, oldest first. */
+export function fiscalYears(client: SampleClient, lastMonth: SampleMonth): FiscalYearRow[] {
   const startMonth = client.fiscalYearStartMonth;
   const firstYear = Number(FIRST_MONTH.slice(0, 4)) - (startMonth === 1 ? 0 : 1);
-  const lastYear = Number(LAST_MONTH.slice(0, 4));
+  const lastYear = Number(fiscalYearOf(client, lastMonth).slice(0, 4));
   return Array.from({ length: lastYear - firstYear + 1 }, (_, index) => {
     const year = firstYear + index;
     const start = Number(compactDate(year, startMonth, 1));
