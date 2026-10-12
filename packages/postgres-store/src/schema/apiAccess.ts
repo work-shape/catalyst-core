@@ -17,6 +17,13 @@ export const servicePrincipals = pgTable(
   {
     id: text("id").primaryKey(),
     clientInstanceId: text("client_instance_id").notNull(),
+    // The store always writes it. The default is for a release that does not know the column
+    // and runs beside this one during a deploy: its rows get a random name.
+    name: text("name")
+      .notNull()
+      .default(
+        sql`('principal-' || substr(md5(random()::text || clock_timestamp()::text), 1, 12))`
+      ),
     displayLabel: text("display_label").notNull(),
     description: text("description"),
     status: text("status").$type<ServicePrincipalRecord["status"]>().notNull(),
@@ -31,6 +38,7 @@ export const servicePrincipals = pgTable(
   (table) => [
     index("service_principals_client_label_idx").on(table.clientInstanceId, table.displayLabel),
     uniqueIndex("service_principals_client_id_idx").on(table.clientInstanceId, table.id),
+    uniqueIndex("service_principals_client_name_idx").on(table.clientInstanceId, table.name),
     foreignKey({
       name: "service_principals_client_creator_fk",
       columns: [table.createdByClientInstanceId, table.createdByUserId],

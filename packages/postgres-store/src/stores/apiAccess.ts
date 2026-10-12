@@ -9,6 +9,7 @@ import {
 import {
   createApiCredential as createPostgresApiCredential,
   createServicePrincipal as createPostgresServicePrincipal,
+  findServicePrincipalByName as findPostgresServicePrincipalByName,
   listApiCredentials as listPostgresApiCredentials,
   listServicePrincipals as listPostgresServicePrincipals,
   resolveApiCredential as resolvePostgresApiCredential,
@@ -23,6 +24,11 @@ export function createPostgresApiAccessStore(db: PostgresConnection): ApiAccessS
       input: Parameters<ApiAccessStore["listServicePrincipals"]>[0]
     ): Promise<ServicePrincipalRecord[]> {
       return listPostgresServicePrincipals(db, input);
+    },
+    async findServicePrincipalByName(
+      input: Parameters<ApiAccessStore["findServicePrincipalByName"]>[0]
+    ): Promise<ServicePrincipalRecord | undefined> {
+      return findPostgresServicePrincipalByName(db, input);
     },
     async createServicePrincipal(
       input: CreateServicePrincipalInput

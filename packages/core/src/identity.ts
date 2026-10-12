@@ -85,6 +85,11 @@ export interface AuthenticatedServicePrincipal {
  * credential authenticated it: the published definition names it under `runAs`, and whoever
  * published that definition held the right to let it act. Its rights are the principal's own,
  * read from its record and its grants like those of a principal that presents a credential.
+ *
+ * `permissions`, `permissionRefs` and `scopes` are what the principal's record and grants hold
+ * when the step runs, and nothing wider. `scopes` restricts as it does for a credential: a run
+ * holds the scopes of the rights its principal was granted and never `["*"]`, so a call that
+ * needs a scope the principal has no right for is refused before its right is asked.
  */
 export interface WorkflowRunPrincipal extends Omit<AuthenticatedServicePrincipal, "credentialId"> {
   workflowRunId: WorkflowRunId;
@@ -95,6 +100,14 @@ export type ActingServicePrincipal = AuthenticatedServicePrincipal | WorkflowRun
 
 export type AuthenticatedIdentity = AuthenticatedUser | ActingServicePrincipal;
 
+/**
+ * Whether the caller is a service principal, with a credential or as a Workflow Run. It admits
+ * both, and every caller of it was read for that: each one takes "service principal" to mean
+ * that no person is present, and then refuses, leaves a user id out or names the actor a
+ * service principal. None reads `credentialId` behind it. A run's principal that failed this
+ * check would be taken for a person, which is the unsafe side. A place that needs the
+ * credential asks for `credentialId` itself.
+ */
 export function isAuthenticatedServicePrincipal(
   identity: AuthenticatedIdentity
 ): identity is ActingServicePrincipal {

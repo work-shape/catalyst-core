@@ -215,6 +215,8 @@ export const apiCredentialSchema = z.object({
 export const servicePrincipalSchema = z.object({
   id: z.string(),
   clientInstanceId: z.string(),
+  /** What a definition names the principal by. Set at creation and never changed. */
+  name: z.string(),
   displayLabel: z.string(),
   description: z.string().optional(),
   status: servicePrincipalStatusSchema,
@@ -232,6 +234,11 @@ export const servicePrincipalDetailSchema = z.object({
 });
 
 export const createServicePrincipalRequestSchema = z.object({
+  /** Left out, the name is the label as a slug. A name another principal has is refused. */
+  name: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9-]{0,62}$/u)
+    .optional(),
   displayLabel: z.string().trim().min(1),
   description: z.string().trim().min(1).optional(),
   status: servicePrincipalStatusSchema.optional(),

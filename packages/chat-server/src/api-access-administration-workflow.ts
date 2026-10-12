@@ -42,15 +42,25 @@ type ChangeContext = Pick<OperationExecutionContext, "actor" | "audit" | "correl
 export function authorizeApiAccessChange(
   operationId: string
 ): (input: unknown, context: OperationAuthorizeContext) => OperationAuthorization {
-  return (_input, { actor, access }) => {
-    const right = access.authorize(API_ACCESS_ACTION);
-    if (!right.allowed) {
-      return { allowed: false, action: API_ACCESS_ACTION, reason: right.reason };
-    }
-    return !isAuthenticatedServicePrincipal(actor) && isSuperadmin(actor)
-      ? { allowed: true }
-      : { allowed: false, action: operationId, reason: "no_grant" };
-  };
+  return (_input, caller) => authorizePrincipalAdministration(caller, operationId);
+}
+
+/**
+ * The one rule on who administers service principals, for every place that asks it: the four
+ * changes of API access, and letting a Workflow act as a principal (`workflow-run-as.ts`).
+ * A service principal never passes, a Workflow Run's among them.
+ */
+export function authorizePrincipalAdministration(
+  { actor, access }: Pick<OperationAuthorizeContext, "actor" | "access">,
+  operationId: string
+): OperationAuthorization {
+  const right = access.authorize(API_ACCESS_ACTION);
+  if (!right.allowed) {
+    return { allowed: false, action: API_ACCESS_ACTION, reason: right.reason };
+  }
+  return !isAuthenticatedServicePrincipal(actor) && isSuperadmin(actor)
+    ? { allowed: true }
+    : { allowed: false, action: operationId, reason: "no_grant" };
 }
 
 export interface ServicePrincipalDetail {
@@ -59,6 +69,7 @@ export interface ServicePrincipalDetail {
 }
 
 interface CreateServicePrincipalCommand {
+  name?: string;
   displayLabel: string;
   description?: string;
   status?: ServicePrincipalRecord["status"];
@@ -112,6 +123,7 @@ export class ApiAccessAdministrationWorkflow {
     this.requireServicePermissions(command.permissions);
     const principal = await this.options.stores.apiAccess.createServicePrincipal({
       clientInstanceId: this.options.clientInstanceId,
+      name: command.name,
       displayLabel: command.displayLabel,
       description: command.description,
       status: command.status,

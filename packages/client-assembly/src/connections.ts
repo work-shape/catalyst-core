@@ -72,7 +72,9 @@ export function withConnections(
   parts: Pick<
     InstanceConnectionParts,
     "clientInstanceId" | "logger" | "config" | "stores" | "modules"
-  >
+  >,
+  /** The tool sources of the modules: operations of their Assets an agent may carry. */
+  moduleToolSources: readonly DataToolSource[] = []
 ): {
   clientInstanceId: ClientInstanceId;
   logger: Logger;
@@ -84,7 +86,11 @@ export function withConnections(
     logger: parts.logger,
     runtime: parts.config.runtime
   };
-  if (!connections) return options;
+  if (!connections) {
+    return moduleToolSources.length === 0
+      ? options
+      : { ...options, dataTools: combineDataToolSources(...moduleToolSources) };
+  }
   operationCalls.registry.addSource(connections.operationSource);
   return {
     ...options,
@@ -96,7 +102,8 @@ export function withConnections(
         modules: parts.modules,
         logger: parts.logger,
         connectionTools: connections.toolSource
-      })
+      }),
+      ...moduleToolSources
     )
   };
 }

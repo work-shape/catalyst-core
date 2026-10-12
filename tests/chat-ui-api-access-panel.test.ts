@@ -12,6 +12,7 @@ const detail: ServicePrincipalDetail = {
   principal: {
     id: "sp_cli",
     clientInstanceId: "client-1",
+    name: "catalyst-cli",
     displayLabel: "Catalyst CLI",
     description: "Configuration sync",
     status: "active",

@@ -1,5 +1,6 @@
 import type {
   ActorAccess,
+  AuthenticatedIdentity,
   ConfigAssetKind,
   JsonObject,
   Namespace,
@@ -64,6 +65,23 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
    * what is stored before the write is read, so its refusal comes before every other one.
    */
   assertStoredWritable?(input: { current: unknown }): void;
+  /**
+   * Throws where this caller may not make this revision the one the asset's users are served,
+   * whatever the kind's publish right says: the revision lends something its writer could not
+   * give, such as the grants of the service principal a Workflow runs as. It is asked of the
+   * revision that becomes live and of who makes it so: on a publish, of the newest revision
+   * and of an earlier one alike, and on a revert of a kind without a draft. Who wrote the
+   * revision is not asked.
+   */
+  authorizeLive?(input: {
+    actor: AuthenticatedIdentity;
+    access: ActorAccess;
+    name: string;
+    /** The revision that becomes live, or the one a revert restores. */
+    revision: number;
+    /** The config of that revision. */
+    config: unknown;
+  }): void | Promise<void>;
   /** Throws `FORBIDDEN` when the instance's editing policy refuses an interactive delete. */
   assertInteractiveDeleteAllowed(): void;
   /**

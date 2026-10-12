@@ -2,6 +2,8 @@ import type {
   AuditRecorder,
   Authorizer,
   ClientInstanceId,
+  DataToolSource,
+  JobRetry,
   JobSchedule,
   Logger,
   ModuleSnapshot,
@@ -48,25 +50,32 @@ interface ModuleRuntime {
 
 /** What a module adds once it has the call path. A module leaves out what it does not have. */
 interface ModuleRuntimeAssembly {
-  /** Added to the registry of the call path: the operations of each Asset of the kind. */
-  readonly operationSources?: readonly OperationSource[];
   /** Served by the API process, with the schedules. */
   readonly jobHandlers?: readonly RegisteredJobHandler[];
   readonly schedules?: readonly JobSchedule[];
+  /** How an ended job of one of the module's kinds is retried by hand. */
+  readonly jobRetries?: readonly JobRetry[];
   /** Registered on the server after its own routes. */
   readonly routes?: readonly RouteRegistration[];
+  /** Operations of the module's Assets as tools an agent may carry, beside the Connections'. */
+  readonly dataToolSources?: readonly DataToolSource[];
+  /** Gives back what the module opened, such as a pool. Called when the process closes. */
+  close?(): Promise<void>;
 }
 
 /**
- * What one module adds to an instance it is on in, in two steps, because what it registers is
+ * What one module adds to an instance it is on in, in steps, because what it registers is
  * needed to build the call path that the rest of it needs. Asset kinds and agent tools come
- * first. `start` is called once with the call path and answers the rest.
+ * first. With the call path, `operationSources` of every module is asked and added to it, and
+ * only then is any module started: a module that starts finds the operations of every other.
  */
 export interface ModuleAssembly {
   /** Kinds as the asset workflow of the API registers them, which is what that type names. */
   readonly assetKinds?: readonly WorkflowAssetKind[];
   /** Agent tools, registered with the tools of the assembly. */
   readonly tools?: readonly ToolAssemblyDefinition[];
+  /** The operations of each Asset of the kind. Built here and resolved when one is called. */
+  operationSources?(runtime: ModuleRuntime): readonly OperationSource[];
   start?(runtime: ModuleRuntime): ModuleRuntimeAssembly | Promise<ModuleRuntimeAssembly>;
 }
 
@@ -82,7 +91,7 @@ export type ModuleSeam = (
 export interface AssembledModules {
   readonly assetKinds: readonly WorkflowAssetKind[];
   readonly tools: readonly ToolAssemblyDefinition[];
-  /** Starts every module, adds their operation sources to the call path and answers the rest. */
+  /** Adds every module's operation sources to the call path, then starts each module. */
   start(runtime: ModuleRuntime): Promise<StartedModules>;
 }
 
@@ -90,5 +99,9 @@ export interface AssembledModules {
 export interface StartedModules {
   readonly jobHandlers: readonly RegisteredJobHandler[];
   readonly schedules: readonly JobSchedule[];
+  readonly jobRetries: readonly JobRetry[];
   readonly routes: readonly RouteRegistration[];
+  readonly dataToolSources: readonly DataToolSource[];
+  /** Closes every started module, the last started first. */
+  close(): Promise<void>;
 }

@@ -110,6 +110,8 @@ export interface AppInstanceOptions {
   explicitCredentials?: boolean;
   /** Kinds registered beside agent, skill and app. */
   furtherKinds?: WorkflowAssetKind[];
+  /** The App kind with something of the test's own, such as an `authorizeLive`. */
+  appKind?: WorkflowAssetKind;
   /** Modules that are on beside `apps`, such as `{ connections: { enabled: true } }`. */
   modules?: AccessInstanceOptions["modules"];
   /** Further server options, such as a policy or an audit recorder of the test's own. */
@@ -159,7 +161,7 @@ export async function setupAppInstance(options: AppInstanceOptions = {}): Promis
   const pages = { objects, contentKey: deriveAppContentKey("content-secret-".repeat(4)) };
   const access = await setupAccessInstance({
     modules: { ...options.modules, apps: { enabled: true } },
-    furtherKinds: [createAppAssetKind(), ...(options.furtherKinds ?? [])],
+    furtherKinds: [options.appKind ?? createAppAssetKind(), ...(options.furtherKinds ?? [])],
     server: (stores, config) => ({
       pages: {
         ...pages,

@@ -121,17 +121,26 @@ export async function assembleModules(parts: ModuleAssemblyParts): Promise<Assem
     assetKinds: assemblies.flatMap((assembly) => assembly.assetKinds ?? []),
     tools: assemblies.flatMap((assembly) => assembly.tools ?? []),
     async start(runtime): Promise<StartedModules> {
-      const started = [];
+      for (const assembly of assemblies) {
+        for (const source of assembly.operationSources?.(runtime) ?? []) {
+          runtime.operationCalls.registry.addSource(source);
+        }
+      }
+      const started: Awaited<ReturnType<NonNullable<ModuleAssembly["start"]>>>[] = [];
       for (const assembly of assemblies) {
         started.push((await assembly.start?.(runtime)) ?? {});
-      }
-      for (const source of started.flatMap((module) => module.operationSources ?? [])) {
-        runtime.operationCalls.registry.addSource(source);
       }
       return {
         jobHandlers: started.flatMap((module) => module.jobHandlers ?? []),
         schedules: started.flatMap((module) => module.schedules ?? []),
-        routes: started.flatMap((module) => module.routes ?? [])
+        jobRetries: started.flatMap((module) => module.jobRetries ?? []),
+        routes: started.flatMap((module) => module.routes ?? []),
+        dataToolSources: started.flatMap((module) => module.dataToolSources ?? []),
+        async close() {
+          for (const module of [...started].reverse()) {
+            await module.close?.();
+          }
+        }
       };
     }
   };

@@ -40,6 +40,7 @@ describe("API Access administration", () => {
     const created = completedOutput(
       await client.service_principals.create({
         body: {
+          name: "release",
           displayLabel: "Release CLI",
           description: "Configuration release automation",
           permissions: ["config_assets.read", "config_assets.release"]
@@ -48,6 +49,7 @@ describe("API Access administration", () => {
     );
     expect(created).toMatchObject({
       principal: {
+        name: "release",
         displayLabel: "Release CLI",
         createdByUserId: fixture.users.superadmin.id,
         permissionRefs: [],
@@ -67,11 +69,16 @@ describe("API Access administration", () => {
         }
       })
     );
+    // The name is the principal's for good: an update has no field for it.
     expect(updated.principal).toMatchObject({
+      name: "release",
       displayLabel: "Disabled release CLI",
       status: "disabled",
       permissions: ["config_assets.read"]
     });
+    await expect(
+      client.service_principals.create({ body: { name: "release", displayLabel: "Second" } })
+    ).rejects.toMatchObject({ status: 409 });
     expect(updated.principal.description).toBeUndefined();
 
     const expiresAt = new Date(Date.now() + 60_000).toISOString();

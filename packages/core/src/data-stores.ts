@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { AssetKindActions } from "./asset-kinds";
 import type { JsonObject } from "./json";
 
@@ -21,15 +22,21 @@ export const KNOWLEDGE_BASE_ASSET_KIND = "knowledge_base";
 export const KNOWLEDGE_BASE_MANIFEST_FILE = "kb.yaml";
 
 /**
- * The rights of the kind. It has no `use`: a person reaches the rows through an App, whose
- * `app.use` is checked. Spec: One data store primitive, scope.
+ * The rights of the kind. `write` changes the definition and its migrations. `insert` adds
+ * rows and changes nothing of the definition: it is what the service principal of a Workflow
+ * is granted, so a run that stores findings cannot edit a migration. `execute` is reserved for
+ * changing statements other than an insert and is asked by nothing yet. The kind has no `use`: a
+ * person reaches the rows through an App, whose `app.use` is checked. Spec: One data store
+ * primitive, scope.
  */
 export const DATA_STORE_ACTIONS = {
   read: "data_store.read",
   write: "data_store.write",
   publish: "data_store.publish",
-  delete: "data_store.delete"
-} as const satisfies AssetKindActions;
+  delete: "data_store.delete",
+  insert: "data_store.insert",
+  execute: "data_store.execute"
+} as const satisfies AssetKindActions & { insert: string; execute: string };
 
 /** The rights of the kind. `use` searches and queries the published revision. */
 export const KNOWLEDGE_BASE_ACTIONS = {
@@ -53,29 +60,165 @@ export const DATA_STORE_OPERATION_PREFIX = "data_store.";
  * (`DataStoreSchema`) and `preview_rows` the first rows of one table, at most
  * `DATA_STORE_PREVIEW_ROW_LIMIT`: the two reads of the store's page.
  *
- * The kind has no `use`, so `insert` needs `data_store.write`. A step of a Workflow calls these
- * as the run's principal, so that service principal is granted the right on the store. No right
- * is implied by the Workflow or by whoever published it.
+ * `insert` and `load` need `data_store.insert`, the right on rows, and not `data_store.write`.
+ * A `load` that changes or removes rows, with `onConflict: "update"` or with `replace`, needs
+ * `data_store.execute` as well (`DATA_STORE_LOAD_CHANGE_RIGHT`). A step of
+ * a Workflow calls these as the run's principal, so that service principal is granted the
+ * right on the store. No right is implied by the Workflow or by whoever published it.
  */
-export const DATA_STORE_OPERATION_VERBS = ["query", "insert", "describe", "preview_rows"] as const;
+export const DATA_STORE_OPERATION_VERBS = [
+  "query",
+  "insert",
+  "load",
+  "describe",
+  "preview_rows"
+] as const;
 
 export type DataStoreOperationVerb = (typeof DATA_STORE_OPERATION_VERBS)[number];
 
 /** The right on the store each verb needs. */
 export const DATA_STORE_OPERATION_RIGHTS = {
   query: DATA_STORE_ACTIONS.read,
-  insert: DATA_STORE_ACTIONS.write,
+  insert: DATA_STORE_ACTIONS.insert,
+  load: DATA_STORE_ACTIONS.insert,
   describe: DATA_STORE_ACTIONS.read,
   preview_rows: DATA_STORE_ACTIONS.read
 } as const satisfies Record<DataStoreOperationVerb, string>;
 
+/**
+ * What `insert` does with a row that a unique constraint of the table refuses. `fail` refuses
+ * the whole call and adds no row. `skip` leaves such a row out and adds the others, against
+ * every unique constraint of the table, the primary key among them.
+ *
+ * The idempotency key of a step protects one run: a retried step run answers with its first
+ * result. It does not protect a second run. `skip` on a table with a unique constraint over
+ * what makes a row the same row is what makes a rerun, and next month's run, safe.
+ */
+export const DATA_STORE_INSERT_CONFLICT_MODES = ["fail", "skip"] as const;
+
+export type DataStoreInsertConflictMode = (typeof DATA_STORE_INSERT_CONFLICT_MODES)[number];
+
+/** `onConflict` of an insert as its input schema reads it: `fail` when left out. */
+export const dataStoreInsertConflictSchema = z
+  .enum(DATA_STORE_INSERT_CONFLICT_MODES)
+  .default("fail");
+
+/** The input of `data_store.<id>.insert`. */
+export interface DataStoreInsertInput {
+  table: string;
+  /** Every row names the same columns. */
+  rows: readonly JsonObject[];
+  /** `fail` when left out. */
+  onConflict?: DataStoreInsertConflictMode;
+}
+
+/**
+ * What `data_store.<id>.insert` answers. Both counts add up to the rows of the call. With
+ * `fail` no row is ever skipped.
+ */
+export const dataStoreInsertResultSchema = z.object({
+  table: z.string(),
+  inserted: z.number().int().min(0),
+  skipped: z.number().int().min(0)
+});
+
+export type DataStoreInsertResult = z.infer<typeof dataStoreInsertResultSchema>;
+
+/**
+ * What `load` does with a row whose `key` a row of the table has. `update` writes the row of
+ * the dataset over it. `skip` and `update` need `key`.
+ */
+export const DATA_STORE_LOAD_CONFLICT_MODES = ["fail", "skip", "update"] as const;
+
+export type DataStoreLoadConflictMode = (typeof DATA_STORE_LOAD_CONFLICT_MODES)[number];
+
+/** The right a `load` needs beside `data_store.insert` where it changes or removes rows. */
+export const DATA_STORE_LOAD_CHANGE_RIGHT = DATA_STORE_ACTIONS.execute;
+
+/**
+ * The input of `data_store.<id>.load`, which takes a dataset of a Workflow Run into one table
+ * in one transaction, once per step run. Reserved: the slice that brings datasets runs it.
+ * Spec: Loading a dataset.
+ */
+export const dataStoreLoadInputSchema = z
+  .strictObject({
+    table: z.string().min(1),
+    /** The reference of the dataset as the step data holds it. */
+    dataset: z.unknown(),
+    /** Row field to column. By name where left out. */
+    columns: z.record(z.string(), z.string()).optional(),
+    /** The columns that tell two rows apart. */
+    key: z.array(z.string().min(1)).min(1).optional(),
+    onConflict: z.enum(DATA_STORE_LOAD_CONFLICT_MODES).default("fail"),
+    /**
+     * Replace by key: first deletes the rows whose values of these columns occur in the
+     * dataset, then inserts the dataset. `by` names columns of `key`.
+     */
+    replace: z.strictObject({ by: z.array(z.string().min(1)).min(1) }).optional()
+  })
+  .refine((input) => input.onConflict === "fail" || input.key !== undefined, {
+    message: "onConflict 'skip' and 'update' need 'key'",
+    path: ["key"]
+  })
+  .refine(
+    (input) =>
+      input.replace === undefined ||
+      input.replace.by.every((column) => input.key?.includes(column) === true),
+    {
+      message:
+        "'replace' deletes the rows that carry the values of 'by' and inserts the dataset; it needs 'key', which makes the inserted rows unique, and 'by' names columns of 'key'",
+      path: ["replace"]
+    }
+  );
+
+export type DataStoreLoadInput = z.input<typeof dataStoreLoadInputSchema>;
+
+/** What `data_store.<id>.load` answers: the four counts and no row. */
+export const dataStoreLoadResultSchema = z.object({
+  table: z.string(),
+  inserted: z.number().int().min(0),
+  updated: z.number().int().min(0),
+  skipped: z.number().int().min(0),
+  deleted: z.number().int().min(0)
+});
+
+export type DataStoreLoadResult = z.infer<typeof dataStoreLoadResultSchema>;
+
+/**
+ * The schema the platform owns in the database of every store, for what it keeps there, such
+ * as the migrations it applied and the loads it made. A migration that names it is refused.
+ */
+export const DATA_STORE_RESERVED_SCHEMA = "catalyst";
+
 /** The most rows `preview_rows` answers. */
 export const DATA_STORE_PREVIEW_ROW_LIMIT = 50;
 
+/**
+ * The types one value of a statement is declared with, and the types `describe` and a result
+ * name a column by. They are the product's own, so a caller reads the same names whatever
+ * backend a store has. A list of values of one type is the type followed by `[]`. Spec:
+ * apps-and-pages.md, Named actions, `sql`.
+ */
+export const DATA_STORE_SCALAR_TYPES = [
+  "text",
+  "integer",
+  "number",
+  "boolean",
+  "date",
+  "timestamp"
+] as const;
+
+export type DataStoreScalarType = (typeof DATA_STORE_SCALAR_TYPES)[number];
+export type DataStoreParameterType = DataStoreScalarType | `${DataStoreScalarType}[]`;
+
+/** A column's type as the product names it. `other` is a type of the backend that has no name here. */
+export type DataStoreColumnType = DataStoreParameterType | "other";
+
 export interface DataStoreColumn {
   name: string;
-  /** The SQL type as the database names it. */
-  type: string;
+  type: DataStoreColumnType;
+  /** The type as the store's database names it, such as `numeric(12,2)`. For people to read. */
+  nativeType: string;
   nullable: boolean;
   default?: string;
   primaryKey: boolean;
@@ -146,9 +289,15 @@ export interface DataStoreReference {
   minSchema?: number;
 }
 
-/** One value a statement binds. It never becomes part of the statement's text. */
-export type DataStoreParameter =
+type DataStoreValue =
   string | number | boolean | null | readonly (string | number | boolean | null)[];
+
+/**
+ * One value a statement binds. It never becomes part of the statement's text. A bare value
+ * leaves its type to the database; a value with a declared type is bound as that type.
+ */
+export type DataStoreParameter =
+  DataStoreValue | { type: DataStoreParameterType; value: DataStoreValue };
 
 /** SQL with positional placeholders and the values they are bound to. */
 export interface DataStoreStatement {
@@ -158,7 +307,7 @@ export interface DataStoreStatement {
 
 export interface DataStoreRows {
   /** The columns in the order of the statement, present even when no row is. */
-  columns: readonly { name: string; type: string }[];
+  columns: readonly { name: string; type: DataStoreColumnType; nativeType: string }[];
   rows: readonly JsonObject[];
   /** Whether the row cap or the byte cap ended the result before its last row. */
   truncated: boolean;

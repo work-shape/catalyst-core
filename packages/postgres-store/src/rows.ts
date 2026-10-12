@@ -588,6 +588,7 @@ export function mapServicePrincipal(row: ServicePrincipalRow | undefined): Servi
   return {
     id: asServicePrincipalId(row.id),
     clientInstanceId: row.clientInstanceId as ClientInstanceId,
+    name: row.name,
     displayLabel: row.displayLabel,
     description: row.description ?? undefined,
     status: row.status,

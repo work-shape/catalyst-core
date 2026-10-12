@@ -10,6 +10,8 @@ import {
   CONNECTION_SECRET_HANDLE_PATTERN,
   CONNECTOR_TYPE_PATTERN,
   EGRESS_PROTOCOLS,
+  operationLimitsSchema,
+  operationPagingSchema,
   secretRef,
   type ConnectionConfig,
   type JsonObject,
@@ -181,7 +183,11 @@ const connectionOperationSchema = z
     exposure: z.array(z.enum(CONNECTION_EXPOSURES)).default([]),
     enabled: z.boolean().default(true),
     policy: z.enum(["deny", "approval"]).optional(),
-    schemaFingerprint: z.string().min(1).max(200).optional()
+    schemaFingerprint: z.string().min(1).max(200).optional(),
+    /** How the outside system pages a reading operation. */
+    paging: operationPagingSchema.optional(),
+    /** How many calls toward the outside system run at once and start per period. */
+    limits: operationLimitsSchema.optional()
   })
   .strict();
 
@@ -246,6 +252,13 @@ export const connectionConfigSchema: z.ZodType<ConnectionConfig, unknown> = z
           message: "Only a changing operation can carry the policy 'approval'"
         });
       }
+      if (operation.paging !== undefined && operation.effect !== "reading") {
+        context.addIssue({
+          code: "custom",
+          path: ["operations", index, "paging"],
+          message: "Only a reading operation can be paged"
+        });
+      }
     }
   });
 
@@ -257,7 +270,11 @@ const releaseConnectionOperationSchema = z
     exposure: z.array(z.enum(CONNECTION_EXPOSURES)).default([]),
     /** Only tightens: `deny` on any operation, `approval` on a changing one. */
     policy: z.enum(["deny", "approval"]).optional(),
-    schemaFingerprint: z.string().min(1).max(200).optional()
+    schemaFingerprint: z.string().min(1).max(200).optional(),
+    /** How the outside system pages a reading operation. */
+    paging: operationPagingSchema.optional(),
+    /** How many calls toward the outside system run at once and start per period. */
+    limits: operationLimitsSchema.optional()
   })
   .strict();
 

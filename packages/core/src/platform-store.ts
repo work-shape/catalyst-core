@@ -26,7 +26,7 @@ import type { ModelUsageEventStore } from "./usage";
 import type { UserStore } from "./user";
 import type { ApiAccessStore } from "./api-access";
 import type { StructuredDataStore } from "./structured-data";
-import type { WorkflowRunsStore } from "./workflows";
+import type { WorkflowRunDatasetsStore, WorkflowRunsStore } from "./workflows";
 
 export interface ConversationsStore
   extends ConversationStore, ConversationRetentionStore, ModelProviderContinuationStore {}
@@ -74,6 +74,7 @@ export interface PlatformStores {
   pages: PagesStore;
   connections: ConnectionsStore;
   workflowRuns: WorkflowRunsStore;
+  workflowRunDatasets: WorkflowRunDatasetsStore;
   dataStores: DataStoreRecordsStore;
   /** Resolves after commit; a rejected callback rolls back all domain writes. Nested calls use savepoints. */
   transaction<T>(fn: (stores: PlatformStores) => Promise<T>): Promise<T>;

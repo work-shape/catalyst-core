@@ -215,9 +215,16 @@ export class AssetDraftWorkflow {
         { reason: "revision_unknown", revision: input.revision }
       );
     }
+    const { config } = revision;
+    await kind.authorizeLive?.({
+      actor: call.actor,
+      access: call.access,
+      name,
+      revision: input.revision,
+      config
+    });
     // The set as it would be were this revision the asset's content, checked as a write of it.
     const stored = await loadStoredAssets(this.options);
-    const { config } = revision;
     const without = withoutDefinition(stored.set, kind.kind, name);
     validateAssetSet(
       this.options.configAssets.kinds.kinds,

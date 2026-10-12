@@ -46,6 +46,44 @@ function issuesOf(config: unknown) {
 }
 
 describe("the definition of a Connection", () => {
+  // Fails without `paging` on the entry: the schema is strict, so a definition that says how
+  // the outside system pages was refused as an unknown field.
+  it("reads how a reading operation pages and refuses paging on a changing one", () => {
+    const base = {
+      name: "accounting",
+      displayName: "Accounting",
+      connectorType: "mcp",
+      ownerPrincipalId: "system",
+      authScheme: "bearer",
+      origin: "release"
+    };
+    const paging = { by: "page", param: "page", sizeParam: "page_size", size: 1000 };
+    const limits = { concurrency: 2, perPeriod: { calls: 60, seconds: 60 } };
+    const parsed = connectionConfigSchema.parse({
+      ...base,
+      operations: [
+        { name: "list_postings", effect: "reading", exposure: ["workflow"], paging, limits }
+      ]
+    });
+    expect(parsed.operations[0]?.paging).toEqual(paging);
+    expect(parsed.operations[0]?.limits).toEqual(limits);
+    expect(
+      issuesOf({
+        ...base,
+        operations: [{ name: "list_postings", effect: "reading", limits: { perMinute: 60 } }]
+      })
+    ).not.toEqual([]);
+    expect(
+      issuesOf({
+        ...base,
+        operations: [{ name: "list_postings", effect: "reading", paging: { by: "page" } }]
+      }).map((issue) => issue.path.split(".").slice(0, 3).join("."))
+    ).toContain("operations.0.paging");
+    expect(
+      issuesOf({ ...base, operations: [{ name: "book", effect: "changing", paging }] })
+    ).toEqual([{ path: "operations.0.paging", message: "Only a reading operation can be paged" }]);
+  });
+
   it("reads a definition and fills what it leaves out", () => {
     const parsed = connectionConfigSchema.parse({
       name: "exampledata",

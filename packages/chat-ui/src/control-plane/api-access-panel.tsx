@@ -308,6 +308,7 @@ function PrincipalDetail({
       <CardHeader className="flex-row items-start justify-between gap-3 p-4 pb-3">
         <div className="grid gap-1">
           <CardTitle className="text-base">{principal.displayLabel}</CardTitle>
+          <Badge tone="neutral">{principal.name}</Badge>
           <p className="text-xs text-muted-foreground">
             {principal.description ?? t("apiAccessNoDescription")}
           </p>

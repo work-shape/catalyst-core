@@ -10,6 +10,11 @@ import { createInProcessRateLimiter } from "./http/rate-limit";
 import { createRoute, type ChatServerExtensions } from "./http/route";
 
 export type { ChatServerExtensions, ModuleRoutes, RouteRegistration } from "./http/route";
+export {
+  createWorkflowLiveCheck,
+  requireWorkflowRunAs,
+  type WorkflowRunAsOptions
+} from "./workflow-run-as";
 import { createHttpRuntime } from "./http/runtime";
 import { registerAuditRoutes } from "./routes/audit-routes";
 import { registerOperationRunRoutes } from "./routes/operation-run-routes";

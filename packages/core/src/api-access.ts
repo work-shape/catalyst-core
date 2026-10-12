@@ -5,9 +5,29 @@ import type { ISODateString } from "./time";
 
 export type ServicePrincipalStatus = "active" | "disabled";
 
+/** What a principal's name looks like: a slug, as an asset's name is. */
+export const SERVICE_PRINCIPAL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/u;
+
+/** The name a principal gets from its label where none is given: the label as a slug. */
+export function servicePrincipalNameFromLabel(displayLabel: string): string {
+  const slug = displayLabel
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, "-")
+    .replace(/^-+/u, "")
+    .slice(0, 48)
+    .replace(/-+$/u, "");
+  return slug === "" ? "principal" : slug;
+}
+
 export interface ServicePrincipalRecord {
   id: ServicePrincipalId;
   clientInstanceId: ClientInstanceId;
+  /**
+   * What a definition names the principal by, such as the `runAs` of a Workflow. A slug,
+   * unique on the instance, set when the principal is created and never changed: a definition
+   * moves between instances unchanged, which the id and the label of a principal do not allow.
+   */
+  name: string;
   displayLabel: string;
   description?: string;
   status: ServicePrincipalStatus;
@@ -42,6 +62,11 @@ export interface ResolvedApiCredential {
 
 export interface CreateServicePrincipalInput {
   clientInstanceId: ClientInstanceId;
+  /**
+   * A name another principal of the instance has is refused with `CONFLICT`. Left out, the
+   * name is the label as a slug, with a short suffix where that is taken.
+   */
+  name?: string;
   displayLabel: string;
   description?: string;
   status?: ServicePrincipalStatus;
@@ -78,6 +103,11 @@ export interface ApiAccessStore {
   listServicePrincipals(input: {
     clientInstanceId: ClientInstanceId;
   }): Promise<ServicePrincipalRecord[]>;
+  /** The principal of that name, active or not. A name is one principal's for good. */
+  findServicePrincipalByName(input: {
+    clientInstanceId: ClientInstanceId;
+    name: string;
+  }): Promise<ServicePrincipalRecord | undefined>;
   createServicePrincipal(input: CreateServicePrincipalInput): Promise<ServicePrincipalRecord>;
   updateServicePrincipal(input: UpdateServicePrincipalInput): Promise<ServicePrincipalRecord>;
   listApiCredentials(input: {

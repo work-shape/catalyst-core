@@ -121,6 +121,66 @@ function runApiAccessStoreSuite(
       expect(updated.updatedAt >= created.updatedAt).toBe(true);
     });
 
+    // Fails without the column `name`: a principal had a label and a random id, and neither
+    // names it in a definition that moves between instances.
+    it("gives a principal a name of its own on the instance that never changes", async () => {
+      const clientInstanceId = createClientInstanceId();
+      const named = await store.apiAccess.createServicePrincipal({
+        clientInstanceId,
+        name: "booking-check",
+        displayLabel: "Monthly booking check"
+      });
+      expect(named.name).toBe("booking-check");
+      await expect(
+        store.apiAccess.createServicePrincipal({
+          clientInstanceId,
+          name: "booking-check",
+          displayLabel: "Another one"
+        })
+      ).rejects.toMatchObject({ code: "CONFLICT", details: { reason: "name_taken" } });
+      await expect(
+        store.apiAccess.createServicePrincipal({
+          clientInstanceId,
+          name: "Booking Check",
+          displayLabel: "No slug"
+        })
+      ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+
+      // Without a name it is the label as a slug, and a second of that label gets a suffix.
+      const first = await store.apiAccess.createServicePrincipal({
+        clientInstanceId,
+        displayLabel: "Catalyst CLI"
+      });
+      const second = await store.apiAccess.createServicePrincipal({
+        clientInstanceId,
+        displayLabel: "Catalyst CLI"
+      });
+      expect(first.name).toBe("catalyst-cli");
+      expect(second.name).toMatch(/^catalyst-cli-[0-9a-f]{6}$/u);
+
+      // The same name on another instance is another principal.
+      const elsewhere = await store.apiAccess.createServicePrincipal({
+        clientInstanceId: createClientInstanceId(),
+        name: "booking-check",
+        displayLabel: "Elsewhere"
+      });
+      expect(elsewhere.id).not.toBe(named.id);
+
+      const renamed = await store.apiAccess.updateServicePrincipal({
+        clientInstanceId,
+        servicePrincipalId: named.id,
+        displayLabel: "Renamed",
+        status: "disabled"
+      });
+      expect(renamed.name).toBe("booking-check");
+      await expect(
+        store.apiAccess.findServicePrincipalByName({ clientInstanceId, name: "booking-check" })
+      ).resolves.toEqual(renamed);
+      await expect(
+        store.apiAccess.findServicePrincipalByName({ clientInstanceId, name: "renamed" })
+      ).resolves.toBeUndefined();
+    });
+
     it("rejects a creator user owned by another client instance", async () => {
       const clientInstanceId = createClientInstanceId();
       const otherClientInstanceId = createClientInstanceId();

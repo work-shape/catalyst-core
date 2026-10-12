@@ -459,7 +459,6 @@ export async function createClientInstanceExecutionAssembly(
     enabledToolNames: getEnabledToolNames(config),
     modules
   });
-  const toolOptions = withConnections(connections, operationCalls, connectionParts);
   const modulesStarted = await moduleAssembly.start({
     operationCalls,
     authorizer,
@@ -467,6 +466,13 @@ export async function createClientInstanceExecutionAssembly(
     modelGateway,
     tools: toolRegistry
   });
+  const { dataToolSources } = modulesStarted;
+  const toolOptions = withConnections(
+    connections,
+    operationCalls,
+    connectionParts,
+    dataToolSources
+  );
   const defaultModelProvider = modelProviders[0];
   if (!defaultModelProvider) {
     throw new AppError("VALIDATION_FAILED", "At least one model provider is required");
@@ -531,7 +537,7 @@ export async function createClientInstanceExecutionAssembly(
     store,
     attachments,
     managedObjects,
-    jobRetries,
+    jobRetries: [...jobRetries, ...modulesStarted.jobRetries],
     workspaceObjectStore,
     pages,
     auditRecorder,
@@ -546,6 +552,7 @@ export async function createClientInstanceExecutionAssembly(
     connections,
     modulesStarted,
     async close() {
+      await modulesStarted.close();
       await closeCapabilityContributions(capabilityContributions);
       await store.close?.();
     }

@@ -7,12 +7,14 @@ import {
   CONNECTION_EXPOSURES,
   DATA_STORE_ACTIONS,
   DATA_STORE_ASSET_KIND,
+  DATA_STORE_INSERT_CONFLICT_MODES,
   DATA_STORE_JOB_KINDS,
   DATA_STORE_MANIFEST_FILE,
   DATA_STORE_OPERATION_PREFIX,
   DATA_STORE_OPERATION_RIGHTS,
   DATA_STORE_OPERATION_VERBS,
   DATA_STORE_PREVIEW_ROW_LIMIT,
+  DATA_STORE_SCALAR_TYPES,
   KNOWLEDGE_BASE_ACTIONS,
   KNOWLEDGE_BASE_ASSET_KIND,
   KNOWLEDGE_BASE_MANIFEST_FILE,
@@ -21,6 +23,9 @@ import {
   MODULE_NAMES,
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
+  WORKFLOW_DOWNLOAD_DATASET_OPERATION,
+  WORKFLOW_LOOP_ITEM_FAILURE_MODES,
+  WORKFLOW_LOOP_MAX_CONCURRENCY,
   WORKFLOW_MANIFEST_FILE,
   WORKFLOW_OPERATION_PREFIX,
   WORKFLOW_RUN_AS_ACTION,
@@ -38,6 +43,8 @@ import {
   createAssetKindRegistry,
   createModuleRegistry,
   createPlatformId,
+  dataStoreInsertConflictSchema,
+  dataStoreInsertResultSchema,
   dataStoreOperationName,
   defineAssetKind,
   defineJobKind,
@@ -45,21 +52,32 @@ import {
   isAuthenticatedServicePrincipal,
   isDataToolName,
   knowledgeQueryOperationName,
+  workflowLoopOptionsSchema,
   workflowStartOperationName,
   workflowStepIdempotencyKey,
   type ActingServicePrincipal,
   type AuthenticatedIdentity,
   type DataStoreCallOptions,
+  type DataStoreColumn,
+  type DataStoreColumnType,
   type DataStoreHandle,
+  type DataStoreInsertInput,
+  type DataStoreInsertResult,
   type DataStoreJobKind,
   type DataStoreOperationVerb,
   type DataStoreParameter,
+  type DataStoreParameterType,
   type DataStoreReference,
   type DataStoreRows,
+  type DataStoreScalarType,
   type DataStoreStatement,
   type OperationOrigin,
   type WorkflowInputMapping,
   type WorkflowLoopCounts,
+  type WorkflowDatasetReference,
+  type WorkflowLoopFailure,
+  type WorkflowLoopItemFailureMode,
+  type WorkflowLoopOutput,
   type WorkflowInputValue,
   type WorkflowManifest,
   type WorkflowReference,
@@ -74,8 +92,7 @@ import {
   type WorkflowStepRunStatus,
   type WorkflowStepType,
   type WorkflowTrigger,
-  type WorkflowTriggerKind,
-  type WorkflowWire
+  type WorkflowTriggerKind
 } from "@vivd-catalyst/core";
 import { dataStoresModule, knowledgeModule } from "@vivd-catalyst/data-stores";
 import { workflowsModule } from "@vivd-catalyst/workflows";
@@ -127,7 +144,8 @@ const manifest: WorkflowManifest = {
           operation: "connection.exampledata.list_bookings",
           input: {
             client: { ref: { step: "each_client", path: "id" } },
-            month: { ref: { step: "start", path: "month" } }
+            // The output of the trigger step is `{ input, startedAt, trigger }`.
+            month: { ref: { step: "start", path: "input.month" } }
           }
         },
         {
@@ -145,6 +163,13 @@ const manifest: WorkflowManifest = {
           type: "operation",
           operation: dataStoreOperationName("findings", "insert"),
           input: { rows: { ref: { step: "check", path: "findings" } } }
+        },
+        {
+          id: "archive",
+          name: "Archive the Mandant",
+          type: "workflow",
+          workflow: "client-archive",
+          input: { client: { ref: { step: "each_client", path: "id" } } }
         }
       ]
     },
@@ -153,7 +178,8 @@ const manifest: WorkflowManifest = {
       name: "Summarise",
       type: "agent",
       instructions: "summarise.md",
-      input: { results: { ref: { step: "each_client", path: "" } } },
+      // What a loop hands on is how many items ended how. The findings are in the store.
+      input: { failed: { ref: { step: "each_client", path: "failed" } } },
       inputSchema: { type: "object" },
       outputSchema: { type: "object" }
     },
@@ -165,13 +191,6 @@ const manifest: WorkflowManifest = {
       input: { text: { ref: { step: "summarise", path: "summary" } } }
     },
     { id: "result", name: "Result", type: "output", input: { findings: { value: 0 } } }
-  ],
-  wiring: [
-    { from: "start", to: "clients" },
-    { from: "clients", to: "each_client" },
-    { from: "each_client", to: "summarise" },
-    { from: "summarise", to: "tell" },
-    { from: "tell", to: "result" }
   ]
 };
 
@@ -187,20 +206,21 @@ describe("the names of a Workflow", () => {
       "code",
       "output",
       "agent",
-      "notify"
+      "notify",
+      "workflow"
     ]);
-    expect(WORKFLOW_TRIGGER_KINDS).toEqual(["manual", "schedule"]);
+    expect(WORKFLOW_TRIGGER_KINDS).toEqual(["manual", "schedule", "parent"]);
     expectTypeOf<WorkflowStep["type"]>().toEqualTypeOf<WorkflowStepType>();
     expectTypeOf<WorkflowTrigger["kind"]>().toEqualTypeOf<WorkflowTriggerKind>();
   });
 
   it("reads a definition with every step type as one manifest", () => {
     const steps: readonly WorkflowStep[] = manifest.steps;
-    const wiring: readonly WorkflowWire[] = manifest.wiring;
     const types = new Set(steps.flatMap((step) => stepTypes(step)));
 
     expect([...types].sort()).toEqual([...WORKFLOW_STEP_TYPES].sort());
-    expect(wiring.every((wire) => steps.some((step) => step.id === wire.to))).toBe(true);
+    // The order of the steps is the order of the list: the file has no wiring.
+    expectTypeOf<WorkflowManifest>().not.toHaveProperty("wiring");
     expectTypeOf<WorkflowInputMapping[string]>().toEqualTypeOf<WorkflowInputValue>();
     expectTypeOf<
       Extract<WorkflowInputValue, { ref: unknown }>["ref"]
@@ -234,17 +254,20 @@ describe("the names of a Workflow", () => {
     }
     expect(WORKFLOW_RUN_JOB_KINDS).toEqual({
       executeStep: "workflow_run.execute_step",
-      fireSchedule: "workflow_run.fire_schedule"
+      fireSchedule: "workflow_run.fire_schedule",
+      deleteDatasets: "workflow_run.delete_datasets"
     });
     expectTypeOf<WorkflowRunJobKind>().toEqualTypeOf<
-      "workflow_run.execute_step" | "workflow_run.fire_schedule"
+      "workflow_run.execute_step" | "workflow_run.fire_schedule" | "workflow_run.delete_datasets"
     >();
+    expect(WORKFLOW_DOWNLOAD_DATASET_OPERATION).toBe("workflows.download_dataset");
+    expect(WORKFLOW_ACTIONS.readRunData).toBe("workflow.read_run_data");
     expect(WORKFLOW_OPERATION_PREFIX).toBe("workflow.");
     expect(workflowStartOperationName(manifest.id)).toBe("workflow.booking-check.start");
   });
 
-  // Fails with the key of run and step: the three calls of one step in a loop shared one key,
-  // so the second and third item answered with the result of the first and stored nothing.
+  // The key is made of the step run alone, so one step has one per item of its loop. What an
+  // Operation Run does with three such keys is in `workflow-step-idempotency.test.ts`.
   it("gives the call of one step its own key for each item of a loop", () => {
     const items = ["10432", "10433", "10434"];
     const stepRuns = items.map((label, index) => ({
@@ -254,13 +277,60 @@ describe("the names of a Workflow", () => {
     }));
 
     const keys = stepRuns.map((stepRun) => workflowStepIdempotencyKey(stepRun.id));
-    expect(new Set(keys).size).toBe(items.length);
     // A retried attempt of one step run has the key of its first attempt.
     expect(stepRuns.map((stepRun) => workflowStepIdempotencyKey(stepRun.id))).toEqual(keys);
     expect(keys).toEqual(stepRuns.map((stepRun) => `workflow_step:${stepRun.id}`));
 
     const counts: WorkflowLoopCounts = { total: 3, done: 2, failed: 1, running: 0 };
     expect(counts.done + counts.failed + counts.running).toBe(counts.total);
+  });
+
+  // Fails without the loop options: a definition could not say that one failed item of 600
+  // leaves the other 599 standing.
+  it("reads what a failed item does to a loop and how many items run at once", () => {
+    expect(WORKFLOW_LOOP_ITEM_FAILURE_MODES).toEqual(["stop", "continue"]);
+    expect(WORKFLOW_LOOP_MAX_CONCURRENCY).toBe(8);
+    expect(workflowLoopOptionsSchema.parse({})).toEqual({ onItemFailure: "stop", concurrency: 1 });
+    expect(
+      workflowLoopOptionsSchema.parse({
+        onItemFailure: "continue",
+        concurrency: WORKFLOW_LOOP_MAX_CONCURRENCY,
+        collect: { step: "check", path: "findings" }
+      })
+    ).toEqual({
+      onItemFailure: "continue",
+      concurrency: 8,
+      collect: { step: "check", path: "findings" }
+    });
+    for (const refused of [
+      { onItemFailure: "fail" },
+      { concurrency: 0 },
+      { concurrency: 1.5 },
+      { concurrency: WORKFLOW_LOOP_MAX_CONCURRENCY + 1 },
+      { collect: "check.findings" }
+    ]) {
+      expect(workflowLoopOptionsSchema.safeParse(refused).success, JSON.stringify(refused)).toBe(
+        false
+      );
+    }
+
+    const loop = manifest.steps.find((step) => step.type === "loop");
+    expectTypeOf<NonNullable<typeof loop>["onItemFailure"]>().toEqualTypeOf<
+      WorkflowLoopItemFailureMode | undefined
+    >();
+    expectTypeOf<NonNullable<typeof loop>["collect"]>().toEqualTypeOf<
+      WorkflowReference | undefined
+    >();
+    // A loop that continued is `done`. A later step reads its counts and, as datasets, the
+    // items that failed and what `collect` named. It reads no item's result inline.
+    const failure: WorkflowLoopFailure = { index: 1, label: "10433", error: "upstream_failed" };
+    const failures: WorkflowDatasetReference = { $dataset: "ds_1", rowCount: 1, bytes: 64 };
+    const output: WorkflowLoopOutput = { total: 3, done: 2, failed: 1, failures };
+    expect(output.done + output.failed).toBe(output.total);
+    expect(failure.index).toBe(1);
+    expectTypeOf<keyof WorkflowLoopOutput>().toEqualTypeOf<
+      "total" | "done" | "failed" | "results" | "failures"
+    >();
   });
 
   it("carries the run's principal as the actor of a call and the run as its origin", () => {
@@ -340,18 +410,30 @@ describe("the names of a Data Store and of a Knowledge Base", () => {
 
   it("names the operations on rows, the knowledge query and the jobs of the store", () => {
     expect(DATA_STORE_OPERATION_PREFIX).toBe("data_store.");
-    expect(DATA_STORE_OPERATION_VERBS).toEqual(["query", "insert", "describe", "preview_rows"]);
+    expect(DATA_STORE_OPERATION_VERBS).toEqual([
+      "query",
+      "insert",
+      "load",
+      "describe",
+      "preview_rows"
+    ]);
     expectTypeOf<DataStoreOperationVerb>().toEqualTypeOf<
-      "query" | "insert" | "describe" | "preview_rows"
+      "query" | "insert" | "load" | "describe" | "preview_rows"
     >();
-    // A Data Store has no `use`: a run's principal inserts with `data_store.write` on the store.
+    // Adding rows is a right of its own: a run's principal holds `data_store.insert` on the
+    // store and cannot edit its migrations, which is `data_store.write`.
     expect(DATA_STORE_OPERATION_RIGHTS).toEqual({
       query: "data_store.read",
-      insert: "data_store.write",
+      insert: "data_store.insert",
+      load: "data_store.insert",
       describe: "data_store.read",
       preview_rows: "data_store.read"
     });
     expect(DATA_STORE_ACTIONS).not.toHaveProperty("use");
+    expect(DATA_STORE_ACTIONS.insert).not.toBe(DATA_STORE_ACTIONS.write);
+    // Reserved for changing statements other than an insert: no operation asks it yet.
+    expect(DATA_STORE_ACTIONS.execute).toBe("data_store.execute");
+    expect(Object.values(DATA_STORE_OPERATION_RIGHTS)).not.toContain(DATA_STORE_ACTIONS.execute);
     expect(DATA_STORE_PREVIEW_ROW_LIMIT).toBe(50);
     for (const action of [
       ...Object.values(WORKFLOW_ACTIONS),
@@ -365,7 +447,8 @@ describe("the names of a Data Store and of a Knowledge Base", () => {
     expect(KNOWLEDGE_OPERATION_PREFIX).toBe("knowledge.");
     expect(KNOWLEDGE_QUERY_TOOL_NAME).toBe("knowledge.query");
     expect(knowledgeQueryOperationName("findings")).toBe("knowledge.findings.query");
-    // None of the new prefixes is a data tool prefix yet: a release tool may still take one.
+    // None of the new prefixes is a data tool prefix: an agent carries none of these names as
+    // a data tool. The registry keeps a release tool off them (`SOURCED_OPERATION_PREFIXES`).
     for (const name of [
       workflowStartOperationName("w"),
       dataStoreOperationName("s", "query"),
@@ -387,6 +470,63 @@ describe("the names of a Data Store and of a Knowledge Base", () => {
     >();
   });
 
+  // Fails without the conflict mode: an insert had no way to say what a duplicate does, so a
+  // rerun of a Workflow stored every finding twice or failed on the first one.
+  it("says what an insert does with a duplicate, and counts what it left out", () => {
+    expect(DATA_STORE_INSERT_CONFLICT_MODES).toEqual(["fail", "skip"]);
+    expect(dataStoreInsertConflictSchema.parse(undefined)).toBe("fail");
+    expect(dataStoreInsertConflictSchema.parse("skip")).toBe("skip");
+    expect(dataStoreInsertConflictSchema.safeParse("update").success).toBe(false);
+
+    const input: DataStoreInsertInput = {
+      table: "findings",
+      rows: [{ client: "10432", rule: "duplicate" }],
+      onConflict: "skip"
+    };
+    const result: DataStoreInsertResult = dataStoreInsertResultSchema.parse({
+      table: input.table,
+      inserted: 0,
+      skipped: 1
+    });
+    expect(result.inserted + result.skipped).toBe(input.rows.length);
+    expect(dataStoreInsertResultSchema.safeParse({ table: "findings", inserted: 1 }).success).toBe(
+      false
+    );
+    expect(
+      dataStoreInsertResultSchema.safeParse({ table: "t", inserted: -1, skipped: 0 }).success
+    ).toBe(false);
+  });
+
+  // Fails with the raw type alone: a caller of `describe` read `numeric(12,2)` or `int8` and
+  // had to know the backend to bind a value to the column.
+  it("names a column by a type of the product and keeps the database's own beside it", () => {
+    expect(DATA_STORE_SCALAR_TYPES).toEqual([
+      "text",
+      "integer",
+      "number",
+      "boolean",
+      "date",
+      "timestamp"
+    ]);
+    const columns: DataStoreColumn[] = [
+      {
+        name: "amount",
+        type: "number",
+        nativeType: "numeric(12,2)",
+        nullable: false,
+        primaryKey: false
+      },
+      { name: "tags", type: "text[]", nativeType: "text[]", nullable: true, primaryKey: false },
+      { name: "payload", type: "other", nativeType: "jsonb", nullable: true, primaryKey: false }
+    ];
+    expect(columns.map((column) => column.type)).toEqual(["number", "text[]", "other"]);
+    expectTypeOf<DataStoreColumnType>().toEqualTypeOf<DataStoreParameterType | "other">();
+    expectTypeOf<DataStoreParameterType>().toEqualTypeOf<
+      DataStoreScalarType | `${DataStoreScalarType}[]`
+    >();
+    expectTypeOf<{ type: "date"; value: string }>().toExtend<DataStoreParameter>();
+  });
+
   it("hands a caller the rows of one store through a handle", async () => {
     const reference: DataStoreReference = { name: "findings", minSchema: 2 };
     const written: DataStoreStatement[] = [];
@@ -395,7 +535,7 @@ describe("the names of a Data Store and of a Knowledge Base", () => {
       schemaLevel: 2,
       query: (statement) =>
         Promise.resolve({
-          columns: [{ name: "rule", type: "text" }],
+          columns: [{ name: "rule", type: "text", nativeType: "character varying(40)" }],
           rows: [{ rule: String(statement.parameters?.[0]) }],
           truncated: false
         }),

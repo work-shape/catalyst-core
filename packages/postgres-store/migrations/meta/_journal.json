@@ -407,6 +407,20 @@
       "when": 1791819889004,
       "tag": "0057_job_worker_reports",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1791833330985,
+      "tag": "0058_service_principal_name",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1791833339743,
+      "tag": "0059_service_principal_name_index",
+      "breakpoints": true
     }
   ]
 }

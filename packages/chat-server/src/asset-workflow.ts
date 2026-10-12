@@ -349,6 +349,13 @@ export class AssetWorkflow {
     const restored = await this.revisionOf(target, input.revision);
     if (restored?.config) {
       await this.requireFurtherRight(call.access, target, "write", restored.config);
+      await target.kind.authorizeLive?.({
+        actor: call.actor,
+        access: call.access,
+        name: target.name,
+        revision: input.revision,
+        config: restored.config
+      });
     }
     const expectedRevision = requirePrecondition(input, input.expectedRevision);
     await this.authorizeEditing(call, "revert");

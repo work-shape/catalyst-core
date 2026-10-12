@@ -1,9 +1,12 @@
+import { randomBytes } from "node:crypto";
 import { and, asc, eq, sql } from "drizzle-orm";
 import {
   AppError,
   createApiCredentialId,
   createApiCredentialSecretMaterial,
   createServicePrincipalId,
+  SERVICE_PRINCIPAL_NAME_PATTERN,
+  servicePrincipalNameFromLabel,
   type ApiAccessStore,
   type ApiCredentialRecord,
   type CreateApiCredentialInput,
@@ -48,12 +51,20 @@ export async function createServicePrincipal(
       throw new AppError("NOT_FOUND", "Creator user is not available");
     }
   }
+  if (input.name !== undefined && !SERVICE_PRINCIPAL_NAME_PATTERN.test(input.name)) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `'${input.name}' is no name of a service principal: lowercase letters, digits and '-', at most 63 characters`
+    );
+  }
+  const name = input.name ?? (await freeNameFor(db, input));
   const now = new Date();
   const [row] = await db
     .insert(servicePrincipals)
     .values({
       id: createServicePrincipalId(),
       clientInstanceId: input.clientInstanceId,
+      name,
       displayLabel: input.displayLabel,
       description: input.description ?? null,
       status: input.status ?? "active",
@@ -64,8 +75,45 @@ export async function createServicePrincipal(
       createdAt: now,
       updatedAt: now
     })
+    .onConflictDoNothing({ target: [servicePrincipals.clientInstanceId, servicePrincipals.name] })
     .returning();
+  if (!row) {
+    throw new AppError("CONFLICT", `A service principal named '${name}' exists on this instance`, {
+      reason: "name_taken",
+      name
+    });
+  }
   return mapServicePrincipal(row);
+}
+
+/** The label as a slug, or that slug with a short random suffix where a principal has it. */
+async function freeNameFor(
+  db: PostgresConnection,
+  input: Pick<CreateServicePrincipalInput, "clientInstanceId" | "displayLabel">
+): Promise<string> {
+  const base = servicePrincipalNameFromLabel(input.displayLabel);
+  const taken = await findServicePrincipalByName(db, {
+    clientInstanceId: input.clientInstanceId,
+    name: base
+  });
+  return taken ? `${base}-${randomBytes(3).toString("hex")}` : base;
+}
+
+export async function findServicePrincipalByName(
+  db: PostgresConnection,
+  input: Parameters<ApiAccessStore["findServicePrincipalByName"]>[0]
+): Promise<ServicePrincipalRecord | undefined> {
+  const [row] = await db
+    .select()
+    .from(servicePrincipals)
+    .where(
+      and(
+        eq(servicePrincipals.clientInstanceId, input.clientInstanceId),
+        eq(servicePrincipals.name, input.name)
+      )
+    )
+    .limit(1);
+  return row ? mapServicePrincipal(row) : undefined;
 }
 
 export async function updateServicePrincipal(

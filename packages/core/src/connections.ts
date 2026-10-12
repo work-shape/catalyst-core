@@ -10,6 +10,7 @@ import type { AssetKindSchema, AssetValidationIssue } from "./asset-kinds";
 import { AppError } from "./errors";
 import { createPlatformId, type ClientInstanceId } from "./ids";
 import type { JsonObject, JsonValue } from "./json";
+import type { OperationLimits, OperationPaging } from "./workflows";
 
 /**
  * A Connection is an asset of kind `connection`: one configured instance of a Connector type,
@@ -91,6 +92,13 @@ export interface ConnectionOperationConfig {
   policy?: ConnectionOperationPolicy;
   /** The fingerprint of the accepted descriptor. A discovery that differs stops the operation. */
   schemaFingerprint?: string;
+  /**
+   * How the outside system pages this reading operation. A Workflow step that names
+   * `paginate` takes it. Reserved: the slice that brings paging reads it.
+   */
+  paging?: OperationPaging;
+  /** The limits of calls toward the outside system. Reserved like `paging`. */
+  limits?: OperationLimits;
 }
 
 /** A Connection as its revision holds it. It never holds a secret value. */
