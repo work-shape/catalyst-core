@@ -20,7 +20,9 @@ import { RetentionNotice } from "../conversation/retention-notice";
 import { AssistantComposer, type LocalUploadingAttachment } from "./assistant-composer";
 import { ThreadMessage } from "./assistant-message";
 import { useTranslation } from "../i18n";
+import { useKeepReadingPlace } from "./reading-place";
 import type { SendBlock } from "./send-block";
+import { useMoveWithPanels } from "../surface/panel-move";
 import { findRunActivity, shouldShowRunActivity } from "./thread-activity";
 
 /** How long the composer takes to settle at the bottom after the first message. */
@@ -141,6 +143,9 @@ export function AssistantThread({
     loadedMessageCount === 0 &&
     !conversationRunning;
   const composerRef = useComposerSettleTransition(startPage, conversationId, startComposerRef);
+  // The column travels with a panel that opens or closes beside the conversation.
+  const columnRef = useMoveWithPanels<HTMLDivElement>();
+  useKeepReadingPlace(columnRef);
 
   // An existing conversation stays readable; only the composer is blocked.
   if (noAgentsMessage && !messagesEnabled) {
@@ -175,7 +180,10 @@ export function AssistantThread({
           className="chat-thread-inset relative flex min-h-0 flex-col overflow-y-auto overflow-x-hidden scroll-smooth"
         >
           <ConversationRunTopAnchor activeRunId={activeRunId} />
-          <div className="mx-auto flex min-h-full w-full max-w-[var(--thread-max-width)] flex-1 flex-col px-5 pt-20">
+          <div
+            ref={columnRef}
+            className="mx-auto flex min-h-full w-full max-w-[var(--thread-max-width)] flex-1 flex-col px-5 pt-20"
+          >
             {startPage ? (
               <ThreadWelcomeHeading
                 agent={agent}

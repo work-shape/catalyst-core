@@ -223,35 +223,35 @@ describe("Resources panel model", () => {
     expect(
       resolveResourcesPanelOpen({
         preference: undefined,
-        desktop: true,
+        roomBeside: true,
         hasResources: true
       })
     ).toBe(true);
     expect(
       resolveResourcesPanelOpen({
         preference: "open",
-        desktop: true,
+        roomBeside: true,
         hasResources: false
       })
     ).toBe(false);
     expect(
       resolveResourcesPanelOpen({
         preference: "open",
-        desktop: true,
+        roomBeside: true,
         hasResources: true
       })
     ).toBe(true);
     expect(
       resolveResourcesPanelOpen({
         preference: "closed",
-        desktop: true,
+        roomBeside: true,
         hasResources: true
       })
     ).toBe(false);
     expect(
       resolveResourcesPanelOpen({
         preference: undefined,
-        desktop: false,
+        roomBeside: false,
         hasResources: true
       })
     ).toBe(false);

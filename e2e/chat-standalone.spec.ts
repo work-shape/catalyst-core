@@ -3889,26 +3889,27 @@ test("the surface slot keeps a width per kind, leaves both sides 380 px and cove
     );
   await page.getByRole("button", { name: "Send message" }).click();
 
-  // It opens beside the conversation at the default width, with nothing animating.
+  // It opens beside the conversation at 45 percent of the main area. Its width never moves in
+  // steps: the surface comes in from the edge at the width it keeps.
   await expect(slot).toHaveAttribute("data-surface-kind", "tool_display");
   await expect(slot).toHaveAttribute("data-surface-mode", "beside");
   await expect(slot.getByRole("heading", { name: "Surface view" })).toBeVisible();
-  await expect.poll(() => width(slot)).toBe(560);
+  await expect.poll(() => width(slot)).toBe(450);
   await expect(slot).toHaveCSS("transition-duration", "0s");
   await expect(showChat).toHaveCount(0);
   // The main area is the window without the 280 px rail: 1000 px, so the surface may take 620.
   await expect(separator).toHaveAttribute("aria-valuemin", "380");
   await expect(separator).toHaveAttribute("aria-valuemax", "620");
-  await expect(separator).toHaveAttribute("aria-valuenow", "440");
+  await expect(separator).toHaveAttribute("aria-valuenow", "550");
   expect((await separator.boundingBox())?.width).toBe(12);
 
   // The keyboard moves the line 16 px, and Home and End take it to the limits.
   await separator.focus();
   await page.keyboard.press("ArrowRight");
-  await expect(separator).toHaveAttribute("aria-valuenow", "456");
-  await expect.poll(() => width(slot)).toBe(544);
+  await expect(separator).toHaveAttribute("aria-valuenow", "566");
+  await expect.poll(() => width(slot)).toBe(434);
   await page.keyboard.press("ArrowLeft");
-  await expect(separator).toHaveAttribute("aria-valuenow", "440");
+  await expect(separator).toHaveAttribute("aria-valuenow", "550");
   await page.keyboard.press("Home");
   await expect(separator).toHaveAttribute("aria-valuenow", "380");
   await expect.poll(() => width(slot)).toBe(620);
@@ -3971,6 +3972,147 @@ test("the surface slot keeps a width per kind, leaves both sides 380 px and cove
   await expect(slot).toBeHidden();
   await card.click();
   await expect(slot).toHaveAttribute("data-surface-mode", "covering");
+});
+
+test("panels at the right of the conversation open and close in one step, leave it 380 px and scroll nothing sideways", async ({
+  page
+}) => {
+  test.setTimeout(90_000);
+  const slot = page.locator("aside[data-surface-kind]");
+  const resources = page.getByRole("complementary", { name: "Resources" });
+  const toggle = page.getByRole("button", { name: "Toggle Resources panel" });
+  const closeSurface = page.getByRole("button", { name: "Close display panel" });
+  const suffix = Date.now();
+  const fileName = `umsatz-${suffix}.csv`;
+
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await signInViaUi(page, normalUser);
+  // A stored width wider than the window: the file takes all it may, so the conversation is at
+  // its minimum, and room kept for the card on top of that would squash it.
+  await page.evaluate(() =>
+    window.localStorage.setItem("vivd-catalyst:surface-width:file_preview", "5000")
+  );
+  await page.locator('input[type="file"]').setInputFiles({
+    name: fileName,
+    mimeType: "text/csv",
+    buffer: Buffer.from(
+      [
+        "Month;Revenue",
+        ...Array.from({ length: 20 }, (_, row) => `M${row + 1};${1000 + row}`)
+      ].join("\n")
+    )
+  });
+  await expect(page.getByText(fileName).first()).toBeVisible();
+  await page
+    .getByPlaceholder("Message")
+    .fill(
+      `Panels ${suffix}. ${"A sentence that is long enough to wrap in a narrow column. ".repeat(12)}`
+    );
+  await page.getByRole("button", { name: "Send message" }).click();
+
+  // With resources the card opens by itself where it has room beside the conversation.
+  await expect(resources).toBeVisible();
+  await expect(resources.getByText(fileName)).toBeVisible();
+  await expect(resources).toHaveCSS("animation-name", "panel-in");
+  // Marked, to tell later that it was never taken away and put back.
+  await resources.evaluate((card) => card.setAttribute("data-kept", ""));
+
+  // The file opens over the card: the conversation gives up the card's room and takes the
+  // file's in the same frame.
+  let frames = await watchPanelFrames(page);
+  await resources.getByText(fileName).click();
+  await expect(slot).toHaveAttribute("data-surface-kind", "file_preview");
+  await expect(slot).toHaveAttribute("data-surface-mode", "beside");
+  await expect(slot).toHaveCSS("animation-name", "panel-in");
+  expectOneStep(await frames.stop(), "the file opens");
+  expect(Math.round((await slot.boundingBox())?.width ?? 0)).toBe(620);
+  await expect(resources).toHaveAttribute("data-kept", "");
+  await expect(resources).toHaveAttribute("inert", "");
+
+  // Closing it uncovers the card, which is the one that was there.
+  frames = await watchPanelFrames(page);
+  await closeSurface.click();
+  await expect(slot).toBeHidden();
+  expectOneStep(await frames.stop(), "the file closes");
+  await expect(resources).toHaveAttribute("data-kept", "");
+  await expect(resources).not.toHaveAttribute("inert", "");
+
+  // The card closes to its button, which stands in the header's row and on no message.
+  frames = await watchPanelFrames(page);
+  await page.getByRole("button", { name: "Close Resources panel" }).click();
+  await expect(toggle).toBeVisible();
+  await expect(resources).toBeHidden();
+  expectOneStep(await frames.stop(), "the card closes");
+  const header = await page.locator("header").first().boundingBox();
+  const toggleBox = await toggle.boundingBox();
+  if (!header || !toggleBox) {
+    throw new Error("The header or the Resources button has no box.");
+  }
+  expect(toggleBox.y + toggleBox.height).toBeLessThanOrEqual(header.y + header.height);
+  for (const message of await page.locator(".group\\/message").all()) {
+    const box = await message.boundingBox();
+    expect(box && box.y < toggleBox.y + toggleBox.height && box.y + box.height > toggleBox.y).toBe(
+      false
+    );
+  }
+
+  // The file opens from the message while the card is closed, and Escape closes it.
+  frames = await watchPanelFrames(page);
+  await page.getByRole("button", { name: `Open preview for ${fileName}` }).click();
+  await expect(slot).toHaveAttribute("data-surface-kind", "file_preview");
+  // Opened from a message the file is looked up first; what stands in the slot until then
+  // would come back after an Escape pressed too early.
+  await expect(slot.getByRole("button", { name: /^Download / }).first()).toBeVisible();
+  expectOneStep(await frames.stop(), "the file opens from the message");
+  await expect(toggle).toBeVisible();
+  frames = await watchPanelFrames(page);
+  await page.keyboard.press("Escape");
+  await expect(slot).toBeHidden();
+  expectOneStep(await frames.stop(), "Escape closes the file");
+
+  // The button opens the card again.
+  frames = await watchPanelFrames(page);
+  await toggle.click();
+  await expect(resources).toBeVisible();
+  expectOneStep(await frames.stop(), "the card opens");
+
+  // A view opens in the same slot, here in a conversation without resources.
+  await page.getByRole("button", { name: "New chat" }).click();
+  await expect(resources).toBeHidden();
+  await page
+    .getByPlaceholder("Message")
+    .fill(
+      `/tool show_view ${JSON.stringify({ html: "<p>Panel body</p>", mode: "side_panel", title: "Panel view" })}`
+    );
+  frames = await watchPanelFrames(page);
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(slot).toHaveAttribute("data-surface-kind", "tool_display");
+  await expect(slot.getByRole("heading", { name: "Panel view" })).toBeVisible();
+  expectOneStep(await frames.stop(), "the view opens", { widths: 3 });
+  expect(Math.round((await slot.boundingBox())?.width ?? 0)).toBe(450);
+  frames = await watchPanelFrames(page);
+  await closeSurface.click();
+  await expect(slot).toBeHidden();
+  expectOneStep(await frames.stop(), "the view closes");
+});
+
+test("under reduced motion a panel is there at once and gone at once", async ({ page }) => {
+  const slot = page.locator("aside[data-surface-kind]");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await signInViaUi(page, normalUser);
+  await page
+    .getByPlaceholder("Message")
+    .fill(
+      `/tool show_view ${JSON.stringify({ html: "<p>Still body</p>", mode: "side_panel", title: "Still view" })}`
+    );
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(slot.getByRole("heading", { name: "Still view" })).toBeVisible();
+  await expect(slot).toHaveCSS("animation-name", "none");
+  // Nothing of the surface is held for a way out: with the click it has left the page.
+  await page.getByRole("button", { name: "Close display panel" }).click();
+  await expect(page.getByRole("heading", { name: "Still view" })).toHaveCount(0);
+  expect(await page.locator("aside.bg-card:not([hidden])").count()).toBe(0);
 });
 
 test("the rail shows placeholder rows while its list loads and offers a retry when the load failed", async ({
@@ -4602,6 +4744,94 @@ function longRunMessage(token: string): string {
 
 function isRunEventsPath(pathname: string): boolean {
   return /^\/api\/v1\/conversations\/[^/]+\/runs\/[^/]+\/events$/u.test(pathname);
+}
+
+/** What the frames painted while a panel opened or closed had in common. */
+interface PanelFrames {
+  /** The least room the conversation had for its text and gutters, in pixels. */
+  minRoom: number;
+  /** The widths the thread's column was laid out at, in the order they appeared. */
+  widths: number[];
+  /** The farthest anything was scrolled or reached sideways, in pixels. */
+  sideways: number;
+}
+
+declare global {
+  interface Window {
+    /** Ends the watch `watchPanelFrames` began and gives what it read. */
+    stopPanelFrames?: () => PanelFrames;
+  }
+}
+
+/**
+ * Reads every frame the page paints until `stop`: the room the conversation keeps beside what
+ * stands at its right, the widths its text was wrapped at, and whether the frame, the main area
+ * or the sidebar was scrolled sideways or the document grew wider than the window.
+ */
+async function watchPanelFrames(page: Page): Promise<{ stop(): Promise<PanelFrames> }> {
+  await page.evaluate(() => {
+    const frames = { minRoom: Number.POSITIVE_INFINITY, widths: [] as number[], sideways: 0 };
+    let watching = true;
+    const read = () => {
+      const viewport = document.querySelector<HTMLElement>(".chat-thread-inset");
+      const column = viewport?.querySelector<HTMLElement>(":scope > div");
+      if (viewport && column) {
+        const room =
+          viewport.getBoundingClientRect().width -
+          Number.parseFloat(getComputedStyle(viewport).paddingRight);
+        frames.minRoom = Math.min(frames.minRoom, room);
+        if (frames.widths.at(-1) !== column.offsetWidth) {
+          frames.widths.push(column.offsetWidth);
+        }
+      }
+      const scrollers = [
+        document.scrollingElement,
+        document.querySelector("main"),
+        document.getElementById("workspace-content"),
+        document.querySelector("[data-sidebar-body]"),
+        viewport
+      ];
+      frames.sideways = Math.max(
+        frames.sideways,
+        document.documentElement.scrollWidth - window.innerWidth,
+        -(document.querySelector("nav")?.getBoundingClientRect().left ?? 0),
+        ...scrollers.map((scroller) => scroller?.scrollLeft ?? 0)
+      );
+      if (watching) {
+        // A task from the frame's callback runs after the frame is laid out and painted.
+        requestAnimationFrame(() => setTimeout(read, 0));
+      }
+    };
+    read();
+    window.stopPanelFrames = () => {
+      watching = false;
+      read();
+      return frames;
+    };
+  });
+  return {
+    stop: () =>
+      page.evaluate(() => {
+        if (!window.stopPanelFrames) {
+          throw new Error("No frames are being watched.");
+        }
+        return window.stopPanelFrames();
+      })
+  };
+}
+
+/**
+ * The conversation kept its minimum in every frame, its text was wrapped at no width between
+ * the one before and the one after, and nothing was scrolled sideways. A run that streams its
+ * answer meanwhile may add the width of that change to the two.
+ */
+function expectOneStep(frames: PanelFrames, what: string, limits: { widths?: number } = {}): void {
+  expect(frames.minRoom, `the conversation's room while ${what}`).toBeGreaterThanOrEqual(380);
+  expect(
+    frames.widths.length,
+    `column widths while ${what}: ${frames.widths.join(", ")}`
+  ).toBeLessThanOrEqual(limits.widths ?? 2);
+  expect(frames.sideways, `scrolled sideways while ${what}`).toBeLessThanOrEqual(0);
 }
 
 /** The gap between the composer and the lower edge of the window, as painted now. */

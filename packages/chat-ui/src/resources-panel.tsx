@@ -1,8 +1,8 @@
 import * as Collapsible from "@radix-ui/react-collapsible";
 import { BarChart3, ChevronDown, Database, Library, X } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, type AnimationEventHandler } from "react";
 import type { ApiClient, ConversationResourceListItem } from "@vivd-catalyst/api-client";
-import { Spinner, IconButton } from "@vivd-catalyst/ui";
+import { cn, Spinner, IconButton } from "@vivd-catalyst/ui";
 import { ArtifactFileIcon } from "./artifact-download-card";
 import { useWorkspaceApiClient } from "./api/workspace-api-client";
 import {
@@ -34,14 +34,16 @@ const AUTH_SCOPE = "standalone";
 
 export function useResourcesPanelState({
   conversationId,
-  enabled
+  enabled,
+  roomBeside
 }: {
   conversationId: string | undefined;
   enabled: boolean;
+  /** Whether the card can stand beside the conversation. Where it cannot, it opens on request only. */
+  roomBeside: boolean;
 }) {
   const { apiBaseUrl, client } = useWorkspaceApiClient();
   const { resourcesPanelPreference, setResourcesPanelPreference } = useWorkspacePreferences();
-  const [desktop, setDesktop] = useState(false);
   const query = useConversationResourcesQuery({
     apiBaseUrl,
     authScope: AUTH_SCOPE,
@@ -51,20 +53,12 @@ export function useResourcesPanelState({
   });
   const resources = query.data ?? [];
 
-  useEffect(() => {
-    const media = window.matchMedia("(min-width: 1024px)");
-    const update = () => setDesktop(media.matches);
-    update();
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
-  }, []);
-
   const open =
     enabled &&
     Boolean(conversationId) &&
     resolveResourcesPanelOpen({
       preference: resourcesPanelPreference,
-      desktop,
+      roomBeside,
       hasResources: resources.length > 0
     });
 
@@ -80,10 +74,14 @@ export function useResourcesPanelState({
   };
 }
 
+/**
+ * The button that opens the Resources card. It is a control of the chat's header: it stands in
+ * the header's row at the right end of the conversation, where no message rests.
+ */
 export function ResourcesPanelToggle({ onOpen }: { onOpen(): void }) {
   const { t } = useTranslation();
   return (
-    <div className="animate-in fade-in zoom-in-95 absolute top-20 right-6 z-[45] duration-200">
+    <div className="absolute top-0 right-4 z-[45] grid h-(--layout-header) place-items-center">
       <IconButton
         variant="outline"
         size="lg"
@@ -104,6 +102,9 @@ export function ResourcesPanel({
   loading,
   onClose,
   open,
+  leaving = false,
+  covered = false,
+  onAnimationEnd,
   resources
 }: {
   client: ApiClient;
@@ -112,6 +113,11 @@ export function ResourcesPanel({
   loading: boolean;
   onClose(): void;
   open: boolean;
+  /** The card is on its way out to the right edge. */
+  leaving?: boolean;
+  /** A surface stands over the card, so it is out of reach until the surface closes. */
+  covered?: boolean;
+  onAnimationEnd?: AnimationEventHandler<HTMLElement>;
   resources: ConversationResourceListItem[];
 }) {
   const { locale, t } = useTranslation();
@@ -197,7 +203,13 @@ export function ResourcesPanel({
   return (
     <aside
       aria-label={t("resourcesTitle")}
-      className="animate-in fade-in zoom-in-95 absolute top-20 right-6 z-[45] flex max-h-[calc(100%-10rem)] w-[min(22rem,calc(100%-3rem))] flex-col overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-lg duration-200"
+      inert={covered || leaving}
+      onAnimationEnd={onAnimationEnd}
+      className={cn(
+        // It comes in from the right edge and leaves to it, across its width and its gap.
+        "absolute top-20 right-6 z-[45] flex max-h-[calc(100%-10rem)] w-[min(22rem,calc(100%-3rem))] flex-col overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-lg [--panel-shift:calc(100%+1.5rem)]",
+        leaving ? "motion-safe:animate-panel-out" : "motion-safe:animate-panel-in"
+      )}
     >
       <div className="flex h-11 shrink-0 items-center justify-between border-b px-3">
         <h2 className="text-sm font-semibold">{t("resourcesTitle")}</h2>

@@ -1,5 +1,5 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import { cn, DocsAddressProvider, SkipLink, Spinner, UiRoot } from "@vivd-catalyst/ui";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { cn, DocsAddressProvider, SkipLink, Spinner, UiRoot, useExit } from "@vivd-catalyst/ui";
 import { DEFAULT_THEME_INPUTS } from "@vivd-catalyst/ui/theme";
 import { ApprovalRevisionHostProvider } from "./approvals/approval-revision-host";
 import { AssistantRuntimePanel } from "./assistant/assistant-runtime-panel";
@@ -20,7 +20,10 @@ import { operationRunHref, operationRunsHref } from "./operations/operations-mod
 import { PageHostProvider } from "./pages/page-host";
 import { ResourcesPanel, ResourcesPanelToggle, useResourcesPanelState } from "./resources-panel";
 import { isResourcesPanelAvailable } from "./resources-panel-model";
+import { announcePanelMove } from "./surface/panel-move";
+import { surfacePlacement } from "./surface/surface-layout";
 import { SurfaceSlot } from "./surface/surface-slot";
+import { useSplitArea } from "./surface/use-split-area";
 import { useToolDisplayPanel } from "./tool-display-panel";
 import { uiLabelsFor } from "./ui-labels";
 import { ViewPolicyProvider } from "./view-policy";
@@ -133,9 +136,15 @@ function ChatWorkspaceContent({
     enabled: resourcesEnabled,
     conversationId: resourcesConversationId
   });
+  // The main area the conversation shares with what opens at its right: the surface and the
+  // Resources card stand beside it by one rule.
+  const [splitAreaElement, setSplitAreaElement] = useState<HTMLDivElement | null>(null);
+  const splitArea = useSplitArea(splitAreaElement, "self");
+  const roomBeside = surfacePlacement(splitArea.mainWidth, splitArea.splitMin) === "beside";
   const resourcesPanel = useResourcesPanelState({
     conversationId: resourcesConversationId,
-    enabled: resourcesAvailable
+    enabled: resourcesAvailable,
+    roomBeside
   });
   const displayPanel = useToolDisplayPanel();
   // The slot reports its placement a render late; a surface that has closed covers nothing at once.
@@ -145,7 +154,21 @@ function ChatWorkspaceContent({
     model.apps.enabled && isAppsRoute(model.route.route) ? model.route.route : undefined;
   const chatCovered =
     surfaceCovering && (inboxRoute ? inboxRoute.kind === "inbox-item" : displayPanel.open);
-  const resourcesVisible = resourcesPanel.open && !displayPanel.open;
+  const resourcesShown =
+    resourcesPanel.open && resourcesPanel.hasResources && Boolean(resourcesConversationId);
+  // The card stays where it is while a surface is open: the surface comes in over it and
+  // uncovers it again, so the right-hand column never closes and reopens in between.
+  const resourcesExit = useExit(resourcesShown ? resourcesConversationId : undefined);
+  // The thread keeps room for the card where the card stands beside it. Under a surface the
+  // surface's own width is that room; over a narrow conversation the card takes none.
+  const resourcesInset = resourcesShown && roomBeside && !displayPanel.open;
+  const resourcesInsetBefore = useRef(resourcesInset);
+  useLayoutEffect(() => {
+    if (resourcesInsetBefore.current !== resourcesInset) {
+      resourcesInsetBefore.current = resourcesInset;
+      announcePanelMove(resourcesInset ? "open" : "close");
+    }
+  }, [resourcesInset]);
   const showsLogin = model.auth.loginRequired || Boolean(passwordSetupToken);
   const themeMode = model.config.resolvedThemeMode;
   const uiLabels = uiLabelsFor(model.config.activeLocale);
@@ -380,7 +403,13 @@ function ChatWorkspaceContent({
             onDeleteConversation={rail.deleteConversation}
           />
 
-          <div id={CONTENT_ID} tabIndex={-1} className="relative min-w-0 flex-1 outline-none">
+          <div
+            id={CONTENT_ID}
+            tabIndex={-1}
+            // Clipped, not hidden: a panel on its way in or out reaches past the edge, and
+            // nothing that takes the focus there may scroll the frame sideways.
+            className="relative min-w-0 flex-1 overflow-clip outline-none"
+          >
             <WorkspaceChrome
               agents={model.config.config.agents}
               agentDisplay={agentChipDisplayFor(model.config.config.ui)}
@@ -453,13 +482,15 @@ function ChatWorkspaceContent({
                       selectedConversationId={chat.selectedConversationId}
                     >
                       <PageHostProvider conversationId={chat.selectedConversationId} {...pageHost}>
-                        <div className="flex h-full min-h-0 min-w-0">
+                        <div ref={setSplitAreaElement} className="flex h-full min-h-0 min-w-0">
                           <div
                             className={cn(
                               "relative h-full min-h-0 min-w-0 flex-1",
-                              // 23.5rem = panel width (22rem) + its right-6 offset, so the
-                              // thread centers with equal gaps to sidebar and panel edge
-                              resourcesVisible && "lg:[--resources-inset:23.5rem]"
+                              // The card's width of 22rem and its gap of 1.5rem to the edge,
+                              // so the thread centres with equal gaps to the sidebar and to
+                              // the card. It is less than the split minimum: a card that has
+                              // room beside the conversation leaves it its minimum too.
+                              resourcesInset && "[--resources-inset:23.5rem]"
                             )}
                             // Under a surface that covers it the chat leaves the tab order.
                             inert={chatCovered}
@@ -472,25 +503,14 @@ function ChatWorkspaceContent({
                             {chat.fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
                             {resourcesAvailable &&
                             resourcesConversationId &&
-                            resourcesPanel.hasResources ? (
-                              resourcesVisible ? (
-                                <ResourcesPanel
-                                  client={resourcesPanel.client}
-                                  conversationId={resourcesConversationId}
-                                  error={resourcesPanel.error}
-                                  loading={resourcesPanel.loading}
-                                  onClose={resourcesPanel.close}
-                                  open
-                                  resources={resourcesPanel.resources}
-                                />
-                              ) : (
-                                <ResourcesPanelToggle
-                                  onOpen={() => {
-                                    displayPanel.close();
-                                    resourcesPanel.openExplicitly();
-                                  }}
-                                />
-                              )
+                            resourcesPanel.hasResources &&
+                            !resourcesShown ? (
+                              <ResourcesPanelToggle
+                                onOpen={() => {
+                                  displayPanel.close();
+                                  resourcesPanel.openExplicitly();
+                                }}
+                              />
                             ) : null}
                           </div>
                           <SurfaceSlot
@@ -498,6 +518,22 @@ function ChatWorkspaceContent({
                             onCoveringChange={setSurfaceCovering}
                           />
                         </div>
+                        {/* Placed in the main area, not in the conversation: it keeps its
+                            place when a surface takes room from the conversation. */}
+                        {resourcesExit.held ? (
+                          <ResourcesPanel
+                            client={resourcesPanel.client}
+                            conversationId={resourcesExit.held}
+                            error={resourcesPanel.error}
+                            loading={resourcesPanel.loading}
+                            onClose={resourcesPanel.close}
+                            open
+                            leaving={resourcesExit.leaving}
+                            covered={displayPanel.open}
+                            onAnimationEnd={resourcesExit.onAnimationEnd}
+                            resources={resourcesPanel.resources}
+                          />
+                        ) : null}
                       </PageHostProvider>
                     </AttachmentContentProvider>
                   </section>

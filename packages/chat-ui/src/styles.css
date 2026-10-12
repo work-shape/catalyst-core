@@ -60,11 +60,12 @@
 
   /* Reserves room for the floating Resources panel by shifting the thread
      column left; the scrollbar stays at the viewport edge. Symmetric gutters
-     keep the column centered even when a classic scrollbar takes up space. */
+     keep the column centered even when a classic scrollbar takes up space.
+     The room is taken and given back in one step, so the text wraps once; the
+     column travels to its new place with the panel (surface/panel-move.ts). */
   .chat-thread-inset {
     padding-right: var(--resources-inset, 0px);
     scrollbar-gutter: stable both-edges;
-    transition: padding-right 300ms ease-out;
   }
 
   /* The activity row is a sibling of the messages. Keep the dynamic reserve
