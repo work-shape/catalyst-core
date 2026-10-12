@@ -52,6 +52,7 @@ export interface AssetWorkflowHost {
       fileSet?: { assetId: string; fileSetId: FileSet["id"] };
       repository?: AssetRepoWrite;
       origin?: ConfigAssetRevisionOrigin;
+      pageLinked?: boolean;
     }
   ): Promise<{ version: number; revision: number; warnings: never[] }>;
   authorizeEditing(call: AssetCall, surface: "put"): Promise<void>;
@@ -151,6 +152,7 @@ export class AssetDraftWorkflow {
       /** Starts the repository of a new asset, with the one line its first commit carries. */
       firstCommit?: string;
       origin?: ConfigAssetRevisionOrigin;
+      pageLinked?: boolean;
     }
   ) {
     const target = await this.host.target(address);
@@ -161,7 +163,8 @@ export class AssetDraftWorkflow {
         audit: "config_asset.updated",
         fileSet: { assetId: write.assetId, fileSetId: write.fileSet.id },
         ...(repository ? { repository } : {}),
-        ...(write.origin ? { origin: write.origin } : {})
+        ...(write.origin ? { origin: write.origin } : {}),
+        ...(write.pageLinked ? { pageLinked: true } : {})
       });
       return {
         written: {
@@ -247,10 +250,11 @@ export class AssetDraftWorkflow {
   }
 
   /**
-   * Writes a newer revision of the Page an asset was created from as the next draft revision
-   * of that asset, from a copy of its files. The published revision stays where it is. An
-   * asset that was created another way, or from another Page, is not written, and neither is
-   * a draft at another revision than the caller read.
+   * Writes the revision of a Page as the next draft revision of an asset, from a copy of its
+   * files. The published revision stays where it is. The asset's Page is the one its newest
+   * revision with a Page names. An asset of another Page, or of none, is written only with
+   * `link`, and is that Page's asset from then on. A draft at another revision than the caller
+   * read is not written either way.
    */
   async replaceFromFileSet(
     call: AssetCall,
@@ -261,21 +265,24 @@ export class AssetDraftWorkflow {
       configOf(current: JsonObject): Record<string, unknown>;
       expectedRevision: number;
       origin: PageRevisionOrigin;
+      /** Whether an asset that is not this Page's may be made this Page's by the write. */
+      link: boolean;
     }
   ) {
     const target = await this.requireFilesWrite(call, address);
     requireOwnScope(target, call.access);
     const asset = requireActive(target);
-    await this.requireCreatedFrom(target, input.origin);
+    const pageLinked = await this.linksPage(target, asset.id, input);
     await requireExpectedRevision(this.options, call, target, input.expectedRevision);
     const { written } = await this.writeCopy(call, address, {
       assetId: asset.id,
       source: input.source,
       config: input.configOf(asset.config),
       expectedRevision: input.expectedRevision,
-      origin: input.origin
+      origin: input.origin,
+      pageLinked
     });
-    return { ...written, id: asset.id };
+    return { ...written, id: asset.id, pageLinked };
   }
 
   /** The target of a write from a stored file set, for a caller who may write it. */
@@ -293,22 +300,31 @@ export class AssetDraftWorkflow {
     return target;
   }
 
-  /** Refuses an asset whose first revision is not a copy of the Page the write names. */
-  private async requireCreatedFrom(target: AssetTarget, origin: PageRevisionOrigin): Promise<void> {
+  /**
+   * Whether the write makes the asset the Page's: `false` for an asset that is the Page's
+   * already. An asset of another Page, or of none, is refused unless the write says `link`.
+   */
+  private async linksPage(
+    target: AssetTarget,
+    assetId: string,
+    write: { origin: PageRevisionOrigin; link: boolean }
+  ): Promise<boolean> {
     const { kind, name } = target;
-    const [first] = await this.options.configAssets.store.listConfigAssetRevisions({
+    const current = await this.options.configAssets.store.getConfigAssetPageOrigin({
       clientInstanceId: this.options.clientInstanceId,
-      kind: kind.kind,
-      name,
-      page: { limit: 1 }
+      assetId
     });
-    if (first?.origin?.kind !== "page" || first.origin.pageId !== origin.pageId) {
+    if (current?.pageId === write.origin.pageId) {
+      return false;
+    }
+    if (!write.link) {
       throw new AppError(
         "CONFLICT",
-        `The ${kind.kind} '${name}' was not saved from this Page. Write it with its files instead`,
+        `The ${kind.kind} '${name}' is not updated from this Page. Send 'link' to make it so`,
         { reason: `${kind.kind}_not_from_page`, kind: kind.kind, name }
       );
     }
+    return true;
   }
 
   /** Copies a stored file set below the asset and makes the copy its draft revision. */
@@ -322,6 +338,7 @@ export class AssetDraftWorkflow {
       expectedRevision: number | null;
       origin: PageRevisionOrigin;
       firstCommit?: string;
+      pageLinked?: boolean;
     }
   ) {
     const fileSet = await copyFileSetToAsset(this.options, {
@@ -337,7 +354,8 @@ export class AssetDraftWorkflow {
       config: write.config,
       expectedRevision: write.expectedRevision,
       origin: write.origin,
-      ...(write.firstCommit === undefined ? {} : { firstCommit: write.firstCommit })
+      ...(write.firstCommit === undefined ? {} : { firstCommit: write.firstCommit }),
+      ...(write.pageLinked ? { pageLinked: true } : {})
     });
   }
 

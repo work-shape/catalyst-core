@@ -42,6 +42,7 @@ export interface UpdateAppFromPageInput {
   pageId: string;
   workspaceId: string;
   expectedRevision: number;
+  link?: boolean | undefined;
 }
 
 /**
@@ -120,9 +121,9 @@ export class AppWorkflow {
   }
 
   /**
-   * Writes the newest revision of the Page an App was saved from as a new draft revision of
-   * the App. Nothing is published: the App's users are served what they were served before.
-   * The App keeps the name people read, which whoever saved it chose.
+   * Writes the newest revision of a Page as a new draft revision of the App that is updated
+   * from it, and with `link` of an App that was not. Nothing is published: the App's users are
+   * served what they were served before. The App keeps the name people read.
    */
   async updateFromPage(call: AssetCall, input: UpdateAppFromPageInput) {
     const { source, origin } = await this.newestPageRevision(call.actor, input);
@@ -132,6 +133,7 @@ export class AppWorkflow {
       {
         source,
         origin,
+        link: input.link === true,
         expectedRevision: input.expectedRevision,
         configOf: (current) =>
           appConfigOf({
@@ -151,13 +153,14 @@ export class AppWorkflow {
   }
 
   /**
-   * The App a Page was saved as, for one caller who reads the Page: among the Apps saved from
-   * it that the caller may write, the one the caller saved, and without one the earliest.
-   * Nothing for a caller who may write none of them, whether or not one exists.
+   * The App of a Page, for one caller who reads the Page: among the Apps that are updated from
+   * it and that the caller may write, the one the caller wrote from it last, and without one
+   * the earliest. Nothing for a caller who may write none of them, whether or not one exists.
+   * With `app`, also what putting the Page into that App would meet.
    */
   async fromPage(
     caller: { user: AuthenticatedUser; access: ActorAccess },
-    input: { conversationId: string; pageId: string }
+    input: { conversationId: string; pageId: string; app?: string }
   ) {
     const page = await this.requirePage(caller.user, input);
     const kind = this.kind();
@@ -168,30 +171,68 @@ export class AppWorkflow {
       limit: APPS_FROM_PAGE_MAX
     });
     const viewerId = getSubjectUserId(caller.user);
-    const writable = saved.filter(
-      ({ asset }) =>
-        caller.access.authorize(
-          kind.actions.write,
-          accessResource(kind.kind, asset.name, asset.scope, asset.id)
-        ).allowed
-    );
+    const writable = saved.filter(({ asset }) => this.mayWrite(caller.access, asset));
     const found =
       writable.find(({ savedBy }) => savedBy?.subjectUserId === viewerId) ?? writable.at(0);
     const asset = found?.asset;
-    if (!asset || asset.scope.kind !== "workspace") {
-      return { app: null };
-    }
-    const title = asset.config?.title;
-    const origin = asset.revisionOrigin;
+    const origin = asset?.revisionOrigin;
     return {
-      app: {
-        name: asset.name,
-        title: typeof title === "string" ? title : asset.name,
-        workspaceId: asset.scope.workspaceId,
-        draftRevision: asset.revision,
-        draftFromPage: origin?.kind === "page" && origin.pageId === page.id
-      }
+      app:
+        asset && asset.scope.kind === "workspace"
+          ? {
+              name: asset.name,
+              title: titleOf(asset),
+              workspaceId: asset.scope.workspaceId,
+              draftRevision: asset.revision,
+              draftFromPage: origin?.kind === "page" && origin.pageId === page.id
+            }
+          : null,
+      ...(input.app === undefined
+        ? {}
+        : { candidate: await this.candidate(caller.access, page, input.app) })
     };
+  }
+
+  /** An App by its id, for a caller who may write it, with the Page it is updated from. */
+  private async candidate(access: ActorAccess, page: Page, name: string) {
+    const asset = await this.options.configAssets.store.getConfigAsset({
+      clientInstanceId: this.options.clientInstanceId,
+      kind: APP_ASSET_KIND,
+      name
+    });
+    if (
+      !asset ||
+      asset.status !== "active" ||
+      asset.scope.kind !== "workspace" ||
+      !this.mayWrite(access, asset)
+    ) {
+      return null;
+    }
+    const current = await this.options.configAssets.store.getConfigAssetPageOrigin({
+      clientInstanceId: this.options.clientInstanceId,
+      assetId: asset.id
+    });
+    return {
+      name: asset.name,
+      title: titleOf(asset),
+      workspaceId: asset.scope.workspaceId,
+      draftRevision: asset.revision,
+      page: !current
+        ? ("none" as const)
+        : current.pageId === page.id
+          ? ("this" as const)
+          : current.conversationId === page.conversationId
+            ? ("other_page" as const)
+            : ("other_conversation" as const)
+    };
+  }
+
+  private mayWrite(access: ActorAccess, asset: ConfigAssetRecord): boolean {
+    const kind = this.kind();
+    return access.authorize(
+      kind.actions.write,
+      accessResource(kind.kind, asset.name, asset.scope, asset.id)
+    ).allowed;
   }
 
   /** The newest revision of a Page the caller reads, and what a copy of it records. */
@@ -323,6 +364,12 @@ export class AppWorkflow {
     requireAssetKindModuleOn(this.options.modules, APP_ASSET_KIND);
     return this.options.configAssets.kinds.require(APP_ASSET_KIND);
   }
+}
+
+/** What people read as an App's name. */
+function titleOf(asset: ConfigAssetRecord): string {
+  const title = asset.config?.title;
+  return typeof title === "string" ? title : asset.name;
 }
 
 const pageNotFound = () => new AppError("NOT_FOUND", "Page is not available");

@@ -1,4 +1,7 @@
-import { listConfigAssetsFromPage as listPostgresConfigAssetsFromPage } from "../postgres-config-asset-origins";
+import {
+  getConfigAssetPageOrigin as getPostgresConfigAssetPageOrigin,
+  listConfigAssetsFromPage as listPostgresConfigAssetsFromPage
+} from "../postgres-config-asset-origins";
 import {
   AppError,
   type ConfigAssetRecord,
@@ -89,6 +92,7 @@ export function createPostgresConfigAssetsStore(
     getConfigAssetRevisionById: (input) => getPostgresConfigAssetRevisionById(db, input),
     listConfigAssetsByKey: (input) => listPostgresConfigAssetsByKey(db, input),
     listConfigAssetsFromPage: (input) => listPostgresConfigAssetsFromPage(db, input),
+    getConfigAssetPageOrigin: (input) => getPostgresConfigAssetPageOrigin(db, input),
     applyConfigAssetMutations: (input) => applyPostgresConfigAssetMutations(db, input),
     publishConfigAssetRevision: (input) => publishPostgresConfigAssetRevision(db, input),
     discardConfigAssetDraft: (input) => discardPostgresConfigAssetDraft(db, input),

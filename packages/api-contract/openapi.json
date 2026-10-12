@@ -1182,7 +1182,7 @@
     "/api/v1/apps/{app}/update-from-page": {
       "post": {
         "operationId": "apps.update_from_page",
-        "summary": "Write the newest revision of the Page an App was saved from as a new draft revision of the App",
+        "summary": "Write the newest revision of a Page as a new draft revision of the App that is updated from it",
         "tags": [
           "Apps"
         ],
@@ -5067,7 +5067,7 @@
     "/api/v1/conversations/{conversationId}/pages/{pageId}/app": {
       "get": {
         "operationId": "apps.get_from_page",
-        "summary": "Read the App a Page was saved as, where the caller may write it",
+        "summary": "Read the App a Page is updated into, where the caller may write it",
         "tags": [
           "Apps"
         ],
@@ -5098,6 +5098,15 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "app",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
             }
           }
         ],
@@ -16997,6 +17006,48 @@
                 "type": "null"
               }
             ]
+          },
+          "candidate": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "workspaceId": {
+                    "type": "string"
+                  },
+                  "draftRevision": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "page": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "this",
+                      "other_page",
+                      "other_conversation"
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "title",
+                  "workspaceId",
+                  "draftRevision",
+                  "page"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -24488,6 +24539,9 @@
             "type": "integer",
             "exclusiveMinimum": 0,
             "maximum": 9007199254740991
+          },
+          "link": {
+            "type": "boolean"
           }
         },
         "required": [

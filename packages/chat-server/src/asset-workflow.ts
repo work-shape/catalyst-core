@@ -525,6 +525,8 @@ export class AssetWorkflow {
       repository?: AssetRepoWrite;
       /** Where the revision came from, where it is not written as it stands. */
       origin?: ConfigAssetRevisionOrigin;
+      /** The write made the asset the asset of the Page its origin names. */
+      pageLinked?: boolean;
     }
   ) {
     const { kind, name } = target;
@@ -597,7 +599,8 @@ export class AssetWorkflow {
           revision,
           version: result.version,
           // A revision that copies a Page names it: the trail says where the content came from.
-          ...(write.origin?.kind === "page" ? { pageId: write.origin.pageId } : {})
+          ...(write.origin?.kind === "page" ? { pageId: write.origin.pageId } : {}),
+          ...(write.pageLinked ? { pageLinked: true } : {})
         })
     ]);
     return { version: result.version, revision, warnings: [] };

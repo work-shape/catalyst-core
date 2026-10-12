@@ -57,8 +57,8 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
 
   // Asked by the surface of a Page each time it opens. What it tells of an App is decided by
   // the caller's right to write that App.
-  route(apiOperations["apps.get_from_page"], ({ user, access, params }) =>
-    workflow.fromPage({ user, access }, params)
+  route(apiOperations["apps.get_from_page"], ({ user, access, params, query }) =>
+    workflow.fromPage({ user, access }, { ...params, ...(query.app ? { app: query.app } : {}) })
   );
 
   // Where a caller's right to an App is checked with the caller present. The address this

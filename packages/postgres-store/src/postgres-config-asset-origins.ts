@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { ConfigAssetFromPage, ConfigAssetStore } from "@vivd-catalyst/core";
 import { publishedColumns, publishedRevisions } from "./postgres-config-asset-operations";
@@ -6,32 +6,34 @@ import type { PostgresConnection } from "./postgres-database";
 import { mapConfigAsset } from "./rows";
 import { configAssetRevisions, configAssets } from "./schema";
 
-// The reads of assets by where their first revision came from.
+// The reads of assets by the Page their revisions came from.
 
-/** The revisions an asset's first one is read from, beside the active and the published one. */
-const firstRevisions = alias(configAssetRevisions, "first_revisions");
+/** The revisions an asset's Page is read from, beside the active and the published one. */
+const pageRevisions = alias(configAssetRevisions, "page_revisions");
+const namesPage = sql`${pageRevisions.origin} ->> 'kind' = 'page'`;
 
 export async function listConfigAssetsFromPage(
   db: PostgresConnection,
   input: Parameters<ConfigAssetStore["listConfigAssetsFromPage"]>[0]
 ): Promise<ConfigAssetFromPage[]> {
-  // One probe of the index on `(asset_id, revision)` per asset, whatever its revisions number.
-  const first = db
-    .select({ actor: firstRevisions.actor, origin: firstRevisions.origin })
-    .from(firstRevisions)
-    .where(eq(firstRevisions.assetId, configAssets.id))
-    .orderBy(asc(firstRevisions.revision))
+  // Per asset, the index on `(asset_id, revision)` backwards to the first revision that names
+  // a Page: one probe where the newest does, and all of its revisions where none does.
+  const linked = db
+    .select({ actor: pageRevisions.actor, origin: pageRevisions.origin })
+    .from(pageRevisions)
+    .where(and(eq(pageRevisions.assetId, configAssets.id), namesPage))
+    .orderBy(desc(pageRevisions.revision))
     .limit(1)
-    .as("first_revision");
+    .as("linked_revision");
   const rows = await db
     .select({
       asset: configAssets,
       revision: configAssetRevisions,
       published: publishedColumns,
-      savedBy: first.actor
+      savedBy: linked.actor
     })
     .from(configAssets)
-    .innerJoinLateral(first, sql`true`)
+    .innerJoinLateral(linked, sql`true`)
     .innerJoin(configAssetRevisions, eq(configAssetRevisions.id, configAssets.activeRevisionId))
     .leftJoin(publishedRevisions, eq(publishedRevisions.id, configAssets.publishedRevisionId))
     .where(
@@ -39,7 +41,7 @@ export async function listConfigAssetsFromPage(
         eq(configAssets.clientInstanceId, input.clientInstanceId),
         eq(configAssets.kind, input.kind),
         eq(configAssets.status, "active"),
-        sql`${first.origin} @> ${JSON.stringify({ kind: "page", pageId: input.pageId })}::jsonb`
+        sql`${linked.origin} ->> 'pageId' = ${input.pageId}`
       )
     )
     .orderBy(asc(configAssets.createdAt), asc(configAssets.id))
@@ -48,4 +50,24 @@ export async function listConfigAssetsFromPage(
     asset: mapConfigAsset(row.asset, row.revision, row.published),
     savedBy: row.savedBy
   }));
+}
+
+export async function getConfigAssetPageOrigin(
+  db: PostgresConnection,
+  input: Parameters<ConfigAssetStore["getConfigAssetPageOrigin"]>[0]
+): ReturnType<ConfigAssetStore["getConfigAssetPageOrigin"]> {
+  const [row] = await db
+    .select({ origin: pageRevisions.origin })
+    .from(pageRevisions)
+    .innerJoin(configAssets, eq(configAssets.id, pageRevisions.assetId))
+    .where(
+      and(
+        eq(configAssets.clientInstanceId, input.clientInstanceId),
+        eq(pageRevisions.assetId, input.assetId),
+        namesPage
+      )
+    )
+    .orderBy(desc(pageRevisions.revision))
+    .limit(1);
+  return row?.origin?.kind === "page" ? row.origin : undefined;
 }

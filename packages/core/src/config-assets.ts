@@ -109,9 +109,9 @@ export interface ConfigAssetRecord {
 
 /**
  * Where a revision came from, where it was not written as it stands: the approval that applied
- * it, or the Page whose files it is a copy of. The first revision of an App that names a Page
- * is how the App remembers the Page it was saved from; a later one says that the draft is that
- * Page's again.
+ * it, or the Page whose files it is a copy of. The newest revision of an App that names a Page
+ * is how the App remembers the Page it is updated from: the one it was saved from, or one it
+ * was linked to later.
  */
 export type ConfigAssetRevisionOrigin =
   | { kind: "approval_request"; requestId: string; summary: string }
@@ -123,7 +123,7 @@ export type ConfigAssetRevisionOrigin =
       fileSetNumber: number;
     };
 
-/** An asset whose first revision is a copy of a Page, with who saved it. */
+/** An asset whose Page is a given one, with who wrote it from that Page last. */
 export interface ConfigAssetFromPage {
   asset: ConfigAssetRecord;
   savedBy: AuditActor | null;
@@ -422,9 +422,11 @@ export interface ConfigAssetStore {
     keys: readonly { kind: ConfigAssetKind; name: string }[];
   }): Promise<ConfigAssetRecord[]>;
   /**
-   * The active assets of a kind that were saved from one Page, the earliest first. One read of
-   * at most `limit` rows. It reads the first revision of every active asset of the kind, so its
-   * cost grows with the assets of the kind on the instance and not with their revisions.
+   * The active assets of a kind whose Page is this one, the earliest first: the Page named by
+   * the newest of an asset's revisions that names one. One read of at most `limit` rows. It
+   * walks the revisions of every active asset of the kind from the newest back to the first
+   * that names a Page, so its cost grows with the assets of the kind on the instance, and
+   * with the revisions of those that were never written from a Page.
    */
   listConfigAssetsFromPage(input: {
     clientInstanceId: ClientInstanceId;
@@ -432,6 +434,11 @@ export interface ConfigAssetStore {
     pageId: string;
     limit: number;
   }): Promise<ConfigAssetFromPage[]>;
+  /** The Page an asset is updated from: the origin of its newest revision that names one. */
+  getConfigAssetPageOrigin(input: {
+    clientInstanceId: ClientInstanceId;
+    assetId: string;
+  }): Promise<Extract<ConfigAssetRevisionOrigin, { kind: "page" }> | undefined>;
   /** The revisions of one asset, oldest first unless `newestFirst` is set. */
   listConfigAssetRevisions(input: {
     clientInstanceId: ClientInstanceId;

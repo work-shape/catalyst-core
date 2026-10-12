@@ -50,7 +50,7 @@ export const createAppFromPageResponseSchema = z.object({
 export const updateAppFromPageRequestSchema = z
   .object({
     conversationId: z.string().min(1),
-    /** The Page the App was saved from. An App saved from another Page is not written. */
+    /** The Page the App is updated from. An App of another Page is written only with `link`. */
     pageId: z.string().min(1),
     /** The workspace the App belongs to. */
     workspaceId: z.string().min(1),
@@ -58,14 +58,27 @@ export const updateAppFromPageRequestSchema = z
      * The draft revision the caller read, as `apps.get_from_page` answers it. A draft at
      * another revision is not overwritten: the call is refused with the revision it is at.
      */
-    expectedRevision: z.number().int().positive()
+    expectedRevision: z.number().int().positive(),
+    /**
+     * `true` writes an App that is not this Page's as well: one saved before Apps remembered
+     * their Page, written another way, or updated from another Page. The App is this Page's
+     * from then on.
+     */
+    link: z.boolean().optional()
   })
   .strict();
 
+/** What `apps.get_from_page` is asked beside the Page. */
+export const appFromPageQuerySchema = z.object({
+  /** The id of an App the caller thinks of putting the Page into. Answered as `candidate`. */
+  app: z.string().min(1).optional()
+});
+
 /**
- * The App a Page was saved as, for the caller: the earliest one the caller may write, and
- * before it one the caller saved. `app` is `null` where there is none, which is also what a
- * caller is answered who may write none of them.
+ * The App of a Page, for the caller: among the Apps whose newest revision with a Page names
+ * this one, the earliest the caller may write, and before it one the caller wrote from the
+ * Page last. `app` is `null` where there is none, which is also what a caller is answered who
+ * may write none of them.
  */
 export const appFromPageSchema = z.object({
   app: z
@@ -83,7 +96,26 @@ export const appFromPageSchema = z.object({
        */
       draftFromPage: z.boolean()
     })
+    .nullable(),
+  /**
+   * The App the question named, where the caller may write it: what `apps.update_from_page`
+   * with `link` would write. `null` for an App that does not exist or that the caller may not
+   * write. Absent where the question named none.
+   */
+  candidate: z
+    .object({
+      name: z.string(),
+      title: z.string(),
+      workspaceId: z.string(),
+      draftRevision: z.number().int().positive(),
+      /**
+       * Which Page the App is updated from now: `none`, `this` one, `other_page` of the same
+       * conversation, or a Page of an `other_conversation`.
+       */
+      page: z.enum(["none", "this", "other_page", "other_conversation"])
+    })
     .nullable()
+    .optional()
 });
 
 export type AppFromPageResponse = z.infer<typeof appFromPageSchema>;
