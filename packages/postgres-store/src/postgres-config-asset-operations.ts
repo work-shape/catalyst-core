@@ -1,6 +1,6 @@
 import { containsPattern } from "./like-pattern";
 import { keysetFilter } from "./paging";
-import { and, asc, desc, eq, ilike, inArray, like, max, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, like, max, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
   AppError,
@@ -242,10 +242,35 @@ export async function getConfigAssetRevision(
   return row ? mapConfigAssetRevision(row.revision) : undefined;
 }
 
+/**
+ * How many rows one statement of a batch writes. A batch of 2,000 assets is written in a
+ * handful of statements, so the time the lock is held grows with the bytes and not with a
+ * round trip per asset.
+ */
+const ASSET_WRITE_CHUNK = 500;
+
+/** One asset as a batch leaves it, followed through the mutations that name it. */
+interface WrittenAsset {
+  id: string;
+  kind: string;
+  /** Whether the row is there before the batch. */
+  stored: boolean;
+  status: ConfigAssetRecord["status"];
+  /** The highest revision number of the asset, the ones this batch adds included. */
+  newest: number;
+  activeRevisionId: string;
+  /** The batch gave it a revision. */
+  written: boolean;
+  /** The batch deleted it, whatever it did to it afterwards. */
+  deleted: boolean;
+  /** An agent that is there after a create: it starts with an availability of its own. */
+  created: boolean;
+}
+
 export async function applyConfigAssetMutations(
   db: PostgresConnection,
   input: Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0]
-): Promise<{ version: number }> {
+): ReturnType<ConfigAssetStore["applyConfigAssetMutations"]> {
   return db.transaction(async (tx) => {
     const now = new Date();
     await tx
@@ -266,34 +291,44 @@ export async function applyConfigAssetMutations(
     if (!state) {
       throw new AppError("INTERNAL", "Failed to lock config asset state");
     }
-    const current = new Map<
-      string,
-      { status: "active" | "deleted"; revision: ConfigAssetRevisionRecord }
-    >();
-    for (const mutation of input.mutations) {
-      if (mutation.type === "setDefaultAgent") {
-        continue;
-      }
-      const [row] = await tx
-        .select({ asset: configAssets, revision: configAssetRevisions })
-        .from(configAssets)
-        .innerJoin(configAssetRevisions, eq(configAssetRevisions.id, configAssets.activeRevisionId))
-        .where(
-          and(
-            eq(configAssets.clientInstanceId, input.clientInstanceId),
-            eq(configAssets.kind, mutation.kind),
-            eq(configAssets.name, mutation.name)
-          )
-        )
-        .limit(1);
-      if (row) {
-        current.set(`${mutation.kind}:${mutation.name}`, {
+    const keyOf = (address: { kind: string; name: string }) => `${address.kind}:${address.name}`;
+    const named = input.mutations.flatMap((mutation) =>
+      mutation.type === "setDefaultAgent" ? [] : [{ kind: mutation.kind, name: mutation.name }]
+    );
+    // Every row the batch names and the highest revision number of each, in one read each.
+    const rows = await selectAssetRowsByKey(tx, input.clientInstanceId, named);
+    const current = new Map(
+      rows.map((row) => [
+        keyOf(row.asset),
+        {
+          id: row.asset.id,
           status: row.asset.status,
           revision: mapConfigAssetRevision(row.revision)
-        });
-      }
-    }
+        }
+      ])
+    );
     assertConfigAssetBases(input, mapConfigAssetState(state), current);
+    await input.validate?.({
+      state: mapConfigAssetState(state),
+      listActiveRevisionIds: async () =>
+        (
+          await tx
+            .select({ id: configAssets.activeRevisionId })
+            .from(configAssets)
+            .where(
+              and(
+                eq(configAssets.clientInstanceId, input.clientInstanceId),
+                eq(configAssets.status, "active")
+              )
+            )
+        ).map((row) => row.id),
+      listActiveConfigAssets: () =>
+        listActiveConfigAssets(tx, { clientInstanceId: input.clientInstanceId })
+    });
+    const newest = await selectNewestRevisions(
+      tx,
+      rows.map((row) => row.asset.id)
+    );
 
     const deletedAgentNames = input.mutations.flatMap((mutation) =>
       mutation.type === "delete" && mutation.kind === "agent" ? [mutation.name] : []
@@ -319,14 +354,6 @@ export async function applyConfigAssetMutations(
       input.initialAgentAvailability,
       deletedSelectedAgent !== undefined
     );
-    const insertInitialAvailability = (assetId: string) =>
-      tx.insert(configAssetAvailability).values({
-        assetId,
-        clientInstanceId: input.clientInstanceId,
-        mode: initialAgentMode,
-        personalWorkspaces: false,
-        updatedAt: now
-      });
 
     // A batch of draft writes alone leaves the set the runtime reads as it is, so its version
     // stays: a draft is no part of the runtime snapshot.
@@ -335,21 +362,73 @@ export async function applyConfigAssetMutations(
       input.mutations.every((mutation) => mutation.type === "upsert" && mutation.draft === true);
     const version = draftsOnly ? state.version : state.version + 1;
     let defaultAgentName = state.defaultAgentName ?? undefined;
+
+    // The batch is worked out in memory, in the order of its mutations, and written after it
+    // in one statement per table.
+    const assets = new Map<string, WrittenAsset>(
+      rows.map((row) => [
+        keyOf(row.asset),
+        {
+          id: row.asset.id,
+          kind: row.asset.kind,
+          stored: true,
+          status: row.asset.status,
+          newest: newest.get(row.asset.id) ?? row.revision.revision,
+          activeRevisionId: row.asset.activeRevisionId,
+          written: false,
+          deleted: false,
+          created: false
+        }
+      ])
+    );
+    const scopes = new Map(rows.map((row) => [keyOf(row.asset), mapAssetScope(row.asset)]));
+    const newAssets: (typeof configAssets.$inferInsert)[] = [];
+    const newRevisions: (typeof configAssetRevisions.$inferInsert)[] = [];
+    const revisions: Record<string, number> = {};
+    const assetIds: Record<string, string> = {};
+    const appendRevision = (
+      key: string,
+      asset: WrittenAsset,
+      revision: Pick<
+        typeof configAssetRevisions.$inferInsert,
+        "operation" | "config" | "fileSetId"
+      >,
+      status: ConfigAssetRecord["status"]
+    ) => {
+      const id = createPlatformId("cfgr");
+      // The highest number, not the active one: after a discarded draft the active revision is
+      // an older one, and a number is never used twice.
+      asset.newest += 1;
+      asset.activeRevisionId = id;
+      asset.status = status;
+      asset.written = true;
+      revisions[key] = asset.newest;
+      assetIds[key] = asset.id;
+      newRevisions.push({
+        id,
+        clientInstanceId: input.clientInstanceId,
+        assetId: asset.id,
+        revision: asset.newest,
+        ...revision,
+        actor: input.actor ?? null,
+        origin: input.origin ?? null,
+        globalVersion: version,
+        createdAt: now
+      });
+    };
     for (const mutation of input.mutations) {
       if (mutation.type === "setDefaultAgent") {
         defaultAgentName = mutation.agentName;
         continue;
       }
-      const asset = await findConfigAssetRow(tx, {
-        clientInstanceId: input.clientInstanceId,
-        kind: mutation.kind,
-        name: mutation.name
-      });
+      const key = keyOf(mutation);
+      const asset = assets.get(key);
       // A mutation that names no scope means the instance's own assets. It never reaches an
       // asset a workspace owns, and a write never moves an asset: the name stays with its
       // owner, also across a delete.
       const scope = mutation.scope ?? INSTANCE_ASSET_SCOPE;
-      if (asset && !assetScopesEqual(scope, mapAssetScope(asset))) {
+      const owner = scopes.get(key);
+      if (owner && !assetScopesEqual(scope, owner)) {
         throw new AppError(
           "VALIDATION_FAILED",
           `Config ${mutation.kind} '${mutation.name}' belongs to another scope`,
@@ -360,35 +439,11 @@ export async function applyConfigAssetMutations(
         if (!asset || asset.status === "deleted") {
           continue;
         }
-        await appendAndActivateRevision(tx, {
-          asset,
-          operation: "delete",
-          config: null,
-          actor: input.actor,
-          origin: input.origin,
-          globalVersion: version,
-          now,
-          status: "deleted"
-        });
-        await tx
-          .delete(configAssetAvailability)
-          .where(eq(configAssetAvailability.assetId, asset.id));
-        // The row is reused when the name is created again, so an allow on this asset must not
-        // come back with the next one. A deny stays: the retained revisions are still the
-        // content it refuses, and whoever restores the name restores that content.
-        await tx
-          .delete(permissionGrants)
-          .where(
-            and(
-              eq(permissionGrants.clientInstanceId, input.clientInstanceId),
-              eq(permissionGrants.scopeKind, "asset"),
-              eq(permissionGrants.scopeId, asset.id),
-              eq(permissionGrants.effect, "allow")
-            )
-          );
+        appendRevision(key, asset, { operation: "delete", config: null }, "deleted");
+        asset.deleted = true;
+        asset.created = false;
         continue;
       }
-
       if (asset && mutation.assetId !== undefined && mutation.assetId !== asset.id) {
         throw new AppError(
           "CONFLICT",
@@ -396,54 +451,105 @@ export async function applyConfigAssetMutations(
           { kind: mutation.kind, name: mutation.name }
         );
       }
+      const written = { config: mutation.config, fileSetId: mutation.fileSetId ?? null };
       if (!asset) {
-        const assetId = mutation.assetId ?? createPlatformId("cfga");
-        const revisionId = createPlatformId("cfgr");
-        await tx.insert(configAssets).values({
-          id: assetId,
+        const created: WrittenAsset = {
+          id: mutation.assetId ?? createPlatformId("cfga"),
+          kind: mutation.kind,
+          stored: false,
+          status: "active",
+          newest: 0,
+          activeRevisionId: "",
+          written: false,
+          deleted: false,
+          created: true
+        };
+        assets.set(key, created);
+        scopes.set(key, scope);
+        appendRevision(
+          key,
+          created,
+          { operation: mutation.operation ?? "create", ...written },
+          "active"
+        );
+        newAssets.push({
+          id: created.id,
           clientInstanceId: input.clientInstanceId,
           kind: mutation.kind,
           name: mutation.name,
           scopeKind: scope.kind,
           scopeId: scope.kind === "workspace" ? scope.workspaceId : null,
           status: "active",
-          activeRevisionId: revisionId,
+          activeRevisionId: created.activeRevisionId,
           createdAt: now,
           updatedAt: now
         });
-        await tx.insert(configAssetRevisions).values({
-          id: revisionId,
-          clientInstanceId: input.clientInstanceId,
-          assetId,
-          revision: 1,
-          operation: mutation.operation ?? "create",
-          config: mutation.config,
-          fileSetId: mutation.fileSetId ?? null,
-          actor: input.actor ?? null,
-          origin: input.origin ?? null,
-          globalVersion: version,
-          createdAt: now
-        });
-        if (mutation.kind === "agent") {
-          await insertInitialAvailability(assetId);
-        }
         continue;
       }
-
-      await appendAndActivateRevision(tx, {
+      const recreated = asset.status === "deleted";
+      appendRevision(
+        key,
         asset,
-        operation: mutation.operation ?? (asset.status === "deleted" ? "create" : "update"),
-        config: mutation.config,
-        fileSetId: mutation.fileSetId,
-        actor: input.actor,
-        origin: input.origin,
-        globalVersion: version,
-        now,
-        status: "active"
-      });
-      if (asset.kind === "agent" && asset.status === "deleted") {
-        await insertInitialAvailability(asset.id);
-      }
+        { operation: mutation.operation ?? (recreated ? "create" : "update"), ...written },
+        "active"
+      );
+      asset.created ||= recreated;
+    }
+
+    const all = [...assets.values()];
+    const writtenRows = all.filter((asset) => asset.written);
+    for (const chunk of chunksOf(newAssets)) {
+      await tx.insert(configAssets).values(chunk);
+    }
+    for (const chunk of chunksOf(newRevisions)) {
+      await tx.insert(configAssetRevisions).values(chunk);
+    }
+    // A row that is new in this batch was inserted as its first mutation left it.
+    for (const chunk of chunksOf(writtenRows.filter((asset) => asset.stored || asset.newest > 1))) {
+      await tx.execute(sql`
+        update ${configAssets} as asset
+        set status = written.status,
+            active_revision_id = written.active_revision_id,
+            updated_at = ${now.toISOString()}::timestamptz
+        from (values ${sql.join(
+          chunk.map((asset) => sql`(${asset.id}, ${asset.status}, ${asset.activeRevisionId})`),
+          sql`, `
+        )}) as written (id, status, active_revision_id)
+        where asset.id = written.id
+      `);
+    }
+    const deletedIds = all.filter((asset) => asset.deleted && asset.stored).map(({ id }) => id);
+    if (deletedIds.length > 0) {
+      await tx
+        .delete(configAssetAvailability)
+        .where(inArray(configAssetAvailability.assetId, deletedIds));
+      // The row is reused when the name is created again, so an allow on this asset must not
+      // come back with the next one. A deny stays: the retained revisions are still the
+      // content it refuses, and whoever restores the name restores that content.
+      await tx
+        .delete(permissionGrants)
+        .where(
+          and(
+            eq(permissionGrants.clientInstanceId, input.clientInstanceId),
+            eq(permissionGrants.scopeKind, "asset"),
+            inArray(permissionGrants.scopeId, deletedIds),
+            eq(permissionGrants.effect, "allow")
+          )
+        );
+    }
+    const createdAgents = all.filter(
+      (asset) => asset.kind === "agent" && asset.created && asset.status === "active"
+    );
+    for (const chunk of chunksOf(createdAgents)) {
+      await tx.insert(configAssetAvailability).values(
+        chunk.map((asset) => ({
+          assetId: asset.id,
+          clientInstanceId: input.clientInstanceId,
+          mode: initialAgentMode,
+          personalWorkspaces: false,
+          updatedAt: now
+        }))
+      );
     }
 
     if (defaultAgentName !== undefined) {
@@ -481,8 +587,72 @@ export async function applyConfigAssetMutations(
         })
         .where(eq(configAssetState.clientInstanceId, input.clientInstanceId));
     }
-    return { version };
+    return { version, revisions, assetIds };
   });
+}
+
+function chunksOf<Row>(rows: readonly Row[]): Row[][] {
+  const chunks: Row[][] = [];
+  for (let start = 0; start < rows.length; start += ASSET_WRITE_CHUNK) {
+    chunks.push(rows.slice(start, start + ASSET_WRITE_CHUNK));
+  }
+  return chunks;
+}
+
+/** The rows of the named assets with their active revisions, deleted ones included. */
+async function selectAssetRowsByKey(
+  db: PostgresConnection,
+  clientInstanceId: string,
+  keys: readonly { kind: string; name: string }[]
+) {
+  const namesByKind = new Map<string, Set<string>>();
+  for (const { kind, name } of keys) {
+    namesByKind.set(kind, (namesByKind.get(kind) ?? new Set()).add(name));
+  }
+  if (namesByKind.size === 0) {
+    return [];
+  }
+  return db
+    .select({ asset: configAssets, revision: configAssetRevisions, published: publishedColumns })
+    .from(configAssets)
+    .innerJoin(configAssetRevisions, eq(configAssetRevisions.id, configAssets.activeRevisionId))
+    .leftJoin(publishedRevisions, eq(publishedRevisions.id, configAssets.publishedRevisionId))
+    .where(
+      and(
+        eq(configAssets.clientInstanceId, clientInstanceId),
+        or(
+          ...[...namesByKind].map(([kind, names]) =>
+            and(eq(configAssets.kind, kind), inArray(configAssets.name, [...names]))
+          )
+        )
+      )
+    );
+}
+
+export async function listConfigAssetsByKey(
+  db: PostgresConnection,
+  input: Parameters<ConfigAssetStore["listConfigAssetsByKey"]>[0]
+): Promise<ConfigAssetRecord[]> {
+  const rows = await selectAssetRowsByKey(db, input.clientInstanceId, input.keys);
+  return rows.map((row) => mapConfigAsset(row.asset, row.revision, row.published));
+}
+
+/** The highest revision number of each asset, in one read. */
+async function selectNewestRevisions(
+  tx: PostgresTransaction,
+  assetIds: readonly string[]
+): Promise<Map<string, number>> {
+  if (assetIds.length === 0) {
+    return new Map();
+  }
+  const rows = await tx
+    .select({ assetId: configAssetRevisions.assetId, revision: max(configAssetRevisions.revision) })
+    .from(configAssetRevisions)
+    .where(inArray(configAssetRevisions.assetId, [...assetIds]))
+    .groupBy(configAssetRevisions.assetId);
+  return new Map(
+    rows.flatMap((row) => (row.revision == null ? [] : [[row.assetId, row.revision]]))
+  );
 }
 
 /**
@@ -587,52 +757,4 @@ export async function findConfigAssetRow(
     )
     .limit(1);
   return row;
-}
-
-async function appendAndActivateRevision(
-  tx: PostgresTransaction,
-  input: {
-    asset: ConfigAssetRow;
-    operation: ConfigAssetRevisionRecord["operation"];
-    config: ConfigAssetRevisionRecord["config"];
-    fileSetId?: ConfigAssetRevisionRecord["fileSetId"];
-    actor: Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0]["actor"];
-    origin: ConfigAssetRevisionRecord["origin"];
-    globalVersion: number;
-    now: Date;
-    status: ConfigAssetRecord["status"];
-  }
-): Promise<void> {
-  // The highest number, not the active one: after a discarded draft the active revision is an
-  // older one, and a number is never used twice.
-  const [newest] = await tx
-    .select({ revision: max(configAssetRevisions.revision) })
-    .from(configAssetRevisions)
-    .where(eq(configAssetRevisions.assetId, input.asset.id));
-  const activeRevision = newest?.revision == null ? undefined : { revision: newest.revision };
-  if (!activeRevision) {
-    throw new AppError("INTERNAL", "Config asset active revision is missing");
-  }
-  const revisionId = createPlatformId("cfgr");
-  await tx.insert(configAssetRevisions).values({
-    id: revisionId,
-    clientInstanceId: input.asset.clientInstanceId,
-    assetId: input.asset.id,
-    revision: activeRevision.revision + 1,
-    operation: input.operation,
-    config: input.config,
-    fileSetId: input.fileSetId ?? null,
-    actor: input.actor ?? null,
-    origin: input.origin ?? null,
-    globalVersion: input.globalVersion,
-    createdAt: input.now
-  });
-  await tx
-    .update(configAssets)
-    .set({
-      status: input.status,
-      activeRevisionId: revisionId,
-      updatedAt: input.now
-    })
-    .where(eq(configAssets.id, input.asset.id));
 }

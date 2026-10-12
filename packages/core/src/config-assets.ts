@@ -151,6 +151,20 @@ export type ConfigAssetMutation =
     }
   | { type: "setDefaultAgent"; agentName: string | undefined };
 
+/**
+ * The asset set as it is under the lock every write of an asset takes: nothing changes it
+ * until the write that holds the lock ends. A write checks here what it would leave.
+ */
+export interface LockedConfigAssetSet {
+  state: ConfigAssetState;
+  /**
+   * `activeRevisionId` of every active asset. It names the set without loading its content,
+   * so a writer that read the same ids before the lock need not read the set again.
+   */
+  listActiveRevisionIds(): Promise<string[]>;
+  listActiveConfigAssets(): Promise<ConfigAssetRecord[]>;
+}
+
 /** What a list needs to decide whether its caller may read an asset, without its content. */
 export interface ConfigAssetKey {
   id: string;
@@ -198,6 +212,14 @@ export interface ConfigAssetStore {
      */
     lock?: "share";
   }): Promise<ConfigAssetRecord | undefined>;
+  /**
+   * The rows of the named assets, deleted ones included, in one read whatever their number.
+   * A name that was never stored has no row.
+   */
+  listConfigAssetsByKey(input: {
+    clientInstanceId: ClientInstanceId;
+    keys: readonly { kind: ConfigAssetKind; name: string }[];
+  }): Promise<ConfigAssetRecord[]>;
   /** The revisions of one asset, oldest first unless `newestFirst` is set. */
   listConfigAssetRevisions(input: {
     clientInstanceId: ClientInstanceId;
@@ -224,13 +246,35 @@ export interface ConfigAssetStore {
      * `null` for an asset that is not there, deleted or never created, and writes nothing.
      */
     baseRevisions: Record<string, number | null>;
+    /**
+     * The id of the asset each revision was read of, keyed like `baseRevisions`, where the
+     * writer knows it. A row of the name with another id is another asset that happens to be
+     * at the same number, such as after a restored or replaced database: the batch is refused
+     * with `CONFLICT` and the reason `asset_replaced`.
+     */
+    baseAssetIds?: Record<string, string>;
     baseDefaultAgentName?: string | null;
     actor?: AuditActor;
     origin?: ConfigAssetRevisionRecord["origin"];
     /** Defaults to `all`. */
     initialAgentAvailability?: InitialAgentAvailability;
     mutations: ConfigAssetMutation[];
-  }): Promise<{ version: number }>;
+    /**
+     * Asked under the lock of the write, once the base revisions hold and before anything is
+     * written. What it throws refuses the batch. It is where a writer checks what the batch
+     * would leave against the set no other write can change any more.
+     */
+    validate?(locked: LockedConfigAssetSet): Promise<void>;
+  }): Promise<{
+    version: number;
+    /**
+     * The revision the write gave each asset it wrote, keyed like `baseRevisions`. A delete
+     * of an asset that was not there wrote nothing and has no entry.
+     */
+    revisions: Record<string, number>;
+    /** The id of each asset that has an entry in `revisions`, keyed the same way. */
+    assetIds: Record<string, string>;
+  }>;
   /**
    * Moves the published pointer of one asset to the revision of that number, in one
    * transaction. Refuses a number the asset has no content for with `NOT_FOUND`.

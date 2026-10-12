@@ -52,7 +52,7 @@ function runConfigAssetStoreSuite(
         ]
       });
 
-      expect(result).toEqual({ version: 1 });
+      expect(result).toMatchObject({ version: 1 });
       await expect(store.configAssets.getConfigAssetState({ clientInstanceId })).resolves.toEqual({
         version: 1
       });
@@ -81,7 +81,7 @@ function runConfigAssetStoreSuite(
         mutations: [{ type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v2") }]
       });
 
-      expect(result).toEqual({ version: 2 });
+      expect(result).toMatchObject({ version: 2 });
       await expect(
         store.configAssets.listActiveConfigAssets({ clientInstanceId })
       ).resolves.toMatchObject([
@@ -148,7 +148,7 @@ function runConfigAssetStoreSuite(
           baseRevisions: { "skill:other": 1 },
           mutations: [{ type: "delete", kind: "skill", name: "other" }]
         })
-      ).resolves.toEqual({ version: 3 });
+      ).resolves.toMatchObject({ version: 3 });
       expect(
         await store.configAssets.getConfigAsset({
           clientInstanceId,
@@ -203,7 +203,7 @@ function runConfigAssetStoreSuite(
             { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("local") }
           ]
         })
-      ).resolves.toEqual({ version: 2 });
+      ).resolves.toMatchObject({ version: 2 });
       await expect(
         applyAtCurrentRevisions(store.configAssets, {
           clientInstanceId,
@@ -211,7 +211,7 @@ function runConfigAssetStoreSuite(
           baseDefaultAgentName: "assistant",
           mutations: [{ type: "setDefaultAgent", agentName: undefined }]
         })
-      ).resolves.toEqual({ version: 3 });
+      ).resolves.toMatchObject({ version: 3 });
     });
 
     it("numbers revisions independently per asset", async () => {
@@ -260,7 +260,7 @@ function runConfigAssetStoreSuite(
         mutations: [{ type: "delete", kind: "skill", name: "research" }]
       });
 
-      expect(repeated).toEqual({ version: 3 });
+      expect(repeated).toMatchObject({ version: 3 });
       await expect(
         store.configAssets.getConfigAsset({ clientInstanceId, kind: "skill", name: "research" })
       ).resolves.toMatchObject({ status: "deleted", revision: 2, config: null });

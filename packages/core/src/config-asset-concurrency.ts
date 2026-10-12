@@ -11,9 +11,13 @@ type MutationInput = Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0
 export function assertConfigAssetBases(
   input: MutationInput,
   state: ConfigAssetState,
-  current: Map<string, { status: "active" | "deleted"; revision: ConfigAssetRevisionRecord }>
+  current: Map<
+    string,
+    { id: string; status: "active" | "deleted"; revision: ConfigAssetRevisionRecord }
+  >
 ): void {
   const conflicts = [];
+  const replaced: { kind: string; name: string }[] = [];
   const checkedKeys = new Set<string>();
   let defaultAgentConflict: { currentAgentName: string | null } | undefined;
   for (const mutation of input.mutations) {
@@ -41,6 +45,12 @@ export function assertConfigAssetBases(
       });
     }
     const asset = current.get(key);
+    const baseId = input.baseAssetIds?.[key];
+    if (baseId !== undefined && asset !== undefined && asset.id !== baseId) {
+      // Another asset under the name. Its number says nothing of what the writer read.
+      replaced.push({ kind: mutation.kind, name: mutation.name });
+      continue;
+    }
     // A tombstone is a revision like any other: a put that creates the name again names it.
     const matches =
       base === null
@@ -57,6 +67,13 @@ export function assertConfigAssetBases(
         operation: asset?.revision.operation ?? null
       });
     }
+  }
+  if (replaced.length > 0) {
+    throw new AppError(
+      "CONFLICT",
+      "Config assets were replaced by other assets of the same name since they were read",
+      { reason: "asset_replaced", assets: replaced }
+    );
   }
   if (conflicts.length || defaultAgentConflict) {
     // A stale asset answers the revision conflict; a stale default alone is a plain conflict.

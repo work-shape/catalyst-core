@@ -10,6 +10,7 @@ import {
   getConfigAssetState as getPostgresConfigAssetState,
   listActiveConfigAssets as listActivePostgresConfigAssets,
   listConfigAssetPage as listPostgresConfigAssetPage,
+  listConfigAssetsByKey as listPostgresConfigAssetsByKey,
   getConfigAssetRevision as getPostgresConfigAssetRevision,
   listConfigAssetRevisions as listPostgresConfigAssetRevisions
 } from "../postgres-config-asset-operations";
@@ -55,11 +56,8 @@ export function createPostgresConfigAssetsStore(db: PostgresConnection): ConfigA
     ): Promise<ConfigAssetRevisionRecord | undefined> {
       return getPostgresConfigAssetRevision(db, input);
     },
-    async applyConfigAssetMutations(
-      input: Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0]
-    ): Promise<{ version: number }> {
-      return applyPostgresConfigAssetMutations(db, input);
-    },
+    listConfigAssetsByKey: (input) => listPostgresConfigAssetsByKey(db, input),
+    applyConfigAssetMutations: (input) => applyPostgresConfigAssetMutations(db, input),
     publishConfigAssetRevision: (input) => publishPostgresConfigAssetRevision(db, input),
     discardConfigAssetDraft: (input) => discardPostgresConfigAssetDraft(db, input),
     removeConfigAsset: (input) => removePostgresConfigAsset(db, input),

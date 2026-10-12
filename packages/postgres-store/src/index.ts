@@ -30,6 +30,11 @@ export interface PostgresStoresOptions {
   /** Connections the pool keeps at most. Left out, the driver's own default applies. */
   poolSize?: number;
   logger?: Logger;
+  /**
+   * Told the text of every statement the stores send, as it is sent. For a test that holds a
+   * path to a number of statements; nothing in an assembled instance sets it.
+   */
+  onStatement?(statement: string): void;
 }
 
 export interface PostgresStores extends PlatformStores {
@@ -105,7 +110,11 @@ export async function createPostgresStores(
     idle_timeout: 30,
     onnotice: (notice) => handlePostgresNotice(notice, options.logger)
   });
-  const db = drizzle(sql, { schema });
+  const { onStatement } = options;
+  const db = drizzle(sql, {
+    schema,
+    ...(onStatement ? { logger: { logQuery: (statement) => onStatement(statement) } } : {})
+  });
   const stores: PostgresStores = {
     ...bindStores(db),
     close: () => sql.end(),

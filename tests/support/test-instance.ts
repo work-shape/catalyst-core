@@ -89,6 +89,7 @@ type TestPostgresOptions = {
   logger?: Parameters<typeof createPostgresStores>[0]["logger"];
   applicationName?: string;
   fixtureFile?: string;
+  onStatement?: Parameters<typeof createPostgresStores>[0]["onStatement"];
 };
 
 type Metadata = {
@@ -291,6 +292,7 @@ async function createConfiguredInstance(
       url.searchParams.set("application_name", input.postgres.applicationName);
     const stores = await createPostgresStores({
       logger: input.postgres.logger,
+      ...(input.postgres.onStatement ? { onStatement: input.postgres.onStatement } : {}),
       databaseUrl: url.toString()
     });
     const cleanup = stores.close.bind(stores);
