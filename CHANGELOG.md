@@ -825,6 +825,13 @@ id from config_assets where status = 'deleted')`.
   every layout without a pinned head, and `SubRail` in `routes` mode takes the area's name as
   `title`. A screen built on `Page` gets the room without a change; one that set a top padding
   of its own to make up for it now has both.
+- **Asset pages, head:** the head of an agent, skill, Connection or App page is one row: the
+  way back, the name, its chips and the actions. From 768 px up it never wraps, and a name
+  that does not fit is cut and shown whole in a tooltip. In a narrower window the actions move
+  to a second row only when they do not fit. The kind and the technical id are gone from the
+  head: the id stands at the top of the page's first section, read-only with a copy button. On
+  an App draft the sentence that names the missing publish right is a line under the head.
+  `@vivd-catalyst/ui`: a `detail` `PageHeader` no longer shows `description`.
 - **Every process of an instance is assembled from one build (breaking for a client
   assembly):** `defineClientInstance` gains `runWorkspaceCommandWorker()` and
   `runArtifactPreviewWorker()`, which hand the worker the capabilities of the build as

@@ -516,7 +516,10 @@ describe("save bar", () => {
     // A new asset has nothing to go back to and no count of changes.
     expect(started).not.toContain("Discard");
     expect(started).not.toMatch(/\d+ changes?/u);
-    expect(started).toContain('title="tax-assistant">tax-assistant</code>');
+    // The id stands once, in the first section with a copy button, and not in the head.
+    expect(started.match(/>tax-assistant<\/code>/gu)).toHaveLength(1);
+    expect(started.indexOf("data-asset-identifier")).toBeGreaterThan(started.indexOf("</header>"));
+    expect(started).toMatch(/data-asset-identifier[^]*?<button[^>]*aria-label="Copy"/u);
     expect(inputOf(started, "Display name")).toContain('value="Tax assistant"');
   });
 
@@ -540,7 +543,11 @@ describe("save bar", () => {
     expect(existing).not.toContain('type="submit"');
     expect(existing).toContain("Add reference");
     expect(started).toMatch(/<button[^>]*type="submit"[^>]*>Create skill<\/button>/u);
-    expect(started).toContain('<h1 class="min-w-0 break-words outline-none text-title">Tax review');
+    // The head is one row: a long name is cut and says itself whole in a tooltip.
+    expect(started).toContain(
+      '<h1 class="min-w-0 truncate outline-none text-title" title="Tax review">Tax review'
+    );
+    expect(started).toMatch(/<header data-variant="detail" class="[^"]*\bmd:flex-nowrap\b/u);
   });
 });
 
@@ -560,7 +567,6 @@ describe("refused save", () => {
     render(
       createElement(AssetEditorShell, {
         frame: frame({ asset: storedAsset("agent", agentBase), ...input }),
-        kindLabel: "Agent",
         title: "Assistant",
         sections: [
           { id: "details", label: "Details", body: createElement("p", null, "Fields") },
@@ -629,7 +635,6 @@ describe("refused save", () => {
       render(
         createElement(AssetEditorShell, {
           frame: frame({ asset: storedAsset("agent", agentBase) }),
-          kindLabel: "Agent",
           title: "Assistant",
           sections: [{ id: "details", label: "Details", body: null }],
           control: { changes, submit: saved, discard: noop },

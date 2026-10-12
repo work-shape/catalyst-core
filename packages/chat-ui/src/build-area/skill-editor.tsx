@@ -165,7 +165,6 @@ export function SkillEditor({
   return (
     <AssetEditorShell
       frame={{ ...frame, canWrite: editable }}
-      kindLabel={t("configSkill")}
       title={form.title.trim() || form.name}
       sections={sections}
       control={{

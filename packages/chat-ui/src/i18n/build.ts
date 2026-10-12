@@ -84,6 +84,7 @@ export const build = defineTranslations({
     "build.cliPushWarning":
       "A push applies to new conversations at once and can replace changes made here.",
     "build.cliTitle": "Edit with the CLI",
+    "build.identifier": "ID",
     "build.kindAgents": "Agents",
     "build.kindSkills": "Skills",
     "build.kinds": "Kinds in Build",
@@ -186,6 +187,7 @@ export const build = defineTranslations({
     "build.cliPushWarning":
       "Ein Push gilt sofort für neue Unterhaltungen und kann Änderungen ersetzen, die hier gemacht wurden.",
     "build.cliTitle": "Mit der CLI bearbeiten",
+    "build.identifier": "ID",
     "build.kindAgents": "Agenten",
     "build.kindSkills": "Skills",
     "build.kinds": "Arten in Bauen",

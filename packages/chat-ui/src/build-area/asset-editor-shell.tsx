@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import {
   Banner,
   FormNotice,
+  KeyValue,
+  KeyValueList,
   Page,
   PageFooter,
   PageHeader,
@@ -86,13 +88,27 @@ export function usePageShown(page: BuildPageSlot, what: string): void {
 }
 
 /**
- * The page of one asset, the same for every kind: the head with the way back, the name and
- * the id, the index of the sections, the one language switch, what a refused save says, and
+ * An asset's technical id, read-only and with a copy button: the first thing in the first
+ * section of its page. The head is one row and names the asset only.
+ */
+export function AssetIdentifier({ name }: { name: string }) {
+  const { t } = useTranslation();
+  return (
+    <KeyValueList layout="stacked" data-asset-identifier="">
+      <KeyValue label={t("build.identifier")} copyValue={name}>
+        <code className="font-mono text-code break-all">{name}</code>
+      </KeyValue>
+    </KeyValueList>
+  );
+}
+
+/**
+ * The page of one asset, the same for every kind: the head with the way back and the name,
+ * the id at the top of the first section, the index of the sections, the one language switch, what a refused save says, and
  * the save bar that shows with the first change. A kind hands it its sections.
  */
 export function AssetEditorShell({
   frame,
-  kindLabel,
   title,
   badges,
   headActions,
@@ -105,8 +121,6 @@ export function AssetEditorShell({
 }: {
   /** What the frame handed the kind's page. */
   frame: BuildAssetEditorProps;
-  /** The kind in the singular, before the id. */
-  kindLabel: string;
   title: string;
   badges?: ReactNode;
   /** Actions of the kind before the frame's own, such as making an agent the default. */
@@ -169,14 +183,6 @@ export function AssetEditorShell({
           back={back}
           title={title}
           state={badges}
-          description={
-            <span className="flex min-w-0 items-center gap-2">
-              <span>{kindLabel}</span>
-              <code className="min-w-0 truncate text-code" title={identifier}>
-                {identifier}
-              </code>
-            </span>
-          }
           secondaryActions={
             <>
               {headActions}
@@ -256,7 +262,7 @@ export function AssetEditorShell({
           </div>
         ) : null}
         <AssetLanguageProvider value={language}>
-          {sections.map((section) => (
+          {sections.map((section, index) => (
             <Section
               key={section.id}
               id={section.id}
@@ -264,6 +270,7 @@ export function AssetEditorShell({
               description={section.description}
               count={section.count}
             >
+              {index === 0 && identifier ? <AssetIdentifier name={identifier} /> : null}
               {section.body}
             </Section>
           ))}

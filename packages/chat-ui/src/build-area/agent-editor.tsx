@@ -375,7 +375,6 @@ export function AgentEditor({
         ...frame,
         canWrite: canWrite && (editableAgentFields.length > 0 || canManageAgentModels)
       }}
-      kindLabel={t("configAgent")}
       title={
         form.displayName[locale].trim() ||
         form.displayName[locale === "de" ? "en" : "de"].trim() ||

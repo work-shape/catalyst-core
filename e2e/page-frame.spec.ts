@@ -1,5 +1,8 @@
+import { randomUUID } from "node:crypto";
 import type { Locator, Page } from "@playwright/test";
-import { requestWithOrigin } from "./request-with-origin";
+import { ALLOWED_URL, plantConnection, removeConnection } from "./connection-fixtures";
+import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
+import { z } from "zod";
 import { expect, test } from "./test";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
@@ -114,6 +117,119 @@ test("in a narrow window the area's name stands beside the sidebar button, over 
   await expect(inbox).toBeVisible();
   const head = page.locator('header[data-variant="list"]').filter({ has: inbox });
   expect(await top(head)).toBe(HEADER + PAGE_TOP_NARROW);
+});
+
+/** A name longer than any head has room for beside its actions. */
+const LONG_TITLE =
+  "Monthly check of every booking against the ledger and the open items of the quarter before it";
+
+// Fails with the head of two lines: under the name stood the kind and the technical id, and a
+// long name or many actions wrapped the head to a second and third row.
+test("the head of every asset page is one row as high as the header, and the id stands once in the first section", async ({
+  page
+}) => {
+  test.setTimeout(180_000);
+  await page.setViewportSize(WIDE);
+  await signIn(page);
+
+  const run = randomUUID().slice(0, 8);
+  const skill = `e2e_frame_${run}`;
+  const skillUrl = `${apiBaseUrl}/api/v1/assets/skill/${skill}`;
+  const connection = {
+    id: `cfga_${randomUUID()}`,
+    name: `frame-business-${run}`,
+    displayName: LONG_TITLE,
+    url: ALLOWED_URL,
+    authScheme: "none" as const
+  };
+  const app = `frame-${run}`;
+
+  const written = await requestWithOrigin(page, "put", skillUrl, {
+    data: {
+      expectedRevision: await assetBaseRevision(page, skillUrl),
+      config: { name: skill, title: LONG_TITLE, description: "A probe.", content: "Text." }
+    }
+  });
+  expect(written.ok(), await written.text()).toBe(true);
+  await plantConnection(connection);
+  try {
+    const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/workspaces`, {
+      data: { name: `Frame ${run}` }
+    });
+    expect(created.ok(), await created.text()).toBe(true);
+    const workspaceId = z.object({ id: z.string() }).parse(await created.json()).id;
+    const appUrl = `${apiBaseUrl}/api/v1/assets/app/${app}`;
+    const saved = await requestWithOrigin(page, "put", appUrl, {
+      data: {
+        workspaceId,
+        expectedRevision: null,
+        files: [
+          {
+            path: "app.yaml",
+            text: `id: ${app}\nname: ${LONG_TITLE}\nkit: 1.2.0\nentry: index.html\n`
+          },
+          { path: "index.html", text: "<!doctype html><html><body><h1>Frame</h1></body></html>" }
+        ]
+      },
+      timeout: 90_000
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    const published = await requestWithOrigin(page, "post", `${appUrl}/publish`, {
+      data: { workspaceId, revision: 1 }
+    });
+    expect(published.ok(), await published.text()).toBe(true);
+
+    const editors: { path: string; id?: string; wideOnly?: boolean }[] = [
+      { path: "/build/agents/research_assistant", id: "research_assistant" },
+      { path: `/build/skills/${skill}`, id: skill },
+      { path: `/build/connections/${connection.name}`, id: connection.name },
+      { path: `/w/${workspaceId}/apps/${app}` },
+      // At 768 px the conversation of a draft covers the draft and its head.
+      { path: `/w/${workspaceId}/apps/${app}/edit`, wideOnly: true }
+    ];
+    for (const size of [WIDE, { width: 768, height: 900 }]) {
+      await page.setViewportSize(size);
+      for (const { path, id, wideOnly } of editors) {
+        if (wideOnly && size !== WIDE) {
+          continue;
+        }
+        const where = `${path} at ${size.width}`;
+        await page.goto(path);
+        const head = page.locator('header[data-variant="detail"]');
+        const name = head.getByRole("heading", { level: 1 });
+        await expect(name, where).toBeVisible();
+        const headBox = await box(head);
+        expect(Math.round(headBox.y), where).toBe(0);
+        expect(Math.round(headBox.height), where).toBe(HEADER);
+        // One row: the name and every button of the head stand on its middle line.
+        expect(await middle(name), where).toBe(HEADER / 2);
+        for (const button of await head.getByRole("button").all()) {
+          expect(await middle(button), where).toBe(HEADER / 2);
+        }
+        if (id !== undefined) {
+          await expect(head, where).not.toContainText(id);
+          const shown = page.locator("[data-asset-identifier]");
+          await expect(shown, where).toHaveCount(1);
+          await expect(shown.locator("code"), where).toHaveText(id);
+          await expect(shown.getByRole("button", { name: "Copy" }), where).toBeVisible();
+          await expect(
+            page.locator("section").first().locator("[data-asset-identifier]")
+          ).toHaveCount(1);
+        }
+      }
+    }
+
+    // A name that does not fit is cut and says itself whole in a tooltip.
+    await page.goto(`/build/skills/${skill}`);
+    const cut = page.locator('header[data-variant="detail"]').getByRole("heading", { level: 1 });
+    await expect(cut).toHaveAttribute("title", LONG_TITLE);
+    expect(await cut.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  } finally {
+    await removeConnection(connection.id);
+    await requestWithOrigin(page, "post", `${skillUrl}/delete`, {
+      data: { expectedRevision: await assetRevision(page, skillUrl) }
+    });
+  }
 });
 
 async function signIn(page: Page): Promise<string> {

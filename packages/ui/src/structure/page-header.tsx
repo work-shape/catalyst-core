@@ -3,7 +3,10 @@ import { cn } from "../cn";
 
 /**
  * `list` heads a list or settings page: the page name, a description, the primary action.
- * `detail` heads one object: it is 64 px high and stays at the top while the page scrolls.
+ * `detail` heads one object: it is one row, `--layout-header` high, and stays at the top while
+ * the page scrolls. From 768 px up it never wraps: the name is cut and says itself whole in a
+ * tooltip. In a narrower window the actions go to a second row only when they do not fit beside
+ * the cut name.
  */
 export type PageHeaderVariant = "list" | "detail";
 
@@ -19,7 +22,7 @@ export interface PageHeaderProps extends Omit<HTMLAttributes<HTMLElement>, "titl
   scope?: ReactNode;
   /** The state, such as a draft badge. */
   state?: ReactNode;
-  /** One line under the name. */
+  /** One line under the name of a `list` head. A `detail` head is one row and shows none. */
   description?: ReactNode;
   secondaryActions?: ReactNode;
   primaryAction?: ReactNode;
@@ -55,7 +58,7 @@ export function PageHeader({
       className={cn(
         "flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2",
         detail
-          ? "sticky top-0 z-(--layer-sticky-header) min-h-(--layout-header) border-b bg-background px-(--layout-gutter) py-1"
+          ? "sticky top-0 z-(--layer-sticky-header) min-h-(--layout-header) border-b bg-background px-(--layout-gutter) py-1 md:flex-nowrap"
           : "pb-6",
         className
       )}
@@ -65,7 +68,8 @@ export function PageHeader({
         className={cn(
           "flex min-w-0 items-center gap-3",
           // Beside a floating control the first row starts after it, at rest and pinned alike.
-          detail && "ps-(--layout-page-head-start)"
+          // The name gives way before the actions do: it keeps a least width and is cut.
+          detail && "flex-1 basis-48 ps-(--layout-page-head-start)"
         )}
       >
         {detail && back !== undefined ? (
@@ -81,35 +85,36 @@ export function PageHeader({
         <div className="grid min-w-0 gap-0.5">
           <div
             className={cn(
-              "flex min-w-0 flex-wrap items-center gap-2",
+              "flex min-w-0 items-center gap-2",
               // A list title's line is as tall as a control, so the title sits the same with
               // or without an action beside it or a description under it.
-              !detail && "min-h-9"
+              detail ? "*:not-first:shrink-0" : "min-h-9 flex-wrap"
             )}
           >
             <Heading
               // An area puts the focus here when it opens; a title is no control and shows no ring.
               className={cn(
-                "min-w-0 break-words outline-none",
+                "min-w-0",
+                detail ? "truncate" : "break-words",
+                "outline-none",
                 detail ? "text-title" : "text-title-lg"
               )}
+              title={detail && typeof title === "string" ? title : undefined}
             >
               {title}
             </Heading>
             {scope}
             {state}
           </div>
-          {description === undefined ? null : (
-            <div
-              className={cn("min-w-0 text-muted-foreground", detail ? "text-caption" : "text-body")}
-            >
-              {description}
-            </div>
+          {detail || description === undefined ? null : (
+            <div className="min-w-0 text-body text-muted-foreground">{description}</div>
           )}
         </div>
       </div>
       {hasActions ? (
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <div
+          className={cn("flex shrink-0 flex-wrap items-center gap-2", detail && "md:flex-nowrap")}
+        >
           {secondaryActions}
           {primaryAction}
           {overflow}

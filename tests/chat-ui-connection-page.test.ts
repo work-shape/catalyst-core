@@ -132,8 +132,10 @@ describe("Connection page", () => {
     const markup = renderPage();
 
     expect(markup).toContain(">Sample business</h1>");
-    expect(markup).toContain(">Connection<");
-    expect(markup).toContain('title="sample-business"');
+    // The head names the Connection only; its id stands in the first section.
+    expect(markup).not.toContain(">Connection<");
+    expect(markup.indexOf("data-asset-identifier")).toBeGreaterThan(markup.indexOf("</header>"));
+    expect(markup.match(/>sample-business<\/code>/gu)).toHaveLength(1);
     expect(markup).toContain(">Instance<");
     expect(markup).toContain(
       "Connections come from the release config and cannot be changed here."

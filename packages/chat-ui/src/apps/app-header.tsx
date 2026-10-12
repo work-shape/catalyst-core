@@ -117,7 +117,6 @@ export function AppStateBadge({ state }: { state: AppState }) {
 export function AppHeader({
   name,
   state,
-  description,
   secondaryActions,
   primaryAction,
   overflow,
@@ -127,7 +126,6 @@ export function AppHeader({
   name: string;
   /** The badge after the name: the published or the draft revision. */
   state?: ReactNode;
-  description?: ReactNode;
   secondaryActions?: ReactNode;
   primaryAction?: ReactNode;
   overflow?: ReactNode;
@@ -158,7 +156,6 @@ export function AppHeader({
       }
       title={name}
       state={state}
-      description={description}
       secondaryActions={secondaryActions}
       primaryAction={primaryAction}
       overflow={overflow}

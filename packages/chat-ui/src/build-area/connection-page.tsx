@@ -27,7 +27,7 @@ import type {
 import { formatDateTime } from "../control-plane/locale-format";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { agentKind } from "./agent-kind";
-import { usePageShown } from "./asset-editor-shell";
+import { AssetIdentifier, usePageShown } from "./asset-editor-shell";
 import type { BuildAssetViewProps } from "./build-asset-kind";
 import { useBuildNavigation } from "./build-route";
 import type { ConnectionSource, ConnectionTestRun } from "./connection-source";
@@ -237,6 +237,7 @@ export function ConnectionPage({
       description: t("connections.statusDescription"),
       body: (
         <>
+          <AssetIdentifier name={asset.name} />
           {enabled ? null : (
             <Banner tone="warning" data-connection-disabled="">
               {t("connections.disabledNotice")}
@@ -335,14 +336,6 @@ export function ConnectionPage({
             <Badge tone={enabled ? "success" : "neutral"} dot>
               {t(enabled ? "connections.enabled" : "connections.disabled")}
             </Badge>
-          }
-          description={
-            <span className="flex min-w-0 items-center gap-2">
-              <span>{t("connections.kindSingular")}</span>
-              <code className="min-w-0 truncate text-code" title={asset.name}>
-                {asset.name}
-              </code>
-            </span>
           }
         />
       }
