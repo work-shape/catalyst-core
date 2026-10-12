@@ -172,6 +172,7 @@ function BuildListSample({ text }: { text: GalleryText }) {
       subRail={
         <SubRail
           mode="routes"
+          title={text.navBuild}
           label={text.buildKinds}
           groups={kinds}
           value="knowledge"
@@ -554,6 +555,7 @@ function SettingsFormSample({ text }: { text: GalleryText }) {
         subRail={
           <SubRail
             mode="routes"
+            title={text.settings}
             label={text.subRailSettings}
             groups={pages}
             value="general"

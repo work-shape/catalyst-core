@@ -28,11 +28,16 @@ export interface PageProps extends ComponentProps<"div"> {
  * The content column of a page: the gutter, the widest it grows, and the column of a
  * `SubRail`. Feature code sets no page padding of its own.
  *
- * The page starts `--layout-page-inset` lower where something floats over the top of its scroll
- * area. Its content scrolls up to the top edge; the sub-rail rests where it is pinned, so it
- * does not move with the content. Above a detail header that room scrolls away: the header
- * pins at the top edge and the sub-rail directly below it. Where the area says the floating
- * control stands beside the head, the head has no room above it and starts at the top edge.
+ * The page's first line, its title line, starts `--layout-page-top` below the top edge, so no
+ * page begins at the window's edge. It starts `--layout-page-inset` lower again where something
+ * floats over the top of the scroll area. A sub-rail with a title heads its column on that line.
+ * The content scrolls up to the top edge; the sub-rail rests where it is pinned, so it does not
+ * move with the content.
+ *
+ * A detail header rests with its first row on the title line. The room above it scrolls away:
+ * the header pins at the top edge and the sub-rail directly below it. Where the area says the
+ * floating control stands beside the head, the head has no room above it and starts at the top
+ * edge.
  *
  * A page ends with `--layout-page-end` of empty space below its last element.
  * The space under the page belongs to the content column. On the row it would end the rail's
@@ -50,10 +55,13 @@ export function Page({
     // The page is the container its sub-rail measures: the room the page has, not the window.
     return (
       <div className={cn("@container/page w-full min-w-0", className)} {...props}>
-        {/* An area whose floating control stands beside the head sets the head's own inset. */}
+        {/* The head's first row is a control high and stands in the middle of the head's least
+            height, so this much room above the head puts that row on the title line. An area
+            whose floating control stands beside the head sets the head's own inset instead. */}
         <div
           aria-hidden="true"
-          className="h-[var(--layout-page-head-inset,var(--layout-page-inset))]"
+          data-page-head-room=""
+          className="h-[var(--layout-page-head-inset,calc(var(--layout-page-inset)+var(--layout-page-top)-(var(--layout-header)-var(--spacing)*9)/2))]"
         />
         {header}
         {subRail === undefined ? (
@@ -80,7 +88,7 @@ export function Page({
     return (
       <div
         className={cn(
-          "mx-auto w-full min-w-0 px-(--layout-gutter) pt-[calc(var(--layout-page-inset)+var(--spacing)*6)] pb-(--layout-page-end)",
+          "mx-auto w-full min-w-0 px-(--layout-gutter) pt-[calc(var(--layout-page-inset)+var(--layout-page-top))] pb-(--layout-page-end)",
           contentWidths[width],
           className
         )}
@@ -96,8 +104,9 @@ export function Page({
       className={cn("@container/page w-full min-w-0 px-(--layout-gutter)", className)}
       {...props}
     >
-      {/* The top padding is the sub-rail's pinned position: the rail rests there from the start. */}
-      <div className="flex min-w-0 flex-col gap-x-(--layout-gutter) gap-y-2 pt-(--layout-page-inset) @subrail/page:flex-row @subrail/page:pt-[calc(var(--layout-page-inset)+var(--spacing)*6)]">
+      {/* The top padding is the sub-rail's pinned position: the rail rests there from the start.
+          Above the content the rail brings the room over its own first line. */}
+      <div className="flex min-w-0 flex-col gap-x-(--layout-gutter) gap-y-2 pt-(--layout-page-inset) @subrail/page:flex-row @subrail/page:pt-[calc(var(--layout-page-inset)+var(--layout-page-top))]">
         {subRail}
         <div className={cn("min-w-0 flex-1 pb-(--layout-page-end)", contentWidths[width])}>
           {children}

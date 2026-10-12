@@ -380,6 +380,7 @@ function SubRailRoutesSample({ text }: { text: GalleryText }) {
         subRail={
           <SubRail
             mode="routes"
+            title={text.settings}
             label={text.subRailSettings}
             groups={groups}
             value={route}

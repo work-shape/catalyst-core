@@ -51,6 +51,12 @@ interface SubRailBaseProps {
 export interface SubRailRoutesProps extends SubRailBaseProps {
   /** Each item is a page. The caller's links navigate; the rail shows where the reader is. */
   mode: "routes";
+  /**
+   * The name of the area these pages belong to, such as Settings. It heads the rail on the
+   * page's title line, level with the open page's name. Above the content it stands over the
+   * select: beside the control that floats over a narrow window, or under the page's top room.
+   */
+  title?: string;
   /** The id of the open route. */
   value: string;
   /** An item without a link, or the select, was chosen: the caller navigates to this route. */
@@ -73,17 +79,20 @@ export type SubRailProps = SubRailRoutesProps | SubRailAnchorsProps;
  *
  * Beside the content it is pinned where it starts, so it stands still while the content scrolls.
  * A rail longer than the scroll area scrolls on its own.
+ *
+ * Its first line is on the page's title line. Above the content it keeps the page's top room
+ * over itself, less what a floating control already takes; once the page scrolls, the select
+ * is pinned at the top edge or under that control, and the room is gone.
  */
 export function SubRail(props: SubRailProps) {
   const { label, groups, scope, belowHeader = false, className } = props;
+  const title = props.mode === "routes" ? props.title : undefined;
   const rootRef = useRef<HTMLDivElement>(null);
-  const railRef = useRef<HTMLElement>(null);
   const ids = groups.flatMap((group) => group.items.map((item) => item.id));
   const anchors = useAnchorTracking({
     enabled: props.mode === "anchors",
     ids,
     rootRef,
-    railRef,
     onChange: props.mode === "anchors" ? props.onValueChange : undefined
   });
   const value = props.mode === "routes" ? props.value : anchors.value;
@@ -112,15 +121,38 @@ export function SubRail(props: SubRailProps) {
         // rail never travels. Under a head it is pinned directly below the pinned head.
         belowHeader
           ? "top-(--layout-header) z-[calc(var(--layer-sticky-header)-1)] @subrail/page:max-h-[calc(100cqh-var(--layout-header))] @subrail/page:pt-4"
-          : "top-(--layout-page-inset) z-(--layer-sticky-header) @subrail/page:top-[calc(var(--layout-page-inset)+var(--spacing)*5)] @subrail/page:-mt-1 @subrail/page:max-h-[calc(100cqh-var(--layout-page-inset)-var(--spacing)*5)] @subrail/page:pt-1",
+          : [
+              "z-(--layer-sticky-header) @subrail/page:top-[calc(var(--layout-page-inset)+var(--layout-page-top)-var(--spacing))] @subrail/page:-mt-1 @subrail/page:max-h-[calc(100cqh-var(--layout-page-inset)-var(--layout-page-top)+var(--spacing))] @subrail/page:pt-1",
+              // Above the content: the page's top room that no floating control takes yet.
+              "[--subrail-room:max(0rem,var(--layout-page-top)_-_var(--layout-page-inset))]",
+              title === undefined
+                ? // The room is over the select at rest and scrolls away, down to the rail's
+                  // own step of padding.
+                  "top-[calc(var(--layout-page-inset)+var(--spacing)*2-max(var(--spacing)*2,var(--subrail-room)))] pt-[max(var(--spacing)*2,var(--subrail-room))]"
+                : // The title's line is as high as the floating control's band, or a control
+                  // high without one. The rail starts at the top edge, so the title stands in
+                  // that band; pinned, the band stays and the room and a bare title line go.
+                  "top-[calc(var(--layout-page-inset)-var(--subrail-room)-var(--subrail-title))] -mt-(--layout-page-inset) pt-(--subrail-room) [--subrail-title:max(var(--layout-page-inset),var(--spacing)_*_9)]"
+            ],
         // The pinned select keeps what floats over the page's top clear: the content leaves
-        // under the select, not between the floating controls.
+        // under the select, not between the floating controls. A title's line does the same.
         props.mode === "routes" &&
           !belowHeader &&
+          title === undefined &&
           "before:absolute before:inset-x-0 before:bottom-full before:h-(--layout-page-inset) before:bg-background @subrail/page:before:hidden",
         className
       )}
     >
+      {title === undefined ? null : (
+        // No heading: the page's own name is its first heading, and the area's landmark and
+        // this navigation are named by the caller.
+        <p
+          data-subrail-title=""
+          className="flex h-(--subrail-title) min-w-0 items-center ps-(--layout-page-head-start) text-title-lg @subrail/page:h-9 @subrail/page:ps-2"
+        >
+          <span className="truncate">{title}</span>
+        </p>
+      )}
       {scope}
       {openGroupScope === undefined ? null : (
         <div className="min-w-0 @subrail/page:hidden">{openGroupScope}</div>
@@ -143,7 +175,7 @@ export function SubRail(props: SubRailProps) {
           )
         )}
       </Select>
-      <nav ref={railRef} aria-label={label} className="hidden gap-4 @subrail/page:grid">
+      <nav aria-label={label} className="hidden gap-4 @subrail/page:grid">
         {groups.map((group) => (
           <NavGroup key={group.id} label={group.label}>
             {group.scope === undefined ? null : (
@@ -225,21 +257,20 @@ interface AnchorMeasure {
 
 /**
  * `anchors` mode: which section is at the top of the view, and scrolling to one. The line the
- * sections are measured against is the rail's own top edge while it stands beside the content.
- * The select that stands in for the rail scrolls away with the page, so there the line is the
- * top of what scrolls, lowered by the sticky head the rail was told of.
+ * sections are measured against is the top edge the rail has once it is pinned: the top of what
+ * scrolls, lowered by the rail's own `top`. Under a head with room above it the rail rests
+ * lower than that until the page scrolls, and the select that stands in for the rail scrolls
+ * away with the page, so where the rail stands now is not the measure.
  */
 function useAnchorTracking({
   enabled,
   ids,
   rootRef,
-  railRef,
   onChange
 }: {
   enabled: boolean;
   ids: readonly string[];
   rootRef: RefObject<HTMLDivElement | null>;
-  railRef: RefObject<HTMLElement | null>;
   onChange?(id: string): void;
 }): { value: string; scrollTo(id: string): void } {
   const [value, setValue] = useState(ids[0] ?? "");
@@ -264,24 +295,19 @@ function useAnchorTracking({
 
   const measure = useCallback((): AnchorMeasure | undefined => {
     const root = rootRef.current;
-    const rail = railRef.current;
-    if (!root || !rail) {
+    if (!root) {
       return undefined;
     }
-    const rect = root.getBoundingClientRect();
-    const narrow = getComputedStyle(rail).display === "none";
     const targets = idsKey.split("\n").flatMap((id) => {
       const element = findById(root, id);
       return element ? [{ id, element }] : [];
     });
-    if (!narrow) {
-      return { line: rect.top, targets };
-    }
-    // The rail's `top` is the height of the head it stays below, or nothing.
-    const below = Number.parseFloat(getComputedStyle(root).top);
+    // The rail's `top` is where it is pinned: under the head it stays below, or where its
+    // `Page` starts it. As a select it keeps that `top` without being pinned.
+    const pinned = Number.parseFloat(getComputedStyle(root).top);
     const scrollerTop = scrollParent(root).getBoundingClientRect().top;
-    return { line: Math.max(scrollerTop, 0) + (Number.isFinite(below) ? below : 0), targets };
-  }, [idsKey, rootRef, railRef]);
+    return { line: Math.max(scrollerTop, 0) + (Number.isFinite(pinned) ? pinned : 0), targets };
+  }, [idsKey, rootRef]);
 
   useEffect(() => {
     if (!enabled) {
