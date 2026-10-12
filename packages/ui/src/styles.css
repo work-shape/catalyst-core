@@ -192,6 +192,28 @@
   --duration-color: 150ms;
   --duration-open: 200ms;
   --duration-close: 180ms;
+  /* How a part moves that changes its place: quickly away, slowly to rest. */
+  --ease-move: cubic-bezier(0.2, 0, 0, 1);
+
+  /* A panel at the right edge of its area comes in from that edge and leaves to it, in the
+     time an overlay takes. `--panel-shift` is how far that is when it is more than the
+     panel's own width, as for a card that stands a gap away from the edge. What stands
+     beside the panel moves with `moveFrom`, over the same time and curve. Use them behind
+     `motion-safe:`; `useExit` holds a leaving panel for as long as `panel-out` takes. */
+  --animate-panel-in: panel-in var(--duration-open) var(--ease-move);
+  --animate-panel-out: panel-out var(--duration-close) var(--ease-move) forwards;
+
+  @keyframes panel-in {
+    from {
+      transform: translateX(var(--panel-shift, 100%));
+    }
+  }
+
+  @keyframes panel-out {
+    to {
+      transform: translateX(var(--panel-shift, 100%));
+    }
+  }
 
   /* A loading layout stays unseen this long, then fades in. An answer that comes sooner shows
      no loading state at all: a stand-in that is replaced at once reads as a flicker. */
