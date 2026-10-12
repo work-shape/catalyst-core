@@ -30,6 +30,8 @@ const requiredBuilds = [
   ["packages/chat-server", "build"],
   ["packages/web-access", "build"],
   ["packages/connections", "build"],
+  ["packages/data-stores", "build"],
+  ["packages/workflows", "build"],
   ["packages/client-assembly", "build"],
   ["packages/api-client", "build"],
   ["packages/ui", "build"],

@@ -22,6 +22,8 @@ export * from "./operation-runs";
 export * from "./infrastructure-checks";
 export * from "./modules";
 export * from "./pages";
+export * from "./workflows";
+export * from "./data-stores";
 
 export { LOG_REDACTION } from "./logger";
 export type { Logger } from "./logger";

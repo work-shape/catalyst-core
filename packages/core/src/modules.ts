@@ -11,7 +11,9 @@ export const MODULE_NAMES = [
   "assetManagement",
   "userInvitations",
   "apps",
-  "connections"
+  "connections",
+  "workflows",
+  "dataStores"
 ] as const;
 
 export type ModuleName = (typeof MODULE_NAMES)[number];

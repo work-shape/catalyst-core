@@ -55,7 +55,15 @@ export type OperationOrigin =
        */
       target?: { connection: string; operation: string };
     }
+  /**
+   * A step of a Workflow Run. The `actor` of the call is the principal the run acts as
+   * (`WorkflowRunPrincipal`), whatever started the run.
+   */
   | { kind: "workflow"; workflowRunId: string; stepRunId: string }
+  /**
+   * A due time, with nobody present. A `schedule` trigger starts its Workflow Run from this
+   * origin as the run's principal; the steps of that run then call from the origin `workflow`.
+   */
   | { kind: "schedule"; scheduleId: string };
 
 export interface OperationCall<TInput = unknown> {

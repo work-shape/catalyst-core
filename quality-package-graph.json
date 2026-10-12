@@ -41,6 +41,7 @@
     "@vivd-catalyst/connections",
     "@vivd-catalyst/core",
     "@vivd-catalyst/data-source",
+    "@vivd-catalyst/data-stores",
     "@vivd-catalyst/mail",
     "@vivd-catalyst/model-provider",
     "@vivd-catalyst/object-storage",
@@ -48,7 +49,8 @@
     "@vivd-catalyst/tool-execution",
     "@vivd-catalyst/tool-sdk",
     "@vivd-catalyst/usage-governance",
-    "@vivd-catalyst/web-access"
+    "@vivd-catalyst/web-access",
+    "@vivd-catalyst/workflows"
   ],
   "@vivd-catalyst/config-schema": ["@vivd-catalyst/asset-schemas", "@vivd-catalyst/core"],
   "@vivd-catalyst/connections": [
@@ -58,6 +60,7 @@
   ],
   "@vivd-catalyst/core": ["@vivd-catalyst/asset-schemas"],
   "@vivd-catalyst/data-source": ["@vivd-catalyst/core", "@vivd-catalyst/tool-sdk"],
+  "@vivd-catalyst/data-stores": ["@vivd-catalyst/core"],
   "@vivd-catalyst/demo": [
     "@vivd-catalyst/api-client",
     "@vivd-catalyst/chat-ui",
@@ -87,6 +90,7 @@
   "@vivd-catalyst/ui": [],
   "@vivd-catalyst/usage-governance": ["@vivd-catalyst/core"],
   "@vivd-catalyst/web-access": ["@vivd-catalyst/core", "@vivd-catalyst/tool-sdk"],
+  "@vivd-catalyst/workflows": ["@vivd-catalyst/core"],
   "@vivd-solutions/registry-canary": [],
   "@work-shape/catalyst-cli": [
     "@vivd-catalyst/api-client",

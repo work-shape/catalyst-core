@@ -139,6 +139,12 @@ export const administration = defineTranslations({
     "modules.connections": "Connections",
     "modules.connectionsDescription":
       "Connections to outside systems: the asset kind, its rights and its list in Build.",
+    "modules.workflows": "Workflows",
+    "modules.workflowsDescription":
+      "Workflows: steps that run on a schedule or a manual start, and their runs.",
+    "modules.dataStores": "Data stores",
+    "modules.dataStoresDescription":
+      "Data Stores: a database of the platform per store, for Apps and Workflows.",
     newPasswordsDoNotMatch: "New passwords do not match",
     passwordUpdated: "Password updated",
     passwordUpdateFailed: "Password update failed",
@@ -318,6 +324,12 @@ export const administration = defineTranslations({
     "modules.connections": "Verbindungen",
     "modules.connectionsDescription":
       "Verbindungen zu externen Systemen: die Asset-Art, ihre Rechte und ihre Liste in Bauen.",
+    "modules.workflows": "Workflows",
+    "modules.workflowsDescription":
+      "Workflows: Schritte, die nach Zeitplan oder von Hand starten, und ihre Läufe.",
+    "modules.dataStores": "Datenspeicher",
+    "modules.dataStoresDescription":
+      "Datenspeicher: je Speicher eine Datenbank der Plattform, für Apps und Workflows.",
     passwordUpdated: "Passwort aktualisiert",
     passwordUpdateFailed: "Passwortaktualisierung fehlgeschlagen",
     profile: "Profil",

@@ -37,6 +37,7 @@ const sourceAlias = {
   "@vivd-catalyst/client-assembly": "packages/client-assembly/src/index.ts",
   "@vivd-catalyst/config-schema": "packages/config-schema/src/index.ts",
   "@vivd-catalyst/connections": "packages/connections/src/index.ts",
+  "@vivd-catalyst/data-stores": "packages/data-stores/src/index.ts",
   "@vivd-catalyst/data-source": "packages/data-source/src/index.ts",
   "@vivd-catalyst/demo/sample-mcp": "clients/demo/sample-mcp/index.ts",
   "@vivd-catalyst/demo/seed": "clients/demo/src/seed/index.ts",
@@ -54,7 +55,8 @@ const sourceAlias = {
   "@vivd-catalyst/ui/gallery": "packages/ui/src/gallery/index.tsx",
   "@vivd-catalyst/ui/theme": "packages/ui/src/theme/index.ts",
   "@vivd-catalyst/ui": "packages/ui/src/index.ts",
-  "@vivd-catalyst/usage-governance": "packages/usage-governance/src/index.ts"
+  "@vivd-catalyst/usage-governance": "packages/usage-governance/src/index.ts",
+  "@vivd-catalyst/workflows": "packages/workflows/src/index.ts"
 };
 
 const rootDir = dirname(fileURLToPath(import.meta.url));

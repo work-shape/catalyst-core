@@ -8,6 +8,9 @@ import {
 } from "@vivd-catalyst/core";
 import { resolveModuleSwitches, type ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { ClientInstanceCapability } from "./capabilities";
+import { assembleDataStores, dataStoresModule } from "./data-stores";
+import type { ModuleAssembly, ModuleAssemblyParts } from "./module-assembly";
+import { assembleWorkflows, workflowsModule } from "./workflows";
 
 /** The Resources panel of a conversation and the list it reads. */
 const resourcesModule = defineModule({
@@ -90,8 +93,32 @@ export const platformModules = [
   assetManagementModule,
   userInvitationsModule,
   appsModule,
-  connectionsModule
+  connectionsModule,
+  workflowsModule,
+  dataStoresModule
 ];
+
+/** The seams of the modules that are assembled through one. A new one is one more entry. */
+const moduleSeams = [assembleWorkflows, assembleDataStores];
+
+/**
+ * Builds what the modules with a seam add to this process, each list in the order of the
+ * seams. A module that is off adds nothing.
+ */
+export async function assembleModules(
+  parts: ModuleAssemblyParts
+): Promise<Required<ModuleAssembly>> {
+  const assemblies: ModuleAssembly[] = [];
+  for (const seam of moduleSeams) {
+    assemblies.push((await seam(parts)) ?? {});
+  }
+  return {
+    assetKinds: assemblies.flatMap((assembly) => assembly.assetKinds ?? []),
+    operationSources: assemblies.flatMap((assembly) => assembly.operationSources ?? []),
+    jobHandlers: assemblies.flatMap((assembly) => assembly.jobHandlers ?? []),
+    schedules: assemblies.flatMap((assembly) => assembly.schedules ?? [])
+  };
+}
 
 export interface InstanceModules {
   /** The modules this build ships: the platform's and each capability's. */

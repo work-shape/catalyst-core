@@ -80,7 +80,7 @@ import { createInfrastructureWorkflow } from "./infrastructure";
 import { createInProcessAgentRunWorker, type AgentRunWorkerPlacement } from "./agent-run-jobs";
 import { createInstancePageSave, createInstancePages } from "./pages";
 import { createJobWorker } from "./job-worker";
-import { endResolveOnlyRun, resolveInstanceModules } from "./modules";
+import { assembleModules, endResolveOnlyRun, resolveInstanceModules } from "./modules";
 import { createRuntimeFailureReporter } from "./runtime-error-logging";
 import { createPlatformStore } from "./store";
 import { createToolDefinitions } from "./tools";
@@ -207,12 +207,14 @@ export async function createClientInstanceApp(
     serviceAccessToken
   };
   const server = await createChatServer(serverOptions);
+  const serverJobs = createChatServerJobs(serverOptions);
   const jobs = createJobWorker({
     stores: store,
     clientInstanceId,
     logger,
     modules: execution.modules,
-    ...createChatServerJobs(serverOptions)
+    handlers: [...serverJobs.handlers, ...execution.moduleAssembly.jobHandlers],
+    schedules: [...serverJobs.schedules, ...execution.moduleAssembly.schedules]
   });
   const agentRunJobs = inProcess ? createInProcessAgentRunWorker(execution, inProcess) : undefined;
 
@@ -270,6 +272,7 @@ export async function createClientInstanceExecutionAssembly(
   });
   const connectionParts = { config, modules, clientInstanceId, secrets, stores: store, logger };
   const connections = await createInstanceConnections(connectionParts, input.connectorTypes);
+  const moduleAssembly = await assembleModules(connectionParts);
   const dataSources = await createDataSourceRegistry({ configs: config.dataSources, secrets });
   const workspaceObjectStore = config.executionWorkspaces.enabled
     ? await createWorkspacesStore(config, infrastructure.context)
@@ -373,7 +376,8 @@ export async function createClientInstanceExecutionAssembly(
       ...(connections
         ? [createConnectionAssetKind({ connectorTypes: connections.connectorTypes })]
         : []),
-      ...(modules.isEnabled("apps") ? [createAppAssetKind()] : [])
+      ...(modules.isEnabled("apps") ? [createAppAssetKind()] : []),
+      ...moduleAssembly.assetKinds
     ]),
     validationRefs
   };
@@ -455,6 +459,7 @@ export async function createClientInstanceExecutionAssembly(
     modules
   });
   const toolOptions = withConnections(connections, operationCalls, connectionParts);
+  moduleAssembly.operationSources.forEach((source) => operationCalls.registry.addSource(source));
   const defaultModelProvider = modelProviders[0];
   if (!defaultModelProvider) {
     throw new AppError("VALIDATION_FAILED", "At least one model provider is required");
@@ -532,6 +537,7 @@ export async function createClientInstanceExecutionAssembly(
     operationCalls,
     approvalRequestHandlers: handlers,
     connections,
+    moduleAssembly,
     async close() {
       await closeCapabilityContributions(capabilityContributions);
       await store.close?.();

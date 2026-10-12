@@ -41,17 +41,15 @@ describe("a resolve-only run, as the release gate starts every built entry point
   async function configFile(
     name: string,
     executionWorkspaces: boolean,
-    capabilities: Record<string, unknown> = {}
+    capabilities: Record<string, unknown> = {},
+    modules: Record<string, { enabled: boolean }> = { documents: { enabled: true } }
   ): Promise<string> {
     const path = join(directory, `${name}.yaml`);
     const config = createTestConfig({
       executionWorkspaces: { enabled: executionWorkspaces },
       workspaceObjectRoot: join(directory, "workspace-objects")
     });
-    await writeFile(
-      path,
-      JSON.stringify({ ...config, capabilities, modules: { documents: { enabled: true } } })
-    );
+    await writeFile(path, JSON.stringify({ ...config, capabilities, modules }));
     return path;
   }
 
@@ -89,6 +87,38 @@ describe("a resolve-only run, as the release gate starts every built entry point
       expect(withoutCapability.stderr).toContain(
         "Module 'documents' is enabled but this build ships no code for it"
       );
+    },
+    ENDED_WITHIN_MS
+  );
+
+  // Fails without the change: the build knew neither module, so each process stopped on an
+  // unknown module name.
+  it.each(PROCESSES)(
+    "ends the %s with code 0 with the modules workflows and dataStores on, as with them off",
+    async (name) => {
+      const [on, off] = await Promise.all([
+        resolveOnly(
+          name,
+          "without-capability",
+          await configFile(
+            "workflows-and-data-stores-on",
+            true,
+            {},
+            {
+              workflows: { enabled: true },
+              dataStores: { enabled: true }
+            }
+          )
+        ),
+        resolveOnly(
+          name,
+          "without-capability",
+          await configFile("workflows-and-data-stores-off", true, {}, {})
+        )
+      ]);
+
+      expect(on).toMatchObject({ code: 0, stdout: `${MARKER}\n` });
+      expect(off).toEqual(on);
     },
     ENDED_WITHIN_MS
   );
