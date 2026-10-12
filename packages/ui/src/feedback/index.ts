@@ -3,6 +3,13 @@ export { EmptyState, type EmptyStateLayout, type EmptyStateProps } from "./empty
 export { FormNotice, type FormNoticeProps, type FormNoticeTone } from "./form-notice";
 export { InlineError } from "./inline-error";
 export {
+  Progress,
+  type ProgressPart,
+  type ProgressProps,
+  type ProgressSize,
+  type ProgressTone
+} from "./progress";
+export {
   Skeleton,
   SkeletonList,
   SkeletonPage,

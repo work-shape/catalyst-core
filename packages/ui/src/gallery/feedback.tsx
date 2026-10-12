@@ -5,6 +5,7 @@ import { Banner, type BannerTone } from "../feedback/banner";
 import { EmptyState } from "../feedback/empty-state";
 import { FormNotice } from "../feedback/form-notice";
 import { InlineError } from "../feedback/inline-error";
+import { Progress } from "../feedback/progress";
 import { Skeleton, SkeletonList, SkeletonPage } from "../feedback/skeleton";
 import { Spinner, type SpinnerSize } from "../feedback/spinner";
 import { Chip } from "../status/chip";
@@ -149,6 +150,66 @@ export const feedbackGallery: GalleryGroup = {
             <EmptyState className="w-full" icon={<LayoutGrid aria-hidden="true" />}>
               {text.emptyNoRight}
             </EmptyState>
+          </Samples>
+        </>
+      )
+    },
+    {
+      name: "Progress",
+      components: ["Progress"],
+      render: (text) => (
+        <>
+          <Samples label={text.progressTones}>
+            <Progress label={text.progressStorage} value={4} valueLabel={text.progressStorageLow} />
+            <Progress
+              label={text.progressStorage}
+              value={84}
+              tone="warning"
+              valueLabel={text.progressStorageHigh}
+            />
+            <Progress
+              label={text.progressStorage}
+              value={5}
+              max={5}
+              tone="danger"
+              valueLabel={text.progressStorageFull}
+            />
+          </Samples>
+          <Samples label={text.progressSmall}>
+            <Progress size="sm" label={text.progressEntries} value={212} max={600} tone="success" />
+          </Samples>
+          <Samples label={text.progressParts}>
+            <Progress
+              label={text.progressEntries}
+              max={600}
+              parts={[
+                { value: 210, tone: "success" },
+                { value: 2, tone: "danger" }
+              ]}
+              valueLabel={text.progressEntriesEarly}
+            />
+            <Progress
+              label={text.progressEntries}
+              max={600}
+              parts={[
+                { value: 478, tone: "success" },
+                { value: 120, tone: "danger" }
+              ]}
+              valueLabel={text.progressEntriesLate}
+            />
+          </Samples>
+          <Samples label={text.progressUnknown}>
+            <Progress label={text.progressWorking} />
+            <Progress size="sm" label={text.progressWorking} tone="success" />
+          </Samples>
+          <Samples label={text.progressNarrow}>
+            <Progress
+              className="max-w-64"
+              label={text.progressEntries}
+              value={1284}
+              max={12000}
+              valueLabel={text.progressEntriesLong}
+            />
           </Samples>
         </>
       )

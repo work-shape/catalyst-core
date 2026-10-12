@@ -1,11 +1,13 @@
 import { chartGalleryText, type ChartGalleryText } from "./text-chart";
 import { layoutGalleryText, type LayoutGalleryText } from "./text-layout";
+import { progressGalleryText, type ProgressGalleryText } from "./text-progress";
 import { sampleGalleryText, type SampleGalleryText } from "./text-samples";
 
 export type GalleryLanguage = "en" | "de";
 
 /** Every text the gallery shows, in both interface languages. Component names are not translated. */
-export interface GalleryText extends LayoutGalleryText, SampleGalleryText, ChartGalleryText {
+export interface GalleryText
+  extends LayoutGalleryText, SampleGalleryText, ChartGalleryText, ProgressGalleryText {
   title: string;
   mode: string;
   modeLight: string;
@@ -415,6 +417,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     ...layoutGalleryText.en,
     ...sampleGalleryText.en,
     ...chartGalleryText.en,
+    ...progressGalleryText.en,
     countPending: "3 requests wait",
     today: "Today",
     yesterday: "Yesterday",
@@ -642,6 +645,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     ...layoutGalleryText.de,
     ...sampleGalleryText.de,
     ...chartGalleryText.de,
+    ...progressGalleryText.de,
     countPending: "3 Anfragen warten",
     today: "Heute",
     yesterday: "Gestern",
