@@ -26,7 +26,14 @@ type RunRow = typeof workflowRuns.$inferSelect;
 type StepRunRow = typeof workflowStepRuns.$inferSelect;
 
 // A run and a step run without the values they carry: the engine reads those one at a time.
-const { input: _runInput, output: _runOutput, ...runColumns } = getTableColumns(workflowRuns);
+// The definition a run keeps is among them: it is as large as a file may be, and a step
+// reads it once.
+const {
+  input: _runInput,
+  output: _runOutput,
+  definition: _runDefinition,
+  ...runColumns
+} = getTableColumns(workflowRuns);
 const {
   input: _stepInput,
   output: _stepOutput,
@@ -39,6 +46,11 @@ const previewOf = (column: typeof workflowRuns.output | typeof workflowStepRuns.
     string | null
   >`left((${column}->'value')::text, ${sql.raw(String(WORKFLOW_OUTPUT_PREVIEW_MAX_CHARS + 1))})`;
 
+// The output of a trigger step is the run's input, and a read never answers an input.
+const stepPreview = sql<
+  string | null
+>`case when ${workflowStepRuns.stepType} = 'trigger' then null else ${previewOf(workflowStepRuns.output)} end`;
+
 function mapPreview(text: string | null): { outputPreview?: WorkflowOutputPreview } {
   if (text === null) return {};
   const truncated = text.length > WORKFLOW_OUTPUT_PREVIEW_MAX_CHARS;
@@ -50,7 +62,7 @@ function mapPreview(text: string | null): { outputPreview?: WorkflowOutputPrevie
   };
 }
 
-function mapRunView(row: Omit<RunRow, "input" | "output" | "definition">): WorkflowRunView {
+function mapRun(row: Omit<RunRow, "input" | "output" | "definition">): WorkflowRun {
   return {
     id: row.id,
     clientInstanceId: row.clientInstanceId,
@@ -72,10 +84,6 @@ function mapRunView(row: Omit<RunRow, "input" | "output" | "definition">): Workf
     ...(row.cancelledBy === null ? {} : { cancelledBy: row.cancelledBy }),
     ...(row.cancelledAt === null ? {} : { cancelledAt: row.cancelledAt.toISOString() })
   };
-}
-
-function mapRun(row: Omit<RunRow, "input" | "output">): WorkflowRun {
-  return { ...mapRunView(row), definition: row.definition };
 }
 
 function mapStepRun(row: Omit<StepRunRow, "input" | "output">): WorkflowStepRun {
@@ -166,7 +174,7 @@ export async function readWorkflowRun(
     .select({ ...runColumns, preview: previewOf(workflowRuns.output) })
     .from(workflowRuns)
     .where(runIs(input));
-  return row ? { ...mapRunView(row), ...mapPreview(row.preview) } : undefined;
+  return row ? { ...mapRun(row), ...mapPreview(row.preview) } : undefined;
 }
 
 export async function listWorkflowRuns(
@@ -185,7 +193,7 @@ export async function listWorkflowRuns(
     )
     .orderBy(desc(workflowRuns.createdAt), desc(workflowRuns.id))
     .limit(input.page?.limit ?? 2147483647);
-  return rows.map((row) => ({ ...mapRunView(row), ...mapPreview(row.preview) }));
+  return rows.map((row) => ({ ...mapRun(row), ...mapPreview(row.preview) }));
 }
 
 export async function listLastWorkflowRuns(
@@ -347,8 +355,24 @@ export async function markWorkflowLoopWaiting(
 ): Promise<void> {
   await db
     .update(workflowStepRuns)
-    .set({ status: "waiting", input: { items: [...ref.items] } })
+    .set({
+      status: "waiting",
+      input: {
+        items: [...ref.items],
+        ...(ref.lastStepId === undefined ? {} : { last: ref.lastStepId })
+      }
+    })
     .where(and(stepRunIs(ref), eq(workflowStepRuns.status, "running")));
+}
+
+export async function noteWorkflowStepRunOperation(
+  db: PostgresConnection,
+  ref: Input<"noteStepRunOperation">
+): Promise<void> {
+  await db
+    .update(workflowStepRuns)
+    .set({ operationRunId: ref.operationRunId })
+    .where(and(stepRunIs(ref), notEnded(workflowStepRuns.status)));
 }
 
 export async function listOpenWorkflowStepRuns(
@@ -375,7 +399,7 @@ export async function listWorkflowStepRuns(
 ): Promise<WorkflowStepRunView[]> {
   const { filter } = input;
   const rows = await db
-    .select({ ...stepRunColumns, preview: previewOf(workflowStepRuns.output) })
+    .select({ ...stepRunColumns, preview: stepPreview })
     .from(workflowStepRuns)
     .where(
       and(
@@ -448,8 +472,9 @@ async function countWorkflowLoopBodies(
 
 /**
  * How far each of the named loop step runs is. An item is failed when one of its step runs
- * is, running while one of them has not ended, and done when all of them ended as done. An
- * item no step run exists for yet, or one a cancel ended, is in `total` alone.
+ * is, running while one of them has not ended, and done when the step run of the loop's last
+ * step is. An item no step run exists for yet, and one that a cancel or a limit cut off
+ * between two of its steps, is in `total` alone.
  */
 async function countWorkflowLoops(
   db: PostgresConnection,
@@ -460,17 +485,22 @@ async function countWorkflowLoops(
   const totals = await db
     .select({
       id: workflowStepRuns.id,
+      last: sql<string | null>`${workflowStepRuns.input}->>'last'`,
       total: sql<number>`coalesce(jsonb_array_length(${workflowStepRuns.input}->'items'), 0)::int`
     })
     .from(workflowStepRuns)
     .where(inArray(workflowStepRuns.id, loopStepRunIds));
+  const last = new Map(totals.map((loop) => [loop.id, loop.last]));
   for (const { id, total } of totals) counts.set(id, { total, done: 0, failed: 0, running: 0 });
   const items = await db
     .select({
       loop: workflowStepRuns.containerStepRunId,
       failed: sql<boolean>`bool_or(${workflowStepRuns.status} = 'failed')`,
       open: sql<boolean>`bool_or(${workflowStepRuns.status} in ('queued', 'running', 'waiting'))`,
-      done: sql<boolean>`bool_and(${workflowStepRuns.status} = 'done')`
+      // The step ids of the item's step runs that ended as done.
+      done: sql<
+        string[]
+      >`coalesce(array_agg(${workflowStepRuns.stepId}) filter (where ${workflowStepRuns.status} = 'done'), '{}')`
     })
     .from(workflowStepRuns)
     .where(inArray(workflowStepRuns.containerStepRunId, loopStepRunIds))
@@ -480,7 +510,9 @@ async function countWorkflowLoops(
     if (!count) continue;
     if (item.failed) count.failed += 1;
     else if (item.open) count.running += 1;
-    else if (item.done) count.done += 1;
+    else if (item.done.includes((item.loop === null ? null : last.get(item.loop)) ?? "")) {
+      count.done += 1;
+    }
   }
   return counts;
 }

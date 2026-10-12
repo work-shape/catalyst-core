@@ -44,4 +44,4 @@ export {
   type WorkflowEngineOptions
 } from "./engine";
 export * from "./limits";
-export type { WorkflowOperationCalls } from "./operation-step";
+export { secretOperationSteps, type WorkflowOperationCalls } from "./operation-step";

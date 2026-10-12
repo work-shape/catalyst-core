@@ -43,6 +43,8 @@ export function isWorkflowRunEnded(status: WorkflowRunStatus): boolean {
 export interface WorkflowRunError {
   code: string;
   message: string;
+  /** Where the run's principal was refused for a right it does not hold: that right. */
+  action?: string;
   /** On a run: the step run it ended at. */
   stepRunId?: WorkflowStepRunId;
 }
@@ -60,8 +62,6 @@ export interface WorkflowRun extends WorkflowRunRecordView {
   mode: WorkflowRunMode;
   trigger: WorkflowTriggerKind;
   status: WorkflowRunStatus;
-  /** The definition as it stood when the run started. A run never reads a newer one. */
-  definition: WorkflowManifest;
   /**
    * The service principal the run acts as: the name its definition gives under `runAs`, which
    * every step reads the principal by, and the id and label it had when the run started. The
@@ -91,7 +91,6 @@ export type NewWorkflowRun = Pick<
   | "definitionRevisionId"
   | "mode"
   | "trigger"
-  | "definition"
   | "principal"
   | "startedBy"
   | "operationRunId"
@@ -99,6 +98,11 @@ export type NewWorkflowRun = Pick<
   | "correlationId"
   | "createdAt"
 > & {
+  /**
+   * The definition as it stood when the run started. The run keeps it and never reads a newer
+   * one; a step reads it with `readRunDefinition`, and no other read of a run carries it.
+   */
+  definition: WorkflowManifest;
   /** The run's input, checked against the definition's `inputs`. */
   input: JsonObject;
 };
@@ -110,7 +114,7 @@ export interface WorkflowOutputPreview {
 }
 
 /** A run as a read shows it: no definition and no input, and the result as a preview. */
-export type WorkflowRunView = Omit<WorkflowRun, "definition"> & {
+export type WorkflowRunView = WorkflowRun & {
   outputPreview?: WorkflowOutputPreview;
 };
 
@@ -253,7 +257,18 @@ export interface WorkflowRunsStore {
    * Moves a running loop step run to `waiting` and keeps the list it runs over. From then on
    * the step runs of its items carry the loop on, and its own job has nothing left to do.
    */
-  markLoopWaiting(ref: WorkflowStepRunRef & { items: readonly JsonValue[] }): Promise<void>;
+  markLoopWaiting(
+    ref: WorkflowStepRunRef & {
+      items: readonly JsonValue[];
+      /** The id of the loop's last step. An item is done when the step run of that step is. */
+      lastStepId?: string;
+    }
+  ): Promise<void>;
+  /**
+   * Keeps the id of the Operation Run of a step's call on a step run that has not ended, as
+   * soon as it is known and before the call has an outcome.
+   */
+  noteStepRunOperation(ref: WorkflowStepRunRef & { operationRunId: OperationRunId }): Promise<void>;
   /** The step runs of a run that have not ended. */
   listOpenStepRuns(ref: WorkflowRunRef): Promise<WorkflowStepRun[]>;
   /**
@@ -285,8 +300,9 @@ export interface WorkflowRunsStore {
   ): Promise<{ value: JsonValue } | undefined>;
   /**
    * How far the items of a loop step run are, as they stand now. An item is failed when one of
-   * its step runs is, running while one of them has not ended, and done when all of them ended
-   * as done.
+   * its step runs is, running while one of them has not ended, and done when the step run of
+   * the loop's last step is. An item that was cut off between two of its steps, by a cancel
+   * or a limit, is none of the three.
    */
   readLoopCounts(ref: WorkflowStepRunRef): Promise<WorkflowLoopCounts | undefined>;
 }

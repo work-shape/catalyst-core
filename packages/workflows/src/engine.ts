@@ -1,8 +1,6 @@
 import { compileJsonSchema } from "@vivd-catalyst/connections";
 import {
   AppError,
-  WORKFLOW_DATASET_KEY,
-  WORKFLOW_ERROR_CODES,
   WORKFLOW_RUN_JOB_KINDS,
   asUserId,
   auditActorFromIdentity,
@@ -12,7 +10,6 @@ import {
   isAuthenticatedServicePrincipal,
   isWorkflowRunEnded,
   subjectDedupeKey,
-  workflowDatasetReferenceSchema,
   type AuthenticatedIdentity,
   type ClientInstanceId,
   type JobControl,
@@ -28,17 +25,15 @@ import {
   type WorkflowRunView,
   type WorkflowStep,
   type WorkflowStepRun,
-  type WorkflowStepRunCall,
   type WorkflowStepRunFilter,
   type WorkflowStepRunPlacement,
   type WorkflowStepRunRef,
-  type WorkflowStepRunView,
-  type WorkflowTriggerOutput
+  type WorkflowStepRunView
 } from "@vivd-catalyst/core";
 import { z } from "zod";
 import { indexWorkflowSteps, type WorkflowStepIndex } from "./definition";
 import type { WorkflowDefinitionSource, WorkflowDefinitionSummary } from "./definition-source";
-import { holdsBrokenDatasetReference, jsonBytes, jsonObjectSchema } from "./json";
+import { jsonBytes, jsonObjectSchema } from "./json";
 import {
   WORKFLOW_RUN_LIMITS,
   WORKFLOW_STEP_JOB_BACKOFF_BASE_MS,
@@ -48,15 +43,11 @@ import {
   WORKFLOW_STEP_JOB_SLOTS,
   type WorkflowRunLimits
 } from "./limits";
-import {
-  OperationStepFailure,
-  callStepOperation,
-  type WorkflowOperationCalls
-} from "./operation-step";
-import { itemLabelOf, resolveInput, resolveReference } from "./references";
-import { principalActor, workflowRunActor, workflowRunPrincipal } from "./run-identity";
+import { secretOperationSteps, type WorkflowOperationCalls } from "./operation-step";
+import { itemLabelOf } from "./references";
+import { principalActor, workflowRunPrincipal } from "./run-identity";
 import { withEveryBodyStep } from "./run-view";
-import { WorkflowStepFailure } from "./step-failure";
+import { createStepExecutor, type StepEnd } from "./step-execution";
 
 // The engine of Workflow Runs. A run is a row, each step it reaches is a step run, and each
 // step run is executed by one job of the shared executor. A step ends in the transaction
@@ -126,18 +117,6 @@ export interface WorkflowEngine {
   jobHandlers: readonly RegisteredJobHandler[];
 }
 
-/** How the attempt of a step went, before anything of it is written. */
-type StepEnd =
-  | { kind: "done"; output: JsonValue; operationRunId?: OperationRunId; call?: WorkflowStepRunCall }
-  | {
-      kind: "failed";
-      error: WorkflowRunError;
-      operationRunId?: OperationRunId;
-      call?: WorkflowStepRunCall;
-    }
-  /** A loop read its list. Its items are run by step runs of their own. */
-  | { kind: "loop"; items: JsonValue[] };
-
 /** Where a new step run stands in its run: its path, and its place in the tree of the run. */
 interface StepPlace extends WorkflowStepRunPlacement {
   key: string;
@@ -148,20 +127,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
   const limits: WorkflowRunLimits = { ...WORKFLOW_RUN_LIMITS, ...options.limits };
   const now = options.now ?? (() => new Date());
 
-  function withinStepData(value: JsonValue, what: string): void {
-    if (jsonBytes(value) > limits.stepDataMaxBytes) {
-      throw new WorkflowStepFailure(
-        "step_data_too_large",
-        `${what} is larger than ${limits.stepDataMaxBytes} bytes`
-      );
-    }
-    if (holdsBrokenDatasetReference(value)) {
-      throw new WorkflowStepFailure(
-        "dataset_reference_invalid",
-        `${what} holds '${WORKFLOW_DATASET_KEY}' on a value that is no reference to a dataset`
-      );
-    }
-  }
+  const executor = createStepExecutor({ clientInstanceId, stores, operationCalls, limits, now });
 
   /**
    * Ends a run that has not ended, with every step run that still waits for its turn. A
@@ -229,14 +195,17 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
   /**
    * What a step run that failed does to its run. A loop around it that continues past a failed
    * item goes on with its next item, and the run with it. Any other loop fails with its item,
-   * and so does what is around that loop, up to the run.
+   * and so does what is around that loop, up to the run. A refusal of the run's principal is
+   * no failure of an item: no loop continues past it, and the run fails with its reason.
    */
   async function failStep(
     tx: PlatformStores,
     run: WorkflowRun,
     index: WorkflowStepIndex,
     stepRun: WorkflowStepRun,
-    error: WorkflowRunError
+    error: WorkflowRunError,
+    /** The run's principal itself was refused, so the next item would be refused as well. */
+    ofPrincipal = false
   ): Promise<void> {
     let failed = stepRun;
     while (failed.containerStepRunId !== undefined) {
@@ -246,7 +215,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       });
       if (!loopRun) break;
       const loop = index.get(loopRun.stepId)?.step;
-      if (loop?.type === "loop" && loop.onItemFailure === "continue") {
+      if (!ofPrincipal && loop?.type === "loop" && loop.onItemFailure === "continue") {
         await nextItem(tx, run, index, loopRun, (failed.iteration?.index ?? 0) + 1);
         return;
       }
@@ -261,7 +230,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     }
     await finishRun(tx, run, {
       status: "failed",
-      error: { code: error.code, message: error.message, stepRunId: stepRun.id }
+      error: { ...error, stepRunId: stepRun.id }
     });
   }
 
@@ -420,7 +389,15 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       const moment = now();
       const finishedAt = moment.toISOString();
       if (isWorkflowRunEnded(run.status)) {
-        await tx.workflowRuns.endStepRun({ ...ref, status: "cancelled", finishedAt });
+        // An attempt nobody ended may have made its call before its worker was gone.
+        const known =
+          stepRun.status === "running"
+            ? await executor.knownCallEnd(tx, run, stepRun, finishedAt)
+            : undefined;
+        await tx.workflowRuns.endStepRun({
+          ...ref,
+          ...(known ?? { status: "cancelled", finishedAt })
+        });
         return undefined;
       }
       if (moment.getTime() >= Date.parse(run.deadlineAt)) {
@@ -446,109 +423,6 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     });
   }
 
-  /** Does the work of one step and writes nothing of it. */
-  async function execute(
-    run: WorkflowRun,
-    stepRun: WorkflowStepRun,
-    index: WorkflowStepIndex,
-    signal: AbortSignal
-  ): Promise<StepEnd> {
-    const step = index.get(stepRun.stepId)?.step;
-    const scope = { store: stores.workflowRuns, index, run, stepRun };
-    try {
-      switch (step?.type) {
-        case "trigger": {
-          const input = await stores.workflowRuns.readRunInput({ clientInstanceId, id: run.id });
-          const output: WorkflowTriggerOutput = {
-            input: input ?? {},
-            startedAt: run.startedAt ?? run.createdAt,
-            trigger: run.trigger,
-            // Only a tick of a schedule has a scheduled time, and no run is started by one yet.
-            scheduledFor: null
-          };
-          return { kind: "done", output: { ...output } };
-        }
-        case "operation": {
-          const input = await resolveInput(scope, step.input);
-          withinStepData(input, "The input of the step");
-          const actor = await workflowRunActor(stores.apiAccess, run);
-          if (!actor) {
-            throw new WorkflowStepFailure(
-              "principal_inactive",
-              "The service principal the run acts as no longer exists or is disabled"
-            );
-          }
-          const result = await callStepOperation({
-            calls: operationCalls,
-            run,
-            stepRun,
-            operation: step.operation,
-            input,
-            actor,
-            signal
-          });
-          const { output, ...trace } = result;
-          try {
-            withinStepData(output, "The output of the step");
-          } catch (error) {
-            if (!(error instanceof WorkflowStepFailure)) throw error;
-            throw new OperationStepFailure(error.code, error.message, trace);
-          }
-          return { kind: "done", ...result };
-        }
-        case "loop": {
-          const items = await resolveReference(scope, step.items);
-          if (workflowDatasetReferenceSchema.safeParse(items).success) {
-            throw new WorkflowStepFailure(
-              WORKFLOW_ERROR_CODES.notSupported,
-              `This engine does not run a loop over a dataset yet (${WORKFLOW_ERROR_CODES.notSupported})`
-            );
-          }
-          if (!Array.isArray(items)) {
-            throw new WorkflowStepFailure("loop_items_not_a_list", "A loop runs over a list");
-          }
-          if (items.length > limits.loopMaxItems) {
-            throw new WorkflowStepFailure(
-              "loop_too_long",
-              `A loop runs over at most ${limits.loopMaxItems} items`
-            );
-          }
-          withinStepData(items, "The list of the loop");
-          return { kind: "loop", items };
-        }
-        case "output": {
-          const output = await resolveInput(scope, step.input);
-          withinStepData(output, "The result of the run");
-          const schema = compileJsonSchema(run.definition.outputs);
-          const [issue] = schema.ok ? schema.validate(output) : [];
-          if (!schema.ok || issue) {
-            throw new WorkflowStepFailure(
-              "output_invalid",
-              issue
-                ? `The result does not fit the Workflow's outputs at '/${issue.path.join("/")}': ${issue.message}`
-                : "The Workflow's outputs are a schema that cannot be checked"
-            );
-          }
-          return { kind: "done", output };
-        }
-        default:
-          // A reserved block, a step type of a later release, or a step the run's definition
-          // does not hold: the step fails with the contract's refusal, and so does its run.
-          throw new WorkflowStepFailure(
-            WORKFLOW_ERROR_CODES.notSupported,
-            `This engine does not run the step '${stepRun.stepId}' of the type '${stepRun.stepType}' yet (${WORKFLOW_ERROR_CODES.notSupported})`
-          );
-      }
-    } catch (error) {
-      if (!(error instanceof WorkflowStepFailure)) throw error;
-      return {
-        kind: "failed",
-        error: error.toRunError(),
-        ...(error instanceof OperationStepFailure ? error.trace : {})
-      };
-    }
-  }
-
   /** Writes how the attempt of a step went and, in the same transaction, what follows it. */
   async function settle(
     tx: PlatformStores,
@@ -565,9 +439,9 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     const live = !isWorkflowRunEnded(run.status);
     const finishedAt = now().toISOString();
     if (end.kind === "failed") {
-      const { kind: _kind, ...failure } = end;
+      const { kind: _kind, ofPrincipal, ...failure } = end;
       await tx.workflowRuns.endStepRun({ ...ref, status: "failed", finishedAt, ...failure });
-      if (live) await failStep(tx, run, index, stepRun, end.error);
+      if (live) await failStep(tx, run, index, stepRun, end.error, ofPrincipal);
       return;
     }
     if (end.kind === "loop") {
@@ -576,7 +450,13 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         return;
       }
       // From here the step runs of its items carry the loop on. A loop without an item ends.
-      await tx.workflowRuns.markLoopWaiting({ ...ref, items: end.items });
+      const loop = index.get(stepRun.stepId)?.step;
+      const last = loop?.type === "loop" ? loop.steps.at(-1)?.id : undefined;
+      await tx.workflowRuns.markLoopWaiting({
+        ...ref,
+        items: end.items,
+        ...(last === undefined ? {} : { lastStepId: last })
+      });
       await nextItem(tx, run, index, stepRun, 0);
       return;
     }
@@ -597,8 +477,21 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       const ref: WorkflowStepRunRef = { clientInstanceId, id: job.payload.stepRunId };
       const claimed = await claim(control, ref);
       if (!claimed) return;
-      const index = indexWorkflowSteps(claimed.run.definition);
-      const end = await execute(claimed.run, claimed.stepRun, index, control.signal);
+      const definition = await stores.workflowRuns.readRunDefinition({
+        clientInstanceId,
+        id: claimed.run.id
+      });
+      if (!definition) return;
+      const index = indexWorkflowSteps(definition);
+      const end = await executor.execute({ ...claimed, definition, index, signal: control.signal });
+      // A worker that stops, or that lost its lease, ends no step: what its cut attempt
+      // answered is no outcome of the step. The step run stays as it is and the next attempt
+      // takes it up, which reads again or is answered what a changing call answered.
+      if (control.signal.aborted) {
+        throw control.signal.reason instanceof Error
+          ? control.signal.reason
+          : new Error("The attempt was stopped");
+      }
       await control.transaction((tx) => settle(tx, ref, index, end));
     },
     // Every attempt of the step crashed. The run does not go on from a step nobody ended.
@@ -620,9 +513,9 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         finishedAt: now().toISOString(),
         error
       });
-      if (!isWorkflowRunEnded(run.status)) {
-        await failStep(tx, run, indexWorkflowSteps(run.definition), stepRun, error);
-      }
+      if (isWorkflowRunEnded(run.status)) return;
+      const definition = await tx.workflowRuns.readRunDefinition({ clientInstanceId, id: run.id });
+      await failStep(tx, run, indexWorkflowSteps(definition ?? { steps: [] }), stepRun, error);
     }
   });
 
@@ -662,6 +555,14 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         throw new AppError(
           "VALIDATION_FAILED",
           `The input of a run is at most ${limits.stepDataMaxBytes} bytes`
+        );
+      }
+      const secret = await secretOperationSteps(manifest, operationCalls.registry);
+      if (secret.length > 0) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          `The definition of the Workflow '${manifest.id}' cannot be run: ${secret[0]?.message ?? ""}`,
+          { reason: "operation_secret", issues: secret }
         );
       }
       const principal = await workflowRunPrincipal(stores.apiAccess, clientInstanceId, manifest);
