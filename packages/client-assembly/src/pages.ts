@@ -125,7 +125,6 @@ export async function createInstancePageBuildJobs(input: {
   if (!input.modules.isEnabled("apps")) {
     return [];
   }
-  requireFilesStore(input.config);
   const timeoutMs = readPositiveInteger("PAGE_BUILD_TIMEOUT_MS", input.env.PAGE_BUILD_TIMEOUT_MS);
   // What a worker that was killed left of its builds is removed when a worker starts; the
   // builds themselves repeat the sweep. The start does not wait for it.
@@ -170,7 +169,8 @@ function readPositiveInteger(name: string, raw: string | undefined): number | un
   return value;
 }
 
-function requireFilesStore(config: ClientInstanceConfig): void {
+/** Stops an instance with the `apps` module on that has no `files` store. */
+export function requireFilesStore(config: ClientInstanceConfig): void {
   if (config.infrastructure.objectStorage.files === undefined) {
     throw new AppError(
       "VALIDATION_FAILED",

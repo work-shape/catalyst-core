@@ -1,62 +1,118 @@
+import type { ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createTestConfig } from "./support/fixtures";
-import { startTestProcess } from "./support/test-process";
+import { killTestProcess, startTestProcess } from "./support/test-process";
 
-// A bound on a hang: both processes of a test start through the TypeScript loader.
+// A bound on a hang: the processes of a test start through the TypeScript loader.
 const ENDED_WITHIN_MS = 120_000;
+const MARKER = "resolve-only: this process starts with this config";
+const PROCESSES = [
+  "server",
+  "agent-run-worker",
+  "workspace-command-worker",
+  "artifact-preview-worker"
+];
+
+type Build =
+  "with-capability" | "without-capability" | "with-capability-that-needs-the-command-worker";
 
 describe("a resolve-only run, as the release gate starts every built entry point", () => {
   let directory = "";
-  let configPath = "";
+  const children: ChildProcess[] = [];
 
   beforeAll(async () => {
     directory = await mkdtemp(join(tmpdir(), "catalyst-resolve-only-"));
-    configPath = join(directory, "app.yaml");
-    // JSON is YAML. The config turns a module on that only a capability ships.
-    await writeFile(
-      configPath,
-      JSON.stringify({ ...createTestConfig(), modules: { documents: { enabled: true } } })
-    );
+  });
+
+  // A run that did not end is not left behind when its test gives up.
+  afterEach(async () => {
+    for (const child of children.splice(0)) await killTestProcess(child);
   });
 
   afterAll(async () => {
     await rm(directory, { recursive: true, force: true });
   });
 
+  /** A release config with a module on that only a capability ships. JSON is YAML. */
+  async function configFile(name: string, executionWorkspaces: boolean): Promise<string> {
+    const path = join(directory, `${name}.yaml`);
+    const config = createTestConfig({
+      executionWorkspaces: { enabled: executionWorkspaces },
+      workspaceObjectRoot: join(directory, "workspace-objects")
+    });
+    await writeFile(path, JSON.stringify({ ...config, modules: { documents: { enabled: true } } }));
+    return path;
+  }
+
   /** The environment names no database and no secret: the run ends before one is asked for. */
-  async function resolveOnly(name: string, build: "with-capability" | "without-capability") {
-    const child = startTestProcess(new URL("./support/resolve-only-process.ts", import.meta.url), {
-      args: [name, build],
-      env: { PATH: process.env.PATH, CATALYST_RESOLVE_ONLY: "1", CLIENT_CONFIG_PATH: configPath },
-      stdio: ["ignore", "ignore", "pipe"]
+  async function resolveOnly(name: string, build: Build, configPath: string) {
+    const child = startTestProcess(new URL("./support/instance-process.ts", import.meta.url), {
+      args: [name, build, "--resolve-only"],
+      env: { PATH: process.env.PATH, CLIENT_CONFIG_PATH: configPath },
+      stdio: ["ignore", "pipe", "pipe"]
     });
-    let stderr = "";
-    child.stderr?.setEncoding("utf8").on("data", (chunk: string) => {
-      stderr += chunk;
-    });
+    children.push(child);
+    const output = { stdout: "", stderr: "" };
+    for (const stream of ["stdout", "stderr"] as const) {
+      child[stream]?.setEncoding("utf8").on("data", (chunk: string) => {
+        output[stream] += chunk;
+      });
+    }
     const [code] = await once(child, "exit");
-    return { code, stderr };
+    return { code, ...output };
   }
 
   // Fails without the change: the two workers were assembled without the capabilities of the
   // build, so they stopped on the module although the build ships it, and no run ended early.
-  it.each(["server", "agent-run-worker", "workspace-command-worker", "artifact-preview-worker"])(
+  it.each(PROCESSES)(
     "ends the %s with code 0 when its build ships every module that is on, and stops it when not",
     async (name) => {
+      const config = await configFile("workspaces-on", true);
       const [withCapability, withoutCapability] = await Promise.all([
-        resolveOnly(name, "with-capability"),
-        resolveOnly(name, "without-capability")
+        resolveOnly(name, "with-capability", config),
+        resolveOnly(name, "without-capability", config)
       ]);
 
-      expect(withCapability).toMatchObject({ code: 0 });
-      expect(withoutCapability.code).toBe(1);
+      expect(withCapability).toMatchObject({ code: 0, stdout: `${MARKER}\n` });
+      expect(withoutCapability).toMatchObject({ code: 1, stdout: "" });
       expect(withoutCapability.stderr).toContain(
         "Module 'documents' is enabled but this build ships no code for it"
       );
+    },
+    ENDED_WITHIN_MS
+  );
+
+  it(
+    "stops the workspace command worker on a config that turns Execution Workspaces off",
+    async () => {
+      const config = await configFile("workspaces-off", false);
+      const run = await resolveOnly("workspace-command-worker", "with-capability", config);
+
+      expect(run).toMatchObject({ code: 1, stdout: "" });
+      expect(run.stderr).toContain("Execution workspaces are disabled in release config");
+    },
+    ENDED_WITHIN_MS
+  );
+
+  it(
+    "stops the workspace command worker, and no other process, when a module needs a job kind it does not serve",
+    async () => {
+      const config = await configFile("workspaces-on", true);
+      const build = "with-capability-that-needs-the-command-worker";
+      const [worker, server] = await Promise.all([
+        resolveOnly("workspace-command-worker", build, config),
+        resolveOnly("server", build, config)
+      ]);
+
+      expect(worker).toMatchObject({ code: 1, stdout: "" });
+      expect(worker.stderr).toContain(
+        "the workspace command worker of this assembly does not serve the job kind 'documents.render'"
+      );
+      expect(server).toMatchObject({ code: 0, stdout: `${MARKER}\n` });
     },
     ENDED_WITHIN_MS
   );

@@ -4,12 +4,10 @@ import {
   defineModule,
   moduleConfigKey,
   type ModuleRegistry,
-  type ModuleSnapshot,
-  type RegisteredJobHandler
+  type ModuleSnapshot
 } from "@vivd-catalyst/core";
 import { resolveModuleSwitches, type ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { ClientInstanceCapability } from "./capabilities";
-import type { ClientInstanceEnv } from "./env";
 
 /** The Resources panel of a conversation and the list it reads. */
 const resourcesModule = defineModule({
@@ -118,36 +116,40 @@ export function resolveInstanceModules(
   return { registry, snapshot: registry.snapshot(resolveModuleSwitches(config)) };
 }
 
+/** What a resolve-only run prints before it ends. The release gate looks for this line. */
+const RESOLVE_ONLY_MARKER = "resolve-only: this process starts with this config";
+
 /**
  * Ends a resolve-only run. The release gate starts every built process entry point of a
- * deployment with `CATALYST_RESOLVE_ONLY=1` once per release config. The process loads its
- * config and resolves its modules as it always does, then ends here with code 0, before it
- * opens a store or a provider. Each process of the instance calls this right after
- * `resolveInstanceModules`. Nothing but the gate sets the variable.
+ * deployment with the argument `--resolve-only`, once per release config. The process loads
+ * its config, resolves its modules and makes every check that needs nothing but the config
+ * and the build, as it always does. Then it prints the marker and ends here with code 0,
+ * before it opens a store or a provider. Each process of the instance calls this once, below
+ * the last of those checks.
  */
-export function endResolveOnlyRun(env: ClientInstanceEnv): void {
-  if (env.CATALYST_RESOLVE_ONLY === "1") {
+export function endResolveOnlyRun(): void {
+  if (process.argv.includes("--resolve-only")) {
+    process.stdout.write(`${RESOLVE_ONLY_MARKER}\n`);
     process.exit(0);
   }
 }
 
 /**
  * Refuses a workspace command worker that does not serve a job kind that a module that is on
- * needs it to serve. `handlers` are the handlers of that worker. A save of a Page would
- * otherwise queue a build that no process ever takes.
+ * needs it to serve. `served` are the job kinds that worker has a handler for. A save of a
+ * Page would otherwise queue a build that no process ever takes.
  */
 export function assertCommandWorkerServesModuleJobKinds(
   modules: ModuleSnapshot,
-  handlers: readonly RegisteredJobHandler[]
+  served: readonly string[]
 ): void {
-  const served = new Set(
-    handlers.filter((handler) => handler.slots > 0).map((handler) => handler.kind.kind)
-  );
   for (const module of modules.modules) {
     if (!module.enabled) {
       continue;
     }
-    const missing = module.definition?.commandWorkerJobKinds?.find((kind) => !served.has(kind));
+    const missing = module.definition?.commandWorkerJobKinds?.find(
+      (kind) => !served.includes(kind)
+    );
     if (missing !== undefined) {
       throw new AppError(
         "VALIDATION_FAILED",

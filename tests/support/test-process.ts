@@ -12,7 +12,7 @@ export function startTestProcess(
   options: {
     args?: string[];
     env: NodeJS.ProcessEnv;
-    stdio: ["pipe" | "ignore", "ignore", "pipe" | "inherit"];
+    stdio: ["pipe" | "ignore", "pipe" | "ignore", "pipe" | "inherit"];
   }
 ): ChildProcess {
   return spawn(

@@ -66,7 +66,7 @@ export async function createClientInstanceArtifactPreviewWorker(
   // This worker reads no module switch. It resolves them so that a config this build cannot
   // run stops every process of the instance, and with the same message.
   resolveInstanceModules(config, input.capabilities);
-  endResolveOnlyRun(env);
+  endResolveOnlyRun();
   const infrastructure = await createInstanceInfrastructure({
     config,
     env,

@@ -724,7 +724,12 @@ describe("the apps module and the workspace command worker", () => {
     expect(() => assertCommandWorkerServesModuleJobKinds(snapshot(true), [])).toThrow(
       "'modules.apps.enabled' is true, but the workspace command worker of this assembly does not serve the job kind 'page.bundle'"
     );
-    expect(() => assertCommandWorkerServesModuleJobKinds(snapshot(true), handlers)).not.toThrow();
+    expect(() =>
+      assertCommandWorkerServesModuleJobKinds(
+        snapshot(true),
+        handlers.map((handler) => handler.kind.kind)
+      )
+    ).not.toThrow();
     expect(() => assertCommandWorkerServesModuleJobKinds(snapshot(false), [])).not.toThrow();
   });
 

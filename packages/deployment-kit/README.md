@@ -62,12 +62,16 @@ assertions in an executable `deploy/scripts/check-release-policy.sh`, which runs
 
 The release gate also starts every built process entry point of the deployment once per
 release config (`lib/resolve-entry-points.mjs`): `dist/server.js`, `dist/agent-run-worker.js`,
-`dist/workspace-command-worker.js` and `dist/artifact-preview-worker.js`, each one that exists.
-It sets `CATALYST_RESOLVE_ONLY=1`, with which a process loads the config, resolves its modules
-against the build it was assembled from and ends with code 0 before it opens a store. A config
-the schema refuses fails there, and so does a process that would stop on the host because a
-module is on that its build ships no code for. An entry point must start its process through
-`defineClientInstance` for this; one that does not is reported after two minutes.
+`dist/workspace-command-worker.js` and `dist/artifact-preview-worker.js`. Its log names the ones
+it ran and the ones the deployment does not build. Each is started with the argument
+`--resolve-only`, with which a process loads the config, resolves its modules against the build
+it was assembled from, makes the checks that need only the two, prints
+`resolve-only: this process starts with this config` and ends with code 0 before it opens a
+store. A config the schema refuses fails there, and so does a process that would stop on the
+host: a module is on that its build ships no code for, or the workspace command worker is built
+for a config that turns Execution Workspaces off. An entry point must start its process through
+`defineClientInstance` for this. One that ends without the line fails, and one that is still
+running after two minutes is killed and fails.
 
 ## Still owned by the deployment repo
 

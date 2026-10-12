@@ -164,28 +164,39 @@ test_resolve_entry_points() {
   local record='import { appendFileSync } from "node:fs";
 import { basename } from "node:path";
 const config = basename(process.env.CLIENT_CONFIG_PATH);
-appendFileSync(process.env.RUNS, `${basename(process.argv[1])} ${config} ${process.env.CATALYST_RESOLVE_ONLY}\n`);'
+appendFileSync(process.env.RUNS, `${basename(process.argv[1])} ${config} ${process.argv[2]}\n`);
+const resolved = () => console.log("resolve-only: this process starts with this config");'
   mkdir -p "$deployment/config" "$deployment/dist"
   printf 'modules: {}\n' > "$deployment/config/app.base.yaml"
   printf 'extends: ./app.base.yaml\n' > "$deployment/config/app.staging.yaml"
   printf 'extends: "./app.base.yaml"\n' > "$deployment/config/app.production.yaml"
-  printf '%s\n' "$record" > "$deployment/dist/server.js"
-  printf '%s\n' "$record" > "$deployment/dist/migrate.js"
-  printf '%s\nif (config === "app.production.yaml") { console.error("Module is enabled but this build ships no code for it"); process.exit(1); }\n' \
+  printf '%s\nresolved();\n' "$record" > "$deployment/dist/server.js"
+  printf '%s\nresolved();\n' "$record" > "$deployment/dist/migrate.js"
+  printf '%s\nif (config === "app.production.yaml") { console.error("Module is enabled but this build ships no code for it"); process.exit(1); }\nresolved();\n' \
     "$record" > "$deployment/dist/workspace-command-worker.js"
+  # Ends with code 0 and resolved nothing, as an entry point that is no process of the instance.
+  printf '%s\n' "$record" > "$deployment/dist/artifact-preview-worker.js"
 
   expect_failure env RUNS="$runs" node "$kit_dir/lib/resolve-entry-points.mjs" "$deployment"
   assert_contains "$scratch/failure-output" "Module is enabled but this build ships no code for it"
   assert_contains "$scratch/failure-output" \
     "check-release: workspace-command-worker.js with app.production.yaml: stopped"
   assert_contains "$scratch/failure-output" "resolved server.js with app.production.yaml"
+  assert_contains "$scratch/failure-output" \
+    "check-release: artifact-preview-worker.js with app.staging.yaml: ended with code 0 and resolved nothing"
+  assert_contains "$scratch/failure-output" \
+    "entry points run: server.js, workspace-command-worker.js, artifact-preview-worker.js"
+  assert_contains "$scratch/failure-output" \
+    "entry points this deployment does not build: agent-run-worker.js"
   # Every process entry point once per config a release starts from, and nothing else in dist/.
-  [[ "$(LC_ALL=C sort "$runs")" == "server.js app.production.yaml 1
-server.js app.staging.yaml 1
-workspace-command-worker.js app.production.yaml 1
-workspace-command-worker.js app.staging.yaml 1" ]] || fail "unexpected resolve-only runs: $(cat "$runs")"
+  [[ "$(LC_ALL=C sort "$runs")" == "artifact-preview-worker.js app.production.yaml --resolve-only
+artifact-preview-worker.js app.staging.yaml --resolve-only
+server.js app.production.yaml --resolve-only
+server.js app.staging.yaml --resolve-only
+workspace-command-worker.js app.production.yaml --resolve-only
+workspace-command-worker.js app.staging.yaml --resolve-only" ]] || fail "unexpected resolve-only runs: $(cat "$runs")"
 
-  rm "$deployment/config/app.production.yaml"
+  rm "$deployment/config/app.production.yaml" "$deployment/dist/artifact-preview-worker.js"
   RUNS="$runs" node "$kit_dir/lib/resolve-entry-points.mjs" "$deployment" >/dev/null
 
   rm "$deployment/dist/server.js" "$deployment/dist/workspace-command-worker.js"

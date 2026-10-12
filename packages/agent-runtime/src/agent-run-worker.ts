@@ -198,6 +198,9 @@ async function executeClaimedRun(
       () => stop("idle", "Agent run stored no event within the idle limit"),
       AGENT_RUN_IDLE_LIMIT_MS
     );
+    // A watchdog, not work: a stopped process does not wait up to the limit for a run whose
+    // executor never returns.
+    idleTimer.unref();
   };
   restartIdleTimer();
 

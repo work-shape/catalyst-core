@@ -16,6 +16,7 @@ import {
   createWorkspaceCommandJobs,
   LocalWorkspaceCommandRunner
 } from "@vivd-catalyst/tool-execution";
+import { pageBundleJob } from "@vivd-catalyst/chat-server";
 import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 import {
   createInstanceInfrastructure,
@@ -33,7 +34,7 @@ import {
   endResolveOnlyRun,
   resolveInstanceModules
 } from "./modules";
-import { createInstancePageBuildJobs } from "./pages";
+import { createInstancePageBuildJobs, requireFilesStore } from "./pages";
 import { createPlatformStore } from "./store";
 
 export interface CreateClientInstanceWorkspaceCommandWorkerInput {
@@ -67,22 +68,24 @@ export async function createClientInstanceWorkspaceCommandWorker(
     env
   );
   const modules = resolveInstanceModules(config, input.capabilities).snapshot;
-  endResolveOnlyRun(env);
   if (!config.executionWorkspaces.enabled) {
     throw new AppError("VALIDATION_FAILED", "Execution workspaces are disabled in release config");
   }
-
+  // The work of a module that this worker has a handler for. It is known before a store is
+  // open, so a module that needs more of this worker stops the process here.
+  const buildsPages = modules.isEnabled("apps");
+  assertCommandWorkerServesModuleJobKinds(modules, buildsPages ? [pageBundleJob.kind] : []);
+  if (buildsPages) {
+    requireFilesStore(config);
+  }
+  endResolveOnlyRun();
   const infrastructure = await createInstanceInfrastructure({
     config,
     env,
     logger,
     secrets: input.secrets,
     // With the `apps` module on this worker also stores the Pages it builds.
-    uses: [
-      WORKSPACE_STORE_PATH,
-      SANDBOX_PATH,
-      ...(modules.isEnabled("apps") ? [FILES_STORE_PATH] : [])
-    ]
+    uses: [WORKSPACE_STORE_PATH, SANDBOX_PATH, ...(buildsPages ? [FILES_STORE_PATH] : [])]
   });
   const store = await createPlatformStore({
     secrets: infrastructure.secrets,
@@ -136,14 +139,12 @@ export async function createClientInstanceWorkspaceCommandWorker(
     env,
     logger
   });
-  const handlers = [...commandJobs.handlers, ...sandboxCheck.handlers, ...pageBuildHandlers];
-  assertCommandWorkerServesModuleJobKinds(modules, handlers);
   const worker = createJobWorker({
     stores: store,
     clientInstanceId,
     // The worker id names this process in the log lines of its jobs.
     logger: workerId ? logger.child({ workerId }) : logger,
-    handlers,
+    handlers: [...commandJobs.handlers, ...sandboxCheck.handlers, ...pageBuildHandlers],
     schedules: [...commandJobs.schedules, ...sandboxCheck.schedules]
   });
   let stopped: (() => void) | undefined;

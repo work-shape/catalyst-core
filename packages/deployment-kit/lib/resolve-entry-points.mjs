@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-// Starts every built process entry point of a deployment once per release config, as a
-// resolve-only run: the process loads the config, resolves its modules against the build it
-// was assembled from and ends before it opens a store or a provider. A config the schema
-// refuses, or a process that would stop at module resolution, fails here and not on the host.
+// Starts every built process entry point of a deployment once per release config with the
+// argument `--resolve-only`: the process loads the config, resolves its modules against the
+// build it was assembled from, makes the checks that need only the two and ends before it
+// opens a store or a provider. A config the schema refuses, or a process that would stop on
+// one of those checks, fails here and not on the host.
 //
 // Usage: resolve-entry-points.mjs DEPLOYMENT_ROOT
 import { spawnSync } from "node:child_process";
@@ -19,6 +20,8 @@ const PROCESS_ENTRY_POINTS = [
 ];
 /** A bound on a hang: a resolve-only run ends in seconds, a process that serves never does. */
 const RUN_TIMEOUT_MS = 120_000;
+/** What a process prints before it ends a resolve-only run, as client-assembly words it. */
+const RESOLVE_ONLY_MARKER = "resolve-only: this process starts with this config";
 
 const [rootArgument] = process.argv.slice(2);
 if (!rootArgument) throw new Error("Usage: resolve-entry-points.mjs DEPLOYMENT_ROOT");
@@ -45,29 +48,42 @@ const entryPoints = PROCESS_ENTRY_POINTS.filter((name) =>
   existsSync(join(deploymentRoot, "dist", name))
 );
 if (entryPoints.length === 0) throw new Error("No built process entry point found under dist/");
+const notBuilt = PROCESS_ENTRY_POINTS.filter((name) => !entryPoints.includes(name));
+console.log(`entry points run: ${entryPoints.join(", ")}`);
+console.log(`entry points this deployment does not build: ${notBuilt.join(", ") || "none"}`);
 
 const failures = [];
 for (const config of configs) {
   for (const entryPoint of entryPoints) {
-    // `env` adds the two variables to the environment the process inherits from the gate.
+    // `env` adds the config path to the environment the process inherits from the gate.
     const run = spawnSync(
       "env",
       [
-        "CATALYST_RESOLVE_ONLY=1",
         `CLIENT_CONFIG_PATH=${join(configDir, config)}`,
         process.execPath,
-        join(deploymentRoot, "dist", entryPoint)
+        join(deploymentRoot, "dist", entryPoint),
+        "--resolve-only"
       ],
-      { cwd: deploymentRoot, stdio: ["ignore", "ignore", "inherit"], timeout: RUN_TIMEOUT_MS }
+      {
+        cwd: deploymentRoot,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "inherit"],
+        timeout: RUN_TIMEOUT_MS,
+        killSignal: "SIGKILL"
+      }
     );
-    if (run.status === 0) {
-      console.log(`resolved ${entryPoint} with ${config}`);
-    } else if (run.error?.code === "ETIMEDOUT") {
+    if (run.error?.code === "ETIMEDOUT") {
       failures.push(
         `${entryPoint} with ${config}: still running after ${RUN_TIMEOUT_MS / 1000} seconds. The entry point does not start its process through 'defineClientInstance'`
       );
-    } else {
+    } else if (run.status !== 0) {
       failures.push(`${entryPoint} with ${config}: stopped, see its message above`);
+    } else if (!run.stdout.includes(RESOLVE_ONLY_MARKER)) {
+      failures.push(
+        `${entryPoint} with ${config}: ended with code 0 and resolved nothing. The entry point does not start its process through 'defineClientInstance'`
+      );
+    } else {
+      console.log(`resolved ${entryPoint} with ${config}`);
     }
   }
 }

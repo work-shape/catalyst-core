@@ -251,7 +251,7 @@ export async function createClientInstanceExecutionAssembly(
   const clientInstanceId = getClientInstanceId(config);
   const { capabilities } = input;
   const modules = resolveInstanceModules(config, capabilities).snapshot;
-  endResolveOnlyRun(env);
+  endResolveOnlyRun();
   // The resolver comes first: the store, the sign-in code and every provider take from it.
   const infrastructure = await createInstanceInfrastructure({
     config,

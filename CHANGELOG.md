@@ -436,11 +436,14 @@ id from config_assets where status = 'deleted')`.
   capabilities and stopped with that message on every instance with a capability module on.
   No migration and no data change: rolling back is rolling back the image.
 - **Release gate:** `catalyst-deploy check` starts every built process entry point once per
-  release config with `CATALYST_RESOLVE_ONLY=1`. The process loads the config, resolves its
-  modules and ends with code 0 before it opens a store. This replaces the schema validation of
-  the configs, which the run of `dist/server.js` includes, and fails the gate for a process that
-  would stop on the host at module resolution. Nothing but the gate sets the variable: a
-  process started with it does no work.
+  release config with the argument `--resolve-only`. The process loads the config, resolves its
+  modules, makes the checks that need only the config and the build, prints
+  `resolve-only: this process starts with this config` and ends with code 0 before it opens a
+  store. This replaces the schema validation of the configs, which the run of `dist/server.js`
+  includes, and fails the gate for a process that would stop on the host on one of those
+  checks. **A deployment that builds `dist/workspace-command-worker.js` now fails the gate for
+  a release config with `executionWorkspaces.enabled: false`.** Nothing but the gate passes the
+  argument: a process started with it does no work.
 
 - **Asset writes name the revision of each asset (breaking):** `expectedRevision` is required
   on `assets.put`, `assets.delete`, `assets.revert` and on every item of `assets.sync` and
