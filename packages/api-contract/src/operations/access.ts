@@ -23,7 +23,9 @@ export const accessOperations = {
     summary:
       "Allow or deny a user an action in a Namespace or on one asset, or allow a service principal a use right on one asset",
     tag: "Access",
-    auth: "user",
+    // A person's operation. A service principal is let in to be refused by the operation
+    // itself, by name and on the Operation Run, and not by the route with a general answer.
+    auth: "principal",
     scope: "user_admin:write",
     // The rule is more than one right: `users.manage`, a superadmin's rows are a superadmin's
     // alone, and a service principal's rows are written by who administers service
@@ -41,7 +43,9 @@ export const accessOperations = {
     path: "/api/v1/instance/access/grants/:grantId",
     summary: "Remove a grant row",
     tag: "Access",
-    auth: "user",
+    // A person's operation. A service principal is let in to be refused by the operation
+    // itself, by name and on the Operation Run, and not by the route with a general answer.
+    auth: "principal",
     scope: "user_admin:write",
     // The rule is more than one right: `users.manage`, a superadmin's rows are a superadmin's
     // alone, and a service principal's rows are removed by who administers service

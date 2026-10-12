@@ -6118,6 +6118,11 @@
             "sessionToken": [
               "user_admin:write"
             ]
+          },
+          {
+            "accessToken": [
+              "user_admin:write"
+            ]
           }
         ],
         "parameters": [
@@ -6227,6 +6232,11 @@
           },
           {
             "sessionToken": [
+              "user_admin:write"
+            ]
+          },
+          {
+            "accessToken": [
               "user_admin:write"
             ]
           }

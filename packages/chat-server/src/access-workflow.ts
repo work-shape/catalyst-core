@@ -4,6 +4,7 @@ import {
   asUserId,
   auditActorFromUser,
   hasAuthScope,
+  requireAuthScope,
   isAuthenticatedServicePrincipal,
   isGrantableAction,
   isGrantableAt,
@@ -33,7 +34,11 @@ import { authorizePrincipalAdministration } from "./api-access-administration-wo
 import type { ChatServerOptions } from "./types";
 
 type AccessCallContext = Pick<OperationExecutionContext, "correlationId">;
-/** A grant write decides again, on what is stored now, what its `authorize` decided. */
+/**
+ * A grant write asks again what its `authorize` asked, of the same answer on the caller's
+ * rights: `access` is the call's one snapshot and is not read anew. What is read anew is the
+ * holder. The check is repeated so the write refuses by itself, whoever calls it.
+ */
 type GrantWriteContext = Pick<OperationExecutionContext, "correlationId" | "access">;
 
 /** The right every operation here asks for. The two grant writes ask it themselves. */
@@ -98,7 +103,11 @@ export class AccessWorkflow {
     );
   }
 
-  /** Who may remove the grant row the call names. A row that does not exist passes. */
+  /**
+   * Who may remove the grant row the call names. A row that does not exist passes, and so
+   * does a service principal's row for a caller who is not shown service principals: the
+   * write answers both the same, so the id of such a row cannot be told from an absent one.
+   */
   async authorizeRevoke(
     actor: AuthenticatedIdentity,
     access: ActorAccess,
@@ -110,11 +119,14 @@ export class AccessWorkflow {
         clientInstanceId: this.options.clientInstanceId,
         grantId
       });
-      return existing?.holderKind === "service_principal"
-        ? authorizePrincipalHolderWrite(person, access, operation)
-        : existing?.holderKind === "user"
-          ? this.authorizeUserHolderWrite(person, operation, existing.holderId)
+      if (existing?.holderKind === "service_principal") {
+        return seesPrincipals(person, access)
+          ? authorizePrincipalHolderWrite(person, access, operation)
           : { allowed: true };
+      }
+      return existing?.holderKind === "user"
+        ? this.authorizeUserHolderWrite(person, operation, existing.holderId)
+        : { allowed: true };
     });
   }
 
@@ -132,7 +144,7 @@ export class AccessWorkflow {
     ) => Promise<OperationAuthorization> | OperationAuthorization
   ): Promise<OperationAuthorization> {
     if (isAuthenticatedServicePrincipal(actor)) {
-      return holderNotAdministrable(operation);
+      return holderNotAdministrable(operation, "A service principal writes no grant row");
     }
     const right = access.authorize(MANAGE_ACTION);
     if (!right.allowed) {
@@ -296,6 +308,10 @@ export class AccessWorkflow {
       }
     }
     if (existing.holderKind === "service_principal") {
+      // The list does not show the row to this caller, so neither does a refusal.
+      if (!seesPrincipals(actor, context.access)) {
+        throw new AppError("NOT_FOUND", "Grant not found");
+      }
       requireAuthorized(authorizePrincipalHolderWrite(actor, context.access, REVOKE_OPERATION));
     }
     const revoked = await this.options.stores.access.deleteGrant({
@@ -335,8 +351,7 @@ export class AccessWorkflow {
       clientInstanceId: this.options.clientInstanceId,
       ...filter,
       excludeSuperadminHolders: !isSuperadmin(actor),
-      excludeServicePrincipalHolders:
-        !access.authorize(API_ACCESS_ACTION).allowed || !hasAuthScope(actor, API_ACCESS_READ_SCOPE)
+      excludeServicePrincipalHolders: !seesPrincipals(actor, access)
     });
   }
 
@@ -530,8 +545,10 @@ export class AccessWorkflow {
         permissionRefs: user.permissionRefs
       };
     }
-    // Service principals are administered behind `api_access.manage`.
+    // Service principals are read behind `api_access.manage` and the scope of reading API
+    // access: the rule of the list of grant rows, so this says nothing the list hides.
     access.require(API_ACCESS_ACTION);
+    requireAuthScope(actor, API_ACCESS_READ_SCOPE);
     const principal = await this.findPrincipal(input.holderId);
     if (!principal) {
       throw new AppError("NOT_FOUND", "Service principal not found", {
@@ -626,8 +643,17 @@ function refused(reason: string, message: string): AppError {
   return new AppError("VALIDATION_FAILED", message, { reason });
 }
 
-function holderNotAdministrable(operation: string): OperationAuthorization {
-  return { allowed: false, action: operation, reason: "holder_not_administrable" };
+/**
+ * No right is missing that the caller could be given, so the refusal names the operation and
+ * its text says who writes the row.
+ */
+function holderNotAdministrable(operation: string, message: string): OperationAuthorization {
+  return { allowed: false, action: operation, reason: "holder_not_administrable", message };
+}
+
+/** Whom the list of service principals is shown to, and so the rows they hold. */
+function seesPrincipals(actor: AuthenticatedUser, access: ActorAccess): boolean {
+  return access.authorize(API_ACCESS_ACTION).allowed && hasAuthScope(actor, API_ACCESS_READ_SCOPE);
 }
 
 /**
@@ -644,13 +670,19 @@ function authorizePrincipalHolderWrite(
 ): OperationAuthorization {
   const administration = authorizePrincipalAdministration({ actor, access }, operation);
   if (!administration.allowed) {
-    return administration.action === operation ? holderNotAdministrable(operation) : administration;
+    return administration.action === operation
+      ? holderNotAdministrable(
+          operation,
+          `A grant row of a service principal is written by a superadmin who holds '${API_ACCESS_ACTION}'`
+        )
+      : administration;
   }
   return hasAuthScope(actor, API_ACCESS_WRITE_SCOPE)
     ? { allowed: true }
     : {
         allowed: false,
-        action: API_ACCESS_ACTION,
+        // The right is held. What is missing is a scope of the credential, and it is named.
+        action: `auth_scope:${API_ACCESS_WRITE_SCOPE}`,
         reason: "no_grant",
         message: `Missing auth scope '${API_ACCESS_WRITE_SCOPE}'`
       };
@@ -661,7 +693,8 @@ function requireAuthorized(authorization: OperationAuthorization): void {
     throw operationDenialError({
       kind: "forbidden",
       action: authorization.action,
-      reason: authorization.reason
+      reason: authorization.reason,
+      ...(authorization.message === undefined ? {} : { message: authorization.message })
     });
   }
 }

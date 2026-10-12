@@ -2,13 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ACTIONS,
   PRINCIPAL_GRANTABLE_ACTIONS,
-  asApiCredentialId,
   createAuthorizer,
-  createPlatformId,
-  type AuthenticatedIdentity,
-  type OperationOrigin,
-  type ServicePrincipalRecord,
-  type WorkflowRunPrincipal
+  type ServicePrincipalRecord
 } from "@vivd-catalyst/core";
 import { runOperation } from "@vivd-catalyst/tool-execution";
 import {
@@ -18,12 +13,17 @@ import {
   errorSchema,
   grantSchema
 } from "./support/access-instance";
-import {
-  fixture,
-  operationOf,
-  type ConnectionOperationsFixture
-} from "./support/connection-operations";
+import type { ConnectionOperationsFixture } from "./support/connection-operations";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
+import {
+  denied,
+  forWorkflows,
+  keyIdentity,
+  runIdentity,
+  setup,
+  workflowOrigin,
+  type Setup
+} from "./support/principal-grants";
 import { withTestSql } from "./support/test-sql";
 
 // Grant rows for a service principal on named resources, on real rows and the real call
@@ -37,107 +37,6 @@ import { withTestSql } from "./support/test-sql";
 
 afterEach(() => {
   vi.restoreAllMocks();
-});
-
-const workflowRunId = createPlatformId<"WorkflowRunId">("wfr");
-const workflowOrigin: OperationOrigin = {
-  kind: "workflow",
-  workflowRunId,
-  stepRunId: "wfstep_test"
-};
-
-/** A Connection whose one operation a step of a Workflow may call. */
-const forWorkflows = { operations: [operationOf("echo", { exposure: ["workflow"] })] };
-
-/** The principal as a Workflow Run acts as it: no credential, the record's own permissions. */
-function runIdentity(
-  principal: ServicePrincipalRecord,
-  permissions: string[] = principal.permissions
-): WorkflowRunPrincipal {
-  return {
-    kind: "service",
-    id: principal.id,
-    displayLabel: principal.displayLabel,
-    permissionRefs: [],
-    permissions,
-    clientInstanceId,
-    authSource: "workflow_run",
-    scopes: ["*"],
-    workflowRunId
-  };
-}
-
-/** The principal as one of its keys authenticates it. */
-function keyIdentity(
-  principal: ServicePrincipalRecord,
-  permissions: string[] = principal.permissions
-): AuthenticatedIdentity {
-  return {
-    kind: "service",
-    id: principal.id,
-    credentialId: asApiCredentialId("cred_test"),
-    displayLabel: principal.displayLabel,
-    permissionRefs: [],
-    permissions,
-    clientInstanceId,
-    authSource: "test",
-    scopes: ["*"]
-  };
-}
-
-async function setup() {
-  const t = await fixture();
-  const principal = await t.stores.apiAccess.createServicePrincipal({
-    clientInstanceId,
-    name: "monthly-check",
-    displayLabel: "Monthly check",
-    permissions: ["config_assets.read"]
-  });
-  /** An administrator who holds `api_access.manage` and is no superadmin. */
-  const ops = await t.stores.users.createUser({
-    clientInstanceId,
-    displayLabel: "Ops",
-    roles: ["user", "admin"],
-    permissions: ["api_access.manage"]
-  });
-  const payload = (assetId: string, overrides: Record<string, unknown> = {}) => ({
-    holderKind: "service_principal",
-    holderId: principal.id,
-    action: "connection.use",
-    scopeKind: "asset",
-    scopeId: assetId,
-    ...overrides
-  });
-  /** Written by the superadmin. Returns the grant id. */
-  const grantTo = async (assetId: string) =>
-    grantSchema.parse(
-      (await t.expectOk(t.root.id, "permissions.grant", { payload: payload(assetId) })).json()
-    ).id;
-  /** A step of a run that acts as the principal calls the Connection's operation. */
-  const step = (name: string, actor: AuthenticatedIdentity = runIdentity(principal)) => {
-    t.executed.length = 0;
-    return runOperation(
-      {
-        operation: `connection.${name}.echo`,
-        effect: "reading",
-        input: { text: "hello" },
-        actor,
-        origin: workflowOrigin,
-        correlationId: "corr_step"
-      },
-      t.operationCalls.deps
-    );
-  };
-  const principalRows = () =>
-    t.stores.access.listGrants({ clientInstanceId, holderKind: "service_principal" });
-  return { t, principal, ops, payload, grantTo, step, principalRows };
-}
-
-type Setup = Awaited<ReturnType<typeof setup>>;
-
-const denied = (action: string, reason: string) => ({
-  status: "denied",
-  reason: { kind: "forbidden", action, reason }
 });
 
 /** The audit rows of one type that name the principal. */
@@ -289,13 +188,18 @@ describe("who writes a service principal's grant row", () => {
     const { t, principal } = s;
     const crm = await t.seed("crm", forWorkflows);
 
-    // Over HTTP the operation is a person's: a service key is turned away at the door.
+    // Over HTTP a service key is refused by the operation's own check, by name, and the
+    // refusal says what refused: no right is missing that a principal could be given.
     const overHttp = await t.instance.call("permissions.grant", {
       payload: s.payload(crm),
       headers: { [SERVICE_HEADER]: principal.id }
     });
     expect(overHttp.statusCode).toBe(403);
-    expect(errorSchema.parse(overHttp.json()).error.code).toBe("FORBIDDEN");
+    expect(errorSchema.parse(overHttp.json()).error).toMatchObject({
+      code: "FORBIDDEN",
+      message: "A service principal writes no grant row",
+      details: { action: "permissions.grant", reason: "holder_not_administrable" }
+    });
 
     // Reached as an operation of the registry, by a key or by a run, also with every right
     // an administrator holds: the operation's own check refuses before any right is read.
@@ -345,6 +249,16 @@ describe("who writes a service principal's grant row", () => {
     );
 
     expect(outcome.result).toMatchObject(denied("permissions.revoke", "holder_not_administrable"));
+    const overHttp = await t.instance.call("permissions.revoke", {
+      params: { grantId },
+      headers: { [SERVICE_HEADER]: principal.id }
+    });
+    expect(overHttp.statusCode).toBe(403);
+    expect(errorSchema.parse(overHttp.json()).error).toMatchObject({
+      code: "FORBIDDEN",
+      message: "A service principal writes no grant row",
+      details: { action: "permissions.revoke", reason: "holder_not_administrable" }
+    });
     expect(await s.principalRows()).toHaveLength(1);
   });
 
@@ -361,11 +275,14 @@ describe("who writes a service principal's grant row", () => {
       t.forbidden("api_access.manage", "no_grant")
     );
     // Holding the right without the role is refused by name: no right stands for the role.
-    await t.expectRefused(
+    const withoutRole = await t.expectRefused(
       s.ops.id,
       "permissions.grant",
       { payload: s.payload(crm) },
       t.forbidden("permissions.grant", "holder_not_administrable")
+    );
+    expect(withoutRole.message).toBe(
+      "A grant row of a service principal is written by a superadmin who holds 'api_access.manage'"
     );
     // A person who manages no users writes no grant row at all.
     await t.expectRefused(
@@ -377,12 +294,24 @@ describe("who writes a service principal's grant row", () => {
     expect(await s.principalRows()).toEqual([]);
 
     const grantId = await s.grantTo(crm);
-    await t.expectRefused(
+    // Who may not see service principals is told of a principal's row what is told of a row
+    // that does not exist, so no grant id of a principal can be told from an absent one.
+    const hidden = await t.expectRefused(
       t.admin.id,
       "permissions.revoke",
       { params: { grantId } },
-      t.forbidden("api_access.manage", "no_grant")
+      { status: 404, code: "NOT_FOUND" }
     );
+    const absent = await t.expectRefused(
+      t.admin.id,
+      "permissions.revoke",
+      { params: { grantId: "grant_absent" } },
+      { status: 404, code: "NOT_FOUND" }
+    );
+    expect({ message: hidden.message, details: hidden.details }).toEqual({
+      message: absent.message,
+      details: absent.details
+    });
     await t.expectRefused(
       s.ops.id,
       "permissions.revoke",
@@ -398,13 +327,18 @@ describe("who writes a service principal's grant row", () => {
     const { t } = s;
     const crm = await t.seed("crm", forWorkflows);
     const withScopes = (scopes: string) => ({ headers: { [SCOPES_HEADER]: scopes } });
+    const missingScope = (scope: string) => ({
+      status: 403,
+      code: "FORBIDDEN",
+      details: { action: `auth_scope:${scope}`, reason: "no_grant" }
+    });
 
     // A key of the superadmin issued for managing users writes rows for users and none here.
     await t.expectRefused(
       t.root.id,
       "permissions.grant",
       { payload: s.payload(crm), ...withScopes("user_admin:write user_admin:read") },
-      t.forbidden("api_access.manage", "no_grant")
+      missingScope("api_access:write")
     );
     expect(await s.principalRows()).toEqual([]);
     const written = await t.expectOk(t.root.id, "permissions.grant", {
@@ -415,12 +349,31 @@ describe("who writes a service principal's grant row", () => {
     await t.expectRefused(
       t.root.id,
       "permissions.revoke",
-      { params: { grantId }, ...withScopes("user_admin:write") },
-      t.forbidden("api_access.manage", "no_grant")
+      { params: { grantId }, ...withScopes("user_admin:write api_access:read") },
+      missingScope("api_access:write")
     );
-    // Nor does it list a principal's rows without the scope of reading API access.
+    // Without the scope of reading API access the row is not there for the key: not to
+    // revoke, not in the list, and not in what the principal is said to hold.
+    await t.expectRefused(
+      t.root.id,
+      "permissions.revoke",
+      { params: { grantId }, ...withScopes("user_admin:write") },
+      { status: 404, code: "NOT_FOUND" }
+    );
     const listed = await t.expectOk(t.root.id, "permissions.list", withScopes("user_admin:read"));
     expect(listed.json()).toMatchObject({ items: [] });
+    const effective = { query: { holderKind: "service_principal", holderId: s.principal.id } };
+    const refused = await t.expectRefused(
+      t.root.id,
+      "permissions.effective",
+      { ...effective, ...withScopes("user_admin:read") },
+      { status: 403, code: "FORBIDDEN" }
+    );
+    expect(refused.message).toBe("Missing auth scope 'api_access:read'");
+    await t.expectOk(t.root.id, "permissions.effective", {
+      ...effective,
+      ...withScopes("user_admin:read api_access:read")
+    });
     expect(await s.principalRows()).toHaveLength(1);
   });
 
