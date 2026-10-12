@@ -1,4 +1,4 @@
-import type { HTMLAttributes } from "react";
+import type { HTMLAttributes, ReactNode } from "react";
 import { cn } from "../cn";
 
 /** What a badge says about its object. `accent` is emphasis that is not a state. */
@@ -36,6 +36,11 @@ export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   size?: BadgeSize;
   /** A leading dot in the tone's colour, for a state that is read at a glance down a list. */
   dot?: boolean;
+  /**
+   * An icon or a spinner before the text, in the dot's place: what the state is doing, such as
+   * the `Spinner` of something that runs. It is decoration; the text names the state.
+   */
+  leading?: ReactNode;
 }
 
 export function Badge({
@@ -44,6 +49,7 @@ export function Badge({
   appearance = "soft",
   size = "md",
   dot = false,
+  leading,
   children,
   ...props
 }: BadgeProps) {
@@ -57,7 +63,19 @@ export function Badge({
       )}
       {...props}
     >
-      {dot ? <span aria-hidden="true" className="size-1.5 rounded-full bg-current" /> : null}
+      {leading === undefined ? (
+        dot ? (
+          <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
+        ) : null
+      ) : (
+        <span
+          aria-hidden="true"
+          data-slot="badge-leading"
+          className="flex shrink-0 items-center [&>svg]:size-3 [&>svg]:stroke-2"
+        >
+          {leading}
+        </span>
+      )}
       {children}
     </span>
   );

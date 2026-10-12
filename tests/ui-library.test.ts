@@ -384,6 +384,28 @@ describe("Picker", () => {
   });
 });
 
+describe("Badge", () => {
+  const badge = (props: Partial<Parameters<typeof library.Badge>[0]>) =>
+    renderToStaticMarkup(createElement(library.Badge, props, "Running"));
+
+  it("shows a leading node in the dot's place, hidden from a screen reader", () => {
+    const markup = badge({ leading: createElement("svg", { "data-icon": "" }), dot: true });
+
+    expect(markup).toMatch(
+      /^<span class="[^"]*"><span aria-hidden="true" data-slot="badge-leading"[^>]*><svg data-icon=""><\/svg><\/span>Running<\/span>$/u
+    );
+    // The dot would be a second mark for the same state.
+    expect(markup).not.toContain("size-1.5");
+  });
+
+  it("keeps the dot, and no mark at all, without a leading node", () => {
+    expect(badge({ dot: true })).toMatch(
+      /^<span class="[^"]*"><span aria-hidden="true" class="size-1\.5 rounded-full bg-current"><\/span>Running<\/span>$/u
+    );
+    expect(badge({})).toMatch(/^<span class="[^"]*">Running<\/span>$/u);
+  });
+});
+
 describe("Banner", () => {
   const inRoot = (banner: ReactNode) =>
     renderToStaticMarkup(createElement(UiRoot, { mode: "light", labels: uiLabelsEn }, banner));

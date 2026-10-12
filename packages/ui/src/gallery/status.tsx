@@ -1,6 +1,7 @@
-import { Bot, Check, Inbox, LayoutGrid, Shield, Users } from "lucide-react";
+import { Bot, Check, Inbox, LayoutGrid, Shield, Users, X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../actions/button";
+import { Spinner } from "../feedback/spinner";
 import { Avatar, type AvatarKind, type AvatarSize } from "../status/avatar";
 import { Badge, type BadgeAppearance, type BadgeTone } from "../status/badge";
 import { Chip, ScopeChip, type ChipSize } from "../status/chip";
@@ -109,6 +110,20 @@ export const statusGallery: GalleryGroup = {
             <Badge tone="success">
               <Check aria-hidden="true" />
               {text.statePublished}
+            </Badge>
+          </Samples>
+          <Samples label="leading">
+            <Badge tone="info" leading={<Spinner size="xs" />}>
+              {text.stateRunning}
+            </Badge>
+            <Badge tone="neutral" appearance="outline" leading={<Spinner size="xs" />}>
+              {text.stateRunning}
+            </Badge>
+            <Badge tone="success" size="sm" leading={<Check />}>
+              {text.statePublished}
+            </Badge>
+            <Badge tone="danger" leading={<X />} dot>
+              {text.stateFailed}
             </Badge>
           </Samples>
         </>
