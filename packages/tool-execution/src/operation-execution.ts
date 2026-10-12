@@ -689,7 +689,13 @@ const forbiddenSchema = z.object({
   message: z.string(),
   details: z.object({
     action: z.string(),
-    reason: z.enum(["no_grant", "denied", "unknown_action", "holder_inactive"])
+    reason: z.enum([
+      "no_grant",
+      "denied",
+      "unknown_action",
+      "holder_inactive",
+      "holder_not_administrable"
+    ])
   })
 });
 

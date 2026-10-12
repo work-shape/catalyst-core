@@ -323,7 +323,13 @@ function denialText(denial: OperationDenial, names: ToolCallNames): string {
 
 const forbiddenDetailsSchema = z.object({
   action: z.string(),
-  reason: z.enum(["no_grant", "denied", "unknown_action", "holder_inactive"])
+  reason: z.enum([
+    "no_grant",
+    "denied",
+    "unknown_action",
+    "holder_inactive",
+    "holder_not_administrable"
+  ])
 });
 const issuesSchema = z.object({
   issues: z.array(

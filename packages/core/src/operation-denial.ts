@@ -4,7 +4,13 @@ export type OperationDenial =
   | {
       kind: "forbidden";
       action: string;
-      reason: "no_grant" | "denied" | "unknown_action" | "holder_inactive";
+      /**
+       * `holder_not_administrable`: the caller may not write a grant row for this holder,
+       * whatever right it holds. A service principal writes none, and a service principal's
+       * rows are written by who administers service principals.
+       */
+      reason:
+        "no_grant" | "denied" | "unknown_action" | "holder_inactive" | "holder_not_administrable";
       /**
        * What the refusal says, where a rule refused that no right a caller can be granted
        * opens. Without it the refusal names the missing right.

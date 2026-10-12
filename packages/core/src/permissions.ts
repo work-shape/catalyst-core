@@ -207,6 +207,28 @@ export function isGrantableAt(
   return GRANTABLE_ACTION_SCOPES[action].some((candidate) => candidate === scopeKind);
 }
 
+/**
+ * The rights a grant row can give a service principal: the use rights of a resource and
+ * nothing else. No right that writes, publishes, deletes or manages is here, and none over
+ * users, access or API access. A kind adds its use right when it brings one; the grant write
+ * hands out only those of them a kind of the instance registers. The list limits what the
+ * grant operation writes; the evaluator answers from whatever rows the table holds.
+ */
+export const PRINCIPAL_GRANTABLE_ACTIONS = [
+  "connection.use",
+  "data_store.read",
+  "data_store.insert",
+  "data_store.execute",
+  "knowledge_base.use",
+  "workflow.use"
+] as const satisfies readonly PlatformAction[];
+
+export type PrincipalGrantableAction = (typeof PRINCIPAL_GRANTABLE_ACTIONS)[number];
+
+export function isPrincipalGrantableAction(action: string): action is PrincipalGrantableAction {
+  return PRINCIPAL_GRANTABLE_ACTIONS.some((candidate) => candidate === action);
+}
+
 /** The one test of the superadmin role. */
 export function isSuperadmin(subject: { roles: readonly string[] }): boolean {
   return subject.roles.includes("superadmin");
@@ -505,7 +527,8 @@ export interface GrantScopeAsset {
 export interface AccessAdministrationStore extends AccessStore {
   /**
    * Throws CONFLICT `duplicate_grant`, VALIDATION_FAILED `unknown_namespace` for an
-   * unregistered prefix, and `userInDeletionError` for a user whose deletion was requested.
+   * unregistered prefix, `userInDeletionError` for a user whose deletion was requested, and
+   * NOT_FOUND `unknown_holder` for a service principal the instance does not have.
    */
   createGrant(input: Omit<PermissionGrant, "id" | "createdAt">): Promise<PermissionGrant>;
   getGrant(input: {
@@ -524,6 +547,8 @@ export interface AccessAdministrationStore extends AccessStore {
     scopeKind?: PermissionGrant["scopeKind"];
     /** Leaves out the rows whose holder is a user with the superadmin role. */
     excludeSuperadminHolders?: boolean;
+    /** Leaves out the rows whose holder is a service principal. */
+    excludeServicePrincipalHolders?: boolean;
     page?: StorePage;
   }): Promise<PermissionGrant[]>;
   /** Throws CONFLICT `namespace_overlap` naming the registered prefix it meets. */

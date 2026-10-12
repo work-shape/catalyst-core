@@ -308,7 +308,12 @@ describe("operation contracts", () => {
       | {
           kind: "forbidden";
           action: string;
-          reason: "no_grant" | "denied" | "unknown_action" | "holder_inactive";
+          reason:
+            | "no_grant"
+            | "denied"
+            | "unknown_action"
+            | "holder_inactive"
+            | "holder_not_administrable";
           message?: string;
         }
       | { kind: "policy"; operation: string }
