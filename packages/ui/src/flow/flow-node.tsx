@@ -3,6 +3,7 @@ import type { HTMLAttributes, KeyboardEvent, ReactNode, Ref } from "react";
 import { cn } from "../cn";
 import { Spinner } from "../feedback/spinner";
 import type { UiLabels } from "../labels";
+import { IconTile } from "../status/icon-tile";
 import { useUiLabels } from "../ui-root";
 import type { FlowEdgeState, FlowStatus } from "./flow-types";
 
@@ -111,16 +112,9 @@ export function FlowHead({ icon, accent = false, eyebrow, title, end, compact }:
       className={cn("flex min-w-0 gap-2.5", compact ? "items-center" : "items-start")}
     >
       {icon === undefined ? null : (
-        <span
-          data-slot="flow-tile"
-          className={cn(
-            "grid shrink-0 place-items-center rounded-md",
-            accent ? "bg-primary-soft text-primary-soft-foreground" : "bg-secondary",
-            compact ? "size-9 [&_svg]:size-5" : "size-7 [&_svg]:size-4"
-          )}
-        >
+        <IconTile data-slot="flow-tile" accent={accent} size={compact ? "lg" : "md"}>
           {icon}
-        </span>
+        </IconTile>
       )}
       <div className="grid min-w-0 flex-1">
         {eyebrow === undefined || compact ? null : (

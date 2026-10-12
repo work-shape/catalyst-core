@@ -1,3 +1,4 @@
+export { Breadcrumb, type BreadcrumbItem, type BreadcrumbProps } from "./breadcrumb";
 export {
   DocsAddressProvider,
   DocsLink,

@@ -18,6 +18,7 @@ import { useId, useState, type MouseEvent, type ReactNode } from "react";
 import { Button } from "../actions/button";
 import { IconButton } from "../actions/icon-button";
 import { Select } from "../forms/select";
+import { Breadcrumb } from "../navigation/breadcrumb";
 import { NavGroup, NavItem } from "../navigation/nav-item";
 import { useSidebarCollapsed } from "../navigation/sidebar-collapsed";
 import {
@@ -650,6 +651,22 @@ export const navigationGallery: GalleryGroup = {
       name: "Tabs",
       components: ["Tabs", "TabsList", "TabsTrigger", "TabsContent", "TabsNav", "TabsLink"],
       render: (text) => <TabsSamples text={text} />
+    },
+    {
+      name: "Breadcrumb",
+      components: ["Breadcrumb"],
+      render: (text) => (
+        <Samples label={text.tabsRoutes}>
+          <Breadcrumb
+            label={text.tabsLabel}
+            items={[
+              { id: "general", label: text.tabsGeneral, href: "#" },
+              { id: "members", label: text.tabsMembers, onSelect: () => undefined },
+              { id: "requests", label: text.tabsRequests }
+            ]}
+          />
+        </Samples>
+      )
     },
     {
       name: "SegmentedControl",

@@ -464,7 +464,10 @@ function Engine({
           zoomOnScroll={false}
           panOnScroll={!embedded}
           preventScrolling={!embedded}
-          proOptions={{ hideAttribution: true }}
+          // The library's own mark stays on the canvas, in the one corner nothing else stands
+          // in: the controls are at the left, the minimap and the panel at the right.
+          attributionPosition="bottom-center"
+          className="[--xy-attribution-background-color:transparent]"
           // With a handler a node takes pointer events, which its own controls need.
           onNodeClick={noNodeClick}
           onPaneClick={() => {

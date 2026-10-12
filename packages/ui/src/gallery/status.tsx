@@ -13,6 +13,7 @@ import {
   RegistryIcon,
   type IconFamily
 } from "../status/registry-icon";
+import { IconTile } from "../status/icon-tile";
 import { KnowsHowTo, SkillIcon, type SkillIconSize } from "../status/skill-icon";
 import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
@@ -269,7 +270,7 @@ export const statusGallery: GalleryGroup = {
     },
     {
       name: "RegistryIcon",
-      components: ["RegistryIcon", "IconRegistryProvider"],
+      components: ["RegistryIcon", "IconRegistryProvider", "IconTile"],
       render: (text) => (
         <>
           <Samples label={text.iconsFileTypes}>
@@ -314,6 +315,17 @@ export const statusGallery: GalleryGroup = {
                 {family}
               </span>
             ))}
+          </Samples>
+          <Samples label="IconTile">
+            <IconTile>
+              <RegistryIcon name="database" />
+            </IconTile>
+            <IconTile accent>
+              <RegistryIcon name="agent" />
+            </IconTile>
+            <IconTile size="lg">
+              <RegistryIcon name="repeat" />
+            </IconTile>
           </Samples>
           <Samples label={text.iconsFallback}>
             <IconRegistryProvider icons={{ ledger: genericIcons.files }}>
