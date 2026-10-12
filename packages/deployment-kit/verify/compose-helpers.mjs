@@ -1,6 +1,14 @@
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { spawnSync } from "node:child_process";
+import { readdir, readFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+
+/** The secret names a model adapter reads when its config entry names none. */
+const DEFAULT_MODEL_SECRET_NAMES = [
+  "OPENAI_API_KEY",
+  "AZURE_OPENAI_API_KEY",
+  "GOOGLE_VERTEX_CREDENTIALS"
+];
 
 export async function readPlatformDockerfile() {
   const platformRoot = process.env.PLATFORM_DIR
@@ -9,9 +17,13 @@ export async function readPlatformDockerfile() {
   return readFile(new URL("docker/vivd-client.Dockerfile", platformRoot), "utf8");
 }
 
-// The deployment repo under check: DEPLOYMENT_ROOT, or the directory the check runs in.
+// A path in the deployment repo under check: DEPLOYMENT_ROOT, or the directory the check runs in.
+function deploymentPath(path) {
+  return resolve(process.env.DEPLOYMENT_ROOT ?? process.cwd(), path);
+}
+
 export function readDeploymentFile(path) {
-  return readFile(resolve(process.env.DEPLOYMENT_ROOT ?? process.cwd(), path), "utf8");
+  return readFile(deploymentPath(path), "utf8");
 }
 
 // The script the kit runs on the host during a deploy.
@@ -43,6 +55,56 @@ export function extractServiceBlock(contents, serviceName) {
     block.push(line);
   }
   return block.join("\n");
+}
+
+// The services of a Compose file as Docker resolves them: YAML anchors, merge keys, `extends`
+// and every profile. Variables stay as written, so the call needs no env file and a value
+// still shows the variable it reads. What a service must not have is judged on this, never on
+// the text of its block, which shows nothing of what an anchor brings in.
+export function resolveComposeServices(composeFile) {
+  const file = deploymentPath(composeFile);
+  const rendered = spawnSync(
+    "docker",
+    ["compose", "-f", file, "--profile", "*", "config", "--no-interpolate", "--format", "json"],
+    { cwd: dirname(file), encoding: "utf8" }
+  );
+  if (rendered.error) {
+    throw new Error(`${composeFile}: docker compose is required to resolve the file`, {
+      cause: rendered.error
+    });
+  }
+  assert(rendered.status === 0, `${composeFile}: docker compose config failed\n${rendered.stderr}`);
+  return JSON.parse(rendered.stdout).services ?? {};
+}
+
+// Whether a resolved service names `name` anywhere: a variable it receives, a value that reads
+// one, a mount, a Compose secret.
+export function serviceNames(service, name) {
+  return JSON.stringify(service ?? {}).includes(name);
+}
+
+// The names of the secrets that hold a model key: the adapters' defaults and every
+// `credentialSecret` and `organizationSecret` that a file under config/ names. A deployment
+// without config files gets the defaults.
+export async function modelSecretNames() {
+  const entries = await readdir(deploymentPath("config"), {
+    recursive: true,
+    withFileTypes: true
+  }).catch((error) => {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  });
+  const names = new Set(DEFAULT_MODEL_SECRET_NAMES);
+  for (const entry of entries) {
+    if (!entry.isFile() || !/\.ya?ml$/u.test(entry.name)) continue;
+    const contents = await readFile(join(entry.parentPath, entry.name), "utf8");
+    for (const match of contents.matchAll(
+      /^\s*(?:credentialSecret|organizationSecret):\s*["']?([A-Za-z0-9_]+)/gmu
+    )) {
+      names.add(match[1]);
+    }
+  }
+  return [...names].sort();
 }
 
 export function workflowTagsImageSuffix(workflow, suffix) {

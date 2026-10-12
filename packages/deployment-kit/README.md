@@ -61,7 +61,11 @@ unless every service runs the digest of the release.
 
 `check` starts with `lib/check-deployment-policy.sh`: production Compose pins every first-party
 image by digest, `deploy.yml` requires a successful staging deployment, the bake targets are the
-image keys of a manifest, and the worker wiring under `verify/` holds. A deployment adds its own
+image keys of a manifest, and the worker wiring under `verify/` holds. What a worker must not
+have (a model key, a signing secret, the Docker socket) is judged on the Compose file as
+`docker compose config --no-interpolate` resolves it, with anchors and merge keys applied; the
+model key names are the adapters' defaults and every `credentialSecret` and
+`organizationSecret` under `config/`. A deployment adds its own
 assertions in an executable `deploy/scripts/check-release-policy.sh`, which runs last.
 
 The release gate also starts every built process entry point of the deployment once per

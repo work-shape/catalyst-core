@@ -2,7 +2,9 @@ import {
   assert,
   readDeploymentFile,
   readRemoteDeployScript,
-  extractServiceBlock
+  extractServiceBlock,
+  resolveComposeServices,
+  serviceNames
 } from "./compose-helpers.mjs";
 
 for (const composeFile of ["docker-compose.yml", "docker-compose.prod.yml"]) {
@@ -12,6 +14,7 @@ for (const composeFile of ["docker-compose.yml", "docker-compose.prod.yml"]) {
 
   assert(worker, `${composeFile}: agent-run-worker service is required`);
   assert(api, `${composeFile}: api service is required`);
+  const resolvedWorker = resolveComposeServices(composeFile)["agent-run-worker"];
   assert(
     worker.includes(
       composeFile === "docker-compose.yml" ? "src/agent-run-worker.ts" : "agent-run-worker.js"
@@ -49,16 +52,19 @@ for (const composeFile of ["docker-compose.yml", "docker-compose.prod.yml"]) {
     `${composeFile}: agent-run-worker must use explicit concurrency 2 by default`
   );
   assert(
-    !worker.includes("      doc-worker:\n"),
+    !Object.hasOwn(resolvedWorker.depends_on ?? {}, "doc-worker"),
     `${composeFile}: agent-run-worker startup must not depend on document-worker health`
   );
-  assert(!worker.includes("ports:"), `${composeFile}: agent-run-worker must not expose HTTP`);
   assert(
-    !worker.includes("healthcheck:"),
+    resolvedWorker.ports === undefined,
+    `${composeFile}: agent-run-worker must not expose HTTP`
+  );
+  assert(
+    resolvedWorker.healthcheck === undefined,
     `${composeFile}: agent-run-worker must not add an HTTP health server`
   );
   assert(
-    !worker.includes("/var/run/docker.sock"),
+    !serviceNames(resolvedWorker, "/var/run/docker.sock"),
     `${composeFile}: agent-run-worker must not receive the Docker socket`
   );
   for (const secretName of [
@@ -68,7 +74,7 @@ for (const composeFile of ["docker-compose.yml", "docker-compose.prod.yml"]) {
     "SERVICE_ACCESS_TOKEN_SECRET"
   ]) {
     assert(
-      !worker.includes(secretName),
+      !serviceNames(resolvedWorker, secretName),
       `${composeFile}: agent-run-worker must not receive ${secretName}`
     );
   }
@@ -87,7 +93,7 @@ for (const composeFile of ["docker-compose.yml", "docker-compose.prod.yml"]) {
       `${composeFile}: production agent-run-worker must reuse the API image`
     );
     assert(
-      !worker.includes("-agent-run-worker:"),
+      !resolvedWorker.image.includes("-agent-run-worker:"),
       `${composeFile}: production must not introduce a separate agent worker image`
     );
   }

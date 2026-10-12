@@ -4,11 +4,24 @@ import {
   readRemoteDeployScript,
   extractDockerStage,
   extractServiceBlock,
-  readPlatformDockerfile
+  modelSecretNames,
+  readPlatformDockerfile,
+  resolveComposeServices,
+  serviceNames
 } from "./compose-helpers.mjs";
 
 const composeFiles = ["docker-compose.yml", "docker-compose.prod.yml"];
 const clientDockerfile = await readPlatformDockerfile();
+// The worker reads sources from the object stores and writes previews there, so it holds the
+// object store keys. It calls no model, signs nothing and does not call the document worker.
+const secretsTheWorkerMustNotReceive = [
+  ...(await modelSecretNames()),
+  "BETTER_AUTH_SECRET",
+  "CHAT_SESSION_TOKEN_SECRET",
+  "CHAT_SERVER_CREDENTIAL",
+  "SERVICE_ACCESS_TOKEN_SECRET",
+  "DOCUMENT_WORKER_TOKEN"
+];
 const nativePackages = [
   "fonts-dejavu",
   "fonts-liberation",
@@ -109,6 +122,8 @@ for (const composeFile of composeFiles) {
 
   assert(worker, `${composeFile}: artifact-preview-worker service is required`);
   assert(api, `${composeFile}: api service is required`);
+  const resolved = resolveComposeServices(composeFile);
+  const resolvedWorker = resolved["artifact-preview-worker"];
   assert(
     worker.includes(
       composeFile === "docker-compose.yml"
@@ -135,7 +150,7 @@ for (const composeFile of composeFiles) {
     `${composeFile}: artifact-preview-worker must have an explicit memory limit`
   );
   assert(
-    !worker.includes("/var/run/docker.sock"),
+    !serviceNames(resolvedWorker, "/var/run/docker.sock"),
     `${composeFile}: artifact-preview-worker must not have Docker socket access`
   );
   if (composeFile === "docker-compose.yml") {
@@ -149,30 +164,21 @@ for (const composeFile of composeFiles) {
       `${composeFile}: production artifact-preview-worker must use the dedicated worker image`
     );
     assert(
-      !worker.includes("-api:"),
+      !resolvedWorker.image.includes("-api:"),
       `${composeFile}: production artifact-preview-worker must not run from the API image`
     );
   }
   assert(
-    !api.includes("target: artifact-preview-worker"),
+    !(resolved.api.build?.target ?? "").startsWith("artifact-preview-worker"),
     `${composeFile}: API must not build the artifact-preview-worker image target`
   );
   assert(
-    api.includes("SERVICE_ACCESS_TOKEN_SECRET"),
+    serviceNames(resolved.api, "SERVICE_ACCESS_TOKEN_SECRET"),
     `${composeFile}: chat API must receive SERVICE_ACCESS_TOKEN_SECRET`
   );
-  for (const secretName of [
-    "OPENAI_API_KEY",
-    "AZURE_OPENAI_API_KEY",
-    "AWS_SECRET_ACCESS_KEY",
-    "BETTER_AUTH_SECRET",
-    "CHAT_SESSION_TOKEN_SECRET",
-    "CHAT_SERVER_CREDENTIAL",
-    "SERVICE_ACCESS_TOKEN_SECRET",
-    "DOCUMENT_WORKER_TOKEN"
-  ]) {
+  for (const secretName of secretsTheWorkerMustNotReceive) {
     assert(
-      !worker.includes(secretName),
+      !serviceNames(resolvedWorker, secretName),
       `${composeFile}: artifact-preview-worker must not receive ${secretName}`
     );
   }

@@ -3,11 +3,23 @@ import {
   readDeploymentFile,
   readRemoteDeployScript,
   extractServiceBlock,
-  readPlatformDockerfile
+  modelSecretNames,
+  readPlatformDockerfile,
+  resolveComposeServices,
+  serviceNames
 } from "./compose-helpers.mjs";
 
 const composeFiles = ["docker-compose.yml", "docker-compose.prod.yml"];
 const clientDockerfile = await readPlatformDockerfile();
+// The worker reads and writes the object stores, so it holds the object store keys. It calls
+// no model and signs nothing.
+const secretsTheWorkerMustNotReceive = [
+  ...(await modelSecretNames()),
+  "BETTER_AUTH_SECRET",
+  "CHAT_SESSION_TOKEN_SECRET",
+  "CHAT_SERVER_CREDENTIAL",
+  "SERVICE_ACCESS_TOKEN_SECRET"
+];
 
 assert(
   clientDockerfile.includes("FROM api AS workspace-command-worker"),
@@ -33,6 +45,8 @@ for (const composeFile of composeFiles) {
 
   assert(worker, `${composeFile}: workspace-command-worker service is required`);
   assert(api, `${composeFile}: api service is required`);
+  const resolved = resolveComposeServices(composeFile);
+  const resolvedWorker = resolved["workspace-command-worker"];
   assert(
     worker.includes(
       composeFile === "docker-compose.yml"
@@ -77,7 +91,7 @@ for (const composeFile of composeFiles) {
       `${composeFile}: production worker must receive the runner image of the release by digest`
     );
     assert(
-      !worker.includes("-api:"),
+      !resolvedWorker.image.includes("-api:"),
       `${composeFile}: production worker must not run from the API image`
     );
   }
@@ -90,24 +104,16 @@ for (const composeFile of composeFiles) {
     `${composeFile}: workspace-command-worker runner image must use the catalyst-runner-base release tag shape`
   );
   assert(
-    !api.includes("/var/run/docker.sock"),
+    !serviceNames(resolved.api, "/var/run/docker.sock"),
     `${composeFile}: chat API must not have Docker socket access`
   );
   assert(
-    api.includes("SERVICE_ACCESS_TOKEN_SECRET"),
+    serviceNames(resolved.api, "SERVICE_ACCESS_TOKEN_SECRET"),
     `${composeFile}: chat API must receive SERVICE_ACCESS_TOKEN_SECRET`
   );
-  for (const secretName of [
-    "OPENAI_API_KEY",
-    "AZURE_OPENAI_API_KEY",
-    "AWS_SECRET_ACCESS_KEY",
-    "BETTER_AUTH_SECRET",
-    "CHAT_SESSION_TOKEN_SECRET",
-    "CHAT_SERVER_CREDENTIAL",
-    "SERVICE_ACCESS_TOKEN_SECRET"
-  ]) {
+  for (const secretName of secretsTheWorkerMustNotReceive) {
     assert(
-      !worker.includes(secretName),
+      !serviceNames(resolvedWorker, secretName),
       `${composeFile}: workspace-command-worker must not receive ${secretName}`
     );
   }

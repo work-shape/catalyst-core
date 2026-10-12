@@ -310,7 +310,10 @@ for (const name of [
   "assert",
   "extractDockerStage",
   "extractServiceBlock",
+  "modelSecretNames",
   "readPlatformDockerfile",
+  "resolveComposeServices",
+  "serviceNames",
   "workflowTagsImageSuffix"
 ]) {
   if (typeof helpers[name] !== "function") throw new Error(`${name} is not exported`);
@@ -838,6 +841,64 @@ SH
   assert_contains "$scratch/failure-output" "verify/artifact-preview-worker-compose.mjs"
 }
 
+# What a worker must not receive is judged on the Compose file as Docker resolves it. The text
+# of a service block shows nothing of what a YAML anchor or a merge key brings in.
+test_worker_secret_guards() {
+  local deployment="$scratch/guard-fixture/deployment.fixture"
+  local guard=(env "DEPLOYMENT_ROOT=$deployment" node "$kit_dir/verify/workspace-command-worker-compose.mjs")
+  docker compose version >/dev/null 2>&1 \
+    || fail "docker compose is required: the worker guards resolve the Compose files with it"
+  mkdir -p "$deployment/config/profiles"
+  printf 'services: {}\n' > "$deployment/docker-compose.prod.yml"
+  # The model key has a name of the deployment's own, which only its config knows.
+  printf 'infrastructure:\n  models:\n    main:\n      credentialSecret: ACME_MODEL_KEY\n' \
+    > "$deployment/config/profiles/acme.yaml"
+  cat > "$deployment/docker-compose.yml" <<'YAML'
+x-model-environment: &model-environment
+  ACME_MODEL_KEY: ${ACME_MODEL_KEY:?ACME_MODEL_KEY is required}
+
+x-worker-environment: &worker-environment
+  EXECUTION_WORKSPACE_RUNNER_IMAGE: example-catalyst-runner-base:local
+
+services:
+  api:
+    image: example
+    environment:
+      <<: *model-environment
+      SERVICE_ACCESS_TOKEN_SECRET: ${SERVICE_ACCESS_TOKEN_SECRET:?}
+    healthcheck:
+      test: ["CMD", "true"]
+  workspace-command-worker:
+    build:
+      context: .
+      target: workspace-command-worker-dev
+    command: ["tsx", "src/workspace-command-worker.ts"]
+    stop_grace_period: 30s
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      <<: *worker-environment
+YAML
+
+  # Without the key the local file holds, and the check stops at the empty production file.
+  expect_failure "${guard[@]}"
+  assert_contains "$scratch/failure-output" \
+    "docker-compose.prod.yml: workspace-command-worker service is required"
+
+  # The same key, merged in through anchors: the worker block never spells its name.
+  local compose
+  compose="$(cat "$deployment/docker-compose.yml")"
+  printf '%s\n' "${compose/<<: \*worker-environment/<<: [*worker-environment, *model-environment]}" \
+    > "$deployment/docker-compose.yml"
+  assert_contains "$deployment/docker-compose.yml" "<<: [*worker-environment, *model-environment]"
+  expect_failure "${guard[@]}"
+  assert_contains "$scratch/failure-output" \
+    "docker-compose.yml: workspace-command-worker must not receive ACME_MODEL_KEY"
+}
+
 # A customer name may start with a digit. Every command that reads INSTANCE runs under such a
 # name here, and so do the files a deploy renders for the host.
 test_digit_leading_instance() {
@@ -951,6 +1012,7 @@ test_deploy
 test_remote_deploy
 test_host_backup_scripts
 test_deployment_policy
+test_worker_secret_guards
 test_digit_leading_instance
 test_packed_layout
 echo "deployment-kit tests passed"
