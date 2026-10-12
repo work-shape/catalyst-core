@@ -102,6 +102,7 @@ export function AppPreview({
         session={shown.pageSessionId}
         url={pageFrameAddress(shown.url, apiBaseUrl, window.location.href)}
         route={route}
+        address={shown}
       />
     );
   }

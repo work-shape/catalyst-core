@@ -3,6 +3,7 @@ import { TriangleAlert } from "lucide-react";
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -22,6 +23,7 @@ import { SaveAsAppAction } from "../apps/save-as-app-dialog";
 import { useTranslation } from "../i18n";
 import type { PageBuildError, SurfaceOf } from "../surface/surface";
 import { createPageBridge, type PageBridge } from "./bridge-host";
+import { createFrameCalls, type FrameAddress } from "./frame-calls";
 import {
   keepPageAddress,
   pageIsGone,
@@ -190,6 +192,7 @@ function PageSurface({
             number={address.number}
             session={address.pageSessionId}
             url={pageFrameAddress(address.url, apiBaseUrl, window.location.href)}
+            address={address}
           />
         ) : (
           <PreviewPane
@@ -369,7 +372,8 @@ export function LivePagePreview({
   number,
   session,
   url,
-  route
+  route,
+  address
 }: {
   /** Names the frame for someone who does not see it. */
   title: string;
@@ -379,9 +383,20 @@ export function LivePagePreview({
   session: string;
   url: string;
   route?: PreviewRoute;
+  /**
+   * The address the instance answered, for the calls the document makes through the bridge.
+   * They are made with the viewer's session and name this address. Without it none is made.
+   */
+  address?: FrameAddress;
 }) {
   const { locale } = useTranslation();
+  const { client } = useWorkspaceApiClient();
   const host = usePageHost();
+  const calls = useMemo(
+    () => (address ? createFrameCalls(client, address) : undefined),
+    [client, address]
+  );
+  const callsRef = useRef(calls);
   const frameRef = useRef<HTMLIFrameElement>(null);
   const bridgeRef = useRef<PageBridge | undefined>(undefined);
   const routeRef = useRef(route);
@@ -399,6 +414,7 @@ export function LivePagePreview({
   useEffect(() => {
     contextRef.current = context;
     routeRef.current = route;
+    callsRef.current = calls;
   });
   const hosted = host !== undefined;
 
@@ -427,7 +443,8 @@ export function LivePagePreview({
         }
       },
       // The frame fills the surface, whatever height the Page's content has.
-      onResize: () => undefined
+      onResize: () => undefined,
+      calls: () => callsRef.current
     });
     bridgeRef.current = bridge;
     const onMessage = (event: MessageEvent) => bridge.receive(event);

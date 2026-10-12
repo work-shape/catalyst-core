@@ -7,6 +7,7 @@ import {
   type AppBridgeHostMessage,
   type AppBridgePageMessage
 } from "@vivd-catalyst/api-client";
+import type { FrameCallAnswer, FrameCalls } from "./frame-calls";
 
 // The interface's side of the bridge to a Page. A Page is code an agent wrote, running in a
 // frame without an origin. So the interface decides by three things whether it listens: the
@@ -75,6 +76,21 @@ export function themeMessage(look: Pick<AppBridgeContext, "theme" | "mode">): Ap
   });
 }
 
+/** The answer to one call of a Page, named by the id the Page gave the call. */
+export function callResultMessage(
+  session: string,
+  requestId: string,
+  answer: FrameCallAnswer
+): AppBridgeHostMessage {
+  return appBridgeHostMessageSchema.parse({
+    [APP_BRIDGE_MARK]: APP_BRIDGE_VERSION,
+    type: "action_result",
+    session,
+    requestId,
+    ...answer
+  });
+}
+
 interface PageWindow {
   postMessage(message: unknown, targetOrigin: string): void;
 }
@@ -103,21 +119,72 @@ export function createPageBridge(input: {
   context(): AppBridgeContext;
   onNavigate(path: string): void;
   onResize(height: number): void;
+  /**
+   * How the calls of the Page reach the instance, asked when a call arrives. Without it the
+   * Page is told that no call can be made, and its context names no action.
+   */
+  calls?(): FrameCalls | undefined;
 }): PageBridge {
   let page: PageWindow | undefined;
+  /** Posts to the window that sent a message, while it is still the frame's one child. */
+  const post = (to: PageWindow, message: AppBridgeHostMessage) => {
+    const frame = input.frame();
+    if (frame?.length === 1 && frame[0] === to) {
+      to.postMessage(message, "*");
+    }
+  };
   return {
     receive(event) {
       const message = readPageMessage(event, input.frame(), input.session);
-      if (!message || !isPageWindow(event.source)) {
+      const source: unknown = event.source;
+      if (!message || !isPageWindow(source)) {
         return;
       }
       if (message.type === "ready") {
-        page = event.source;
-        page.postMessage(contextMessage(input.session, input.context()), "*");
+        page = source;
+        const calls = input.calls?.();
+        if (!calls) {
+          source.postMessage(contextMessage(input.session, input.context()), "*");
+          return;
+        }
+        // The context waits for what the viewer may do. A read that fails leaves it out.
+        calls
+          .can()
+          .catch(() => undefined)
+          .then((can) => {
+            post(
+              source,
+              contextMessage(input.session, {
+                ...input.context(),
+                ...(can === undefined ? {} : { can })
+              })
+            );
+          })
+          // The frame was replaced while the answer was on its way: nobody is left to tell.
+          .catch(() => undefined);
       } else if (message.type === "navigate") {
         input.onNavigate(message.path);
-      } else {
+      } else if (message.type === "resize") {
         input.onResize(message.height);
+      } else {
+        const { requestId } = message;
+        const calls = input.calls?.();
+        const answer: Promise<FrameCallAnswer> = calls
+          ? calls.run(message)
+          : Promise.resolve({
+              ok: false,
+              error: { code: "not_available", message: "This frame cannot make calls." }
+            });
+        answer
+          // The Page always gets an answer to a call, so that it never waits for nothing.
+          .catch((): FrameCallAnswer => ({
+            ok: false,
+            error: { code: "failed", message: "The call could not be made." }
+          }))
+          .then((result) => {
+            post(source, callResultMessage(input.session, requestId, result));
+          })
+          .catch(() => undefined);
       }
     },
     sendLook(look) {

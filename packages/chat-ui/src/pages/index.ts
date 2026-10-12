@@ -1,12 +1,21 @@
 // What the tests of the Page surface read. The interface itself reaches these through the
 // surface renderers and the tool call card.
 export {
+  callResultMessage,
   contextMessage,
   createPageBridge,
   readPageMessage,
   themeMessage,
   type ArrivedMessage
 } from "./bridge-host";
+export {
+  createFrameCalls,
+  frameCallFailure,
+  frameSessionProof,
+  type FrameAddress,
+  type FrameCallAnswer,
+  type FrameCalls
+} from "./frame-calls";
 export {
   PAGE_ADDRESS_LIFETIME_MS,
   PAGE_ADDRESS_RENEWAL_MARGIN_MS,
