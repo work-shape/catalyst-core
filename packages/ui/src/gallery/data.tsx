@@ -42,6 +42,20 @@ const codeSample = [
   ""
 ].join("\n");
 
+/** A result as a run keeps it: more lines than a preview shows. */
+const jsonSample = JSON.stringify(
+  {
+    checked: 598,
+    findings: [
+      { client: "10432", rule: "duplicate-receipt", amount: 1240, account: "4400" },
+      { client: "10432", rule: "allowance", amount: 812.5, account: "4400" },
+      { client: "10977", rule: "rounding", amount: 0.03, account: "1200" }
+    ]
+  },
+  null,
+  2
+);
+
 const rowSizes: readonly ListRowSize[] = ["default", "compact"];
 const keyValueLayouts: readonly KeyValueLayout[] = ["inline", "stacked"];
 
@@ -406,6 +420,18 @@ export const dataGallery: GalleryGroup = {
           </Samples>
           <Samples label={text.codeScrolling}>
             <CodeBlock className="max-h-32 w-full" label={text.codeFileName} code={codeSample} />
+          </Samples>
+          <Samples label={text.codeCut}>
+            <CodeBlock
+              label={text.codeOutputName}
+              code={jsonSample}
+              lineNumbers={false}
+              maxLines={6}
+              footer={text.codeCutFooter}
+            />
+          </Samples>
+          <Samples label={text.codeCutNumbered}>
+            <CodeBlock label={text.codeFileName} code={codeSample} maxLines={4} />
           </Samples>
         </div>
       )

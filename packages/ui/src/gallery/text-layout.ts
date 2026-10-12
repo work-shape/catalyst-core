@@ -153,6 +153,10 @@ export interface LayoutGalleryText {
   codeFileName: string;
   codeWhole: string;
   codeScrolling: string;
+  codeCut: string;
+  codeCutFooter: string;
+  codeCutNumbered: string;
+  codeOutputName: string;
   countPrimary: string;
   countMuted: string;
   countDot: string;
@@ -314,6 +318,10 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     codeFileName: "src/routes/index.tsx",
     codeWhole: "Whole file",
     codeScrolling: "In a low box",
+    codeCut: "Cut to six lines, without numbers, with a footer",
+    codeCutFooter: "Shortened. The run keeps the whole output for 30 days.",
+    codeCutNumbered: "Cut to four lines",
+    codeOutputName: "Output of the step",
     countPrimary: "Needs you",
     countMuted: "Plain count",
     countDot: "Dot"
@@ -473,6 +481,10 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     codeFileName: "src/routes/index.tsx",
     codeWhole: "Ganze Datei",
     codeScrolling: "In einem niedrigen Kasten",
+    codeCut: "Auf sechs Zeilen gekürzt, ohne Nummern, mit Fußzeile",
+    codeCutFooter: "Gekürzt. Der Lauf bewahrt die ganze Ausgabe 30 Tage auf.",
+    codeCutNumbered: "Auf vier Zeilen gekürzt",
+    codeOutputName: "Ausgabe des Schritts",
     countPrimary: "Braucht dich",
     countMuted: "Einfache Anzahl",
     countDot: "Punkt"
