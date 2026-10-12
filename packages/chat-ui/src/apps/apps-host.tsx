@@ -23,6 +23,11 @@ export interface AppsHost {
   showRoute(route: WorkspaceRoute, options?: WorkspaceRouteChangeOptions): void;
   /** Opens a new conversation of the workspace with this text in its composer. */
   startChat(prompt: string): void;
+  /**
+   * Where the run of a call is read, for a reader who may open Instance > Operations. Absent
+   * for everybody else: nothing links to a page its reader is not shown.
+   */
+  operationRunHref?(runId: string): string;
 }
 
 const AppsHostContext = createContext<AppsHost | undefined>(undefined);

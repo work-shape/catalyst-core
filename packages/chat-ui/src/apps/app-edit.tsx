@@ -22,6 +22,7 @@ import { instanceSentence, PendingApprovalError } from "../build-area/build-refu
 import { useTranslation } from "../i18n";
 import { PreviewPane } from "../pages/preview-pane";
 import { workspaceRoutePath } from "../routes";
+import { AppDraftActions } from "./actions-view";
 import { useApp, useAppWrites } from "./app-data";
 import { AppDraftFiles } from "./app-draft-files";
 import { AppDeleteDialog, AppFrame, AppHeader, NameList } from "./app-header";
@@ -38,6 +39,10 @@ import {
 import { AppPreview, AppPreviewNotice } from "./app-preview";
 import { useAppsHost, type AppsWorkspace } from "./apps-host";
 import { RevisionsDrawer } from "./revisions-drawer";
+
+/** The sides of a draft: the App in its frame, its source files, and its named actions. */
+const APP_DRAFT_VIEWS = ["preview", "files", "actions"] as const;
+export type AppDraftView = (typeof APP_DRAFT_VIEWS)[number];
 
 /** The revision a publish names, with what its manifest reaches. */
 interface PublishAsk {
@@ -60,7 +65,7 @@ export function AppEdit({ app }: { app: string }) {
   const record = useApp(workspace?.id ?? "", app, mayWrite);
   const writes = useAppWrites(workspace?.id);
   const [turn, setTurn] = useState(0);
-  const [view, setView] = useState<"preview" | "files">("preview");
+  const [view, setView] = useState<AppDraftView>("preview");
   const [publishAsk, setPublishAsk] = useState<PublishAsk>();
   const [discardOpen, setDiscardOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -155,8 +160,8 @@ export function AppEdit({ app }: { app: string }) {
           setDeleteOpen(true);
         }}
       >
-        {/* The preview stays mounted under the files, so the App keeps its state. */}
-        <div className="size-full" hidden={view === "files"}>
+        {/* The preview stays mounted under the other sides, so the App keeps its state. */}
+        <div className="size-full" hidden={view !== "preview"}>
           {record.failed ? (
             <PreviewPane
               source={undefined}
@@ -187,6 +192,7 @@ export function AppEdit({ app }: { app: string }) {
             publishedRevision={published}
           />
         ) : null}
+        {view === "actions" ? <AppDraftActions app={app} rights={rights} /> : null}
       </AppEditFrame>
       {publishAsk ? (
         <PublishDialog
@@ -309,9 +315,9 @@ export function AppEditFrame({
   draftRevision?: number;
   publishedRevision?: number;
   /** The side that is shown. Left out, the head has no switch. */
-  view?: "preview" | "files";
+  view?: AppDraftView;
   children: ReactNode;
-  onViewChange?(view: "preview" | "files"): void;
+  onViewChange?(view: AppDraftView): void;
   onBack(): void;
   onPublish?: () => void;
   onDiscard?: () => void;
@@ -356,12 +362,17 @@ export function AppEditFrame({
                     size="sm"
                     label={t("pages.view")}
                     value={view}
-                    onValueChange={(next) => onViewChange(next === "files" ? "files" : "preview")}
+                    onValueChange={(next) =>
+                      onViewChange(
+                        APP_DRAFT_VIEWS.find((candidate) => candidate === next) ?? "preview"
+                      )
+                    }
                   >
                     <SegmentedControlItem value="preview">
                       {t("pages.preview")}
                     </SegmentedControlItem>
                     <SegmentedControlItem value="files">{t("pages.files")}</SegmentedControlItem>
+                    <SegmentedControlItem value="actions">{t("apps.actions")}</SegmentedControlItem>
                   </SegmentedControl>
                 ) : null}
                 {ahead && publishedRevision !== undefined ? (

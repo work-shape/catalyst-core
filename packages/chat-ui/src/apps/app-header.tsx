@@ -15,6 +15,8 @@ import {
 } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
 import { workspaceRoutePath } from "../routes";
+import { AppActionEffect, AppActionOutcomeBadge } from "./app-action-facts";
+import type { AppActionsRead } from "./app-data";
 import { appDescription, appManifestSummary, type AppState } from "./app-model";
 
 /** The address of an App for its users, as a link another person can follow. */
@@ -216,17 +218,21 @@ export function AppFrame({
 /**
  * What an App is and what it reaches: its id, its description, and the Connections, actions
  * and external hosts its manifest names. The record is the App's newest revision, which the
- * dialog says by number.
+ * dialog says by number. Each action is listed with its effect and what the policy makes of a
+ * call of it for the reader, once the instance said so; until then, and where it could not,
+ * the actions are the names of the manifest.
  */
 export function AppDetailsDialog({
   name,
   app,
+  actions,
   failed,
   onClose
 }: {
   name: string;
   /** The record, once it arrived. */
   app: Asset | undefined;
+  actions: AppActionsRead;
   failed: boolean;
   onClose(): void;
 }) {
@@ -262,7 +268,23 @@ export function AppDetailsDialog({
             <NameList names={summary.connections} />
           </KeyValue>
           <KeyValue label={t("apps.detailsActions")}>
-            <NameList names={summary.actions} />
+            {actions.status === "ready" && actions.actions.length > 0 ? (
+              <ul className="grid min-w-0 gap-1.5" data-app-details-actions>
+                {actions.actions.map((action) => (
+                  <li
+                    key={action.name}
+                    data-app-action={action.name}
+                    className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
+                  >
+                    <code className="min-w-0 font-mono text-code break-words">{action.name}</code>
+                    <AppActionEffect effect={action.effect} />
+                    <AppActionOutcomeBadge action={action} />
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <NameList names={summary.actions} />
+            )}
           </KeyValue>
           <KeyValue label={t("apps.detailsHosts")}>
             <NameList names={summary.hosts} />

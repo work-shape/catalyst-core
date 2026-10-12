@@ -23,6 +23,7 @@ import { SaveAsAppAction } from "../apps/save-as-app-dialog";
 import { useTranslation } from "../i18n";
 import type { PageBuildError, SurfaceOf } from "../surface/surface";
 import { createPageBridge, type PageBridge } from "./bridge-host";
+import { useFrameCallTexts } from "./frame-call-texts";
 import { createFrameCalls, type FrameAddress } from "./frame-calls";
 import {
   keepPageAddress,
@@ -389,23 +390,13 @@ export function LivePagePreview({
    */
   address?: FrameAddress;
 }) {
-  const { locale, t } = useTranslation();
+  const { locale } = useTranslation();
   const { client } = useWorkspaceApiClient();
   const host = usePageHost();
+  const texts = useFrameCallTexts();
   const calls = useMemo(
-    () =>
-      address
-        ? createFrameCalls(client, address, {
-            // The platform's own sentence, in the language of whoever looks at the frame.
-            connectionUseDenied: (name, frame) =>
-              name !== undefined
-                ? t("pages.connectionUseDenied", { name })
-                : frame === "page"
-                  ? t("pages.connectionUseDeniedUnnamedPage")
-                  : t("pages.connectionUseDeniedUnnamed")
-          })
-        : undefined,
-    [client, address, t]
+    () => (address ? createFrameCalls(client, address, texts) : undefined),
+    [client, address, texts]
   );
   const callsRef = useRef(calls);
   const frameRef = useRef<HTMLIFrameElement>(null);

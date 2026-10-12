@@ -39,6 +39,16 @@ export function frameSessionProof(address: FrameAddress): FrameSessionProof | un
 }
 
 type CallMessage = Extract<AppBridgePageMessage, { type: "action" | "connection_call" }>;
+/**
+ * One call as the instance is asked for it: what a frame's message says of it, without what
+ * only the bridge reads. The test of an action in the draft view makes the same call.
+ */
+type FrameCall =
+  | Pick<Extract<CallMessage, { type: "action" }>, "type" | "name" | "input" | "idempotencyKey">
+  | Pick<
+      Extract<CallMessage, { type: "connection_call" }>,
+      "type" | "connection" | "operation" | "input" | "idempotencyKey"
+    >;
 type CallAnswer = Extract<AppBridgeHostMessage, { type: "action_result" }>;
 
 /** How one call of a frame came out, as the frame is told. */
@@ -50,7 +60,7 @@ export type FrameCallAnswer =
 export interface FrameCalls {
   /** What each action would come to for the viewer, or nothing where it could not be read. */
   can(): Promise<Record<string, AppActionPermission> | undefined>;
-  run(message: CallMessage): Promise<FrameCallAnswer>;
+  run(call: FrameCall): Promise<FrameCallAnswer>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -140,25 +150,24 @@ export function createFrameCalls(
         (answer) => answer.can,
         () => undefined
       ),
-    async run(message) {
+    async run(call) {
       // A frame that names no key gets one per message: one message is one call.
-      const key =
-        message.idempotencyKey === undefined ? {} : { idempotencyKey: message.idempotencyKey };
+      const key = call.idempotencyKey === undefined ? {} : { idempotencyKey: call.idempotencyKey };
       try {
         const result =
-          message.type === "action"
+          call.type === "action"
             ? await client.apps.sessions.call_action({
-                params: { pageSessionId, name: message.name },
-                body: { fileSetId, token, input: message.input },
+                params: { pageSessionId, name: call.name },
+                body: { fileSetId, token, input: call.input },
                 ...key
               })
             : await client.apps.sessions.call_connection({
                 params: {
                   pageSessionId,
-                  connection: message.connection,
-                  operation: message.operation
+                  connection: call.connection,
+                  operation: call.operation
                 },
-                body: { fileSetId, token, input: message.input },
+                body: { fileSetId, token, input: call.input },
                 ...key
               });
         return {

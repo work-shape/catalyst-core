@@ -26,7 +26,7 @@ import { formatDateTime } from "../control-plane/locale-format";
 import { useTranslation } from "../i18n";
 import { workspaceRoutePath } from "../routes";
 import type { WorkspaceRoute } from "../workspace/workspace-route";
-import { useApp, useAppList, useAppWrites, type AppList } from "./app-data";
+import { useApp, useAppActions, useAppList, useAppWrites, type AppList } from "./app-data";
 import {
   AppDeleteDialog,
   AppDetailsDialog,
@@ -86,6 +86,7 @@ export function AppsPage() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string>();
   const details = useApp(workspace?.id ?? "", detailsOf?.name ?? "", detailsOf !== undefined);
+  const detailActions = useAppActions(detailsOf?.name ?? "", detailsOf !== undefined);
   // The ages are counted from when the list last arrived.
   const rows = list.rows;
   const now = useMemo(() => new Date(), [rows]);
@@ -144,6 +145,7 @@ export function AppsPage() {
         <AppDetailsDialog
           name={appDisplayName(detailsOf)}
           app={details.app}
+          actions={detailActions}
           failed={details.failed || details.missing}
           onClose={() => setDetailsOf(undefined)}
         />

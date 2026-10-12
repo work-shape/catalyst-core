@@ -2,6 +2,7 @@ import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-quer
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   APP_ASSET_KIND,
+  type AppAction,
   type AppMode,
   type AppPreviewResponse,
   type Asset,
@@ -113,6 +114,40 @@ export function useApp(workspaceId: string, app: string, enabled: boolean): AppR
     loading: enabled && query.isPending,
     reload: async () => (await query.refetch()).data
   };
+}
+
+/** The named actions of one App as a screen asked for them. */
+export type AppActionsRead =
+  | { status: "loading" }
+  | { status: "failed"; retry(): void }
+  | { status: "ready"; view: AppMode; revision: number; actions: readonly AppAction[] };
+
+/**
+ * The named actions of one App with what a call of each would come to for the reader: of the
+ * draft for whoever writes the App, of the published revision for every other reader. One
+ * request when the screen that shows them opens, and one after each write to an App.
+ */
+export function useAppActions(app: string, enabled: boolean): AppActionsRead {
+  const { client } = useWorkspaceApiClient();
+  const keys = useAppKeys();
+  const query = useQuery({
+    queryKey: [...keys, "actions", app],
+    queryFn: ({ signal }) => client.apps.actions.list({ query: { app }, signal }),
+    enabled,
+    retry: retryUnlessGone
+  });
+  const listed = query.data?.apps[0];
+  if (listed) {
+    return {
+      status: "ready",
+      view: listed.view,
+      revision: listed.revision,
+      actions: listed.actions
+    };
+  }
+  return query.isError || query.data
+    ? { status: "failed", retry: () => void query.refetch().catch(() => undefined) }
+    : { status: "loading" };
 }
 
 /** The source files of one revision as its Files side asked for them. */

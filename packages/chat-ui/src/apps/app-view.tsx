@@ -11,7 +11,7 @@ import {
 } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
 import { workspaceRouteFromPath, workspaceRoutePath } from "../routes";
-import { useApp } from "./app-data";
+import { useApp, useAppActions } from "./app-data";
 import {
   AppDetailsDialog,
   AppFrame,
@@ -38,6 +38,7 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
   const record = useApp(workspace?.id ?? "", app, workspace !== undefined);
   const [shown, setShown] = useState<AppPreviewResponse>();
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const actions = useAppActions(app, detailsOpen);
   const showRoute = host?.showRoute;
   const workspaceId = workspace?.id;
 
@@ -115,6 +116,7 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
         <AppDetailsDialog
           name={name}
           app={record.app}
+          actions={actions}
           failed={record.failed || record.missing}
           onClose={() => setDetailsOpen(false)}
         />

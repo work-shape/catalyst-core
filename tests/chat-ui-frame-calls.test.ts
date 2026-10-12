@@ -217,23 +217,16 @@ describe("the calls of a frame", () => {
     if (!calls) throw new Error("The address names a frame");
 
     expect(await calls.can()).toEqual({ load: "allow" });
-    const bridgeMark = { [APP_BRIDGE_MARK]: APP_BRIDGE_VERSION } as const;
     expect(
       await calls.run({
-        ...bridgeMark,
         type: "action",
-        session: "s-1",
-        requestId: "r-1",
         name: "save",
         input: { note: "x" },
         idempotencyKey: "key-1"
       })
     ).toEqual({ ok: true, result: answer });
     await calls.run({
-      ...bridgeMark,
       type: "connection_call",
-      session: "s-1",
-      requestId: "r-2",
       connection: "crm",
       operation: "list",
       input: { limit: 5 }

@@ -8,12 +8,14 @@ import { ChatDropOverlay } from "./chat-file-dropzone";
 import type { ChatShellProps } from "./chat-shell";
 import { CollaborationWorkspacePanel } from "./collaboration-workspace/collaboration-workspace-panel";
 import { CollaborationWorkspaceSelector } from "./collaboration-workspace/collaboration-workspace-selector";
+import { canViewAudit } from "./control-plane/governance";
 import { ControlPlaneRoutes } from "./control-plane/control-plane-routes";
 import { TranslationProvider, useTranslation } from "./i18n";
 import { AppsArea, isAppsRoute } from "./apps/apps-area";
 import { AppsHostProvider, type AppsHost } from "./apps/apps-host";
 import { InboxArea } from "./inbox";
 import { LoginPanel } from "./login-panel";
+import { operationRunHref } from "./operations/operations-model";
 import { PageHostProvider } from "./pages/page-host";
 import { ResourcesPanel, ResourcesPanelToggle, useResourcesPanelState } from "./resources-panel";
 import { isResourcesPanelAvailable } from "./resources-panel-model";
@@ -292,7 +294,8 @@ function ChatWorkspaceContent({
       ? { id: activeWorkspace.id, name: activeWorkspace.name, emoji: activeWorkspace.emoji }
       : undefined,
     showRoute: model.route.showRoute,
-    startChat: model.apps.startChat
+    startChat: model.apps.startChat,
+    ...(canViewAudit(model.auth.user) ? { operationRunHref } : {})
   };
 
   const workspace = (
