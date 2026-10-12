@@ -78,9 +78,10 @@ contain breaking changes; a patch version does not.
   image alone: the API image and the worker images carry none, and `pnpm check:images` fails
   when one does. **Operators:** the image grows by git, about 95 MB unpacked. The runner image of
   the capabilities repository does not carry the command yet.
-- **Database:** migration `0057_asset_repositories` adds the tables `asset_repo_bundles` and
+- **Database:** migration `0061_asset_repositories` adds the tables `asset_repo_bundles` and
   `asset_checkouts` and the columns `commit` and `tree` on `config_asset_revisions`. They are
-  empty for every asset that exists. **Rollback:** an earlier release ignores them.
+  empty for every asset that exists. The migration waits five seconds for its locks at most; one
+  that gives up is run again. **Rollback:** an earlier release ignores them.
 - **Pages, plain HTML:** App Kit version `1.2.0`, with two new files, `page.css` and `theme.js`.
   A plain HTML Page that names it comes out with the look of the platform: the build links
   `page.css` and `theme.js` first into every HTML file of a Page with an `entry`, also one whose
