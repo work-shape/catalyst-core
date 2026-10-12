@@ -256,6 +256,76 @@ describe("a frame's call when the App changes around it", () => {
     });
   });
 
+  // Fails without the fix: an agent's call named no revision, so after a republish the
+  // approved call ran the new revision's mapping, which the approver never read.
+  it("does not execute an agent's held action after its App was published again", async () => {
+    // Its action stands for an operation agents may call, and changes something.
+    const files = (source: string) =>
+      appSource("published", "agent-pinned").map((file) =>
+        file.path === "actions/save.action.yaml"
+          ? {
+              path: file.path,
+              text: action([
+                "connection: erp",
+                "operation: write",
+                "effect: changing",
+                "input:",
+                "  schema: { type: object, properties: { note: { type: string } }, required: [note] }",
+                `  mapping: { note: "{{note}}", source: ${source} }`
+              ])
+            }
+          : file
+      );
+    expectStatus(await t.putApp(t.admin.id, "agent-pinned", files("first")), 200);
+    expectStatus(await t.publish(t.admin.id, "agent-pinned", 1), 200);
+    const toolName = "app.agent-pinned.save";
+    const tools = createAppActionToolSource({
+      clientInstanceId,
+      store: t.stores.configAssets,
+      modules: { isEnabled: () => true },
+      connectionTools: createConnectionToolSource(t.sourceDeps)
+    });
+    // The tool an agent's call is made with names the revision it was read from, and the
+    // runner puts it into the origin of the call.
+    const [tool] = await tools.describe([toolName], {});
+    expect(tool).toMatchObject({ name: toolName, effect: "changing" });
+    const toolRevisionId = tool?.revisionId;
+    if (toolRevisionId === undefined) throw new Error("The tool names no revision");
+    t.state.agentTools.set("assistant", [toolName]);
+
+    const erp = await t.assetId("connection", "erp");
+    await t.withRight(t.kai.id, "connection.use", { assetId: erp }, async () => {
+      const origin = { ...agentOrigin(toolName), toolRevisionId };
+      // The setting stays until the approval was applied: an agent's changing call is refused
+      // as policy without it, and then nothing would show what the pin holds back.
+      t.state.centralSettings = [{ operation: "connection.erp.write", value: "approval" }];
+      try {
+        const held = await t.invoke(
+          t.kai,
+          toolName,
+          { note: "agent" },
+          { origin, effect: "changing", idempotencyKey: "agent-pinned-1" }
+        );
+        expect(held.result.status).toBe("pending_approval");
+        const run = await t.runOf(held.run.id);
+        expect(run.origin).toMatchObject({ kind: "agent", toolRevisionId });
+        if (run.approvalRequestId === undefined) throw new Error("The run names no request");
+        expectStatus(await t.putApp(t.admin.id, "agent-pinned", files("second")), 200);
+        expectStatus(await t.publish(t.admin.id, "agent-pinned", 2), 200);
+
+        await approve(run.approvalRequestId);
+
+        expect(t.executed).toEqual([]);
+        expect(await t.runOf(run.id)).toMatchObject({
+          status: "failed",
+          error: { code: "CONFLICT", message: expect.stringContaining("published again") }
+        });
+      } finally {
+        t.state.centralSettings = [];
+      }
+    });
+  });
+
   // Fails without the fix for the direct call: its run is the Connection operation's own and
   // nothing of the App was asked when it was executed.
   it("does not execute a held call after its caller lost the App, as an action and as a direct call", async () => {

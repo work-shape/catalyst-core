@@ -295,9 +295,9 @@ interface PublishedApp {
 }
 
 /**
- * A call that waited for an approval was made in a frame of one revision, and the approver
- * read what that revision's action does. It is executed only while that revision is still
- * the published one. The compiled mapping is not kept with the call, since a revision that
+ * A call that waited for an approval was made in a frame of one revision, or by an agent
+ * whose tool was read from one, and the approver read what that revision's action does. It
+ * is executed only while that revision is still the published one. The compiled mapping is not kept with the call, since a revision that
  * was replaced is no longer served to anybody and nothing of it should still run. So a call
  * whose revision was replaced ends with this sentence, and nothing is carried out.
  */
@@ -305,7 +305,14 @@ export function requirePublishedRevision(
   origin: OperationOrigin,
   publishedRevisionId: string | undefined
 ): void {
-  if (origin.kind === "app" && origin.appRevisionId !== publishedRevisionId) {
+  const madeIn =
+    origin.kind === "app"
+      ? origin.appRevisionId
+      : origin.kind === "agent"
+        ? origin.toolRevisionId
+        : undefined;
+  // A call that names no revision, such as a person's own from the API, is not pinned.
+  if (madeIn !== undefined && madeIn !== publishedRevisionId) {
     throw new AppError(
       "CONFLICT",
       "The App was published again after this call was made, so the call was not carried out and nothing was changed. Make the call again in the App.",
@@ -526,7 +533,9 @@ export function createAppActionToolSource(deps: AppActionToolSourceDeps): DataTo
             action.description ?? `The action '${action.name}' of the App '${app.title}'.`
           ).slice(0, APP_ACTION_TOOL_DESCRIPTION_MAX_CHARS),
           inputJsonSchema: action.input.schema,
-          effect: action.effect
+          effect: action.effect,
+          // What a call of the tool is pinned to while it waits for an approval.
+          revisionId: app.revisionId
         });
       }
       return tools;

@@ -33,6 +33,11 @@ export type OperationOrigin =
       agentName: string;
       toolCallId: ToolCallId;
       toolName: string;
+      /**
+       * The revision of what a data tool was read from when the call was made, where its
+       * source names one. A call that waited runs only while that revision still stands.
+       */
+      toolRevisionId?: string;
     }
   | { kind: "user" }
   | { kind: "cli" }
@@ -152,8 +157,10 @@ export function operationCallFromToolRequest(input: {
   correlationId: string;
   workspaceId?: CollaborationWorkspaceId;
   idempotencyKey?: string;
+  /** See `toolRevisionId` of the agent origin. */
+  toolRevisionId?: string;
 }): OperationCall {
-  const { request, ...context } = input;
+  const { request, toolRevisionId, ...context } = input;
   return {
     ...context,
     input: request.input,
@@ -163,7 +170,8 @@ export function operationCallFromToolRequest(input: {
       conversationId: request.conversationId,
       agentName: request.agentName,
       toolCallId: request.toolCallId,
-      toolName: request.toolName
+      toolName: request.toolName,
+      ...(toolRevisionId === undefined ? {} : { toolRevisionId })
     }
   };
 }

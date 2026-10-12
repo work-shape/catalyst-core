@@ -163,7 +163,12 @@ export async function setupAppActions(
       operationOf("write", { effect: "changing", exposure: ["bridge"] })
     ]
   });
-  await t.seed("erp", { operations: [operationOf("echo", { exposure: ["agent"] })] });
+  await t.seed("erp", {
+    operations: [
+      operationOf("echo", { exposure: ["agent"] }),
+      operationOf("write", { effect: "changing", exposure: ["agent"] })
+    ]
+  });
   await t.seed("hidden", { operations: [operationOf("echo", { exposure: ["bridge"] })] });
   for (const name of ["crm", "erp", "hidden"]) {
     await t.grant(t.admin.id, "connection.use", { assetId: await t.assetId("connection", name) });

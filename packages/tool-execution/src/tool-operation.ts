@@ -409,6 +409,8 @@ interface CalledTool {
   effect: OperationEffect;
   /** The reason a release tool's own definition gives for refusing every call. */
   policyReason?: string;
+  /** The revision a data tool's source read it from, kept in the origin of the call. */
+  revisionId?: string;
 }
 
 /**
@@ -452,7 +454,8 @@ export function createToolOperationRunner(
           },
           operation: tool.name,
           effect: tool.effect,
-          correlationId: context.correlationId
+          correlationId: context.correlationId,
+          ...(tool.revisionId === undefined ? {} : { toolRevisionId: tool.revisionId })
         }),
         deps,
         {
@@ -544,7 +547,13 @@ async function calledTool(
   }
   const descriptor = described.find((candidate) => candidate.name === toolName);
   return descriptor
-    ? { tool: { name: descriptor.name, effect: descriptor.effect } }
+    ? {
+        tool: {
+          name: descriptor.name,
+          effect: descriptor.effect,
+          ...(descriptor.revisionId === undefined ? {} : { revisionId: descriptor.revisionId })
+        }
+      }
     : { refusal: failed("not_allowed", `Tool '${toolName}' is not registered`) };
 }
 

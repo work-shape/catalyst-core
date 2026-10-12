@@ -8,7 +8,9 @@ export const operationRunOriginSchema = z.discriminatedUnion("kind", [
     conversationId: z.string(),
     agentName: z.string(),
     toolCallId: z.string(),
-    toolName: z.string()
+    toolName: z.string(),
+    /** The revision a data tool was read from when the call was made, where it names one. */
+    toolRevisionId: z.string().optional()
   }),
   z.object({ kind: z.literal("user") }),
   z.object({ kind: z.literal("cli") }),

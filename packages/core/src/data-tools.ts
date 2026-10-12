@@ -9,6 +9,12 @@ import type { ToolDescriptor } from "./tool-execution";
  */
 export interface DataToolDescriptor extends ToolDescriptor {
   effect: OperationEffect;
+  /**
+   * The revision of what the tool is read from, where a call must still find that revision
+   * when it runs after an approval, such as the published revision of an App. It is kept in
+   * the origin of the call and never sent to a model.
+   */
+  revisionId?: string;
 }
 
 /** Describes the data tools an agent lists, as they are now. */

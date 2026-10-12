@@ -18703,6 +18703,9 @@
               },
               "toolName": {
                 "type": "string"
+              },
+              "toolRevisionId": {
+                "type": "string"
               }
             },
             "required": [
