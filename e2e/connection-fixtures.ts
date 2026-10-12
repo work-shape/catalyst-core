@@ -28,6 +28,16 @@ export interface PlantedConnection {
   displayName: string;
   url: string;
   authScheme: "none" | "bearer";
+  /**
+   * The operations the Connection accepts, where a spec needs other ones than the four that
+   * show every state of an operation.
+   */
+  operations?: readonly {
+    name: string;
+    effect: "reading" | "changing";
+    exposure: readonly string[];
+    enabled: boolean;
+  }[];
 }
 
 /** Writes one Connection as the store holds it: the asset and its first revision. */
@@ -45,7 +55,7 @@ export async function plantConnection(connection: PlantedConnection): Promise<vo
     // A reference to a credential in the Secret Store. It is no credential, and no secret is
     // stored under it here.
     ...(connection.authScheme === "bearer" ? { secretHandle: FIXTURE_SECRET_HANDLE } : {}),
-    operations: [
+    operations: connection.operations ?? [
       { name: "echo", effect: "reading", exposure: ["agent"], enabled: true },
       // Accepted with another description than the type has now: it waits for a review.
       {

@@ -140,6 +140,26 @@ auth:
           - user
         permissionRefs:
           - demo-tools
+      # The two people of the App actions view spec, used by no other spec: the builder writes
+      # the App, tests its action and reads its run, and the member holds none of the App's
+      # rights. Their labels sort after every other for the reason given above.
+      - email: e2e-app-actions-view@example.test
+        displayLabel: E2E Zz App Actions View
+        passwordEnvName: E2E_APP_ACTIONS_VIEW_PASSWORD
+        developmentPassword: e2e-app-actions-view-password
+        roles:
+          - user
+          - admin
+        permissionRefs:
+          - demo-tools
+      - email: e2e-app-actions-view-member@example.test
+        displayLabel: E2E Zz App Actions View Member
+        passwordEnvName: E2E_APP_ACTIONS_VIEW_MEMBER_PASSWORD
+        developmentPassword: e2e-app-actions-view-member-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
   sessionToken:
     issuer: demo-e2e-client-instance
     ttlSeconds: 900

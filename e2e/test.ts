@@ -317,6 +317,28 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     tests: ["a tile of a published App reads rows through a named action with the viewer's rights"]
   },
   {
+    name: "app-actions-list-that-fails",
+    reason:
+      "Chromium's own log line: the test answers one read of an App's actions with 500 and " +
+      "asserts that the Actions side says so and offers a retry.",
+    matches: requestAnswered(500),
+    path: /^\/api\/v1\/app-actions$/u,
+    tests: [
+      "a builder reads the actions of a draft, tests a reading one and finds its run in Operations"
+    ]
+  },
+  {
+    name: "app-action-test-that-is-refused",
+    reason:
+      "Chromium's own log line: the test answers one test call of an action with 403 and " +
+      "asserts that the dialog shows the refusal with its status.",
+    matches: requestAnswered(403),
+    path: /^\/api\/v1\/app-content-sessions\/[^/]+\/actions\/load-rows$/u,
+    tests: [
+      "a builder reads the actions of a draft, tests a reading one and finds its run in Operations"
+    ]
+  },
+  {
     name: "unread-configuration-diagnostic",
     reason:
       "The interface writes this line itself when the instance configuration does not fit it, " +
