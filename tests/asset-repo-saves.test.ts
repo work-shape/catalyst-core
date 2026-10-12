@@ -302,6 +302,86 @@ describe("a pending save of an asset's repository", () => {
     expect(await revisions()).toHaveLength(base.revision);
   });
 
+  // Fails where one statement claims the pending rows and the live rows without an asset: the
+  // statement begins before the first save of an asset is confirmed, reaches its row after,
+  // reads it again as live and asks for its asset in the view from before. Here the save is
+  // confirmed and holds its row when the pass begins, and ends while the pass is busy with
+  // the rows before it in the line.
+  it("keeps the first save of an asset that is confirmed while the sweeper is on its way", async () => {
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    for (let round = 0; round < 3; round += 1) {
+      const { clientInstanceId, assetId, pend, settle, bundles, rows } = arrange(
+        `first-race-${round}`
+      );
+      const first = { revision: null, commit: null };
+      const { operationRunId, bundle } = await pend(db.store.configAssets, first, oid("a"));
+      // The save is older than a day, and 3,000 older ones stand before it.
+      await db.sql`update asset_repo_bundles set saved_at = now() - interval '2 days' where asset_id = ${assetId}`;
+      await db.sql`
+        insert into asset_repo_bundles
+          (asset_id, operation_run_id, client_instance_id, state, saved_at, created_at)
+        select ${`cfga_filler_${round}`}, 'oprun_filler_' || n, ${clientInstanceId}, 'pending',
+          '2000-01-01T00:00:00Z', now()
+        from generate_series(1, 3000) as n`;
+      const removed: string[] = [];
+      let sweeping: Promise<unknown> = Promise.resolve();
+      await db.store.transaction(async (tx) => {
+        await settle(tx.configAssets, first, oid("a"), operationRunId);
+        sweeping = db.secondStore.configAssets.sweepAssetRepoSaves({
+          olderThan: dayAgo,
+          limit: 5000,
+          removeObject: (object) => {
+            if (object.assetId === assetId) removed.push(object.objectKey);
+            return Promise.resolve();
+          }
+        });
+        // The transaction ends as soon as the pass has begun its statement.
+        for (let asked = 0; asked < 2000; asked += 1) {
+          const [busy] = await db.sql<{ n: number }[]>`
+            select count(*)::int as n from pg_stat_activity
+            where state = 'active' and pid <> pg_backend_pid()
+              and query like '%asset_repo_bundles%skip locked%'`;
+          if (busy?.n) break;
+        }
+      });
+      await sweeping;
+      await db.sql`delete from asset_repo_bundles where asset_id = ${`cfga_filler_${round}`}`;
+      expect(removed).toEqual([]);
+      expect((await rows()).map((row) => row.state)).toEqual(["live"]);
+      expect((await bundles()).map((row) => row.objectKey)).toEqual([bundle.objectKey]);
+    }
+  });
+
+  // Fails where a pass always begins with the rows it gave up first: as many rows whose object
+  // cannot be removed as a pass takes keep every later row from being reached.
+  it("is reached by the sweeper behind rows whose object cannot be removed", async () => {
+    const { assetId, pend, rows } = arrange("stuck");
+    const store = db.store.configAssets;
+    const stuck = await pend(store, { revision: null, commit: null }, oid("a"));
+    const free = await pend(store, { revision: null, commit: null }, oid("b"));
+    const removed: string[] = [];
+    const pass = () =>
+      store.sweepAssetRepoSaves({
+        olderThan: FAR_FUTURE,
+        limit: 1,
+        removeObject: (object) => {
+          if (object.assetId !== assetId) return Promise.resolve();
+          if (object.objectKey === stuck.bundle.objectKey) {
+            return Promise.reject(new Error("the store refuses this object"));
+          }
+          removed.push(object.objectKey);
+          return Promise.resolve();
+        }
+      });
+    // Each pass takes one row. Both rows are given up, the one that cannot be removed first.
+    await db.sql`update asset_repo_bundles set saved_at = '2000-01-01T00:00:00Z' where operation_run_id = ${stuck.operationRunId}`;
+    for (let passes = 0; passes < 6 && removed.length === 0; passes += 1) {
+      await pass().catch(() => undefined);
+    }
+    expect(removed).toEqual([free.bundle.objectKey]);
+    expect(await rows()).toEqual([{ state: "swept", object_key: stuck.bundle.objectKey }]);
+  });
+
   // Fails where the sweeper holds the lock of a row while it calls the store: the save that
   // finishes that row waits, and with it every write of the instance.
   it("holds up no save while the sweeper waits for the object store", async () => {
