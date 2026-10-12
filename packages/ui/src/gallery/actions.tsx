@@ -1,6 +1,7 @@
 import { Ellipsis, Plus, Settings } from "lucide-react";
 import { Button, type ButtonSize, type ButtonVariant } from "../actions/button";
 import { IconButton, type IconButtonSize } from "../actions/icon-button";
+import { TextLink } from "../actions/text-link";
 import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
 
@@ -82,6 +83,26 @@ export const actionsGallery: GalleryGroup = {
             </IconButton>
           </Samples>
         </>
+      )
+    },
+    {
+      name: "TextLink",
+      components: ["TextLink"],
+      render: (text) => (
+        <Samples>
+          <p className="text-body text-muted-foreground">
+            <TextLink href="#" onClick={(event) => event.preventDefault()}>
+              {text.learnMore}
+            </TextLink>
+            {" · "}
+            {text.disabled}
+          </p>
+          <p className="text-caption text-muted-foreground">
+            <TextLink href="#" onClick={(event) => event.preventDefault()}>
+              {text.learnMore}
+            </TextLink>
+          </p>
+        </Samples>
       )
     }
   ]

@@ -5,3 +5,4 @@ export {
   type IconButtonSize,
   type IconButtonVariant
 } from "./icon-button";
+export { TextLink, type TextLinkProps } from "./text-link";
