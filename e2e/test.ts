@@ -308,6 +308,15 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     ]
   },
   {
+    name: "app-action-refused-for-a-missing-right",
+    reason:
+      "Chromium's own log line: a member without the right on the Connection opens the App, " +
+      "the call of its tile is answered with 403, and the test asserts that the tile names the right.",
+    matches: requestAnswered(403),
+    path: /^\/api\/v1\/app-content-sessions\/[^/]+\/actions\/load-rows$/u,
+    tests: ["a tile of a published App reads rows through a named action with the viewer's rights"]
+  },
+  {
     name: "unread-configuration-diagnostic",
     reason:
       "The interface writes this line itself when the instance configuration does not fit it, " +

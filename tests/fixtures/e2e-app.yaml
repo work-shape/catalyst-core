@@ -116,6 +116,26 @@ auth:
           - admin
         permissionRefs:
           - demo-tools
+      # The two people of the App actions spec. No other spec uses them: the admin writes and
+      # publishes the App and may use its Connection through the role, and the member holds the
+      # use right on the App alone until the spec grants the one on the Connection.
+      - email: e2e-app-actions@example.test
+        displayLabel: E2E App Actions
+        passwordEnvName: E2E_APP_ACTIONS_PASSWORD
+        developmentPassword: e2e-app-actions-password
+        roles:
+          - user
+          - admin
+        permissionRefs:
+          - demo-tools
+      - email: e2e-app-actions-member@example.test
+        displayLabel: E2E App Actions Member
+        passwordEnvName: E2E_APP_ACTIONS_MEMBER_PASSWORD
+        developmentPassword: e2e-app-actions-member-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
   sessionToken:
     issuer: demo-e2e-client-instance
     ttlSeconds: 900
