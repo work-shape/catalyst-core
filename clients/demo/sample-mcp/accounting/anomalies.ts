@@ -39,6 +39,12 @@ const RULE_PRESENCE = { small: 0.25, other: 0.6 } as const;
 const POSTINGS_PER_FURTHER_FINDING = 2_500;
 /** How many days before or after the month a planted date may lie. */
 const OUTSIDE_DAYS = 5;
+/**
+ * Of the months with a round booking without a document, the share in which one of them is
+ * a standing order paid once more. A standing order comes once a month, so a second one is
+ * rare in real books and no month has a third.
+ */
+const STANDING_ORDER_SHARE = 0.05;
 
 type Findings = Record<AccountingRuleId, number>;
 
@@ -264,12 +270,18 @@ export function plantedBooking(
         : extra.purchase(ordinal, formerSupplierOf(client, random()));
     case "round-amount-no-document": {
       const { thresholdEuros, roundingUnitEuros } = ACCOUNTING_RULES[rule].parameters;
-      // A standing order paid once more, by hand: no statement number, and a round amount
-      // from the threshold up to three times it or, where a month has more such bookings
-      // than that gives amounts, further. Each takes an amount of its own.
+      // Something paid once more, by hand: an invoice the month before left open or, seldom
+      // and for the month's first such booking only, a standing order. It has no document
+      // number, and a round amount from the threshold up to three times it or, where a month
+      // has more such bookings than that gives amounts, further. Each takes an amount of its
+      // own.
+      const paidOnceMore =
+        index === 0 && random() < STANDING_ORDER_SHARE
+          ? extra.standingOrder()
+          : extra.payment(random());
       const amounts = Math.max((2 * thresholdEuros) / roundingUnitEuros, of);
       const units = thresholdEuros / roundingUnitEuros + shuffled(index, amounts, monthSeed);
-      return { ...extra.standingOrder(), cents: units * roundingUnitEuros * 100, document: "" };
+      return { ...paidOnceMore, cents: units * roundingUnitEuros * 100, document: "" };
     }
     case "expense-in-credit":
       return { ...extra.purchase(ordinal), side: "H" };

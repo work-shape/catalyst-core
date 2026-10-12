@@ -29,6 +29,9 @@ const RULE_IDS: readonly RuleId[] = [
 ];
 /** The most of the invoices numbered out of order that may be planted: no more than any hundred invoices hold. */
 const PLANTED_OUT_OF_ORDER_BOUND = 0.02;
+/** The most of the rent bookings that may be planted: of all clients, and of the clients of any one industry. */
+const PLANTED_RENT_BOUND = { overall: 0.05, industry: 0.1 } as const;
+const RENT_LABEL = "Miete (unbewegliche Wirtschaftsgüter)";
 /** Two planted round bookings were alike here once, so one of them was a duplicate as well. */
 const PINNED = { clientId: 1457, month: "2025-02" };
 const SAMPLE_SEED = 20261012;
@@ -111,7 +114,10 @@ function recount(clientMonths: readonly ClientMonth[]) {
     plantedShapes: new Set<string>(),
     /** The invoices on a personal account, and those of them numbered out of order: all, and the planted ones. */
     invoices: { all: 0, planted: 0 },
-    outOfOrder: { all: 0, planted: 0 }
+    outOfOrder: { all: 0, planted: 0 },
+    /** The bookings on the rent account by the client's industry: all, and the planted ones. */
+    rent: new Map<string, { all: number; planted: number }>(),
+    mostRentBookingsInAMonth: 0
   };
   for (const { clientId, month } of clientMonths) {
     const where = `client ${clientId} in ${month}`;
@@ -176,6 +182,17 @@ function recount(clientMonths: readonly ClientMonth[]) {
     result.invoices.planted += invoices.filter((place) => planted.has(place)).length;
     result.outOfOrder.all += outOfOrder.length;
     result.outOfOrder.planted += outOfOrder.filter((place) => planted.has(place)).length;
+
+    const rent = rows.flatMap((row, place) =>
+      required(chart.get(row.account_number)).label === RENT_LABEL ? [place] : []
+    );
+    const { industry } = sample.businessOf(clientId);
+    const counted = result.rent.get(industry) ?? { all: 0, planted: 0 };
+    result.rent.set(industry, {
+      all: counted.all + rent.length,
+      planted: counted.planted + rent.filter((place) => planted.has(place)).length
+    });
+    result.mostRentBookingsInAMonth = Math.max(result.mostRentBookingsInAMonth, rent.length);
   }
   return result;
 }
@@ -228,5 +245,19 @@ describe("demo sample accounting findings", () => {
     // Some of them are planted, and few: about the share planted invoices have of all.
     expect(outOfOrder.planted).toBeGreaterThan(0);
     expect(outOfOrder.planted / outOfOrder.all).toBeLessThan(PLANTED_OUT_OF_ORDER_BOUND);
+  });
+
+  it("plants a second rent booking in few months and never a third, so a rent booking is seldom planted", () => {
+    const industries = [...counted.rent.values()].filter(({ all }) => all > 0);
+    expect(industries.length).toBeGreaterThanOrEqual(6);
+    const all = industries.reduce((sum, industry) => sum + industry.all, 0);
+    const planted = industries.reduce((sum, industry) => sum + industry.planted, 0);
+    expect(all).toBeGreaterThan(500);
+    expect(planted).toBeGreaterThan(0);
+    expect(planted / all).toBeLessThan(PLANTED_RENT_BOUND.overall);
+    for (const industry of industries) {
+      expect(industry.planted / industry.all).toBeLessThan(PLANTED_RENT_BOUND.industry);
+    }
+    expect(counted.mostRentBookingsInAMonth).toBe(2);
   });
 });

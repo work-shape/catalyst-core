@@ -422,42 +422,44 @@ export function activitiesOf(
     return supplierInvoice(month, rank, { turn: own(rank), turns });
   };
 
+  const fromCustomers = settlements(
+    {
+      from: "customers",
+      activity: ACTIVITY.customerPayments,
+      word: "Zahlungseingang",
+      discounts: !client.business.profile.invoices.rentRoll,
+      invoice: (month, rank) => salesInvoiceOf(month, rank).invoice
+    },
+    { frame: previous, count: previous.issued.salesInvoices },
+    { frame, count: issued.salesInvoices },
+    officeDay
+  );
+  const toSuppliers = settlements(
+    {
+      from: "suppliers",
+      activity: ACTIVITY.supplierPayments,
+      word: "Zahlung",
+      discounts: true,
+      invoice: (month, rank) => supplierInvoiceOf(month, rank).invoice
+    },
+    { frame: previous, count: previous.issued.supplierInvoices },
+    { frame, count: issued.supplierInvoices },
+    officeDay
+  );
   const settled: Activity[] = [
     {
       count: issued.salesInvoices,
       day: evenDays(issued.salesInvoices, officeDay),
       booking: (rank) => salesInvoiceOf(frame, rank).booking
     },
-    settlements(
-      {
-        from: "customers",
-        activity: ACTIVITY.customerPayments,
-        word: "Zahlungseingang",
-        discounts: !client.business.profile.invoices.rentRoll,
-        invoice: (month, rank) => salesInvoiceOf(month, rank).invoice
-      },
-      { frame: previous, count: previous.issued.salesInvoices },
-      { frame, count: issued.salesInvoices },
-      officeDay
-    ),
+    fromCustomers,
     ...tillActivities(frame, plantedIn),
     {
       count: issued.supplierInvoices,
       day: evenDays(issued.supplierInvoices, officeDay),
       booking: (rank) => supplierInvoiceOf(frame, rank).booking
     },
-    settlements(
-      {
-        from: "suppliers",
-        activity: ACTIVITY.supplierPayments,
-        word: "Zahlung",
-        discounts: true,
-        invoice: (month, rank) => supplierInvoiceOf(month, rank).invoice
-      },
-      { frame: previous, count: previous.issued.supplierInvoices },
-      { frame, count: issued.supplierInvoices },
-      officeDay
-    ),
+    toSuppliers,
     payrollRun(frame, officeDay),
     {
       count: standingOrders.length,
@@ -512,7 +514,18 @@ export function activitiesOf(
         ).booking;
       },
       /** The client's first standing order, as the month books it. */
-      standingOrder: (): Booking => standingOrder(frame, pick(standingOrders, 0))
+      standingOrder: (): Booking => standingOrder(frame, pick(standingOrders, 0)),
+      /**
+       * The payment in full of an invoice the month before left open, as the month books
+       * it: the one a draw in [0, 1) falls on among those of the customers and the
+       * suppliers, so each side takes its share of them.
+       */
+      payment(draw: number): Booking {
+        const place = Math.floor(draw * (fromCustomers.carried + toSuppliers.carried));
+        return place < fromCustomers.carried
+          ? fromCustomers.inFull(place)
+          : toSuppliers.inFull(place - fromCustomers.carried);
+      }
     }
   };
 }

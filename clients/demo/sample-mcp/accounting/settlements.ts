@@ -55,6 +55,14 @@ interface Invoiced {
   count: number;
 }
 
+/** A side's payments of a month, and what a payment made once more is made of. */
+export interface Settlements extends Activity {
+  /** How many invoices the month before left open. The month pays them first. */
+  carried: number;
+  /** The payment in full of the invoice at `place` among them, as the month books it. */
+  inFull(place: number): Booking;
+}
+
 /** What one booking pays of an invoice. */
 type Part = "all" | "lessDiscount" | "discount" | "firstPart" | "rest";
 
@@ -100,7 +108,7 @@ export function settlements(
   previous: Invoiced,
   current: Invoiced,
   dayAt: (point: number) => number
-): Activity {
+): Settlements {
   const { frame } = current;
   const paidBefore = settledInMonth(previous.count);
   const carried = previous.count - paidBefore;
@@ -113,12 +121,16 @@ export function settlements(
   // lies days after its invoice.
   const window = Math.min(ORDER_WINDOW, Math.floor(carried / 2));
 
-  /** The invoice the payment at `turn` pays: the one whose turn it is, or one of its neighbours. */
-  function invoiceAt(turn: number): Invoice {
-    const place = window < 2 ? turn : swapped(turn);
+  /** The invoice at `place` among those the month pays: the ones left open first. */
+  function invoiceOf(place: number): Invoice {
     return place < carried
       ? side.invoice(previous.frame, paidBefore + place)
       : side.invoice(frame, place - carried);
+  }
+
+  /** The invoice the payment at `turn` pays: the one whose turn it is, or one of its neighbours. */
+  function invoiceAt(turn: number): Invoice {
+    return invoiceOf(window < 2 ? turn : swapped(turn));
   }
 
   /** The place `turn` takes when the turns of each `window` payments in a row are shuffled. */
@@ -170,10 +182,9 @@ export function settlements(
       : { turn: first + place, part: "all" };
   }
 
-  function booking(rank: number): Booking {
-    const { turn, part } = at(rank);
-    const invoice = invoiceAt(turn);
-    const paid = paidOf(invoice.cents, part, splitAt(turn).draw);
+  /** The booking that pays a `part` of an invoice. `draw` decides how large a discount or a first part is. */
+  function payment(invoice: Invoice, part: Part, draw: number): Booking {
+    const paid = paidOf(invoice.cents, part, draw);
     // A discount takes the bank's place in the booking of its payment. Its account corrects
     // the tax of the invoice by itself.
     const money =
@@ -202,6 +213,11 @@ export function settlements(
     count,
     // A discount is booked on the day of its payment, the booking before it.
     day: (rank) => evenDay(at(rank).part === "discount" ? rank - 1 : rank),
-    booking
+    booking(rank) {
+      const { turn, part } = at(rank);
+      return payment(invoiceAt(turn), part, splitAt(turn).draw);
+    },
+    carried,
+    inFull: (place) => payment(invoiceOf(place), "all", 0)
   };
 }

@@ -370,8 +370,10 @@ describe("demo sample accounting books", () => {
       for (const rows of [required(august), required(september)]) {
         const settledBefore = settled.size;
         for (const [index, row] of rows.entries()) {
-          // A planted duplicate repeats the booking before it and settles nothing.
+          // A planted duplicate repeats the booking before it and settles nothing. Nor does
+          // a planted payment by hand, which names no invoice in its document field.
           if (JSON.stringify(row) === JSON.stringify(rows[index - 1])) continue;
+          if (row.document_field_1 === "") continue;
           // Nothing is booked on the collective accounts themselves.
           expect(collective).not.toContain(labelOf(row.account_number));
           expect(collective).not.toContain(labelOf(row.contra_account_number));

@@ -107,9 +107,9 @@ contain breaking changes; a patch version does not.
   payments, payments out of the order of the invoices, invoice numbers out of the order of
   the days, till reports in one booking per tax rate with a restaurant's best days at the
   weekend, and no booking on a nationwide public holiday. A planted booking has the text and
-  the accounts of clean ones and a document number that fits its day as theirs do, so only
-  its rule tells it apart. See "The sample accounting system and its Connection" in
-  `clients/demo/README.md`.
+  the accounts of clean ones and a document number that fits its day as theirs do, and no kind
+  of booking is mostly planted, so only its rule tells it apart. See "The sample accounting
+  system and its Connection" in `clients/demo/README.md`.
 - **Web access:** the public web fetcher refuses an IPv6 address that carries a blocked IPv4
   address in any form: IPv4-compatible, NAT64 `64:ff9b::/96`, 6to4 `2002::/16` and Teredo
   `2001:0::/32`, as it did IPv4-mapped ones.
