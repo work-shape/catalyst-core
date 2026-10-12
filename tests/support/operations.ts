@@ -238,13 +238,26 @@ export const resourceRouteTestOperations = {
     body: z.object({ shelf: z.string() }),
     response: json(z.object({ box: z.string(), shelf: z.string() }))
   }),
+  /** A box whose operation changes, is a person's alone and asks a scope of its own. */
+  testBoxGreenRead: defineRegisteredOperation({
+    ...registeredTestOperation,
+    id: "test_box.green.read",
+    auth: "user",
+    method: "POST",
+    path: "/api/v1/test/operations/internal/green",
+    scope: "governance:write",
+    requires: ["audit.view"],
+    effect: "changing",
+    body: z.object({ shelf: z.string() }),
+    response: json(z.object({ box: z.string(), shelf: z.string() }))
+  }),
   /** The route of the family `test_box.<id>.read`: it names no right and is in no registry. */
   testBoxesRead: defineRegisteredOperation({
     ...registeredTestOperation,
     id: "test_boxes.read",
     method: "POST",
     path: "/api/v1/test/operations/boxes/:box/read",
-    scope: "governance:read",
+    scope: "config_assets:read",
     requires: [],
     effect: "reading",
     body: z.object({ shelf: z.string() }),

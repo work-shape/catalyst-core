@@ -194,7 +194,14 @@ export interface ResourceOperationTarget {
  */
 export interface ResourceOperationBinding<Op extends Operation> {
   target(input: OperationInput<Op>): ResourceOperationTarget;
-  /** What a caller reads when the resource has no such operation. */
+  /**
+   * The right of the kind that the verb asks for, such as `data_store.read`. It is asked on
+   * the instance where the resource has no such operation, and for nothing else: a caller
+   * without it is refused as for a resource that exists, so the answer tells nobody which
+   * ids exist. The call of a resource that exists is judged by the resource's operation.
+   */
+  right: string;
+  /** What a caller who holds the right reads when the resource has no such operation. */
   notFound: string;
   bodyLimitBytes?: number;
 }
@@ -432,6 +439,7 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
     operation: Operation,
     binding: {
       target(input: Record<string, unknown>): ResourceOperationTarget;
+      right: string;
       notFound: string;
       bodyLimitBytes?: number;
     }
@@ -470,8 +478,20 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
           ...inputFieldsSchema.parse(query ?? {}),
           ...params
         });
-        if (!(await face.registry.resolve(target.operation))) {
+        const resolved = await face.registry.resolve(target.operation);
+        if (!resolved) {
+          // Asked without a resource, so only a right on the instance answers: who holds it
+          // on single resources alone learns of no other id.
+          requireAccess(await options.authorizer.forActor(caller.identity)).require(binding.right);
           throw new AppError("NOT_FOUND", binding.notFound);
+        }
+        // The descriptor admitted the request. What the resource's operation asks of a caller
+        // and of its key is asked here as well, since that operation is the one that runs.
+        if (resolved.auth === "user" && isAuthenticatedServicePrincipal(caller.identity)) {
+          throw new AppError("FORBIDDEN", "Service principals cannot access user-scoped routes");
+        }
+        if (resolved.scope) {
+          requireAuthScope(caller.identity, resolved.scope);
         }
         return face.answer(
           operation,
@@ -481,6 +501,7 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
             correlationId,
             input: target.input,
             idempotencyKey: readIdempotencyKey(request),
+            effect: resolved.effect,
             runs: target.operation
           },
           reply

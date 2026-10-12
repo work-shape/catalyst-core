@@ -13,6 +13,7 @@ import {
   type OperationAuthorizeContext,
   type OperationChangeClass,
   type OperationDefinition,
+  type OperationEffect,
   type OperationExecutionContext,
   type OperationOrigin,
   type OperationRegistry,
@@ -92,6 +93,8 @@ export interface OperationFace {
        * a family of operations that exist per resource. Without it the descriptor's own.
        */
       runs?: string;
+      /** The effect of that operation, where it is not the descriptor's own. */
+      effect?: OperationEffect;
     },
     reply: FastifyReply
   ): Promise<unknown>;
@@ -197,7 +200,7 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
       const outcome = await runOperation(
         {
           operation: call.runs ?? operation.id,
-          effect: operation.effect,
+          effect: call.effect ?? operation.effect,
           input: call.input,
           actor: call.identity,
           origin: call.origin,
