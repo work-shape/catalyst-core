@@ -221,6 +221,19 @@ test("anchored overlays sit on the raised surface and answer the keyboard", asyn
   await page.keyboard.press("Enter");
   await expect(menu).toBeHidden();
   await expect(menuTrigger).toBeFocused();
+  // A press on the trigger right after the menu closed opens it again, while the closed menu
+  // is still fading out: after Escape, and after the trigger closed it.
+  await menuTrigger.click();
+  await expect(menu).toBeVisible();
+  await page.keyboard.press("Escape");
+  await menuTrigger.click();
+  await expect(menuTrigger).toHaveAttribute("aria-expanded", "true");
+  await menuTrigger.click();
+  await menuTrigger.click();
+  await expect(menuTrigger).toHaveAttribute("aria-expanded", "true");
+  await expect(menu).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
 
   // A checkable item switches and the menu stays open.
   await menuEntry.getByRole("button", { name: "View" }).click();

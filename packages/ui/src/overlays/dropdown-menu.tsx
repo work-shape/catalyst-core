@@ -1,6 +1,6 @@
 import { ArrowUpRight, Check } from "lucide-react";
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui";
-import { forwardRef, useId, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { forwardRef, useId, useRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { cn } from "../cn";
 import { useOverlayContainer } from "../ui-root";
 import { ANCHORED_COLLISION_PADDING, anchoredPanelClassName } from "./popover";
@@ -48,12 +48,25 @@ export function DropdownMenuContent({
   ...props
 }: DropdownMenuContentProps) {
   const container = useOverlayContainer("DropdownMenu");
+  const contentRef = useRef<HTMLDivElement>(null);
   if (!container) {
     return null;
   }
   return (
     <DropdownMenuPrimitive.Portal container={container}>
       <DropdownMenuPrimitive.Content
+        ref={contentRef}
+        // The trigger opens and closes the menu by itself. A menu that is fading out stays on
+        // the page and still hears a press outside it, so a press on its trigger opened the
+        // menu and the fading menu closed it in the same moment: a second quick press did
+        // nothing. A press on the trigger is therefore never one that dismisses.
+        onInteractOutside={(event) => {
+          const triggerId = contentRef.current?.getAttribute("aria-labelledby");
+          const trigger = triggerId ? document.getElementById(triggerId) : null;
+          if (event.target instanceof Node && trigger?.contains(event.target)) {
+            event.preventDefault();
+          }
+        }}
         align={align}
         sideOffset={sideOffset}
         collisionPadding={ANCHORED_COLLISION_PADDING}
