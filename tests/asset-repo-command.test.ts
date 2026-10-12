@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -16,6 +16,7 @@ import {
 import {
   commitFolder,
   materialise,
+  pathWithGitThatFirstRuns,
   testGit,
   writeExecutable,
   type TestBundle
@@ -216,6 +217,44 @@ describe("committing a folder", () => {
     });
     expect(commit.result).toMatchObject({ status: "refused", path: ".git" });
     expect(existsSync(marker)).toBe(false);
+  });
+
+  it("refuses a folder that is itself a symbolic link", async () => {
+    const elsewhere = await mkdtemp(join(scratch, "elsewhere-"));
+    await writeFile(join(elsewhere, "secret.txt"), "not of this folder\n");
+    const commit = await commitFolder(scratch, {
+      files: {},
+      prepare: async (folder) => {
+        await rm(folder, { recursive: true });
+        await symlink(elsewhere, folder);
+      }
+    });
+    expect(commit.result).toMatchObject({ status: "refused", code: "folder_invalid" });
+  });
+
+  // Fails where a file is read by its path a second time, after the walk: the commit would
+  // hold the bytes of a file outside the folder.
+  it("commits the bytes it read, also when a file becomes a link while it runs", async () => {
+    const elsewhere = await mkdtemp(join(scratch, "elsewhere-"));
+    await writeFile(join(elsewhere, "secret.txt"), "not of this folder\n");
+    const commit = committed(
+      await commitFolder(scratch, {
+        files: source,
+        path: (directory) => {
+          const file = join(directory, "folder/src/rates.ts");
+          return pathWithGitThatFirstRuns(
+            scratch,
+            "hash-object",
+            1,
+            `rm '${file}' && ln -s '${join(elsewhere, "secret.txt")}' '${file}'`
+          );
+        }
+      })
+    );
+    const repository = await repositoryOf([commit.bundle], commit.commit, [commit.commit]);
+    expect(await testGit(repository, ["cat-file", "-p", `${commit.commit}:src/rates.ts`])).toBe(
+      source["src/rates.ts"].trim()
+    );
   });
 
   it("refuses a file over the cap and names it", async () => {
@@ -422,6 +461,80 @@ describe("making a repository from bundles", () => {
       base: first.commit
     });
     expect(save.result).toMatchObject({ status: "refused", code: "bundle_hash_mismatch" });
+  });
+
+  // Fails where the file is opened again for git after it was hashed: the repository would
+  // hold objects of a bundle the ledger never recorded.
+  it("gives git the bytes it hashed, also when the file is exchanged while it runs", async () => {
+    const { first, second, bundles } = await twoRevisions();
+    const honest = await repositoryOf(bundles, second.commit, [first.commit, second.commit]);
+    // A bundle with the header of the second and a pack that holds one object more.
+    const smuggled = await testGit(honest, ["hash-object", "-w", "--stdin"], {
+      input: "smuggled\n"
+    });
+    const objects = await testGit(honest, [
+      "rev-list",
+      "--objects",
+      `${first.commit}..${second.commit}`
+    ]);
+    const packs = await mkdtemp(join(scratch, "pack-"));
+    await testGit(honest, ["pack-objects", join(packs, "pack")], {
+      input: `${[...objects.split("\n").map((line) => line.slice(0, 40)), smuggled].join("\n")}\n`
+    });
+    const pack = (await readdir(packs)).find((name) => name.endsWith(".pack")) ?? "";
+    const header = second.bundle.bytes.subarray(0, second.bundle.bytes.indexOf("\n\n") + 2);
+    const exchanged = join(packs, "exchanged.bundle");
+    await writeFile(exchanged, Buffer.concat([header, await readFile(join(packs, pack))]));
+
+    // The second call of `cat-file` asks for the commit the second bundle stands on: after the
+    // bundle was hashed and before its pack is read.
+    const { result, directory } = await materialise(scratch, {
+      bundles,
+      draft: second.commit,
+      revisions: [{ number: 1, commit: first.commit }],
+      path: (target) =>
+        pathWithGitThatFirstRuns(
+          scratch,
+          "cat-file",
+          2,
+          `cp '${exchanged}' '${join(target, "bundles", second.bundle.file)}'`
+        )
+    });
+    expect(result).toMatchObject({ status: "materialised" });
+    const repository = join(
+      directory,
+      ASSET_REPO_OUTPUT_DIRECTORY,
+      ASSET_REPO_REPOSITORY_DIRECTORY
+    );
+    expect(await readFile(join(directory, "bundles", second.bundle.file))).toEqual(
+      await readFile(exchanged)
+    );
+    await expect(testGit(repository, ["cat-file", "-e", smuggled])).rejects.toThrow();
+  });
+
+  it("makes its repository new: refuses one that is there already, and a request that names no bundle", async () => {
+    const { first, second, bundles } = await twoRevisions();
+    const honest = await repositoryOf(bundles, second.commit, [first.commit, second.commit]);
+    const request = { draft: second.commit, revisions: [{ number: 1, commit: first.commit }] };
+    const output = (directory: string) =>
+      join(directory, ASSET_REPO_OUTPUT_DIRECTORY, ASSET_REPO_REPOSITORY_DIRECTORY);
+    // A repository that holds the commits already, put where the command writes its own.
+    const planted = await materialise(scratch, {
+      ...request,
+      bundles: [],
+      prepare: (directory) => symlink(honest, output(directory))
+    });
+    expect(planted.result).toMatchObject({ status: "refused" });
+    const copied = await materialise(scratch, {
+      ...request,
+      bundles,
+      prepare: async (directory) => {
+        await mkdir(output(directory));
+      }
+    });
+    expect(copied.result).toMatchObject({ status: "refused", code: "output_exists" });
+    const none = await materialise(scratch, { ...request, bundles: [] });
+    expect(none.result).toMatchObject({ status: "refused", code: "request_invalid" });
   });
 
   it("refuses a bundle whose base no earlier bundle holds", async () => {

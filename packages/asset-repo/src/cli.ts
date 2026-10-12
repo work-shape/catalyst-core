@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { commitFolder } from "./commit-folder";
@@ -58,19 +58,36 @@ async function runCommitFolder(directory: string): Promise<CommitFolderResult> {
       request,
       folder: join(directory, ASSET_REPO_FOLDER_DIRECTORY),
       bundles: join(directory, ASSET_REPO_BUNDLES_DIRECTORY),
-      output: join(directory, ASSET_REPO_OUTPUT_DIRECTORY)
+      output: join(directory, ASSET_REPO_OUTPUT_DIRECTORY),
+      scratch
     })
   );
 }
 
 async function runMaterialise(directory: string): Promise<MaterialiseResult> {
   const request = parseMaterialiseRequest(await readRequest(directory));
+  const output = join(directory, ASSET_REPO_OUTPUT_DIRECTORY);
+  const target = join(output, ASSET_REPO_REPOSITORY_DIRECTORY);
+  // The repository is made here, new. Whatever is at its place already, a repository with
+  // objects, alternates or refs of its own or a link to somewhere else, is not written into.
+  if (
+    !(await lstat(output).catch(() => undefined))?.isDirectory() ||
+    (await lstat(target).catch(() => undefined))
+  ) {
+    throw new Refused(
+      "output_exists",
+      `'${ASSET_REPO_OUTPUT_DIRECTORY}' is not a directory or holds '${ASSET_REPO_REPOSITORY_DIRECTORY}' already`,
+      ASSET_REPO_REPOSITORY_DIRECTORY
+    );
+  }
   return withScratch(async (scratch) => {
-    const repository = await createRepository(
-      join(directory, ASSET_REPO_OUTPUT_DIRECTORY, ASSET_REPO_REPOSITORY_DIRECTORY),
+    const repository = await createRepository(target, scratch);
+    await applyBundles(
+      repository,
+      join(directory, ASSET_REPO_BUNDLES_DIRECTORY),
+      request.bundles,
       scratch
     );
-    await applyBundles(repository, join(directory, ASSET_REPO_BUNDLES_DIRECTORY), request.bundles);
     await writeLedgerRefs(repository, request);
     const commits = await repository.git(["rev-list", "--count", "--all"]);
     return {
@@ -105,21 +122,27 @@ async function check(): Promise<void> {
       request: { bundles: [], base: null, author: "check", time: 0, message: "check" },
       folder,
       bundles: join(directory, ASSET_REPO_BUNDLES_DIRECTORY),
-      output
+      output,
+      scratch: join(scratch, "first")
     });
     if (committed.status !== "committed") {
       throw new Error("The check folder was not committed");
     }
     const second = await createRepository(join(scratch, "second.git"), join(scratch, "second"));
-    await applyBundles(second, output, [
-      {
-        file: committed.bundle.file,
-        tip: committed.commit,
-        prerequisite: null,
-        sha256: committed.bundle.sha256,
-        bytes: committed.bundle.bytes
-      }
-    ]);
+    await applyBundles(
+      second,
+      output,
+      [
+        {
+          file: committed.bundle.file,
+          tip: committed.commit,
+          prerequisite: null,
+          sha256: committed.bundle.sha256,
+          bytes: committed.bundle.bytes
+        }
+      ],
+      join(scratch, "second")
+    );
     await writeLedgerRefs(second, {
       draft: committed.commit,
       revisions: [{ number: 1, commit: committed.commit }]

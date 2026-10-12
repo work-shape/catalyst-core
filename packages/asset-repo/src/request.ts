@@ -156,5 +156,11 @@ export function parseMaterialiseRequest(value: unknown): MaterialiseRequest {
     }
     return { number, commit: commit(revision.commit, `revisions[${index}].commit`) };
   });
-  return { bundles: bundles(request.bundles), draft: commit(request.draft, "draft"), revisions };
+  const named = bundles(request.bundles);
+  // Every commit the request names comes out of a bundle it names. A request without one
+  // could only be answered from objects somebody else put there.
+  if (named.length === 0) {
+    throw new RequestError("A repository is made from at least one bundle");
+  }
+  return { bundles: named, draft: commit(request.draft, "draft"), revisions };
 }

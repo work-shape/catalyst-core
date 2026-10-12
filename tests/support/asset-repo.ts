@@ -86,6 +86,8 @@ export async function commitFolder(
     time?: number;
     message?: string;
     prepare?(folder: string): Promise<void>;
+    /** The search path the command runs with, where it is not this process's. */
+    path?(directory: string): Promise<string>;
     /** Replaces the list of bundles the request names. The files stay those of `bundles`. */
     named?: readonly TestBundle[];
   }
@@ -114,7 +116,7 @@ export async function commitFolder(
       message: input.message ?? "Revision"
     })
   );
-  await run(process.execPath, [await assetRepoCommandFromSource(), "commit-folder", directory]);
+  await runCommand("commit-folder", directory, await input.path?.(directory));
   const result = await readResult<CommitFolderResult>(directory);
   if (result.status !== "committed") {
     return { result, directory };
@@ -140,6 +142,10 @@ export async function materialise(
     revisions: readonly { number: number; commit: string }[];
     /** Files that are not written although the request names them. */
     withhold?: readonly string[];
+    /** Changes the directory of the command before it runs. */
+    prepare?(directory: string): Promise<void>;
+    /** The search path the command runs with, where it is not this process's. */
+    path?(directory: string): Promise<string>;
   }
 ): Promise<{ result: MaterialiseResult; directory: string }> {
   const directory = await mkdtemp(join(scratch, "materialise-"));
@@ -158,8 +164,44 @@ export async function materialise(
       revisions: input.revisions
     })
   );
-  await run(process.execPath, [await assetRepoCommandFromSource(), "materialise", directory]);
+  await input.prepare?.(directory);
+  await runCommand("materialise", directory, await input.path?.(directory));
   return { result: await readResult<MaterialiseResult>(directory), directory };
+}
+
+async function runCommand(command: string, directory: string, path?: string): Promise<void> {
+  await run(process.execPath, [await assetRepoCommandFromSource(), command, directory], {
+    env: { ...process.env, ...(path === undefined ? {} : { PATH: path }) }
+  });
+}
+
+/**
+ * A search path on which `git` is a script that runs `before` ahead of the `count`th call of
+ * the sub-command `on` and then the real git: what somebody who can write to the directory of
+ * the command does while the command runs.
+ */
+export async function pathWithGitThatFirstRuns(
+  scratch: string,
+  on: string,
+  count: number,
+  before: string
+): Promise<string> {
+  const directory = await mkdtemp(join(scratch, "git-"));
+  const real = (await run("/bin/sh", ["-c", "command -v git"])).stdout.trim();
+  const calls = join(directory, "calls");
+  await writeExecutable(
+    join(directory, "git"),
+    [
+      "#!/bin/sh",
+      `case " $* " in *" ${on} "*)`,
+      `  n=$(($(cat '${calls}' 2>/dev/null || echo 0) + 1)); echo "$n" > '${calls}'`,
+      `  if [ "$n" = ${count} ]; then ${before}; fi;;`,
+      "esac",
+      `exec '${real}' "$@"`,
+      ""
+    ].join("\n")
+  );
+  return `${directory}:${process.env.PATH ?? ""}`;
 }
 
 async function readResult<Result>(directory: string): Promise<Result> {

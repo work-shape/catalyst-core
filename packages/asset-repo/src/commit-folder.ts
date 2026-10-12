@@ -1,15 +1,25 @@
-import { lstat, open, readdir } from "node:fs/promises";
+import type { Dirent } from "node:fs";
+import { lstat, mkdir, open, opendir, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import type { Repository } from "./git";
 import {
   ASSET_REPO_DRAFT_REF,
   ASSET_REPO_LFS_POINTER_MAX_BYTES,
   ASSET_REPO_LFS_POINTER_START,
-  ASSET_REPO_MAX_FILES
+  ASSET_REPO_MAX_BUNDLE_BYTES,
+  ASSET_REPO_MAX_FILE_BYTES,
+  ASSET_REPO_MAX_FILES,
+  ASSET_REPO_MAX_TREE_BYTES
 } from "./limits";
-import { applyBundles, Refused, sha256OfFile } from "./materialise";
+import {
+  applyBundles,
+  copyBounded,
+  openRegularFile,
+  Refused,
+  type BoundedCopy
+} from "./materialise";
 import type { CommitFolderRequest, CommitFolderResult } from "./request";
-import { treeRefusal, type TreeEntry } from "./tree-check";
+import { pathRefusal, treeRefusal, type TreeEntry } from "./tree-check";
 
 // One commit from a folder of plain files. The folder is read as files and nothing else: git
 // is never started inside it, so a `.git` directory, a `.gitignore` or a `.gitattributes` in
@@ -28,42 +38,98 @@ const COMMITTER = { name: "catalyst", email: "platform@catalyst.invalid" };
  */
 const FOLDER_MAX_ENTRIES = 4 * ASSET_REPO_MAX_FILES;
 
-/** Every entry of a folder, at every depth, as a tree would name it. Follows no link. */
-async function walkFolder(folder: string): Promise<TreeEntry[]> {
+/** One file of the folder, as it was read: its path in the tree and the copy of its bytes. */
+interface SnapshotFile extends TreeEntry {
+  copy: string;
+}
+
+/**
+ * Reads a folder once: every entry of it, at every depth, as a tree would name it, and the
+ * bytes of every file as a copy below `snapshot`, which this command made. Each file is opened
+ * once, by a name that is no link, and what is committed later is that copy, so a file that is
+ * exchanged after it was read changes nothing. A directory is entered only where its path
+ * holds no link, and no more names are read of the folder than a walk takes.
+ */
+async function snapshotFolder(
+  folder: string,
+  snapshot: string
+): Promise<{ entries: TreeEntry[]; files: SnapshotFile[] }> {
+  const root = await lstat(folder).catch(() => undefined);
+  if (!root?.isDirectory()) {
+    throw new Refused("folder_invalid", "The folder to commit is not a directory");
+  }
   const entries: TreeEntry[] = [];
+  const files: SnapshotFile[] = [];
+  let names = 0;
+  let bytes = 0;
   const walk = async (directory: string, prefix: string): Promise<void> => {
-    const names = await readdir(directory, { withFileTypes: true });
-    for (const entry of names.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
-      const path = `${prefix}${entry.name}`;
-      if (entries.length >= FOLDER_MAX_ENTRIES) {
+    // The directory as it is reached must be the directory itself: a link anywhere in its
+    // path would lead the walk out of the folder.
+    if ((await realpath(directory).catch(() => undefined)) !== directory) {
+      throw new Refused(
+        "symbolic_link",
+        `'${prefix.slice(0, -1)}' is reached through a symbolic link`,
+        prefix.slice(0, -1)
+      );
+    }
+    const found: Dirent[] = [];
+    for await (const entry of await opendir(directory)) {
+      names += 1;
+      // Counted while the names are read, so a directory of any size is left after this many.
+      if (names > FOLDER_MAX_ENTRIES) {
         throw new Refused(
           "too_many_files",
           `The folder holds more than ${FOLDER_MAX_ENTRIES} files and directories`,
-          path
+          `${prefix}${entry.name}`
         );
+      }
+      found.push(entry);
+    }
+    for (const entry of found.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+      const path = `${prefix}${entry.name}`;
+      // A name the store does not take is refused before anything below it is read.
+      const refused = pathRefusal(path);
+      if (refused) {
+        throw new Refused(refused.code, refused.message, refused.path);
       }
       if (entry.isSymbolicLink()) {
         entries.push({ mode: "120000", path });
       } else if (entry.isDirectory()) {
         entries.push({ mode: "40000", path });
-        // What a repository inside the folder holds is nothing to read: the folder is refused
-        // for it below, by its name.
-        if (entry.name.toLowerCase() !== ".git") {
-          await walk(join(directory, entry.name), `${path}/`);
-        }
+        await walk(join(directory, entry.name), `${path}/`);
       } else if (entry.isFile()) {
-        entries.push({
-          mode: FILE_MODE,
-          path,
-          size: (await lstat(join(directory, entry.name))).size
-        });
+        const source = await openRegularFile(join(directory, entry.name));
+        if (!source) {
+          // It was a file when the directory was read and is none now.
+          entries.push({ mode: "0", path });
+          continue;
+        }
+        const copy = join(snapshot, String(files.length));
+        try {
+          const copied = await copyBounded(source, copy, ASSET_REPO_MAX_FILE_BYTES);
+          const file = { mode: FILE_MODE, path, size: copied.bytes, copy };
+          entries.push(file);
+          files.push(file);
+          bytes += copied.bytes;
+        } finally {
+          await source.close();
+        }
+        // Nothing is copied past what a tree may weigh.
+        if (bytes > ASSET_REPO_MAX_TREE_BYTES) {
+          throw new Refused(
+            "tree_too_large",
+            `The files of the folder have more than ${ASSET_REPO_MAX_TREE_BYTES} bytes together (ASSET_REPO_MAX_TREE_BYTES). '${path}' is the first past it.`,
+            path
+          );
+        }
       } else {
         entries.push({ mode: "0", path });
       }
     }
   };
-  await walk(folder, "");
-  return entries;
+  await mkdir(snapshot, { mode: 0o700 });
+  await walk(await realpath(folder), "");
+  return { entries, files };
 }
 
 async function isLfsPointer(path: string): Promise<boolean> {
@@ -108,6 +174,8 @@ export interface CommitFolderInput {
   bundles: string;
   /** Where the bundle of the new commit is written. */
   output: string;
+  /** A directory this command made, for the copies it reads from. */
+  scratch: string;
 }
 
 /**
@@ -116,7 +184,7 @@ export interface CommitFolderInput {
  */
 export async function commitFolder(input: CommitFolderInput): Promise<CommitFolderResult> {
   const { repository, request, folder } = input;
-  await applyBundles(repository, input.bundles, request.bundles);
+  await applyBundles(repository, input.bundles, request.bundles, input.scratch);
   if (
     request.base !== null &&
     !(await repository.succeeds(["cat-file", "-e", `${request.base}^{commit}`]))
@@ -127,17 +195,13 @@ export async function commitFolder(input: CommitFolderInput): Promise<CommitFold
     );
   }
 
-  const entries = await walkFolder(folder);
+  const { entries, files } = await snapshotFolder(folder, join(input.scratch, "snapshot"));
   const refused = treeRefusal(entries);
   if (refused) {
     throw new Refused(refused.code, refused.message, refused.path);
   }
-  const files = entries.filter((entry) => entry.mode === FILE_MODE);
   for (const file of files) {
-    if (
-      (file.size ?? 0) < ASSET_REPO_LFS_POINTER_MAX_BYTES &&
-      (await isLfsPointer(join(folder, file.path)))
-    ) {
+    if ((file.size ?? 0) < ASSET_REPO_LFS_POINTER_MAX_BYTES && (await isLfsPointer(file.copy))) {
       throw new Refused(
         "lfs_pointer",
         `'${file.path}' is a Git LFS pointer. A repository holds the file itself, or a reference to a managed file.`,
@@ -146,11 +210,11 @@ export async function commitFolder(input: CommitFolderInput): Promise<CommitFold
     }
   }
 
-  // The bytes as they are: no ignore rule, no attribute, no filter. Git runs in its own
-  // repository and is handed each file by its full path.
+  // The bytes as they were read: no ignore rule, no attribute, no filter. Git runs in its own
+  // repository and is handed the copy of each file, never a path of the folder.
   const ids = (
     await repository.git(["hash-object", "-w", "--no-filters", "--stdin-paths"], {
-      input: files.map((file) => `${join(folder, file.path)}\n`).join("")
+      input: files.map((file) => `${file.copy}\n`).join("")
     })
   )
     .split("\n")
@@ -195,16 +259,31 @@ export async function commitFolder(input: CommitFolderInput): Promise<CommitFold
   }
 
   await repository.git(["update-ref", ASSET_REPO_DRAFT_REF, commit]);
-  const file = `${commit}.bundle`;
-  const bundlePath = join(input.output, file);
+  // The bundle is made where only this command writes and copied out once, as a new file: its
+  // size and hash are those of the bytes that were written out.
+  const made = join(input.scratch, "new.bundle");
   await repository.git([
     "bundle",
     "create",
     "--quiet",
     "--version=2",
-    bundlePath,
+    made,
     request.base ? `${request.base}..${ASSET_REPO_DRAFT_REF}` : ASSET_REPO_DRAFT_REF
   ]);
+  const file = `${commit}.bundle`;
+  const source = await open(made, "r");
+  let copiedOut: BoundedCopy;
+  try {
+    copiedOut = await copyBounded(source, join(input.output, file), ASSET_REPO_MAX_BUNDLE_BYTES);
+  } finally {
+    await source.close();
+  }
+  if (copiedOut.exceeded) {
+    throw new Refused(
+      "bundle_too_large",
+      `The bundle of the commit has more than ${ASSET_REPO_MAX_BUNDLE_BYTES} bytes (ASSET_REPO_MAX_BUNDLE_BYTES)`
+    );
+  }
   return {
     status: "committed",
     commit,
@@ -215,8 +294,8 @@ export async function commitFolder(input: CommitFolderInput): Promise<CommitFold
       file,
       kind: request.base ? "incremental" : "full",
       prerequisite: request.base,
-      sha256: await sha256OfFile(bundlePath),
-      bytes: (await lstat(bundlePath)).size
+      sha256: copiedOut.sha256,
+      bytes: copiedOut.bytes
     }
   };
 }

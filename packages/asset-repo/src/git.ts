@@ -107,14 +107,16 @@ function run(
 }
 
 /**
- * Makes an empty bare repository at `directory`. `scratch` is a directory this command made
+ * Makes an empty bare repository at `directory`, which must not exist: a repository somebody
+ * else left there could hold objects, alternates, refs or settings of its own. `scratch` is a
+ * directory this command made
  * and nobody else writes to: it holds the empty directory hooks, templates and a home are
  * looked for in.
  */
 export async function createRepository(directory: string, scratch: string): Promise<Repository> {
   const empty = join(scratch, "empty");
   await mkdir(empty, { recursive: true });
-  await mkdir(directory, { recursive: true });
+  await mkdir(directory);
   const env: Record<string, string> = {
     PATH: commandSearchPath(),
     HOME: empty,

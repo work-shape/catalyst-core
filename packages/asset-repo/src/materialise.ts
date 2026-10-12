@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
-import { lstat, open } from "node:fs/promises";
+import { constants } from "node:fs";
+import { mkdir, open, type FileHandle } from "node:fs/promises";
 import { join } from "node:path";
 import { GitError, OBJECT_ID, type Repository } from "./git";
 import {
@@ -62,48 +62,105 @@ function parseBundleHeader(start: Uint8Array): BundleHeader | undefined {
   return header;
 }
 
-/** The SHA-256 of a file, in lower-case hex, read as a stream. */
-export async function sha256OfFile(path: string): Promise<string> {
+/** What was read of a file that was copied, up to the bound of the copy. */
+export interface BoundedCopy {
+  bytes: number;
+  sha256: string;
+  /** The file holds more than the bound. The copy ends there and is not the file. */
+  exceeded: boolean;
+}
+
+/**
+ * Copies what an open file holds into a new file this command owns and answers its size and
+ * SHA-256. The bytes are read once, here: what was counted and hashed is what the copy holds,
+ * whatever becomes of the path afterwards. Not more than `maxBytes` are read.
+ */
+export async function copyBounded(
+  source: FileHandle,
+  destination: string,
+  maxBytes: number
+): Promise<BoundedCopy> {
   const hash = createHash("sha256");
-  for await (const chunk of createReadStream(path)) {
-    hash.update(chunk);
+  const target = await open(destination, "wx", 0o600);
+  try {
+    const buffer = Buffer.alloc(64 * 1024);
+    let bytes = 0;
+    for (;;) {
+      const { bytesRead } = await source.read(buffer, 0, buffer.byteLength, null);
+      if (bytesRead === 0) {
+        return { bytes, sha256: hash.digest("hex"), exceeded: false };
+      }
+      bytes += bytesRead;
+      if (bytes > maxBytes) {
+        return { bytes, sha256: "", exceeded: true };
+      }
+      const chunk = buffer.subarray(0, bytesRead);
+      hash.update(chunk);
+      await target.writeFile(chunk);
+    }
+  } finally {
+    await target.close();
   }
-  return hash.digest("hex");
+}
+
+/** Opens a regular file for reading and follows no link at its name. Nothing else is opened. */
+export async function openRegularFile(path: string): Promise<FileHandle | undefined> {
+  const file = await open(
+    path,
+    constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK
+  ).catch(() => undefined);
+  if (file && !(await file.stat()).isFile()) {
+    await file.close();
+    return undefined;
+  }
+  return file;
 }
 
 async function isCommit(repository: Repository, commit: string): Promise<boolean> {
   return repository.succeeds(["cat-file", "-e", `${commit}^{commit}`]);
 }
 
-/** Adds the objects of one bundle the ledger names, or refuses it with its name. */
+/**
+ * Adds the objects of one bundle the ledger names, or refuses it with its name. `copy` is where
+ * the bundle is copied to before anything reads it as a bundle.
+ */
 async function applyBundle(
   repository: Repository,
   directory: string,
-  bundle: BundleReference
+  bundle: BundleReference,
+  copy: string
 ): Promise<void> {
-  const path = join(directory, bundle.file);
   const refuse = (code: string, reason: string) =>
     new Refused(code, `The bundle '${bundle.file}' ${reason}`, bundle.file);
-  const stat = await lstat(path).catch(() => undefined);
-  if (!stat?.isFile()) {
-    throw refuse("bundle_missing", "is not among the files of this repository");
-  }
-  if (stat.size > ASSET_REPO_MAX_BUNDLE_BYTES) {
+  if (bundle.bytes > ASSET_REPO_MAX_BUNDLE_BYTES) {
     throw refuse(
       "bundle_too_large",
-      `has ${stat.size} bytes. A bundle has at most ${ASSET_REPO_MAX_BUNDLE_BYTES} (ASSET_REPO_MAX_BUNDLE_BYTES).`
+      `has ${bundle.bytes} bytes. A bundle has at most ${ASSET_REPO_MAX_BUNDLE_BYTES} (ASSET_REPO_MAX_BUNDLE_BYTES).`
     );
   }
+  const source = await openRegularFile(join(directory, bundle.file));
+  if (!source) {
+    throw refuse("bundle_missing", "is not among the files of this repository");
+  }
   // A bundle of the ledger passed the tree check when it was written, and that check is not
-  // repeated here. So the file must be those bytes and no others: the size and the hash the
-  // ledger recorded are compared before anything of the file is read as a bundle.
-  if (stat.size !== bundle.bytes || (await sha256OfFile(path)) !== bundle.sha256) {
+  // repeated here. So the bytes must be the ones the ledger recorded and no others. The file
+  // is read once, into a copy nobody else writes to, and not past the size the ledger
+  // recorded; the hash is taken of what the copy holds, and the header and the pack are read
+  // from the copy. What becomes of the file meanwhile changes nothing.
+  let copied: BoundedCopy;
+  try {
+    copied = await copyBounded(source, copy, bundle.bytes);
+  } finally {
+    await source.close();
+  }
+  if (copied.exceeded || copied.bytes !== bundle.bytes || copied.sha256 !== bundle.sha256) {
     throw refuse("bundle_hash_mismatch", "does not have the bytes the ledger recorded for it");
   }
+  const path = copy;
   const file = await open(path, "r");
   let start: Buffer;
   try {
-    const buffer = Buffer.alloc(Math.min(stat.size, BUNDLE_HEADER_MAX_BYTES));
+    const buffer = Buffer.alloc(Math.min(copied.bytes, BUNDLE_HEADER_MAX_BYTES));
     const { bytesRead } = await file.read(buffer, 0, buffer.byteLength, 0);
     start = buffer.subarray(0, bytesRead);
   } finally {
@@ -165,14 +222,20 @@ async function applyBundle(
   }
 }
 
-/** Adds the objects of every bundle, in the order of the ledger. */
+/**
+ * Adds the objects of every bundle, in the order of the ledger. `scratch` is a directory this
+ * command made, which gets the copies the bundles are read from.
+ */
 export async function applyBundles(
   repository: Repository,
   directory: string,
-  bundles: readonly BundleReference[]
+  bundles: readonly BundleReference[],
+  scratch: string
 ): Promise<void> {
-  for (const bundle of bundles) {
-    await applyBundle(repository, directory, bundle);
+  const copies = join(scratch, "bundles");
+  await mkdir(copies, { mode: 0o700 });
+  for (const [index, bundle] of bundles.entries()) {
+    await applyBundle(repository, directory, bundle, join(copies, `${index}.bundle`));
   }
 }
 
