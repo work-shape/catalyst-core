@@ -5,7 +5,9 @@ import {
   extractServiceBlock,
   modelSecretNames,
   readPlatformDockerfile,
-  resolveComposeServices,
+  assertWorkerIsolation,
+  reachesDockerSocket,
+  resolveCompose,
   serviceNames
 } from "./compose-helpers.mjs";
 
@@ -45,8 +47,12 @@ for (const composeFile of composeFiles) {
 
   assert(worker, `${composeFile}: workspace-command-worker service is required`);
   assert(api, `${composeFile}: api service is required`);
-  const resolved = resolveComposeServices(composeFile);
-  const resolvedWorker = resolved["workspace-command-worker"];
+  const resolved = await resolveCompose(composeFile);
+  const resolvedWorker = resolved.services["workspace-command-worker"];
+  assertWorkerIsolation(composeFile, resolved, "workspace-command-worker", {
+    secretNames: secretsTheWorkerMustNotReceive,
+    dockerSocket: true
+  });
   assert(
     worker.includes(
       composeFile === "docker-compose.yml"
@@ -104,19 +110,13 @@ for (const composeFile of composeFiles) {
     `${composeFile}: workspace-command-worker runner image must use the catalyst-runner-base release tag shape`
   );
   assert(
-    !serviceNames(resolved.api, "/var/run/docker.sock"),
+    !reachesDockerSocket(resolved, "api"),
     `${composeFile}: chat API must not have Docker socket access`
   );
   assert(
-    serviceNames(resolved.api, "SERVICE_ACCESS_TOKEN_SECRET"),
+    serviceNames(resolved.services.api, "SERVICE_ACCESS_TOKEN_SECRET"),
     `${composeFile}: chat API must receive SERVICE_ACCESS_TOKEN_SECRET`
   );
-  for (const secretName of secretsTheWorkerMustNotReceive) {
-    assert(
-      !serviceNames(resolvedWorker, secretName),
-      `${composeFile}: workspace-command-worker must not receive ${secretName}`
-    );
-  }
   assert(
     !/^\s{2}(catalyst-runner-base|runner|sandbox):/mu.test(contents),
     `${composeFile}: runner/sandbox containers must not be long-running Compose services`

@@ -6,7 +6,8 @@ import {
   extractServiceBlock,
   modelSecretNames,
   readPlatformDockerfile,
-  resolveComposeServices,
+  assertWorkerIsolation,
+  resolveCompose,
   serviceNames
 } from "./compose-helpers.mjs";
 
@@ -122,8 +123,11 @@ for (const composeFile of composeFiles) {
 
   assert(worker, `${composeFile}: artifact-preview-worker service is required`);
   assert(api, `${composeFile}: api service is required`);
-  const resolved = resolveComposeServices(composeFile);
-  const resolvedWorker = resolved["artifact-preview-worker"];
+  const resolved = await resolveCompose(composeFile);
+  const resolvedWorker = resolved.services["artifact-preview-worker"];
+  assertWorkerIsolation(composeFile, resolved, "artifact-preview-worker", {
+    secretNames: secretsTheWorkerMustNotReceive
+  });
   assert(
     worker.includes(
       composeFile === "docker-compose.yml"
@@ -149,10 +153,6 @@ for (const composeFile of composeFiles) {
     worker.includes("mem_limit:"),
     `${composeFile}: artifact-preview-worker must have an explicit memory limit`
   );
-  assert(
-    !serviceNames(resolvedWorker, "/var/run/docker.sock"),
-    `${composeFile}: artifact-preview-worker must not have Docker socket access`
-  );
   if (composeFile === "docker-compose.yml") {
     assert(
       worker.includes("target: artifact-preview-worker-dev"),
@@ -169,19 +169,13 @@ for (const composeFile of composeFiles) {
     );
   }
   assert(
-    !(resolved.api.build?.target ?? "").startsWith("artifact-preview-worker"),
+    !(resolved.services.api.build?.target ?? "").startsWith("artifact-preview-worker"),
     `${composeFile}: API must not build the artifact-preview-worker image target`
   );
   assert(
-    serviceNames(resolved.api, "SERVICE_ACCESS_TOKEN_SECRET"),
+    serviceNames(resolved.services.api, "SERVICE_ACCESS_TOKEN_SECRET"),
     `${composeFile}: chat API must receive SERVICE_ACCESS_TOKEN_SECRET`
   );
-  for (const secretName of secretsTheWorkerMustNotReceive) {
-    assert(
-      !serviceNames(resolvedWorker, secretName),
-      `${composeFile}: artifact-preview-worker must not receive ${secretName}`
-    );
-  }
 }
 
 const deployScript = await readRemoteDeployScript();

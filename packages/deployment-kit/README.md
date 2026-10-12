@@ -62,11 +62,20 @@ unless every service runs the digest of the release.
 `check` starts with `lib/check-deployment-policy.sh`: production Compose pins every first-party
 image by digest, `deploy.yml` requires a successful staging deployment, the bake targets are the
 image keys of a manifest, and the worker wiring under `verify/` holds. What a worker must not
-have (a model key, a signing secret, the Docker socket) is judged on the Compose file as
-`docker compose config --no-interpolate` resolves it, with anchors and merge keys applied; the
-model key names are the adapters' defaults and every `credentialSecret` and
-`organizationSecret` under `config/`. A deployment adds its own
-assertions in an executable `deploy/scripts/check-release-policy.sh`, which runs last.
+have is judged on the stack as `docker compose config --no-interpolate` resolves it, with
+anchors, merge keys and the override file applied. The stack is the files `lib/deploy-remote.sh`
+passes with `-f`, and locally `docker-compose.yml` with `docker-compose.override.yml`. A
+worker receives only what its `environment` spells out:
+
+- no signing secret, and no model key unless it is `agent-run-worker`. The model key names are
+  the adapters' defaults and every `credentialSecret` and `organizationSecret` under `config/`;
+- no `env_file`, `secrets`, `configs` or `volumes_from`, because the resolved file does not
+  show what they carry;
+- no `pid`, no mount of `/etc/vivd-catalyst` or of a path whose variable has no default, and
+  the Docker socket only on `workspace-command-worker`.
+
+A deployment adds its own assertions in an executable
+`deploy/scripts/check-release-policy.sh`, which runs last.
 
 The release gate also starts every built process entry point of the deployment once per
 release config (`lib/resolve-entry-points.mjs`): `dist/server.js`, `dist/agent-run-worker.js`,

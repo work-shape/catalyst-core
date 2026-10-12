@@ -3,9 +3,18 @@ import {
   readDeploymentFile,
   readRemoteDeployScript,
   extractServiceBlock,
-  resolveComposeServices,
-  serviceNames
+  assertWorkerIsolation,
+  resolveCompose
 } from "./compose-helpers.mjs";
+
+// The worker calls the model, so it holds the model keys. It signs nothing and serves no
+// request.
+const secretsTheWorkerMustNotReceive = [
+  "BETTER_AUTH_SECRET",
+  "CHAT_SESSION_TOKEN_SECRET",
+  "CHAT_SERVER_CREDENTIAL",
+  "SERVICE_ACCESS_TOKEN_SECRET"
+];
 
 for (const composeFile of ["docker-compose.yml", "docker-compose.prod.yml"]) {
   const contents = await readDeploymentFile(composeFile);
@@ -14,7 +23,11 @@ for (const composeFile of ["docker-compose.yml", "docker-compose.prod.yml"]) {
 
   assert(worker, `${composeFile}: agent-run-worker service is required`);
   assert(api, `${composeFile}: api service is required`);
-  const resolvedWorker = resolveComposeServices(composeFile)["agent-run-worker"];
+  const resolved = await resolveCompose(composeFile);
+  const resolvedWorker = resolved.services["agent-run-worker"];
+  assertWorkerIsolation(composeFile, resolved, "agent-run-worker", {
+    secretNames: secretsTheWorkerMustNotReceive
+  });
   assert(
     worker.includes(
       composeFile === "docker-compose.yml" ? "src/agent-run-worker.ts" : "agent-run-worker.js"
@@ -63,21 +76,6 @@ for (const composeFile of ["docker-compose.yml", "docker-compose.prod.yml"]) {
     resolvedWorker.healthcheck === undefined,
     `${composeFile}: agent-run-worker must not add an HTTP health server`
   );
-  assert(
-    !serviceNames(resolvedWorker, "/var/run/docker.sock"),
-    `${composeFile}: agent-run-worker must not receive the Docker socket`
-  );
-  for (const secretName of [
-    "BETTER_AUTH_SECRET",
-    "CHAT_SESSION_TOKEN_SECRET",
-    "CHAT_SERVER_CREDENTIAL",
-    "SERVICE_ACCESS_TOKEN_SECRET"
-  ]) {
-    assert(
-      !serviceNames(resolvedWorker, secretName),
-      `${composeFile}: agent-run-worker must not receive ${secretName}`
-    );
-  }
   if (composeFile === "docker-compose.yml") {
     assert(
       worker.includes("      api:\n        condition: service_healthy"),

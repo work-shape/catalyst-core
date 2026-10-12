@@ -1455,19 +1455,29 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
-- **Deployment kit, worker secret guards:** the Compose checks under `verify/` judge what a
-  service must not have on the file as `docker compose config --no-interpolate` resolves it,
-  so a secret that reaches a worker through a YAML anchor or a merge key is refused. Before,
-  they read the text of the service block and such a secret passed. **`catalyst-deploy check`
-  now needs `docker compose`**, and it stops a deployment that passed before with
-  `docker-compose.yml: workspace-command-worker must not receive <NAME>` (or
-  `artifact-preview-worker`, `agent-run-worker`, and `docker-compose.prod.yml`). The model
-  key names the two workers must not receive are `OPENAI_API_KEY`, `AZURE_OPENAI_API_KEY`,
-  `GOOGLE_VERTEX_CREDENTIALS` and every `credentialSecret` and `organizationSecret` a file
-  under `config/` names. `AWS_SECRET_ACCESS_KEY` left both lists: the two workers read and
-  write the object stores, and the deployments hand them that key through an anchor, which
-  the text check never saw.
-  `verify/compose-helpers.mjs` gains `resolveComposeServices`, `serviceNames` and
+- **Deployment kit, worker guards:** the Compose checks under `verify/` judge what a worker
+  must not have on the stack as `docker compose config --no-interpolate` resolves it: the
+  files the deploy script passes with `-f`, and locally `docker-compose.yml` with
+  `docker-compose.override.yml`. A secret that reaches a worker through a YAML anchor, a merge
+  key or an override file is refused. Before, the checks read the text of the service block
+  and such a secret passed. **`catalyst-deploy check` now needs `docker compose`**, and it
+  stops a deployment that passed before with `<file>: <worker> must not ...` for
+  `agent-run-worker`, `workspace-command-worker` and `artifact-preview-worker`:
+  - `receive <NAME>`: a signing secret, and for the two workers that call no model a model
+    key. Model key names are `OPENAI_API_KEY`, `AZURE_OPENAI_API_KEY`,
+    `GOOGLE_VERTEX_CREDENTIALS` and every `credentialSecret` and `organizationSecret` a file
+    under `config/` names.
+  - `use env_file`, `use secrets`, `use configs`, `use volumes_from`: the resolved file does
+    not show what they carry. A worker names each variable under `environment`. There is no
+    allow list; none of the operated deployments uses one of the four keys.
+  - `set pid`, and `mount <path>` for `/etc/vivd-catalyst`, a directory that holds it, a
+    path whose variable has no default, and, except on `workspace-command-worker`, the Docker
+    socket under any path.
+
+  `AWS_SECRET_ACCESS_KEY` left the lists of the workspace command worker and the artifact
+  preview worker: both read and write the object stores, and the deployments hand them that
+  key through an anchor, which the text check never saw. `verify/compose-helpers.mjs` gains
+  `resolveCompose`, `assertWorkerIsolation`, `reachesDockerSocket`, `serviceNames` and
   `modelSecretNames`.
 - **Workers no longer end on their own:** a job worker with nothing to do ended with exit code
   13 when the driver closed its last database connection at the end of the connection's

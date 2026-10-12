@@ -308,11 +308,13 @@ const helpers = await import(
 );
 for (const name of [
   "assert",
+  "assertWorkerIsolation",
   "extractDockerStage",
   "extractServiceBlock",
   "modelSecretNames",
+  "reachesDockerSocket",
   "readPlatformDockerfile",
-  "resolveComposeServices",
+  "resolveCompose",
   "serviceNames",
   "workflowTagsImageSuffix"
 ]) {
@@ -841,62 +843,80 @@ SH
   assert_contains "$scratch/failure-output" "verify/artifact-preview-worker-compose.mjs"
 }
 
-# What a worker must not receive is judged on the Compose file as Docker resolves it. The text
-# of a service block shows nothing of what a YAML anchor or a merge key brings in.
-test_worker_secret_guards() {
-  local deployment="$scratch/guard-fixture/deployment.fixture"
-  local guard=(env "DEPLOYMENT_ROOT=$deployment" node "$kit_dir/verify/workspace-command-worker-compose.mjs")
+# Writes the local Compose file of the guard fixture: the API and the three workers, with
+# the lines of $3 added to the worker $2 and the lines of $4 added at the top level.
+write_guard_compose() {
+  local deployment="$1" target="$2" worker_lines="$3" top_level="${4:-}" worker
+  {
+    printf 'x-leaked-environment: &leaked-environment\n'
+    printf '  ACME_MODEL_KEY: ${ACME_MODEL_KEY:?}\n  BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?}\n'
+    printf 'services:\n  api:\n    image: example\n'
+    for worker in agent-run-worker workspace-command-worker artifact-preview-worker; do
+      printf '  %s:\n    image: example\n' "$worker"
+      [[ "$worker" != "$target" ]] || printf '%s\n' "$worker_lines"
+    done
+    printf '%s\n' "$top_level"
+  } > "$deployment/docker-compose.yml"
+}
+
+# What a worker must not have is judged on the stack as Docker resolves it. Each case below
+# hands one worker a secret, or a way to one, that the text of its service block does not
+# show, and each of the three checks must refuse it for its worker.
+test_worker_isolation_guards() {
+  local deployment="$scratch/guard-fixture/deployment.fixture" worker secret
   docker compose version >/dev/null 2>&1 \
     || fail "docker compose is required: the worker guards resolve the Compose files with it"
   mkdir -p "$deployment/config/profiles"
-  printf 'services: {}\n' > "$deployment/docker-compose.prod.yml"
-  # The model key has a name of the deployment's own, which only its config knows.
-  printf 'infrastructure:\n  models:\n    main:\n      credentialSecret: ACME_MODEL_KEY\n' \
+  # The model key has a name of the deployment's own, which only its config knows, and the
+  # config spells the entry as a flow mapping with a quoted key.
+  printf 'infrastructure:\n  models:\n    main: { "credentialSecret": ACME_MODEL_KEY }\n' \
     > "$deployment/config/profiles/acme.yaml"
-  cat > "$deployment/docker-compose.yml" <<'YAML'
-x-model-environment: &model-environment
-  ACME_MODEL_KEY: ${ACME_MODEL_KEY:?ACME_MODEL_KEY is required}
 
-x-worker-environment: &worker-environment
-  EXECUTION_WORKSPACE_RUNNER_IMAGE: example-catalyst-runner-base:local
+  for worker in agent-run-worker workspace-command-worker artifact-preview-worker; do
+    local guard=(env "DEPLOYMENT_ROOT=$deployment" node "$kit_dir/verify/$worker-compose.mjs")
+    # refused LINES MESSAGE [TOP-LEVEL]: the worker with LINES is refused with MESSAGE.
+    refused() {
+      write_guard_compose "$deployment" "$worker" "$1" "${3:-}"
+      expect_failure "${guard[@]}"
+      assert_contains "$scratch/failure-output" "docker-compose.yml: $worker must not $2"
+    }
+    # The agent run worker calls the model and may hold its key; a signing secret it may not.
+    secret="ACME_MODEL_KEY"
+    [[ "$worker" != "agent-run-worker" ]] || secret="BETTER_AUTH_SECRET"
 
-services:
-  api:
-    image: example
-    environment:
-      <<: *model-environment
-      SERVICE_ACCESS_TOKEN_SECRET: ${SERVICE_ACCESS_TOKEN_SECRET:?}
-    healthcheck:
-      test: ["CMD", "true"]
-  workspace-command-worker:
-    build:
-      context: .
-      target: workspace-command-worker-dev
-    command: ["tsx", "src/workspace-command-worker.ts"]
-    stop_grace_period: 30s
-    depends_on:
-      api:
-        condition: service_healthy
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      <<: *worker-environment
-YAML
+    # Without any of it the worker passes the guard and the check stops at the wiring.
+    write_guard_compose "$deployment" "$worker" ""
+    expect_failure "${guard[@]}"
+    assert_contains "$scratch/failure-output" "worker entrypoint"
 
-  # Without the key the local file holds, and the check stops at the empty production file.
-  expect_failure "${guard[@]}"
-  assert_contains "$scratch/failure-output" \
-    "docker-compose.prod.yml: workspace-command-worker service is required"
+    refused $'    environment:\n      <<: *leaked-environment' "receive $secret"
+    refused '    env_file: [/etc/vivd-catalyst/fixture/app.env]' "use env_file"
+    refused '    secrets: [model-key]' "use secrets" \
+      $'secrets:\n  model-key:\n    environment: ACME_MODEL_KEY'
+    refused '    configs: [model-key]' "use configs" \
+      $'configs:\n  model-key:\n    content: ${ACME_MODEL_KEY}'
+    refused '    volumes_from: [api]' "use volumes_from"
+    refused '    pid: "service:api"' "set pid (service:api)"
+    refused '    volumes: ["/etc/vivd-catalyst/fixture:/instance:ro"]' \
+      "mount /etc/vivd-catalyst/fixture/: /etc/vivd-catalyst holds the secrets"
+    refused '    volumes: ["/etc:/host-etc:ro"]' "mount /etc/: /etc/vivd-catalyst holds the secrets"
+    refused '    volumes: ["instance:/instance"]' "mount /etc/vivd-catalyst/fixture/" \
+      $'volumes:\n  instance:\n    driver_opts: { type: none, o: bind, device: /etc/vivd-catalyst/fixture }'
+    refused '    volumes: ["${SOMEWHERE}:/somewhere"]' 'mount ${SOMEWHERE}'
+    # The worker that starts the command containers is the one that has the socket.
+    if [[ "$worker" != "workspace-command-worker" ]]; then
+      refused '    volumes: ["/run/docker.sock:/tmp/engine.sock"]' "mount /run/docker.sock/"
+      refused '    volumes: ["${RUN_DIR:-/var/run}:/host-run"]' "mount /var/run/: it reaches the Docker socket"
+    fi
 
-  # The same key, merged in through anchors: the worker block never spells its name.
-  local compose
-  compose="$(cat "$deployment/docker-compose.yml")"
-  printf '%s\n' "${compose/<<: \*worker-environment/<<: [*worker-environment, *model-environment]}" \
-    > "$deployment/docker-compose.yml"
-  assert_contains "$deployment/docker-compose.yml" "<<: [*worker-environment, *model-environment]"
-  expect_failure "${guard[@]}"
-  assert_contains "$scratch/failure-output" \
-    "docker-compose.yml: workspace-command-worker must not receive ACME_MODEL_KEY"
+    # An override file is part of the local stack.
+    write_guard_compose "$deployment" "$worker" ""
+    printf 'services:\n  %s:\n    environment:\n      %s: from-the-override\n' "$worker" "$secret" \
+      > "$deployment/docker-compose.override.yml"
+    expect_failure "${guard[@]}"
+    assert_contains "$scratch/failure-output" "docker-compose.yml: $worker must not receive $secret"
+    rm "$deployment/docker-compose.override.yml"
+  done
 }
 
 # A customer name may start with a digit. Every command that reads INSTANCE runs under such a
@@ -1012,7 +1032,7 @@ test_deploy
 test_remote_deploy
 test_host_backup_scripts
 test_deployment_policy
-test_worker_secret_guards
+test_worker_isolation_guards
 test_digit_leading_instance
 test_packed_layout
 echo "deployment-kit tests passed"
