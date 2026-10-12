@@ -21,7 +21,7 @@ import {
   Textarea
 } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
-import { formatModelLabel } from "../model-label";
+import { modelDisplayLabel } from "../model-label";
 import { useModuleName } from "../module-texts";
 import { AssetEditorShell, useAssetForm, type AssetSection } from "./asset-editor-shell";
 import {
@@ -540,7 +540,7 @@ function AgentModels({
   onSetReasoningEffort
 }: {
   form: AgentFormState;
-  modelBindings: readonly { id: string; model: string }[];
+  modelBindings: readonly { id: string; model: string; label?: string }[];
   reasoningEfforts: readonly string[];
   editable: boolean;
   onSelectDefault(modelBindingId: string): void;
@@ -550,7 +550,13 @@ function AgentModels({
   const { t } = useTranslation();
   const rows = agentModelRows(form, modelBindings).map((row) => ({
     ...row,
-    label: modelBindingLabel({ id: row.bindingId, model: row.model }, modelBindings)
+    label: modelBindingLabel(
+      modelBindings.find((binding) => binding.id === row.bindingId) ?? {
+        id: row.bindingId,
+        model: row.model
+      },
+      modelBindings
+    )
   }));
   const others = rows.filter((row) => !row.isDefault && (editable || row.userSelectable));
   const instanceDefaultLabel = form.modelProviderId
@@ -621,12 +627,12 @@ function AgentModels({
 }
 
 function modelBindingLabel(
-  binding: { id: string; model: string },
+  binding: { id: string; model: string; label?: string },
   bindings: readonly { id: string; model: string }[]
 ): string {
   const duplicateModel = bindings.some(
     (candidate) => candidate.id !== binding.id && candidate.model === binding.model
   );
-  const label = formatModelLabel(binding.model);
+  const label = modelDisplayLabel(binding);
   return duplicateModel ? `${label} (${binding.id})` : label;
 }

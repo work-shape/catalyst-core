@@ -34,6 +34,7 @@ import {
   TableRow,
   type PickerOption
 } from "@vivd-catalyst/ui";
+import { modelDisplayLabel } from "../model-label";
 import { useTranslation, type TranslationKey } from "../i18n";
 import {
   accessWriteFailure,
@@ -55,7 +56,7 @@ const LIST_SEARCH_FROM_COUNT = 8;
 /** What the instance offers a Namespace to list, and the assets a prefix would cover. */
 interface NamespaceReferences {
   toolNames: readonly string[];
-  modelBindings: readonly { id: string; model: string }[];
+  modelBindings: readonly { id: string; model: string; label?: string }[];
   assets: readonly ConfigAssetSummary[];
 }
 
@@ -427,7 +428,7 @@ function NamespaceDialog({
           options={(references?.modelBindings ?? []).map((binding) => ({
             value: binding.id,
             label: binding.id,
-            description: binding.model === binding.id ? undefined : binding.model
+            description: binding.model === binding.id ? undefined : modelDisplayLabel(binding)
           }))}
           optionsReady={references !== undefined}
           onLimitedChange={(limitModels) => change({ limitModels })}

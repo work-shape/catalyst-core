@@ -150,6 +150,8 @@ export const safeConfigSchema = z.object({
           bindingId: z.string().optional(),
           model: z.string(),
           compactThresholdTokens: z.number().optional(),
+          /** The name people read, when release config gives one; otherwise made from the model id. */
+          label: z.string().optional(),
           /** Who makes the model, when release config names it; otherwise read from the model id. */
           vendor: z.string().optional(),
           description: z.string().optional(),
@@ -237,7 +239,9 @@ export const configAssetReferencesSchema = z.object({
   modelBindings: z.array(
     z.object({
       id: z.string(),
-      model: z.string()
+      model: z.string(),
+      /** The name people read, when release config gives one. */
+      label: z.string().optional()
     })
   ),
   fastModeModelBindingIds: z.array(z.string()),

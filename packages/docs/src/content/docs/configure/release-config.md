@@ -470,6 +470,7 @@ modelBindings:
       en: For complex analysis and multi-step work.
       de: Für komplexe Analysen und mehrstufige Aufgaben.
     userSelectableReasoningEfforts: [low, medium, high]
+    label: GPT-5.6 Sol
     vendor: openai
     usageTier: high
 ```
@@ -485,6 +486,11 @@ modelBindings:
   is sent to the provider until the user picks one. The run API accepts
   `reasoningEffort` only when the model that will run offers it, and the picked effort is
   stored on the run. A higher effort uses more tokens, which are billed as usual.
+- `label` is the name people read for the model, in the picker, the agent editor and the
+  Access page. Without it the name is made from the model id, which suits a vendor's own model
+  name. Set it where `model` is a deployment name you chose, as on Azure: `model:
+  acme-gpt-5.6-sol` with `label: GPT-5.6 Sol`. Usage keeps the model id, which is what the
+  provider bills.
 - `vendor` names who makes the model, for its logo: `openai`, `anthropic`, `mistral` or
   `google`. Without it the picker reads the vendor from the model id, and shows a neutral icon
   when it cannot tell.

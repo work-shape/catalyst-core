@@ -192,7 +192,15 @@ describe("user-selectable model config", () => {
           usageTier: "very_high",
           userSelectableReasoningEfforts: []
         },
-        { id: "unpriced", providerId: "azure-eu", model: "gpt-unpriced" }
+        { id: "unpriced", providerId: "azure-eu", model: "gpt-unpriced" },
+        // A deployment name an operator chose, as on Azure, with the name people read.
+        {
+          id: "deployed",
+          providerId: "azure-eu",
+          model: "client-gpt-6.1-sol",
+          label: "GPT-6.1 Sol",
+          vendor: "openai"
+        }
       ],
       usage: {
         costs: {
@@ -240,7 +248,7 @@ describe("user-selectable model config", () => {
             instructions: "Help the user.",
             modelBindingId: "sol",
             reasoningEffort: "high",
-            userSelectableModelBindingIds: ["luna", "opus", "unpriced"],
+            userSelectableModelBindingIds: ["luna", "opus", "unpriced", "deployed"],
             modelReasoningEfforts: { luna: "medium" },
             toolNames: [],
             skillNames: [],
@@ -286,7 +294,15 @@ describe("user-selectable model config", () => {
         ...noChoice
       },
       // No rate card entry and no override: the picker shows no tier.
-      { bindingId: "unpriced", model: "gpt-unpriced", region: "eu", ...defaultChoice }
+      { bindingId: "unpriced", model: "gpt-unpriced", region: "eu", ...defaultChoice },
+      {
+        bindingId: "deployed",
+        model: "client-gpt-6.1-sol",
+        label: "GPT-6.1 Sol",
+        vendor: "openai",
+        region: "eu",
+        ...defaultChoice
+      }
     ]);
   });
 

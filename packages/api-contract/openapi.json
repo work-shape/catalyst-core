@@ -15063,6 +15063,9 @@
                       "compactThresholdTokens": {
                         "type": "number"
                       },
+                      "label": {
+                        "type": "string"
+                      },
                       "vendor": {
                         "type": "string"
                       },
@@ -15411,6 +15414,9 @@
                   "type": "string"
                 },
                 "model": {
+                  "type": "string"
+                },
+                "label": {
                   "type": "string"
                 }
               },
@@ -19838,6 +19844,9 @@
                       },
                       "compactThresholdTokens": {
                         "type": "number"
+                      },
+                      "label": {
+                        "type": "string"
                       },
                       "vendor": {
                         "type": "string"

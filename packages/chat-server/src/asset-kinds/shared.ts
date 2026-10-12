@@ -10,7 +10,7 @@ import type {
 export interface ConfigAssetValidationRefs {
   modelProviderIds: string[];
   modelBindingIds: string[];
-  modelBindings: Array<{ id: string; model: string }>;
+  modelBindings: Array<{ id: string; model: string; label?: string }>;
   fastModeModelBindingIds: string[];
   reasoningEfforts: string[];
   enabledToolNames: string[];

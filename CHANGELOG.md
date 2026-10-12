@@ -26,6 +26,12 @@ contain breaking changes; a patch version does not.
   1.0.0, 1.1.0"; roll out the runner image with the instance. **Rollback:** an earlier release
   does not serve `/app-runtime/kit/1.2.0/`, so a Page saved with `1.2.0` shows nothing there
   until it is saved again with `kit: 1.1.0`.
+- **Model names:** a model binding in release config takes `label`, the name people read for
+  the model. The model picker, the agent editor and the Access page show it in place of the
+  model id; without it they show the id tidied up, as before. An instance whose `model` is a
+  deployment name of its own, as on Azure, sets `label` and `vendor` to get the model's name
+  and logo. `GET /config` carries it as `label` on a selectable model, and the config asset
+  references carry it on a model binding.
 - **Documentation links:** release config `ui.docsUrl` names where an instance's documentation
   is read. With it the account menu has a "Documentation" item in a group of its own above
   Sign out, and the Access page, the New right dialog, the rights check and the read-only

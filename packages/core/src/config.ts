@@ -74,6 +74,11 @@ export interface ModelBindingConfig {
   supportsFastMode?: boolean;
   /** Shown on the model card in the chat's model picker. */
   description?: LocalizedStringConfig;
+  /**
+   * The name people read for this model. Unset shows the model id tidied up, which suits a
+   * vendor's own model name and not a deployment name an operator chose.
+   */
+  label?: string;
   /** Who makes the model, for its icon. Derived from the model id when unset. */
   vendor?: string;
   /** Overrides the usage tier derived from the Customer Rate Card. */

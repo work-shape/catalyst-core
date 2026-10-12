@@ -185,6 +185,7 @@ function modelView(
     ...(binding ? { bindingId: binding.id } : {}),
     model,
     ...compactionThresholdView(provider),
+    ...(binding?.label ? { label: binding.label } : {}),
     ...(binding?.vendor ? { vendor: binding.vendor } : {}),
     ...(description ? { description } : {}),
     ...(provider.region ? { region: provider.region } : {}),

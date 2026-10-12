@@ -173,6 +173,18 @@ describe("composer model picker", () => {
     expect(markup).not.toContain("GPT-5.6 Terra");
   });
 
+  it("shows the name release config gives a model, not its deployment name", () => {
+    const markup = renderPicker([
+      { ...own, model: "client-gpt-6.1-sol", label: "GPT-6.1 Sol", vendor: "openai" },
+      terra
+    ]);
+
+    expect(markup).toContain(">GPT-6.1 Sol<");
+    expect(markup).not.toContain("client-gpt-6.1-sol");
+    // The mark of the vendor release config names, which the deployment name does not suggest.
+    expect(markup).toContain('d="M9.205 8.658');
+  });
+
   it("offers a single model only for its reasoning effort", () => {
     expect(renderPicker([own])).toContain(">GPT-5.6 Sol<");
     expect(renderPicker([terra])).toBe("");

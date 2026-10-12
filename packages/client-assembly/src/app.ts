@@ -348,7 +348,7 @@ export async function createClientInstanceExecutionAssembly(
           binding.model ??
           modelProviders.find((provider) => provider.id === binding.providerId)?.model;
         if (model === undefined) throw new Error(`Model binding ${binding.id} has no model`);
-        return { id: binding.id, model };
+        return { id: binding.id, model, ...(binding.label ? { label: binding.label } : {}) };
       }),
     fastModeModelBindingIds: fastModeModelBindingIds(config),
     reasoningEfforts: [...REASONING_EFFORTS],

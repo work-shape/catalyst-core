@@ -209,6 +209,7 @@ export const modelBindingConfigSchema = z.object({
   userSelectable: z.boolean().default(false),
   supportsFastMode: z.boolean().default(false),
   description: localizedStringSchema.optional(),
+  label: z.string().trim().min(1).optional(),
   vendor: z.string().min(1).optional(),
   usageTier: z.enum(MODEL_USAGE_TIERS).optional(),
   userSelectableReasoningEfforts: z.array(z.enum(REASONING_EFFORTS)).optional()

@@ -26,6 +26,7 @@ import {
   TableRow
 } from "@vivd-catalyst/ui";
 import { DocsReference } from "../docs-links";
+import { modelDisplayLabel } from "../model-label";
 import { useTranslation, type TranslationContextValue, type TranslationKey } from "../i18n";
 import {
   assetNameValid,
@@ -120,7 +121,7 @@ export interface CheckTabProps {
   /** The Namespaces, for the lists that bind a save. Absent while they load or failed. */
   namespaces: readonly NamespaceWithUsage[] | undefined;
   /** The models of the instance, for the names of the ones a Namespace lists. */
-  modelBindings: readonly { id: string; model: string }[] | undefined;
+  modelBindings: readonly { id: string; model: string; label?: string }[] | undefined;
   holderId: string | undefined;
   onHolderChange(holderId: string): void;
   /** What the chosen user is allowed and denied. Absent while it loads. */
@@ -349,7 +350,7 @@ export function CheckTab({
 function namespaceLimits(
   kind: string,
   namespace: NamespaceWithUsage | undefined,
-  modelBindings: readonly { id: string; model: string }[] | undefined,
+  modelBindings: readonly { id: string; model: string; label?: string }[] | undefined,
   t: Translate
 ): string[] {
   const tools = namespace?.allowedToolNames;
@@ -357,8 +358,10 @@ function namespaceLimits(
   if (kind !== "agent" || !namespace || (!tools && !models)) {
     return [];
   }
-  const modelName = (id: string) =>
-    modelBindings?.find((binding) => binding.id === id)?.model ?? id;
+  const modelName = (id: string) => {
+    const binding = modelBindings?.find((candidate) => candidate.id === id);
+    return binding ? modelDisplayLabel(binding) : id;
+  };
   return [
     t("access.checkNamespace", { prefix: namespace.prefix }),
     ...(tools
@@ -392,7 +395,7 @@ function CheckResult({
   assetName: string;
   effective: EffectivePermissions;
   namespace: NamespaceWithUsage | undefined;
-  modelBindings: readonly { id: string; model: string }[] | undefined;
+  modelBindings: readonly { id: string; model: string; label?: string }[] | undefined;
   actions: readonly CheckedAction[];
 }) {
   const { t } = useTranslation();

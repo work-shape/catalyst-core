@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@vivd-catalyst/ui";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
-import { formatModelLabel } from "../model-label";
+import { modelDisplayLabel } from "../model-label";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { EuResidencyBadge, ModelVendorIcon, modelVendorLabel } from "./model-vendor";
 
@@ -209,7 +209,7 @@ export function ModelPicker({
         onClick={toggle}
       >
         <ModelVendorIcon model={selectedModel} size={14} className="shrink-0" />
-        <span className="truncate">{formatModelLabel(selectedModel.model)}</span>
+        <span className="truncate">{modelDisplayLabel(selectedModel)}</span>
         {offersReasoning ? (
           <span className="hidden shrink-0 font-normal opacity-75 sm:inline">
             {t(reasoningEffortLabels[reasoningEffort])}
@@ -273,7 +273,7 @@ export function ModelPicker({
                       }}
                     >
                       <ModelVendorIcon model={model} />
-                      <span className="truncate font-medium">{formatModelLabel(model.model)}</span>
+                      <span className="truncate font-medium">{modelDisplayLabel(model)}</span>
                       {model.region === "eu" ? (
                         <EuResidencyBadge size={14} label={t("modelPickerResidencyEu")} />
                       ) : (
@@ -325,7 +325,7 @@ export function ModelPicker({
               t("modelPickerModel"),
               <>
                 <ModelVendorIcon model={selectedModel} size={14} className="shrink-0" />
-                <span className="truncate">{formatModelLabel(selectedModel.model)}</span>
+                <span className="truncate">{modelDisplayLabel(selectedModel)}</span>
               </>
             )}
             {offersReasoning ? (
@@ -421,7 +421,7 @@ function ModelCard({ model, className }: { model: AgentSelectableModel; classNam
         <ModelVendorIcon model={model} className="shrink-0" />
         <span className="min-w-0 truncate">
           {vendorLabel ? <span className="text-muted-foreground">{vendorLabel} / </span> : null}
-          <span className="font-semibold">{formatModelLabel(model.model)}</span>
+          <span className="font-semibold">{modelDisplayLabel(model)}</span>
         </span>
       </div>
       {model.description ? (
