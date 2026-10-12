@@ -6104,7 +6104,7 @@
       },
       "post": {
         "operationId": "permissions.grant",
-        "summary": "Allow or deny a user an action in a Namespace or on one asset",
+        "summary": "Allow or deny a user an action in a Namespace or on one asset, or allow a service principal a use right on one asset",
         "tags": [
           "Access"
         ],

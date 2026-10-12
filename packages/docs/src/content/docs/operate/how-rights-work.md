@@ -595,7 +595,9 @@ The Catalyst CLI does not sign in as a person. It works as a Service Principal, 
 
 Then the Superadmin creates an **API key** for it and picks the key's scopes from the rights the Service Principal holds. The key is shown once.
 
-A Service Principal has no role, and no grant can be written for one. A release push reaches every agent and skill of the instance and is not held back by the editing limits of the interface. It is still bound by the tool and model lists of a Namespace and by a deny on an asset. See [config assets](/configure/config-assets/#permissions).
+A Service Principal has no role. A Superadmin can allow one to use a single named resource, such as one Connection: a grant with the holder kind `service_principal`, a use right such as `connection.use`, and that one asset as scope. No other grant can be written for one: no right that writes, publishes, deletes or manages, no workspace, Namespace or instance scope, and no deny. A Service Principal never writes a grant, also not for itself. Disabling a Service Principal leaves its grants recorded and without effect. The interface does not offer these grants yet; they are written through `POST /api/v1/instance/access/grants`.
+
+A release push reaches every agent and skill of the instance and is not held back by the editing limits of the interface. It is still bound by the tool and model lists of a Namespace and by a deny on an asset. See [config assets](/configure/config-assets/#permissions).
 
 ## Which screen for what
 

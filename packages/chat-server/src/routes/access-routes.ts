@@ -27,7 +27,7 @@ export function registerAccessRoutes(route: Route, options: ChatServerOptions): 
 
   route.operation(grant, {
     authorize: (input, { actor, access }) =>
-      workflow.authorizeGrant(personOf(actor), access, grant.id, input),
+      workflow.authorizeGrant(actor, access, grant.id, input),
     resource: ({ holderKind, holderId }) => ({ kind: holderKind, id: holderId }),
     changeClass: "reversible",
     execute: async (input, context) => {
@@ -44,7 +44,7 @@ export function registerAccessRoutes(route: Route, options: ChatServerOptions): 
 
   route.operation(revoke, {
     authorize: ({ grantId }, { actor, access }) =>
-      workflow.authorizeRevoke(personOf(actor), access, revoke.id, grantId),
+      workflow.authorizeRevoke(actor, access, revoke.id, grantId),
     // The call names the row. Its holder is in the row and in the audit event of the revoke.
     resource: ({ grantId }) => ({ kind: "permission_grant", id: grantId }),
     changeClass: "reversible",
@@ -65,7 +65,7 @@ export function registerAccessRoutes(route: Route, options: ChatServerOptions): 
   });
 
   route(apiOperations["permissions.list"], async ({ user, access, query, paging }) => {
-    const grants = await workflow.listGrants(user, {
+    const grants = await workflow.listGrants(user, access, {
       holderKind: query.holderKind,
       holderId: query.holderId,
       action: query.action,

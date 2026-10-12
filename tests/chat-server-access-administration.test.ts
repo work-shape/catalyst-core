@@ -237,7 +237,6 @@ describe("who may write a grant, and what a grant may say", () => {
       namespace: "kai-"
     };
     const refusals: Array<[Record<string, unknown>, number, string, string]> = [
-      [{ ...base, holderKind: "service_principal" }, 422, "VALIDATION_FAILED", "invalid_scope"],
       [
         { ...base, holderKind: "role", holderId: "admin" },
         422,

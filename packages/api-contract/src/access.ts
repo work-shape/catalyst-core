@@ -38,7 +38,11 @@ export const permissionGrantSchema = z.object({
 /**
  * The row shape takes every holder and scope kind. Which of them can be written is the
  * server's answer: `details.reason` is `invalid_scope`, `action_not_grantable`,
- * `unknown_action`, `unknown_holder`, `unknown_namespace` or `duplicate_grant`.
+ * `unknown_action`, `unknown_holder`, `unknown_namespace` or `duplicate_grant`. A service
+ * principal is allowed a use right on one named asset and nothing else:
+ * `action_not_grantable_to_principal`, `effect_not_grantable_to_principal` and
+ * `invalid_scope`; a caller who may not write a row for the holder is refused with
+ * `holder_not_administrable`.
  */
 export const createPermissionGrantRequestSchema = z.object({
   holderKind: grantHolderKindSchema,

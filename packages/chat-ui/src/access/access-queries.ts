@@ -32,10 +32,17 @@ export function useNamespacesQuery(input: AccessApiInput) {
   });
 }
 
+/**
+ * The rows users hold. A service principal's rows are listed for a caller who may see service
+ * principals; this page names its holders from the user list and shows none of them.
+ */
 export function usePermissionGrantsQuery(input: AccessApiInput) {
   return useQuery({
     queryKey: accessQueryKeys.grants(input.apiBaseUrl, input.authScope),
-    queryFn: () => listAll((paging) => input.client.permissions.list({ query: paging }))
+    queryFn: () =>
+      listAll((paging) =>
+        input.client.permissions.list({ query: { ...paging, holderKind: "user" } })
+      )
   });
 }
 

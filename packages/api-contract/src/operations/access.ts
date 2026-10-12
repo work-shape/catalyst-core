@@ -20,12 +20,14 @@ export const accessOperations = {
     id: "permissions.grant",
     method: "POST",
     path: "/api/v1/instance/access/grants",
-    summary: "Allow or deny a user an action in a Namespace or on one asset",
+    summary:
+      "Allow or deny a user an action in a Namespace or on one asset, or allow a service principal a use right on one asset",
     tag: "Access",
     auth: "user",
     scope: "user_admin:write",
-    // The rule is more than one right: `users.manage`, and a superadmin's rows are a
-    // superadmin's alone. The operation checks both itself, before the policy is asked.
+    // The rule is more than one right: `users.manage`, a superadmin's rows are a superadmin's
+    // alone, and a service principal's rows are written by who administers service
+    // principals. The operation checks all of it itself, before the policy is asked.
     requires: [],
     effect: "changing",
     body: createPermissionGrantRequestSchema,
@@ -41,8 +43,9 @@ export const accessOperations = {
     tag: "Access",
     auth: "user",
     scope: "user_admin:write",
-    // The rule is more than one right: `users.manage`, and a superadmin's rows are a
-    // superadmin's alone. The operation checks both itself, before the policy is asked.
+    // The rule is more than one right: `users.manage`, a superadmin's rows are a superadmin's
+    // alone, and a service principal's rows are removed by who administers service
+    // principals. The operation checks all of it itself, before the policy is asked.
     requires: [],
     effect: "changing",
     response: json(permissionGrantSchema),
