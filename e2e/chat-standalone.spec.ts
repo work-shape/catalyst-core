@@ -1782,6 +1782,7 @@ test("the user list shows an account that is being deleted", async ({ page }) =>
   await settingsGear(page).click();
   await settingsPages(page).getByRole("button", { name: "Users", exact: true }).click();
 
+  await searchUsers(page, normalUser.email);
   await expect(page.getByText("Being deleted", { exact: true }).first()).toBeVisible();
 });
 
@@ -2936,6 +2937,7 @@ test("users, usage, audit and API access follow the German locale", async ({ pag
   await expect(panel.getByRole("columnheader", { name: "Anmeldemethoden" })).toBeVisible();
   await expect(panel.getByRole("button", { name: "Nächste Seite" })).toBeVisible();
   // The sign-in above is the superadmin's last activity, written as a German date.
+  await searchUsers(page, superadminUser.email, "Benutzer suchen");
   await expect(panel.getByRole("row", { name: /E2E Superadmin/u })).toContainText(
     /\d{1,2}\.\d{1,2}\.\d{4}, \d{2}:\d{2}:\d{2}/u
   );
@@ -3684,6 +3686,7 @@ test("admin sees billed usage and can manage users", async ({ page }) => {
   await expect(page).toHaveURL(/\/settings\/instance\/users$/u);
   const adminPanel = page.getByRole("region", { name: "Settings" });
   await expect(adminPanel).toBeVisible();
+  await searchUsers(page, adminUser.email);
   await expect(adminPanel.getByRole("cell", { name: "Admin", exact: true }).first()).toBeVisible();
   await expect(
     settingsPages(page).getByRole("button", { name: "Usage", exact: true })
@@ -4334,6 +4337,7 @@ test("superadmin resets a user's password from the users panel", async ({ page }
   await expect(settingsPages(page)).toBeVisible();
 
   await settingsPages(page).getByRole("button", { name: "Users", exact: true }).click();
+  await searchUsers(page, resetUser.email);
   await page.getByRole("button", { name: `${resetUser.displayLabel} ${resetUser.email}` }).click();
   await expect(page.getByRole("heading", { name: "Sign-in identities" })).toBeVisible();
 
@@ -4472,6 +4476,14 @@ function settingsGear(page: Page): Locator {
 /** The Settings sub-rail. */
 function settingsPages(page: Page): Locator {
   return page.getByRole("navigation", { name: "Settings pages" });
+}
+
+/**
+ * Finds a person in the Users panel the way a reader does among many: through its search. The
+ * panel shows one page of rows, so a row is only certain to be there once it was searched for.
+ */
+async function searchUsers(page: Page, text: string, label = "Search users"): Promise<void> {
+  await page.getByRole("searchbox", { name: label, exact: true }).fill(text);
 }
 
 async function createListedConversation(page: Page, title: string): Promise<{ id: string }> {
