@@ -420,6 +420,24 @@ id from config_assets where status = 'deleted')`.
 
 ### Changed
 
+- **Asset writes name the revision of each asset (breaking):** `expectedRevision` is required
+  on `assets.put`, `assets.delete`, `assets.revert` and on every item of `assets.sync` and
+  `assets.sync_check`: a number for an asset that exists, `null` on a put for one that never
+  did. A write that leaves it out is answered `428 PRECONDITION_REQUIRED` with
+  `details.assets` and writes nothing. A write against another revision is answered
+  `412 REVISION_CONFLICT`, where it was `409 CONFLICT`, with `details.conflicts`: `kind` and
+  `name` for everyone, and `currentRevision`, `deleted`, `changedBy` and `changedAt` for a
+  caller who may read the asset's history. A deleted asset is created again only against the
+  revision of its delete. The store no longer takes a version of the whole asset set, so a
+  save of one asset is never refused for a change of another. `assets.sync` and
+  `assets.sync_check` take a body of up to 20 MiB (`ASSET_SYNC_BODY_MAX_BYTES`). No migration.
+  **`catalyst config push --force` no longer exists** and is refused with the conflict
+  procedure: pull the assets the conflict names, re-apply the edits, push. A working copy that
+  never pulled pushes every asset as a creation; `pull` records the delete of an asset it sees
+  gone, and the next push may create it again. `--prune` needs the delete right on each asset
+  it deletes. Remove `.catalyst-state.json` of an instance whose database was reset. In Build
+  the conflict notice names who saved first and when and offers the history; the demo's
+  `pnpm config:push` pushes without `--force`. **Upgrade CLI and server together.**
 - **Access wording:** in English a row of the Access page is a "right", as it already is in
   German: "New right", "Create right" and the tab "Rights". The column of the place is "Where"
   ("Wo"), as the dialog's field. The descriptions of the New right dialog, of Deny, of the
