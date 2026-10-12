@@ -2,12 +2,13 @@ import { Tabs as TabsPrimitive } from "radix-ui";
 import type { AnchorHTMLAttributes, ButtonHTMLAttributes, HTMLAttributes } from "react";
 import { cn } from "../cn";
 import { LinkSlot, splitLinkChild } from "../link-slot";
-import { CountBadge } from "../status/count-badge";
+import { CountBadge, type CountBadgeTone } from "../status/count-badge";
+import { useUiLabels } from "../ui-root";
 
 // The list scrolls sideways when the tabs do not fit, which would cut a focus line drawn
 // outside a tab. So the line sits inside it.
 const tabClassName =
-  "inline-flex h-9 shrink-0 items-center gap-2 border-b-2 border-transparent px-3 text-label whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50";
+  "relative inline-flex h-9 shrink-0 items-center gap-2 border-b-2 border-transparent px-3 text-label whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50";
 const selectedTabClassName = "border-primary text-foreground";
 // The row's line is drawn inside the row, under the tabs, so the selected tab's underline ends
 // on the same edge as the line and covers it. A border would lie outside what the row clips
@@ -44,10 +45,35 @@ export function TabsList({ className, label, ...props }: TabsListProps) {
 export interface TabsTriggerProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "value"> {
   /** The value of the `TabsContent` this tab shows. */
   value: string;
+  /** How many the tab holds. It is read out after the label, as "Members, 12 items". */
   count?: number;
+  /** `primary` where the count says something waits for the reader. */
+  countTone?: CountBadgeTone;
 }
 
-export function TabsTrigger({ className, count, children, ...props }: TabsTriggerProps) {
+/**
+ * The count of a tab: the number for the eye, and the number with its noun for a screen
+ * reader, which would otherwise read "Members 12". The hidden text is held by the tab, which
+ * is positioned, so it does not lengthen the row.
+ */
+function TabCount({ count, tone }: { count: number; tone: CountBadgeTone }) {
+  const labels = useUiLabels("Tabs");
+  const spoken = count === 1 ? labels.countOne : labels.countMany.replace("{count}", String(count));
+  return (
+    <>
+      <CountBadge count={count} tone={tone} aria-hidden="true" />
+      <span className="sr-only">, {spoken}</span>
+    </>
+  );
+}
+
+export function TabsTrigger({
+  className,
+  count,
+  countTone = "muted",
+  children,
+  ...props
+}: TabsTriggerProps) {
   return (
     <TabsPrimitive.Trigger
       className={cn(
@@ -58,7 +84,7 @@ export function TabsTrigger({ className, count, children, ...props }: TabsTrigge
       {...props}
     >
       {children}
-      {count === undefined ? null : <CountBadge count={count} tone="muted" />}
+      {count === undefined ? null : <TabCount count={count} tone={countTone} />}
     </TabsPrimitive.Trigger>
   );
 }
@@ -85,6 +111,7 @@ export interface TabsLinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
   /** This tab's route is open. It is marked with `aria-current="page"`. */
   selected?: boolean;
   count?: number;
+  countTone?: CountBadgeTone;
   /** Renders the single child, the caller's link element, as the tab. */
   asChild?: boolean;
 }
@@ -93,6 +120,7 @@ export function TabsLink({
   className,
   selected = false,
   count,
+  countTone = "muted",
   asChild = false,
   children,
   ...props
@@ -108,7 +136,7 @@ export function TabsLink({
       {...props}
     >
       {label}
-      {count === undefined ? null : <CountBadge count={count} tone="muted" />}
+      {count === undefined ? null : <TabCount count={count} tone={countTone} />}
     </LinkSlot>
   );
 }

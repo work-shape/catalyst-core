@@ -104,3 +104,20 @@ export async function expectInboxFrameStill(inbox: Locator, row: Locator): Promi
   await expect(row).toBeVisible();
   await expect.poll(places).toEqual(start);
 }
+
+/**
+ * What a tab reads out: its label, and its count with the noun where it has one. The count is
+ * a box of its own in the tab, so the name may hold a space before the comma.
+ */
+export function tabName(label: string, count: number): RegExp {
+  return new RegExp(
+    count === 0 ? `^${label}$` : `^${label} ?, ${count} ${count === 1 ? "item" : "items"}$`,
+    "u"
+  );
+}
+
+/** The number a Decided tab reads out, 0 when it reads none: an earlier run may have left some. */
+export async function decidedCount(tab: Locator): Promise<number> {
+  await expect(tab).toHaveAccessibleName(/^Decided(?: ?, \d+ items?)?$/u);
+  return Number(/, (\d+) item/u.exec((await tab.textContent()) ?? "")?.[1] ?? 0);
+}

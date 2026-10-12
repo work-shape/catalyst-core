@@ -132,6 +132,22 @@ export interface ApprovalDecisionStore {
   appendApprovalDecision(request: ApprovalRequest): Promise<void>;
 }
 
+/** Which requests a list holds. The count of a list takes the same filter. */
+export interface ApprovalRequestListFilter {
+  clientInstanceId: ClientInstanceId;
+  kinds: readonly string[];
+  status?: ApprovalRequestStatus;
+  /** Every status but this one. */
+  excludeStatus?: ApprovalRequestStatus;
+  /** Only the requests this person made. */
+  requestedById?: string;
+  /** Only the requests changed at or after this instant. */
+  updatedSince?: Date;
+  conversationId?: ConversationId;
+  /** Only the requests whose payload has this top-level key. */
+  payloadKey?: string;
+}
+
 export interface ApprovalRequestStore {
   createApprovalRequest(
     input: Pick<
@@ -154,21 +170,11 @@ export interface ApprovalRequestStore {
     requestId: string;
   }): Promise<ApprovalRequest | undefined>;
   /** Newest first with an exclusive createdAt/id cursor when paging. */
-  listApprovalRequests(input: {
-    clientInstanceId: ClientInstanceId;
-    kinds: readonly string[];
-    status?: ApprovalRequestStatus;
-    /** Every status but this one. */
-    excludeStatus?: ApprovalRequestStatus;
-    /** Only the requests this person made. */
-    requestedById?: string;
-    /** Only the requests changed at or after this instant. */
-    updatedSince?: Date;
-    conversationId?: ConversationId;
-    /** Only the requests whose payload has this top-level key. */
-    payloadKey?: string;
-    page?: StorePage;
-  }): Promise<ApprovalRequest[]>;
+  listApprovalRequests(
+    input: ApprovalRequestListFilter & { page?: StorePage }
+  ): Promise<ApprovalRequest[]>;
+  /** How many requests `listApprovalRequests` answers for the same filter, read to its end. */
+  countApprovalRequests(input: ApprovalRequestListFilter): Promise<number>;
   countPendingApprovalRequests(input: {
     clientInstanceId: ClientInstanceId;
     kinds: readonly string[];

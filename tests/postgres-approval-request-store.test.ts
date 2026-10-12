@@ -297,6 +297,12 @@ async function expectOwnRequestsFromTheIndex(
     pending: 0,
     total: 0
   });
+  // A count takes the filter of a list and answers its length.
+  expect(await store.approvals.countApprovalRequests(own)).toBe(1);
+  expect(await store.approvals.countApprovalRequests({ clientInstanceId, kinds: ["fake"] })).toBe(
+    (await store.approvals.listApprovalRequests({ clientInstanceId, kinds: ["fake"] })).length
+  );
+  expect(await store.approvals.countApprovalRequests({ ...own, kinds: [] })).toBe(0);
   expect(
     (
       await store.approvals.listApprovalRequests({

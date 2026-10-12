@@ -38,6 +38,10 @@ export interface UiLabels {
   flowMinimap: string;
   /** In the box of a canvas whose engine could not be loaded. */
   flowLoadFailed: string;
+  /** What a count beside a label says to someone who does not see it, for one and for more. */
+  countOne: string;
+  /** `{count}` stands for the number. */
+  countMany: string;
   /** Under a chart that drew only the first rows or series of its data. */
   chartTruncated: string;
   /** In the box of a chart whose engine could not be loaded. */
@@ -75,6 +79,8 @@ export const uiLabelsEn: UiLabels = {
   flowTidy: "Tidy up",
   flowMinimap: "Overview",
   flowLoadFailed: "The canvas could not be loaded.",
+  countOne: "1 item",
+  countMany: "{count} items",
   chartTruncated: "Only part of the data is shown.",
   chartLoadFailed: "The chart could not be loaded."
 };
@@ -110,6 +116,8 @@ export const uiLabelsDe: UiLabels = {
   flowTidy: "Aufräumen",
   flowMinimap: "Übersicht",
   flowLoadFailed: "Die Ansicht konnte nicht geladen werden.",
+  countOne: "1 Eintrag",
+  countMany: "{count} Einträge",
   chartTruncated: "Nur ein Teil der Daten wird angezeigt.",
   chartLoadFailed: "Das Diagramm konnte nicht geladen werden."
 };

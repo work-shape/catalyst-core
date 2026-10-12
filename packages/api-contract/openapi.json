@@ -19310,6 +19310,11 @@
           "canReview": {
             "type": "boolean"
           },
+          "decided": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
           "mine": {
             "type": "object",
             "properties": {
@@ -19333,6 +19338,7 @@
         "required": [
           "count",
           "canReview",
+          "decided",
           "mine"
         ]
       },

@@ -497,7 +497,7 @@ function TabsSamples({ text }: { text: GalleryText }) {
             <TabsTrigger value="members" count={12}>
               {text.tabsMembers}
             </TabsTrigger>
-            <TabsTrigger value="requests" count={3}>
+            <TabsTrigger value="requests" count={3} countTone="primary">
               {text.tabsRequests}
             </TabsTrigger>
             <TabsTrigger value="audit" disabled>

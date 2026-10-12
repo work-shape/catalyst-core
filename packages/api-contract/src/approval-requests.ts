@@ -70,6 +70,8 @@ export const pendingApprovalRequestCountSchema = z.object({
   /** The pending requests the caller can decide. */
   count: z.number().int().nonnegative(),
   canReview: z.boolean(),
+  /** How many requests the list with `scope=decided` holds for the caller. */
+  decided: z.number().int().nonnegative(),
   /** The requests the caller made: those still pending, and all of them. */
   mine: z.object({
     pending: z.number().int().nonnegative(),

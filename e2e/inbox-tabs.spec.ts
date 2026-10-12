@@ -64,10 +64,10 @@ test("a tab opened for the first time flashes no loading layout for a fast answe
     }
   );
   const inbox = page.getByRole("region", { name: "Inbox", exact: true });
-  // A tab by its label. The reviewer's own open requests, which another test may have made
-  // before this one read the counts, stand as a number after the label.
+  // A tab by its label. What another test left in a list before this one read the counts
+  // stands as a count after the label: "Decided, 3 items".
   const tabNamed = (label: string) =>
-    inbox.getByRole("tab", { name: new RegExp(`^${label}(?:\\s*\\d+\\+?)?$`, "u") });
+    inbox.getByRole("tab", { name: new RegExp(`^${label}(?: ?, \\d+ items?)?$`, "u") });
   const openInbox = async () => {
     await page.goto("/inbox");
     await expect(inbox.getByRole("tab")).toHaveCount(3);

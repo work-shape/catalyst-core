@@ -109,28 +109,44 @@ export async function listApprovalRequests(
     .from(approvalRequests)
     .where(
       and(
-        eq(approvalRequests.clientInstanceId, input.clientInstanceId),
-        inArray(approvalRequests.kind, [...input.kinds]),
-        keysetFilter(input.page, [approvalRequests.createdAt, approvalRequests.id], true),
-        input.status === undefined ? undefined : eq(approvalRequests.status, input.status),
-        input.excludeStatus === undefined
-          ? undefined
-          : ne(approvalRequests.status, input.excludeStatus),
-        input.requestedById === undefined ? undefined : requestedBy(input.requestedById),
-        input.updatedSince === undefined
-          ? undefined
-          : gte(approvalRequests.updatedAt, input.updatedSince),
-        input.conversationId === undefined
-          ? undefined
-          : sql`${approvalRequests.origin}->>'conversationId' = ${input.conversationId}`,
-        input.payloadKey === undefined
-          ? undefined
-          : sql`jsonb_exists(${approvalRequests.payload}, ${input.payloadKey})`
+        listFilter(input),
+        keysetFilter(input.page, [approvalRequests.createdAt, approvalRequests.id], true)
       )
     )
     .orderBy(desc(approvalRequests.createdAt), desc(approvalRequests.id))
     .limit(input.page?.limit ?? 2147483647);
   return rows.map(mapApprovalRequest);
+}
+
+export async function countApprovalRequests(
+  db: PostgresConnection,
+  input: Parameters<ApprovalRequestStore["countApprovalRequests"]>[0]
+): Promise<number> {
+  if (input.kinds.length === 0) return 0;
+  const [row] = await db.select({ count: count() }).from(approvalRequests).where(listFilter(input));
+  return row?.count ?? 0;
+}
+
+/** Which requests a list holds. The list and its count share it, so they cannot disagree. */
+function listFilter(input: Parameters<ApprovalRequestStore["countApprovalRequests"]>[0]) {
+  return and(
+    eq(approvalRequests.clientInstanceId, input.clientInstanceId),
+    inArray(approvalRequests.kind, [...input.kinds]),
+    input.status === undefined ? undefined : eq(approvalRequests.status, input.status),
+    input.excludeStatus === undefined
+      ? undefined
+      : ne(approvalRequests.status, input.excludeStatus),
+    input.requestedById === undefined ? undefined : requestedBy(input.requestedById),
+    input.updatedSince === undefined
+      ? undefined
+      : gte(approvalRequests.updatedAt, input.updatedSince),
+    input.conversationId === undefined
+      ? undefined
+      : sql`${approvalRequests.origin}->>'conversationId' = ${input.conversationId}`,
+    input.payloadKey === undefined
+      ? undefined
+      : sql`jsonb_exists(${approvalRequests.payload}, ${input.payloadKey})`
+  );
 }
 
 export async function countPendingApprovalRequests(

@@ -20,6 +20,9 @@ export function createPostgresApprovalsStore(
     listApprovalRequests(input: Parameters<ApprovalRequestStore["listApprovalRequests"]>[0]) {
       return approvalRequestOperations.listApprovalRequests(db, input);
     },
+    countApprovalRequests(input: Parameters<ApprovalRequestStore["countApprovalRequests"]>[0]) {
+      return approvalRequestOperations.countApprovalRequests(db, input);
+    },
     countPendingApprovalRequests(
       input: Parameters<ApprovalRequestStore["countPendingApprovalRequests"]>[0]
     ) {

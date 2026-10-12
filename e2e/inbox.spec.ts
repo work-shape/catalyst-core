@@ -1,10 +1,12 @@
 import {
   apiBaseUrl,
+  decidedCount,
   expectInboxFrameStill,
   reviewer,
   shoot,
   shotsDir,
-  signIn
+  signIn,
+  tabName
 } from "./inbox-fixtures";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 import type { Response } from "@playwright/test";
@@ -107,11 +109,16 @@ test("a member's proposal waits in the reviewer's Inbox, is rejected there and c
   await reviewerPage.getByRole("button", { name: "Expand sidebar" }).click();
   await reviewerRail.getByRole("button", { name: "Inbox, 1 to decide", exact: true }).click();
   const inbox = reviewerPage.getByRole("region", { name: "Inbox", exact: true });
-  await expect(inbox.getByRole("tab")).toHaveText(["To decide1", "My requests", "Decided"]);
-  await expect(inbox.getByRole("tab", { name: /^To decide/u })).toHaveAttribute(
-    "aria-selected",
-    "true"
+  // Each tab says how many it holds: the list that waits as in the rail, the reviewer's own
+  // requests with none open without a number, and the decided list with what it holds.
+  const toDecideTab = inbox.getByRole("tab", { name: /^To decide/u });
+  const decidedTab = inbox.getByRole("tab", { name: /^Decided/u });
+  await expect(toDecideTab).toHaveAccessibleName(tabName("To decide", 1));
+  await expect(toDecideTab).toHaveAttribute("aria-selected", "true");
+  await expect(inbox.getByRole("tab", { name: /^My requests/u })).toHaveAccessibleName(
+    tabName("My requests", 0)
   );
+  const decidedBefore = await decidedCount(decidedTab);
   await expect(inbox.getByText("Select a request to read it.")).toBeVisible();
 
   // Opening the row gives the item its address and shows it beside the list.
@@ -136,17 +143,19 @@ test("a member's proposal waits in the reviewer's Inbox, is rejected there and c
   await expect(surface.getByTestId("inbox-item")).toContainText("Decision by E2E Superadmin");
   await expect(reviewerRail.getByRole("button", { name: "Inbox", exact: true })).toBeVisible();
   await expect(inbox.getByText("Nothing to decide.")).toBeVisible();
-  await inbox.getByRole("tab", { name: "Decided", exact: true }).click();
+  // Fails without the count of the decided list: the tab said only "Decided". The decision
+  // moves the number from one tab to the other without a reload.
+  await expect(toDecideTab).toHaveAccessibleName(tabName("To decide", 0));
+  await expect(decidedTab).toHaveAccessibleName(tabName("Decided", decidedBefore + 1));
+  await expect(decidedTab).toContainText(String(decidedBefore + 1));
+  await decidedTab.click();
   await expect(inbox.getByTestId("inbox-row").filter({ hasText: summary })).toContainText(
     "Rejected"
   );
 
   // The address of the item opens the list that holds it now.
   await reviewerPage.goto(itemAddress);
-  await expect(inbox.getByRole("tab", { name: "Decided", exact: true })).toHaveAttribute(
-    "aria-selected",
-    "true"
-  );
+  await expect(decidedTab).toHaveAttribute("aria-selected", "true");
   await expect(
     inbox.getByTestId("inbox-row").filter({ hasText: summary }).getByRole("button")
   ).toHaveAttribute("aria-current", "true");

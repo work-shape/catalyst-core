@@ -48,9 +48,24 @@ const expenseKind: InboxItemKind = {
 };
 
 describe("inbox model", () => {
-  const reviewer: InboxCounts = { count: 2, canReview: true, mine: { pending: 1, total: 4 } };
-  const member: InboxCounts = { count: 0, canReview: false, mine: { pending: 1, total: 1 } };
-  const stranger: InboxCounts = { count: 0, canReview: false, mine: { pending: 0, total: 0 } };
+  const reviewer: InboxCounts = {
+    count: 2,
+    canReview: true,
+    decided: 3,
+    mine: { pending: 1, total: 4 }
+  };
+  const member: InboxCounts = {
+    count: 0,
+    canReview: false,
+    decided: 0,
+    mine: { pending: 1, total: 1 }
+  };
+  const stranger: InboxCounts = {
+    count: 0,
+    canReview: false,
+    decided: 0,
+    mine: { pending: 0, total: 0 }
+  };
 
   it("gives a reviewer three lists and everyone else their own requests alone", () => {
     expect(inboxTabs(true)).toEqual(["to_decide", "mine", "decided"]);
@@ -65,10 +80,14 @@ describe("inbox model", () => {
     expect(inboxRailEntry(undefined)).toBeUndefined();
   });
 
-  it("counts what waits in a list and nothing in the decided one", () => {
-    expect(inboxTabCount("to_decide", reviewer)).toBe(2);
-    expect(inboxTabCount("mine", reviewer)).toBe(1);
-    expect(inboxTabCount("decided", reviewer)).toBeUndefined();
+  it("counts what waits in the first two lists and what the decided one holds", () => {
+    expect(inboxTabCount("to_decide", reviewer)).toEqual({ count: 2, tone: "primary" });
+    expect(inboxTabCount("mine", reviewer)).toEqual({ count: 1, tone: "muted" });
+    expect(inboxTabCount("decided", reviewer)).toEqual({ count: 3, tone: "muted" });
+    // A list that counts zero has no number, and none before the counts arrived.
+    expect(inboxTabCount("to_decide", { ...reviewer, count: 0 })).toBeUndefined();
+    expect(inboxTabCount("mine", { ...reviewer, mine: { pending: 0, total: 4 } })).toBeUndefined();
+    expect(inboxTabCount("decided", { ...reviewer, decided: 0 })).toBeUndefined();
     expect(inboxTabCount("mine", undefined)).toBeUndefined();
   });
 
@@ -427,22 +446,29 @@ describe("inbox area", () => {
 
   it("gives a reviewer three tabs with what waits in each", () => {
     const markup = renderArea(
-      { count: 2, canReview: true, mine: { pending: 0, total: 3 } },
+      { count: 2, canReview: true, decided: 120, mine: { pending: 0, total: 3 } },
       "to_decide",
       [item({ canDecide: true })]
     );
 
     expect(markup).toContain(">Eingang</h1>");
     expect(markup.match(/role="tab"/gu)).toHaveLength(3);
-    expect(markup).toMatch(/aria-selected="true"[^>]*>Zu entscheiden<span[^>]*>2<\/span>/u);
-    expect(markup).toContain("Meine Anfragen");
-    expect(markup).toContain("Entschieden");
+    // The list that waits for the reader has the number of the rail, the decided one a quiet
+    // number that stops at 99+, and the list with nothing waiting has none.
+    // The harness gives the library its English words, so the noun of the count is English.
+    expect(markup).toMatch(
+      /aria-selected="true"[^>]*>Zu entscheiden<span class="[^"]*bg-primary[^"]*" aria-hidden="true">2<\/span><span class="sr-only">, 2 items<\/span>/u
+    );
+    expect(markup).toContain(">Meine Anfragen</button>");
+    expect(markup).toMatch(
+      />Entschieden<span class="[^"]*bg-state-pressed[^"]*" aria-hidden="true">99\+<\/span><span class="sr-only">, 120 items<\/span>/u
+    );
     expect(markup).toContain('data-testid="inbox-row"');
   });
 
   it("shows a plain member their own requests without a tab bar", () => {
     const markup = renderArea(
-      { count: 0, canReview: false, mine: { pending: 1, total: 1 } },
+      { count: 0, canReview: false, decided: 0, mine: { pending: 1, total: 1 } },
       "mine",
       [item({ canWithdraw: true })],
       "en"
@@ -456,12 +482,14 @@ describe("inbox area", () => {
 
   it("tells a reviewer with an empty queue that nothing waits", () => {
     const markup = renderArea(
-      { count: 0, canReview: true, mine: { pending: 0, total: 0 } },
+      { count: 0, canReview: true, decided: 1, mine: { pending: 0, total: 0 } },
       "to_decide",
-      []
+      [],
+      "en"
     );
 
-    expect(markup).toContain("Nichts zu entscheiden.");
-    expect(markup).toMatch(/aria-selected="true"[^>]*>Zu entscheiden<\/button>/u);
+    expect(markup).toContain("Nothing to decide.");
+    expect(markup).toMatch(/aria-selected="true"[^>]*>To decide<\/button>/u);
+    expect(markup).toMatch(/>Decided<span[^>]*>1<\/span><span class="sr-only">, 1 item<\/span>/u);
   });
 });

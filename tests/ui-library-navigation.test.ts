@@ -27,6 +27,7 @@ import {
   TabsNav,
   TabsTrigger,
   UiRoot,
+  uiLabelsDe,
   uiLabelsEn
 } from "@vivd-catalyst/ui";
 
@@ -63,6 +64,44 @@ describe("navigation, page structure and data components", () => {
     expect(markup.match(/role="tab"/gu)).toHaveLength(2);
     expect(markup).toMatch(/role="tab"[^>]*aria-selected="true"/u);
     expect(markup).toContain('role="tabpanel"');
+  });
+
+  it("reads a tab's count out with its noun, and shows it quiet unless it is told to stand out", () => {
+    const tabs = (labels: typeof uiLabelsEn) =>
+      renderToStaticMarkup(
+        createElement(
+          UiRoot,
+          { mode: "light", labels },
+          createElement(
+            Tabs,
+            { defaultValue: "a" },
+            createElement(
+              TabsList,
+              { label: "Views" },
+              createElement(TabsTrigger, { value: "a", count: 1, countTone: "primary" }, "First"),
+              createElement(TabsTrigger, { value: "b", count: 120 }, "Second")
+            )
+          ),
+          createElement(
+            TabsNav,
+            { label: "Routes" },
+            createElement(TabsLink, { href: "/members", count: 3 }, "Members")
+          )
+        )
+      );
+
+    const english = tabs(uiLabelsEn);
+    expect(english).toMatch(
+      />First<span class="[^"]*bg-primary[^"]*" aria-hidden="true">1<\/span><span class="sr-only">, 1 item<\/span>/u
+    );
+    // The eye gets the capped number and the screen reader the whole one.
+    expect(english).toMatch(
+      />Second<span class="[^"]*bg-state-pressed[^"]*" aria-hidden="true">99\+<\/span><span class="sr-only">, 120 items<\/span>/u
+    );
+    expect(english).toMatch(/>Members<span[^>]*>3<\/span><span class="sr-only">, 3 items<\/span>/u);
+    const german = tabs(uiLabelsDe);
+    expect(german).toContain('<span class="sr-only">, 1 Eintrag</span>');
+    expect(german).toContain('<span class="sr-only">, 120 Einträge</span>');
   });
 
   it("renders route tabs as the caller's links and marks the open page", () => {

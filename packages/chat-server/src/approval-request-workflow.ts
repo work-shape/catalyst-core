@@ -31,6 +31,11 @@ const APPROVAL_WITHDRAW_AUTH_SCOPE = "conversation:write";
 /** How far back the list of decided requests reaches. Older decisions stay in the audit trail. */
 const DECIDED_LIST_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
+/** The decided list and its count: everything no longer pending that changed inside the window. */
+function decidedListFilter(): { excludeStatus: "pending"; updatedSince: Date } {
+  return { excludeStatus: "pending", updatedSince: new Date(Date.now() - DECIDED_LIST_WINDOW_MS) };
+}
+
 type CallContext = Pick<RuntimeCallContext, "correlationId"> &
   Partial<Omit<RuntimeCallContext, "user" | "clientInstanceId" | "correlationId">>;
 
@@ -121,8 +126,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       clientInstanceId: this.options.clientInstanceId,
       kinds,
       ...storeFilter,
-      excludeStatus: scope === "decided" ? "pending" : undefined,
-      updatedSince: scope === "decided" ? new Date(Date.now() - DECIDED_LIST_WINDOW_MS) : undefined
+      ...(scope === "decided" ? decidedListFilter() : {})
     });
     // One viewer for the page: what a kind reads for one row it does not read for the next.
     const viewer: ApprovalPreviewViewer = { access, inList: true };
@@ -154,12 +158,23 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
   async pendingCount(
     user: AuthenticatedUser,
     access: ActorAccess
-  ): Promise<{ count: number; canReview: boolean; mine: { pending: number; total: number } }> {
+  ): Promise<{
+    count: number;
+    canReview: boolean;
+    decided: number;
+    mine: { pending: number; total: number };
+  }> {
     const kinds = this.reviewableKinds(user, access);
-    const [count, mine] = await Promise.all([
+    const [count, decided, mine] = await Promise.all([
       this.options.store.countPendingApprovalRequests({
         clientInstanceId: this.options.clientInstanceId,
         kinds
+      }),
+      // What the decided list holds for this person: the same kinds and the same filter.
+      this.options.store.countApprovalRequests({
+        clientInstanceId: this.options.clientInstanceId,
+        kinds,
+        ...decidedListFilter()
       }),
       this.options.store.countOwnApprovalRequests({
         clientInstanceId: this.options.clientInstanceId,
@@ -167,7 +182,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
         requestedById: user.id
       })
     ]);
-    return { count, canReview: kinds.length > 0, mine };
+    return { count, canReview: kinds.length > 0, decided, mine };
   }
 
   async decideRequest(

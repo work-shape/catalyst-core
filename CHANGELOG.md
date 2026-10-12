@@ -41,6 +41,15 @@ contain breaking changes; a patch version does not.
   1.0.0, 1.1.0"; roll out the runner image with the instance. **Rollback:** an earlier release
   does not serve `/app-runtime/kit/1.2.0/`, so a Page saved with `1.2.0` shows nothing there
   until it is saved again with `kit: 1.1.0`.
+- **Inbox, counts on the tabs:** the tab **Decided** shows how many requests it holds, so a
+  reviewer sees without opening it whether anything is in there. **To decide** shows its count
+  in the emphasis of the sidebar, **My requests** keeps counting what is still open, and a tab
+  that counts nothing shows no number. A screen reader reads a count with its noun, "Decided,
+  3 items". `approval_requests.count_pending` also answers `decided`: the length of the list
+  with `scope=decided` for the caller, the same kinds and the same 30 days, and 0 for a caller
+  who may decide nothing. No migration. In the library, `TabsTrigger` and `TabsLink` take
+  `countTone`, and `UiLabels` has `countOne` and `countMany`; an assembly that passes labels of
+  its own adds both.
 - **Model names:** a model binding in release config takes `label`, the name people read for
   the model. The model picker, the agent editor and the Access page show it in place of the
   model id; without it they show the id tidied up, as before. An instance whose `model` is a

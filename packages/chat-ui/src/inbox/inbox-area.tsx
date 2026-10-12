@@ -243,15 +243,19 @@ export function InboxAreaView({
                 }}
               >
                 <TabsList label={t("inbox.tabs")}>
-                  {tabs.map((entry) => (
-                    <TabsTrigger
-                      key={entry}
-                      value={entry}
-                      count={inboxTabCount(entry, counts) || undefined}
-                    >
-                      {t(inboxTabLabelKeys[entry])}
-                    </TabsTrigger>
-                  ))}
+                  {tabs.map((entry) => {
+                    const count = inboxTabCount(entry, counts);
+                    return (
+                      <TabsTrigger
+                        key={entry}
+                        value={entry}
+                        count={count?.count}
+                        countTone={count?.tone}
+                      >
+                        {t(inboxTabLabelKeys[entry])}
+                      </TabsTrigger>
+                    );
+                  })}
                 </TabsList>
                 <TabsContent value={tab} className="pt-3">
                   {list}

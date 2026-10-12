@@ -373,6 +373,7 @@ describe("approval request workflow", () => {
     await expect(f.workflow.pendingCount(reviewer, accessOf(reviewer))).resolves.toEqual({
       count: 1,
       canReview: true,
+      decided: 1,
       mine: { pending: 0, total: 0 }
     });
     await expect(
@@ -384,6 +385,7 @@ describe("approval request workflow", () => {
     await expect(f.workflow.pendingCount(requester, accessOf(requester))).resolves.toEqual({
       count: 0,
       canReview: false,
+      decided: 0,
       mine: { pending: 2, total: 3 }
     });
   });
@@ -450,16 +452,45 @@ describe("approval request workflow", () => {
       const newest = await decide(new Date("2026-10-01T10:00:00.000Z"));
       vi.setSystemTime(new Date("2026-10-05T10:00:00.000Z"));
       await f.create();
-      await f.create("other");
+      // A decision of a kind the reviewer may not decide, made by someone who may.
+      const otherReviewer = {
+        ...reviewer,
+        id: "other_reviewer",
+        permissions: ["config_assets.write"]
+      };
+      const other = await f.create("other");
+      await f.workflow.decideRequest(...callerOf(otherReviewer), context, {
+        requestId: other.id,
+        decision: "reject"
+      });
 
-      expect(
-        (
-          await f.workflow.listRequests(reviewer, accessOf(reviewer), context, { scope: "decided" })
-        ).map((request) => request.id)
-      ).toEqual([newest.id, inside.id]);
+      const decidedIds = async (user: AuthenticatedUser) =>
+        (await f.workflow.listRequests(...callerOf(user), context, { scope: "decided" })).map(
+          (request) => request.id
+        );
+      expect(await decidedIds(reviewer)).toEqual([newest.id, inside.id]);
+      expect(await decidedIds(otherReviewer)).toEqual([other.id]);
       await expect(
         f.workflow.listRequests(requester, accessOf(requester), context, { scope: "decided" })
       ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      // The count on the Decided tab is the length of the list each caller reads: the same
+      // kinds and the same 30 days. A caller who may read no such list counts none.
+      await expect(f.workflow.pendingCount(...callerOf(reviewer))).resolves.toMatchObject({
+        decided: (await decidedIds(reviewer)).length
+      });
+      await expect(f.workflow.pendingCount(...callerOf(otherReviewer))).resolves.toMatchObject({
+        decided: 1
+      });
+      await expect(f.workflow.pendingCount(...callerOf(requester))).resolves.toMatchObject({
+        canReview: false,
+        decided: 0
+      });
+      // A decision that leaves the window leaves the list and the count together.
+      vi.setSystemTime(new Date("2026-10-15T10:00:00.000Z"));
+      expect(await decidedIds(reviewer)).toEqual([newest.id]);
+      await expect(f.workflow.pendingCount(...callerOf(reviewer))).resolves.toMatchObject({
+        decided: 1
+      });
     } finally {
       vi.useRealTimers();
     }
@@ -493,13 +524,19 @@ describe("approval request workflow", () => {
       await expect(f.workflow.pendingCount(reviewer, accessOf(reviewer))).resolves.toEqual({
         count: 205,
         canReview: true,
+        decided: 0,
         mine: { pending: 0, total: 0 }
       });
       await expect(
         f.workflow.pendingCount(
           ...callerOf({ ...reviewer, permissions: ["!agent_skills.approve"] })
         )
-      ).resolves.toEqual({ count: 0, canReview: false, mine: { pending: 0, total: 0 } });
+      ).resolves.toEqual({
+        count: 0,
+        canReview: false,
+        decided: 0,
+        mine: { pending: 0, total: 0 }
+      });
     } finally {
       vi.useRealTimers();
     }
@@ -609,6 +646,7 @@ describe("approval request workflow", () => {
     await expect(f.workflow.pendingCount(reviewer, accessOf(reviewer))).resolves.toEqual({
       count: 0,
       canReview: false,
+      decided: 0,
       mine: { pending: 0, total: 0 }
     });
     await expect(
