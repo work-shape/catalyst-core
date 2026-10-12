@@ -7,6 +7,16 @@ contain breaking changes; a patch version does not.
 
 ### Added
 
+- **Claude on Amazon Bedrock:** a model provider `aws-bedrock` beside `openai-compatible` and
+  `google-vertex`. It calls Claude through the Bedrock runtime in Frankfurt
+  (`eu-central-1`) with a Bedrock API key named by `credentialSecret` (default
+  `AWS_BEARER_TOKEN_BEDROCK`). The entry must state `region: eu`, and `model` must be the ARN of
+  an application inference profile in `eu-central-1`: a model id, a shared `eu.anthropic.…`
+  profile or another region stops startup. It carries text, images, tool calls and streaming, and
+  a binding on it can be chosen for agents. It does not carry reasoning efforts, documents, a
+  JSON answer format or web search yet. **Operators:** the API and the agent run worker need
+  the secret. Add a rate card row per profile ARN; without one the calls are recorded as
+  unpriced.
 - **Pages, plain HTML:** App Kit version `1.2.0`, with two new files, `page.css` and `theme.js`.
   A plain HTML Page that names it comes out with the look of the platform: the build links
   `page.css` and `theme.js` first into every HTML file of a Page with an `entry`, also one whose

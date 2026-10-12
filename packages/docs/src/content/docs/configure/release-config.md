@@ -456,6 +456,57 @@ create an access boundary, and billing reports take time to populate.
 The provider's check on **Instance > Infrastructure** asks Google for a token with the key. It
 shows that the key is taken. It does not show that the account may call the model on Vertex.
 
+### Claude on Amazon Bedrock
+
+The `aws-bedrock` provider calls Claude models through the Bedrock runtime in Frankfurt,
+`bedrock-runtime.eu-central-1.amazonaws.com`. The entry must state `region: eu`. There is no
+setting for another endpoint or AWS region, so no request leaves the EU.
+
+```yaml
+infrastructure:
+  models:
+    bedrock:
+      provider: aws-bedrock
+      region: eu
+      model: arn:aws:bedrock:eu-central-1:123456789012:application-inference-profile/abcd1234efgh
+      credentialSecret: AWS_BEARER_TOKEN_BEDROCK
+modelBindings:
+  - id: claude-sonnet
+    providerId: bedrock
+    model: arn:aws:bedrock:eu-central-1:123456789012:application-inference-profile/abcd1234efgh
+    label: Claude Sonnet 4.6
+    vendor: anthropic
+```
+
+`model` is the ARN of an application inference profile in `eu-central-1`, in the entry and in
+every binding on it. AWS attributes usage and cost to that profile, so the profile is what
+separates one consumer's calls from another's. A model id, a shared profile id such as
+`eu.anthropic.…`, a foundation model ARN and a profile of another region stop startup; the
+message says why and does not repeat the id. An ARN says nothing a person can read, so give
+each binding a `label` and a `vendor`. Usage records and the rate card keep the ARN.
+
+`credentialSecret` names the secret that holds a Bedrock API key, sent as a bearer token. The
+API and the agent run worker create every entry of `infrastructure.models` and need the secret;
+a capability worker needs it when one of its bindings is on the entry. The key's policy needs
+`bedrock:InvokeModel` and `bedrock:InvokeModelWithResponseStream` on the profiles and nothing
+else.
+
+The adapter reads text and images, calls tools, also several at once, and streams. A binding on
+it can be chosen for agents. In this version it declares no reasoning efforts, no documents, no
+JSON answer format, no web search, no fast tier and no server-side compaction; a call that asks
+for one of them is refused before it is sent, and an agent with web search configured runs
+without it. The adapter asks for no prompt cache. An image above 3.75 MB is left out of the
+request, and the model is told so.
+
+Bedrock's refusals reach people as the product's own messages. The provider's words, with any
+account id masked, are written to the `model_provider.error` log line together with the
+exception name and the AWS request id.
+
+The provider's check on **Instance > Infrastructure** sends the key with a request Bedrock
+refuses as invalid. It shows that the key is taken. It does not show that the key may call a
+profile, or that the account has access to the model behind it: those answer with status 403 on
+the first call.
+
 Document extraction of the document processing capability, a paid capability, names its model
 binding in `capabilities.documentProcessing.extraction.modelBindingId`. The binding's model must
 read documents and answer in a JSON format, and its entry must state `region: eu` or keep data
@@ -678,9 +729,8 @@ infrastructure:
 - `provider` picks the adapter. An unknown provider, an unknown setting or a missing setting
   stops startup, and the message names the field.
 - `region` is `eu` or `global` and says where the provider processes the data it is sent. A
-  provider that sends data outside the instance (`openai-compatible`, `google-vertex`, `mailjet`,
-  `s3`) must
-  state it. A provider that keeps data inside the instance (`deterministic`, `capture`,
+  provider that sends data outside the instance (`openai-compatible`, `google-vertex`, `aws-bedrock`,
+  `mailjet`, `s3`) must state it. A provider that keeps data inside the instance (`deterministic`, `capture`,
   `filesystem`, `docker`, `local`) must not. A `docker` sandbox with an `endpoint` runs on
   another host and must state it too. A vendor's own region name is a separate setting,
   such as `bucketRegion`.
@@ -702,6 +752,7 @@ Providers and their settings:
 | --------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `models`        | `openai-compatible`         | `model`, `api`, `reasoningEffort`, `contextManagement`, `baseUrl`, `credentialSecret` (default `OPENAI_API_KEY`), `authMode`, `organizationSecret`                                                           |
 | `models`        | `google-vertex`             | `model`, `projectId`, `credentialSecret` (default `GOOGLE_VERTEX_CREDENTIALS`): the JSON key of a service account. Gemini on Vertex AI; `region` decides the endpoint and location.                          |
+| `models`        | `aws-bedrock`               | `model`: the ARN of an application inference profile in `eu-central-1`; `credentialSecret` (default `AWS_BEARER_TOKEN_BEDROCK`): a Bedrock API key. Claude on Amazon Bedrock; `region` must be `eu`. |
 | `models`        | `deterministic`             | `model`. Answers without a model; for tests and local runs.                                                                                                                                                  |
 | `mail`          | `mailjet`                   | `appUrl`, `sender`, `apiKeySecret` (default `MAILJET_API_KEY`), `apiSecretSecret` (default `MAILJET_API_SECRET`)                                                                                             |
 | `mail`          | `capture`                   | `appUrl`, `sender`. Development only.                                                                                                                                                                        |
