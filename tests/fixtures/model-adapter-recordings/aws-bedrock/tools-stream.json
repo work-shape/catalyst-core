@@ -1,0 +1,170 @@
+{
+  "exchanges": [
+    {
+      "request": {
+        "url": "https://bedrock-runtime.eu-central-1.amazonaws.com/model/arn%3Aaws%3Abedrock%3Aeu-central-1%3A000000000000%3Aapplication-inference-profile%2Frecordedprofile/invoke-with-response-stream",
+        "body": {
+          "anthropic_version": "bedrock-2023-05-31",
+          "max_tokens": 64000,
+          "messages": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Weather and time in Berlin?"
+                }
+              ]
+            }
+          ],
+          "tools": [
+            {
+              "name": "get_weather",
+              "description": "Reads the weather of a city.",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["city"],
+                "properties": {
+                  "city": {
+                    "type": "string",
+                    "description": "The name of the city."
+                  }
+                }
+              }
+            },
+            {
+              "name": "get_time",
+              "description": "Reads the time of a zone.",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["zone"],
+                "properties": {
+                  "zone": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "eventStream": [
+          {
+            "type": "message_start",
+            "message": {
+              "model": "recorded-claude-model",
+              "id": "msg_bdrk_recorded",
+              "type": "message",
+              "role": "assistant",
+              "content": [],
+              "stop_reason": null,
+              "stop_sequence": null,
+              "usage": {
+                "input_tokens": 40,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 0,
+                "output_tokens": 1
+              }
+            }
+          },
+          {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "tool_use",
+              "id": "toolu_bdrk_recorded_1",
+              "name": "get_weather",
+              "input": {}
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "input_json_delta",
+              "partial_json": ""
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "input_json_delta",
+              "partial_json": "{\"ci"
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "input_json_delta",
+              "partial_json": "ty\": \"Ber"
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "input_json_delta",
+              "partial_json": "lin\"}"
+            }
+          },
+          {
+            "type": "content_block_stop",
+            "index": 0
+          },
+          {
+            "type": "content_block_start",
+            "index": 1,
+            "content_block": {
+              "type": "tool_use",
+              "id": "toolu_bdrk_recorded_2",
+              "name": "get_time",
+              "input": {}
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 1,
+            "delta": {
+              "type": "input_json_delta",
+              "partial_json": "{\"zone\":"
+            }
+          },
+          {
+            "type": "content_block_delta",
+            "index": 1,
+            "delta": {
+              "type": "input_json_delta",
+              "partial_json": " \"Europe/Berlin\"}"
+            }
+          },
+          {
+            "type": "content_block_stop",
+            "index": 1
+          },
+          {
+            "type": "message_delta",
+            "delta": {
+              "stop_reason": "tool_use",
+              "stop_sequence": null
+            },
+            "usage": {
+              "input_tokens": 40,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "output_tokens": 18
+            }
+          },
+          {
+            "type": "message_stop"
+          }
+        ]
+      }
+    }
+  ]
+}

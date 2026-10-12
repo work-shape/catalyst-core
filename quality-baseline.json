@@ -326,13 +326,6 @@
     {
       "target": "lint",
       "rule": "knip/exports",
-      "scope": "packages/model-provider",
-      "count": 1,
-      "owner": "CB-8b"
-    },
-    {
-      "target": "lint",
-      "rule": "knip/exports",
       "scope": "packages/postgres-store",
       "count": 1,
       "owner": "CB-3a"

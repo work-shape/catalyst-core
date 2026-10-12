@@ -1,0 +1,53 @@
+{
+  "exchanges": [
+    {
+      "request": {
+        "url": "https://bedrock-runtime.eu-central-1.amazonaws.com/model/arn%3Aaws%3Abedrock%3Aeu-central-1%3A000000000000%3Aapplication-inference-profile%2Frecordedprofile/invoke",
+        "body": {
+          "anthropic_version": "bedrock-2023-05-31",
+          "max_tokens": 64000,
+          "system": [
+            {
+              "type": "text",
+              "text": "Answer briefly."
+            }
+          ],
+          "messages": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Say hello."
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "model": "recorded-claude-model",
+          "id": "msg_bdrk_recorded",
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Hello from the recording."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 8,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 4,
+            "output_tokens": 5
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "exchanges": [
+    {
+      "request": {
+        "url": "https://bedrock-runtime.eu-central-1.amazonaws.com/model/catalyst-check/invoke",
+        "body": {}
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "x-amzn-errortype": "ValidationException:http://internal.amazon.com/coral/com.amazon.bedrock/",
+          "x-amzn-requestid": "recorded-request"
+        },
+        "body": {
+          "message": "The provided model identifier is invalid."
+        }
+      }
+    }
+  ]
+}

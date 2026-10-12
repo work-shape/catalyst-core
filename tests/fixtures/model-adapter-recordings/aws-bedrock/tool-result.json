@@ -1,0 +1,106 @@
+{
+  "exchanges": [
+    {
+      "request": {
+        "url": "https://bedrock-runtime.eu-central-1.amazonaws.com/model/arn%3Aaws%3Abedrock%3Aeu-central-1%3A000000000000%3Aapplication-inference-profile%2Frecordedprofile/invoke",
+        "body": {
+          "anthropic_version": "bedrock-2023-05-31",
+          "max_tokens": 64000,
+          "messages": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "What is the weather in Berlin?"
+                }
+              ]
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "tool_use",
+                  "id": "call_weather_1",
+                  "name": "get_weather",
+                  "input": {
+                    "city": "Berlin"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call_weather_1",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "{\"temperatureC\":18}"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "tools": [
+            {
+              "name": "get_weather",
+              "description": "Reads the weather of a city.",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["city"],
+                "properties": {
+                  "city": {
+                    "type": "string",
+                    "description": "The name of the city."
+                  }
+                }
+              }
+            },
+            {
+              "name": "get_time",
+              "description": "Reads the time of a zone.",
+              "input_schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["zone"],
+                "properties": {
+                  "zone": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "model": "recorded-claude-model",
+          "id": "msg_bdrk_recorded",
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "It is 18 degrees in Berlin."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 60,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "output_tokens": 9
+          }
+        }
+      }
+    }
+  ]
+}

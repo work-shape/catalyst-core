@@ -1,4 +1,5 @@
 import type { ModelProviderConfig, ProviderDefinition } from "@vivd-catalyst/core";
+import { bedrockModelProvider } from "./adapters/bedrock";
 import { deterministicModelProvider } from "./adapters/deterministic";
 import { googleVertexModelProvider } from "./adapters/google-vertex";
 import { openAiCompatibleModelProvider } from "./adapters/openai-compatible";
@@ -8,7 +9,12 @@ import type { ModelAdapterFactory } from "./types";
 export const modelProviderDefinitions: readonly ProviderDefinition<
   "models",
   ModelAdapterFactory
->[] = [openAiCompatibleModelProvider, googleVertexModelProvider, deterministicModelProvider];
+>[] = [
+  openAiCompatibleModelProvider,
+  googleVertexModelProvider,
+  bedrockModelProvider,
+  deterministicModelProvider
+];
 
 /**
  * The entries whose calls nobody bills: those a deterministic provider answers inside the

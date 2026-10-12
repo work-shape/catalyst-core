@@ -15,6 +15,7 @@ import {
   type ModelAdapter,
   type ModelAdapterFactory
 } from "@vivd-catalyst/model-provider";
+import { bedrockChunk } from "./bedrock-event-stream";
 import { silentTestLogger } from "./model-gateway";
 
 /**
@@ -38,6 +39,8 @@ interface RecordedExchange {
     body?: unknown;
     /** Server-sent events, each the `data` of one event. A string is sent as it is. */
     events?: unknown[];
+    /** The events of an answer in Bedrock's binary stream framing, each sent as one chunk. */
+    eventStream?: unknown[];
     /** After its events the stream stays open until the caller stops it. */
     staysOpen?: boolean;
     /** No answer comes until the caller stops the request. */
@@ -64,6 +67,10 @@ const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const REPLAY_ACCESS_TOKEN = "replay-access-token";
 /** The API key the replay's secrets hold for an adapter that sends a key. It opens nothing. */
 const REPLAY_API_KEY = "replay-api-key";
+
+/** An application inference profile of an account that does not exist. */
+export const RECORDED_BEDROCK_PROFILE =
+  "arn:aws:bedrock:eu-central-1:000000000000:application-inference-profile/recordedprofile";
 
 export function loadModelAdapterRecording(adapter: string, name: string): ModelAdapterRecording {
   const parsed: unknown = JSON.parse(
@@ -143,19 +150,22 @@ function answer(
     });
   }
   const headers = new Headers(recorded.headers);
-  if (!recorded.events) {
+  if (!recorded.events && !recorded.eventStream) {
     return new Response(recorded.body === undefined ? null : JSON.stringify(recorded.body), {
       status: recorded.status,
       headers
     });
   }
-  const events = recorded.events;
   const encoder = new TextEncoder();
+  const pieces = recorded.eventStream
+    ? recorded.eventStream.map(bedrockChunk)
+    : (recorded.events ?? []).map((event) =>
+        encoder.encode(`data: ${typeof event === "string" ? event : JSON.stringify(event)}\n\n`)
+      );
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
-      for (const event of events) {
-        const data = typeof event === "string" ? event : JSON.stringify(event);
-        controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+      for (const piece of pieces) {
+        controller.enqueue(piece);
       }
       if (!recorded.staysOpen) {
         controller.close();
@@ -167,7 +177,10 @@ function answer(
       onCancel();
     }
   });
-  headers.set("content-type", "text/event-stream");
+  headers.set(
+    "content-type",
+    recorded.eventStream ? "application/vnd.amazon.eventstream" : "text/event-stream"
+  );
   return new Response(body, { status: recorded.status, headers });
 }
 
@@ -254,6 +267,12 @@ export const conformanceAdapters: ConformanceAdapter[] = [
     model: "recorded-gemini-model",
     projectId: "recorded-project",
     credentialSecret: "REPLAY_VERTEX_KEY"
+  }),
+  conformanceAdapter("recorded-bedrock", `Bearer ${REPLAY_API_KEY}`, {
+    provider: "aws-bedrock",
+    region: "eu",
+    model: RECORDED_BEDROCK_PROFILE,
+    credentialSecret: "REPLAY_MODEL_KEY"
   })
 ];
 
