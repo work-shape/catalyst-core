@@ -16,19 +16,20 @@ const target = process.argv[2] ?? "";
 const here = dirname(fileURLToPath(import.meta.url));
 const formatted = "js,jsx,mjs,cjs,ts,tsx,mts,cts,json,css,scss,html,yml,yaml".split(",");
 
-// The typed lint keeps one TypeScript program for the whole repository in memory: about
-// 2.5 GB once every file is checked. Node sizes its heap by the machine, 2 GB on a runner
-// with 8 GB of memory, where the lint ran out of memory. On a smaller heap than this the
-// lint starts itself again with this one, so no caller has to set it.
-const lintHeapMegabytes = 4096;
+// The lint and the type checks each keep whole TypeScript programs in memory. Measured on
+// 12 October 2026: the lint needs 3.2 GB, the type check of the tests 2.2 GB, the type check
+// of the packages 1.5 GB. Node sizes its heap by the machine: 4 GB on a runner with 16 GB of
+// memory, 2 GB on one with 8 GB, where first the lint and later the type check of the tests
+// ran out of memory. On a smaller heap than this every target starts itself again with this
+// one, so no caller has to set it and no target is left on the machine's default.
+const heapMegabytes = 4096;
 if (
-  target === "lint" &&
-  getHeapStatistics().heap_size_limit < lintHeapMegabytes * 1024 * 1024 &&
+  getHeapStatistics().heap_size_limit < heapMegabytes * 1024 * 1024 &&
   !process.execArgv.some((argument) => argument.startsWith("--max-old-space-size"))
 ) {
   const again = spawnSync(
     process.execPath,
-    [`--max-old-space-size=${lintHeapMegabytes}`, ...process.execArgv, ...process.argv.slice(1)],
+    [`--max-old-space-size=${heapMegabytes}`, ...process.execArgv, ...process.argv.slice(1)],
     { stdio: "inherit" }
   );
   if (again.error) throw again.error;
