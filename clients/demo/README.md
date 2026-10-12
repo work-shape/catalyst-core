@@ -206,7 +206,7 @@ The client list is the one of a real firm. The legal form decides how large a le
 | manufacturing       | Invoiced: domestic at 19 %, tax-free intra-community deliveries and exports         | Goods and wages; the only industry with the largest ledgers besides retail. |
 | freelancer          | Invoiced at 19 % with the key 3                                                     | Few bookings, few or no employees, the profit is the owner's income.        |
 
-A client's margin is drawn for its industry, higher where the owner draws the profit instead of a wage, and about one client in eight loses money. Revenue follows the industry's season. A profile gives the share of the revenue each cost takes and the usual amount of one booking, so the number of invoices, purchases and employees follows from the size of the ledger (`sample-mcp/accounting/profiles.ts`, `business.ts`).
+A client's margin is drawn for its industry, higher where the owner draws the profit instead of a wage, and roughly one client in ten loses money over a year. Revenue follows the industry's season. A profile gives the share of the revenue each cost takes and the usual amount of one booking, so the number of invoices, purchases and employees follows from the size of the ledger (`sample-mcp/accounting/profiles.ts`, `business.ts`).
 
 A month holds what such a business books (`activities.ts`):
 
