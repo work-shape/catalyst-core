@@ -29,9 +29,6 @@ export const levelMeterGalleryEntry: GalleryEntry = {
       <Samples label={text.levelMeterSpectrum}>
         <Levels scale="spectrum" text={text} />
       </Samples>
-      <Samples label={text.levelMeterTone}>
-        <Levels scale="tone" text={text} />
-      </Samples>
       <Samples label={text.levelMeterNeutral}>
         <Levels scale="neutral" text={text} />
       </Samples>

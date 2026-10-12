@@ -52,13 +52,10 @@ describe("LevelMeter", () => {
     expect(segments(render({ level: 2 }))[2]?.classes).toContain("bg-state-pressed");
   });
 
-  it.each([
-    ["spectrum", "bg-level-"],
-    ["tone", "bg-level-tone-"]
-  ] as const)("gives every filled step of a %s meter the colour of its level", (scale, prefix) => {
+  it("gives every filled step of a spectrum meter the colour of its level", () => {
     for (const level of [1, 2, 3, 4, 5, 6]) {
-      expect(fills(render({ level, scale }))).toEqual(
-        Array.from({ length: level }, () => `${prefix}${level}`)
+      expect(fills(render({ level, scale: "spectrum" }))).toEqual(
+        Array.from({ length: level }, () => `bg-level-${level}`)
       );
     }
   });

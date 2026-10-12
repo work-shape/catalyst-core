@@ -2,11 +2,10 @@ import type { HTMLAttributes } from "react";
 import { cn } from "../cn";
 
 /**
- * How the filled steps are coloured. `neutral` is the text colour at every level, `spectrum`
- * goes from a cool colour at the lowest level to a warm one at the highest, and `tone` is one
- * hue that deepens with the level.
+ * How the filled steps are coloured. `neutral` is the text colour at every level, and
+ * `spectrum` goes from a cool colour at the lowest level to a warm one at the highest.
  */
-export type LevelMeterScale = "neutral" | "spectrum" | "tone";
+export type LevelMeterScale = "neutral" | "spectrum";
 
 export interface LevelMeterProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"> {
   /** What is measured, such as "Usage consumption". It stands before the level in words. */
@@ -33,23 +32,14 @@ const spectrumFills = [
   "bg-level-5",
   "bg-level-6"
 ] as const;
-const toneFills = [
-  "bg-level-tone-1",
-  "bg-level-tone-2",
-  "bg-level-tone-3",
-  "bg-level-tone-4",
-  "bg-level-tone-5",
-  "bg-level-tone-6"
-] as const;
 
 function fillOf(scale: LevelMeterScale, level: number, steps: number): string {
   if (scale === "neutral") {
     return "bg-foreground";
   }
-  const fills = scale === "spectrum" ? spectrumFills : toneFills;
-  const last = fills.length - 1;
+  const last = spectrumFills.length - 1;
   const index = steps > 1 ? Math.round(((level - 1) / (steps - 1)) * last) : last;
-  return fills[index] ?? "bg-foreground";
+  return spectrumFills[index] ?? "bg-foreground";
 }
 
 /**
