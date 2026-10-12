@@ -203,7 +203,8 @@ export function createSeedApi(client: ApiClient): SeedApi {
     listOwnApprovalRequests: () =>
       listAll((paging) => client.approval_requests.list_mine({ query: paging })),
     listWorkspaces: () => listAll((paging) => client.workspaces.list({ query: paging })),
-    createWorkspace: (input) => client.workspaces.create({ body: input }),
+    createWorkspace: async (input) =>
+      completedOutput(await client.workspaces.create({ body: input })),
     listWorkspaceMemberEmails: async (workspaceId) =>
       (
         await listAll((paging) =>
@@ -214,10 +215,12 @@ export function createSeedApi(client: ApiClient): SeedApi {
         )
       ).flatMap((member) => (member.email ? [member.email.toLowerCase()] : [])),
     async addWorkspaceMember(workspaceId, email) {
-      await client.workspaces.members.add({
-        params: { collaborationWorkspaceId: workspaceId },
-        body: { email }
-      });
+      completedOutput(
+        await client.workspaces.members.add({
+          params: { collaborationWorkspaceId: workspaceId },
+          body: { email }
+        })
+      );
     },
     listApps: (workspaceId) =>
       listAll((paging) =>
