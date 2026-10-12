@@ -94,16 +94,13 @@ export const dataStoreDefinitionSchema = z
 export type DataStoreDefinition = z.infer<typeof dataStoreDefinitionSchema>;
 export type DataStoreMigration = DataStoreDefinition["migrations"][number];
 
-/** The words that end or split a transaction wherever they stand in a statement. */
-const TRANSACTION_WORDS: ReadonlySet<string> = new Set([
-  "commit",
-  "rollback",
-  "savepoint",
-  "abort"
-]);
-/** `begin` and `start` open a transaction where one of these follows; a block of a function has statements there. */
-const TRANSACTION_OPENING =
-  /\b(?:begin\s*(?:;|$|transaction\b|work\b|isolation\b|read\b|deferrable\b|not\s+deferrable\b)|start\s+transaction\b|prepare\s+transaction\b)/iu;
+/**
+ * A statement that opens, ends or splits a transaction, by how it starts. A column or a table
+ * may carry such a word as its name, so only the start of a statement is read. `end` is left
+ * to the database: it also closes a block of a function.
+ */
+const TRANSACTION_STATEMENT =
+  /^(?:(?:commit|rollback|abort|savepoint|release)\b|begin(?:\s+(?:transaction|work|isolation|read|deferrable|not\s+deferrable)\b|$)|start\s+transaction\b|prepare\s+transaction\b)/iu;
 /** A statement that creates, changes or drops a role, or makes the session another one. */
 const ROLE_STATEMENT =
   /\b(?:(?:create|alter|drop)\s+(?:role|user|group)\b|(?:set|reset)\s+(?:(?:local|session)\s+)?(?:role|session\s+authorization)\b)/iu;
@@ -121,11 +118,12 @@ function migrationTextRefusals(sql: string): string[] {
     .replace(/\$[A-Za-z_]*\$/gu, " ; ");
   const refusals: string[] = [];
   let namesSchema = false;
-  let endsTransaction = TRANSACTION_OPENING.test(code);
+  const endsTransaction = code
+    .split(";")
+    .some((statement) => TRANSACTION_STATEMENT.test(statement.trim()));
   for (const [, quoted, bare] of code.matchAll(/"((?:[^"]|"")*)"|([A-Za-z_][A-Za-z0-9_$]*)/gu)) {
     const word = bare?.toLowerCase();
     namesSchema ||= quoted === DATA_STORE_RESERVED_SCHEMA || word === DATA_STORE_RESERVED_SCHEMA;
-    endsTransaction ||= word !== undefined && TRANSACTION_WORDS.has(word);
   }
   if (namesSchema) {
     refusals.push(

@@ -41,7 +41,6 @@ import { databaseFailureError } from "./failures";
 import { DATA_STORE_ROLE_LIMITS } from "./role-limits";
 import type { DataStoreRuntime } from "./runtime";
 import { quoteIdentifier } from "./server";
-import { withFreshSize } from "./size";
 
 // The operations on the rows of one store. Each is called through `runOperation` like every
 // other operation: this file says who may call it and what it does, as the app role of the
@@ -169,19 +168,61 @@ function sharedColumns(rows: readonly JsonObject[]): string[] {
 }
 
 const insertedRow = z.object({ count: z.number().int() });
+const sizeRow = z.object({ bytes: z.string().regex(/^\d+$/u) });
 
-/** A column that may be empty in a unique index of a table whose empty values are distinct. */
-const NULLABLE_KEY_COLUMN = `
-  select a.attname as column_name
+/**
+ * The unique indexes of a table that hold for every row, each with the columns it reads,
+ * those of an expression among them. An index over a part of the rows is left out: whether a
+ * row falls under it is not known here.
+ */
+const UNIQUE_INDEXES = `
+  select i.indnullsnotdistinct as nulls_not_distinct,
+    coalesce((
+      select pg_catalog.array_agg(a.attname::text)
+      from pg_catalog.pg_attribute a
+      where a.attrelid = i.indrelid and a.attnum > 0
+        and (a.attnum = any (i.indkey) or exists (
+          select 1 from pg_catalog.pg_depend d
+          where d.objid = i.indexrelid and d.refobjid = i.indrelid
+            and d.refobjsubid = a.attnum))
+    ), '{}') as columns
   from pg_catalog.pg_index i
   join pg_catalog.pg_class c on c.oid = i.indrelid
   join pg_catalog.pg_namespace n on n.oid = c.relnamespace
-  join pg_catalog.pg_attribute a on a.attrelid = c.oid and a.attnum = any (i.indkey)
-  where n.nspname = 'public' and c.relname = $1
-    and i.indisunique and not i.indnullsnotdistinct and not a.attnotnull
-  order by a.attnum
-  limit 1
+  where n.nspname = 'public' and c.relname = $1 and i.indisunique and i.indpred is null
 `;
+
+const uniqueIndexRow = z.object({
+  nulls_not_distinct: z.boolean(),
+  columns: z.array(z.string())
+});
+
+/**
+ * The number of the first row that `skip` could not skip on a repeated call, or nothing. A
+ * row is met again only where one unique index has all its columns set in it by the call: an
+ * empty column never conflicts unless the index says so, and a column the call leaves to its
+ * default may get another value every time. A table without a unique index skips nothing by
+ * its nature and is not refused.
+ */
+function unboundRow(
+  rows: readonly JsonObject[],
+  provided: readonly string[],
+  indexes: readonly z.infer<typeof uniqueIndexRow>[]
+): number | undefined {
+  if (indexes.length === 0) return undefined;
+  const unbound = rows.findIndex(
+    (row) =>
+      !indexes.some(
+        (index) =>
+          index.columns.length > 0 &&
+          index.columns.every(
+            (column) =>
+              provided.includes(column) && (index.nulls_not_distinct || row[column] !== null)
+          )
+      )
+  );
+  return unbound === -1 ? undefined : unbound + 1;
+}
 
 const query: StoreVerb = {
   verb: "query",
@@ -211,15 +252,7 @@ const insert: StoreVerb = {
   use: `Adds rows to one table. Use it to record new rows; it changes and removes nothing that is stored. Name the table and send each row as an object of column name to value. All rows of one call name the same columns, and a column that is left out takes its default. "onConflict" says what happens to a row that a unique constraint of the table refuses: "fail", the default, adds no row of the call; "skip" leaves that row out and adds the others, which makes sending the same rows again safe. One call adds at most ${DATA_STORE_INSERT_MAX_ROWS} rows and ${DATA_STORE_INSERT_MAX_BYTES} bytes.`,
   async run({ runtime, store, target }, call) {
     const input = insertInputSchema.parse(call);
-    // Against a size of this minute: measured now where the stored one is older or missing.
-    const record = await withFreshSize(runtime, store.record, target.signal);
-    if (record.sizeBytes !== undefined && record.sizeBytes >= record.sizeLimitBytes) {
-      throw new AppError(
-        "CONFLICT",
-        `The Data Store '${record.name}' holds ${record.sizeBytes} bytes and its size limit is ${record.sizeLimitBytes} bytes (sizeLimit). No rows are added until it is smaller or the limit is raised; reading keeps working.`,
-        { reason: "data_store_size_limit", limit: record.sizeLimitBytes, actual: record.sizeBytes }
-      );
-    }
+    const { record } = store;
     const columns = sharedColumns(input.rows);
     const rows = JSON.stringify(input.rows);
     const bytes = Buffer.byteLength(rows);
@@ -247,21 +280,24 @@ const insert: StoreVerb = {
       );
     }
     if (input.onConflict === "skip") {
-      // Two rows that are empty in a column of a key never conflict, so `skip` would not skip.
-      const loose = z.array(z.object({ column_name: z.string() })).parse(
-        (
-          await runtime.server.executor.query({
-            ...target,
-            sql: NULLABLE_KEY_COLUMN,
-            parameters: [table.name]
-          })
-        ).rows
-      )[0];
-      if (loose) {
+      const unbound = unboundRow(
+        input.rows,
+        columns,
+        z.array(uniqueIndexRow).parse(
+          (
+            await runtime.server.executor.query({
+              ...target,
+              sql: UNIQUE_INDEXES,
+              parameters: [table.name]
+            })
+          ).rows
+        )
+      );
+      if (unbound !== undefined) {
         throw new AppError(
           "VALIDATION_FAILED",
-          `The table '${table.name}' has a unique constraint over the column '${loose.column_name}', which may be empty: rows that are empty there never conflict, so 'skip' would add the same row again. Make the column NOT NULL, or the constraint NULLS NOT DISTINCT.`,
-          { reason: "nullable_key", column: loose.column_name }
+          `Row ${unbound} would be added again by a repeated call: every unique constraint of the table '${table.name}' has a column that is empty in it or that the call leaves to its default. Set the columns of one unique constraint in every row, or make the constraint NULLS NOT DISTINCT.`,
+          { reason: "nullable_key", row: unbound }
         );
       }
     }
@@ -277,11 +313,33 @@ const insert: StoreVerb = {
         returning 1
       )
       select count(*)::integer as count from inserted`;
-    const [counted] = await runtime.server.executor.change(
+    // The size is read in the transaction of the insert itself, as the app role: whoever
+    // calls and from whichever process, a store at its limit takes no further row. What may
+    // pass the limit is what the inserts that run at this moment add.
+    const outcome = await runtime.server.executor.change(
       { ...target, timeoutMs: POSTGRES_STATEMENT_TIMEOUT_MS },
-      (sql) => sql.run(statement, [rows])
+      async (sql) => {
+        const [size] = await sql.run(
+          "select pg_catalog.pg_database_size(pg_catalog.current_database())::text as bytes"
+        );
+        const sizeBytes = Number(sizeRow.parse(size).bytes);
+        if (sizeBytes >= record.sizeLimitBytes) return { sizeBytes };
+        const [counted] = await sql.run(statement, [rows]);
+        return { inserted: insertedRow.parse(counted).count };
+      }
     );
-    const inserted = insertedRow.parse(counted).count;
+    if (outcome.inserted === undefined) {
+      throw new AppError(
+        "CONFLICT",
+        `The Data Store '${record.name}' holds ${outcome.sizeBytes} bytes and its size limit is ${record.sizeLimitBytes} bytes (sizeLimit). No rows are added until it is smaller or the limit is raised; reading keeps working.`,
+        {
+          reason: "data_store_size_limit",
+          limit: record.sizeLimitBytes,
+          actual: outcome.sizeBytes
+        }
+      );
+    }
+    const { inserted } = outcome;
     return {
       table: table.name,
       inserted,

@@ -13,14 +13,6 @@ const DATA_STORE_MEASURE_MAX_STORES = 2_000;
 
 const sizeRow = z.object({ bytes: z.string().regex(/^\d+$/u) });
 
-/**
- * How old the stored size of a store may be for an insert to believe it. An insert that finds
- * it older, or finds none, measures first: one statement that sums the files of the store's
- * database, a few milliseconds for a store of some gigabytes, at most once a minute per store.
- * So a store passes its limit by at most what one minute of inserts adds.
- */
-const DATA_STORE_SIZE_FRESH_MS = 60_000;
-
 type Transact = <Result>(work: (stores: PlatformStores) => Promise<Result>) => Promise<Result>;
 
 /**
@@ -54,28 +46,6 @@ export async function recordStoreSize(
     await stores.dataStores.putDataStore(next);
     return next;
   });
-}
-
-/** The record with a size an insert may believe: the stored one, or one measured now. */
-export async function withFreshSize(
-  runtime: DataStoreRuntime,
-  record: DataStoreRecord,
-  signal: AbortSignal | undefined
-): Promise<DataStoreRecord> {
-  const age =
-    record.sizeMeasuredAt === undefined
-      ? undefined
-      : Date.now() - Date.parse(record.sizeMeasuredAt);
-  if (record.sizeBytes !== undefined && age !== undefined && age < DATA_STORE_SIZE_FRESH_MS) {
-    return record;
-  }
-  const measured = await recordStoreSize(
-    runtime,
-    (work) => runtime.stores.transaction(work),
-    record,
-    signal
-  );
-  return measured ?? record;
 }
 
 /**
