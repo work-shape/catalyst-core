@@ -7,6 +7,7 @@ import { useAdministeredCollaborationWorkspacesQuery } from "../api/workspace-qu
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { canManageAgentModels } from "../control-plane/governance";
 import { useTranslation } from "../i18n";
+import { useAppToolsRead } from "../apps/app-tools-group";
 import { useSettingsPage } from "../settings/settings-page-context";
 import { apiErrorMessage } from "../workspace-utils";
 import { AgentAvailabilityEditor, AgentEditor } from "./agent-editor";
@@ -54,6 +55,7 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
     retry: false
   });
   const connectionTools = useConnectionToolChoice();
+  const appTools = useAppToolsRead();
   const [skillSearch, setSkillSearch] = useState("");
   const skillsQuery = useQuery({
     queryKey: [...workspaceQueryKeys.assets(apiBaseUrl, authScope), "choice", "skill", skillSearch],
@@ -94,6 +96,7 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
         onSearch: (text) => setSkillSearch(text.trim())
       }}
       connectionTools={connectionTools}
+      appTools={appTools}
       onMakeDefault={
         asset && !isDefault && instanceWrite && management.allowDefaultAgentChange
           ? () =>

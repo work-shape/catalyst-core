@@ -1,19 +1,11 @@
-import {
-  Badge,
-  Button,
-  Checkbox,
-  Chip,
-  Disclosure,
-  DisclosureContent,
-  DisclosureTrigger
-} from "@vivd-catalyst/ui";
+import { Button } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
 import {
   connectionToolsView,
-  toggleToolName,
   type ConnectionToolChoice,
   type ConnectionToolGroupView
 } from "./connection-tools";
+import { ToolChip, ToolGroup, toggleToolName } from "./tool-group";
 
 /**
  * The tools of Connections in an agent's Tools section: one folding group per Connection the
@@ -106,25 +98,6 @@ export function ConnectionToolsGroup({
   );
 }
 
-/** A tool name the agent holds that no check box stands for. It can only be removed. */
-function ToolChip({
-  toolName,
-  remove
-}: {
-  toolName: string;
-  remove: ((toolName: string) => void) | undefined;
-}) {
-  return (
-    <Chip
-      size="sm"
-      className="max-w-full font-mono"
-      onRemove={remove ? () => remove(toolName) : undefined}
-    >
-      <span className="break-all">{toolName}</span>
-    </Chip>
-  );
-}
-
 function ConnectionGroup({
   group,
   selected,
@@ -139,52 +112,21 @@ function ConnectionGroup({
   onChange(selected: string[]): void;
 }) {
   const { t } = useTranslation();
-  const title = group.title.trim() || group.name;
   return (
-    <Disclosure variant="outline" defaultOpen={group.startsOpen} data-connection-tools={group.name}>
-      <DisclosureTrigger>
-        <span className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-          <span className="min-w-0 break-words text-foreground">{title}</span>
-          <span className="text-caption font-normal text-muted-foreground">
-            {t("connections.toolsSelected", {
-              selected: group.selectedCount,
-              count: group.tools.length
-            })}
-          </span>
-        </span>
-      </DisclosureTrigger>
-      <DisclosureContent>
-        <div role="group" aria-label={title} className="grid min-w-0 gap-3">
-          {group.tools.map((tool) => (
-            <Checkbox
-              key={tool.toolName}
-              checked={selected.includes(tool.toolName)}
-              disabled={disabled}
-              data-connection-tool={tool.toolName}
-              label={
-                <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                  <code className="min-w-0 font-mono break-all">{tool.operation}</code>
-                  <Badge size="sm" tone={tool.effect === "changing" ? "warning" : "neutral"}>
-                    {t(
-                      tool.effect === "changing"
-                        ? "connections.effectChanging"
-                        : "connections.effectReading"
-                    )}
-                  </Badge>
-                </span>
-              }
-              description={
-                tool.description ? (
-                  <span className="line-clamp-2 whitespace-pre-line">{tool.description}</span>
-                ) : undefined
-              }
-              onCheckedChange={(checked) =>
-                onChange(toggleToolName(selected, tool.toolName, checked))
-              }
-            />
-          ))}
-        </div>
-        {link ? (
+    <ToolGroup
+      source={{ kind: "connection", name: group.name }}
+      title={group.title.trim() || group.name}
+      tools={group.tools.map((tool) => ({
+        toolName: tool.toolName,
+        label: tool.operation,
+        effect: tool.effect,
+        ...(tool.description === undefined ? {} : { description: tool.description })
+      }))}
+      selected={selected}
+      startsOpen={group.startsOpen}
+      disabled={disabled}
+      footer={
+        link ? (
           <div>
             <Button asChild variant="link" size="sm" className="px-0">
               <a
@@ -206,8 +148,9 @@ function ConnectionGroup({
               </a>
             </Button>
           </div>
-        ) : null}
-      </DisclosureContent>
-    </Disclosure>
+        ) : null
+      }
+      onChange={onChange}
+    />
   );
 }

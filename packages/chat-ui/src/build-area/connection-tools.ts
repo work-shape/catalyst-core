@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { ConnectionTools } from "@vivd-catalyst/api-client";
 import { useSettingsPage } from "../settings/settings-page-context";
 import { useBuildNavigation } from "./build-route";
+import { toolGroupStartsOpen } from "./tool-group";
 
 // The tools of Connections an agent can be given, as the agent page offers them. The instance
 // answers them for the Connections the reader may read (`connections.list_tools`): operations
@@ -13,15 +14,6 @@ export const CONNECTIONS_BUILD_PATH = "connections";
 
 /** What every tool name of a Connection's operation starts with. */
 const CONNECTION_TOOL_PREFIX = "connection.";
-
-/** A Connection with more operations than this starts folded, with its count. */
-const CONNECTION_GROUP_OPEN_MAX_TOOLS = 12;
-
-/**
- * With more Connections than this, a Connection starts folded unless the agent holds one of
- * its tools, so a long list of Connections stays a list of lines.
- */
-const CONNECTION_GROUPS_OPEN_MAX = 6;
 
 type ConnectionToolGroup = ConnectionTools["connections"][number];
 
@@ -74,7 +66,6 @@ export function connectionToolsView(
   const offered = new Set(
     read.connections.flatMap((connection) => connection.tools.map((tool) => tool.toolName))
   );
-  const many = read.connections.length > CONNECTION_GROUPS_OPEN_MAX;
   return {
     groups: read.connections.map((connection) => {
       const selectedCount = connection.tools.filter((tool) =>
@@ -83,23 +74,16 @@ export function connectionToolsView(
       return {
         ...connection,
         selectedCount,
-        startsOpen:
-          connection.tools.length <= CONNECTION_GROUP_OPEN_MAX_TOOLS && (!many || selectedCount > 0)
+        startsOpen: toolGroupStartsOpen({
+          toolCount: connection.tools.length,
+          selectedCount,
+          groupCount: read.connections.length
+        })
       };
     }),
     unavailable: held.filter((toolName) => !offered.has(toolName)),
     unchecked: []
   };
-}
-
-/** The agent's tool names after one tool was ticked or unticked. The order of the rest stays. */
-export function toggleToolName(
-  selected: readonly string[],
-  toolName: string,
-  checked: boolean
-): string[] {
-  const rest = selected.filter((entry) => entry !== toolName);
-  return checked ? [...rest, toolName] : rest;
 }
 
 /**

@@ -46,6 +46,7 @@ import {
 } from "./asset-form-model";
 import type { BuildAssetEditorProps } from "./build-asset-kind";
 import { refusalsOf } from "./build-refusals";
+import { AppToolsGroup, isAppToolName, type AppToolsRead } from "../apps/app-tools-group";
 import { isConnectionToolName, type ConnectionToolChoice } from "./connection-tools";
 import { ConnectionToolsGroup } from "./connection-tools-group";
 
@@ -66,6 +67,7 @@ export function AgentEditor({
   canManageAgentModels,
   skillChoice,
   connectionTools = NO_CONNECTION_TOOLS,
+  appTools = NO_APP_TOOLS,
   onMakeDefault,
   availability
 }: {
@@ -79,6 +81,8 @@ export function AgentEditor({
   skillChoice: SkillChoice;
   /** The tools of Connections on offer. Left out, the page shows only those the agent holds. */
   connectionTools?: ConnectionToolChoice;
+  /** The actions of Apps on offer. Left out, the page shows only those the agent holds. */
+  appTools?: AppToolsRead;
   /** Makes the agent the instance's default. Answers with what went wrong, if anything did. */
   onMakeDefault?: () => Promise<string | undefined>;
   /** Saved on its own, so it sits outside the agent form's save. */
@@ -308,7 +312,7 @@ export function AgentEditor({
       count: form.toolNames.length,
       refusalField: "tools",
       // One group per source of tools, each a sibling with its heading: the instance's own,
-      // then the Connections. A further source is a further sibling.
+      // then the Connections, then the Apps. A further source is a further sibling.
       body: (
         <>
           <CheckboxGroup
@@ -326,6 +330,12 @@ export function AgentEditor({
           />
           <ConnectionToolsGroup
             choice={connectionTools}
+            selected={form.toolNames}
+            disabled={!canEdit("toolNames")}
+            onChange={(toolNames) => update({ toolNames })}
+          />
+          <AppToolsGroup
+            read={appTools}
             selected={form.toolNames}
             disabled={!canEdit("toolNames")}
             onChange={(toolNames) => update({ toolNames })}
@@ -405,10 +415,12 @@ export function AgentEditor({
 
 /** What the page is handed while nobody asked the instance for the tools of Connections. */
 const NO_CONNECTION_TOOLS: ConnectionToolChoice = { read: { status: "unknown" } };
+/** The same for the actions of Apps. */
+const NO_APP_TOOLS: AppToolsRead = { status: "unknown" };
 
 /**
  * The instance's own tools on offer, and the ones the agent names that the reader was not told
- * of. A tool of a Connection is shown in the group of the Connections.
+ * of. A tool of a Connection or of an App is shown in the group of its source.
  */
 function toolOptions(
   references: ConfigAssetReferences | undefined,
@@ -419,7 +431,11 @@ function toolOptions(
   return [
     ...offered,
     ...selected.filter(
-      (name) => !offered.includes(name) && !off.has(name) && !isConnectionToolName(name)
+      (name) =>
+        !offered.includes(name) &&
+        !off.has(name) &&
+        !isConnectionToolName(name) &&
+        !isAppToolName(name)
     )
   ];
 }

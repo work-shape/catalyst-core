@@ -20,7 +20,8 @@ export type {
   ConnectionSource,
   ConnectionTestRun
 } from "./connection-source";
-export { connectionToolsView, toggleToolName, type ConnectionToolsRead } from "./connection-tools";
+export { connectionToolsView, type ConnectionToolsRead } from "./connection-tools";
+export { toggleToolName } from "./tool-group";
 export { assetIdFromTitle, resolveBuildPlace, visibleBuildKinds } from "./build-model";
 export {
   PendingApprovalError,
