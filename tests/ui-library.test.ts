@@ -13,7 +13,7 @@ const { Tooltip, TooltipContent, TooltipTrigger, uiLabelsDe, uiLabelsEn } = libr
 const { Avatar, Banner, Checkbox, Chip, ConfirmDialog, Field, Input, RadioGroup } = library;
 const { DropdownMenu, DropdownMenuContent, Picker, PickerButton, Popover, PopoverContent } =
   library;
-const { SkeletonList } = library;
+const { SkeletonList, scrollEdgeFadeStyle } = library;
 
 describe("UiRoot", () => {
   it("carries the theme on its own element and holds the overlay container as its last child", () => {
@@ -540,3 +540,23 @@ function isComponent(value: unknown): boolean {
     (typeof value === "object" && value !== null && "$$typeof" in value)
   );
 }
+
+describe("scrollEdgeFadeStyle", () => {
+  it("fades the edges that hide content, and only those", () => {
+    const both = scrollEdgeFadeStyle({ above: true, below: true });
+    const top = scrollEdgeFadeStyle({ above: true, below: false });
+    const bottom = scrollEdgeFadeStyle({ above: false, below: true });
+
+    expect(both?.maskImage).toBe(
+      "linear-gradient(to bottom, transparent 0, black 1rem, black calc(100% - 1rem), transparent 100%)"
+    );
+    expect(top?.maskImage).toBe(
+      "linear-gradient(to bottom, transparent 0, black 1rem, black 100%)"
+    );
+    expect(bottom?.maskImage).toBe(
+      "linear-gradient(to bottom, black 0, black calc(100% - 1rem), transparent 100%)"
+    );
+    expect(both?.WebkitMaskImage).toBe(both?.maskImage);
+    expect(scrollEdgeFadeStyle({ above: false, below: false })).toBeUndefined();
+  });
+});

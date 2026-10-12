@@ -141,9 +141,9 @@ export function AssistantComposer({
   );
 
   const inputFade = useScrollEdgeFade<HTMLTextAreaElement>();
-  // Text scrolled out above fades at the top edge; the lower edge stays clear. The field takes
-  // the mask alone: its own style type knows no other property of the library's.
-  const inputFadeMask = scrollEdgeFadeStyle({ above: inputFade.overflow.above, below: false });
+  // Text scrolled out above or below fades at that edge. The field takes the mask alone: its
+  // own style type knows no other property of the library's.
+  const inputFadeMask = scrollEdgeFadeStyle(inputFade.overflow);
   const inputFadeStyle = inputFadeMask && {
     maskImage: inputFadeMask.maskImage,
     WebkitMaskImage: inputFadeMask.WebkitMaskImage
