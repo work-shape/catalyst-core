@@ -54,7 +54,12 @@ export const runSchema = z.object({
   principal: z.object({ id: z.string(), name: z.string(), displayLabel: z.string() }),
   startedBy: z.object({ kind: z.string(), id: z.string(), label: z.string() }),
   error: z
-    .object({ code: z.string(), message: z.string(), stepRunId: z.string().optional() })
+    .object({
+      code: z.string(),
+      message: z.string(),
+      action: z.string().optional(),
+      stepRunId: z.string().optional()
+    })
     .optional(),
   outputPreview: z.object({ text: z.string(), truncated: z.boolean() }).optional(),
   cancelledBy: z.string().optional(),
@@ -82,7 +87,9 @@ export const stepRunsSchema = z.object({
       effect: z.string().optional(),
       source: z.string().optional(),
       operationRunId: z.string().optional(),
-      error: z.object({ code: z.string(), message: z.string() }).optional(),
+      error: z
+        .object({ code: z.string(), message: z.string(), action: z.string().optional() })
+        .optional(),
       outputPreview: z.object({ text: z.string(), truncated: z.boolean() }).optional()
     })
   )

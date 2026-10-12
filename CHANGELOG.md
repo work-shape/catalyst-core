@@ -39,7 +39,8 @@ contain breaking changes; a patch version does not.
   nested blocks), `reference_out_of_scope`, `duplicate_step_id` or `not_supported_yet`: the
   last for the reserved blocks `condition` and `parallel` and for every field the file form
   holds and this engine does not run (`dataset`, `paginate`, `collect`, a loop's `concurrency`
-  above 1, the step types `code`, `agent`, `notify` and `workflow`, the trigger `parent`,
+  above 1, the step types `code`, `agent`, `notify` and `workflow`, the triggers `schedule`
+  and `parent`,
   `labels`, `onFailure`, `retention`, `types`). A loop returns how many of its items ended how
   (`total`, `done`, `failed`) and never what an item returned. With `onItemFailure: continue`
   the loop goes on past a failed item and ends as `done`, and so does its run; without it the
@@ -51,7 +52,18 @@ contain breaking changes; a patch version does not.
   (`bodyCounts`); `.../steps` filters by `containerStepRunId`, `status` and `iteration`. An
   operation step calls through the operation layer from the origin `workflow`, and a changing
   call carries the id of its step run as its idempotency key, so a step a worker runs again
-  changes nothing twice. A run ends as `limit_reached` after 20,000 step runs or twelve hours.
+  changes nothing twice. A worker that stops fails no run: a reading call is cut and made
+  again by the next worker, and a changing call is left to end and is answered again from its
+  Operation Run. A changing call whose process died before it had an outcome is never made a
+  second time: the step waits for the outcome, at most ten minutes from the start of the
+  call, and then ends with its run as `operation_interrupted`. An operation marked secret is
+  no step (`operation_secret` when the run is started), and a step whose input holds a secret
+  fails as `secret_input`. A refusal of the run's principal itself, disabled or without the
+  right, stops a loop that continues past failed items and fails the run with that reason and
+  the right in `error.action`. The trigger step shows no preview: its output is the run's
+  input. `iteration` filters the step runs of one loop and is refused without
+  `containerStepRunId`. A run ends as `limit_reached` after 20,000 step runs or twelve hours;
+  the step runs bound a loop before its 10,000 items do, unless it has one step.
   The start, the cancel and the end are audited as `workflow_run.started`,
   `workflow_run.cancelled` and `workflow_run.ended`, without a value of the run. An assembled
   instance knows no Workflow yet: definitions are stored with the asset kind that follows.

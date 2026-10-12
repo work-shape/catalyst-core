@@ -103,16 +103,16 @@ describe("a Workflow Run from the manual start to its end", () => {
     ]);
   });
 
-  it("hands the trigger's output on: the input, the start and the kind of trigger", async () => {
+  it("shows no preview of the trigger step, whose output is the run's input", async () => {
     const t = await ready();
     const run = await t.finish((await start(t)).id);
-    const [trigger] = await stepRunsOf(t, run.id);
-    expect(JSON.parse(trigger?.outputPreview?.text ?? "null")).toEqual({
-      input: { note: NOTE },
-      startedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/u),
-      trigger: "manual",
-      scheduledFor: null
-    });
+    // A read never answers an input, and the trigger hands the input on as its output.
+    const [trigger, clients] = await stepRunsOf(t, run.id);
+    expect(trigger).toMatchObject({ stepId: "start", status: "done" });
+    expect(trigger?.outputPreview).toBeUndefined();
+    // The steps after it read that output all the same.
+    expect(clients?.outputPreview).toBeDefined();
+    expect(t.executed[0]).toMatchObject({ operation: "echo", input: { text: NOTE } });
   });
 
   it("filters the step runs by their block, their status and their item", async () => {
@@ -136,9 +136,18 @@ describe("a Workflow Run from the manual start to its end", () => {
         (stepRun) => [stepRun.key, stepRun.iteration]
       )
     ).toEqual([["each_client[1].send", { index: 1, label: "client-bert" }]]);
-    expect((await stepRunsOf(t, run.id, { iteration: 2 })).map((stepRun) => stepRun.key)).toEqual([
-      "each_client[2].send"
-    ]);
+    expect(
+      (await stepRunsOf(t, run.id, { containerStepRunId: loop?.id, iteration: 2 })).map(
+        (stepRun) => stepRun.key
+      )
+    ).toEqual(["each_client[2].send"]);
+    // Every loop counts its items from zero: a number without its loop names no one item.
+    await t.expectRefused(
+      t.root.id,
+      "workflows.list_step_runs",
+      { params: { runId: run.id }, query: { iteration: 2 } },
+      { status: 422, code: "VALIDATION_FAILED" }
+    );
     expect(await stepRunsOf(t, run.id, { status: "done" })).toHaveLength(6);
     expect(await stepRunsOf(t, run.id, { containerStepRunId: "wfs_none" })).toEqual([]);
   });
