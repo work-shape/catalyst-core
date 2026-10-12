@@ -167,7 +167,7 @@ export function Step({
   const heading = expandable ? (
     <Collapsible.Trigger
       className={cn(
-        "group/step-trigger relative flex max-w-full min-w-0 items-start gap-1 rounded-md text-left focus-visible:focus-ring",
+        "group/step-trigger relative flex w-fit max-w-full min-w-0 items-start gap-1 rounded-md text-left focus-visible:focus-ring",
         (eyebrowLine === null || titleText === null) && "py-0.5"
       )}
     >
