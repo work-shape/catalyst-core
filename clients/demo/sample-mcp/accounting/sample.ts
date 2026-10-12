@@ -16,10 +16,11 @@ import type { AccountingRuleId } from "./rules.js";
 /** The seed of the data the sample server serves. Changing it changes every row. */
 const ACCOUNTING_SEED = 0x4b1d7e63;
 /**
- * The last month the sample serves when it is given none: the month it was last brought up to.
- * It is served whole, to its last day, because the sample knows a month and no day of today.
+ * The last month the sample serves when it is given none: the last whole month before the
+ * sample was last brought up to date. A month is served whole, to its last day, so a month
+ * that is still running would hold bookings dated after today.
  */
-const LAST_MONTH = "2026-10";
+const LAST_MONTH = "2026-09";
 /** The months at the end of the range that are still open. The ones before are locked (festgeschrieben). */
 const OPEN_MONTHS = 3;
 

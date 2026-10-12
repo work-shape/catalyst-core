@@ -111,6 +111,8 @@ export function createSampleMcpServer(options: {
   now?: Date;
   /** The seed of the accounting sample. Left out, it is the one fixed seed of the server. */
   accountingSeed?: number;
+  /** The last month the accounting sample has bookings for, as `YYYY-MM`. Left out, it is the sample's own. */
+  accountingLastMonth?: string;
   /** Receives one line per request to an endpoint, so the developer sees who calls. */
   log?: (line: string) => void;
 }) {
@@ -118,7 +120,10 @@ export function createSampleMcpServer(options: {
   if (!key.success) throw new SampleMcpKeyError();
   const digest = createHash("sha256").update(key.data).digest();
   const data = createSampleData(options.anchor ?? utcMonthAnchor(options.now ?? new Date()));
-  const accounting = createAccountingSample({ seed: options.accountingSeed });
+  const accounting = createAccountingSample({
+    seed: options.accountingSeed,
+    lastMonth: options.accountingLastMonth
+  });
   // Each endpoint stands for one outside system, and a Connection is one MCP address. All of
   // them share the key and everything below.
   const endpoints = new Map<string, { name: string; register(mcp: McpServer): void }>([

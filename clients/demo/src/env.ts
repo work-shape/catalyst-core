@@ -5,6 +5,7 @@ export function readSampleMcpEnvironment() {
   return {
     secrets: createEnvironmentSecrets(process.env),
     anchor: process.env.SAMPLE_DATA_ANCHOR,
+    accountingLastMonth: process.env.SAMPLE_ACCOUNTING_LAST_MONTH,
     port: process.env.PORT,
     host: process.env.HOST
   };

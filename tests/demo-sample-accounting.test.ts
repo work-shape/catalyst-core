@@ -48,7 +48,13 @@ type ToolResult = Awaited<ReturnType<SampleClient["callTool"]>>;
 const servers: ReturnType<typeof createSampleMcpServer>[] = [];
 const clients: SampleClient[] = [];
 
-async function start(options: { accountingSeed?: number; log?: (line: string) => void } = {}) {
+async function start(
+  options: {
+    accountingSeed?: number;
+    accountingLastMonth?: string;
+    log?: (line: string) => void;
+  } = {}
+) {
   const server = createSampleMcpServer({ key, ...options });
   servers.push(server);
   const { port } = await server.listen(0, "127.0.0.1");
@@ -225,7 +231,7 @@ describe("demo sample accounting", () => {
       startMonths.add(Math.floor(first.fiscal_year_start / 100) % 100);
       // The fiscal years follow one another without a gap and cover the sample's months.
       expect(first.fiscal_year_start).toBeLessThanOrEqual(20240101);
-      expect(required(years.at(-1)).fiscal_year_end).toBeGreaterThanOrEqual(20261031);
+      expect(required(years.at(-1)).fiscal_year_end).toBeGreaterThanOrEqual(20260930);
       for (const [index, year] of years.entries()) {
         expect(year).toMatchObject({
           client_id,
@@ -436,16 +442,16 @@ describe("demo sample accounting", () => {
       }
     }
     // The range ends with the sample's last month. No month after it has bookings.
-    for (const month of ["2024-01", "2026-10"]) {
+    for (const month of ["2024-01", "2026-09"]) {
       expect(refusedByConnection("list_postings", { client_id: first, month })).toBe(false);
     }
-    for (const month of ["2023-12", "2026-11", "2026-12", "2027-01", "2026-13", "2026-3"]) {
+    for (const month of ["2023-12", "2026-10", "2026-11", "2027-01", "2026-13", "2026-3"]) {
       expect(await refusal("list_postings", { client_id: first, month })).toContain(
-        "month must be a month from 2024-01 to 2026-10 as YYYY-MM."
+        "month must be a month from 2024-01 to 2026-09 as YYYY-MM."
       );
     }
     expect(required(tools.find(({ name }) => name === "list_postings")).description).toContain(
-      "from 2024-01 to 2026-10"
+      "from 2024-01 to 2026-09"
     );
     for (const invalid of [
       { page: 0 },
@@ -467,10 +473,10 @@ describe("demo sample accounting", () => {
     ).toEqual([]);
   });
 
-  it("ends with the month it is given, 2026-10 when left out, whatever the clock says", () => {
-    expect(sample.months).toHaveLength(34);
+  it("ends with the month it is given, 2026-09 when left out, whatever the clock says", () => {
+    expect(sample.months).toHaveLength(33);
     expect(sample.months[0]).toBe("2024-01");
-    expect(sample.months.at(-1)).toBe("2026-10");
+    expect(sample.months.at(-1)).toBe("2026-09");
     const earlier = createAccountingSample({ lastMonth: "2025-06" });
     expect(earlier.months).toEqual(sample.months.slice(0, 18));
     const { client_id } = required(sample.clients[0]);
@@ -482,7 +488,7 @@ describe("demo sample accounting", () => {
       "The sample has bookings for the months 2024-01 to 2025-06 only."
     );
     expect(required(earlier.fiscalYears(client_id).at(-1)).year).toBe(2025);
-    for (const lastMonth of ["2023-12", "2026-13", "2026-1", "October"]) {
+    for (const lastMonth of ["2023-12", "2026-13", "2026-1", "September"]) {
       expect(() => createAccountingSample({ lastMonth })).toThrow(
         "lastMonth must be a month from 2024-01 on as YYYY-MM."
       );
@@ -490,7 +496,35 @@ describe("demo sample accounting", () => {
     // The last three months are open, the ones before are locked.
     const capitalisation = (month: string) =>
       required(sample.postings(client_id, month, 0, 1)[0]).capitalisation_number;
-    expect(sample.months.map(capitalisation).slice(-4)).toEqual([31, 0, 0, 0]);
+    expect(sample.months.map(capitalisation).slice(-4)).toEqual([30, 0, 0, 0]);
+  });
+
+  it("takes its last month from where the server is built: schema, description and refusal name it", async () => {
+    const { client } = await start({ accountingLastMonth: "2025-03" });
+    const { client_id } = required(sample.clients[0]);
+    const { tools } = await client.listTools();
+    const listPostings = required(tools.find(({ name }) => name === "list_postings"));
+    expect(listPostings.description).toContain("from 2024-01 to 2025-03");
+    expect(JSON.stringify(listPostings.inputSchema)).toContain('"2025-03"');
+    expect(JSON.stringify(listPostings.inputSchema)).not.toContain('"2025-04"');
+    // A month it has holds the bookings of the server that is given none.
+    expect(
+      await rowsOf(client, "list_postings", accountingOutputSchemas.list_postings, {
+        client_id,
+        month: MONTH
+      })
+    ).toEqual(sample.postings(client_id, MONTH, 0, ACCOUNTING_DEFAULT_PAGE_SIZE));
+    const refused = await client.callTool({
+      name: "list_postings",
+      arguments: { client_id, month: "2025-04" }
+    });
+    expect(refused.isError).toBe(true);
+    expect(JSON.stringify(refused.content)).toContain(
+      "month must be a month from 2024-01 to 2025-03 as YYYY-MM."
+    );
+    expect(() => createSampleMcpServer({ key, accountingLastMonth: "2026-13" })).toThrow(
+      "lastMonth must be a month from 2024-01 on as YYYY-MM."
+    );
   });
 
   it("opens every month of every client with the month's exact count", () => {

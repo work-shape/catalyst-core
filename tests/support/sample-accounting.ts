@@ -15,7 +15,7 @@ export type Account = z.output<typeof accountingOutputSchemas.list_accounts>["ro
 export type RuleId = keyof typeof ACCOUNTING_RULES;
 
 export const sample = createAccountingSample();
-export const MONTHS = ["2024-02", "2026-10"] as const;
+export const MONTHS = ["2024-02", "2026-09"] as const;
 export const [MONTH] = MONTHS;
 
 export const INDUSTRIES = [

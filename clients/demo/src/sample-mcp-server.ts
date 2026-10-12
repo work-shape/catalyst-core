@@ -12,6 +12,7 @@ try {
   const server = createSampleMcpServer({
     key: await environment.secrets.resolve(SAMPLE_MCP_KEY_NAME),
     anchor: environment.anchor,
+    accountingLastMonth: environment.accountingLastMonth,
     log: (line) => console.log(line)
   });
   const port = z.coerce
@@ -44,7 +45,7 @@ try {
     error instanceof SampleMcpKeyError ||
     (error instanceof Error && error.name === "SecretNotResolvedError")
       ? error.message
-      : "The sample MCP server could not start. Check SAMPLE_DATA_ANCHOR, PORT and HOST.";
+      : "The sample MCP server could not start. Check SAMPLE_DATA_ANCHOR, SAMPLE_ACCOUNTING_LAST_MONTH, PORT and HOST.";
   console.error(message);
   process.exitCode = 1;
 }

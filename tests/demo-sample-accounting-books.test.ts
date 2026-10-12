@@ -24,8 +24,8 @@ import {
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /** Two months that follow one another, to see what carries over from one to the next. */
+const AUGUST = "2026-08";
 const SEPTEMBER = "2026-09";
-const OCTOBER = "2026-10";
 const YEAR = Array.from({ length: 12 }, (_, month) => `2025-${String(month + 1).padStart(2, "0")}`);
 const OWNER_RUN_FORMS = ["Einzelunternehmen", "Freiberufler", "GbR", "e. K."];
 /** A period's net revenue and net expenses, as the accounts' classes and the booking sides say. */
@@ -201,11 +201,11 @@ describe("demo sample accounting books", () => {
 
   it("gives a client its own suppliers and customers that recur, and document numbers that move forward", () => {
     const [clientId] = clientsOf("crafts", 100, 4_000).filter(
-      (id) => sample.postingCount(id, SEPTEMBER) >= 300
+      (id) => sample.postingCount(id, AUGUST) >= 300
     );
     const chart = chartOf(required(clientId));
-    const months = [SEPTEMBER, OCTOBER].map((month) => everyPosting(required(clientId), month));
-    const [september, october] = months.map((rows) =>
+    const months = [AUGUST, SEPTEMBER].map((month) => everyPosting(required(clientId), month));
+    const [august, september] = months.map((rows) =>
       // A purchase on account: an expense against a creditor, with its document. A planted
       // duplicate repeats the booking before it and is no second invoice.
       rows.filter(
@@ -227,8 +227,8 @@ describe("demo sample accounting books", () => {
       }
       return groups;
     };
-    const before = byCreditor(required(september));
-    const after = byCreditor(required(october));
+    const before = byCreditor(required(august));
+    const after = byCreditor(required(september));
 
     // A few suppliers do much of the business, many do a little, and most come back.
     const sizes = [...after.values()]
@@ -236,11 +236,11 @@ describe("demo sample accounting books", () => {
       .sort((left, right) => right - left);
     expect(sizes.length).toBeGreaterThanOrEqual(8);
     expect(sizes.slice(0, 5).reduce((sum, size) => sum + size, 0)).toBeGreaterThan(
-      required(october).length * 0.25
+      required(september).length * 0.25
     );
     expect(sizes.filter((size) => size <= 2).length).toBeGreaterThanOrEqual(3);
-    const returning = required(october).filter((row) => before.has(row.contra_account_number));
-    expect(returning.length).toBeGreaterThan(required(october).length * 0.6);
+    const returning = required(september).filter((row) => before.has(row.contra_account_number));
+    expect(returning.length).toBeGreaterThan(required(september).length * 0.6);
 
     for (const [creditor, rows] of after) {
       const { label } = required(chart.get(creditor));
@@ -273,14 +273,14 @@ describe("demo sample accounting books", () => {
       }
     }
     expect(outOfOrder).toBeLessThanOrEqual(
-      Object.values(sample.expectedFindings(required(clientId), OCTOBER)).reduce(
+      Object.values(sample.expectedFindings(required(clientId), SEPTEMBER)).reduce(
         (sum, count) => sum + count,
         0
       )
     );
     // Suppliers do not share one format.
     expect(
-      new Set(required(october).map((row) => formatOf(row.document_field_1))).size
+      new Set(required(september).map((row) => formatOf(row.document_field_1))).size
     ).toBeGreaterThan(1);
 
     // No document number is the booking's position in the month.
@@ -353,13 +353,13 @@ describe("demo sample accounting books", () => {
       );
     for (const industry of ["crafts", "manufacturing", "medicalPractice"] as const) {
       const [clientId] = clientsOf(industry, 100, 4_000).filter(
-        (id) => sample.postingCount(id, SEPTEMBER) >= 300
+        (id) => sample.postingCount(id, AUGUST) >= 300
       );
       const chart = chartOf(required(clientId));
       const classOf = (number: number) => required(chart.get(number)).account_class;
       const labelOf = (number: number) => required(chart.get(number)).label;
       const isDiscount = (number: number) => / Skonti/u.test(labelOf(number));
-      const [september, october] = [SEPTEMBER, OCTOBER].map((month) =>
+      const [august, september] = [AUGUST, SEPTEMBER].map((month) =>
         everyPosting(required(clientId), month)
       );
       const collective = [
@@ -371,7 +371,7 @@ describe("demo sample accounting books", () => {
       const settled = new Map<string, { cents: number; dates: string[]; words: string[] }>();
       const keyOf = (personal: number, row: Posting) => `${personal} ${row.document_field_1}`;
       let openAtMonthEnd = 0;
-      for (const rows of [required(september), required(october)]) {
+      for (const rows of [required(august), required(september)]) {
         const settledBefore = settled.size;
         for (const [index, row] of rows.entries()) {
           // A planted duplicate repeats the booking before it and settles nothing.
@@ -403,8 +403,8 @@ describe("demo sample accounting books", () => {
           }
           const key = keyOf(fromCustomer ? row.contra_account_number : row.account_number, row);
           const invoice = invoices.get(key);
-          // September's first payments settle invoices of August, which this test did not read.
-          if (rows === september && invoice === undefined) continue;
+          // August's first payments settle invoices of July, which this test did not read.
+          if (rows === august && invoice === undefined) continue;
           expect(invoice, `${industry} ${row.posting_description}`).toBeDefined();
           expect(row.date > required(invoice).date, row.posting_description).toBe(true);
           expect(row.debit_credit_indicator).toBe("S");
@@ -428,7 +428,7 @@ describe("demo sample accounting books", () => {
             );
           }
         }
-        if (rows === september) {
+        if (rows === august) {
           openAtMonthEnd = invoices.size - settled.size;
           expect(settled.size - settledBefore).toBeGreaterThan(0);
         }
@@ -451,12 +451,12 @@ describe("demo sample accounting books", () => {
         expect(paid.cents, key).toBe(cents(required(invoices.get(key)).amount));
       }
       for (const { dates } of discounted) expect(new Set(dates).size).toBe(1);
-      // Some of September's invoices are open at its end, and October settles them all but
+      // Some of August's invoices are open at its end, and September settles them all but
       // the planted ones, which nobody pays.
       expect(openAtMonthEnd).toBeGreaterThan(0);
-      const septemberInvoices = [...invoices].filter(([, row]) => row.date.startsWith(SEPTEMBER));
-      const stillOpen = septemberInvoices.filter(([key]) => !settled.has(key)).length;
-      expect(stillOpen).toBeLessThanOrEqual(planted(required(clientId), SEPTEMBER));
+      const augustInvoices = [...invoices].filter(([, row]) => row.date.startsWith(AUGUST));
+      const stillOpen = augustInvoices.filter(([key]) => !settled.has(key)).length;
+      expect(stillOpen).toBeLessThanOrEqual(planted(required(clientId), AUGUST));
       expect(openAtMonthEnd).toBeGreaterThan(stillOpen);
 
       // Nobody pays in the strict order of the invoices: a later invoice is sometimes paid on
