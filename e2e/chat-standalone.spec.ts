@@ -3509,7 +3509,7 @@ test("superadmin manages config assets with validation and conflict protection",
     // The page saves against the revision it loaded: the newer one is not overwritten, and
     // what was typed stays until the reader asks for the newer version.
     const conflict = page.locator("[data-build-conflict]");
-    await expect(conflict).toContainText("Somebody saved this while you were editing.");
+    await expect(conflict).toContainText(/saved this on .+, while you were editing\./u);
     await expect(instructions).toHaveValue(unsaved);
     await expectVersion(original.version + 5);
     await loadNewerVersion(page);

@@ -1,7 +1,7 @@
 import { type Locator, type Page } from "@playwright/test";
 import { expect, test } from "./test";
 import { loadNewerVersion } from "./build-fixtures";
-import { assetRevision, requestWithOrigin } from "./request-with-origin";
+import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const superadminUser = {
@@ -131,6 +131,7 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
     }
     const first = await requestWithOrigin(admin, "put", agentPath("kai-first"), {
       data: {
+        expectedRevision: await assetBaseRevision(admin, agentPath("kai-first")),
         config: {
           name: "kai-first",
           displayName: "Kai First",
@@ -204,13 +205,15 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
     await expect.poll(() => assetRevision(admin, agentPath("kai-helper"))).toBe(created + 2);
     await page.getByRole("button", { name: "Save changes", exact: true }).click();
     const conflict = page.locator("[data-build-conflict]");
-    await expect(conflict).toContainText("Somebody saved this while you were editing.");
+    // Fails without the change: the notice said "Somebody" and offered no way to the history.
+    await expect(conflict).toContainText(/saved this on .+, while you were editing\./u);
+    await expect(conflict).not.toContainText("Somebody");
     await expect(instructions(page)).toHaveValue("The holder's unsaved text.");
     await expect.poll(() => assetRevision(admin, agentPath("kai-helper"))).toBe(created + 2);
     // While the conflict stands nothing is saved, and History restores nothing: the page
     // holds an older version than the newest one, which History marks as the current one.
     await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
-    await page.getByRole("button", { name: "History", exact: true }).click();
+    await conflict.getByRole("button", { name: "Open history", exact: true }).click();
     const staleHistory = page.getByRole("dialog", { name: "History", exact: true });
     await expect(staleHistory.locator(`[data-revision="${created + 2}"]`)).toContainText("Current");
     await expect(staleHistory.locator(`[data-revision="${created + 1}"]`)).not.toContainText(
@@ -336,10 +339,9 @@ async function deleteSkill(admin: Page, name: string): Promise<void> {
 
 /** A skill of this spec's own, written by the administrator. */
 async function putSkill(admin: Page, name: string, text: string): Promise<void> {
-  const found = await admin.request.get(skillPath(name));
   const answer = await requestWithOrigin(admin, "put", skillPath(name), {
     data: {
-      ...(found.ok() ? { expectedRevision: await assetRevision(admin, skillPath(name)) } : {}),
+      expectedRevision: await assetBaseRevision(admin, skillPath(name)),
       config: {
         name,
         title: "Reload Probe",
@@ -365,7 +367,9 @@ test("a newer version that cannot be loaded leaves the page as it is and says so
     await putSkill(page, name, "Somebody else was faster.");
     await page.getByRole("button", { name: "Save changes", exact: true }).click();
     const conflict = page.locator("[data-build-conflict]");
-    await expect(conflict).toContainText("Somebody saved this while you were editing.");
+    await expect(conflict).toContainText(
+      /E2E Superadmin saved this on .+, while you were editing\./u
+    );
 
     // The read behind "Load the newer version" fails: the notice stays, the text stays, and
     // the page says that the load failed. It does not show the old version as the new one.
@@ -407,8 +411,10 @@ test("an asset that was deleted meanwhile says so, keeps the text and offers the
     await deleteSkill(page, name);
     await page.getByRole("button", { name: "Save changes", exact: true }).click();
     const deleted = page.locator('[data-build-conflict="deleted"]');
-    await expect(deleted).toContainText("Somebody deleted this while you were editing.");
-    await expect(page.getByText("Somebody saved this", { exact: false })).toHaveCount(0);
+    await expect(deleted).toContainText(
+      /E2E Superadmin deleted this on .+, while you were editing\./u
+    );
+    await expect(page.getByText("saved this", { exact: false })).toHaveCount(0);
     await expect(content(page)).toHaveValue("My unsaved text.");
     await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
     await expect(
@@ -456,6 +462,7 @@ test("an agent's availability and the default agent are changed by the asset ope
   await deleteAgent(page, name);
   const created = await requestWithOrigin(page, "put", agentPath(name), {
     data: {
+      expectedRevision: await assetBaseRevision(page, agentPath(name)),
       config: {
         name,
         displayName: "Placement Probe",

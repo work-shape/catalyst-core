@@ -37,7 +37,7 @@ export const build = defineTranslations({
       "The newer version could not be loaded. Your text is still here. Try again in a moment.",
     "build.loadNewerTitle": "Load the newer version?",
     "build.nameDeleted":
-      "An asset with the id {name} was deleted, and the id stays with its history. Go back and choose another one.",
+      "An asset with the id {name} was deleted, and you may not read its history. Go back and choose another one.",
     "build.nameTaken": "The id {name} is taken. Go back and choose another one.",
     "build.openHistory": "Open history",
     "build.namespaceAll": "All Namespaces",
@@ -138,7 +138,7 @@ export const build = defineTranslations({
       "Die neuere Version konnte nicht geladen werden. Ihr Text steht noch hier. Versuchen Sie es gleich noch einmal.",
     "build.loadNewerTitle": "Neuere Version laden?",
     "build.nameDeleted":
-      "Ein Asset mit der Kennung {name} wurde gelöscht, und die Kennung bleibt bei seinem Verlauf. Gehen Sie zurück und wählen Sie eine andere.",
+      "Ein Asset mit der Kennung {name} wurde gelöscht, und Sie dürfen seinen Verlauf nicht lesen. Gehen Sie zurück und wählen Sie eine andere.",
     "build.nameTaken":
       "Die Kennung {name} ist vergeben. Gehen Sie zurück und wählen Sie eine andere.",
     "build.openHistory": "Verlauf öffnen",

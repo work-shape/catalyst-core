@@ -27,6 +27,8 @@ export type BuildWriteOutcome =
 interface BuildConflict {
   /** The newer revision is the delete of the asset. */
   deleted?: true;
+  /** The revision the asset is at, told to a reader of its history. */
+  currentRevision?: number;
   changedBy?: string;
   changedAt?: string;
 }
@@ -81,8 +83,10 @@ function readConflict(error: unknown): BuildConflict {
   const [conflict]: unknown[] = Array.isArray(conflicts) ? conflicts : [];
   const changedBy = text(conflict, "changedBy");
   const changedAt = text(conflict, "changedAt");
+  const currentRevision = field(conflict, "currentRevision");
   return {
     ...(field(conflict, "deleted") === true ? { deleted: true as const } : {}),
+    ...(typeof currentRevision === "number" ? { currentRevision } : {}),
     ...(changedBy === undefined ? {} : { changedBy }),
     ...(changedAt === undefined ? {} : { changedAt })
   };

@@ -6,7 +6,7 @@ import { dirname, resolve } from "node:path";
 import type { Page } from "@playwright/test";
 import postgres from "postgres";
 import { z } from "zod";
-import { assetRevision, requestWithOrigin } from "./request-with-origin";
+import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, takeTurn, test } from "./test";
 
 // Instance > Modules: an operator reads which modules this instance runs. And a module that is
@@ -126,6 +126,7 @@ test("an admin removes a tool of a module that is off from an agent and saves", 
   // The agent names the tool, as it did before the module was turned off.
   const stored = await requestWithOrigin(page, "put", agentUrl, {
     data: {
+      expectedRevision: await assetBaseRevision(page, agentUrl),
       config: {
         ...template,
         name: agentName,

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -38,6 +38,8 @@ const requiredBuilds = [
 ];
 
 const defaultStateGrep = "@chat-state";
+/** The working copy the instance of a run is given its agents and skills from. */
+const e2eAssetsDir = "tests/fixtures/e2e-assets";
 
 const options = parseArgs(process.argv.slice(2));
 const e2eHost = process.env.E2E_HOST ?? "127.0.0.1";
@@ -277,6 +279,9 @@ function startWorkspaceCommandWorker() {
 
 async function pushConfigAssets() {
   await createConfigApiKey();
+  // The database of a run is new, so nothing an earlier run pulled or pushed holds: without
+  // its state the working copy pushes every asset as a creation.
+  await rm(resolve(repoRoot, e2eAssetsDir, ".catalyst-state.json"), { force: true });
   // A key in the caller's environment would win over the env file.
   const { CATALYST_API_KEY: _callerKey, ...env } = process.env;
   await run(
@@ -286,9 +291,8 @@ async function pushConfigAssets() {
       "packages/config-cli/dist/index.js",
       "config",
       "push",
-      "--force",
       "--dir",
-      "tests/fixtures/e2e-assets",
+      e2eAssetsDir,
       "--instance",
       e2eApiUrl
     ],
@@ -309,7 +313,7 @@ async function createConfigApiKey() {
       "config",
       "local-key",
       "--dir",
-      "tests/fixtures/e2e-assets",
+      e2eAssetsDir,
       "--instance",
       e2eApiUrl,
       "--config",

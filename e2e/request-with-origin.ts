@@ -36,6 +36,27 @@ export async function assetRevision(page: Page, assetUrl: string): Promise<numbe
   return body.revision;
 }
 
+const latestRevisionSchema = z.object({
+  items: z.array(z.object({ revision: z.number() }))
+});
+
+/**
+ * The revision a write of an asset is made against, whatever its state: the one it stands at,
+ * the revision of its delete where it was deleted, and `null` where the name was never stored.
+ * It is what a test names that writes an asset over whatever an earlier run left.
+ */
+export async function assetBaseRevision(page: Page, assetUrl: string): Promise<number | null> {
+  const asset = await page.request.get(assetUrl);
+  if (asset.ok()) {
+    return assetRevision(page, assetUrl);
+  }
+  const history = await page.request.get(`${assetUrl}/revisions?limit=1`);
+  if (!history.ok()) {
+    return null;
+  }
+  return latestRevisionSchema.parse(await history.json()).items[0]?.revision ?? null;
+}
+
 const assetListSchema = z.object({
   items: z.array(z.object({ kind: z.string(), name: z.string(), revision: z.number() })),
   nextCursor: z.string().optional()
@@ -86,23 +107,29 @@ export async function readAssetSet(page: Page, apiBaseUrl: string): Promise<Asse
  */
 export async function restoreAssetSet(page: Page, apiBaseUrl: string, original: AssetSet) {
   const current = await readAssetSet(page, apiBaseUrl);
-  const revisionNow = new Map(
+  const revisionNow = new Map<string, number | null>(
     current.assets.map((asset) => [`${asset.kind}:${asset.name}`, asset.revision])
   );
+  // An asset of the set that was deleted since is created again against that delete.
+  for (const { kind, name } of original.assets) {
+    if (!revisionNow.has(`${kind}:${name}`)) {
+      revisionNow.set(
+        `${kind}:${name}`,
+        await assetBaseRevision(page, `${apiBaseUrl}/api/v1/assets/${kind}/${name}`)
+      );
+    }
+  }
   const kept = new Set(original.assets.map((asset) => `${asset.kind}:${asset.name}`));
   return requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/assets/sync`, {
     headers: { "Idempotency-Key": randomUUID() },
     data: {
       items: [
-        ...original.assets.map(({ kind, name, config }) => {
-          const expectedRevision = revisionNow.get(`${kind}:${name}`);
-          return {
-            type: "put",
-            kind,
-            config,
-            ...(expectedRevision === undefined ? {} : { expectedRevision })
-          };
-        }),
+        ...original.assets.map(({ kind, name, config }) => ({
+          type: "put",
+          kind,
+          config,
+          expectedRevision: revisionNow.get(`${kind}:${name}`) ?? null
+        })),
         ...current.assets
           .filter((asset) => !kept.has(`${asset.kind}:${asset.name}`))
           .map(({ kind, name, revision }) => ({

@@ -64,18 +64,27 @@ export function NewAssetPage({
       instanceWrite={source.rights.instanceWrite}
       onUnsavedChange={page.onUnsavedChange}
       save={async (config) => {
+        const create = (expectedRevision: number | null) =>
+          source.writes.put({ kind: entry.kind, name: start.name, config, expectedRevision });
         try {
-          await source.writes.put({
-            kind: entry.kind,
-            name: start.name,
-            config,
-            expectedRevision: null
-          });
+          try {
+            await create(null);
+          } catch (error) {
+            // The id is held by a deleted asset. The reader chose the id for a new asset and
+            // holds no older text of it, so the asset is created again after that delete, which
+            // the instance has just told, and keeps its history.
+            const met = readBuildRefusal(error, t);
+            if (met.ok || !met.conflict || !met.deleted || met.currentRevision === undefined) {
+              throw error;
+            }
+            await create(met.currentRevision);
+          }
           onCreated(start.name);
           return { ok: true };
         } catch (error) {
           const outcome = readBuildRefusal(error, t);
-          // A create that meets a conflict found the id taken, or held by a deleted asset.
+          // A create that meets a conflict found the id taken, or held by a deleted asset
+          // whose history the reader may not read.
           return !outcome.ok && outcome.conflict
             ? {
                 ok: false,
@@ -282,6 +291,8 @@ function LoadedAssetPage({
         (exists) => {
           if (exists === false) {
             setConflict("deleted");
+            // Who and when were told of a save. Nobody told this page of the delete after it.
+            if (!outcome.deleted) setConflictBy(undefined);
           }
         },
         () => undefined
@@ -297,6 +308,7 @@ function LoadedAssetPage({
     setLoadAsked(false);
     if (answer === "missing") {
       setConflict("deleted");
+      setConflictBy(undefined);
       setReloadFailed(false);
     } else if (answer === "failed") {
       setReloadFailed(true);

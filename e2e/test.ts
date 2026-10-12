@@ -82,8 +82,8 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     name: "refused-config-asset",
     reason:
       "Chromium's own log line: the test saves an asset that does not validate and one that " +
-      "changed meanwhile, and asserts what the page shows for the 422 and the 409.",
-    matches: new RegExp(`${requestAnswered(422).source}|${requestAnswered(409).source}`, "u"),
+      "changed meanwhile, and asserts what the page shows for the 422 and the 412.",
+    matches: new RegExp(`${requestAnswered(422).source}|${requestAnswered(412).source}`, "u"),
     path: /^\/api\/v1\/assets\//u,
     tests: ["superadmin manages config assets with validation and conflict protection"]
   },
@@ -101,8 +101,8 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     reason:
       "Chromium's own log line: the test saves an agent with a tool its Namespace does not " +
       "allow and one that changed meanwhile, and opens an agent outside the Namespace. It " +
-      "asserts what the page shows for the 403 and the 409.",
-    matches: new RegExp(`${requestAnswered(403).source}|${requestAnswered(409).source}`, "u"),
+      "asserts what the page shows for the 403 and the 412.",
+    matches: new RegExp(`${requestAnswered(403).source}|${requestAnswered(412).source}`, "u"),
     path: /^\/api\/v1\/assets\/agent\/(?:kai-helper|research_assistant)$/u,
     tests: [
       "a Namespace holder builds an agent in the Namespace, is refused, meets a conflict and restores"
@@ -113,9 +113,9 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     reason:
       "Chromium's own log lines: these tests save a skill that somebody saved or deleted " +
       "meanwhile and read one that is gone or whose read they cut off. They assert what the " +
-      "page shows for the 409, the 404 and the failed read.",
+      "page shows for the 412, the 404 and the failed read.",
     matches: new RegExp(
-      `${requestAnswered(409).source}|${requestAnswered(404).source}|net::ERR_FAILED`,
+      `${requestAnswered(412).source}|${requestAnswered(404).source}|net::ERR_FAILED`,
       "u"
     ),
     path: /^\/api\/v1\/assets\/skill\/e2e_(?:reload|deleted)_probe$/u,

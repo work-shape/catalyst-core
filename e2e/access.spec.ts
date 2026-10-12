@@ -1,6 +1,6 @@
 import { type Locator, type Page } from "@playwright/test";
 import { expect, test } from "./test";
-import { assetRevision, requestWithOrigin } from "./request-with-origin";
+import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const normalUser = { email: "e2e-user@example.test", password: "e2e-user-password" };
@@ -96,6 +96,7 @@ test("an administrator registers a Namespace, grants in it, checks, denies, revo
   // An agent in the Namespace, for the lists and the deny further down.
   const created = await requestWithOrigin(page, "put", assetPath, {
     data: {
+      expectedRevision: await assetBaseRevision(page, assetPath),
       config: {
         name: "kai-helper",
         displayName: "Kai Helper",

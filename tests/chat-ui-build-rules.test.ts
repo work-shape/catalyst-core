@@ -168,7 +168,7 @@ describe("Build refusals", () => {
         }),
         t
       )
-    ).toEqual({ ok: false, conflict: true, ...changed });
+    ).toEqual({ ok: false, conflict: true, currentRevision: 4, ...changed });
     expect(
       readBuildRefusal(
         refusal("REVISION_CONFLICT", "Config agent 'tax' was deleted at revision 4", {
@@ -176,7 +176,7 @@ describe("Build refusals", () => {
         }),
         t
       )
-    ).toEqual({ ok: false, conflict: true, deleted: true, ...changed });
+    ).toEqual({ ok: false, conflict: true, deleted: true, currentRevision: 4, ...changed });
   });
 
   it("shows any other conflict as the instance said it", () => {

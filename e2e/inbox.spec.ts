@@ -1,5 +1,5 @@
 import { apiBaseUrl, reviewer, shoot, shotsDir, signIn } from "./inbox-fixtures";
-import { assetRevision, requestWithOrigin } from "./request-with-origin";
+import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 import type { Response } from "@playwright/test";
 import { expect, test } from "./test";
 
@@ -536,7 +536,14 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
   expect(registered.ok()).toBe(true);
   try {
     // The instance holds a skill saved into this Namespace, the superadmin's own too.
-    expect((await answerOf({ config: heldSkill(OLD_PARAGRAPH) })).status()).toBe(202);
+    expect(
+      (
+        await answerOf({
+          config: heldSkill(OLD_PARAGRAPH),
+          expectedRevision: await assetBaseRevision(page, heldSkillUrl)
+        })
+      ).status()
+    ).toBe(202);
 
     // A new skill: the row names it, and the item shows all of it with its line breaks.
     await openRow(`New skill: ${HELD_TITLE}`);

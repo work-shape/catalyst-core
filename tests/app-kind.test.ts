@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { appInterfacePath } from "@vivd-catalyst/api-contract";
-import { createAppAssetKind, type WorkflowAssetKind } from "@vivd-catalyst/chat-server";
+import { createAppAssetKind } from "@vivd-catalyst/chat-server";
 import {
   ASSET_GET_FILES_MAX_BYTES,
   ASSET_PUT_FILES_MAX_BYTES,
