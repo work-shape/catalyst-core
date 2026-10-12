@@ -5,7 +5,6 @@ import {
   Clock,
   Code,
   Database,
-  File,
   FileText,
   Flag,
   GitBranch,
@@ -20,6 +19,7 @@ import {
   Wrench
 } from "lucide-react";
 import { createContext, useContext, type ComponentType, type ReactNode } from "react";
+import { fileTypeIcons } from "./file-type-icons";
 
 /** An icon of the registry. It is drawn at the size its place gives it. */
 export type IconComponent = ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
@@ -31,17 +31,19 @@ export type IconRegistry = Readonly<Record<string, IconComponent>>;
 export type IconFamily = "file" | "service" | "skill" | "tool";
 
 /**
- * The icons the library ships: one per family, one per kind of part of a graph and one per
- * category of what a part touches. None of them is a mark of a vendor or of a file type.
+ * The icons the library ships: one per family, one per kind of part of a graph, one per
+ * category of what a part touches and one per file type (`spreadsheet`, `document`,
+ * `presentation`, `pdf`, `image`, `archive`, `text`, and `file` for every other type, which is
+ * also the generic icon of the family). None of them is a mark of a vendor.
  */
 export const genericIcons = {
+  ...fileTypeIcons,
   agent: Sparkles,
   approval: UserCheck,
   branch: GitBranch,
   code: Code,
   connection: Plug,
   database: Database,
-  file: File,
   files: FileText,
   mail: Mail,
   manual: Play,

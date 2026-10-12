@@ -94,6 +94,11 @@ export const THEME_TOKEN_NAMES = [
   "--level-4",
   "--level-5",
   "--level-6",
+  "--file-sheet",
+  "--file-document",
+  "--file-slides",
+  "--file-pdf",
+  "--file-foreground",
   "--border",
   "--input",
   "--input-strong",
@@ -128,6 +133,8 @@ interface ModeConstants {
    * page, the sidebar and a raised surface of the base theme. The last is not the destructive red.
    */
   levels: LevelColors;
+  /** The page colours of the file-type icons. They are fixed: no instance theme tints them. */
+  files: { sheet: string; document: string; slides: string; pdf: string; foreground: string };
   shadowControl: string;
   shadowRaised: string;
   shadowOverlay: string;
@@ -142,6 +149,13 @@ const MODE_CONSTANTS: Record<ThemeMode, ModeConstants> = {
     info: "#0369a1",
     charts: ["#0f766e", "#b45309", "#0369a1", "#7c3aed", "#be185d"],
     levels: ["#3082b5", "#118c8c", "#318f5a", "#8b8318", "#ae720a", "#b24b0a"],
+    files: {
+      sheet: "#1a7f4b",
+      document: "#2563c9",
+      slides: "#d2571c",
+      pdf: "#c8322b",
+      foreground: "#ffffff"
+    },
     shadowControl: "inset 0 1px 0 rgb(255 255 255 / 0.4), 0 1px 2px rgb(0 0 0 / 0.05)",
     shadowRaised: "0 1px 2px rgb(0 0 0 / 0.04), 0 2px 12px rgb(0 0 0 / 0.06)",
     shadowOverlay: "0 1px 3px rgb(0 0 0 / 0.06), 0 8px 24px rgb(0 0 0 / 0.10)",
@@ -154,6 +168,15 @@ const MODE_CONSTANTS: Record<ThemeMode, ModeConstants> = {
     info: "#38bdf8",
     charts: ["#2dd4bf", "#fbbf24", "#38bdf8", "#a78bfa", "#f472b6"],
     levels: ["#6bbaf0", "#4fcdcd", "#72d699", "#d5cc55", "#f5ae4b", "#f47f46"],
+    // A step lighter than in light mode, so a page stands off a dark surface and still carries
+    // its white glyph.
+    files: {
+      sheet: "#23915a",
+      document: "#3b76d9",
+      slides: "#dc6328",
+      pdf: "#d6453d",
+      foreground: "#ffffff"
+    },
     shadowControl: "inset 0 1px 0 rgb(255 255 255 / 0.07), 0 1px 2px rgb(0 0 0 / 0.3)",
     shadowRaised: "0 1px 2px rgb(0 0 0 / 0.4)",
     shadowOverlay: "0 8px 24px rgb(0 0 0 / 0.5)",
@@ -233,6 +256,11 @@ export function createThemeTokens(inputs: ThemeInputs, mode: ThemeMode): ThemeTo
     "--level-4": constants.levels[3],
     "--level-5": constants.levels[4],
     "--level-6": constants.levels[5],
+    "--file-sheet": constants.files.sheet,
+    "--file-document": constants.files.document,
+    "--file-slides": constants.files.slides,
+    "--file-pdf": constants.files.pdf,
+    "--file-foreground": constants.files.foreground,
     "--border": borderColor,
     "--input": mix(textColor, 12, borderColor),
     "--input-strong": over(mutedTextColor, 70),

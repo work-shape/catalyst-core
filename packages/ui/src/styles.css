@@ -67,6 +67,11 @@
   --color-level-4: var(--level-4);
   --color-level-5: var(--level-5);
   --color-level-6: var(--level-6);
+  --color-file-sheet: var(--file-sheet);
+  --color-file-document: var(--file-document);
+  --color-file-slides: var(--file-slides);
+  --color-file-pdf: var(--file-pdf);
+  --color-file-foreground: var(--file-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-input-strong: var(--input-strong);

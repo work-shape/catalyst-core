@@ -20,6 +20,8 @@ export interface FlowGalleryText {
   iconsGeneric: string;
   iconsFallback: string;
   iconsFamilies: string;
+  iconsFileTypes: string;
+  iconsFileSizes: string;
   flowControlsFull: string;
   flowControlsNarrow: string;
   flowMinimapSample: string;
@@ -114,6 +116,8 @@ export const flowGalleryText: Record<"en" | "de", FlowGalleryText> = {
     flowHandleStates: "Handles take the state of their edge",
     iconsFamilies: "A key nobody registered shows the generic icon of its family",
     iconsGeneric: "The generic icons",
+    iconsFileTypes: "The file types, and the neutral page for a type without an icon",
+    iconsFileSizes: "As large as in a chip, in a list row and on a starter",
     iconsFallback: "An unknown key shows its fallback, a registered one its own icon",
     flowControlsFull: "With the search field and tidy",
     flowControlsNarrow: "Under 600 px: zoom and fit",
@@ -209,6 +213,8 @@ export const flowGalleryText: Record<"en" | "de", FlowGalleryText> = {
     iconsFamilies:
       "Ein Schlüssel, den niemand registriert hat, zeigt das generische Symbol seiner Familie",
     iconsGeneric: "Die generischen Symbole",
+    iconsFileTypes: "Die Dateitypen und die neutrale Seite für einen Typ ohne eigenes Symbol",
+    iconsFileSizes: "So groß wie in einem Chip, in einer Listenzeile und auf einem Einstieg",
     iconsFallback:
       "Ein unbekannter Schlüssel zeigt seinen Ersatz, ein registrierter sein eigenes Symbol",
     flowControlsFull: "Mit Suchfeld und Aufräumen",

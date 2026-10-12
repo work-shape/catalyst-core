@@ -6,6 +6,7 @@ import { Avatar, type AvatarKind, type AvatarSize } from "../status/avatar";
 import { Badge, type BadgeAppearance, type BadgeTone } from "../status/badge";
 import { Chip, ScopeChip, type ChipSize } from "../status/chip";
 import { CountBadge, type CountBadgeTone } from "../status/count-badge";
+import { fileTypeIcons } from "../status/file-type-icons";
 import {
   genericIcons,
   IconRegistryProvider,
@@ -16,6 +17,8 @@ import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
 
 const iconFamilies: readonly IconFamily[] = ["file", "service", "skill", "tool"];
+const fileTypeKeys = Object.keys(fileTypeIcons);
+const fileIconSizes = ["size-4", "size-5", "size-7"] as const;
 const iconSample =
   "flex items-center gap-2 text-caption text-muted-foreground [&_svg]:size-4 [&_svg]:text-foreground";
 const badgeTones: readonly BadgeTone[] = [
@@ -256,13 +259,36 @@ export const statusGallery: GalleryGroup = {
       components: ["RegistryIcon", "IconRegistryProvider"],
       render: (text) => (
         <>
-          <Samples label={text.iconsGeneric}>
-            {Object.keys(genericIcons).map((name) => (
-              <span key={name} data-gallery-sample={`icon-${name}`} className={iconSample}>
-                <RegistryIcon name={name} />
+          <Samples label={text.iconsFileTypes}>
+            {fileTypeKeys.map((name) => (
+              <span
+                key={name}
+                data-gallery-sample={`icon-file-${name}`}
+                className="flex items-center gap-2 text-caption text-muted-foreground"
+              >
+                <RegistryIcon name={name} family="file" className="size-7" />
                 {name}
               </span>
             ))}
+          </Samples>
+          <Samples label={text.iconsFileSizes}>
+            {fileIconSizes.map((size) => (
+              <span key={size} className="flex items-center gap-1">
+                {fileTypeKeys.map((name) => (
+                  <RegistryIcon key={name} name={name} family="file" className={size} />
+                ))}
+              </span>
+            ))}
+          </Samples>
+          <Samples label={text.iconsGeneric}>
+            {Object.keys(genericIcons)
+              .filter((name) => !fileTypeKeys.includes(name))
+              .map((name) => (
+                <span key={name} data-gallery-sample={`icon-${name}`} className={iconSample}>
+                  <RegistryIcon name={name} />
+                  {name}
+                </span>
+              ))}
           </Samples>
           <Samples label={text.iconsFamilies}>
             {iconFamilies.map((family) => (

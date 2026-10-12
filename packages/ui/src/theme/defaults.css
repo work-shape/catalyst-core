@@ -51,6 +51,11 @@
   --level-4: #8b8318;
   --level-5: #ae720a;
   --level-6: #b24b0a;
+  --file-sheet: #1a7f4b;
+  --file-document: #2563c9;
+  --file-slides: #d2571c;
+  --file-pdf: #c8322b;
+  --file-foreground: #ffffff;
   --border: #e7e1d5;
   --input: color-mix(in srgb, #201c17 12%, #e7e1d5);
   --input-strong: color-mix(in srgb, #655e54 70%, transparent);
@@ -120,6 +125,11 @@
   --level-4: #d5cc55;
   --level-5: #f5ae4b;
   --level-6: #f47f46;
+  --file-sheet: #23915a;
+  --file-document: #3b76d9;
+  --file-slides: #dc6328;
+  --file-pdf: #d6453d;
+  --file-foreground: #ffffff;
   --border: #33302b;
   --input: color-mix(in srgb, #efebe4 12%, #33302b);
   --input-strong: color-mix(in srgb, #b3ada3 70%, transparent);
