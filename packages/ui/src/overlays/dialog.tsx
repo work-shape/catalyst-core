@@ -39,6 +39,23 @@ interface ModalSurfaceProps {
   className?: string;
 }
 
+/** The open modal surfaces in the order they opened. Escape closes the last one. */
+const openSurfaces: HTMLDialogElement[] = [];
+
+/**
+ * Whether an overlay stands on the page outside the dialog. Nothing outside a modal dialog can
+ * be used, so such an overlay is one that is closing: the menu the dialog was opened from, or
+ * the tooltip of its button.
+ */
+function hasOverlayOutside(dialog: HTMLDialogElement): boolean {
+  return [...document.querySelectorAll("[data-catalyst-overlays]")].some(
+    (container) => !dialog.contains(container) && container.childElementCount > 0
+  );
+}
+
+/** An overlay that is open inside the dialog: Escape closes it before the dialog. */
+const OPEN_OVERLAY_INSIDE = '[data-catalyst-overlays] [data-state]:not([data-state="closed"])';
+
 /**
  * The modal layer `Dialog` and `CommandPalette` stand on: the browser's own `dialog` element,
  * opened as a modal. It holds the focus, closes on Escape and on a press on the backdrop, and
@@ -70,6 +87,38 @@ export function ModalSurface({
       dialog.close();
     }
   }, [initialFocus, open]);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!open || !dialog) {
+      return;
+    }
+    openSurfaces.push(dialog);
+    return () => {
+      openSurfaces.splice(openSurfaces.lastIndexOf(dialog), 1);
+    };
+  }, [open]);
+
+  // A menu or tooltip that is closing behind the dialog still listens for Escape and takes the
+  // key, so the browser never closes the dialog: a press right after opening did nothing. While
+  // such an overlay is there, the dialog closes on the key by itself.
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!open || !dialog) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.isComposing || openSurfaces.at(-1) !== dialog) {
+        return;
+      }
+      if (!dialog.querySelector(OPEN_OVERLAY_INSIDE) && hasOverlayOutside(dialog)) {
+        onClose();
+      }
+    };
+    // On the window, before the listeners of the overlays on the document.
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
+  }, [onClose, open]);
 
   return (
     <dialog
