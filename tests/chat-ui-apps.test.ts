@@ -252,7 +252,7 @@ describe("what a reader may do with Apps", () => {
   });
 });
 
-describe("the Apps list", () => {
+describe("the Apps page", () => {
   it("shows name, description, workspace, state and the menu of each App", () => {
     const markup = render(
       appsPage(
@@ -284,6 +284,45 @@ describe("the Apps list", () => {
     expect(markup).toContain(">urlaubsplaner</code>");
     expect(markup).toContain("Draft only");
     expect(markup).toContain('href="/w/cw_1/apps/urlaubsplaner/edit"');
+  });
+
+  it("shows each App as a card with one main action, and says when it last changed", () => {
+    const draftOnly = summary({
+      name: "urlaubsplaner",
+      title: "Urlaubsplaner",
+      publishedRevision: undefined,
+      revision: 1,
+      draftRevision: 1
+    });
+    const builder = render(appsPage([summary(), draftOnly], ALL));
+    const cards = builder.split("<li").slice(1);
+
+    expect(cards).toHaveLength(2);
+    // A published App opens, and its draft is edited beside it.
+    expect(cards[0]).toMatch(/<a[^>]*href="\/w\/cw_1\/apps\/angebotsrechner"[^>]*>Open<\/a>/u);
+    expect(cards[0]).toMatch(
+      /<a[^>]*href="\/w\/cw_1\/apps\/angebotsrechner\/edit"[^>]*>Edit<\/a>/u
+    );
+    expect(cards[0]).toContain("Changed yesterday");
+    // An App with a draft alone has the draft as its one action.
+    expect(cards[1]?.match(/<a /gu)).toHaveLength(1);
+    expect(cards[1]).toMatch(/<a[^>]*href="\/w\/cw_1\/apps\/urlaubsplaner\/edit"[^>]*>Edit<\/a>/u);
+
+    // Whoever uses Apps gets Open and nothing a builder works with.
+    const member = render(appsPage([summary(), draftOnly], NO_APP_RIGHTS));
+    const memberCards = member.split("<li").slice(1);
+    expect(memberCards[0]).toMatch(/>Open<\/a>/u);
+    expect(memberCards[0]).toContain("Changed yesterday");
+    expect(member).not.toContain(">Edit</a>");
+    expect(member).not.toContain("angebotsrechner</code>");
+    // The menu keeps what a member may do beside opening: copying the link.
+    expect(memberCards[0]).toContain('aria-label="Actions for Angebotsrechner"');
+    // Nothing is published of the second one: its card says so and opens nothing.
+    expect(memberCards[1]).toContain("Draft only");
+    expect(memberCards[1]).not.toContain("<a ");
+    expect(memberCards[1]).not.toContain("<button");
+
+    expect(render(appsPage([summary()], NO_APP_RIGHTS), "de")).toContain("Geändert gestern");
   });
 
   it("keeps the draft's news from a reader who does not write", () => {

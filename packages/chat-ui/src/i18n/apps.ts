@@ -63,6 +63,7 @@ export const apps = defineTranslations({
     "apps.actionsOf": "Actions for {name}",
     "apps.backToList": "Back to Apps",
     "apps.buildInChat": "Build an app in chat",
+    "apps.changed": "Changed {when}",
     "apps.copyLink": "Copy link",
     "apps.delete": "Delete",
     "apps.deleteBody":
@@ -211,6 +212,7 @@ export const apps = defineTranslations({
     "apps.actionsOf": "Aktionen für {name}",
     "apps.backToList": "Zurück zu Apps",
     "apps.buildInChat": "App im Chat bauen",
+    "apps.changed": "Geändert {when}",
     "apps.copyLink": "Link kopieren",
     "apps.delete": "Löschen",
     "apps.deleteBody":

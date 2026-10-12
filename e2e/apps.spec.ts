@@ -227,7 +227,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await memberPage.goto(appsPath);
   const memberArea = memberPage.getByTestId("apps-area");
   await expect(memberArea).toContainText(appName);
-  await memberArea.getByText(appName, { exact: true }).click();
+  await memberArea.getByRole("link", { name: "Open", exact: true }).click();
   await expect(memberPage).toHaveURL(new RegExp(`${appPath}$`, "u"));
   const memberView = memberPage.getByTestId("app-view");
   const memberApp = appIn(memberPage, "app-view");
@@ -279,12 +279,19 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await memberListReady();
   await expect(memberArea).toContainText(appName);
   await expect(memberArea).not.toContainText("Unpublished changes");
-  await memberArea.getByRole("button", { name: `Actions for ${appName}` }).click();
-  await expect(memberPage.getByRole("menuitem", { name: "Open" })).toBeVisible();
+  // The App is a card with one main action. The id and the way to the draft are a builder's,
+  // and the menu holds what a member does beside opening.
+  const memberCard = memberArea.getByRole("listitem").filter({ hasText: appName });
+  const memberOpen = memberCard.getByRole("link", { name: "Open", exact: true });
+  await expect(memberOpen).toHaveAttribute("href", appPath);
+  await expect(memberCard.getByRole("link", { name: "Edit", exact: true })).toHaveCount(0);
+  await expect(memberCard).not.toContainText(appId);
+  await memberCard.getByRole("button", { name: `Actions for ${appName}` }).click();
+  await expect(memberPage.getByRole("menuitem", { name: "Copy link" })).toBeVisible();
   await expect(memberPage.getByRole("menuitem", { name: "Edit" })).toHaveCount(0);
   await memberPage.keyboard.press("Escape");
   await shoot(memberPage, "apps-list-member", [["light", "en", 1440]], memberListReady);
-  await memberArea.getByText(appName, { exact: true }).click();
+  await memberArea.getByRole("link", { name: "Open", exact: true }).click();
   await expect(
     appIn(memberPage, "app-view").getByRole("heading", { name: PUBLISHED_HEADING })
   ).toBeVisible();
@@ -375,13 +382,19 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   });
   await builderContext.close();
 
-  // The list shows the App with its state, and opens it.
+  // The page shows the App with its state, and opens it.
   await page.goto(appsPath);
   await expect(area).toContainText(appName);
   await shoot(page, "apps-list", MAIN, async () => {
     await expect(area).toContainText(appName);
   });
-  await area.getByText(appName, { exact: true }).click();
+  // The builder's card opens the App and leads to its draft beside that.
+  const card = area.getByRole("listitem").filter({ hasText: appName });
+  await expect(card.getByRole("link", { name: "Edit", exact: true })).toHaveAttribute(
+    "href",
+    `${appPath}/edit`
+  );
+  await card.getByRole("link", { name: "Open", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${appPath}$`, "u"));
   const viewReady = async () => {
     await expect(

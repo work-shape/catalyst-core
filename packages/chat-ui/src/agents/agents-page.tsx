@@ -16,10 +16,9 @@ import {
   PageHeader,
   SkeletonList
 } from "@vivd-catalyst/ui";
-import { opensHere } from "../apps/app-header";
 import { AreaFrame, useAreaTitleFocus } from "../area-frame";
 import { useTranslation } from "../i18n";
-import { workspaceRoutePath } from "../routes";
+import { RouteLink } from "../route-link";
 import type { WorkspaceRoute } from "../workspace/workspace-route";
 import {
   agentCardPrompts,
@@ -78,9 +77,14 @@ export function AgentsPage({
             icon={<Bot aria-hidden="true" />}
             action={
               onOpenStudio ? (
-                <StudioLink route={agentsStudioRoute()} variant="primary" onOpen={onOpenStudio}>
+                <RouteLink
+                  route={agentsStudioRoute()}
+                  variant="primary"
+                  size="md"
+                  onOpen={onOpenStudio}
+                >
                   {t("agents.openStudio")}
-                </StudioLink>
+                </RouteLink>
               ) : undefined
             }
           >
@@ -156,48 +160,16 @@ function AgentCard({
           {t("agents.startChat")}
         </Button>
         {onOpenStudio ? (
-          <StudioLink
+          <RouteLink
             route={agentStudioRoute(agent.name)}
             variant="link"
             describedBy={titleId}
             onOpen={onOpenStudio}
           >
             {t("agents.editInStudio")}
-          </StudioLink>
+          </RouteLink>
         ) : null}
       </CardFooter>
     </Card>
-  );
-}
-
-/** A link to a place in Studio. A plain click opens it here; any other is the browser's. */
-function StudioLink({
-  route,
-  variant,
-  describedBy,
-  onOpen,
-  children
-}: {
-  route: WorkspaceRoute;
-  variant: "primary" | "link";
-  describedBy?: string;
-  onOpen(route: WorkspaceRoute): void;
-  children: string;
-}) {
-  return (
-    <Button variant={variant} size={variant === "link" ? "sm" : "md"} asChild>
-      <a
-        href={workspaceRoutePath(route)}
-        aria-describedby={describedBy}
-        onClick={(event) => {
-          if (opensHere(event)) {
-            event.preventDefault();
-            onOpen(route);
-          }
-        }}
-      >
-        {children}
-      </a>
-    </Button>
   );
 }

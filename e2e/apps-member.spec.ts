@@ -172,7 +172,7 @@ test("a member who uses an App is shown the App and a builder its revision", asy
   await shoot(memberPage, "apps-list-member", memberListReady);
 
   // The member's head names the App and offers its link as one button, without a menu.
-  await memberList.getByText(appName, { exact: true }).click();
+  await memberList.getByRole("link", { name: "Open", exact: true }).click();
   await expect(memberPage).toHaveURL(new RegExp(`${appPath}$`, "u"));
   const memberView = memberPage.getByTestId("app-view");
   const memberHead = memberView.locator("header").first();

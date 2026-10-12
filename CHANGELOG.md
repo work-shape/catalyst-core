@@ -828,6 +828,12 @@ id from config_assets where status = 'deleted')`.
   sentences that name it and the documentation. The sentence of a failed Connection call now
   ends with "Studio > Connections". Its addresses stay `/build/...`, and it shows to the same
   people as before.
+- **Apps page:** the Apps of a workspace are cards in a grid, as the agents are, where they were
+  rows of a list. A card shows the name, the description where the App has one, the state, and
+  when the App last changed. Its main action is "Open"; an App with a draft alone has "Edit" in
+  that place for whoever may write it. A writer gets "Edit" as a quiet link beside Open. The
+  menu of a card keeps Details, Copy link and Delete, and no longer repeats Open and Edit. The
+  App's id shows to builders on every card, and to nobody else.
 - **Page frame:** every page of Build, Settings, the Inbox and Apps starts its title line 56 px
   under the top edge, where it started 24 px under it. A page whose head is pinned, such as an
   asset page in Build, is unchanged: its head is the top band from the start. The column of
