@@ -100,6 +100,8 @@ export function createGoogleAccessTokenSource(
         grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
         assertion: assertion()
       }).toString(),
+      // The signed assertion goes to Google's token endpoint alone.
+      redirect: "manual",
       signal
     });
     // The answer names the account on a refusal and holds the token on success: neither is kept

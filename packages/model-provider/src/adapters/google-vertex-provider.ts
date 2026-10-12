@@ -152,6 +152,9 @@ export class GoogleVertexProvider {
           ...toVertexRequest(request),
           ...(this.options.labels ? { labels: this.options.labels } : {})
         }),
+        // A redirect is never followed: the token and the conversation go to Google's endpoint
+        // alone. The answer with status 3xx is refused like any other that is no success.
+        redirect: "manual",
         signal: request.signal
       });
     } catch (error) {

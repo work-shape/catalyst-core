@@ -41,6 +41,7 @@ async function listModels(
           : { authorization: `Bearer ${endpoint.apiKey}` }),
         ...(endpoint.organization ? { "openai-organization": endpoint.organization } : {})
       },
+      redirect: "manual",
       signal
     });
   } catch {

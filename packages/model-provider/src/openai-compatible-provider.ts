@@ -277,6 +277,9 @@ export class OpenAiCompatibleChatProvider {
         method: "POST",
         headers: this.createHeaders(),
         body: JSON.stringify(body),
+        // A redirect is never followed: the key and the conversation go to the configured
+        // endpoint alone. The answer with status 3xx is refused like any other that is no success.
+        redirect: "manual",
         signal
       });
     } catch (error) {
