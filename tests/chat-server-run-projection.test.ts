@@ -16,7 +16,9 @@ import {
 
 import { toolSuccess } from "@vivd-catalyst/tool-sdk";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
+import { eventually } from "./support/assertions";
 import { createTestConfig, createTestUser } from "./support/fixtures";
+import { createHeldModel, HELD_MODEL_PROVIDER } from "./support/held-model";
 import {
   createMissingRuntime,
   createUnusedModelProvider,
@@ -27,9 +29,15 @@ import {
 
 describe("client instance app vertical slice", () => {
   it("exposes a thread snapshot with active run projection", async () => {
+    // The model stops after its first piece, so the run stays in progress until the test has read
+    // it, however fast or slow the worker takes it up.
+    const model = createHeldModel();
+    const config = createTestConfig();
+    config.infrastructure.models = { local: { provider: HELD_MODEL_PROVIDER, model: "local" } };
     const app = await createTestInstance({
-      config: createTestConfig(),
+      config,
       env: {},
+      capabilities: [model.capability],
       tools: []
     });
 
@@ -48,32 +56,36 @@ describe("client instance app vertical slice", () => {
     );
     const runId = started.run.id;
 
-    const snapshot = await fetchTestOperation(baseUrl, "conversations.thread.get", {
-      params: { conversationId: conversation.id }
-    });
-    expect(snapshot.status).toBe(200);
-    expect(await snapshot.json()).toMatchObject({
-      conversation: {
-        id: conversation.id
-      },
-      messages: [
-        expect.objectContaining({
-          role: "user",
-          text: "snapshot should show this run while active"
-        })
-      ],
-      activeRun: {
-        run: {
-          id: runId,
-          status: "running"
+    // The run is queued until the worker takes it up: read the thread until it is running.
+    await eventually(async () => {
+      const snapshot = await fetchTestOperation(baseUrl, "conversations.thread.get", {
+        params: { conversationId: conversation.id }
+      });
+      expect(snapshot.status).toBe(200);
+      expect(await snapshot.json()).toMatchObject({
+        conversation: {
+          id: conversation.id
         },
-        projection: {
-          runId,
-          lastSequence: expect.any(Number),
-          text: expect.any(String)
+        messages: [
+          expect.objectContaining({
+            role: "user",
+            text: "snapshot should show this run while active"
+          })
+        ],
+        activeRun: {
+          run: {
+            id: runId,
+            status: "running"
+          },
+          projection: {
+            runId,
+            lastSequence: expect.any(Number),
+            text: expect.any(String)
+          }
         }
-      }
+      });
     });
+    model.release();
 
     await fetchRunEvents(baseUrl, conversation.id, runId);
 
