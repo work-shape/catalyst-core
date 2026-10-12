@@ -18,7 +18,7 @@ import {
 } from "@vivd-catalyst/core";
 import type { PostgresConnection } from "./postgres-database";
 import { mapApiCredential, mapServicePrincipal } from "./rows";
-import { apiCredentials, productUsers, servicePrincipals } from "./schema";
+import { apiCredentials, permissionGrants, productUsers, servicePrincipals } from "./schema";
 
 export async function listServicePrincipals(
   db: PostgresConnection,
@@ -173,6 +173,41 @@ export async function updateServicePrincipal(
     throw new AppError("NOT_FOUND", "Service principal is not available");
   }
   return mapServicePrincipal(row);
+}
+
+/**
+ * The principal row goes first. A grant write holds a share lock on it until its row is
+ * stored, so this waits for one that is under way and then removes what it wrote; a grant
+ * write that comes later finds no principal. The keys go with the row by their foreign key.
+ */
+export async function deleteServicePrincipal(
+  db: PostgresConnection,
+  input: Parameters<ApiAccessStore["deleteServicePrincipal"]>[0]
+): Promise<ServicePrincipalRecord | undefined> {
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .delete(servicePrincipals)
+      .where(
+        and(
+          eq(servicePrincipals.clientInstanceId, input.clientInstanceId),
+          eq(servicePrincipals.id, input.servicePrincipalId)
+        )
+      )
+      .returning();
+    if (!row) {
+      return undefined;
+    }
+    await tx
+      .delete(permissionGrants)
+      .where(
+        and(
+          eq(permissionGrants.clientInstanceId, input.clientInstanceId),
+          eq(permissionGrants.holderKind, "service_principal"),
+          eq(permissionGrants.holderId, input.servicePrincipalId)
+        )
+      );
+    return mapServicePrincipal(row);
+  });
 }
 
 export async function listApiCredentials(

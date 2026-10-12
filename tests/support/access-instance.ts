@@ -23,6 +23,7 @@ import {
   type TestStore
 } from "./test-instance";
 import { applyAtCurrentRevisions } from "./asset-revisions";
+import { withTestSql } from "./test-sql";
 
 // The instance behind the grant and Namespace tests: four stored users, interactive agent
 // editing switched on, two tools and two model bindings.
@@ -123,6 +124,22 @@ export function recordAuthAdapter(stores: TestStore): AuthAdapter {
       };
     }
   };
+}
+
+/**
+ * Stores the service principal the header names, with the id the tests sign it in under. A
+ * grant row is written only for a principal the instance has.
+ */
+export async function storeTestServicePrincipal(id: string): Promise<void> {
+  await withTestSql(
+    (sql) => sql`
+      insert into service_principals
+        (id, client_instance_id, display_label, status, permission_refs, permissions, created_at, updated_at)
+      values
+        (${id}, ${clientInstanceId}, 'Service', 'active', '[]'::jsonb,
+         '["config_assets.read","config_assets.release"]'::jsonb, now(), now())
+      on conflict do nothing`
+  );
 }
 
 export const errorSchema = z.object({

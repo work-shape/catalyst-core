@@ -15,6 +15,7 @@ import {
   resolveApiCredential as resolvePostgresApiCredential,
   revokeApiCredential as revokePostgresApiCredential,
   updateApiCredentialLastUsed as updatePostgresApiCredentialLastUsed,
+  deleteServicePrincipal as deletePostgresServicePrincipal,
   updateServicePrincipal as updatePostgresServicePrincipal
 } from "../postgres-api-access-operations";
 import type { PostgresConnection } from "../postgres-database";
@@ -39,6 +40,11 @@ export function createPostgresApiAccessStore(db: PostgresConnection): ApiAccessS
       input: UpdateServicePrincipalInput
     ): Promise<ServicePrincipalRecord> {
       return updatePostgresServicePrincipal(db, input);
+    },
+    async deleteServicePrincipal(
+      input: Parameters<ApiAccessStore["deleteServicePrincipal"]>[0]
+    ): Promise<ServicePrincipalRecord | undefined> {
+      return deletePostgresServicePrincipal(db, input);
     },
     async listApiCredentials(
       input: Parameters<ApiAccessStore["listApiCredentials"]>[0]

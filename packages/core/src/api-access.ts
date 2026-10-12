@@ -110,6 +110,15 @@ export interface ApiAccessStore {
   }): Promise<ServicePrincipalRecord | undefined>;
   createServicePrincipal(input: CreateServicePrincipalInput): Promise<ServicePrincipalRecord>;
   updateServicePrincipal(input: UpdateServicePrincipalInput): Promise<ServicePrincipalRecord>;
+  /**
+   * Removes the principal with its keys and with every grant row it holds, in one
+   * transaction: a row left behind would answer for whoever carried the id next. Answers
+   * nothing for a principal the instance does not have.
+   */
+  deleteServicePrincipal(input: {
+    clientInstanceId: ClientInstanceId;
+    servicePrincipalId: ServicePrincipalId;
+  }): Promise<ServicePrincipalRecord | undefined>;
   listApiCredentials(input: {
     clientInstanceId: ClientInstanceId;
     servicePrincipalId: ServicePrincipalId;

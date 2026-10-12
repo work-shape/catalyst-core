@@ -8,6 +8,7 @@ import {
   errorSchema,
   setupAccessInstance,
   skill,
+  storeTestServicePrincipal,
   type AccessInstance,
   type AccessInstanceOptions
 } from "./access-instance";
@@ -69,6 +70,7 @@ export interface ReleaseInstance extends AccessInstance {
 
 export async function setupRelease(options: AccessInstanceOptions = {}): Promise<ReleaseInstance> {
   const t = await setupAccessInstance(options);
+  await storeTestServicePrincipal(SERVICE);
   await t.createNamespace(NAMESPACE);
   // An administrator who also holds the release right: bound outside a sync like anyone.
   const releaser = await t.stores.users.createUser({

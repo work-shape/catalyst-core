@@ -4,7 +4,8 @@ import {
   SCOPES_HEADER,
   SERVICE_HEADER,
   clientInstanceId,
-  setupAccessInstance as setup
+  setupAccessInstance as setup,
+  storeTestServicePrincipal
 } from "./support/access-instance";
 
 // `platform.context.get` is the first read of an outside editor: where it is, which kinds
@@ -148,6 +149,7 @@ describe("platform.context.get", () => {
       { prefix: "lena-", displayName: "lena-", actions: reads }
     ]);
 
+    await storeTestServicePrincipal("sp_test");
     await t.stores.access.createGrant({
       clientInstanceId,
       holderKind: "service_principal",

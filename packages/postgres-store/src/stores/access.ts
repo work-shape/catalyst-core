@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import {
   AppError,
   asClientInstanceId,
@@ -81,7 +81,12 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
         // A holder without a record here was vouched for by the sign-in alone and has no status
         // to read; only a record that says otherwise makes a holder inactive.
         holderActive: holder[0] === undefined || holder[0].status === "active",
-        grants: grantRows.map(mapGrant),
+        // A grant row is written for a service principal the instance has and goes with it.
+        // One that names a principal without a record answers for nobody.
+        grants:
+          input.holder.kind === "service_principal" && holder[0] === undefined
+            ? []
+            : grantRows.map(mapGrant),
         memberWorkspaceIds: holder[0]?.memberWorkspaceIds ?? []
       };
     },
@@ -103,6 +108,25 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
             )
             .for("share");
           if (holder && holder.deletionRequestedAt !== null) throw userInDeletionError();
+        }
+        if (input.holderKind === "service_principal") {
+          // Held until the row is written: the deletion of the principal removes the rows
+          // it holds, so none may appear for a principal that is gone.
+          const [holder] = await tx
+            .select({ id: servicePrincipals.id })
+            .from(servicePrincipals)
+            .where(
+              and(
+                eq(servicePrincipals.clientInstanceId, input.clientInstanceId),
+                eq(servicePrincipals.id, input.holderId)
+              )
+            )
+            .for("share");
+          if (!holder) {
+            throw new AppError("NOT_FOUND", "Service principal not found", {
+              reason: "unknown_holder"
+            });
+          }
         }
         if (input.scopeKind === "namespace") {
           const [registered] = await tx
@@ -219,6 +243,9 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
                   WHERE ${productUsers.clientInstanceId} = ${permissionGrants.clientInstanceId}
                     AND ${productUsers.id} = ${permissionGrants.holderId}
                     AND ${productUsers.roles} @> '["superadmin"]'::jsonb))`
+              : undefined,
+            input.excludeServicePrincipalHolders
+              ? ne(permissionGrants.holderKind, "service_principal")
               : undefined,
             keysetFilter(input.page, order, false)
           )
