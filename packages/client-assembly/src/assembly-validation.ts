@@ -18,6 +18,7 @@ import {
   type ClientInstanceConfig
 } from "@vivd-catalyst/config-schema";
 import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
+import type { ClientInstanceCapability } from "./capabilities";
 
 export function assertClientAssemblyValid(input: {
   config: ClientInstanceConfig;
@@ -251,4 +252,35 @@ function waitsForAPerson(config: ClientInstanceConfig, tool: AnyToolDefinition):
     resolution.next === "await_confirmation" ||
     resolution.source === "surface_cannot_pause"
   );
+}
+
+/**
+ * Stops a build whose capabilities do not match the `capabilities` section of the config: two
+ * that register one key, or a key no capability of the build registers. It needs the config
+ * and the build alone, so a process makes it before it opens a store.
+ */
+export function assertCapabilityConfigKeys(
+  capabilities: readonly ClientInstanceCapability[],
+  config: Record<string, unknown>
+): void {
+  const registeredKeys = capabilities.flatMap((capability) =>
+    capability.configKey ? [capability.configKey] : []
+  );
+  const duplicateKeys = registeredKeys.filter(
+    (key, index) => registeredKeys.indexOf(key) !== index
+  );
+  if (duplicateKeys.length > 0) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `Duplicate capability config registrations: ${[...new Set(duplicateKeys)].join(", ")}`
+    );
+  }
+  const registered = new Set(registeredKeys);
+  const unknown = Object.keys(config).filter((key) => !registered.has(key));
+  if (unknown.length > 0) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `Capability config has no registered implementation: ${unknown.join(", ")}`
+    );
+  }
 }

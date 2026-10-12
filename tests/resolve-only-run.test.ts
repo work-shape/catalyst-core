@@ -38,13 +38,20 @@ describe("a resolve-only run, as the release gate starts every built entry point
   });
 
   /** A release config with a module on that only a capability ships. JSON is YAML. */
-  async function configFile(name: string, executionWorkspaces: boolean): Promise<string> {
+  async function configFile(
+    name: string,
+    executionWorkspaces: boolean,
+    capabilities: Record<string, unknown> = {}
+  ): Promise<string> {
     const path = join(directory, `${name}.yaml`);
     const config = createTestConfig({
       executionWorkspaces: { enabled: executionWorkspaces },
       workspaceObjectRoot: join(directory, "workspace-objects")
     });
-    await writeFile(path, JSON.stringify({ ...config, modules: { documents: { enabled: true } } }));
+    await writeFile(
+      path,
+      JSON.stringify({ ...config, capabilities, modules: { documents: { enabled: true } } })
+    );
     return path;
   }
 
@@ -81,6 +88,21 @@ describe("a resolve-only run, as the release gate starts every built entry point
       expect(withoutCapability).toMatchObject({ code: 1, stdout: "" });
       expect(withoutCapability.stderr).toContain(
         "Module 'documents' is enabled but this build ships no code for it"
+      );
+    },
+    ENDED_WITHIN_MS
+  );
+
+  // Fails without the change: the check ran after the store was open, so the run ended before it.
+  it.each(["server", "agent-run-worker"])(
+    "stops the %s on a config for a capability that its build does not have",
+    async (name) => {
+      const config = await configFile("unknown-capability", true, { notRegisteredByThisBuild: {} });
+      const run = await resolveOnly(name, "with-capability", config);
+
+      expect(run).toMatchObject({ code: 1, stdout: "" });
+      expect(run.stderr).toContain(
+        "Capability config has no registered implementation: notRegisteredByThisBuild"
       );
     },
     ENDED_WITHIN_MS

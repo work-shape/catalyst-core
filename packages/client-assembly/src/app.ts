@@ -57,6 +57,7 @@ import {
 } from "@vivd-catalyst/tool-execution";
 import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
 import {
+  assertCapabilityConfigKeys,
   assertClientAssemblyValid,
   findConfigAssetAgentValidationIssues,
   findModuleOffToolIssues
@@ -251,6 +252,7 @@ export async function createClientInstanceExecutionAssembly(
   const clientInstanceId = getClientInstanceId(config);
   const { capabilities } = input;
   const modules = resolveInstanceModules(config, capabilities).snapshot;
+  assertCapabilityConfigKeys(capabilities, config.capabilities);
   endResolveOnlyRun();
   // The resolver comes first: the store, the sign-in code and every provider take from it.
   const infrastructure = await createInstanceInfrastructure({
@@ -541,38 +543,11 @@ async function createCapabilityContributions(
   capabilities: readonly ClientInstanceCapability[],
   context: Parameters<ClientInstanceCapability["create"]>[0]
 ): Promise<ClientInstanceCapabilityContribution[]> {
-  assertCapabilityConfigKeys(capabilities, context.capabilitiesConfig);
   const contributions: ClientInstanceCapabilityContribution[] = [];
   for (const capability of capabilities) {
     contributions.push(await capability.create(context));
   }
   return contributions;
-}
-
-function assertCapabilityConfigKeys(
-  capabilities: readonly ClientInstanceCapability[],
-  config: Record<string, unknown>
-): void {
-  const registeredKeys = capabilities.flatMap((capability) =>
-    capability.configKey ? [capability.configKey] : []
-  );
-  const duplicateKeys = registeredKeys.filter(
-    (key, index) => registeredKeys.indexOf(key) !== index
-  );
-  if (duplicateKeys.length > 0) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      `Duplicate capability config registrations: ${[...new Set(duplicateKeys)].join(", ")}`
-    );
-  }
-  const registered = new Set(registeredKeys);
-  const unknown = Object.keys(config).filter((key) => !registered.has(key));
-  if (unknown.length > 0) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      `Capability config has no registered implementation: ${unknown.join(", ")}`
-    );
-  }
 }
 
 function resolveAttachmentHandlers(
