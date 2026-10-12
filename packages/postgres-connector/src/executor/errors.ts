@@ -91,6 +91,11 @@ export function toPostgresExecutorError(
   if (code.startsWith("42") && fromCallerStatement) {
     return new PostgresExecutorError("query_rejected", rejectionText(error), code);
   }
+  // A statement can raise any SQLSTATE it likes, the class of a refused credential among
+  // them. Only the connection itself is refused a credential.
+  if (code.startsWith("28") && fromCallerStatement) {
+    return new PostgresExecutorError("failed", code);
+  }
   return new PostgresExecutorError(kindOfSqlState(code), code);
 }
 
