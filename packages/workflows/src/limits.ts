@@ -2,8 +2,10 @@
 
 /**
  * How many step runs one run may create, the steps of every loop iteration among them. A run
- * that would create one more ends as `limit_reached`. A loop over the largest list with a
- * handful of steps per item fits; a definition that never ends does not.
+ * that would create one more ends as `limit_reached`. This is the limit that binds a loop:
+ * each item takes one step run per step of the loop, so a loop of two steps runs at most
+ * some 10,000 items less the steps outside it, and one of five steps some 4,000. Only a loop
+ * of one step reaches `WORKFLOW_LOOP_MAX_ITEMS` first.
  */
 export const WORKFLOW_RUN_MAX_STEP_RUNS = 20_000;
 
@@ -25,6 +27,12 @@ export const WORKFLOW_STEP_DATA_MAX_BYTES = 256 * 1_024;
 
 /** How large `workflow.yaml` may be. A larger file is not read as a definition. */
 export const WORKFLOW_MANIFEST_MAX_BYTES = 256 * 1_024;
+
+/**
+ * How deep the values of `workflow.yaml` may nest, lists and objects alike. Sixteen blocks,
+ * each with its steps, their mappings and their schemas, stay far below it.
+ */
+export const WORKFLOW_MANIFEST_MAX_NESTING = 256;
 
 /** How many steps a definition may hold, the steps of its loops among them. */
 export const WORKFLOW_DEFINITION_MAX_STEPS = 200;
@@ -54,8 +62,17 @@ export const WORKFLOW_STEP_JOB_BACKOFF_MAX_MS = 60_000;
  */
 export const WORKFLOW_STEP_JOB_LEASE_MS = 10 * 60 * 1_000;
 
+/**
+ * How long a step waits for a changing call that an earlier attempt of it started and that
+ * has no outcome yet, counted from the start of that call. It is the lease of the step's job,
+ * which is above the time one call may take: a call without an outcome after it was cut off
+ * with its process, and nobody will write one.
+ */
+export const WORKFLOW_OPERATION_OUTCOME_WAIT_MS = 10 * 60 * 1_000;
+
 /** The bounds a run is started under. A test starts an engine with smaller ones. */
 export interface WorkflowRunLimits {
+  operationOutcomeWaitMs: number;
   maxStepRuns: number;
   maxDurationMs: number;
   loopMaxItems: number;
@@ -63,6 +80,7 @@ export interface WorkflowRunLimits {
 }
 
 export const WORKFLOW_RUN_LIMITS: WorkflowRunLimits = {
+  operationOutcomeWaitMs: WORKFLOW_OPERATION_OUTCOME_WAIT_MS,
   maxStepRuns: WORKFLOW_RUN_MAX_STEP_RUNS,
   maxDurationMs: WORKFLOW_RUN_MAX_DURATION_MS,
   loopMaxItems: WORKFLOW_LOOP_MAX_ITEMS,

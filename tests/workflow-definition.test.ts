@@ -236,6 +236,22 @@ describe("the definitions a folder holds", () => {
         { steps: [{ ...trigger, triggers: [{ kind: "manual" }, { kind: "parent" }] }, output()] },
         "steps[0].triggers[1].kind"
       ],
+      // A schedule that is read and never fires would look like one that is kept.
+      [
+        {
+          steps: [{ ...trigger, triggers: [{ kind: "schedule", cron: "0 6 * * *" }] }, output()]
+        },
+        "steps[0].triggers[0].kind"
+      ],
+      [
+        {
+          steps: [
+            { ...trigger, triggers: [{ kind: "manual" }, { kind: "schedule", cron: "0 6 * * *" }] },
+            output()
+          ]
+        },
+        "steps[0].triggers[1].kind"
+      ],
       [
         { steps: [trigger, { ...operation("rows"), dataset: { at: "rows" } }, output()] },
         "steps[1].dataset"
@@ -284,6 +300,17 @@ describe("the definitions a folder holds", () => {
     expect(refused({ steps: [trigger, operation("first", { text: {} }), output()] })).not.toEqual(
       []
     );
+    // A literal is no dataset: one that carries the key of one is refused where it is written.
+    expect(
+      refused({
+        steps: [trigger, operation("first", { rows: { value: { $dataset: 5 } } }), output()]
+      })
+    ).toEqual([["", "steps.first.input.rows"]]);
+    expect(
+      refused({
+        steps: [trigger, output({ rows: { value: [{ nested: { $dataset: "x" } }] } })]
+      })
+    ).toEqual([["", "steps.result.input.rows"]]);
     // The key that marks a dataset in step data names no field a definition declares.
     expect(
       refused({
@@ -313,6 +340,31 @@ describe("the definitions a folder holds", () => {
     expect(
       (await read({ steps: [trigger, each, output({ done: ref("each", "done") })] })).issues
     ).toBeUndefined();
+  });
+
+  it("refuses a file nested deeper than a definition may be, however deep, without reading it by recursion", async () => {
+    // Blocks nested far deeper than the stack is: as a value, and as the text of a file.
+    let steps: unknown[] = [operation("leaf")];
+    for (let level = 0; level < 20_000; level += 1) steps = [loop(`l${String(level)}`, steps)];
+    const result = parseWorkflowManifest(sample({ steps: [trigger, ...steps, output()] }));
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.issues.map((issue) => issue.message)).toEqual([
+      "workflow.yaml is nested deeper than 256 levels"
+    ]);
+    const deepSchema = parseWorkflowManifest(
+      sample({
+        steps: [trigger, output()],
+        inputs: JSON.parse(`${'{"a":'.repeat(300)}1${"}".repeat(300)}`)
+      })
+    );
+    expect(!deepSchema.ok && deepSchema.issues.map((issue) => issue.message)).toEqual([
+      "workflow.yaml is nested deeper than 256 levels"
+    ]);
+    const text = `steps: ${"[".repeat(60_000)}${"]".repeat(60_000)}`;
+    const refusal = await read({}, text);
+    expect(refusal.reason).toBe("definition_invalid");
+    // The reader of YAML refuses it itself; either way it is a refusal and no crash.
+    expect(refusal.issues).toHaveLength(1);
   });
 
   it("refuses a file that is not YAML, and a folder whose definition names another id", async () => {

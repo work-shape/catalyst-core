@@ -19,8 +19,12 @@ import {
 } from "@vivd-catalyst/core";
 import { JSON_SCHEMA, YAMLException, load } from "js-yaml";
 import { z } from "zod";
-import { jsonObjectSchema, jsonValueSchema } from "./json";
-import { WORKFLOW_DEFINITION_MAX_STEPS, WORKFLOW_MANIFEST_MAX_BYTES } from "./limits";
+import { holdsBrokenDatasetReference, jsonObjectSchema, jsonValueSchema } from "./json";
+import {
+  WORKFLOW_DEFINITION_MAX_STEPS,
+  WORKFLOW_MANIFEST_MAX_BYTES,
+  WORKFLOW_MANIFEST_MAX_NESTING
+} from "./limits";
 
 // `workflow.yaml` as a definition the engine runs: its shape, and what must hold between its
 // steps before a run is started from it. Nothing here reads a file or a store. Saving a
@@ -187,9 +191,13 @@ function unsupportedIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[
         issues.push(notSupported(`${at}.type`, `a step of the type '${step.type}'`));
       }
       if (step.type === "trigger") {
+        // Only the start by hand is built. A trigger that is read and never fires would
+        // look like a schedule that is kept.
         step.triggers.forEach((trigger, number) => {
-          if (trigger.kind === "parent") {
-            issues.push(notSupported(`${at}.triggers[${number}].kind`, "the trigger 'parent'"));
+          if (trigger.kind !== "manual") {
+            issues.push(
+              notSupported(`${at}.triggers[${number}].kind`, `the trigger '${trigger.kind}'`)
+            );
           }
         });
       }
@@ -292,12 +300,20 @@ function structuralIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[]
         message: `A '${step.type}' step stands at the top, not in a loop`
       });
     }
+    const mapped = "input" in step ? Object.entries(step.input) : [];
+    for (const [field, source] of mapped) {
+      // A literal is no dataset, so it never carries the key that marks one.
+      if (source.value !== undefined && holdsBrokenDatasetReference(source.value)) {
+        issues.push({
+          path: `steps.${id}.input.${field}`,
+          message: `The literal of '${field}' holds '${WORKFLOW_DATASET_KEY}' and is no reference to a dataset`
+        });
+      }
+    }
     const references =
       step.type === "loop"
         ? [step.items]
-        : "input" in step
-          ? Object.values(step.input).flatMap((value) => (value.ref ? [value.ref] : []))
-          : [];
+        : mapped.flatMap(([, source]) => (source.ref ? [source.ref] : []));
     for (const reference of references) {
       if (!index.has(reference.step)) {
         issues.push({
@@ -310,6 +326,20 @@ function structuralIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[]
   return [...issues, ...datasetKeyIssues(manifest)];
 }
 
+/** Whether no value of a file is nested deeper than `WORKFLOW_MANIFEST_MAX_NESTING`. */
+function withinNesting(value: unknown): boolean {
+  // A list of what is left to look at, so the check itself needs no stack.
+  const open: { value: unknown; depth: number }[] = [{ value, depth: 0 }];
+  for (let next = open.pop(); next !== undefined; next = open.pop()) {
+    if (typeof next.value !== "object" || next.value === null) continue;
+    if (next.depth >= WORKFLOW_MANIFEST_MAX_NESTING) return false;
+    for (const child of Object.values(next.value)) {
+      open.push({ value: child, depth: next.depth + 1 });
+    }
+  }
+  return true;
+}
+
 /**
  * Checks a value read from `workflow.yaml`. Answers the definition, or every issue found: of
  * its shape first, then what the contract's block check refuses (`block_depth`,
@@ -317,6 +347,19 @@ function structuralIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[]
  * does not run and what else must hold between the steps.
  */
 export function parseWorkflowManifest(value: unknown): WorkflowDefinitionResult {
+  // Before anything reads the value by recursion: the schema and the checks below follow a
+  // file as deep as it goes, and a file deeper than the stack would end the process.
+  if (!withinNesting(value)) {
+    return {
+      ok: false,
+      issues: [
+        {
+          path: "",
+          message: `workflow.yaml is nested deeper than ${WORKFLOW_MANIFEST_MAX_NESTING} levels`
+        }
+      ]
+    };
+  }
   const parsed = manifestSchema.safeParse(value);
   if (!parsed.success) {
     return {
@@ -354,6 +397,14 @@ export function readWorkflowManifest(text: string): WorkflowDefinitionResult {
   try {
     return parseWorkflowManifest(load(text, { schema: JSON_SCHEMA }));
   } catch (error) {
+    // The reader of YAML follows a file as deep as it goes: one deeper than the stack ends
+    // as a file that is refused, like one deeper than a definition may be.
+    if (error instanceof RangeError) {
+      return {
+        ok: false,
+        issues: [{ path: "", message: "workflow.yaml is nested too deeply to be read" }]
+      };
+    }
     if (!(error instanceof YAMLException)) throw error;
     return { ok: false, issues: [{ path: "", message: "workflow.yaml is not valid YAML" }] };
   }
