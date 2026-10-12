@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { cn, DocsAddressProvider, SkipLink, Spinner, UiRoot } from "@vivd-catalyst/ui";
 import { DEFAULT_THEME_INPUTS } from "@vivd-catalyst/ui/theme";
 import { ApprovalRevisionHostProvider } from "./approvals/approval-revision-host";
@@ -6,11 +6,12 @@ import { AssistantRuntimePanel } from "./assistant/assistant-runtime-panel";
 import { AttachmentContentProvider } from "./attachment-content";
 import { ChatDropOverlay } from "./chat-file-dropzone";
 import type { ChatShellProps } from "./chat-shell";
+import { collaborationWorkspaceDisplayName } from "./collaboration-workspace/collaboration-workspace-name";
 import { CollaborationWorkspacePanel } from "./collaboration-workspace/collaboration-workspace-panel";
 import { CollaborationWorkspaceSelector } from "./collaboration-workspace/collaboration-workspace-selector";
 import { canViewAudit } from "./control-plane/governance";
 import { ControlPlaneRoutes } from "./control-plane/control-plane-routes";
-import { TranslationProvider, useTranslation } from "./i18n";
+import { createTranslationContext, TranslationProvider, useTranslation } from "./i18n";
 import { AppsArea, isAppsRoute } from "./apps/apps-area";
 import { AppsHostProvider, type AppsHost } from "./apps/apps-host";
 import { InboxArea } from "./inbox";
@@ -148,6 +149,11 @@ function ChatWorkspaceContent({
   const showsLogin = model.auth.loginRequired || Boolean(passwordSetupToken);
   const themeMode = model.config.resolvedThemeMode;
   const uiLabels = uiLabelsFor(model.config.activeLocale);
+  // This component sets the translations up for what it renders, so it reads them directly.
+  const { t } = useMemo(
+    () => createTranslationContext(model.config.activeLocale, labelOverrides),
+    [model.config.activeLocale, labelOverrides]
+  );
 
   // The login panel resolves its own mode from the public branding and reports that instead.
   useEffect(() => {
@@ -268,6 +274,10 @@ function ChatWorkspaceContent({
   ) : undefined;
 
   const activeWorkspace = collaborationWorkspace.activeCollaborationWorkspace;
+  // The Personal Workspace is named after its owner, here and wherever a surface names it.
+  const activeWorkspaceName = activeWorkspace
+    ? collaborationWorkspaceDisplayName(activeWorkspace, userLabel, t)
+    : undefined;
   const rail = model.conversationRail;
   const closeDrawer = model.chrome.closeSidebarDrawer;
   const startNewChat = () => {
@@ -283,16 +293,20 @@ function ChatWorkspaceContent({
 
   const pageHost = {
     viewer: { kind: "member" as const, id: model.auth.user.id, displayName: userLabel },
-    workspace: activeWorkspace ? { id: activeWorkspace.id, name: activeWorkspace.name } : null,
+    workspace:
+      activeWorkspace && activeWorkspaceName !== undefined
+        ? { id: activeWorkspace.id, name: activeWorkspaceName }
+        : null,
     theme: model.config.theme ?? DEFAULT_THEME_INPUTS[themeMode],
     mode: themeMode
   };
   const appsHost: AppsHost = {
     enabled: model.apps.enabled,
     rights: model.apps.rights,
-    workspace: activeWorkspace
-      ? { id: activeWorkspace.id, name: activeWorkspace.name, emoji: activeWorkspace.emoji }
-      : undefined,
+    workspace:
+      activeWorkspace && activeWorkspaceName !== undefined
+        ? { id: activeWorkspace.id, name: activeWorkspaceName, emoji: activeWorkspace.emoji }
+        : undefined,
     showRoute: model.route.showRoute,
     startChat: model.apps.startChat,
     ...(canViewAudit(model.auth.user)
@@ -499,7 +513,7 @@ function ChatWorkspaceContent({
           client={chat.client}
           collaborationWorkspaceId={collaborationWorkspace.activeCollaborationWorkspaceId}
           collaborationWorkspacesAvailable={collaborationWorkspacesAvailable}
-          searchedWorkspace={collaborationWorkspace.activeCollaborationWorkspace}
+          searchedWorkspaceName={activeWorkspaceName}
           recentConversations={rail.conversations}
           goToTargets={model.controlPlane.goToTargets}
           onNewChat={startNewChat}

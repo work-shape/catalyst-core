@@ -21,6 +21,10 @@ import {
   CollaborationWorkspaceAvatar,
   PersonalCollaborationWorkspaceAvatar
 } from "./collaboration-workspace-avatar";
+import {
+  collaborationWorkspaceDisplayName,
+  personalCollaborationWorkspaceName
+} from "./collaboration-workspace-name";
 
 export function CollaborationWorkspaceSelector({
   collaborationWorkspaces,
@@ -93,10 +97,10 @@ export function CollaborationWorkspaceSelector({
   }
 
   const triggerLabel = activeCollaborationWorkspace
-    ? collaborationWorkspaceDisplayName(activeCollaborationWorkspace, t)
+    ? collaborationWorkspaceDisplayName(activeCollaborationWorkspace, userLabel, t)
     : loading
       ? t("collaborationWorkspaceLoading")
-      : t("collaborationWorkspacePersonalName");
+      : personalCollaborationWorkspaceName(userLabel, t);
 
   return (
     <div ref={rootRef} className="relative min-w-0">
@@ -235,7 +239,7 @@ export function CollaborationWorkspaceSelectorMenu({
                 <CollaborationWorkspaceRow
                   active={personalCollaborationWorkspace.id === activeCollaborationWorkspaceId}
                   avatar={<PersonalCollaborationWorkspaceAvatar label={userLabel} />}
-                  name={t("collaborationWorkspacePersonalName")}
+                  name={personalCollaborationWorkspaceName(userLabel, t)}
                   onSelect={() => onSelectCollaborationWorkspace(personalCollaborationWorkspace.id)}
                 />
               </List>
@@ -374,13 +378,4 @@ export function canManageCollaborationWorkspace(
     collaborationWorkspace.kind === "shared" &&
     (collaborationWorkspace.role === "owner" || collaborationWorkspace.role === "admin")
   );
-}
-
-export function collaborationWorkspaceDisplayName(
-  collaborationWorkspace: Pick<CollaborationWorkspaceWithRole, "kind" | "name">,
-  translate: (key: "collaborationWorkspacePersonalName") => string
-): string {
-  return collaborationWorkspace.kind === "personal"
-    ? translate("collaborationWorkspacePersonalName")
-    : collaborationWorkspace.name;
 }

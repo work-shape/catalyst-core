@@ -8,7 +8,7 @@ import {
   PersonalCollaborationWorkspaceAvatar
 } from "./collaboration-workspace-avatar";
 import type { ConversationVisibility } from "./collaboration-workspace-fields";
-import { collaborationWorkspaceDisplayName } from "./collaboration-workspace-selector";
+import { collaborationWorkspaceDisplayName } from "./collaboration-workspace-name";
 
 export function MoveConversationDialog({
   open,
@@ -134,7 +134,7 @@ export function MoveConversationDialog({
                     />
                   )}
                   <span className="truncate text-sm font-medium">
-                    {collaborationWorkspaceDisplayName(collaborationWorkspace, t)}
+                    {collaborationWorkspaceDisplayName(collaborationWorkspace, userLabel, t)}
                   </span>
                 </label>
               );

@@ -568,7 +568,7 @@ describe("move conversation dialog", () => {
 
     expect(markup).toContain("Unterhaltung verschieben");
     expect(markup).toContain("Angebot Q3");
-    expect(markup).toContain("Persönlicher Arbeitsbereich");
+    expect(markup).toContain("Felix&#x27; Arbeitsbereich");
     expect(markup).toContain("Analytik");
     expect(markup).not.toContain("Produktteam");
     expect(markup.match(/data-testid="move-conversation-destination-row"/gu)).toHaveLength(2);

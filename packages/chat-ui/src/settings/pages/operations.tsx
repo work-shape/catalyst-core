@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import type { OperationRunResource } from "@vivd-catalyst/api-client";
 import {
@@ -11,6 +11,7 @@ import {
   SkeletonList
 } from "@vivd-catalyst/ui";
 import { useCollaborationWorkspacesQuery } from "../../api/workspace-queries";
+import { collaborationWorkspaceDisplayName } from "../../collaboration-workspace/collaboration-workspace-name";
 import { useTranslation } from "../../i18n";
 import {
   defaultOperationRunFilter,
@@ -48,15 +49,27 @@ function useOperationRunsApi() {
 export function OperationsPage() {
   const { t } = useTranslation();
   const { apiBaseUrl, authScope, client, scope } = useOperationRunsApi();
+  const { user } = useSettingsPage();
   const [filter, setFilter] = useState<OperationRunFilter>(defaultOperationRunFilter);
   // The name is asked for once typing rests; the selects apply at once.
   const appliedOperation = useRested(filter.operation, OPERATION_NAME_FILTER_DELAY_MS);
   const applied: OperationRunFilter = { ...filter, operation: appliedOperation };
   const query = operationRunQuery(applied);
   // The same list the shell holds: it names a workspace by its id and fills the filter.
-  const workspaces =
-    useCollaborationWorkspacesQuery({ apiBaseUrl, authScope, client, enabled: true }).data ??
-    noWorkspaces;
+  const listedWorkspaces = useCollaborationWorkspacesQuery({
+    apiBaseUrl,
+    authScope,
+    client,
+    enabled: true
+  }).data;
+  const workspaces = useMemo<readonly OperationRunWorkspace[]>(
+    () =>
+      listedWorkspaces?.map((workspace) => ({
+        id: workspace.id,
+        name: collaborationWorkspaceDisplayName(workspace, user.displayLabel, t)
+      })) ?? noWorkspaces,
+    [listedWorkspaces, user.displayLabel, t]
+  );
   const runsQuery = useInfiniteQuery({
     queryKey: [...scope, "list", query],
     queryFn: ({ pageParam, signal }) =>

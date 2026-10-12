@@ -217,7 +217,7 @@ test("the rail is the list of conversations: it loads a page at a time, the sear
   // Another workspace and back: the loaded pages are let go, and the first one is read again.
   const selector = page.getByTestId("collaboration-workspace-selector-trigger");
   await selector.click();
-  await page.getByRole("button", { name: "Personal workspace" }).click();
+  await page.getByRole("button", { name: "E2E's workspace" }).click();
   await expect(page).not.toHaveURL(new RegExp(workspacePath, "u"));
   await selector.click();
   await page.getByRole("button", { name: workspace.name, exact: true }).click();

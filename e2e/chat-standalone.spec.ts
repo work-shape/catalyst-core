@@ -1502,7 +1502,7 @@ test("collaboration workspaces scope navigation, settings, and discovery", async
   const personalPathname = new URL(page.url()).pathname;
 
   const selectorTrigger = page.getByTestId("collaboration-workspace-selector-trigger");
-  await expect(selectorTrigger).toContainText("Personal workspace");
+  await expect(selectorTrigger).toContainText("E2E's workspace");
 
   const workspaceName = `E2E Workspace ${Date.now()}`;
   await selectorTrigger.click();
@@ -1562,7 +1562,7 @@ test("collaboration workspaces scope navigation, settings, and discovery", async
   await page.getByRole("button", { name: "Close", exact: true }).first().click();
 
   await selectorTrigger.click();
-  await page.getByRole("button", { name: "Personal workspace" }).click();
+  await page.getByRole("button", { name: "E2E's workspace" }).click();
   await expect(page).toHaveURL(new RegExp(`${escapeRegExp(personalPathname)}$`, "u"));
   await expect(workspaceConversation).toHaveCount(0);
 
@@ -1609,7 +1609,7 @@ test("conversation rail moves a conversation into another workspace", async ({ p
   const moveDialog = page.getByRole("dialog", { name: "Move conversation", exact: true });
   await expect(moveDialog).toBeVisible();
   // The workspace the conversation already lives in is never a destination.
-  await expect(moveDialog.getByRole("radio", { name: "Personal workspace" })).toHaveCount(0);
+  await expect(moveDialog.getByRole("radio", { name: "E2E's workspace" })).toHaveCount(0);
   await expect(moveDialog.getByRole("radio", { name: destinationName })).toHaveCount(1);
 
   await moveDialog.getByRole("radio", { name: destinationName }).check();
@@ -1641,12 +1641,12 @@ test("conversation rail moves a conversation into another workspace", async ({ p
     .getByRole("button", { name: `Conversation options for ${title}`, exact: true })
     .click();
   await page.getByRole("menuitem", { name: "Move to workspace…", exact: true }).click();
-  await expect(moveDialog.getByRole("radio", { name: "Personal workspace" })).toHaveCount(1);
+  await expect(moveDialog.getByRole("radio", { name: "E2E's workspace" })).toHaveCount(1);
   await moveDialog.getByRole("button", { name: "Close", exact: true }).click();
   await expect(moveDialog).toHaveCount(0);
 
   await selectorTrigger.click();
-  await page.getByRole("button", { name: "Personal workspace" }).click();
+  await page.getByRole("button", { name: "E2E's workspace" }).click();
   await expect(page).toHaveURL(new RegExp(`${escapeRegExp(personalPathname)}$`, "u"));
   await expect(targetConversation).toHaveCount(0);
 });
@@ -1699,7 +1699,7 @@ test("collaboration workspace settings delete a workspace and fall back to perso
   ]);
 
   await expect(page).toHaveURL(new RegExp(`${escapeRegExp(personalPathname)}$`, "u"));
-  await expect(selectorTrigger).toContainText("Personal workspace");
+  await expect(selectorTrigger).toContainText("E2E's workspace");
 
   await selectorTrigger.click();
   await page.getByRole("button", { name: "Browse workspaces" }).click();

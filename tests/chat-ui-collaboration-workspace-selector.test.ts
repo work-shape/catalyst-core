@@ -6,6 +6,11 @@ import {
   CollaborationWorkspaceSelector,
   CollaborationWorkspaceSelectorMenu
 } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-selector";
+import {
+  collaborationWorkspaceDisplayName,
+  personalCollaborationWorkspaceName
+} from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-name";
+import { createTranslationContext } from "../packages/chat-ui/src/i18n";
 import { ClientBrandingHeader } from "../packages/chat-ui/src/workspace/client-branding";
 
 const noop = () => undefined;
@@ -65,10 +70,11 @@ function renderMenu(
 }
 
 describe("collaboration workspace selector", () => {
-  it("shows the fixed personal label without a secondary marker line", () => {
+  it("names the personal workspace after its owner, without a secondary marker line", () => {
     const markup = renderMenu([personal]);
 
-    expect(markup).toContain("Persönlicher Arbeitsbereich");
+    expect(markup).toContain("Felix&#x27; Arbeitsbereich");
+    expect(markup).not.toContain("Persönlicher Arbeitsbereich");
     // The marker used to render as its own text node right under the name.
     expect(markup).not.toContain(">Persönlich<");
     expect(markup).not.toContain("Server side personal name");
@@ -107,7 +113,7 @@ describe("collaboration workspace selector", () => {
       collaborationWorkspace({ id: "cw_a", name: "Alpaka" })
     ]);
 
-    expect(markup.indexOf("Persönlicher Arbeitsbereich")).toBeLessThan(markup.indexOf("Alpaka"));
+    expect(markup.indexOf("Felix&#x27; Arbeitsbereich")).toBeLessThan(markup.indexOf("Alpaka"));
     expect(markup.indexOf("Alpaka")).toBeLessThan(markup.indexOf("Zebra"));
   });
 
@@ -235,7 +241,7 @@ describe("collaboration workspace selector", () => {
 
     expect(markup).toContain('aria-label="Switch workspace"');
     expect(markup).toContain('aria-expanded="false"');
-    expect(markup).toContain("Personal workspace");
+    expect(markup).toContain("Felix&#x27;s workspace");
     expect(markup).not.toContain("Browse workspaces");
   });
 });
@@ -273,7 +279,7 @@ describe("collaboration workspace selector client branding", () => {
     expect(markup).toContain('src="/assets/musterfinanz.svg"');
     expect(markup).toContain('data-testid="client-branding-header"');
     expect(markup.indexOf("client-branding-header")).toBeLessThan(
-      markup.indexOf("Persönlicher Arbeitsbereich")
+      markup.indexOf("Felix&#x27; Arbeitsbereich")
     );
   });
 
@@ -288,5 +294,41 @@ describe("collaboration workspace selector client branding", () => {
 
   it("leaves the popover unchanged when no branding is supplied", () => {
     expect(renderMenu([personal])).not.toContain("client-branding-header");
+  });
+});
+
+describe("personal workspace name", () => {
+  const en = createTranslationContext("en").t;
+  const de = createTranslationContext("de").t;
+
+  it("is the owner's first name with the possessive of the language", () => {
+    expect(personalCollaborationWorkspaceName("Felix Pahlke", en)).toBe("Felix's workspace");
+    expect(personalCollaborationWorkspaceName("Anna Schmidt", en)).toBe("Anna's workspace");
+    expect(personalCollaborationWorkspaceName("Anna Schmidt", de)).toBe("Annas Arbeitsbereich");
+    // German sets only the apostrophe after s, ß, x and z.
+    expect(personalCollaborationWorkspaceName("Felix Pahlke", de)).toBe("Felix' Arbeitsbereich");
+    expect(personalCollaborationWorkspaceName("Hans", de)).toBe("Hans' Arbeitsbereich");
+    expect(personalCollaborationWorkspaceName("  Moritz  ", de)).toBe("Moritz' Arbeitsbereich");
+  });
+
+  it("stays the fixed label where the owner has no name", () => {
+    expect(personalCollaborationWorkspaceName(undefined, en)).toBe("Personal workspace");
+    expect(personalCollaborationWorkspaceName("", en)).toBe("Personal workspace");
+    expect(personalCollaborationWorkspaceName("felix@example.test", de)).toBe(
+      "Persönlicher Arbeitsbereich"
+    );
+  });
+
+  it("leaves a shared workspace its own name and never shows the stored personal one", () => {
+    expect(collaborationWorkspaceDisplayName(personal, "Felix Pahlke", en)).toBe(
+      "Felix's workspace"
+    );
+    expect(
+      collaborationWorkspaceDisplayName(
+        collaborationWorkspace({ id: "cw_team", name: "Produktteam" }),
+        "Felix Pahlke",
+        en
+      )
+    ).toBe("Produktteam");
   });
 });

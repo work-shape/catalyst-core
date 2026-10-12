@@ -116,6 +116,8 @@ export const collaborationWorkspace = defineTranslations({
     collaborationWorkspaceOtherHeading: "Other workspaces",
     collaborationWorkspacePendingRequestCount: "{count} open access requests",
     collaborationWorkspacePersonalName: "Personal workspace",
+    collaborationWorkspacePersonalNameOf: "{name}'s workspace",
+    collaborationWorkspacePersonalNameOfSibilant: "{name}'s workspace",
     collaborationWorkspaceRemoveMember: "Remove {name}",
     collaborationWorkspaceRemoveMemberConfirm: "Remove",
     collaborationWorkspaceRemoveMemberDescription:
@@ -280,6 +282,8 @@ export const collaborationWorkspace = defineTranslations({
     collaborationWorkspaceOtherHeading: "Weitere Arbeitsbereiche",
     collaborationWorkspacePendingRequestCount: "{count} offene Zugriffsanfragen",
     collaborationWorkspacePersonalName: "Persönlicher Arbeitsbereich",
+    collaborationWorkspacePersonalNameOf: "{name}s Arbeitsbereich",
+    collaborationWorkspacePersonalNameOfSibilant: "{name}' Arbeitsbereich",
     collaborationWorkspaceRemoveMember: "{name} entfernen",
     collaborationWorkspaceRemoveMemberConfirm: "Entfernen",
     collaborationWorkspaceRemoveMemberDescription:

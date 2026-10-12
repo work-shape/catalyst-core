@@ -652,6 +652,12 @@ id from config_assets where status = 'deleted')`.
   `modelBindingId` in place of `model`. A call without a binding names the model as before. The
   usage ledger keeps the model id. **Operators:** a log query or alert on the `model` field of
   these lines needs `bindingId` as well.
+- **A Personal Workspace is named after its owner:** the interface shows "Felix's workspace"
+  (German "Felix' Arbeitsbereich", "Annas Arbeitsbereich") in the workspace selector, the move
+  dialog, the command palette, the workspace filter and column of Instance > Operations, and
+  the workspace name an App or a Page is given. The first name comes from the display label;
+  an account whose label is an e-mail address keeps "Personal workspace". The name stored on
+  the row is unchanged and still not shown.
 - **Every process of an instance is assembled from one build (breaking for a client
   assembly):** `defineClientInstance` gains `runWorkspaceCommandWorker()` and
   `runArtifactPreviewWorker()`, which hand the worker the capabilities of the build as

@@ -1,13 +1,8 @@
 import { SquarePen } from "lucide-react";
 import { useEffect, useState } from "react";
-import type {
-  ApiClient,
-  CollaborationWorkspaceWithRole,
-  ConversationListItem
-} from "@vivd-catalyst/api-client";
+import type { ApiClient, ConversationListItem } from "@vivd-catalyst/api-client";
 import { CommandPalette, type CommandPaletteGroup } from "@vivd-catalyst/ui";
 import { useConversationSearchQuery } from "../api/conversation-search-query";
-import { collaborationWorkspaceDisplayName } from "../collaboration-workspace/collaboration-workspace-selector";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { workspaceShortcutLabel } from "./workspace-shortcuts";
 
@@ -47,7 +42,7 @@ export function ConversationPalette({
   client,
   collaborationWorkspaceId,
   collaborationWorkspacesAvailable,
-  searchedWorkspace,
+  searchedWorkspaceName,
   recentConversations,
   goToTargets,
   onNewChat,
@@ -61,8 +56,8 @@ export function ConversationPalette({
   client: ApiClient;
   collaborationWorkspaceId: string | undefined;
   collaborationWorkspacesAvailable: boolean;
-  /** The workspace the search is limited to. An answer without a match names it. */
-  searchedWorkspace: Pick<CollaborationWorkspaceWithRole, "kind" | "name"> | undefined;
+  /** The shown name of the workspace the search is limited to. An answer without a match names it. */
+  searchedWorkspaceName: string | undefined;
   recentConversations: readonly ConversationListItem[];
   /** The caller lists only what the viewer may open. */
   goToTargets: readonly PaletteGoToTarget[];
@@ -132,10 +127,10 @@ export function ConversationPalette({
     // The sentence names the text the shown answer belongs to, not what is typed since.
     message =
       results?.length === 0 && !search.isPlaceholderData && goTo.items.length === 0
-        ? searchedWorkspace
+        ? searchedWorkspaceName !== undefined
           ? t("nav.paletteNoMatchInWorkspace", {
               query: searched,
-              workspace: collaborationWorkspaceDisplayName(searchedWorkspace, t)
+              workspace: searchedWorkspaceName
             })
           : t("nav.paletteNoMatch", { query: searched })
         : undefined;
