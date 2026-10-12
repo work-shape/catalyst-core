@@ -295,6 +295,7 @@ export function BuildFrame({ source }: { source: BuildSource }) {
         kinds.length > 1 ? (
           <SubRail
             mode="routes"
+            title={t("nav.build")}
             label={t("build.kinds")}
             groups={[
               {
