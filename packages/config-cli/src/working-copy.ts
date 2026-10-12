@@ -255,7 +255,7 @@ export async function readWorkingCopy(
     const file = toRelativePath(workingDir, path);
     try {
       const contents = await readFile(path, "utf8");
-      const parsedMarkdown = parseSkillMarkdown(contents, file, path);
+      const parsedMarkdown = parseSkillMarkdown(contents, file, toPosixPath(path));
       const resources = await readSkillResources(path);
       const parsed = skillConfigSchema.safeParse(
         isRecord(parsedMarkdown)
@@ -536,7 +536,11 @@ function extractErrorIssues(file: string, error: unknown): WorkingCopyIssue[] {
 }
 
 function toRelativePath(root: string, path: string): string {
-  return relative(root, path).split(sep).join("/");
+  return toPosixPath(relative(root, path));
+}
+
+function toPosixPath(path: string): string {
+  return path.split(sep).join("/");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
