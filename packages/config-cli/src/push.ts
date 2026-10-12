@@ -1,0 +1,519 @@
+import { resolve } from "node:path";
+import { ASSET_RELEASE_SYNC_MAX_ITEMS } from "@vivd-catalyst/api-contract";
+import { ConfigApiError, type ConfigApi, type SyncBatch } from "./api";
+import {
+  STATE_FILENAME,
+  readManifest,
+  readStateFile,
+  readWorkingCopy,
+  resolveInstance,
+  type DeletedAssetBaseline,
+  type InstanceBaseline,
+  type WorkingCopyBundle
+} from "./working-copy";
+import {
+  type ConfigCommandOptions,
+  type RemoteAsset,
+  assetContents,
+  assetEntries,
+  assetHash,
+  bundleOf,
+  byKey,
+  connectApi,
+  fetchRemoteAsset,
+  formatCount,
+  isRecord,
+  listRemoteAssets,
+  mapConcurrently,
+  parseOnlySelectors,
+  recordBaseline,
+  resolveWorkingDir,
+  selectBundle,
+  writeError,
+  writeOutput
+} from "./command-support";
+
+export async function pushConfig(options: ConfigCommandOptions): Promise<number> {
+  const workingDir = resolveWorkingDir(options);
+  const manifest = await readManifest(workingDir);
+  const instance = resolveInstance(manifest, options.instance);
+  const local = await readWorkingCopy(workingDir, manifest);
+  const selectors = parseOnlySelectors(options.only);
+  if (options.prune && selectors.length > 0) {
+    throw new Error("--prune cannot be combined with --only.");
+  }
+  const bundle = selectBundle(local, selectors, true);
+  if (options.force) {
+    throw new Error(FORCE_REFUSED_MESSAGE);
+  }
+  const state = await readStateFile(resolve(workingDir, STATE_FILENAME));
+  // A working copy that never pulled from the instance read nothing of it: every asset it
+  // pushes is a creation, made against no revision and no default agent, and the instance
+  // refuses it where it holds the name. State of an earlier CLI, pulled without revisions,
+  // says nothing a push could name.
+  const baseline: InstanceBaseline = state.instances[instance.key] ?? {
+    lastPulledVersion: 0,
+    assets: {},
+    defaultAgentName: null
+  };
+  if (baseline.assets === undefined) {
+    throw new Error(
+      `No per-asset baseline is recorded for '${instance.key}'. Run 'catalyst config pull' first.`
+    );
+  }
+  const baselineAssets = baseline.assets;
+  const api = await connectApi(instance.url, options);
+  // Read to its last page or not at all: a listing that fails stops the push, so a prune
+  // never takes an asset it could not list for one that is gone.
+  const listing = await listRemoteAssets(api);
+  const touched = assetEntries(bundle).filter(
+    (asset) => baselineAssets[asset.key]?.hash !== assetHash(asset.contents)
+  );
+  const touchedKeys = new Set(touched.map((asset) => asset.key));
+  const localKeys = new Set(assetEntries(local).map((asset) => asset.key));
+  const deleteAssets = options.prune
+    ? [...listing.values()].filter((asset) => !localKeys.has(asset.key))
+    : [];
+  const changesDefault =
+    selectors.length === 0 && (bundle.defaultAgentName ?? null) !== baseline.defaultAgentName;
+  if (changesDefault && baseline.defaultAgentName === undefined) {
+    throw new Error(
+      "No default-agent baseline is recorded. Run 'catalyst config pull' before changing the default agent."
+    );
+  }
+  /**
+   * The revision an item is made against: the one of the last pull, so a change on the
+   * instance since then refuses the push. For an asset this working copy saw deleted it is
+   * the revision of that delete, and for one it never saw it is none: a creation.
+   */
+  const baseOf = (key: string): { id?: string; revision: number } | undefined =>
+    baselineAssets[key] ?? baseline.deleted?.[key];
+  const selectedRemote = selectors.length
+    ? new Map(selectors.flatMap((selector) => listing.get(selector.key) ?? []).map(byKey))
+    : listing;
+  writeOutput(
+    options,
+    formatPushPlan(
+      await createPushPlan(api, bundle, selectedRemote, touchedKeys, baseline),
+      options.prune === true
+    )
+  );
+  if (!touched.length && !deleteAssets.length && !changesDefault) {
+    writeOutput(options, "No local changes to push.");
+    return 0;
+  }
+  // An asset to delete that no pull of this working copy has seen was created since. The
+  // instance is asked for nothing: a delete names the revision it was decided on.
+  const unseen = deleteAssets.filter((asset) => baselineAssets[asset.key] === undefined);
+  if (unseen.length > 0) {
+    writeError(
+      options,
+      formatPushConflict(
+        unseen.map((asset) => ({ ...asset, currentRevision: asset.revision })),
+        false,
+        options
+      )
+    );
+    return 1;
+  }
+  // A revision counts one asset. Where the instance holds another asset under the name than
+  // the one that was pulled, or the baseline does not say which asset it was, the number says
+  // nothing: the push is refused here, and the instance refuses it again under its own lock.
+  const written = [...touched, ...deleteAssets];
+  const foreign: AssetConflict[] = written.flatMap((asset): AssetConflict[] => {
+    const base = baseOf(asset.key);
+    if (base === undefined) return [];
+    const address = { kind: asset.kind, name: asset.name };
+    if (base.id === undefined) return [{ ...address, baseline: "unbound" }];
+    const remote = listing.get(asset.key);
+    return remote !== undefined && remote.id !== base.id
+      ? [{ ...address, baseline: "replaced" }]
+      : [];
+  });
+  if (foreign.length > 0) {
+    writeError(options, formatPushConflict(foreign, false, options));
+    return 1;
+  }
+  const items: SyncBatch["items"] = [
+    ...touched.map((asset) => {
+      const base = baseOf(asset.key);
+      return {
+        type: "put" as const,
+        kind: asset.kind,
+        config: { ...asset.config },
+        expectedRevision: base?.revision ?? null,
+        ...(base?.id === undefined ? {} : { expectedAssetId: base.id })
+      };
+    }),
+    ...deleteAssets.flatMap((asset) => {
+      const base = baselineAssets[asset.key];
+      return base === undefined
+        ? []
+        : [
+            {
+              type: "delete" as const,
+              kind: asset.kind,
+              name: asset.name,
+              expectedRevision: base.revision,
+              ...(base.id === undefined ? {} : { expectedAssetId: base.id })
+            }
+          ];
+    })
+  ];
+  if (items.length > ASSET_RELEASE_SYNC_MAX_ITEMS) {
+    throw new Error(
+      `This push changes ${items.length} assets, and one push holds at most ${ASSET_RELEASE_SYNC_MAX_ITEMS}. Push in parts with --only.`
+    );
+  }
+  // The default agent the push is made against, as the revisions are: the one of the last pull.
+  const batch: SyncBatch = {
+    items,
+    ...(changesDefault
+      ? {
+          defaultAgentName: bundle.defaultAgentName ?? null,
+          expectedDefaultAgentName: baseline.defaultAgentName ?? null
+        }
+      : {})
+  };
+  try {
+    // Asked first: an instance of an earlier release has no check, and says so here before
+    // anything is written under rules this CLI does not expect.
+    await checkSyncOnThisRelease(api, batch);
+    const outcome = await api.syncAssets(batch);
+    if (outcome.status === "pending_approval") {
+      writeError(
+        options,
+        `The push waits for an approval on the instance and nothing was applied yet (Operation Run ${outcome.operationRunId}). When it is approved, run 'catalyst config pull' to record the new revisions.`
+      );
+      return 1;
+    }
+    const result = outcome.output;
+    const revisions = Object.fromEntries(
+      result.items.flatMap((item) =>
+        item.status === "applied" && item.type === "put"
+          ? [[`${item.kind}:${item.name}`, { id: item.id, revision: item.revision }]]
+          : []
+      )
+    );
+    const pushed = bundleOf(touched);
+    await recordBaseline(
+      workingDir,
+      instance.key,
+      result.version,
+      pushed,
+      revisions,
+      false,
+      changesDefault ? (bundle.defaultAgentName ?? null) : undefined,
+      Object.fromEntries(
+        result.items.flatMap((item) =>
+          item.status === "applied" && item.type === "delete"
+            ? [[`${item.kind}:${item.name}`, { id: item.id, revision: item.revision }]]
+            : []
+        )
+      )
+    );
+    writeOutput(
+      options,
+      `Pushed ${formatCount(pushed.agents.length, "agent")}, ${formatCount(pushed.skills.length, "skill")}, version ${result.version}.`
+    );
+    if (result.hiddenAgentNames?.length) {
+      writeOutput(
+        options,
+        [
+          "Hidden in every workspace until an instance admin sets their availability:",
+          ...result.hiddenAgentNames.map((name) => `  agent:${name}`)
+        ].join("\n")
+      );
+    }
+    return 0;
+  } catch (error) {
+    const refusal = error instanceof ConfigApiError ? readRefusedBatch(error) : undefined;
+    if (!refusal) {
+      throw error;
+    }
+    if (refusal.conflicts.length > 0 || refusal.defaultAgentConflict) {
+      writeError(
+        options,
+        formatPushConflict(refusal.conflicts, refusal.defaultAgentConflict, options)
+      );
+      return 1;
+    }
+    writeError(
+      options,
+      formatRefusal(
+        refusal.validation ? "Validation failed" : "Push refused; nothing was applied",
+        refusal
+      )
+    );
+    return 1;
+  }
+}
+
+interface PushPlan {
+  added: number;
+  updated: number;
+  unchanged: number;
+  remoteOnly: string[];
+}
+
+/**
+ * What a push would do to each local asset. Whether a touched asset differs from the
+ * instance's is read from the baseline where the instance still holds the pulled revision,
+ * and from the instance's content only where it does not.
+ */
+async function createPushPlan(
+  api: ConfigApi,
+  local: WorkingCopyBundle,
+  remote: ReadonlyMap<string, RemoteAsset>,
+  touchedKeys: Set<string>,
+  baseline: InstanceBaseline | undefined
+): Promise<PushPlan> {
+  const localAssets = assetEntries(local);
+  const differs = await mapConcurrently(localAssets, async (asset) => {
+    const remoteAsset = remote.get(asset.key);
+    if (!touchedKeys.has(asset.key) || !remoteAsset) {
+      return false;
+    }
+    const base = baseline?.assets?.[asset.key];
+    if (base?.revision === remoteAsset.revision && base.id === remoteAsset.id) {
+      return base.hash !== assetHash(asset.contents);
+    }
+    const fetched = await fetchRemoteAsset(api, remoteAsset.kind, remoteAsset.name);
+    return fetched === undefined || assetContents(fetched) !== asset.contents;
+  });
+  let added = 0;
+  let updated = 0;
+  let unchanged = 0;
+  localAssets.forEach((asset, index) => {
+    if (touchedKeys.has(asset.key) && !remote.has(asset.key)) {
+      added += 1;
+    } else if (differs[index]) {
+      updated += 1;
+    } else {
+      unchanged += 1;
+    }
+  });
+  const localKeys = new Set(localAssets.map((asset) => asset.key));
+  return {
+    added,
+    updated,
+    unchanged,
+    remoteOnly: [...remote.keys()].filter((key) => !localKeys.has(key)).sort()
+  };
+}
+
+function formatPushPlan(plan: PushPlan, prune: boolean): string {
+  const lines = [
+    `Push plan (${prune ? "mirror" : "merge"}):`,
+    `  Added: ${plan.added}`,
+    `  Updated: ${plan.updated}`,
+    `  Unchanged: ${plan.unchanged}`
+  ];
+  if (prune) {
+    lines.push(`  Deleted: ${plan.remoteOnly.length}`);
+    if (plan.remoteOnly.length > 0) {
+      lines.push("Assets to delete:", ...plan.remoteOnly.map((key) => `- ${key}`));
+    }
+  } else if (plan.remoteOnly.length > 0) {
+    lines.push(
+      "Warning: these assets exist only on the instance and will be kept:",
+      ...plan.remoteOnly.map((key) => `- ${key}`),
+      "Use --prune to delete them."
+    );
+  }
+  return lines.join("\n");
+}
+
+/** What `push --force` answers. The flag is gone: a push never overwrites what it did not read. */
+const FORCE_REFUSED_MESSAGE =
+  "'catalyst config push --force' no longer exists: a push names the revision each asset was pulled at and never overwrites a change it did not read. Where a push reports a conflict, commit or stash local edits, run 'catalyst config pull --only <kind>:<name>' for the assets it names, review with 'catalyst config diff', re-apply the edits and push again.";
+
+/**
+ * One asset a push was made against another revision of, as the instance told it. A key that
+ * may not read the asset is told its name only.
+ */
+interface AssetConflict {
+  kind: string;
+  name: string;
+  /**
+   * The baseline says nothing a push could name for the asset: `replaced` where the instance
+   * holds another asset under the name than the one that was pulled, `unbound` where an
+   * earlier CLI recorded the revision without the asset it counts.
+   */
+  baseline?: "replaced" | "unbound";
+  /** The revision the instance holds, or null where it holds no such asset. */
+  currentRevision?: number | null;
+  /** The instance holds the delete of the asset as its latest revision. */
+  deleted?: boolean;
+  changedBy?: string;
+  changedAt?: string;
+}
+
+/**
+ * The revision of the delete of each named asset, where the key may read its history. A push
+ * that creates the asset again names it.
+ */
+export async function readTombstones(
+  api: ConfigApi,
+  keys: readonly string[]
+): Promise<Record<string, DeletedAssetBaseline | undefined>> {
+  const revisions = await mapConcurrently(keys, async (key) => {
+    const separator = key.indexOf(":");
+    const latest = await api
+      .getLatestRevision(key.slice(0, separator), key.slice(separator + 1))
+      .catch(() => undefined);
+    return latest?.operation === "delete"
+      ? { id: latest.assetId, revision: latest.revision }
+      : undefined;
+  });
+  return Object.fromEntries(keys.map((key, index) => [key, revisions[index]]));
+}
+
+/** A batch the instance did not apply, as the command reports it. */
+interface RefusedBatch {
+  message: string;
+  /** The answer is about the definitions, not about rights or revisions. */
+  validation: boolean;
+  conflicts: AssetConflict[];
+  defaultAgentConflict: boolean;
+  /** One line per refused item and per issue of the set. */
+  lines: string[];
+}
+
+/** Reads the error of a refused sync or check. Any other error is not one. */
+export function readRefusedBatch(error: ConfigApiError): RefusedBatch | undefined {
+  const details = isRecord(error.details) ? error.details : {};
+  const defaultAgentConflict =
+    error.code === "CONFLICT" && details.reason === "default_agent_changed";
+  if (details.reason !== "sync_refused" && !defaultAgentConflict && error.status !== 422) {
+    return undefined;
+  }
+  const refused = (Array.isArray(details.items) ? details.items : []).flatMap((item) =>
+    isRecord(item) && isRecord(item.error) ? [{ item, refusal: item.error }] : []
+  );
+  const label = (item: Record<string, unknown>) =>
+    `${String(item.kind)}${typeof item.name === "string" ? ` '${item.name}'` : typeof item.index === "number" ? ` #${item.index + 1}` : ""}`;
+  const issues = (Array.isArray(details.issues) ? details.issues : []).flatMap((issue) =>
+    isRecord(issue) && typeof issue.message === "string" ? [issue] : []
+  );
+  return {
+    message: error.message,
+    validation: error.status === 422,
+    defaultAgentConflict,
+    conflicts: (Array.isArray(details.conflicts) ? details.conflicts : []).flatMap((conflict) =>
+      isRecord(conflict) && typeof conflict.kind === "string" && typeof conflict.name === "string"
+        ? [
+            {
+              kind: conflict.kind,
+              name: conflict.name,
+              ...(typeof conflict.currentRevision === "number" || conflict.currentRevision === null
+                ? { currentRevision: conflict.currentRevision }
+                : {}),
+              ...(conflict.deleted === true ? { deleted: true } : {}),
+              ...(typeof conflict.changedBy === "string" ? { changedBy: conflict.changedBy } : {}),
+              ...(typeof conflict.changedAt === "string" ? { changedAt: conflict.changedAt } : {})
+            }
+          ]
+        : []
+    ),
+    lines: [
+      ...refused.map(({ item, refusal }) => `${label(item)}: ${String(refusal.message)}`),
+      ...issues.map((issue) => {
+        const path =
+          Array.isArray(issue.path) && issue.path.length > 0
+            ? ` (${issue.path.map(String).join(".")})`
+            : "";
+        return `config${path}: ${String(issue.message)}`;
+      })
+    ]
+  };
+}
+
+/**
+ * Asks the instance whether it would apply the batch. An instance that does not know the
+ * check is of an earlier release, whose sync does not write a release as this CLI sends it.
+ */
+export async function checkSyncOnThisRelease(api: ConfigApi, batch: SyncBatch): Promise<void> {
+  try {
+    await api.checkSync(batch);
+  } catch (error) {
+    if (error instanceof ConfigApiError && isMissingCheck(error)) {
+      throw new Error(
+        "This instance is on an earlier release than this CLI: 'config push' and 'config validate' need the instance on the release of this CLI or later. Upgrade the instance, or use the CLI of its release.",
+        { cause: error }
+      );
+    }
+    throw error;
+  }
+}
+
+/** A 404 that is no refusal of the batch: the instance has no such operation. */
+function isMissingCheck(error: ConfigApiError): boolean {
+  return (
+    error.status === 404 && !(isRecord(error.details) && error.details.reason === "sync_refused")
+  );
+}
+
+export function formatRefusal(title: string, refusal: RefusedBatch): string {
+  if (refusal.lines.length === 0) {
+    // The instance bounds a batch by its caller. Where that refuses a push, parts fit.
+    const hint = /^A batch holds at most/u.test(refusal.message)
+      ? " Push in parts with --only."
+      : "";
+    return `${title}: ${refusal.message}${hint}`;
+  }
+  return `${title}:\n${refusal.lines.map((line) => `- ${line}`).join("\n")}`;
+}
+
+function formatPushConflict(
+  conflicts: readonly AssetConflict[],
+  defaultAgentConflict: boolean,
+  options: ConfigCommandOptions
+): string {
+  const selectors = conflicts.map((asset) => `${asset.kind}:${asset.name}`);
+  const argumentsList = [
+    "catalyst config pull",
+    ...(options.dir ? ["--dir", shellQuote(options.dir)] : []),
+    ...(options.instance ? ["--instance", shellQuote(options.instance)] : []),
+    // A full pull refreshes the manifest's default-agent pointer as well as assets.
+    ...(defaultAgentConflict
+      ? []
+      : selectors.flatMap((selector) => ["--only", shellQuote(selector)]))
+  ];
+  return [
+    "Push conflict; nothing was applied.",
+    ...conflicts.map((asset) => `- ${asset.kind}:${asset.name}: ${describeConflict(asset)}`),
+    ...(defaultAgentConflict
+      ? ["- default agent changed on the instance; a full pull is required."]
+      : []),
+    defaultAgentConflict
+      ? "Commit or stash local edits in git first: a full pull overwrites the local working copy."
+      : "Commit or stash local edits in git first: pull overwrites the local files for these assets.",
+    argumentsList.join(" "),
+    "Review with 'catalyst config diff', re-apply local edits, and push again."
+  ].join("\n");
+}
+
+/** What the instance holds of one conflicting asset, in the words of what the key may read. */
+function describeConflict(asset: AssetConflict): string {
+  if (asset.baseline === "replaced") {
+    return "the instance holds another asset under this name than the one this working copy pulled. The working copy was pulled from another database, or the asset was replaced there";
+  }
+  if (asset.baseline === "unbound") {
+    return "the baseline was written by an earlier CLI and does not say which asset its revision counts, so it cannot be pushed against";
+  }
+  if (asset.currentRevision === undefined) {
+    return "changed on the instance since the last pull";
+  }
+  if (asset.currentRevision === null) {
+    return "not on the instance";
+  }
+  const by = `by ${asset.changedBy ?? "unknown actor"} at ${asset.changedAt ?? "unknown time"}`;
+  return asset.deleted
+    ? `deleted at revision ${asset.currentRevision} ${by}; the pull records that delete, and the next push may create the asset again`
+    : `revision ${asset.currentRevision}, changed ${by}`;
+}
+
+function shellQuote(value: string): string {
+  return /^[a-zA-Z0-9_:./-]+$/u.test(value) ? value : "'" + value.replaceAll("'", "'\"'\"'") + "'";
+}

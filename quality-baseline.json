@@ -424,13 +424,6 @@
     {
       "target": "lint",
       "rule": "max-lines",
-      "scope": "packages/config-cli/src/commands.ts",
-      "count": 1,
-      "owner": "PA-1b"
-    },
-    {
-      "target": "lint",
-      "rule": "max-lines",
       "scope": "packages/config-schema/src/schemas.ts",
       "count": 1,
       "owner": "MD-1"
