@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 import { lstat, open } from "node:fs/promises";
 import { join } from "node:path";
 import { GitError, OBJECT_ID, type Repository } from "./git";
@@ -60,6 +62,15 @@ function parseBundleHeader(start: Uint8Array): BundleHeader | undefined {
   return header;
 }
 
+/** The SHA-256 of a file, in lower-case hex, read as a stream. */
+export async function sha256OfFile(path: string): Promise<string> {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(path)) {
+    hash.update(chunk);
+  }
+  return hash.digest("hex");
+}
+
 async function isCommit(repository: Repository, commit: string): Promise<boolean> {
   return repository.succeeds(["cat-file", "-e", `${commit}^{commit}`]);
 }
@@ -82,6 +93,12 @@ async function applyBundle(
       "bundle_too_large",
       `has ${stat.size} bytes. A bundle has at most ${ASSET_REPO_MAX_BUNDLE_BYTES} (ASSET_REPO_MAX_BUNDLE_BYTES).`
     );
+  }
+  // A bundle of the ledger passed the tree check when it was written, and that check is not
+  // repeated here. So the file must be those bytes and no others: the size and the hash the
+  // ledger recorded are compared before anything of the file is read as a bundle.
+  if (stat.size !== bundle.bytes || (await sha256OfFile(path)) !== bundle.sha256) {
+    throw refuse("bundle_hash_mismatch", "does not have the bytes the ledger recorded for it");
   }
   const file = await open(path, "r");
   let start: Buffer;

@@ -112,7 +112,13 @@ async function check(): Promise<void> {
     }
     const second = await createRepository(join(scratch, "second.git"), join(scratch, "second"));
     await applyBundles(second, output, [
-      { file: committed.bundle.file, tip: committed.commit, prerequisite: null }
+      {
+        file: committed.bundle.file,
+        tip: committed.commit,
+        prerequisite: null,
+        sha256: committed.bundle.sha256,
+        bytes: committed.bundle.bytes
+      }
     ]);
     await writeLedgerRefs(second, {
       draft: committed.commit,

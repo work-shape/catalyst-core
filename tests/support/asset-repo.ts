@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -44,6 +45,22 @@ export interface TestBundle {
   tip: string;
   prerequisite: string | null;
   bytes: Buffer;
+  /** What the ledger recorded of the bundle, where that is not what `bytes` are. */
+  recorded?: { sha256: string; bytes: number };
+}
+
+/** A bundle as a request names it: by what the ledger recorded, which is the file's own bytes
+ * unless a test says the ledger recorded others. */
+function named(bundle: TestBundle) {
+  return {
+    file: bundle.file,
+    tip: bundle.tip,
+    prerequisite: bundle.prerequisite,
+    ...(bundle.recorded ?? {
+      sha256: createHash("sha256").update(bundle.bytes).digest("hex"),
+      bytes: bundle.bytes.byteLength
+    })
+  };
 }
 
 export interface TestCommit {
@@ -70,7 +87,7 @@ export async function commitFolder(
     message?: string;
     prepare?(folder: string): Promise<void>;
     /** Replaces the list of bundles the request names. The files stay those of `bundles`. */
-    named?: readonly Pick<TestBundle, "file" | "tip" | "prerequisite">[];
+    named?: readonly TestBundle[];
   }
 ): Promise<TestCommit> {
   const directory = await mkdtemp(join(scratch, "commit-"));
@@ -90,11 +107,7 @@ export async function commitFolder(
   await writeFile(
     join(directory, ASSET_REPO_REQUEST_FILE),
     JSON.stringify({
-      bundles: (input.named ?? bundles).map(({ file, tip, prerequisite }) => ({
-        file,
-        tip,
-        prerequisite
-      })),
+      bundles: (input.named ?? bundles).map(named),
       base: input.base ?? null,
       author: input.author ?? "user_7f3a",
       time: input.time ?? 1_760_270_400,
@@ -140,7 +153,7 @@ export async function materialise(
   await writeFile(
     join(directory, ASSET_REPO_REQUEST_FILE),
     JSON.stringify({
-      bundles: input.bundles.map(({ file, tip, prerequisite }) => ({ file, tip, prerequisite })),
+      bundles: input.bundles.map(named),
       draft: input.draft,
       revisions: input.revisions
     })

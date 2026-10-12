@@ -11,6 +11,12 @@ export interface BundleReference {
   tip: string;
   /** The commit an incremental bundle stands on. `null` for a full bundle. */
   prerequisite: string | null;
+  /**
+   * The SHA-256 and the size the ledger recorded when the bundle was written. A file with
+   * other bytes is not the bundle the ledger names and is refused before it is read.
+   */
+  sha256: string;
+  bytes: number;
 }
 
 export interface CommitFolderRequest {
@@ -49,7 +55,14 @@ export type CommitFolderResult =
       parent: string | null;
       files: number;
       /** The bundle that holds the commit, below the output directory. */
-      bundle: { file: string; kind: "full" | "incremental"; prerequisite: string | null };
+      bundle: {
+        file: string;
+        kind: "full" | "incremental";
+        prerequisite: string | null;
+        /** What the ledger records of the file, and what a later request names it by. */
+        sha256: string;
+        bytes: number;
+      };
     }
   | AssetRepoRefusal;
 
@@ -59,6 +72,7 @@ export type MaterialiseResult =
 export class RequestError extends Error {}
 
 const BUNDLE_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,200}\.bundle$/u;
+const SHA256 = /^[0-9a-f]{64}$/u;
 const AUTHOR = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
 const MESSAGE = /^[^\u0000-\u001f\u007f]{1,200}$/u;
 
@@ -89,8 +103,20 @@ function bundles(value: unknown): BundleReference[] {
     if (typeof bundle.file !== "string" || !BUNDLE_FILE.test(bundle.file)) {
       throw new RequestError(`bundles[${index}].file is not the name of a bundle file`);
     }
+    if (typeof bundle.sha256 !== "string" || !SHA256.test(bundle.sha256)) {
+      throw new RequestError(`bundles[${index}].sha256 is not a SHA-256 in lower-case hex`);
+    }
+    if (
+      typeof bundle.bytes !== "number" ||
+      !Number.isSafeInteger(bundle.bytes) ||
+      bundle.bytes < 1
+    ) {
+      throw new RequestError(`bundles[${index}].bytes is not a number of bytes`);
+    }
     return {
       file: bundle.file,
+      sha256: bundle.sha256,
+      bytes: bundle.bytes,
       tip: commit(bundle.tip, `bundles[${index}].tip`),
       prerequisite:
         bundle.prerequisite === null

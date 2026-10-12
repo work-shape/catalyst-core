@@ -27,6 +27,8 @@ export const ASSET_REPO_REVISION_REF_PREFIX = "refs/revisions/";
 
 /** The largest file a repository takes. A larger one is refused with its path. */
 export const ASSET_REPO_MAX_FILE_BYTES = 2 * 1024 * 1024;
+/** What the files of one commit may weigh together. A heavier tree is refused. */
+export const ASSET_REPO_MAX_TREE_BYTES = 50 * 1024 * 1024;
 /** How many files one commit may hold. One more is refused. */
 export const ASSET_REPO_MAX_FILES = 2000;
 /** The longest path, in bytes. A longer one is refused. */

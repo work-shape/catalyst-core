@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -6,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   ASSET_REPO_MAX_FILE_BYTES,
   ASSET_REPO_MAX_FILES,
+  ASSET_REPO_MAX_TREE_BYTES,
   ASSET_REPO_OUTPUT_DIRECTORY,
   ASSET_REPO_REPOSITORY_DIRECTORY,
   treeRefusal,
@@ -227,6 +229,23 @@ describe("committing a folder", () => {
     });
   });
 
+  it("refuses a folder whose files weigh more than a tree may, and names the first file past it", async () => {
+    const count = ASSET_REPO_MAX_TREE_BYTES / ASSET_REPO_MAX_FILE_BYTES;
+    const commit = await commitFolder(scratch, {
+      files: Object.fromEntries(
+        Array.from({ length: count + 1 }, (_, index) => [
+          `data/${String(index).padStart(2, "0")}.bin`,
+          new Uint8Array(ASSET_REPO_MAX_FILE_BYTES)
+        ])
+      )
+    });
+    expect(commit.result).toMatchObject({
+      status: "refused",
+      code: "tree_too_large",
+      path: `data/${count}.bin`
+    });
+  });
+
   it("refuses a folder with more files than the cap, and one with more directories than a walk takes", async () => {
     const many = await commitFolder(scratch, {
       files: Object.fromEntries(
@@ -316,6 +335,12 @@ describe("the trees the store takes", () => {
     const many = Array.from({ length: ASSET_REPO_MAX_FILES + 1 }, (_, index) => file(`f${index}`));
     expect(refused(many)).toEqual(["too_many_files", `f${ASSET_REPO_MAX_FILES}`]);
     expect(refused(many.slice(0, ASSET_REPO_MAX_FILES))).toBe(undefined);
+    const heavy = Array.from(
+      { length: ASSET_REPO_MAX_TREE_BYTES / ASSET_REPO_MAX_FILE_BYTES + 1 },
+      (_, index) => file(`h${index}`, ASSET_REPO_MAX_FILE_BYTES)
+    );
+    expect(refused(heavy)).toEqual(["tree_too_large", `h${heavy.length - 1}`]);
+    expect(refused(heavy.slice(0, -1))).toBe(undefined);
   });
 });
 
@@ -333,6 +358,70 @@ describe("making a repository from bundles", () => {
       code: "bundle_missing",
       path: second.bundle.file
     });
+  });
+
+  it("says what the ledger records of the bundle it wrote: its size and SHA-256", async () => {
+    const { result, bundle } = await commitFolder(scratch, { files: source });
+    expect(result).toMatchObject({
+      status: "committed",
+      bundle: {
+        bytes: bundle?.bytes.byteLength,
+        sha256: createHash("sha256")
+          .update(bundle?.bytes ?? "")
+          .digest("hex")
+      }
+    });
+  });
+
+  it("refuses a bundle whose bytes are not the ones the ledger recorded", async () => {
+    const { first, second } = await twoRevisions();
+    // Another bundle that is whole and ends on a commit of its own, under the name of the second.
+    const other = committed(
+      await commitFolder(scratch, {
+        files: { ...source, "src/rates.ts": "export const rate = 3;\n" },
+        bundles: [first.bundle],
+        base: first.commit
+      })
+    );
+    const recorded = {
+      sha256: createHash("sha256").update(second.bundle.bytes).digest("hex"),
+      bytes: second.bundle.bytes.byteLength
+    };
+    const flipped = Buffer.from(second.bundle.bytes);
+    flipped[flipped.byteLength - 1] = (flipped.at(-1) ?? 0) ^ 1;
+    const wrong = {
+      swapped: other.bundle.bytes,
+      truncated: second.bundle.bytes.subarray(0, second.bundle.bytes.byteLength - 20),
+      "of the same size": flipped
+    };
+    for (const [what, bytes] of Object.entries(wrong)) {
+      const { result, directory } = await materialise(scratch, {
+        bundles: [first.bundle, { ...second.bundle, bytes, recorded }],
+        draft: second.commit,
+        revisions: [{ number: 1, commit: first.commit }]
+      });
+      expect(result, what).toMatchObject({
+        status: "refused",
+        code: "bundle_hash_mismatch",
+        path: second.bundle.file
+      });
+      // Refused before git saw it: the repository holds the first bundle and nothing of this one.
+      const repository = join(
+        directory,
+        ASSET_REPO_OUTPUT_DIRECTORY,
+        ASSET_REPO_REPOSITORY_DIRECTORY
+      );
+      await expect(testGit(repository, ["cat-file", "-e", other.commit]), what).rejects.toThrow();
+    }
+    // A save reads the same bundles and refuses the same way.
+    const save = await commitFolder(scratch, {
+      files: source,
+      bundles: [
+        { ...first.bundle, recorded: { ...recorded, bytes: first.bundle.bytes.byteLength } }
+      ],
+      base: first.commit
+    });
+    expect(save.result).toMatchObject({ status: "refused", code: "bundle_hash_mismatch" });
   });
 
   it("refuses a bundle whose base no earlier bundle holds", async () => {

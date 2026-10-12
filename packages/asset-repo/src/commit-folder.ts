@@ -7,7 +7,7 @@ import {
   ASSET_REPO_LFS_POINTER_START,
   ASSET_REPO_MAX_FILES
 } from "./limits";
-import { applyBundles, Refused } from "./materialise";
+import { applyBundles, Refused, sha256OfFile } from "./materialise";
 import type { CommitFolderRequest, CommitFolderResult } from "./request";
 import { treeRefusal, type TreeEntry } from "./tree-check";
 
@@ -196,12 +196,13 @@ export async function commitFolder(input: CommitFolderInput): Promise<CommitFold
 
   await repository.git(["update-ref", ASSET_REPO_DRAFT_REF, commit]);
   const file = `${commit}.bundle`;
+  const bundlePath = join(input.output, file);
   await repository.git([
     "bundle",
     "create",
     "--quiet",
     "--version=2",
-    join(input.output, file),
+    bundlePath,
     request.base ? `${request.base}..${ASSET_REPO_DRAFT_REF}` : ASSET_REPO_DRAFT_REF
   ]);
   return {
@@ -213,7 +214,9 @@ export async function commitFolder(input: CommitFolderInput): Promise<CommitFold
     bundle: {
       file,
       kind: request.base ? "incremental" : "full",
-      prerequisite: request.base
+      prerequisite: request.base,
+      sha256: await sha256OfFile(bundlePath),
+      bytes: (await lstat(bundlePath)).size
     }
   };
 }

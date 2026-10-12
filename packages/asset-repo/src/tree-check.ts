@@ -1,7 +1,8 @@
 import {
   ASSET_REPO_MAX_FILE_BYTES,
   ASSET_REPO_MAX_FILES,
-  ASSET_REPO_MAX_PATH_BYTES
+  ASSET_REPO_MAX_PATH_BYTES,
+  ASSET_REPO_MAX_TREE_BYTES
 } from "./limits";
 
 // The trees the platform accepts. One list for a folder before it is committed and for a
@@ -19,7 +20,8 @@ export interface TreeRefusal {
     | "path_too_long"
     | "file_too_large"
     | "lfs_pointer"
-    | "too_many_files";
+    | "too_many_files"
+    | "tree_too_large";
   path: string;
   message: string;
 }
@@ -37,12 +39,14 @@ export interface TreeLimits {
   maxFileBytes: number;
   maxFiles: number;
   maxPathBytes: number;
+  maxTreeBytes: number;
 }
 
 const DEFAULT_TREE_LIMITS: TreeLimits = {
   maxFileBytes: ASSET_REPO_MAX_FILE_BYTES,
   maxFiles: ASSET_REPO_MAX_FILES,
-  maxPathBytes: ASSET_REPO_MAX_PATH_BYTES
+  maxPathBytes: ASSET_REPO_MAX_PATH_BYTES,
+  maxTreeBytes: ASSET_REPO_MAX_TREE_BYTES
 };
 
 // Names git or a file system reads as something else than a file of the author: the
@@ -96,6 +100,7 @@ export function treeRefusal(
 ): TreeRefusal | undefined {
   const seen = new Set<string>();
   let files = 0;
+  let bytes = 0;
   for (const entry of entries) {
     const { path, mode } = entry;
     const invalid = pathRefusal(path, limits);
@@ -136,6 +141,14 @@ export function treeRefusal(
         code: "file_too_large",
         path,
         message: `'${path}' has ${entry.size} bytes. A file has at most ${limits.maxFileBytes} (ASSET_REPO_MAX_FILE_BYTES).`
+      };
+    }
+    bytes += entry.size ?? 0;
+    if (bytes > limits.maxTreeBytes) {
+      return {
+        code: "tree_too_large",
+        path,
+        message: `The files of the tree have more than ${limits.maxTreeBytes} bytes together (ASSET_REPO_MAX_TREE_BYTES). '${path}' is the first past it.`
       };
     }
   }
