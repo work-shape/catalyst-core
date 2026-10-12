@@ -125,6 +125,17 @@ auth:
           - admin
         permissionRefs:
           - demo-tools
+      # The person of the Update app spec. No other spec uses them: the spec saves an App, and
+      # an App's id is taken once for the whole instance.
+      - email: e2e-app-update@example.test
+        displayLabel: Zz E2E App Update
+        passwordEnvName: E2E_APP_UPDATE_PASSWORD
+        developmentPassword: e2e-app-update-password
+        roles:
+          - user
+          - admin
+        permissionRefs:
+          - demo-tools
       # The two people of the App actions spec. No other spec uses them: the admin writes and
       # publishes the App and may use its Connection through the role, and the member holds the
       # use right on the App alone until the spec grants the one on the Connection.

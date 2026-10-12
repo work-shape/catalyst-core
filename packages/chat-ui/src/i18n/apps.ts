@@ -141,13 +141,27 @@ export const apps = defineTranslations({
       "Lowercase letters, digits and hyphens. It is part of the app’s address and stays as it is.",
     "apps.saveIdInvalid":
       "Use lowercase letters, digits and hyphens, at most 63, not starting with a hyphen.",
-    "apps.saveIdTaken": "An app with this ID already exists on this instance.",
+    "apps.saveIdTaken":
+      "An app with this ID already exists. Choose another ID to save this page as a new app. To put this page into the existing app instead, delete that app under Apps and save again.",
     "apps.saveName": "Name",
     "apps.showMore": "Show more",
     "apps.starting": "The app is starting",
     "apps.title": "Apps",
     "apps.unavailable": "This app is not available to you.",
-    "apps.unpublishedChanges": "Unpublished changes"
+    "apps.unpublishedChanges": "Unpublished changes",
+    "apps.update": "Update app",
+    "apps.updateBody":
+      "The page as it is now becomes the draft of this app. People who use the app see the change only once the draft is published.",
+    "apps.updateChanged":
+      "The draft of this app was changed somewhere else since it was last updated from this page. Updating replaces those changes.",
+    "apps.updateConfirm": "Update draft",
+    "apps.updateDone":
+      "The draft of the app now holds this page as it is. Open the app to check the draft and publish it.",
+    "apps.updateDoneTitle": "“{name}” is updated",
+    "apps.updateFailed": "The app could not be updated.",
+    "apps.updateOpen": "Open app",
+    "apps.updateReplace": "Replace draft",
+    "apps.updateTitle": "Update “{name}”?"
   },
   de: {
     "apps.actionCalls": "Ruft auf",
@@ -294,12 +308,26 @@ export const apps = defineTranslations({
       "Kleinbuchstaben, Ziffern und Bindestriche. Sie ist Teil der Adresse der App und bleibt, wie sie ist.",
     "apps.saveIdInvalid":
       "Verwende Kleinbuchstaben, Ziffern und Bindestriche, höchstens 63, nicht mit einem Bindestrich beginnend.",
-    "apps.saveIdTaken": "Auf dieser Instanz gibt es schon eine App mit dieser ID.",
+    "apps.saveIdTaken":
+      "Es gibt schon eine App mit dieser ID. Wähle eine andere ID, um die Page als neue App zu speichern. Soll die Page stattdessen in die vorhandene App, lösche diese App unter Apps und speichere erneut.",
     "apps.saveName": "Name",
     "apps.showMore": "Mehr anzeigen",
     "apps.starting": "Die App wird gestartet",
     "apps.title": "Apps",
     "apps.unavailable": "Diese App ist für dich nicht verfügbar.",
-    "apps.unpublishedChanges": "Unveröffentlichte Änderungen"
+    "apps.unpublishedChanges": "Unveröffentlichte Änderungen",
+    "apps.update": "App aktualisieren",
+    "apps.updateBody":
+      "Die Page wird so, wie sie jetzt ist, zum Entwurf dieser App. Wer die App nutzt, sieht die Änderung erst, wenn der Entwurf veröffentlicht ist.",
+    "apps.updateChanged":
+      "Der Entwurf dieser App wurde an anderer Stelle geändert, seit er zuletzt aus dieser Page aktualisiert wurde. Beim Aktualisieren werden diese Änderungen ersetzt.",
+    "apps.updateConfirm": "Entwurf aktualisieren",
+    "apps.updateDone":
+      "Der Entwurf der App enthält die Page jetzt so, wie sie ist. Öffne die App, um den Entwurf zu prüfen und zu veröffentlichen.",
+    "apps.updateDoneTitle": "„{name}“ ist aktualisiert",
+    "apps.updateFailed": "Die App konnte nicht aktualisiert werden.",
+    "apps.updateOpen": "App öffnen",
+    "apps.updateReplace": "Entwurf ersetzen",
+    "apps.updateTitle": "„{name}“ aktualisieren?"
   }
 });

@@ -34,7 +34,9 @@ export { AppViewFrame } from "./app-view";
 export { AppsHostProvider, type AppsHost } from "./apps-host";
 export { appRowRoute, AppsPageView } from "./apps-page";
 export { RevisionsDrawerView } from "./revisions-drawer";
+export { pageAppChoice } from "./page-app-action";
 export { SaveAsAppAction, SaveAsAppDialogView } from "./save-as-app-dialog";
+export { UpdateAppAction, UpdateAppDialogView } from "./update-app-dialog";
 // The address of the area and its row in the rail, which the same tests hold.
 export {
   areaOfRoute,

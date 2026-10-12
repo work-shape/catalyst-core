@@ -19,7 +19,7 @@ import {
   SegmentedControlItem
 } from "@vivd-catalyst/ui";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
-import { SaveAsAppAction } from "../apps/save-as-app-dialog";
+import { PageAppAction } from "../apps/page-app-action";
 import { useTranslation } from "../i18n";
 import type { PageBuildError, SurfaceOf } from "../surface/surface";
 import { createPageBridge, type PageBridge } from "./bridge-host";
@@ -108,7 +108,7 @@ export function pageSurfaceRendering(surface: SurfaceOf<"page">): {
   return {
     actions: (
       <>
-        <SaveAsAppAction
+        <PageAppAction
           conversationId={surface.conversationId}
           pageId={surface.pageId}
           pageName={surface.title}

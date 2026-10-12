@@ -351,6 +351,16 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     ]
   },
   {
+    name: "app-update-over-a-draft-that-moved",
+    reason:
+      "Chromium's own log line: the test writes the draft of an App with the API while the " +
+      "update of it is asked for, the update is answered with 412, and the test asserts that " +
+      "the dialog says so and offers to replace the draft.",
+    matches: requestAnswered(412),
+    path: /^\/api\/v1\/apps\/[^/]+\/update-from-page$/u,
+    tests: ["a Page saved as an App updates the draft of that App, and nothing that is published"]
+  },
+  {
     name: "unread-configuration-diagnostic",
     reason:
       "The interface writes this line itself when the instance configuration does not fit it, " +

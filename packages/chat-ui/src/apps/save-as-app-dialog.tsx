@@ -1,19 +1,21 @@
 import { LayoutGrid } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { Button, Dialog, Field, IconButton, InlineError, Input } from "@vivd-catalyst/ui";
+import { Button, Dialog, Field, InlineError, Input } from "@vivd-catalyst/ui";
 import { instanceSentence } from "../build-area/build-refusals";
 import { useTranslation } from "../i18n";
 import { apiErrorCode } from "../workspace-utils";
 import { useAppWrites } from "./app-data";
 import { APP_ID_PATTERN, APP_NAME_MAX, appIdFromName, appRefusalText } from "./app-model";
 import { useAppsHost } from "./apps-host";
+import { PageHeaderAction } from "./page-header-action";
 
 const FORM_ID = "save-as-app-form";
 
 /**
- * Save as app, in the header of a Page: for whoever may write Apps in the workspace of the
- * conversation, while the Apps module is on. Everywhere else it is nothing, which is also what
- * a Page shows outside a workspace shell. Saving makes the draft of a new App and opens it.
+ * Save as app, in the header of a Page that has no App the reader may write: for whoever may
+ * write Apps in the workspace of the conversation, while the Apps module is on. Everywhere else
+ * it is nothing, which is also what a Page shows outside a workspace shell. Saving makes the
+ * draft of a new App and opens it.
  */
 export function SaveAsAppAction({
   conversationId,
@@ -34,19 +36,11 @@ export function SaveAsAppAction({
   const workspace = host.workspace;
   return (
     <>
-      {/* The header of a Page is narrow on a phone: the action is its icon alone there. */}
-      <Button variant="outline" size="sm" className="max-md:hidden" onClick={() => setOpen(true)}>
-        {t("apps.save")}
-      </Button>
-      <IconButton
+      <PageHeaderAction
         label={t("apps.save")}
-        variant="outline"
-        size="sm"
-        className="md:hidden"
+        icon={<LayoutGrid aria-hidden="true" />}
         onClick={() => setOpen(true)}
-      >
-        <LayoutGrid aria-hidden="true" />
-      </IconButton>
+      />
       {open ? (
         <SaveAsAppDialog
           workspaceId={workspace.id}
