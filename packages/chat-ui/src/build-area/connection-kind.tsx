@@ -3,6 +3,7 @@ import { Badge, Chip } from "@vivd-catalyst/ui";
 import type { BuildAssetViewProps, BuildListedKind } from "./build-asset-kind";
 import { ConnectionPage } from "./connection-page";
 import { useConnectionSource } from "./connection-source";
+import { CONNECTIONS_BUILD_PATH } from "./connection-tools";
 
 /** The Connection page on the instance's own answers. */
 function ConnectionAssetPage(frame: BuildAssetViewProps) {
@@ -18,7 +19,7 @@ function ConnectionAssetPage(frame: BuildAssetViewProps) {
  */
 export const connectionKind: BuildListedKind = {
   kind: "connection",
-  path: "connections",
+  path: CONNECTIONS_BUILD_PATH,
   label: "connections.kind",
   description: "connections.description",
   searchLabel: "connections.search",

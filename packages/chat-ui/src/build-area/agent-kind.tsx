@@ -12,6 +12,7 @@ import { apiErrorMessage } from "../workspace-utils";
 import { AgentAvailabilityEditor, AgentEditor } from "./agent-editor";
 import { agentConfigToForm, startedAgentForm } from "./asset-form-model";
 import type { BuildAssetEditorProps, BuildAssetKind } from "./build-asset-kind";
+import { useConnectionToolChoice } from "./connection-tools";
 
 /** How many skills the chooser of an agent asks the instance for with one search. */
 const SKILL_CHOICE_PAGE_SIZE = 50;
@@ -52,6 +53,7 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
     queryFn: ({ signal }) => client.platform.references.get({ signal }),
     retry: false
   });
+  const connectionTools = useConnectionToolChoice();
   const [skillSearch, setSkillSearch] = useState("");
   const skillsQuery = useQuery({
     queryKey: [...workspaceQueryKeys.assets(apiBaseUrl, authScope), "choice", "skill", skillSearch],
@@ -91,6 +93,7 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
         })),
         onSearch: (text) => setSkillSearch(text.trim())
       }}
+      connectionTools={connectionTools}
       onMakeDefault={
         asset && !isDefault && instanceWrite && management.allowDefaultAgentChange
           ? () =>

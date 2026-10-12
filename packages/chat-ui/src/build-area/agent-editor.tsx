@@ -46,6 +46,8 @@ import {
 } from "./asset-form-model";
 import type { BuildAssetEditorProps } from "./build-asset-kind";
 import { refusalsOf } from "./build-refusals";
+import { isConnectionToolName, type ConnectionToolChoice } from "./connection-tools";
+import { ConnectionToolsGroup } from "./connection-tools-group";
 
 /** The skills an agent can be given, as far as the instance was asked for them. */
 export interface SkillChoice {
@@ -63,6 +65,7 @@ export function AgentEditor({
   editableAgentFields,
   canManageAgentModels,
   skillChoice,
+  connectionTools = NO_CONNECTION_TOOLS,
   onMakeDefault,
   availability
 }: {
@@ -74,6 +77,8 @@ export function AgentEditor({
   editableAgentFields: readonly string[];
   canManageAgentModels: boolean;
   skillChoice: SkillChoice;
+  /** The tools of Connections on offer. Left out, the page shows only those the agent holds. */
+  connectionTools?: ConnectionToolChoice;
   /** Makes the agent the instance's default. Answers with what went wrong, if anything did. */
   onMakeDefault?: () => Promise<string | undefined>;
   /** Saved on its own, so it sits outside the agent form's save. */
@@ -302,6 +307,9 @@ export function AgentEditor({
       label: t("configTools"),
       count: form.toolNames.length,
       refusalField: "tools",
+      // One group per source of tools: the instance's own first, under the section's heading,
+      // then the Connections under a heading of their own. A further source is a further
+      // sibling with its heading.
       body: (
         <>
           <CheckboxGroup
@@ -314,6 +322,12 @@ export function AgentEditor({
             }))}
             disabled={!canEdit("toolNames")}
             emptyHint={t("configNoTools")}
+            onChange={(toolNames) => update({ toolNames })}
+          />
+          <ConnectionToolsGroup
+            choice={connectionTools}
+            selected={form.toolNames}
+            disabled={!canEdit("toolNames")}
             onChange={(toolNames) => update({ toolNames })}
           />
           <FieldRefusals messages={refusalsOf(outcome, "tools")} />
@@ -389,14 +403,25 @@ export function AgentEditor({
   );
 }
 
-/** The tools on offer, and the ones the agent names that the reader was not told of. */
+/** What the page is handed while nobody asked the instance for the tools of Connections. */
+const NO_CONNECTION_TOOLS: ConnectionToolChoice = { read: { status: "unknown" } };
+
+/**
+ * The instance's own tools on offer, and the ones the agent names that the reader was not told
+ * of. A tool of a Connection is shown in the group of the Connections.
+ */
 function toolOptions(
   references: ConfigAssetReferences | undefined,
   selected: readonly string[]
 ): string[] {
   const offered = references?.enabledToolNames ?? [];
   const off = new Set((references?.moduleOffTools ?? []).map((tool) => tool.name));
-  return [...offered, ...selected.filter((name) => !offered.includes(name) && !off.has(name))];
+  return [
+    ...offered,
+    ...selected.filter(
+      (name) => !offered.includes(name) && !off.has(name) && !isConnectionToolName(name)
+    )
+  ];
 }
 
 /**

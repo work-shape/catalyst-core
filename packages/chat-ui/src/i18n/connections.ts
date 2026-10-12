@@ -105,7 +105,18 @@ export const connections = defineTranslations({
     "connections.testHeld": "The test waits for approval in the Inbox. It has not run yet.",
     "connections.testNotAllowed":
       "You can read this connection. Testing it needs the right to change connections on the instance.",
-    "connections.testRefused": "You may not test this connection. You can read it."
+    "connections.testRefused": "You may not test this connection. You can read it.",
+    "connections.toolUnavailable":
+      "Not available: the connection or the operation is gone, switched off, not offered to agents, or you may not see it. The agent keeps it until you remove it.",
+    "connections.toolsEmpty": "No connection you may read offers an operation to agents.",
+    "connections.toolsHeld": "Tools of connections this agent holds",
+    "connections.toolsHint":
+      "What a connection lets agents do in an outside system. You see the connections you may read.",
+    "connections.toolsLoading": "The connections are being checked.",
+    "connections.toolsOpenConnection": "Open connection",
+    "connections.toolsSelected": "{selected} of {count} selected",
+    "connections.toolsUnknown":
+      "The connections could not be read, so this was not checked. The agent keeps it until you remove it."
   },
   de: {
     "connections.description":
@@ -215,6 +226,18 @@ export const connections = defineTranslations({
       "Der Test wartet auf eine Freigabe im Eingang. Er ist noch nicht gelaufen.",
     "connections.testNotAllowed":
       "Sie können diese Verbindung lesen. Zum Testen brauchen Sie das Recht, Verbindungen der Instanz zu ändern.",
-    "connections.testRefused": "Sie dürfen diese Verbindung nicht testen. Lesen können Sie sie."
+    "connections.testRefused": "Sie dürfen diese Verbindung nicht testen. Lesen können Sie sie.",
+    "connections.toolUnavailable":
+      "Nicht verfügbar: Die Verbindung oder die Operation gibt es nicht mehr, sie ist aus, wird Agenten nicht angeboten oder du darfst sie nicht sehen. Der Agent behält sie, bis du sie entfernst.",
+    "connections.toolsEmpty":
+      "Keine Verbindung, die du lesen darfst, bietet Agenten eine Operation an.",
+    "connections.toolsHeld": "Werkzeuge von Verbindungen, die dieser Agent führt",
+    "connections.toolsHint":
+      "Was eine Verbindung Agenten in einem externen System erlaubt. Du siehst die Verbindungen, die du lesen darfst.",
+    "connections.toolsLoading": "Die Verbindungen werden geprüft.",
+    "connections.toolsOpenConnection": "Verbindung öffnen",
+    "connections.toolsSelected": "{selected} von {count} ausgewählt",
+    "connections.toolsUnknown":
+      "Die Verbindungen ließen sich nicht lesen, deshalb wurde das nicht geprüft. Der Agent behält es, bis du es entfernst."
   }
 });
