@@ -78,6 +78,29 @@ describe(`upgrade from the oldest supported release (${release})`, () => {
     expect(run).toMatchObject({ agentName: "test_agent", ownerUserId: userId });
   });
 
+  it("has the record of Data Stores, empty, and keeps one written to it", async () => {
+    const { stores } = required(upgraded);
+    expect(await stores.dataStores.listDataStores({ clientInstanceId, limit: 10 })).toEqual([]);
+    const record = {
+      id: "cfga_upgrade_fixture",
+      clientInstanceId,
+      name: "findings",
+      status: "provisioning" as const,
+      location: { host: "db", port: 5432, database: "catalyst_ds_fixture" },
+      roles: { app: "catalyst_ds_fixture_app", migration: "catalyst_ds_fixture_migration" },
+      level: 0,
+      migrations: [],
+      targetRevision: 1,
+      sizeLimitBytes: 5 * 1024 ** 3,
+      createdAt: "2026-10-12T00:00:00.000Z",
+      updatedAt: "2026-10-12T00:00:00.000Z"
+    };
+    await stores.dataStores.putDataStore(record);
+    expect(
+      await stores.dataStores.findDataStoreByName({ clientInstanceId, name: "findings" })
+    ).toEqual(record);
+  });
+
   it("writes what the newer schema adds onto the release's rows", async () => {
     const { stores } = required(upgraded);
     expect(await stores.users.getUserModelPreference({ clientInstanceId, userId })).toBeUndefined();
