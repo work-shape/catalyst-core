@@ -440,18 +440,22 @@ contain breaking changes; a patch version does not.
   and logo. `GET /config` carries it as `label` on a selectable model, and the config asset
   references carry it on a model binding.
 - **Update app:** an App saved from a Page remembers the Page, and the header of that Page
+- **Update app:** an App remembers the Page it is updated from, and the header of that Page
   offers "Update app" in place of "Save as app" to whoever may write the App. The update writes
   the Page's newest revision as the next draft revision; nothing is published, and the App
   keeps its title. New operations: `apps.update_from_page`
   (`POST /api/v1/apps/{app}/update-from-page`, `app.write` on the App and read access to the
   Page, `expectedRevision` required, `412 REVISION_CONFLICT` for a draft that moved, `409` with
-  `details.reason: "app_not_from_page"` for an App that was not saved from the Page) and
-  `apps.get_from_page` (`GET /api/v1/conversations/{conversationId}/pages/{pageId}/app`). The
-  link is the `origin` of an App revision, which gains the kind `page`; no migration. **An App
-  saved before this release has no link:** its Page keeps "Save as app", and the message for a
-  taken ID now says to choose another ID or to delete the existing App and save again. After a
-  rollback the previous release logs a response-schema error when it lists the revisions of an
-  App that carries the new origin; the answer is still sent.
+  `details.reason: "app_not_from_page"` for an App of another Page or of none unless the call
+  says `"link": true`) and `apps.get_from_page`
+  (`GET /api/v1/conversations/{conversationId}/pages/{pageId}/app`, with `?app=<id>` also the
+  App of that id where the caller may write it). The link is the `origin` of an App revision,
+  which gains the kind `page`: an App's Page is the one its newest revision with such an
+  origin names. No migration. **An App saved before this release has no link:** saving its
+  Page under the App's id now offers "Update <App> from this page", which replaces the App's
+  draft with the Page and links the two. After a rollback the previous release logs a
+  response-schema error when it lists the revisions of an App that carries the new origin;
+  the answer is still sent.
 - **Documentation links:** release config `ui.docsUrl` names where an instance's documentation
   is read. With it the account menu has a "Documentation" item in a group of its own above
   Sign out, and the Access page, the New right dialog, the rights check and the read-only
