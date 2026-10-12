@@ -342,12 +342,17 @@ export function tombstoneColumns(stored: StoredAssets) {
   };
 }
 
-/** The columns of a revision that name its commit. Empty for a write without a repository. */
-export function repoColumns(mutation: { repository?: AssetRepoWrite }): {
-  commit: string | null;
-  tree: string | null;
-} {
-  return { commit: mutation.repository?.commit ?? null, tree: mutation.repository?.tree ?? null };
+/**
+ * What an upsert writes into its revision: its content, and the commit and tree where it adds
+ * a commit. Those two are empty for a write without a repository.
+ */
+export function writtenColumns(mutation: Extract<ConfigAssetMutation, { type: "upsert" }>) {
+  return {
+    config: mutation.config,
+    fileSetId: mutation.fileSetId ?? null,
+    commit: mutation.repository?.commit ?? null,
+    tree: mutation.repository?.tree ?? null
+  };
 }
 
 /**

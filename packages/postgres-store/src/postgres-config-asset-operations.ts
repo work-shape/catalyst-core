@@ -335,8 +335,6 @@ export async function applyConfigAssetMutations(
         }
       ])
     );
-    // A write that adds a commit names the commit it stands on. That is compared first: the
-    // second of two saves from the same base is told that the draft moved.
     const repoWrites = repo.lockedRepoWrites(input.mutations, rows);
     const kept = repo.tombstoneColumns(rows);
     assertConfigAssetBases(input, mapConfigAssetState(state), current);
@@ -483,7 +481,7 @@ export async function applyConfigAssetMutations(
           { kind: mutation.kind, name: mutation.name }
         );
       }
-      const written = { config: mutation.config, fileSetId: mutation.fileSetId ?? null };
+      const written = repo.writtenColumns(mutation);
       if (!asset) {
         const created: WrittenAsset = {
           id: mutation.assetId ?? createPlatformId("cfga"),
@@ -501,7 +499,7 @@ export async function applyConfigAssetMutations(
         appendRevision(
           key,
           created,
-          { operation: mutation.operation ?? "create", ...written, ...repo.repoColumns(mutation) },
+          { operation: mutation.operation ?? "create", ...written },
           "active"
         );
         newAssets.push({
@@ -522,11 +520,7 @@ export async function applyConfigAssetMutations(
       appendRevision(
         key,
         asset,
-        {
-          operation: mutation.operation ?? (recreated ? "create" : "update"),
-          ...written,
-          ...repo.repoColumns(mutation)
-        },
+        { operation: mutation.operation ?? (recreated ? "create" : "update"), ...written },
         "active"
       );
       asset.created ||= recreated;
@@ -540,8 +534,6 @@ export async function applyConfigAssetMutations(
     for (const chunk of chunksOf(newRevisions)) {
       await tx.insert(configAssetRevisions).values(chunk);
     }
-    // The bundle row and the revision that names its commit are one write: neither is there
-    // without the other.
     await repo.insertRepoWrites(tx, input.clientInstanceId, now, repoWrites, revisions, assetIds);
     // A row that is new in this batch was inserted as its first mutation left it.
     for (const chunk of chunksOf(writtenRows.filter((asset) => asset.stored || asset.newest > 1))) {
