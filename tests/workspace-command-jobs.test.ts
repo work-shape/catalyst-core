@@ -1,13 +1,26 @@
 import { mkdir, readdir, utimes } from "node:fs/promises";
 import { join } from "node:path";
-import type { PlatformStores, WorkspaceCommand } from "@vivd-catalyst/core";
+import { AGENT_RUN_IDLE_LIMIT_MS } from "@vivd-catalyst/agent-runtime";
+import {
+  JOB_UNCLAIMED_MS,
+  JOB_WORKER_CHECK_INTERVAL_MS,
+  type PlatformStores,
+  type WorkspaceCommand
+} from "@vivd-catalyst/core";
 import {
   WORKSPACE_COMMAND_CANCELLATION_CHECK_INTERVAL_MS,
   WORKSPACE_COMMAND_HEARTBEAT_MS,
-  WORKSPACE_COMMAND_LEASE_MS
+  WORKSPACE_COMMAND_LEASE_MS,
+  WORKSPACE_COMMAND_NO_WORKER_MESSAGE,
+  createWorkspaceCommandClient
 } from "@vivd-catalyst/tool-execution";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { required, waitUntil } from "./support/assertions";
+import {
+  advanceFakeClockUntilSettled,
+  settleOnFakeClock,
+  useFakeClockBesidePostgres
+} from "./support/fake-clock";
 import { useJobExecutorHarness } from "./support/job-executor-harness";
 import { usePostgresSuite } from "./support/postgres-suite";
 import {
@@ -54,8 +67,9 @@ describe("workspace commands on the job executor", () => {
 
   it("queues no command when its job cannot be queued", async () => {
     const fixture = await createFixture("atomic");
-    const withoutJobs: Pick<PlatformStores, "executionWorkspaces" | "transaction"> = {
+    const withoutJobs: Pick<PlatformStores, "executionWorkspaces" | "jobs" | "transaction"> = {
       executionWorkspaces: db.store.executionWorkspaces,
+      jobs: db.store.jobs,
       transaction: (fn) =>
         db.store.transaction((stores) =>
           fn({
@@ -218,7 +232,10 @@ describe("workspace commands on the job executor", () => {
     await fixture.worker().runDue();
 
     expect(fixture.executor.calls).toHaveLength(0);
-    expect(await commandJobs(fixture)).toMatchObject([{ status: "succeeded", attempts: 1 }]);
+    // Withdrawn with the cancellation: no worker claims it, and it never reads as succeeded.
+    expect(await commandJobs(fixture)).toMatchObject([
+      { status: "cancelled", attempts: 0, error_code: "WITHDRAWN" }
+    ]);
   });
 
   it("runs the commands of one workspace in order, one at a time, beside another workspace", async () => {
@@ -281,6 +298,7 @@ describe("workspace commands on the job executor", () => {
     });
     await fixture.worker().runDue();
     expect(fixture.executor.calls).toHaveLength(1);
+    // The attempt that ran the command ended with it: the job is done, not waiting for a claim.
     expect(await commandJobs(fixture)).toMatchObject([{ status: "succeeded", attempts: 1 }]);
   });
 
@@ -489,4 +507,126 @@ describe("workspace commands on the job executor", () => {
       from workspace_commands where id = ${command.id}`;
     return required(row);
   }
+});
+
+describe("a workspace command no worker takes", () => {
+  const db = usePostgresSuite("command_no_worker");
+  const harness = useJobExecutorHarness(db);
+  const { createFixture, commandJobs } = useWorkspaceCommandJobFixture(db, harness);
+
+  /** The client as the API builds it: its own poll interval and the limits of the product. */
+  const productClient = () =>
+    createWorkspaceCommandClient({ stores: db.store, now: () => new Date().toISOString() });
+
+  it("is given up after the unclaimed time with the reason, its job is withdrawn, and the next command runs when a worker is back", async () => {
+    const fixture = await createFixture("no_worker");
+    const client = productClient();
+    useFakeClockBesidePostgres();
+    const handle = await settleOnFakeClock(
+      client.enqueue(
+        { kind: "execution_workspace", id: fixture.workspace.id },
+        fixture.request("ls")
+      )
+    );
+    const queuedAt = Date.now();
+
+    const result = await advanceFakeClockUntilSettled(client.await(handle, {}), 250);
+
+    const waited = Date.now() - queuedAt;
+    expect(result).toMatchObject({
+      status: "no_worker",
+      reason: WORKSPACE_COMMAND_NO_WORKER_MESSAGE,
+      command: { status: "cancelled", cancellationReason: "No worker took the workspace command" }
+    });
+    expect(WORKSPACE_COMMAND_NO_WORKER_MESSAGE).toMatch(
+      /^Code execution is unavailable right now/u
+    );
+    // Not before the limit, and long before the idle limit of a run would have ended the run.
+    expect(waited).toBeGreaterThanOrEqual(JOB_UNCLAIMED_MS);
+    expect(waited).toBeLessThan(AGENT_RUN_IDLE_LIMIT_MS);
+    vi.useRealTimers();
+    // Withdrawn, not left queued: the worker that comes back has nothing of it to run.
+    expect(await commandJobs(fixture)).toMatchObject([
+      { status: "cancelled", attempts: 0, error_code: "WITHDRAWN" }
+    ]);
+    const worker = fixture.worker();
+    await worker.runDue();
+    expect(fixture.executor.calls).toHaveLength(0);
+
+    worker.start();
+    const next = await fixture.client.enqueue(
+      { kind: "execution_workspace", id: fixture.workspace.id },
+      fixture.request("printf back")
+    );
+    const waiting = fixture.client.await(next, {});
+    (await fixture.executor.next()).complete(successResult({ stdoutPreview: "back" }));
+
+    expect(await waiting).toMatchObject({
+      status: "settled",
+      command: { status: "completed", output: { stdoutPreview: "back" } }
+    });
+    expect(fixture.executor.calls.map((call) => call.command.command)).toEqual(["printf back"]);
+  });
+
+  it("runs a command once that a worker claims just before the unclaimed time, however long it then runs", async () => {
+    const fixture = await createFixture("claimed_late");
+    const client = productClient();
+    useFakeClockBesidePostgres();
+    const handle = await settleOnFakeClock(
+      client.enqueue(
+        { kind: "execution_workspace", id: fixture.workspace.id },
+        fixture.request("ls")
+      )
+    );
+    let result: Awaited<ReturnType<typeof client.await>> | undefined;
+    const waiting = client.await(handle, {}).then((ended) => {
+      result = ended;
+    });
+    // 700 ms before the limit: no worker has shown itself yet.
+    await vi.advanceTimersByTimeAsync(JOB_UNCLAIMED_MS - 700);
+
+    const pass = fixture.worker().runDue();
+    const execution = await settleOnFakeClock(fixture.executor.next());
+    // Past the limit and past the next look at the queue, while the command still runs.
+    await vi.advanceTimersByTimeAsync(700 + JOB_WORKER_CHECK_INTERVAL_MS + 1_300);
+    await settleOnFakeClock(fixture.command(handle.command));
+    expect(result).toBeUndefined();
+
+    execution.complete(successResult({ stdoutPreview: "listed" }));
+    await settleOnFakeClock(pass);
+    await advanceFakeClockUntilSettled(waiting, 250);
+
+    expect(result).toMatchObject({
+      status: "settled",
+      command: { status: "completed", attempts: 1, output: { stdoutPreview: "listed" } }
+    });
+    expect(fixture.executor.calls).toHaveLength(1);
+    expect(await settleOnFakeClock(commandJobs(fixture))).toMatchObject([
+      { status: "succeeded", attempts: 1 }
+    ]);
+  });
+
+  it("ends the job of a cancelled command as cancelled when a worker claims it late, and runs nothing", async () => {
+    const fixture = await createFixture("late_claim");
+    const queued = await fixture.enqueue("ls");
+    await db.store.executionWorkspaces.requestWorkspaceCommandCancellation({
+      clientInstanceId: fixture.clientInstanceId,
+      commandId: queued.id,
+      reason: "Workspace command was cancelled with its agent run",
+      requestedAt: new Date().toISOString()
+    });
+    // As the release before this one left it: the command cancelled, its job still queued.
+    await db.sql`
+      update platform_jobs
+      set status = 'queued', finished_at = null, error_code = null, error_message = null
+      where client_instance_id = ${fixture.clientInstanceId}`;
+
+    await fixture.worker().runDue();
+
+    expect(fixture.executor.calls).toHaveLength(0);
+    expect(await commandJobs(fixture)).toMatchObject([
+      { status: "cancelled", attempts: 1, error_code: "WITHDRAWN" }
+    ]);
+    expect(await fixture.command(queued)).toMatchObject({ status: "cancelled", attempts: 0 });
+  });
 });

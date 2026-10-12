@@ -58,6 +58,11 @@ export interface AgentRunError {
   code: string;
   message: string;
   category: AgentRunFailureCategory;
+  /**
+   * The tool the run waited on when it was ended for standing still. Its name, never its input
+   * or output.
+   */
+  tool?: string;
 }
 
 export interface AgentRunAuthorization {

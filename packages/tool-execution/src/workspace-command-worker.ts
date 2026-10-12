@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   AppError,
   JobLeaseLostError,
+  JobWithdrawnError,
   StoreBackedAuditRecorder,
   asWorkspaceCommandId,
   claimSubjectRow,
@@ -175,7 +176,15 @@ class WorkspaceCommandJobRun {
         }),
       this.yieldCheckIntervalMs
     );
-    if (!command) return;
+    if (!command) {
+      // The row is ended. One that was cancelled is not this attempt's success: whoever queued
+      // it gave it up, or its run ended, before this attempt ran it.
+      if ((await this.readStatus(job)) === "cancelled")
+        throw new JobWithdrawnError(
+          "The workspace command was cancelled before this attempt ran it"
+        );
+      return;
+    }
     try {
       if (command.attempts > 1) {
         // It ran before and whoever ran it is gone. A command is never run a second time.
@@ -220,6 +229,14 @@ class WorkspaceCommandJobRun {
       latest.status === "failed" ||
       latest.status === "cancelled"
     );
+  }
+
+  private async readStatus(job: CommandJob): Promise<WorkspaceCommand["status"] | undefined> {
+    const command = await this.stores.executionWorkspaces.getWorkspaceCommand({
+      clientInstanceId: job.clientInstanceId,
+      commandId: asWorkspaceCommandId(job.payload.commandId)
+    });
+    return command?.status;
   }
 
   async cleanTempState(job: Job): Promise<void> {

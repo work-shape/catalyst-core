@@ -1,14 +1,25 @@
 import {
+  JOB_UNCLAIMED_MS,
+  JOB_WORKER_CHECK_INTERVAL_MS,
   type EnqueueWorkspaceCommandInput,
   type ISODateString,
   type PlatformStores,
   type WorkspaceCommand,
   type WorkspaceHandle,
-  isAppError
+  isAppError,
+  noWorkerTakesJobs
 } from "@vivd-catalyst/core";
 import { runWorkspaceCommandJob, workspaceCommandJobOptions } from "./workspace-command-kind";
 
 const DEFAULT_RESULT_POLL_INTERVAL_MS = 500;
+/** What the row of a command says that was given up because no worker takes commands. */
+const NO_WORKER_REASON = "No worker took the workspace command";
+/**
+ * What a tool call is told when its command waited `JOB_UNCLAIMED_MS` and no worker takes
+ * commands. The agent reads it and tells the person; the run goes on.
+ */
+export const WORKSPACE_COMMAND_NO_WORKER_MESSAGE =
+  "Code execution is unavailable right now: no worker is taking commands on this instance, so the command was not run. Tell the person that code execution is unavailable at the moment and that an operator has to start the workspace command worker. Do not repeat the command in this reply.";
 
 /** A command to queue. The client sets its workspace id and the time it was queued. */
 export type WorkspaceCommandRequest = Omit<
@@ -31,13 +42,14 @@ export interface WorkspaceCommandWait {
 /**
  * How a wait ended. `settled` carries the command as it stands: finished, or still open when the
  * client is set not to wait. The other outcomes say why the wait gave up; for `cancelled`,
- * `timed_out` and `wait_limit` the client has asked for cancellation and `command` is the row
- * after that request.
+ * `timed_out`, `no_worker` and `wait_limit` the client has asked for cancellation and `command`
+ * is the row after that request. `no_worker` is a command no worker claimed while none takes
+ * commands: it was never run.
  */
 export type WorkspaceCommandResult =
   | { status: "settled"; command: WorkspaceCommand }
   | { status: "missing" }
-  | { status: "cancelled" | "timed_out"; reason: string; command: WorkspaceCommand }
+  | { status: "cancelled" | "timed_out" | "no_worker"; reason: string; command: WorkspaceCommand }
   | { status: "wait_limit"; reason: string; command: WorkspaceCommand; waitMs?: number };
 
 /**
@@ -58,7 +70,7 @@ export interface WorkspaceCommandClient {
 
 export interface WorkspaceCommandClientOptions {
   /** The stores of the process. The row and its job are written in one transaction of them. */
-  stores: Pick<PlatformStores, "executionWorkspaces" | "transaction">;
+  stores: Pick<PlatformStores, "executionWorkspaces" | "jobs" | "transaction">;
   /** The longest wait for a result. Zero or less returns at once; unset waits without a limit. */
   resultWaitMs?: number;
   resultPollIntervalMs?: number;
@@ -142,6 +154,7 @@ export function createWorkspaceCommandClient(
       const waitDeadlineMs = resultWaitMs === undefined ? undefined : Date.now() + resultWaitMs;
       const contextDeadlineMs = wait.deadline?.getTime();
       let current = command;
+      let nextWorkerCheck = Date.now() + JOB_UNCLAIMED_MS;
       while (true) {
         if (wait.signal?.aborted) {
           return cancelWaitingCommand(
@@ -180,6 +193,21 @@ export function createWorkspaceCommandClient(
         current = latest;
         if (isTerminalWorkspaceCommand(current)) {
           return { status: "settled", command: current };
+        }
+        // Only a command no worker claimed is given up: one that runs ends by its own limits.
+        if (current.status === "queued" && Date.now() >= nextWorkerCheck) {
+          nextWorkerCheck = Date.now() + JOB_WORKER_CHECK_INTERVAL_MS;
+          const noWorker = await noWorkerTakesJobs(stores.jobs, {
+            clientInstanceId: command.clientInstanceId,
+            kind: runWorkspaceCommandJob
+          });
+          if (noWorker) {
+            const given = await cancelWaitingCommand(command, NO_WORKER_REASON, "cancelled");
+            // A worker that claimed the command in this very moment is told to end it.
+            return given.status === "cancelled" && given.command.status === "cancelled"
+              ? { ...given, status: "no_worker", reason: WORKSPACE_COMMAND_NO_WORKER_MESSAGE }
+              : given;
+          }
         }
       }
 

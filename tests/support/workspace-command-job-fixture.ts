@@ -166,7 +166,7 @@ export interface WorkspaceCommandJobFixture {
   request(command: string): CommandRequest;
   enqueue(
     command: string,
-    stores?: Pick<PlatformStores, "executionWorkspaces" | "transaction">,
+    stores?: Pick<PlatformStores, "executionWorkspaces" | "jobs" | "transaction">,
     workspace?: ExecutionWorkspace
   ): Promise<WorkspaceCommand>;
   command(command: Pick<WorkspaceCommand, "id">): Promise<WorkspaceCommand | undefined>;

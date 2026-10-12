@@ -11,6 +11,8 @@ export const workspace = defineTranslations({
     loadingUser: "Loading",
     noConversations: "No conversations yet.",
     openSidebar: "Open sidebar",
+    runCommandNotTaken:
+      "The reply was stopped: it waited for the tool {tool}, and no worker took its command. Code execution is unavailable right now.",
     runInterrupted: "The reply was interrupted. Please send your message again.",
     runModelNotPriced:
       "This model cannot be used at the moment. Choose another model or ask an administrator.",
@@ -19,6 +21,8 @@ export const workspace = defineTranslations({
     runNotStarted:
       "The reply could not be started because the service is busy or unavailable. Please send your message again.",
     runStopped: "The reply was stopped.",
+    runToolSilent:
+      "The reply was stopped: it waited for the tool {tool}, which did not answer in time. Please send your message again.",
     returnToChat: "Return to chat",
     selectAgent: "Select agent",
     sessionCheckingDescription: "Your account is being checked before the chat loads.",
@@ -43,6 +47,8 @@ export const workspace = defineTranslations({
     loadingUser: "Lädt",
     noConversations: "Noch keine Unterhaltungen.",
     openSidebar: "Seitenleiste öffnen",
+    runCommandNotTaken:
+      "Die Antwort wurde gestoppt: Sie hat auf das Werkzeug {tool} gewartet, und kein Worker hat dessen Befehl übernommen. Code kann gerade nicht ausgeführt werden.",
     runInterrupted: "Die Antwort wurde unterbrochen. Bitte sende deine Nachricht erneut.",
     runModelNotPriced:
       "Dieses Modell kann gerade nicht verwendet werden. Wähle ein anderes Modell oder wende dich an einen Administrator.",
@@ -51,6 +57,8 @@ export const workspace = defineTranslations({
     runNotStarted:
       "Die Antwort konnte nicht gestartet werden, weil der Dienst ausgelastet oder nicht erreichbar ist. Bitte sende deine Nachricht erneut.",
     runStopped: "Die Antwort wurde gestoppt.",
+    runToolSilent:
+      "Die Antwort wurde gestoppt: Sie hat auf das Werkzeug {tool} gewartet, das nicht rechtzeitig geantwortet hat. Bitte sende deine Nachricht erneut.",
     returnToChat: "Zurück zum Chat",
     selectAgent: "Agent auswählen",
     sessionCheckingDescription: "Dein Konto wird geprüft, bevor der Chat geladen wird.",

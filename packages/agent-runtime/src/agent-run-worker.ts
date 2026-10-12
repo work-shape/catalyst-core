@@ -4,6 +4,7 @@ import {
   AppError,
   JobLeaseLostError,
   adoptAgentRunsSchedule,
+  agentRunIdleError,
   agentRunUpkeepHandler,
   asAgentRunId,
   defineJobHandler,
@@ -38,6 +39,7 @@ import type { AgentRunSignal } from "./store-backed-agent-runtime";
 
 // A run that stored no event for this long is ended as interrupted, so a model or a tool that
 // never answers cannot hold its conversation closed. Every stored event starts the time anew.
+// The failure names what the run waited on; the person reads that the reply stood still.
 export const AGENT_RUN_IDLE_LIMIT_MS = 30 * 60 * 1000;
 // The most events a run holds back behind its last assistant message. The runtime emits two
 // events after that message, so what is held beyond them is what the run produced faster than
@@ -191,13 +193,36 @@ async function executeClaimedRun(
   if (control.signal.aborted) onJobAborted();
   else control.signal.addEventListener("abort", onJobAborted, { once: true });
 
+  // The tool calls that started and have not ended, by their id, in the order they started.
+  const openToolCalls = new Map<string, string>();
+  let idleError: AgentRunError | undefined;
+  /** What the run stands still on: the tool that is open longest, and whether its command waits. */
+  const idleWait = async (): Promise<AgentRunError> => {
+    const [tool] = openToolCalls.values();
+    if (tool === undefined) return agentRunIdleError({});
+    const commandUnclaimed = await options.stores.executionWorkspaces
+      .hasUnclaimedWorkspaceCommand({ clientInstanceId: run.clientInstanceId, agentRunId: run.id })
+      // A queue that cannot be read leaves the cause unnamed. The tool is named all the same.
+      .catch(() => false);
+    return agentRunIdleError({ tool, commandUnclaimed });
+  };
+  /**
+   * Names what the run stood still on, then stops it. The queue is read before the stop:
+   * stopping the run cancels the command a tool waits for, and with it the sign of its cause.
+   */
+  const stopAsIdle = (): void => {
+    idleWait().then(
+      (error) => {
+        idleError = error;
+        stop("idle", error.message);
+      },
+      () => stop("idle", agentRunIdleError({}).message)
+    );
+  };
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
   const restartIdleTimer = () => {
     clearTimeout(idleTimer);
-    idleTimer = setTimeout(
-      () => stop("idle", "Agent run stored no event within the idle limit"),
-      AGENT_RUN_IDLE_LIMIT_MS
-    );
+    idleTimer = setTimeout(stopAsIdle, AGENT_RUN_IDLE_LIMIT_MS);
     // A watchdog, not work: a stopped process does not wait up to the limit for a run whose
     // executor never returns.
     idleTimer.unref();
@@ -322,7 +347,8 @@ async function executeClaimedRun(
     if (cancellation) return cancelledEvent(run, sequence, now(), cancellation.reason);
     if (stopCause === "worker_stopping")
       return failedEvent(run, sequence, now(), AGENT_RUN_INTERRUPTED_ERROR);
-    if (stopCause === "idle") return failedEvent(run, sequence, now(), AGENT_RUN_IDLE_ERROR);
+    if (stopCause === "idle")
+      return failedEvent(run, sequence, now(), idleError ?? agentRunIdleError({}));
     return failedEvent(run, sequence, now(), failure);
   };
   const closeRun = async (failure: AgentRunError): Promise<void> => {
@@ -386,6 +412,7 @@ async function executeClaimedRun(
         controller.signal
       )) {
         if (stopCause === "lease_lost") break;
+        noteToolCall(openToolCalls, sourceEvent);
         const event =
           sourceEvent.type === "run_failed" && (cancellation || stopCause)
             ? closingEvent(sourceEvent.sequence, sourceEvent.error)
@@ -557,11 +584,12 @@ async function nextEventOrAbort(
 
 const ENDED_STATUSES = new Set<AgentRun["status"]>(["completed", "cancelled", "failed"]);
 
-const AGENT_RUN_IDLE_ERROR: AgentRunError = {
-  code: "AGENT_RUN_RUNTIME_INTERRUPTED",
-  message: "Agent run stored no event within the idle limit",
-  category: "runtime_interrupted"
-};
+/** Keeps the tool calls that started and have not ended, with the name of their tool. */
+function noteToolCall(open: Map<string, string>, event: AgentRuntimeEvent): void {
+  if (event.type === "tool_call_started") open.set(event.toolCallId, event.toolName);
+  else if (event.type === "tool_call_completed" || event.type === "tool_call_failed")
+    open.delete(event.toolCallId);
+}
 
 const PERMISSION_UNSUPPORTED_ERROR: AgentRunError = {
   code: "AGENT_RUN_PERMISSION_UNSUPPORTED",

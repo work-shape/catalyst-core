@@ -190,6 +190,12 @@ function commandResultToToolResult(
           }
         }
       };
+    case "no_worker":
+      return failedValidationResult(result.reason, {
+        commandId: queued.id,
+        status: result.command.status,
+        reason: "no_worker"
+      });
     case "wait_limit":
       return failedValidationResult(result.reason, {
         commandId: queued.id,

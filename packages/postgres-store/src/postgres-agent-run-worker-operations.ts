@@ -27,6 +27,7 @@ import {
   subjectRowLeaseOwnerId
 } from "@vivd-catalyst/core";
 import { requireActiveConversationLock } from "./postgres-conversation-operations";
+import { withdrawUnclaimedWorkspaceCommandsOfRuns } from "./postgres-execution-workspace-operations";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import { mapAgentRun, mapMessage, mapRunObservation } from "./rows";
 import {
@@ -250,6 +251,11 @@ async function insertClaimedRunObservation(
       "Agent run has ended, was asked to cancel, or its sequence is stale"
     );
   }
+  if (terminal.status)
+    await withdrawUnclaimedWorkspaceCommandsOfRuns(tx, {
+      clientInstanceId: claim.clientInstanceId,
+      runIds: [claim.runId]
+    });
 
   const [row] = await tx
     .insert(agentRunObservations)
@@ -434,6 +440,10 @@ export async function failLostAgentRun(
       )
       .returning();
     if (!row?.failedAt) return undefined;
+    await withdrawUnclaimedWorkspaceCommandsOfRuns(tx, {
+      clientInstanceId: input.clientInstanceId,
+      runIds: [input.runId]
+    });
     const event = {
       type: "run_failed" as const,
       runId: asAgentRunId(row.id),
@@ -525,6 +535,10 @@ async function failAgentRunsWhere(
       .returning();
     const failed = rows.flatMap((row) => (row.failedAt ? [{ row, failedAt: row.failedAt }] : []));
     if (failed.length === 0) return [];
+    await withdrawUnclaimedWorkspaceCommandsOfRuns(tx, {
+      clientInstanceId: input.clientInstanceId,
+      runIds: failed.map(({ row }) => asAgentRunId(row.id))
+    });
     await tx.insert(agentRunObservations).values(
       failed.map(({ row, failedAt }) => ({
         clientInstanceId: row.clientInstanceId,

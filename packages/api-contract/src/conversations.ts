@@ -382,7 +382,9 @@ export const agentRunErrorSchema = z.object({
     "runtime_interrupted",
     "abort_error",
     "unknown_error"
-  ])
+  ]),
+  /** The tool a run waited on when it was ended for standing still: its name only. */
+  tool: z.string().optional()
 });
 
 export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
@@ -487,17 +489,7 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     runId: z.string(),
     sequence: z.number(),
     createdAt: timestampSchema,
-    error: z.object({
-      code: z.string(),
-      message: z.string(),
-      category: z.enum([
-        "app_error",
-        "internal_error",
-        "runtime_interrupted",
-        "abort_error",
-        "unknown_error"
-      ])
-    })
+    error: agentRunErrorSchema
   })
 ]);
 

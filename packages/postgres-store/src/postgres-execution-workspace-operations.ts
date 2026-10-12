@@ -1,7 +1,10 @@
 import { and, asc, eq, inArray, isNull, ne, sql as drizzleSql } from "drizzle-orm";
 import {
   AppError,
+  WORKSPACE_COMMAND_JOB_KIND,
+  subjectDedupeKey,
   type ActiveWorkspaceCommandCounts,
+  type AgentRunId,
   type CancelClaimedWorkspaceCommandInput,
   type ClaimWorkspaceCommandInput,
   type ClientInstanceId,
@@ -30,6 +33,7 @@ import {
   asWorkspaceCommandId,
   createPlatformId
 } from "@vivd-catalyst/core";
+import { withdrawQueuedJobs } from "./jobs/store";
 import { requireActiveConversationLock } from "./postgres-conversation-operations";
 import type { PostgresConnection } from "./postgres-database";
 import { mapExecutionWorkspace, mapWorkspaceCommand, mapWorkspaceFile } from "./rows";
@@ -609,7 +613,11 @@ export async function requestWorkspaceCommandCancellation(
           )
         )
         .limit(1);
-      return mapWorkspaceCommand(row);
+      const command = mapWorkspaceCommand(row);
+      // Cancelled at once means no worker had claimed it: its job has nothing left to run.
+      if (command.status === "cancelled")
+        await withdrawCommandJobs(tx, input.clientInstanceId, [command.id]);
+      return command;
     }
 
     const [existing] = await tx
@@ -626,6 +634,74 @@ export async function requestWorkspaceCommandCancellation(
       throw new AppError("NOT_FOUND", "Workspace command is not available");
     }
     throw new AppError("CONFLICT", "Workspace command is already terminal");
+  });
+}
+
+/** What a command is cancelled with when its run ended before a worker claimed it. */
+const RUN_ENDED_REASON =
+  "Workspace command was withdrawn: its agent run ended before a worker took it";
+
+/**
+ * Cancels the commands of these runs that no worker claimed and withdraws their jobs. Called
+ * in the transaction that ends a run, so nothing a run queued waits for a worker after it. A
+ * command that runs is its worker's and ends by its own limits.
+ */
+export async function withdrawUnclaimedWorkspaceCommandsOfRuns(
+  tx: PostgresConnection,
+  input: { clientInstanceId: ClientInstanceId; runIds: readonly AgentRunId[] }
+): Promise<void> {
+  if (input.runIds.length === 0) return;
+  const cancelled = await tx
+    .update(workspaceCommands)
+    .set({
+      status: "cancelled",
+      cancellationReason: RUN_ENDED_REASON,
+      cancellationRequestedAt: drizzleSql`now()`,
+      completedAt: drizzleSql`now()`,
+      updatedAt: drizzleSql`now()`
+    })
+    .where(
+      and(
+        eq(workspaceCommands.clientInstanceId, input.clientInstanceId),
+        inArray(workspaceCommands.agentRunId, [...input.runIds]),
+        eq(workspaceCommands.status, "queued")
+      )
+    )
+    .returning({ id: workspaceCommands.id });
+  await withdrawCommandJobs(
+    tx,
+    input.clientInstanceId,
+    cancelled.map((command) => command.id)
+  );
+}
+
+export async function hasUnclaimedWorkspaceCommand(
+  db: PostgresConnection,
+  input: { clientInstanceId: ClientInstanceId; agentRunId: AgentRunId }
+): Promise<boolean> {
+  const [queued] = await db
+    .select({ id: workspaceCommands.id })
+    .from(workspaceCommands)
+    .where(
+      and(
+        eq(workspaceCommands.clientInstanceId, input.clientInstanceId),
+        eq(workspaceCommands.agentRunId, input.agentRunId),
+        eq(workspaceCommands.status, "queued")
+      )
+    )
+    .limit(1);
+  return queued !== undefined;
+}
+
+function withdrawCommandJobs(
+  tx: PostgresConnection,
+  clientInstanceId: ClientInstanceId,
+  commandIds: readonly string[]
+): Promise<void> {
+  return withdrawQueuedJobs(tx, {
+    clientInstanceId,
+    kind: WORKSPACE_COMMAND_JOB_KIND,
+    dedupeKeys: commandIds.map((id) => subjectDedupeKey(WORKSPACE_COMMAND_JOB_KIND, id))
   });
 }
 

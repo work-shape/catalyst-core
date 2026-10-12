@@ -141,6 +141,40 @@ export const AGENT_RUN_INTERRUPTED_ERROR: AgentRunError = {
 };
 
 /**
+ * What a run is failed with when it stored no event within the idle limit, by what it waited
+ * on. The interface words each code itself; the category is the one an API of the previous
+ * release shows as an interrupted reply.
+ */
+export const AGENT_RUN_IDLE_CODE = "AGENT_RUN_IDLE";
+/** The run waited for a tool that did not answer. `tool` names it. */
+export const AGENT_RUN_TOOL_SILENT_CODE = "AGENT_RUN_TOOL_SILENT";
+/** The run waited for a tool whose command no worker took. `tool` names it. */
+export const AGENT_RUN_COMMAND_NOT_TAKEN_CODE = "AGENT_RUN_COMMAND_NOT_TAKEN";
+
+/** The failure of a run that stood still. `commandUnclaimed` needs `tool`. */
+export function agentRunIdleError(wait: {
+  tool?: string;
+  commandUnclaimed?: boolean;
+}): AgentRunError {
+  const idle = "Agent run stored no event within the idle limit";
+  if (wait.tool === undefined)
+    return { code: AGENT_RUN_IDLE_CODE, message: idle, category: "runtime_interrupted" };
+  return wait.commandUnclaimed
+    ? {
+        code: AGENT_RUN_COMMAND_NOT_TAKEN_CODE,
+        message: `${idle} while it waited for the tool ${wait.tool}: no worker took the command`,
+        category: "runtime_interrupted",
+        tool: wait.tool
+      }
+    : {
+        code: AGENT_RUN_TOOL_SILENT_CODE,
+        message: `${idle} while it waited for the tool ${wait.tool}`,
+        category: "runtime_interrupted",
+        tool: wait.tool
+      };
+}
+
+/**
  * Ends the run of a job whose worker is gone, with its audit event. A queued run, an ended
  * run and a run that someone else holds under a live lease are left as they are.
  */

@@ -1160,6 +1160,10 @@ const NO_CONVERSATIONS: readonly ConversationListItem[] = [];
 // The code a run is failed with when no worker took it within its queue limit.
 const RUN_NOT_STARTED_CODE = "AGENT_RUN_NOT_STARTED";
 
+// The codes a run is failed with when it stood still while it waited for a tool (`@vivd-catalyst/core`).
+const RUN_TOOL_SILENT_CODE = "AGENT_RUN_TOOL_SILENT";
+const RUN_COMMAND_NOT_TAKEN_CODE = "AGENT_RUN_COMMAND_NOT_TAKEN";
+
 // The code a run is failed with when its model has no price on the rate card (`@vivd-catalyst/core`).
 const MODEL_NOT_PRICED_CODE = "MODEL_NOT_PRICED";
 
@@ -1181,5 +1185,10 @@ export function terminalRunNotice(
     return t(viewer.seesRateCard ? "runModelNotPricedOperator" : "runModelNotPriced");
   }
   if (error.category !== "runtime_interrupted") return error.message;
-  return error.code === RUN_NOT_STARTED_CODE ? t("runNotStarted") : t("runInterrupted");
+  if (error.code === RUN_NOT_STARTED_CODE) return t("runNotStarted");
+  if (error.tool !== undefined && error.code === RUN_COMMAND_NOT_TAKEN_CODE)
+    return t("runCommandNotTaken", { tool: error.tool });
+  if (error.tool !== undefined && error.code === RUN_TOOL_SILENT_CODE)
+    return t("runToolSilent", { tool: error.tool });
+  return t("runInterrupted");
 }

@@ -44,7 +44,7 @@ export interface WorkspaceCommandResultSource {
 
 export interface WorkspaceCommandServiceOptions {
   /** The stores of the process. A command and its job are queued in one transaction of them. */
-  store: Pick<PlatformStores, "files" | "executionWorkspaces" | "transaction">;
+  store: Pick<PlatformStores, "files" | "executionWorkspaces" | "jobs" | "transaction">;
   /** The `workspaces` store, for tools that only read file bytes. */
   objectStore?: ObjectStorage;
   /** The `workspaces` store, for tools that also write. It serves the reads when given alone. */

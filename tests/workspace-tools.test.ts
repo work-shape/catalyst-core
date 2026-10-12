@@ -4,13 +4,16 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { AGENT_RUN_IDLE_LIMIT_MS } from "@vivd-catalyst/agent-runtime";
 import {
+  JOB_UNCLAIMED_MS,
   asExecutionWorkspaceId,
   asWorkspaceCommandId,
   type WorkspaceCommand
 } from "@vivd-catalyst/core";
 import {
   LocalWorkspaceCommandRunner,
+  WORKSPACE_COMMAND_NO_WORKER_MESSAGE,
   shapeWorkspaceCommandOutput,
   type WorkspaceCommandTelemetry
 } from "@vivd-catalyst/tool-execution";
@@ -472,6 +475,43 @@ describe("workspace tools", () => {
       await worker.stop();
       await rm(tempRoot, { recursive: true, force: true });
     }
+  });
+
+  it("fails workspace.exec with the reason when no worker takes commands, and the run goes on", async () => {
+    // As the product assembles it: the call waits for its command without a limit of its own.
+    const harness = await createWorkspaceHarness({ execResultWaitMs: null });
+    const request = harness.createRequest("workspace.exec", { command: "ls" });
+    useFakeClockBesidePostgres();
+    try {
+      const startedAt = Date.now();
+
+      const result = await advanceFakeClockUntilSettled(
+        harness.execution(request, harness.context),
+        250
+      );
+
+      // A result the agent reads, not a call that hangs or throws.
+      expect(result).toMatchObject({
+        status: "failed",
+        error: { code: "handler_failed", message: WORKSPACE_COMMAND_NO_WORKER_MESSAGE }
+      });
+      expect(Date.now() - startedAt).toBeGreaterThanOrEqual(JOB_UNCLAIMED_MS);
+      expect(Date.now() - startedAt).toBeLessThan(AGENT_RUN_IDLE_LIMIT_MS);
+    } finally {
+      vi.useRealTimers();
+    }
+    await expect(
+      harness.store.agentRuns.getAgentRun({
+        clientInstanceId: harness.clientInstanceId,
+        runId: request.agentRunId
+      })
+    ).resolves.toMatchObject({ status: "running" });
+    await expect(
+      harness.store.executionWorkspaces.countActiveWorkspaceCommands({
+        clientInstanceId: harness.clientInstanceId,
+        conversationId: harness.conversation.id
+      })
+    ).resolves.toMatchObject({ total: 0 });
   });
 
   it("does not consume the execution timeout while a command is queued", async () => {

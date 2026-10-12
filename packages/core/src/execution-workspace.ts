@@ -321,6 +321,12 @@ export interface ExecutionWorkspaceFileStore {
   }): Promise<WorkspaceFile | undefined>;
 }
 
+/**
+ * The kind of the job that runs one row of `workspace_commands`. It is named here because the
+ * store that cancels a queued command withdraws the command's job in the same transaction.
+ */
+export const WORKSPACE_COMMAND_JOB_KIND = "workspace.command";
+
 export interface WorkspaceCommandStore {
   countActiveWorkspaceCommands(
     input: CountActiveWorkspaceCommandsInput
@@ -358,9 +364,18 @@ export interface WorkspaceCommandStore {
   }): Promise<Array<Pick<WorkspaceCommand, "id" | "workspaceId">>>;
   completeWorkspaceCommand(input: CompleteWorkspaceCommandInput): Promise<WorkspaceCommand>;
   failWorkspaceCommand(input: FailWorkspaceCommandInput): Promise<WorkspaceCommand>;
+  /**
+   * Asks a command to end. One that runs becomes `cancelling` and its worker ends it. One that
+   * no worker claimed becomes `cancelled` at once and its queued job is withdrawn with it.
+   */
   requestWorkspaceCommandCancellation(
     input: RequestWorkspaceCommandCancellationInput
   ): Promise<WorkspaceCommand>;
+  /** Whether a command of the run is still queued: no worker has claimed it. */
+  hasUnclaimedWorkspaceCommand(input: {
+    clientInstanceId: ClientInstanceId;
+    agentRunId: AgentRunId;
+  }): Promise<boolean>;
   cancelClaimedWorkspaceCommand(
     input: CancelClaimedWorkspaceCommandInput
   ): Promise<WorkspaceCommand>;

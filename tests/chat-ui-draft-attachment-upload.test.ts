@@ -171,6 +171,32 @@ describe("the notice of a run that ended as failed or cancelled", () => {
     );
   });
 
+  it("says which tool a reply that stood still waited on, and when no worker took its command", () => {
+    const notTaken = {
+      ...interrupted,
+      code: "AGENT_RUN_COMMAND_NOT_TAKEN",
+      tool: "workspace.exec"
+    };
+    const silent = { ...interrupted, code: "AGENT_RUN_TOOL_SILENT", tool: "web.fetch" };
+
+    expect(terminalRunNotice(notTaken, en)).toBe(
+      "The reply was stopped: it waited for the tool workspace.exec, and no worker took its command. Code execution is unavailable right now."
+    );
+    expect(terminalRunNotice(notTaken, de)).toBe(
+      "Die Antwort wurde gestoppt: Sie hat auf das Werkzeug workspace.exec gewartet, und kein Worker hat dessen Befehl übernommen. Code kann gerade nicht ausgeführt werden."
+    );
+    expect(terminalRunNotice(silent, en)).toBe(
+      "The reply was stopped: it waited for the tool web.fetch, which did not answer in time. Please send your message again."
+    );
+    expect(terminalRunNotice(silent, de)).toBe(
+      "Die Antwort wurde gestoppt: Sie hat auf das Werkzeug web.fetch gewartet, das nicht rechtzeitig geantwortet hat. Bitte sende deine Nachricht erneut."
+    );
+    // A run that stood still on no tool reads as before.
+    expect(terminalRunNotice({ ...interrupted, code: "AGENT_RUN_IDLE" }, en)).toBe(
+      "The reply was interrupted. Please send your message again."
+    );
+  });
+
   it("says what to do about a model without a price, to each reader what they can act on", () => {
     const notPriced = {
       class: "run_failed" as const,

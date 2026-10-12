@@ -1,4 +1,5 @@
 import {
+  WORKSPACE_COMMAND_JOB_KIND,
   defineJobKind,
   defineSchedule,
   scheduledJobPayloadSchema,
@@ -32,7 +33,7 @@ const SCHEDULED_LEASE_MS = 2 * 60 * 1000;
  * nothing.
  */
 export const runWorkspaceCommandJob = defineJobKind({
-  kind: "workspace.command",
+  kind: WORKSPACE_COMMAND_JOB_KIND,
   payloadSchema: z.object({ commandId: z.string().min(1) }),
   maxAttempts: 1,
   backoff: { baseMs: 0, maxMs: 0 },
