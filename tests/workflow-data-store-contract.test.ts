@@ -619,6 +619,12 @@ describe("the modules workflows and dataStores", () => {
       ...nothing,
       name: "dataStores",
       kinds: [DATA_STORE_ASSET_KIND],
+      operations: [
+        "data_stores.query",
+        "data_stores.insert",
+        "data_stores.describe",
+        "data_stores.preview_rows"
+      ],
       jobKinds: Object.values(DATA_STORE_JOB_KINDS)
     });
     const off = createModuleRegistry(platformModules).snapshot({});

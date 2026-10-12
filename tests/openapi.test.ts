@@ -21,6 +21,7 @@ import { required } from "./support/assertions";
 import { registeredTestOperations } from "./support/operations";
 import { retiredApiPaths } from "./support/retired-api-paths";
 import { asCaller, createCallerAuthAdapter } from "./support/route-callers";
+import { dataStoreRoutes } from "./support/data-store-routes";
 import { createTestInstanceWith, type TestStore } from "./support/test-instance";
 
 const released = createOpenApiDocument();
@@ -424,7 +425,8 @@ describe("the reference an instance serves", () => {
   });
 
   it("describes every operation the instance registered, as the release does", async () => {
-    const instance = await createTestInstanceWith(withApprovals);
+    // The routes of a module come from its assembly, which a server built here does not have.
+    const instance = await createTestInstanceWith(withApprovals, await dataStoreRoutes());
     const response = await instance.call("openapi.get", {}, asCaller());
     expect(pathsOf(response.json())).toEqual(Object.keys(released.paths));
     expect(response.json()).toEqual(JSON.parse(JSON.stringify(released)));
@@ -438,8 +440,12 @@ describe("the reference an instance serves", () => {
       path.startsWith(`${API_VERSION_PREFIX}/approval-requests`)
     );
     expect(approvalPaths.length).toBeGreaterThan(0);
+    // Nor does this server hold the routes of a module, which only its assembly adds.
+    const moduleRoutes = `${API_VERSION_PREFIX}/data-stores/`;
     expect(paths).toEqual(
-      Object.keys(released.paths).filter((path) => !approvalPaths.includes(path))
+      Object.keys(released.paths).filter(
+        (path) => !approvalPaths.includes(path) && !path.startsWith(moduleRoutes)
+      )
     );
     const document = openApiDocumentSchema.parse(response.json());
     expect(document.tags.map((tag) => tag.name)).not.toContain(

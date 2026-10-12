@@ -33,7 +33,7 @@ describe("the roles of a Data Store", () => {
     // `PUBLIC` connects to the platform database as on a server nobody hardened.
     const { name, databaseUrl } = await platformRole();
     await db.sql.unsafe(`grant connect on database "${platformDatabase()}" to public`);
-    const world = await setup("platform_role", databaseUrl);
+    const world = await setup("platform_role", {}, databaseUrl);
     const attempt = async (sizeLimit: string) => {
       const id = await publish(world, [manifest(`sizeLimit: ${sizeLimit}\n`), init]);
       const sizeLimitBytes = Number(sizeLimit.replace("GB", "")) * 1024 ** 3;
@@ -139,31 +139,34 @@ describe("the roles of a Data Store", () => {
     expect(await sqlState(connect(record.location.database, appRole)`select 1`)).toBe("53300");
   });
 
-  it("opens no more connections to a store than its pool holds, under 50 calls at once", async () => {
-    const world = await published("pool");
-    const { record } = world;
-    let most = 0;
-    let sampling = true;
-    const sample = (async () => {
-      while (sampling) {
-        const [open] = await db.sql<{ count: number }[]>`
-          select count(*)::integer as count from pg_stat_activity
-          where usename = ${record.roles.app}`;
-        most = Math.max(most, open?.count ?? 0);
-      }
-    })();
+  it("opens no more connections to a store than the pool cap of release config, under 50 calls at once", async () => {
+    const most = async (label: string, limits?: { poolMaxConnections: number }) => {
+      const world = await setup(label, limits);
+      const record = await settle(world, await publish(world, [manifest(), init]), 1);
+      let seen = 0;
+      let sampling = true;
+      const sample = (async () => {
+        while (sampling) {
+          const [open] = await db.sql<{ count: number }[]>`
+            select count(*)::integer as count from pg_stat_activity
+            where usename = ${record.roles.app}`;
+          seen = Math.max(seen, open?.count ?? 0);
+        }
+      })();
+      const answers = await Promise.all(
+        Array.from({ length: 50 }, () =>
+          call(world, "query", { sql: "select pg_sleep(0.1)::text as slept" })
+        )
+      );
+      sampling = false;
+      await sample;
+      // Every call waited for one of the connections and was answered.
+      expect(answers).toHaveLength(50);
+      return seen;
+    };
 
-    const answers = await Promise.all(
-      Array.from({ length: 50 }, () =>
-        call(world, "query", { sql: "select pg_sleep(0.05)::text as slept" })
-      )
-    );
-    sampling = false;
-    await sample;
-
-    // Every call waited for one of the four connections and was answered.
-    expect(answers).toHaveLength(50);
-    expect(most).toBeGreaterThan(0);
-    expect(most).toBeLessThanOrEqual(4);
+    // Five by default, as the spec has it, and what the operator names otherwise.
+    expect(await most("pool_default")).toBe(5);
+    expect(await most("pool_lowered", { poolMaxConnections: 2 })).toBe(2);
   });
 });

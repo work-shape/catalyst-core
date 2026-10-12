@@ -3,6 +3,7 @@ import {
   AppError,
   DATA_STORE_ASSET_KIND,
   DATA_STORE_JOB_KINDS,
+  DATA_STORE_MANIFEST_FILE,
   NonRetryableJobError,
   claimSubjectRow,
   defineJobHandler,
@@ -106,24 +107,31 @@ async function enqueueStoreJob(
 }
 
 /**
- * The size limit of a store whose manifest names none, and the most a manifest may name:
- * 5 GiB. At the limit rows are no longer added and reading keeps working.
- */
-const DATA_STORE_SIZE_LIMIT_BYTES = 5 * 1024 ** 3;
-
-/**
  * What publishing a revision of a store does beside moving the published pointer, in the same
  * transaction: it writes the store's record and queues the job. It throws, and so refuses the
  * publish, where the revision changes a migration the store has applied, and where the id is
  * still held by a retired store.
  */
 export async function publishDataStore(
-  runtime: Pick<DataStoreRuntime, "clientInstanceId" | "server">,
+  runtime: Pick<DataStoreRuntime, "clientInstanceId" | "server" | "limits">,
   stores: PlatformStores,
   input: { storeId: string; revision: number; definition: DataStoreDefinition }
 ): Promise<void> {
-  const { clientInstanceId, server } = runtime;
+  const { clientInstanceId, server, limits } = runtime;
   const { storeId, definition } = input;
+  const asset = await stores.configAssets.getConfigAsset({
+    clientInstanceId,
+    kind: DATA_STORE_ASSET_KIND,
+    name: definition.name
+  });
+  const owner = asset?.scope.kind ?? "instance";
+  if (definition.scope !== undefined && definition.scope !== owner) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `'${DATA_STORE_MANIFEST_FILE}' says scope '${definition.scope}' and the store belongs to ${owner === "instance" ? "the instance" : "a workspace"}. Write the store for ${definition.scope === "instance" ? "the instance" : "a workspace"}, or change 'scope'.`,
+      { reason: "scope_mismatch" }
+    );
+  }
   const held = await stores.dataStores.findDataStoreByName({
     clientInstanceId,
     name: definition.name
@@ -159,9 +167,10 @@ export async function publishDataStore(
       createdAt: now
     }),
     targetRevision: input.revision,
+    // The instance's ceiling, which a manifest lowers and never raises.
     sizeLimitBytes: Math.min(
-      definition.sizeLimitBytes ?? DATA_STORE_SIZE_LIMIT_BYTES,
-      DATA_STORE_SIZE_LIMIT_BYTES
+      definition.sizeLimitBytes ?? limits.sizeLimitBytes,
+      limits.sizeLimitBytes
     ),
     updatedAt: now
   };

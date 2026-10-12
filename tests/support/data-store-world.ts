@@ -12,6 +12,7 @@ import {
   dataStoreOperationName,
   isAppError,
   type AuthenticatedUser,
+  type DataStoreOperationVerb,
   type DataStoreRecord,
   type JsonObject,
   type Logger,
@@ -136,7 +137,11 @@ export function useDataStoreWorld(prefix: string) {
   });
 
   /** The Data Stores of one instance of a test, with the worker that serves their jobs. */
-  async function setup(label: string, databaseUrl = db.databaseUrl) {
+  async function setup(
+    label: string,
+    limits: { sizeLimitBytes?: number; poolMaxConnections?: number } = {},
+    databaseUrl = db.databaseUrl
+  ) {
     const clientInstanceId = db.clientInstance(label);
     const key = randomBytes(32).toString("base64");
     const dataStores = createDataStores({
@@ -147,6 +152,7 @@ export function useDataStoreWorld(prefix: string) {
         keys: [{ id: "k1", ref: "DATA_STORE_TEST_KEY" }],
         secrets: { resolve: () => Promise.resolve(key) }
       }),
+      limits: { sizeLimitBytes: 5 * 1024 ** 3, poolMaxConnections: 5, ...limits },
       logger: silent
     });
     opened.push(dataStores);
@@ -211,7 +217,7 @@ export function useDataStoreWorld(prefix: string) {
   }
 
   /** Executes one operation of a store, with its input read by the operation's schema. */
-  async function call(world: World, verb: "query" | "insert", input: unknown) {
+  async function call(world: World, verb: DataStoreOperationVerb, input: unknown) {
     const operation = required(
       await world.dataStores.operationSource.resolve(dataStoreOperationName("findings", verb))
     );

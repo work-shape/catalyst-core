@@ -18,6 +18,7 @@ import {
   operationPathParamNames
 } from "./support/route-catalog";
 import { asCaller, createCallerAuthAdapter } from "./support/route-callers";
+import { dataStoreRoutes } from "./support/data-store-routes";
 import { createTestInstanceWith, listTestRoutes, type TestInstance } from "./support/test-instance";
 
 // Generated from the catalog: every operation the server registers is called the ways it must
@@ -41,6 +42,8 @@ const authenticated = names.flatMap((name) => {
  * holder's rights are checked after the input, so a refusal for a missing right needs one.
  */
 const acceptedBodies: Partial<Record<ApiOperationName, unknown>> = {
+  "data_stores.query": { sql: "select 1" },
+  "data_stores.insert": { table: "missing", rows: [{ id: 1 }] },
   "service_principals.create": { displayLabel: "Service" },
   "service_principals.update": { displayLabel: "Service" },
   "api_credentials.create": { name: "Credential" },
@@ -58,6 +61,7 @@ const acceptedBodies: Partial<Record<ApiOperationName, unknown>> = {
   "namespaces.update": { displayName: "Team" }
 };
 const acceptedQueries: Partial<Record<ApiOperationName, Record<string, string>>> = {
+  "data_stores.preview_rows": { table: "missing" },
   "permissions.effective": { holderKind: "user", holderId: "missing" }
 };
 
@@ -83,30 +87,34 @@ const everyRight = { roles: ["superadmin"], permissions: [...PERMISSIONS] };
 
 describe("every operation of the catalog", () => {
   beforeAll(async () => {
-    instance = await createTestInstanceWith((stores) => ({
-      authAdapter,
-      // Every module is on: an operation of a module that is off answers 404 before any of the
-      // refusals this file asks for.
-      modules: createModuleRegistry(platformModules).snapshot(
-        Object.fromEntries(platformModules.map((module) => [module.name, { enabled: true }]))
-      ),
-      approvalRequests: { store: stores.approvals, handlers: new Map() },
-      allowedOrigins: ["https://ui.example.test"],
-      mail: {
-        sender: { send: () => Promise.resolve({ ok: true }) },
-        appUrl: "https://ui.example.test",
-        listCaptured: () => []
-      },
-      sessionToken: {
-        serverCredential: "route-authorization-server-credential",
-        issuer: new HmacSessionTokenIssuer({
-          secret: "route-authorization-session-token-secret",
-          issuer: "test",
-          clientInstanceId: "route_authorization_test",
-          ttlSeconds: 60
-        })
-      }
-    }));
+    instance = await createTestInstanceWith(
+      (stores) => ({
+        authAdapter,
+        // Every module is on: an operation of a module that is off answers 404 before any of the
+        // refusals this file asks for.
+        modules: createModuleRegistry(platformModules).snapshot(
+          Object.fromEntries(platformModules.map((module) => [module.name, { enabled: true }]))
+        ),
+        approvalRequests: { store: stores.approvals, handlers: new Map() },
+        allowedOrigins: ["https://ui.example.test"],
+        mail: {
+          sender: { send: () => Promise.resolve({ ok: true }) },
+          appUrl: "https://ui.example.test",
+          listCaptured: () => []
+        },
+        sessionToken: {
+          serverCredential: "route-authorization-server-credential",
+          issuer: new HmacSessionTokenIssuer({
+            secret: "route-authorization-session-token-secret",
+            issuer: "test",
+            clientInstanceId: "route_authorization_test",
+            ttlSeconds: 60
+          })
+        }
+      }),
+      // The routes of a module come from its assembly, which a server built here does not have.
+      await dataStoreRoutes()
+    );
   });
 
   // This instance runs without the sign-in library, so its mount is absent. The preflight

@@ -19,6 +19,7 @@ import {
   type TestInstance,
   type TestStore
 } from "./support/test-instance";
+import { dataStoreRoutes } from "./support/data-store-routes";
 
 // The inventory of the versioned API: what is registered, under which id and path, and what
 // answers nothing any more. Paths and ids are hard to change once a release carries them, so
@@ -123,6 +124,10 @@ describe("the operation catalog", () => {
         "conversations.runs.start  POST /api/v1/conversations/:conversationId/runs",
         "conversations.structured_data.get  GET /api/v1/conversations/:conversationId/structured-data/:structuredDataResourceId",
         "conversations.thread.get  GET /api/v1/conversations/:conversationId/thread",
+        "data_stores.describe  GET /api/v1/data-stores/:store/describe",
+        "data_stores.insert  POST /api/v1/data-stores/:store/insert",
+        "data_stores.preview_rows  GET /api/v1/data-stores/:store/preview-rows",
+        "data_stores.query  POST /api/v1/data-stores/:store/query",
         "docs.get  GET /api/v1/docs",
         "health.get  GET /health",
         "instance.infrastructure.check  POST /api/v1/instance/infrastructure/check",
@@ -245,6 +250,7 @@ describe("the operation catalog", () => {
       "connections",
       "context",
       "conversations",
+      "data-stores",
       "dev",
       "docs",
       "instance",
@@ -314,11 +320,13 @@ describe("a running instance", () => {
   let instance: TestInstance;
   let development: TestInstance;
   beforeAll(async () => {
-    instance = await createTestInstanceWith(optionalParts);
-    development = await createTestInstanceWith((stores) => ({
-      ...optionalParts(stores),
-      mail: capturedMail
-    }));
+    // The routes of a module come from its assembly, which a server built here does not have.
+    const moduleRoutes = await dataStoreRoutes();
+    instance = await createTestInstanceWith(optionalParts, moduleRoutes);
+    development = await createTestInstanceWith(
+      (stores) => ({ ...optionalParts(stores), mail: capturedMail }),
+      moduleRoutes
+    );
   });
 
   it("registers the catalog and nothing beside it", async () => {
@@ -417,6 +425,10 @@ describe("a running instance", () => {
       "connections.get",
       "connections.test",
       "connections.list_tools",
+      "data_stores.query",
+      "data_stores.insert",
+      "data_stores.describe",
+      "data_stores.preview_rows",
       "assets.publish",
       "assets.discard_draft",
       "apps.create_from_page",
@@ -448,10 +460,10 @@ describe("the sign-in library's mount", () => {
       secret: "test-secret-at-least-32-characters-long",
       baseUrl: "http://localhost:3000"
     });
-    instance = await createTestInstanceWith((stores) => ({
-      ...optionalParts(stores),
-      standaloneAuth: auth
-    }));
+    instance = await createTestInstanceWith(
+      (stores) => ({ ...optionalParts(stores), standaloneAuth: auth }),
+      await dataStoreRoutes()
+    );
   });
   afterAll(async () => {
     await auth?.close();

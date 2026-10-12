@@ -54,9 +54,7 @@ function rowOf(record: DataStoreRecord): Row {
 }
 
 /** The only code that reads or writes `data_stores`. */
-export function createPostgresDataStoreRecordsStore(
-  db: PostgresConnection
-): DataStoreRecordsStore {
+export function createPostgresDataStoreRecordsStore(db: PostgresConnection): DataStoreRecordsStore {
   return {
     async getDataStore({ clientInstanceId, id, lock }) {
       const query = db

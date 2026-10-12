@@ -83,19 +83,25 @@ contain breaking changes; a patch version does not.
   empty for every asset that exists. The migration waits five seconds for its locks at most; one
   that gives up is run again. **Rollback:** an earlier release ignores them.
 - **Data Stores:** with `modules.dataStores.enabled` an instance has the asset kind
-  `data_store`: a folder with `store.yaml` (`id`, `name`, `description`, `sizeLimit`) and SQL
-  files under `migrations/` (`NNNN_name.sql`, numbered from 0001 without a gap), with a draft
-  and a published revision. Publishing a revision creates a Postgres database of its own for
-  the store on the platform's server, with an app role (reads and writes rows, 15 seconds per
-  statement, 10 connections) and a migration role (changes the schema, 10 minutes, 2
-  connections), or applies the migrations that database lacks, each in its own transaction.
-  The jobs are `data_store.provision`, `data_store.migrate` and the daily
-  `data_store.measure_size`. The rows are reached through two operations per store,
-  `data_store.<id>.query` (one read-only statement with bound parameters, at most 1,000 rows
-  and 2 MiB, needs `data_store.read`, every call recorded) and `data_store.<id>.insert` (at
-  most 1,000 rows and 1 MiB per call, needs `data_store.write`). Migration `0057_data_stores`
-  adds the table `data_stores`, the platform's record of each store; a store's own database is
-  made at runtime and is no platform migration. With the module off nothing of it exists.
+  `data_store`: a folder with `store.yaml` (`id`, `name`, `description`, `scope`, `sizeLimit`;
+  an unknown key is refused) and SQL files under `migrations/` (`NNNN_name.sql`, numbered from
+  0001 without a gap), with a draft and a published revision. Publishing a revision creates a
+  Postgres database of its own for the store on the platform's server, with an app role (reads
+  and writes rows, 15 seconds per statement, 10 connections) and a migration role (changes the
+  schema, 10 minutes, 2 connections), or applies the migrations that database lacks, each in
+  its own transaction. The jobs are `data_store.provision`, `data_store.migrate` and the daily
+  `data_store.measure_size`. The rows are reached through `data_store.<id>.<verb>`, which a
+  Workflow step and an agent call, and through the HTTP operations `data_stores.<verb>` under
+  `/api/v1/data-stores/:store/`: `query` (one read-only statement with bound parameters, at
+  most 1,000 rows and 2 MiB), `describe` (tables, columns and types) and `preview_rows` (at
+  most 50 rows of one table) need `data_store.read` and record every call; `insert` (at most
+  1,000 rows and 1 MiB per call, `onConflict: fail | skip`, answers `inserted` and `skipped`)
+  needs `data_store.insert`. `load` is reserved and answers `not_supported_yet`. Release
+  config `dataStores.sizeLimit` (default `5GB`) is the most one store may hold and
+  `dataStores.poolMaxConnections` (default 5) the connections one process holds to one store.
+  Migration `0059_data_stores` adds the table `data_stores`, the platform's record of each
+  store; a store's own database is made at runtime and is no platform migration. With the
+  module off nothing of it exists.
   - **New privileges of the platform's database role:** `CREATEDB` and `CREATEROLE`, and
     ownership of the platform database. On an instance that exists an operator runs
     `ALTER ROLE <platform role> CREATEDB CREATEROLE;` once before turning the module on.
@@ -103,8 +109,11 @@ contain breaking changes; a patch version does not.
     reaches it: a role of the operator's own that connected through `PUBLIC` needs
     `GRANT CONNECT` of its own. The module needs `secretStore.keys`, where the passwords of the
     store roles are kept; without a key startup stops and names the setting.
-  - **Refusals:** a publish that changes or removes an applied migration answers `400` with
-    `details.reason: "applied_migration_changed"` and names the file; one whose id a retired
+  - **Refusals:** a migration that names the schema `catalyst`, which the platform keeps for
+    itself in every store, is refused when it is written. A publish whose `scope` is not the
+    owner of the store answers `scope_mismatch`. A publish that changes or removes an applied
+    migration answers `400` with `details.reason: "applied_migration_changed"` and names the
+    file; one whose id a retired
     store holds answers `409` with `data_store_id_held`. An insert at the size limit answers
     `409` with `data_store_size_limit` and names the limit; a call of a store without a
     database answers `409` with `data_store_not_ready`. A failure of the database is answered
@@ -120,7 +129,8 @@ contain breaking changes; a patch version does not.
   `onPublish` and `onRemove`, which run in the transaction of a publish and of a delete.
 - **`@vivd-catalyst/postgres-connector`:** `PostgresExecutor.change` runs statements in one
   transaction that commits, or outside of one, for a database the platform manages itself. A
-  change takes at most `POSTGRES_CHANGE_MAX_TIMEOUT_MS` (10 minutes).
+  change takes at most `POSTGRES_CHANGE_MAX_TIMEOUT_MS` (10 minutes). `createPostgresExecutor`
+  takes `poolMaxConnections` for an executor whose databases the platform sizes itself.
 - **Pages, plain HTML:** App Kit version `1.2.0`, with two new files, `page.css` and `theme.js`.
   A plain HTML Page that names it comes out with the look of the platform: the build links
   `page.css` and `theme.js` first into every HTML file of a Page with an `entry`, also one whose

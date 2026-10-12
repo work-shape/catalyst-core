@@ -1,5 +1,6 @@
 import type { SecretKeyring } from "@vivd-catalyst/connections";
 import {
+  DATA_STORE_ACTIONS,
   DATA_STORE_ASSET_KIND,
   DATA_STORE_JOB_KINDS,
   DATA_STORE_MANIFEST_FILE,
@@ -26,9 +27,15 @@ import {
   readDataStoreFiles
 } from "./definition";
 import { createDataStoreJobs, publishDataStore, retireDataStore } from "./jobs";
-import { createDataStoreOperationSource, createDataStoreToolSource } from "./operations";
-import { DATA_STORE_ACTIONS } from "./rights";
-import type { DataStoreRuntime } from "./runtime";
+import {
+  createDataStoreHttpOperations,
+  createDataStoreOperationSource,
+  createDataStoreToolSource,
+  type DataStoreHttpOperations
+} from "./operations";
+import type { DataStoreLimits, DataStoreRuntime } from "./runtime";
+
+export { sizeLimitBytes } from "./definition";
 import { createDataStoreServer } from "./server";
 
 /**
@@ -39,6 +46,12 @@ import { createDataStoreServer } from "./server";
 export const dataStoresModule = defineModule({
   name: "dataStores",
   kinds: [DATA_STORE_ASSET_KIND],
+  operations: [
+    "data_stores.query",
+    "data_stores.insert",
+    "data_stores.describe",
+    "data_stores.preview_rows"
+  ],
   jobKinds: Object.values(DATA_STORE_JOB_KINDS)
 });
 
@@ -69,6 +82,8 @@ export interface DataStores {
   /** What deleting the asset does to the store, in the transaction of the delete: it is retired. */
   retire(stores: PlatformStores, assetId: string): Promise<void>;
   readonly operationSource: OperationSource;
+  /** The verbs the HTTP API has, each to be bound to its operation of the API contract. */
+  readonly httpOperations: DataStoreHttpOperations;
   /** Describes the operations to an agent that lists them as tools. */
   readonly toolSource: DataToolSource;
   readonly jobHandlers: readonly RegisteredJobHandler[];
@@ -86,20 +101,24 @@ export function createDataStores(input: {
   databaseUrl: string;
   /** The keys of the Secret Store, which keeps the passwords of the store roles. */
   keyring: SecretKeyring;
+  /** The limits of release config (`dataStores`). */
+  limits: DataStoreLimits;
   logger: Logger;
 }): DataStores {
-  const { clientInstanceId, stores, logger } = input;
+  const { clientInstanceId, stores, limits, logger } = input;
   const credentials = createDataStoreCredentials({ clientInstanceId, keyring: input.keyring });
   const server = createDataStoreServer({
     clientInstanceId,
     databaseUrl: input.databaseUrl,
     credentials,
-    secretRows: stores.connections
+    secretRows: stores.connections,
+    poolMaxConnections: limits.poolMaxConnections
   });
   const runtime: DataStoreRuntime = {
     clientInstanceId,
     stores,
     server,
+    limits,
     credentials,
     auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: stores.audit }),
     logger
@@ -136,6 +155,7 @@ export function createDataStores(input: {
       }),
     retire: (bound, assetId) => retireDataStore(runtime, bound, assetId),
     operationSource: createDataStoreOperationSource(runtime),
+    httpOperations: createDataStoreHttpOperations(runtime),
     toolSource: createDataStoreToolSource(runtime),
     jobHandlers: jobs.handlers,
     schedules: jobs.schedules,

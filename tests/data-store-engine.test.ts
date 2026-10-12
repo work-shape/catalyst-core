@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   DATA_STORE_ASSET_KIND,
   DATA_STORE_JOB_KINDS,
+  DATA_STORE_PREVIEW_ROW_LIMIT,
   dataStoreOperationName,
   isAppError,
   type JsonObject
@@ -74,7 +75,30 @@ describe("a Data Store on Postgres", () => {
     expect(issuesOf([manifest(), { path: "tables.yaml", text: "a: 1" }])[0]).toContain(
       "is no file of a Data Store"
     );
+    // `store.yaml` is strict: a key it does not know is refused, never ignored.
     expect(issuesOf([manifest("tables: []\n"), init])[0]).toContain("tables");
+    expect(read([manifest("scope: instance\n"), init])).toMatchObject({ scope: "instance" });
+    expect(issuesOf([manifest("scope: everyone\n"), init])[0]).toContain("scope");
+    // The schema `catalyst` is the platform's in every store: a migration that names it is refused.
+    for (const touching of [
+      "create table catalyst.notes (id integer);",
+      'insert into "catalyst".migrations values (9, $$x$$, $$y$$);',
+      "set search_path = Catalyst;"
+    ]) {
+      expect(issuesOf([manifest(), { path: "migrations/0001_init.sql", text: touching }])).toEqual([
+        "'migrations/0001_init.sql' names the schema 'catalyst', which the platform keeps for itself in every store (DATA_STORE_RESERVED_SCHEMA). A migration creates and changes objects in other schemas."
+      ]);
+    }
+    // Naming it in a comment or a value touches nothing.
+    expect(
+      read([
+        manifest(),
+        {
+          path: "migrations/0001_init.sql",
+          text: "-- not the catalyst schema\ncreate table notes (source text default 'catalyst');"
+        }
+      ])
+    ).toMatchObject({ migrations: [{ number: 1 }] });
     expect(
       issuesOf([manifest(), { path: "migrations/0001_big.sql", text: "-".repeat(262_145) }])[0]
     ).toContain("DATA_STORE_MIGRATION_MAX_BYTES");
@@ -145,24 +169,178 @@ describe("a Data Store on Postgres", () => {
 
     expect(
       await call(world, "insert", { table: "findings", rows: [finding(1), finding(2)] })
-    ).toEqual({ table: "findings", insertedCount: 2 });
+    ).toEqual({ table: "findings", inserted: 2, skipped: 0 });
     const rows = await call(world, "query", {
       sql: "select client_id, severity, amount, details from findings where rule_id = $1 order by client_id",
+      // A bare value leaves its type to the database; a declared one is bound as that type.
       parameters: ["vat-rate"]
     });
+    const typed = await call(world, "query", {
+      sql: "select count(*)::integer as count from findings where revision = $1 and client_id = any($2)",
+      parameters: [
+        { type: "integer", value: 3 },
+        { type: "text[]", value: ["client-1", "client-9"] }
+      ]
+    });
 
+    expect(typed).toMatchObject({ rows: [{ count: 1 }] });
     expect(rows).toEqual({
+      // The product's own type beside the type as the store's database names it.
       columns: [
-        { name: "client_id", type: "text" },
-        { name: "severity", type: "text" },
-        { name: "amount", type: "numeric" },
-        { name: "details", type: "jsonb" }
+        { name: "client_id", type: "text", nativeType: "text" },
+        { name: "severity", type: "text", nativeType: "text" },
+        { name: "amount", type: "number", nativeType: "numeric" },
+        { name: "details", type: "other", nativeType: "jsonb" }
       ],
       rows: [
         { client_id: "client-1", severity: "warning", amount: "119.50", details: { booking: 1 } },
         { client_id: "client-2", severity: "warning", amount: "119.50", details: { booking: 2 } }
       ],
       truncated: false
+    });
+  });
+
+  it("skips or refuses a row a unique constraint of the table holds already, as onConflict says", async () => {
+    const unique: StoreFile = {
+      path: "migrations/0002_one_finding.sql",
+      text: "create unique index one_finding on findings (run_id, client_id, rule_id);"
+    };
+    const world = await published("on_conflict", [manifest(), init, unique]);
+    await call(world, "insert", { table: "findings", rows: [finding(1), finding(2)] });
+    const rerun = { table: "findings", rows: [finding(2), finding(3)] };
+
+    // Left out, a conflict refuses the whole call and adds no row of it.
+    expect(await refusal(call(world, "insert", rerun))).toMatchObject({
+      code: "VALIDATION_FAILED",
+      message: "The insert would store a value twice that must be unique (SQLSTATE 23505)."
+    });
+    expect(await refusal(call(world, "insert", { ...rerun, onConflict: "fail" }))).toMatchObject({
+      details: { sqlState: "23505" }
+    });
+    expect(
+      await call(world, "query", { sql: "select count(*)::integer as count from findings" })
+    ).toMatchObject({ rows: [{ count: 2 }] });
+
+    // The rerun of a run, and next month's run over the same findings, add only what is new.
+    expect(await call(world, "insert", { ...rerun, onConflict: "skip" })).toEqual({
+      table: "findings",
+      inserted: 1,
+      skipped: 1
+    });
+    expect(await call(world, "insert", { ...rerun, onConflict: "skip" })).toEqual({
+      table: "findings",
+      inserted: 0,
+      skipped: 2
+    });
+  });
+
+  it("refuses load, which is reserved, as not supported yet and changes nothing", async () => {
+    const world = await published("load");
+
+    const refused = await refusal(
+      call(world, "load", { table: "findings", dataset: { id: "ds_1" } })
+    );
+
+    expect(refused).toMatchObject({
+      code: "VALIDATION_FAILED",
+      message:
+        "data_store.findings.load is not supported yet: a dataset of a Workflow Run cannot be loaded into a Data Store by this release. Add rows with data_store.findings.insert.",
+      details: { reason: "not_supported_yet" }
+    });
+    expect(
+      await call(world, "query", { sql: "select count(*)::integer as count from findings" })
+    ).toMatchObject({ rows: [{ count: 0 }] });
+  });
+
+  it("describes the tables of a store at its level and previews at most 50 rows of one", async () => {
+    const commented: StoreFile = {
+      path: "migrations/0002_comments.sql",
+      text: `comment on table findings is 'One row per finding of a check.';
+        comment on column findings.amount is 'In EUR.';`
+    };
+    const world = await published("describe", [manifest(), init, commented]);
+    await call(world, "insert", {
+      table: "findings",
+      rows: Array.from({ length: 60 }, (_, index) => finding(index))
+    });
+
+    const schema = z
+      .object({
+        schemaLevel: z.number(),
+        tables: z.array(
+          z.object({
+            name: z.string(),
+            comment: z.string().optional(),
+            rowEstimate: z.number(),
+            columns: z.array(z.record(z.string(), z.unknown()))
+          })
+        )
+      })
+      .parse(await call(world, "describe", {}));
+
+    expect(schema.schemaLevel).toBe(2);
+    expect(schema.tables.map((table) => [table.name, table.comment])).toEqual([
+      ["findings", "One row per finding of a check."]
+    ]);
+    expect(schema.tables[0]?.columns).toEqual([
+      {
+        name: "id",
+        type: "integer",
+        nativeType: "bigint",
+        nullable: false,
+        primaryKey: true
+      },
+      { name: "run_id", type: "text", nativeType: "text", nullable: false, primaryKey: false },
+      { name: "client_id", type: "text", nativeType: "text", nullable: false, primaryKey: false },
+      { name: "rule_id", type: "text", nativeType: "text", nullable: false, primaryKey: false },
+      {
+        name: "revision",
+        type: "integer",
+        nativeType: "integer",
+        nullable: false,
+        primaryKey: false
+      },
+      { name: "severity", type: "text", nativeType: "text", nullable: false, primaryKey: false },
+      {
+        name: "amount",
+        type: "number",
+        nativeType: "numeric(14,2)",
+        nullable: true,
+        primaryKey: false,
+        comment: "In EUR."
+      },
+      {
+        name: "details",
+        type: "other",
+        nativeType: "jsonb",
+        nullable: false,
+        default: "'{}'::jsonb",
+        primaryKey: false
+      }
+    ]);
+
+    const preview = z
+      .object({ rows: z.array(z.unknown()), truncated: z.boolean() })
+      .parse(await call(world, "preview_rows", { table: "findings" }));
+    expect([preview.rows.length, preview.truncated]).toEqual([DATA_STORE_PREVIEW_ROW_LIMIT, true]);
+    expect(await call(world, "preview_rows", { table: "findings", limit: 2 })).toMatchObject({
+      columns: expect.arrayContaining([{ name: "amount", type: "number", nativeType: "numeric" }]),
+      rows: [{ client_id: "client-0" }, { client_id: "client-1" }],
+      truncated: true
+    });
+    const preview_ = required(
+      await world.dataStores.operationSource.resolve(
+        dataStoreOperationName("findings", "preview_rows")
+      )
+    );
+    expect(preview_.inputSchema.safeParse({ table: "findings", limit: 51 }).success).toBe(false);
+    expect(await refusal(call(world, "preview_rows", { table: "bookings" }))).toMatchObject({
+      message: "The store has no table 'bookings'"
+    });
+    // Both are reads as the app role: neither reaches what the platform keeps in the store.
+    expect(JSON.stringify(schema)).not.toContain("migrations");
+    expect(await refusal(call(world, "preview_rows", { table: "migrations" }))).toMatchObject({
+      message: "The store has no table 'migrations'"
     });
   });
 
@@ -180,7 +358,7 @@ describe("a Data Store on Postgres", () => {
     });
 
     expect(injected).toMatchObject({ rows: [] });
-    expect(stored).toEqual({ table: "findings", insertedCount: 1 });
+    expect(stored).toEqual({ table: "findings", inserted: 1, skipped: 0 });
     expect(
       await call(world, "query", { sql: "select count(*)::integer as count from findings" })
     ).toMatchObject({ rows: [{ count: 3 }] });
@@ -369,6 +547,30 @@ describe("a Data Store on Postgres", () => {
     ).toMatchObject({
       rows: [{ owner: null, reviewed: false }]
     });
+  });
+
+  it("takes the size ceiling from release config, which a manifest lowers and never raises", async () => {
+    const world = await setup("ceiling", { sizeLimitBytes: 2 * 1024 ** 3 });
+    const limitOf = async (extra: string) =>
+      (await recordOf(world, await publish(world, [manifest(extra), init]))).sizeLimitBytes;
+
+    expect(await limitOf("")).toBe(2 * 1024 ** 3);
+    expect(await limitOf("sizeLimit: 500MB\n")).toBe(500 * 1024 ** 2);
+    expect(await limitOf("sizeLimit: 9GB\n")).toBe(2 * 1024 ** 3);
+  });
+
+  it("refuses the publish of a store whose manifest names another scope than its owner", async () => {
+    const world = await setup("scope");
+
+    // The stores of this suite belong to the instance.
+    await expect(publish(world, [manifest("scope: workspace\n"), init])).rejects.toMatchObject({
+      code: "VALIDATION_FAILED",
+      message:
+        "'store.yaml' says scope 'workspace' and the store belongs to the instance. Write the store for a workspace, or change 'scope'.",
+      details: { reason: "scope_mismatch" }
+    });
+    const id = await publish(world, [manifest("scope: instance\n"), init]);
+    expect(await recordOf(world, id)).toMatchObject({ status: "provisioning" });
   });
 
   it("refuses an insert at the size limit and keeps answering queries", async () => {

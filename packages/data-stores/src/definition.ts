@@ -4,6 +4,8 @@ import { z } from "zod";
 import {
   AppError,
   DATA_STORE_MANIFEST_FILE,
+  DATA_STORE_RESERVED_SCHEMA,
+  type AssetScope,
   type AssetValidationIssue,
   type DataStoreAppliedMigration,
   type JsonObject
@@ -34,8 +36,13 @@ const MIGRATION_FILE = /^migrations\/(\d{4})_([a-z0-9]+(?:_[a-z0-9]+)*)\.sql$/u;
 const BYTES_PER_UNIT = { MB: 1024 ** 2, GB: 1024 ** 3 } as const;
 const SIZE_LIMIT = /^([1-9]\d{0,5})(MB|GB)$/u;
 
+/** Who owns a store, as `store.yaml` may say it. The owner itself is the asset's. */
+const scopeSchema = z.enum(["instance", "workspace"] satisfies AssetScope["kind"][]);
+
+// Strict: a key the manifest does not know is refused, never ignored.
 const manifestSchema = z.strictObject({
   id: z.string(),
+  scope: scopeSchema.optional(),
   name: z.string().min(1).max(DATA_STORE_TITLE_MAX_CHARS).optional(),
   description: z.string().max(DATA_STORE_DESCRIPTION_MAX_CHARS).optional(),
   sizeLimit: z
@@ -60,6 +67,8 @@ export const dataStoreDefinitionSchema = z
     name: z.string(),
     title: z.string().min(1).max(DATA_STORE_TITLE_MAX_CHARS),
     description: z.string().max(DATA_STORE_DESCRIPTION_MAX_CHARS).optional(),
+    /** Checked against the owner of the asset when the revision is published. */
+    scope: scopeSchema.optional(),
     sizeLimitBytes: z.number().int().positive().optional(),
     migrations: z.array(migrationSchema).max(DATA_STORE_MAX_MIGRATIONS)
   })
@@ -72,18 +81,46 @@ export const dataStoreDefinitionSchema = z
           message: `Migrations are numbered from 0001 without a gap: expected ${fileNumber(index + 1)}, found ${fileNumber(migration.number)}`
         });
       }
+      if (namesReservedSchema(migration.sql)) {
+        context.addIssue({
+          code: "custom",
+          path: ["migrations", index, "sql"],
+          message: `'${migrationFileName(migration)}' names the schema '${DATA_STORE_RESERVED_SCHEMA}', which the platform keeps for itself in every store (DATA_STORE_RESERVED_SCHEMA). A migration creates and changes objects in other schemas.`
+        });
+      }
     });
   });
 
 export type DataStoreDefinition = z.infer<typeof dataStoreDefinitionSchema>;
 export type DataStoreMigration = DataStoreDefinition["migrations"][number];
 
+/**
+ * Whether a migration names the platform's schema as an identifier, quoted or not. A comment
+ * and a quoted value are no identifier. The body of a dollar-quoted text is read as SQL,
+ * because that is what a function and a `do` block hold. This is the refusal an author reads
+ * early; what the migration role may do there is decided by its grants.
+ */
+function namesReservedSchema(sql: string): boolean {
+  const code = sql
+    .replace(/--[^\n]*|\/\*[\s\S]*?\*\/|'(?:[^']|'')*'/gu, " ")
+    .replace(/\$[A-Za-z_]*\$/gu, " ");
+  for (const [, quoted, bare] of code.matchAll(/"((?:[^"]|"")*)"|([A-Za-z_][A-Za-z0-9_$]*)/gu)) {
+    if (
+      quoted === DATA_STORE_RESERVED_SCHEMA ||
+      bare?.toLowerCase() === DATA_STORE_RESERVED_SCHEMA
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function fileNumber(number: number): string {
   return String(number).padStart(4, "0");
 }
 
 /** The file a migration was read from, as a refusal names it. */
-export function migrationFileName(migration: Pick<DataStoreMigration, "number" | "name">): string {
+export function migrationFileName(migration: { number: number; name: string }): string {
   return `${MIGRATIONS_FOLDER}${fileNumber(migration.number)}_${migration.name}.sql`;
 }
 
@@ -139,6 +176,7 @@ export function readDataStoreFiles(
     name: manifest.id,
     title: manifest.name ?? manifest.id,
     ...(manifest.description === undefined ? {} : { description: manifest.description }),
+    ...(manifest.scope === undefined ? {} : { scope: manifest.scope }),
     ...(manifest.sizeLimit === undefined
       ? {}
       : { sizeLimitBytes: sizeLimitBytes(manifest.sizeLimit) }),
@@ -173,7 +211,8 @@ function readManifest(
       ...(loaded === undefined
         ? [{ message: `'${DATA_STORE_MANIFEST_FILE}' is not readable YAML`, path }]
         : parsed.error.issues.map((issue) => ({
-            message: issue.message,
+            // The key is named in the sentence: a reader of the refusal sees no path.
+            message: `${issue.path.length > 0 ? `'${issue.path.join(".")}': ` : ""}${issue.message}`,
             path: [...path, ...issue.path]
           })))
     );
@@ -214,7 +253,8 @@ function readMigration(
   };
 }
 
-function sizeLimitBytes(sizeLimit: string): number {
+/** The bytes of a size as `store.yaml` and release config write it, such as `500MB`. */
+export function sizeLimitBytes(sizeLimit: string): number {
   const [, amount, unit] = SIZE_LIMIT.exec(sizeLimit) ?? [];
   return Number(amount) * BYTES_PER_UNIT[unit === "GB" ? "GB" : "MB"];
 }

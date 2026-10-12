@@ -1,23 +1,17 @@
-import type { WorkflowAssetKind } from "@vivd-catalyst/chat-server";
+import { apiOperations } from "@vivd-catalyst/api-contract";
+import type { RouteRegistration, WorkflowAssetKind } from "@vivd-catalyst/chat-server";
 import { loadSecretKeyring } from "@vivd-catalyst/connections";
-import { AppError, type DataToolSource, type JobRetry } from "@vivd-catalyst/core";
-import { createDataStores, dataStoresModule, type DataStores } from "@vivd-catalyst/data-stores";
+import { AppError } from "@vivd-catalyst/core";
+import {
+  createDataStores,
+  dataStoresModule,
+  sizeLimitBytes,
+  type DataStores
+} from "@vivd-catalyst/data-stores";
 import { PLATFORM_SECRET_NAMES } from "./infrastructure";
-import type { ModuleAssembly, ModuleSeam } from "./module-assembly";
+import type { ModuleSeam } from "./module-assembly";
 
 export { dataStoresModule };
-
-/**
- * What the Data Stores of an instance have that `ModuleAssembly` has no place for yet. The
- * seam answers it beside what the assembly takes, so that the assembly reads it from here
- * once it can: the manual retries of the store's jobs where the API registers retries, the
- * tool source where an agent's data tools are described, and `close` where the process stops.
- */
-interface DataStoresAssembly extends ModuleAssembly {
-  readonly jobRetries: readonly JobRetry[];
-  readonly dataTools: DataToolSource;
-  close(): Promise<void>;
-}
 
 /** The kind `data_store` as the asset workflow of the API registers it. */
 function workflowAssetKind(dataStores: DataStores): WorkflowAssetKind {
@@ -37,9 +31,20 @@ function workflowAssetKind(dataStores: DataStores): WorkflowAssetKind {
   };
 }
 
+/** The four verbs of a store as operations of the HTTP API, each named by the store in its path. */
+function routesOf({ httpOperations }: DataStores): RouteRegistration {
+  return (routes) => {
+    routes.operation(apiOperations["data_stores.query"], httpOperations.query);
+    routes.operation(apiOperations["data_stores.insert"], httpOperations.insert);
+    routes.operation(apiOperations["data_stores.describe"], httpOperations.describe);
+    routes.operation(apiOperations["data_stores.preview_rows"], httpOperations.preview_rows);
+  };
+}
+
 /**
  * What an instance with the module `dataStores` on has for its Data Stores: the kind, the
- * operations on the rows of each store, and the jobs that provision, migrate and measure.
+ * operations on the rows of each store with their routes and their tools for agents, and the
+ * jobs that provision, migrate and measure.
  */
 export const assembleDataStores: ModuleSeam = async (parts) => {
   const { config, modules, secrets } = parts;
@@ -55,16 +60,22 @@ export const assembleDataStores: ModuleSeam = async (parts) => {
     stores: parts.stores,
     databaseUrl: await secrets.resolve(PLATFORM_SECRET_NAMES.databaseUrl),
     keyring: await loadSecretKeyring({ keys: config.secretStore.keys, secrets }),
+    limits: {
+      sizeLimitBytes: sizeLimitBytes(config.dataStores.sizeLimit),
+      poolMaxConnections: config.dataStores.poolMaxConnections
+    },
     logger: parts.logger
   });
-  const assembly: DataStoresAssembly = {
+  return {
     assetKinds: [workflowAssetKind(dataStores)],
-    operationSources: [dataStores.operationSource],
-    jobHandlers: dataStores.jobHandlers,
-    schedules: dataStores.schedules,
-    jobRetries: dataStores.jobRetries,
-    dataTools: dataStores.toolSource,
-    close: () => dataStores.close()
+    operationSources: () => [dataStores.operationSource],
+    start: () => ({
+      jobHandlers: dataStores.jobHandlers,
+      schedules: dataStores.schedules,
+      jobRetries: dataStores.jobRetries,
+      routes: [routesOf(dataStores)],
+      dataToolSources: [dataStores.toolSource],
+      close: () => dataStores.close()
+    })
   };
-  return assembly;
 };

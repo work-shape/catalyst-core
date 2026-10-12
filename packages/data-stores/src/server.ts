@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import { lookup } from "node:dns/promises";
 import {
-  POSTGRES_POOL_MAX_CONNECTIONS,
   createPostgresExecutor,
   type PostgresExecutor,
   type PostgresTarget
@@ -14,16 +13,10 @@ import {
   type DataStoreRecord
 } from "@vivd-catalyst/core";
 import type { DataStoreCredentials, DataStoreRole } from "./credentials";
+import { DATA_STORE_ROLE_LIMITS } from "./role-limits";
 
 // The Postgres server the stores of an instance live on, and the way to each database on it.
 // Every connection to a store database is one of the bounded pools of the executor.
-
-/**
- * The connections the platform holds to one store as one role, at most. It stays below the
- * connection limit of the app role, so a second process has room. A call that finds none free
- * waits and then fails as busy.
- */
-const DATA_STORE_POOL_MAX_CONNECTIONS = POSTGRES_POOL_MAX_CONNECTIONS;
 
 /** The credential handle of the platform's own role. Every other handle names a store role. */
 const PLATFORM_ROLE_HANDLE = "platform";
@@ -57,10 +50,17 @@ export function createDataStoreServer(input: {
   credentials: DataStoreCredentials;
   /** The rows of the Secret Store, outside of any transaction. */
   secretRows: ConnectionsStore;
+  /**
+   * The connections this process holds to one store as one role, at most: the pool cap of
+   * release config. A call that finds none free waits and then fails as busy.
+   */
+  poolMaxConnections: number;
 }): DataStoreServer {
   const platform = readDatabaseUrl(input.databaseUrl);
   const base = { host: platform.host, port: platform.port, tls: platform.tls, schemas: [] };
+  const { poolMaxConnections } = input;
   const executor = createPostgresExecutor({
+    poolMaxConnections,
     secrets: {
       async getSecret(handle) {
         if (handle === PLATFORM_ROLE_HANDLE) return platform.password;
@@ -89,7 +89,7 @@ export function createDataStoreServer(input: {
     asPlatform: (database) => ({
       location: { ...base, database, user: platform.user },
       credentialHandle: PLATFORM_ROLE_HANDLE,
-      limits: { maxConnections: DATA_STORE_POOL_MAX_CONNECTIONS }
+      limits: { maxConnections: poolMaxConnections }
     }),
     asRole: (record, role) => ({
       location: {
@@ -102,7 +102,10 @@ export function createDataStoreServer(input: {
         schemas: ["public"]
       },
       credentialHandle: `${record.id}:${role}`,
-      limits: { maxConnections: DATA_STORE_POOL_MAX_CONNECTIONS }
+      // Never more than Postgres lets the role open.
+      limits: {
+        maxConnections: Math.min(poolMaxConnections, DATA_STORE_ROLE_LIMITS[role].connectionLimit)
+      }
     })
   };
 }

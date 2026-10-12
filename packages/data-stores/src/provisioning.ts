@@ -2,20 +2,11 @@ import { createHash, createHmac, pbkdf2Sync, randomBytes } from "node:crypto";
 import type { PostgresChangeStatements } from "@vivd-catalyst/postgres-connector";
 import type { DataStoreRecord } from "@vivd-catalyst/core";
 import type { DataStoreRole } from "./credentials";
+import { DATA_STORE_ROLE_LIMITS } from "./role-limits";
 import { quoteIdentifier, type DataStoreServer } from "./server";
 
 // The one place a store's database, its roles and their grants are made. Every statement is
 // built from names this package derived, never from a caller's text.
-
-/**
- * The limits Postgres itself holds each store role to: the longest statement and the number of
- * connections. A statement past its timeout is cancelled by the database and the call reports
- * a timeout; a connection past the limit is refused and the call reports the store as busy.
- */
-export const DATA_STORE_ROLE_LIMITS = {
-  app: { statementTimeoutMs: 15_000, connectionLimit: 10 },
-  migration: { statementTimeoutMs: 600_000, connectionLimit: 2 }
-} as const satisfies Record<DataStoreRole, { statementTimeoutMs: number; connectionLimit: number }>;
 
 /** How long a session of a store role may sit idle inside a transaction before Postgres ends it. */
 const DATA_STORE_IDLE_IN_TRANSACTION_TIMEOUT_MS = 60_000;

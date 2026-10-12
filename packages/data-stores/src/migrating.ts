@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { DataStoreAppliedMigration, DataStoreRecord } from "@vivd-catalyst/core";
 import type { DataStoreMigration } from "./definition";
-import { DATA_STORE_ROLE_LIMITS } from "./provisioning";
+import { DATA_STORE_ROLE_LIMITS } from "./role-limits";
 import type { DataStoreServer } from "./server";
 
 /** How long reading the applied migrations of a store may take before the attempt fails. */

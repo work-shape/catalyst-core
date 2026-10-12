@@ -44,6 +44,7 @@
   "dependencies": {
     "@vivd-catalyst/agent-runtime": "workspace:*",
     "@vivd-catalyst/api-client": "workspace:*",
+    "@vivd-catalyst/api-contract": "workspace:*",
     "@vivd-catalyst/app-build": "workspace:*",
     "@vivd-catalyst/auth": "workspace:*",
     "@vivd-catalyst/capability-sdk": "workspace:*",
