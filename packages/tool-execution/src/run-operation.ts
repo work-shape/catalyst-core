@@ -203,7 +203,13 @@ function readIdempotencyKey(call: OperationCall, definition: OperationDefinition
   if (definition.effect === "reading") return undefined;
   const key = call.idempotencyKey;
   if (key === undefined) {
-    if (call.origin.kind === "app" || call.origin.kind === "workflow") {
+    // No person repeats these calls by hand: a frame, a step and a due time are run again by
+    // code, and a changing call that code repeats without a key would change twice.
+    if (
+      call.origin.kind === "app" ||
+      call.origin.kind === "workflow" ||
+      call.origin.kind === "schedule"
+    ) {
       throw new AppError("VALIDATION_FAILED", "This call needs an Idempotency-Key");
     }
     return undefined;

@@ -174,6 +174,11 @@ describe("the operation catalog", () => {
         "users.update  PATCH /api/v1/instance/users/:userId",
         "view_runtime.files.get  GET /app-runtime/view/:version/:file",
         "view_shell.files.get  GET /app-runtime/view-shell/:version/:file",
+        "workflows.cancel_run  POST /api/v1/workflow-runs/:runId/cancel",
+        "workflows.get_run  GET /api/v1/workflow-runs/:runId",
+        "workflows.list_runs  GET /api/v1/workflows/:workflow/runs",
+        "workflows.list_step_runs  GET /api/v1/workflow-runs/:runId/steps",
+        "workflows.start  POST /api/v1/workflows/:workflow/runs",
         "workspaces.access_requests.approve  POST /api/v1/workspaces/:collaborationWorkspaceId/access-requests/:userId/approve",
         "workspaces.access_requests.create  POST /api/v1/workspaces/:collaborationWorkspaceId/access-requests",
         "workspaces.access_requests.decline  DELETE /api/v1/workspaces/:collaborationWorkspaceId/access-requests/:userId",
@@ -247,6 +252,8 @@ describe("the operation catalog", () => {
       "operations",
       "password-reset",
       "password-setup",
+      "workflow-runs",
+      "workflows",
       "workspaces"
     ]);
   });
@@ -416,7 +423,12 @@ describe("a running instance", () => {
       "apps.sessions.context",
       "apps.sessions.call_action",
       "apps.sessions.call_connection",
-      "apps.actions.list"
+      "apps.actions.list",
+      "workflows.start",
+      "workflows.list_runs",
+      "workflows.get_run",
+      "workflows.list_step_runs",
+      "workflows.cancel_run"
     ];
     // The export, import and validation of a release went when the CLI moved to `assets.sync`.
     const removed = 3;

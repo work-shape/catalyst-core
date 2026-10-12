@@ -338,6 +338,17 @@ export const EVENTS = {
   },
   "user.profile_updated": { ...LEGACY_AUDIT, name: "user.profile_updated", subject: "user" },
   "user.updated": { ...LEGACY_AUDIT, name: "user.updated", subject: "user" },
+  "workflow_run.cancelled": {
+    ...LEGACY_AUDIT,
+    name: "workflow_run.cancelled",
+    subject: "workflow_run"
+  },
+  "workflow_run.ended": { ...LEGACY_AUDIT, name: "workflow_run.ended", subject: "workflow_run" },
+  "workflow_run.started": {
+    ...LEGACY_AUDIT,
+    name: "workflow_run.started",
+    subject: "workflow_run"
+  },
   "workspace_command.cancelled": {
     ...LEGACY_AUDIT,
     name: "workspace_command.cancelled",

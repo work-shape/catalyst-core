@@ -90,7 +90,11 @@
   "@vivd-catalyst/ui": [],
   "@vivd-catalyst/usage-governance": ["@vivd-catalyst/core"],
   "@vivd-catalyst/web-access": ["@vivd-catalyst/core", "@vivd-catalyst/tool-sdk"],
-  "@vivd-catalyst/workflows": ["@vivd-catalyst/core"],
+  "@vivd-catalyst/workflows": [
+    "@vivd-catalyst/connections",
+    "@vivd-catalyst/core",
+    "@vivd-catalyst/tool-execution"
+  ],
   "@vivd-solutions/registry-canary": [],
   "@work-shape/catalyst-cli": [
     "@vivd-catalyst/api-client",

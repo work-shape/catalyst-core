@@ -27,7 +27,11 @@ const runOperationCallers = [
   // S3-42: a call a frame makes through the bridge. Its operation is a named action read from
   // the file set the frame shows, which for a Page or a draft is in no registry, so the
   // operation face cannot name it. The call runs with the same dependencies as the face.
-  { package: "packages/chat-server", path: "src/apps/action-call.ts" }
+  { package: "packages/chat-server", path: "src/apps/action-call.ts" },
+  // Workflow engine, slice A1: the call an operation step of a Workflow Run makes. It is made
+  // by a job, with nobody's request to answer, as the run's service principal and from the
+  // origin `workflow`, so the HTTP face cannot make it. It runs with the same dependencies.
+  { package: "packages/workflows", path: "src/operation-step.ts" }
 ];
 
 /**

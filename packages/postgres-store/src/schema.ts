@@ -16,6 +16,7 @@ export * from "./schema/access";
 export * from "./schema/infrastructure";
 export * from "./schema/pages";
 export * from "./schema/connections";
+export * from "./schema/workflowRuns";
 import { productUsers, userIdentities } from "./schema/users";
 import { servicePrincipals, apiCredentials } from "./schema/apiAccess";
 import { conversations, messages, modelProviderContinuations } from "./schema/conversations";
@@ -43,6 +44,7 @@ import { permissionGrants, namespaces } from "./schema/access";
 import { infrastructureCheckState } from "./schema/infrastructure";
 import { pages, fileSets, pageBuilds } from "./schema/pages";
 import { secrets, connectionState } from "./schema/connections";
+import { workflowRuns, workflowStepRuns } from "./schema/workflowRuns";
 
 export const schema = {
   approvalRequests,
@@ -79,5 +81,7 @@ export const schema = {
   fileSets,
   pageBuilds,
   secrets,
-  connectionState
+  connectionState,
+  workflowRuns,
+  workflowStepRuns
 };

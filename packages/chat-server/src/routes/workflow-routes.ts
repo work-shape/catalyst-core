@@ -1,0 +1,183 @@
+import { apiOperations } from "@vivd-catalyst/api-contract";
+import {
+  AppError,
+  WORKFLOW_ACTIONS,
+  WORKFLOW_ASSET_KIND,
+  isAuthenticatedServicePrincipal,
+  type AccessResource,
+  type AuthenticatedIdentity,
+  type OperationAuthorization,
+  type OperationResource,
+  type WorkflowRunView,
+  type WorkflowStepRunView
+} from "@vivd-catalyst/core";
+import { decide } from "../asset-access";
+import type { ModuleRoutes, RouteRegistration } from "../http/route";
+import type { WorkflowRunsPort } from "../workflow-runs-port";
+
+/** The module these operations belong to. */
+const WORKFLOWS_MODULE = "workflows";
+
+const workflowOf = (name: string): AccessResource => ({ kind: WORKFLOW_ASSET_KIND, name });
+
+/**
+ * The runs of a Workflow: the start by hand, the reads and the cancel. Each is an operation
+ * of the registry and brings its check, because the right is decided on the Workflow the
+ * call or its run names. The right of the caller opens the call and nothing more: a run acts
+ * with the grants of the service principal its Workflow names.
+ *
+ * The assembly registers them through the seam of the module, with the engine of the process.
+ * Without an engine, which is an instance with the module off, the module gate refuses each
+ * call before it reaches one of them.
+ */
+export function createWorkflowRoutes(workflows: WorkflowRunsPort | undefined): RouteRegistration {
+  return (route) => registerWorkflowRoutes(route, workflows);
+}
+
+function registerWorkflowRoutes(
+  route: ModuleRoutes,
+  workflows: WorkflowRunsPort | undefined
+): void {
+  function required(): WorkflowRunsPort {
+    if (!workflows) throw new AppError("NOT_FOUND", "This instance has no Workflows");
+    return workflows;
+  }
+
+  /**
+   * Decided on the Workflow of the run, or on no Workflow where no run has the id. So a
+   * caller who may not read a run is refused the same way whether or not it exists.
+   */
+  async function authorizeOnRun(
+    runId: string,
+    decideOn: (run: WorkflowRunView | undefined, resource: AccessResource) => OperationAuthorization
+  ): Promise<OperationAuthorization> {
+    const run = await workflows?.readRun(runId);
+    return decideOn(run, run ? workflowOf(run.workflow) : { kind: WORKFLOW_ASSET_KIND });
+  }
+
+  async function runOf(runId: string): Promise<WorkflowRunView> {
+    const run = await required().readRun(runId);
+    if (!run) throw new AppError("NOT_FOUND", "There is no such Workflow Run");
+    return run;
+  }
+
+  route.operation(apiOperations["workflows.start"], {
+    authorize: (input, { access }) =>
+      decide(access, WORKFLOW_ACTIONS.use, workflowOf(input.workflow)),
+    resource: workflowResource,
+    module: WORKFLOWS_MODULE,
+    execute: async (input, context) =>
+      toRunResource(
+        await required().start({
+          workflow: input.workflow,
+          input: input.input,
+          startedBy: context.actor,
+          operationRunId: context.runId,
+          correlationId: context.correlationId
+        })
+      )
+  });
+
+  route.operation(apiOperations["workflows.list_runs"], {
+    authorize: (input, { access }) =>
+      decide(access, WORKFLOW_ACTIONS.read, workflowOf(input.workflow)),
+    resource: workflowResource,
+    module: WORKFLOWS_MODULE,
+    execute: async (input, context) =>
+      (
+        await required().listRuns({
+          workflow: input.workflow,
+          ...(context.paging ? { page: context.paging } : {})
+        })
+      ).map(toRunResource)
+  });
+
+  route.operation(apiOperations["workflows.get_run"], {
+    authorize: (input, { access }) =>
+      authorizeOnRun(input.runId, (_run, resource) =>
+        decide(access, WORKFLOW_ACTIONS.read, resource)
+      ),
+    resource: runResource,
+    module: WORKFLOWS_MODULE,
+    execute: async (input) => toRunResource(await runOf(input.runId))
+  });
+
+  route.operation(apiOperations["workflows.list_step_runs"], {
+    authorize: (input, { access }) =>
+      authorizeOnRun(input.runId, (_run, resource) =>
+        decide(access, WORKFLOW_ACTIONS.read, resource)
+      ),
+    resource: runResource,
+    module: WORKFLOWS_MODULE,
+    execute: async (input, context) => {
+      const run = await runOf(input.runId);
+      const stepRuns = await required().listStepRuns({
+        runId: run.id,
+        ...(context.paging ? { page: context.paging } : {})
+      });
+      return stepRuns.map(toStepRunResource);
+    }
+  });
+
+  route.operation(apiOperations["workflows.cancel_run"], {
+    // Whoever started the run may end it, and whoever may write its Workflow.
+    authorize: (input, { access, actor }) =>
+      authorizeOnRun(input.runId, (run, resource) =>
+        run && startedBy(run, actor)
+          ? { allowed: true }
+          : decide(access, WORKFLOW_ACTIONS.write, resource)
+      ),
+    resource: runResource,
+    module: WORKFLOWS_MODULE,
+    execute: async (input, context) => {
+      const run = await required().cancel({
+        runId: input.runId,
+        cancelledBy: context.actor,
+        correlationId: context.correlationId
+      });
+      if (!run) throw new AppError("NOT_FOUND", "There is no such Workflow Run");
+      return toRunResource(run);
+    }
+  });
+}
+
+function startedBy(run: WorkflowRunView, actor: AuthenticatedIdentity): boolean {
+  const kind = isAuthenticatedServicePrincipal(actor) ? "service_principal" : "user";
+  return run.startedBy.kind === kind && run.startedBy.id === actor.id;
+}
+
+/** A run as the API answers it: without the instance and the correlation id it carries. */
+function toRunResource(run: WorkflowRunView) {
+  const { clientInstanceId: _instance, correlationId: _correlation, principal, ...resource } = run;
+  return {
+    ...resource,
+    principal: { id: principal.id, displayLabel: principal.displayLabel },
+    startedBy: { kind: run.startedBy.kind, id: run.startedBy.id, label: run.startedBy.label }
+  };
+}
+
+/** A step run as the API answers it: its place in a loop as one value. */
+function toStepRunResource(stepRun: WorkflowStepRunView) {
+  const { clientInstanceId: _instance, iteration, iterationLabel, ...resource } = stepRun;
+  return {
+    ...resource,
+    ...(iteration === undefined
+      ? {}
+      : {
+          iteration: {
+            index: iteration,
+            ...(iterationLabel === undefined ? {} : { label: iterationLabel })
+          }
+        })
+  };
+}
+
+/** What a call on a Workflow touches, as its run and its events name it. */
+function workflowResource(input: { workflow: string }): OperationResource {
+  return { kind: WORKFLOW_ASSET_KIND, id: input.workflow, name: input.workflow };
+}
+
+/** What a call on a run touches. The Workflow of the run is what its right is decided on. */
+function runResource(input: { runId: string }): OperationResource {
+  return { kind: "workflow_run", id: input.runId };
+}

@@ -718,12 +718,6 @@ export const WORKFLOW_RUN_DATASET_AUDIT_EVENTS = {
 } as const;
 
 /**
- * What the engine keeps of runs and step runs, as `PlatformStores.workflowRuns`. It is bound to
- * a transaction like every store of the platform. The engine's first slice gives it its methods.
- */
-export interface WorkflowRunsStore {}
-
-/**
  * The job kinds of the engine. `execute_step` runs one step run and queues what follows it.
  * `fire_schedule` starts the run of a due `schedule` trigger and queues the next due time.
  * `delete_datasets` removes the objects of the datasets of a run that were marked deleted.

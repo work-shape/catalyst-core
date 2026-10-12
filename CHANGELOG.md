@@ -22,6 +22,25 @@ contain breaking changes; a patch version does not.
   with a price above zero for the entry's model and for the model of every binding on it. The
   adapter fixes the endpoint; the profile, the key's IAM policy, Bedrock's data retention and
   invocation logging decide the rest and are the operator's to set, see the configuration docs.
+- **Workflow Runs:** with the module `workflows` on, a Workflow is started by hand and runs to
+  its end on the job executor. `POST /api/v1/workflows/{workflow}/runs` starts a run
+  (`workflow.use`), `GET` on the same path lists the runs of a Workflow, and
+  `GET /api/v1/workflow-runs/{runId}` and `.../steps` read a run and its step runs
+  (`workflow.read`): status, times, error and a preview of at most 2,000 characters of a
+  result, never an input. `POST /api/v1/workflow-runs/{runId}/cancel` ends a run for whoever
+  started it or holds `workflow.write`. A run acts as the service principal its definition
+  names under `runAs`, with that principal's grants and never the starter's. This release
+  executes the step types `trigger` (manual), `operation`, `loop` and `output`; an operation
+  step calls through the operation layer from the origin `workflow`, and a changing call
+  carries the id of its step run as its idempotency key, so a step a worker runs again changes
+  nothing twice. A run ends as `limit_reached` after 20,000 step runs or twelve hours. The
+  start, the cancel and the end are audited as `workflow_run.started`,
+  `workflow_run.cancelled` and `workflow_run.ended`, without a value of the run. An assembled
+  instance knows no Workflow yet: definitions are stored with the asset kind that follows.
+  **Migration `0057_workflow_runs`** adds the tables `workflow_runs` and `workflow_step_runs`
+  and changes no existing table, so the previous release runs on the migrated database. A
+  changing call from the origin `schedule` now needs an idempotency key, as one from `app` and
+  `workflow` does; nothing in the platform makes such a call yet.
 - **Pages, plain HTML:** App Kit version `1.2.0`, with two new files, `page.css` and `theme.js`.
   A plain HTML Page that names it comes out with the look of the platform: the build links
   `page.css` and `theme.js` first into every HTML file of a Page with an `entry`, also one whose
@@ -563,7 +582,7 @@ id from config_assets where status = 'deleted')`.
   revision, then for the stale one; a caller who may not read an asset is told its name alone
   for a delete, for a name another owner holds and for a read-only asset at another revision.
   A missing `agent_models.manage` is answered as every missing right, `Missing the right
-  'agent_models.manage'`, without the names of the settings. `assets.discard_draft` without a
+'agent_models.manage'`, without the names of the settings. `assets.discard_draft` without a
   revision answers `428`. A committed write is answered as made when its audit row cannot be
   written, and the failure is logged. In Build
   the conflict notice names who saved first and when, says that loading the newer version
@@ -618,8 +637,8 @@ id from config_assets where status = 'deleted')`.
   answer `202` with the run while it waits for an approval. The run names the workspace; a
   creation names none. The typed client answers the ten calls as an operation outcome;
   `completedOutput(outcome)` hands a caller the output. `DELETE
-  /api/v1/workspaces/{collaborationWorkspaceId}` answers `200` with `{ "state": "deleted" |
-  "deleting" }` in place of the counts or an empty `202`; what a deletion removed is counted
+/api/v1/workspaces/{collaborationWorkspaceId}` answers `200` with `{ "state": "deleted" |
+"deleting" }` in place of the counts or an empty `202`; what a deletion removed is counted
   in its audit row `collaboration_workspace.deleted`. The caller's role in the workspace is
   asked before the policy: a refusal answers `403 FORBIDDEN` with `details.action` naming the
   operation, and a workspace the caller cannot reach answers `404` as before.

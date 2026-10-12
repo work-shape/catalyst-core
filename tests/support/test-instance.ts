@@ -2,6 +2,7 @@ import { createClientInstanceExecutionAssembly } from "../../packages/client-ass
 import { afterAll, afterEach, beforeEach } from "vitest";
 import {
   createClientInstanceApp,
+  createInstanceWorkflows,
   createJobWorker,
   createLogger,
   resolveInstanceModules,
@@ -13,6 +14,7 @@ import {
   createChatServerJobs,
   createOperationCalls,
   createSkillAssetKind,
+  type ChatServerExtensions,
   type ChatServerJobOptions,
   type ChatServerOptions
 } from "@vivd-catalyst/chat-server";
@@ -256,7 +258,11 @@ async function createDefaultInstance(
       stores
     );
     state.serverOptions = options;
-    const server = await createChatServer(options);
+    // A test that registers operations itself brings the routes of the modules it needs.
+    const server = await createChatServer(
+      options,
+      register ? {} : { routes: moduleRoutes(options) }
+    );
     try {
       const framework = testFramework(server);
       register?.(framework.route);
@@ -313,7 +319,7 @@ async function createConfiguredInstance(
     const options = input.server;
     const stores = options.stores;
     const serverOptions = completeServerOptions(options, stores);
-    const server = await createChatServer(serverOptions);
+    const server = await createChatServer(serverOptions, { routes: moduleRoutes(serverOptions) });
     return bindInstance(stores, {
       server: testFramework(server).app,
       runtime: server,
@@ -366,6 +372,20 @@ export function createTestAssetKinds(
     createAgentAssetKind(input),
     createSkillAssetKind({ config: input.config })
   ]);
+}
+
+/**
+ * The routes the assembly hands a server for its modules, built as the assembly builds them:
+ * the runs of Workflows, on the call path of the server and without a definition.
+ */
+function moduleRoutes(options: ChatServerOptions): ChatServerExtensions["routes"] {
+  if (!options.operationCalls) throw new Error("The server options carry no call path");
+  return createInstanceWorkflows({
+    modules: options.modules,
+    clientInstanceId: options.clientInstanceId,
+    stores: options.stores,
+    operationCalls: options.operationCalls
+  }).routes;
 }
 
 export function completeServerOptions(

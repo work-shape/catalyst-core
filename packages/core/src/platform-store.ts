@@ -26,7 +26,8 @@ import type { ModelUsageEventStore } from "./usage";
 import type { UserStore } from "./user";
 import type { ApiAccessStore } from "./api-access";
 import type { StructuredDataStore } from "./structured-data";
-import type { WorkflowRunDatasetsStore, WorkflowRunsStore } from "./workflows";
+import type { WorkflowRunDatasetsStore } from "./workflows";
+import type { WorkflowRunsStore } from "./workflow-runs";
 
 export interface ConversationsStore
   extends ConversationStore, ConversationRetentionStore, ModelProviderContinuationStore {}

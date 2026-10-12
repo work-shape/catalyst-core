@@ -19,6 +19,7 @@ import {
   createTestAssetKinds,
   createTestInstanceWith,
   type TestInstance,
+  type TestRoute,
   type TestServerOptions,
   type TestStore
 } from "./test-instance";
@@ -238,6 +239,8 @@ export interface AccessInstanceOptions {
    * replace the ones this file sets, such as the call path with a further operation source.
    */
   server?: (stores: TestStore, config: ReturnType<typeof configWith>) => Partial<TestServerOptions>;
+  /** Registers further operations beside the product's, as the assembly does for a module. */
+  register?: (route: TestRoute) => void;
 }
 
 export async function setupAccessInstance(
@@ -256,27 +259,30 @@ export async function setupAccessInstance(
     reasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
     enabledToolNames: ["known.tool", "second.tool", ...furtherToolNames]
   };
-  const instance = await createTestInstanceWith((stores) => ({
-    config,
-    ...(operations ? { operations } : {}),
-    // A call the policy holds is filed and decided as on an assembled instance.
-    approvalRequests: { store: stores.approvals, handlers: new Map() },
-    authAdapter: recordAuthAdapter(stores),
-    auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: stores.audit }),
-    configAssets: {
-      store: stores.configAssets,
-      validationRefs,
-      ...(furtherKinds.length === 0
-        ? {}
-        : {
-            kinds: createAssetKindRegistry([
-              ...createTestAssetKinds({ config, validationRefs }).kinds,
-              ...furtherKinds
-            ])
-          })
-    },
-    ...options.server?.(stores, config)
-  }));
+  const instance = await createTestInstanceWith(
+    (stores) => ({
+      config,
+      ...(operations ? { operations } : {}),
+      // A call the policy holds is filed and decided as on an assembled instance.
+      approvalRequests: { store: stores.approvals, handlers: new Map() },
+      authAdapter: recordAuthAdapter(stores),
+      auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: stores.audit }),
+      configAssets: {
+        store: stores.configAssets,
+        validationRefs,
+        ...(furtherKinds.length === 0
+          ? {}
+          : {
+              kinds: createAssetKindRegistry([
+                ...createTestAssetKinds({ config, validationRefs }).kinds,
+                ...furtherKinds
+              ])
+            })
+      },
+      ...options.server?.(stores, config)
+    }),
+    options.register
+  );
   const { stores } = instance;
   const createUser = (displayLabel: string, roles: UserRole[], permissions: string[] = []) =>
     stores.users.createUser({ clientInstanceId, displayLabel, roles, permissions });

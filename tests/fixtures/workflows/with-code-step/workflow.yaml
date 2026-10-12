@@ -1,0 +1,25 @@
+id: with-code-step
+name: With a code step
+runAs: workflow-runner
+inputs: { type: object }
+outputs: { type: object }
+steps:
+  - id: start
+    name: Start by hand
+    type: trigger
+    triggers:
+      - kind: manual
+  - id: check
+    name: Check
+    type: code
+    file: check.py
+    input: {}
+    inputSchema: { type: object }
+    outputSchema: { type: object }
+  - id: result
+    name: Result
+    type: output
+    input: {}
+wiring:
+  - { from: start, to: check }
+  - { from: check, to: result }

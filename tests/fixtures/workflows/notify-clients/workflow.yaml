@@ -1,0 +1,56 @@
+id: notify-clients
+name: Notify clients
+description: Reads the clients and sends each of them the note of the run.
+runAs: workflow-runner
+inputs:
+  type: object
+  properties:
+    note:
+      type: string
+  required: [note]
+  additionalProperties: false
+outputs:
+  type: object
+  properties:
+    sent:
+      type: array
+  required: [sent]
+steps:
+  - id: start
+    name: Start by hand
+    type: trigger
+    triggers:
+      - kind: manual
+  - id: clients
+    name: Read the clients
+    type: operation
+    operation: connection.crm.echo
+    input:
+      text:
+        ref: { step: start, path: note }
+  - id: each_client
+    name: For each client
+    type: loop
+    items: { step: clients, path: clients }
+    itemName: client
+    itemLabel: id
+    steps:
+      - id: send
+        name: Send the note
+        type: operation
+        operation: connection.crm.write
+        input:
+          client:
+            ref: { step: each_client, path: id }
+          note:
+            ref: { step: start, path: note }
+  - id: result
+    name: Result
+    type: output
+    input:
+      sent:
+        ref: { step: each_client, path: "" }
+wiring:
+  - { from: start, to: clients }
+  - { from: clients, to: each_client }
+  - { from: each_client, to: result }

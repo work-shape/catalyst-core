@@ -1,0 +1,40 @@
+id: top-customers
+name: Top customers
+description: Reads the customers with the highest revenue from the sample system.
+runAs: workflow-runner
+inputs:
+  type: object
+  properties:
+    limit:
+      type: integer
+  required: [limit]
+  additionalProperties: false
+outputs:
+  type: object
+  properties:
+    customers:
+      type: array
+  required: [customers]
+steps:
+  - id: start
+    name: Start by hand
+    type: trigger
+    triggers:
+      - kind: manual
+  - id: top
+    name: Read the top customers
+    type: operation
+    operation: connection.sample.top_customers
+    input:
+      limit:
+        ref: { step: start, path: limit }
+  - id: result
+    name: Result
+    type: output
+    input:
+      customers:
+        # An MCP Connection answers the tool's own result under `structuredContent`.
+        ref: { step: top, path: structuredContent.rows }
+wiring:
+  - { from: start, to: top }
+  - { from: top, to: result }

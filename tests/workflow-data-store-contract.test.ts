@@ -589,31 +589,45 @@ describe("the modules workflows and dataStores", () => {
     expect(on.isEnabled("dataStores")).toBe(true);
   });
 
-  it("contribute nothing yet, so nothing is switched by either", () => {
-    for (const module of [workflowsModule, dataStoresModule, knowledgeModule]) {
-      expect(module).toEqual({
-        name: module.name,
-        requires: [],
-        kinds: [],
-        operations: [],
-        selfCheckedOperations: [],
-        jobKinds: [],
-        commandWorkerJobKinds: [],
-        tools: [],
-        ui: []
-      });
+  it("contribute what is built of them, so nothing else is switched by any of them", () => {
+    const nothing = {
+      requires: [],
+      kinds: [],
+      operations: [],
+      selfCheckedOperations: [],
+      jobKinds: [],
+      commandWorkerJobKinds: [],
+      tools: [],
+      ui: []
+    };
+    for (const module of [dataStoresModule, knowledgeModule]) {
+      expect(module).toEqual({ ...nothing, name: module.name });
     }
+    // The runs of a Workflow and the job that executes their steps. No kind yet.
+    expect(workflowsModule).toEqual({
+      ...nothing,
+      name: "workflows",
+      operations: [
+        "workflows.start",
+        "workflows.get_run",
+        "workflows.list_runs",
+        "workflows.list_step_runs",
+        "workflows.cancel_run"
+      ],
+      jobKinds: [WORKFLOW_RUN_JOB_KINDS.executeStep]
+    });
     const off = createModuleRegistry(platformModules).snapshot({});
     for (const [contribution, name] of [
       ["kind", WORKFLOW_ASSET_KIND],
       ["kind", DATA_STORE_ASSET_KIND],
       ["kind", KNOWLEDGE_BASE_ASSET_KIND],
-      ["jobKind", WORKFLOW_RUN_JOB_KINDS.executeStep],
       ["jobKind", DATA_STORE_JOB_KINDS.provision],
       ["tool", KNOWLEDGE_QUERY_TOOL_NAME]
     ] as const) {
       expect(off.offModuleOf(contribution, name), name).toBeUndefined();
     }
+    expect(off.offModuleOf("jobKind", WORKFLOW_RUN_JOB_KINDS.executeStep)).toBe("workflows");
+    expect(off.offModuleOf("operation", "workflows.start")).toBe("workflows");
   });
 });
 

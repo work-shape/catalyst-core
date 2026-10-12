@@ -24,6 +24,7 @@ export * from "./modules";
 export * from "./pages";
 export * from "./workflow-blocks";
 export * from "./workflows";
+export * from "./workflow-runs";
 export * from "./data-stores";
 
 export { LOG_REDACTION } from "./logger";

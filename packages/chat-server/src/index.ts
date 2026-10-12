@@ -276,6 +276,8 @@ export type {
   ConnectionManagementPort
 } from "./connection-management-port";
 export { enqueueConnectionDiscovery } from "./connection-jobs";
+export type { WorkflowRunsPort } from "./workflow-runs-port";
+export { createWorkflowRoutes } from "./routes/workflow-routes";
 export type { ConfigAssetValidationRefs, WorkflowAssetKind } from "./asset-kinds/shared";
 
 function adaptLogger(logger: Logger): FastifyInstance["log"] {
