@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { listAll } from "@vivd-catalyst/api-client";
+import { assetKindLabelKey } from "@vivd-catalyst/chat-ui/access";
 import { connectionCheckQuestions } from "@vivd-catalyst/demo/seed";
 import {
   createdBy,
@@ -25,6 +26,22 @@ const seeded = useSeededInstance({
 });
 
 describe("the demo seed on the demo's own config", () => {
+  it("has a name for every asset kind the instance registers", async () => {
+    const { kinds } = await seeded().after.client.platform.context.get();
+    // Every module of the demo is on, so this is every kind the platform brings. A new kind
+    // fails here until the interface has a word for it.
+    expect(kinds.map((kind) => kind.kind)).toEqual(
+      expect.arrayContaining(["agent", "skill", "connection", "app"])
+    );
+    for (const kind of kinds) {
+      // A label key is a key of both languages: `tests/i18n.test.ts` holds them level.
+      expect(
+        assetKindLabelKey(kind.kind),
+        `asset kind '${kind.kind}' has no label key`
+      ).toBeDefined();
+    }
+  });
+
   it("creates the same company and changes nothing on a second run", () => {
     expect(createdBy(seeded().first)).toEqual({
       people: 7,

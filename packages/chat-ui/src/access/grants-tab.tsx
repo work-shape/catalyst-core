@@ -77,11 +77,21 @@ export const verbLabelKeys: Record<GrantVerb, TranslationKey> = {
   delete: "access.actionDelete"
 };
 
-export const kindLabelKeys: Record<GrantKind, TranslationKey> = {
+/**
+ * The name of every asset kind an instance can register, in the plural. A kind added to the
+ * platform gets its entry here: a test holds the registry of an instance against this list.
+ */
+const kindLabelKeys = {
   agent: "access.kindAgent",
   skill: "access.kindSkill",
-  connection: "access.kindConnection"
-};
+  connection: "access.kindConnection",
+  app: "access.kindApp"
+} as const satisfies Record<GrantKind, TranslationKey> & Record<string, TranslationKey>;
+
+/** The label of a registered asset kind; nothing for a kind this interface has no name for. */
+export function assetKindLabelKey(kind: string): TranslationKey | undefined {
+  return Object.entries(kindLabelKeys).find(([known]) => known === kind)?.[1];
+}
 
 const actionOnKindKeys: Record<GrantKind, TranslationKey> = {
   agent: "access.actionOnAgent",

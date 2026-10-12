@@ -1,5 +1,5 @@
 export { CheckTab } from "./check-tab";
-export { GrantsTab } from "./grants-tab";
+export { GrantsTab, assetKindLabelKey } from "./grants-tab";
 export { NamespacesTab } from "./namespaces-tab";
 export {
   accessWriteFailure,

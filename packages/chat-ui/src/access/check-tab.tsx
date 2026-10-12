@@ -38,7 +38,7 @@ import {
   type CheckedKind,
   type LoadFailure
 } from "./access-model";
-import { kindLabelKeys, verbLabelKeys } from "./grants-tab";
+import { assetKindLabelKey, verbLabelKeys } from "./grants-tab";
 
 /** From this many entries on, a picker of the check shows its search field. */
 const PICKER_SEARCH_FROM_COUNT = 8;
@@ -88,7 +88,7 @@ function decidedBy(action: CheckedAction, t: Translate): string {
 
 /** The name of a kind in the list: the page's own word, else the name the instance gives it. */
 function kindLabel(kind: CheckedKind, t: Translate): string {
-  const key = Object.entries(kindLabelKeys).find(([known]) => known === kind.kind)?.[1];
+  const key = assetKindLabelKey(kind.kind);
   return key === undefined ? kind.plural : t(key);
 }
 

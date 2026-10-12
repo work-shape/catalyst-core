@@ -480,12 +480,24 @@ describe("what a check decides", () => {
         lifecycle: "active" as const,
         representation: "config" as const,
         actions: { read: "app.read", write: "app.write", delete: "app.delete" }
+      },
+      {
+        kind: "report",
+        plural: "reports",
+        lifecycle: "active" as const,
+        representation: "config" as const,
+        actions: { read: "report.read", write: "report.write", delete: "report.delete" }
       }
     ];
     const markup = render(checkTab({ kinds: registry }));
     expect(markup).toContain('<option value="agent" selected="">Agents</option>');
     expect(markup).toContain('<option value="connection">Connections</option>');
-    expect(markup).toContain('<option value="app">apps</option>');
+    expect(markup).toContain('<option value="app">Apps</option>');
+    // A kind only a deployment registers has no word here and keeps the instance's name.
+    expect(markup).toContain('<option value="report">reports</option>');
+    expect(render(checkTab({ kinds: registry }), "de")).toContain(
+      '<option value="app">Apps</option>'
+    );
     expect(markup).not.toContain('value="skill"');
     expect(render(checkTab({ kinds: registry }), "de")).toContain(
       '<option value="connection">Verbindungen</option>'
