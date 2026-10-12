@@ -2,6 +2,8 @@ import type { OperationScope } from "./identity";
 import { workflowDatasetReferenceSchema } from "./workflows";
 import { z } from "zod";
 import type { AssetKindActions } from "./asset-kinds";
+import type { DataStoreRecord } from "./data-store-records";
+import type { ClientInstanceId } from "./ids";
 import type { JsonObject } from "./json";
 
 // The names and shapes of a Data Store and of a Knowledge Base that more than one package
@@ -291,10 +293,29 @@ export type DataStoreJobKind = (typeof DATA_STORE_JOB_KINDS)[keyof typeof DATA_S
 
 /**
  * What the platform keeps of each Data Store, as `PlatformStores.dataStores`: where it lives and
- * the level it is at. It is bound to a transaction like every store of the platform. The first
- * slice of the store gives it its methods.
+ * the level it is at. It is bound to a transaction like every store of the platform. A caller
+ * that reads and then writes does both in one transaction.
  */
-export interface DataStoreRecordsStore {}
+export interface DataStoreRecordsStore {
+  /** `lock` holds the row until the surrounding transaction ends. */
+  getDataStore(input: {
+    clientInstanceId: ClientInstanceId;
+    id: string;
+    lock?: true;
+  }): Promise<DataStoreRecord | undefined>;
+  /** The record that holds the name, retired or not. */
+  findDataStoreByName(input: {
+    clientInstanceId: ClientInstanceId;
+    name: string;
+  }): Promise<DataStoreRecord | undefined>;
+  /** The records of the instance in the order of their names, at most `limit`. */
+  listDataStores(input: {
+    clientInstanceId: ClientInstanceId;
+    limit: number;
+  }): Promise<DataStoreRecord[]>;
+  /** Inserts the record, or replaces the one of the same id. */
+  putDataStore(record: DataStoreRecord): Promise<void>;
+}
 
 /** A Data Store as a manifest names it. Spec: apps-and-pages.md, Manifest, `dataStores`. */
 export interface DataStoreReference {
