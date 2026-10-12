@@ -27,7 +27,7 @@ import {
   type DataStoreDefinition
 } from "./definition";
 import { describeDatabaseFailure } from "./failures";
-import { DataStoreMigrationRefusal, applyMigration, readAppliedMigrations } from "./migrating";
+import { DataStoreMigrationRefusal, applyMigration, readSignedMigrations } from "./migrating";
 import { DataStoreProvisioningError, assertStoreRoles, provisionDataStore } from "./provisioning";
 import type { DataStoreRuntime } from "./runtime";
 import { measureDataStores, recordStoreSize } from "./size";
@@ -357,16 +357,6 @@ async function provision(
   }
 }
 
-/** What Postgres answers a statement with that ends, splits or cannot share a transaction. */
-const OUTSIDE_A_TRANSACTION: ReadonlySet<string> = new Set(["0A000", "25001", "2D000"]);
-
-/** What a migration that was rolled back and refused is told, after the name of its file. */
-const REFUSALS: Record<DataStoreMigrationRefusal["code"], string> = {
-  migration_changed_role: "changed the settings of a role of its store. Nothing of it was applied.",
-  migration_left_transaction:
-    "ended the transaction it ran in. What it changed before that stays, and the store needs an operator before another migration is published."
-};
-
 /** The published definition of a store, or nothing where its asset is gone or unpublished. */
 async function publishedDefinition(
   runtime: DataStoreRuntime,
@@ -384,6 +374,8 @@ async function publishedDefinition(
     : undefined;
 }
 
+const count = (migrations: number) => `${migrations} migration${migrations === 1 ? "" : "s"}`;
+
 async function migrate(
   runtime: DataStoreRuntime,
   job: Job<StorePayload>,
@@ -395,41 +387,76 @@ async function migrate(
   if (!record || record.status !== "ready") return;
   const published = await publishedDefinition(runtime, record);
   if (!published) return;
+  const { definition } = published;
   const fail = (failure: DataStoreFailure & { retryable: boolean; sqlState?: string }) =>
     failAttempt(runtime, control, job, "data_store.migration_failed", failure);
-
-  let applied;
-  let secrets: Awaited<ReturnType<typeof storeSecrets>>;
-  try {
-    secrets = await storeSecrets(runtime, control, storeId);
-    // What the platform recorded in the database itself decides, not the mirror on the record.
-    applied = await readAppliedMigrations(runtime.server, record, secrets.ledger, control.signal);
-  } catch (error) {
-    const failure = describeDatabaseFailure(error, "Reading the level of the Data Store");
+  const unreachable = (error: unknown, doing: string) => {
+    const failure = describeDatabaseFailure(error, doing);
     return fail({ ...failure, code: "migration_failed", message: failure.sentence });
-  }
-  const issue = appliedMigrationIssue(applied, published.definition);
-  if (issue) return fail({ code: "applied_migration_changed", message: issue, retryable: false });
+  };
 
-  const pending = published.definition.migrations.slice(applied.length);
+  // The platform's record of the store says what is applied. The record in the store's
+  // database has to bear it out; where it cannot, nothing is run.
+  const issue = appliedMigrationIssue(record.migrations, definition);
+  if (issue) return fail({ code: "applied_migration_changed", message: issue, retryable: false });
+  const secrets = await control.transaction(async (stores) => ({
+    app: await runtime.credentials.ensure(stores.connections, storeId, "app"),
+    migration: await runtime.credentials.ensure(stores.connections, storeId, "migration"),
+    // A key is made only for a store that has applied nothing: a new key for any other one
+    // would read its record as empty.
+    ledger: await (record.level === 0
+      ? runtime.credentials.ensure(stores.connections, storeId, "ledger")
+      : runtime.credentials.read(stores.connections, storeId, "ledger"))
+  }));
+  const { ledger } = secrets;
+  if (ledger === undefined) {
+    return fail({
+      code: "ledger_key_lost",
+      message: `The store has applied ${count(record.level)} and the key that signs its record of them cannot be read from the Secret Store. No migration was run. Restore the Secret Store key the record was written with.`,
+      retryable: false
+    });
+  }
+  const known = definition.migrations.map(({ number, name, sha256 }) => ({ number, name, sha256 }));
+  let signed;
+  try {
+    // Both roles as the platform gave them, before anything connects as one.
+    await assertStoreRoles(runtime.server, record, secrets, control.signal);
+    signed = await readSignedMigrations(runtime.server, record, known, ledger, control.signal);
+  } catch (error) {
+    return unreachable(error, "Reading the level of the Data Store");
+  }
+  // The signed rows from the first on, as far as they go without a gap. One more than the
+  // platform recorded is an attempt that ended between the commit and the platform's own write.
+  const reached = signed.findIndex((migration, index) => migration.number !== index + 1);
+  const applied = known.slice(0, reached === -1 ? signed.length : reached);
+  if (applied.length < record.level) {
+    return fail({
+      code: "ledger_mismatch",
+      message: `The platform has recorded ${record.level} applied migration${record.level === 1 ? "" : "s"} for the store and the record in the store's database holds ${applied.length} of them. No migration was run. The database was changed or restored apart from the platform's record.`,
+      retryable: false
+    });
+  }
+
+  const pending = definition.migrations.slice(applied.length);
   for (const migration of pending) {
     const file = `'${migrationFileName(migration)}'`;
     let failed: (DataStoreFailure & { retryable: boolean; sqlState?: string }) | undefined;
+    let appliedNow = true;
     try {
-      await applyMigration(runtime.server, record, migration, secrets.ledger, control.signal);
+      await applyMigration(runtime.server, record, migration, ledger, control.signal);
     } catch (error) {
-      const failure = describeDatabaseFailure(error, file);
-      failed =
-        error instanceof DataStoreMigrationRefusal
-          ? { code: error.code, message: `${file} ${REFUSALS[error.code]}`, retryable: false }
-          : {
-              ...failure,
-              code: "migration_failed",
-              message:
-                failure.sqlState !== undefined && OUTSIDE_A_TRANSACTION.has(failure.sqlState)
-                  ? `${file} holds a statement that cannot run in the one transaction of a migration, such as one that ends it (SQLSTATE ${failure.sqlState}). Nothing of it was applied.`
-                  : failure.sentence
-            };
+      if (error instanceof DataStoreMigrationRefusal) {
+        appliedNow = error.applied;
+        failed = {
+          code: error.code,
+          message: `${file} changed the settings of a role of its store${error.applied ? " as its transaction ended. It is applied, and the roles were set back." : ". Nothing of it was applied."}`,
+          retryable: false
+        };
+      } else {
+        appliedNow = false;
+        const failure = describeDatabaseFailure(error, file);
+        failed = { ...failure, code: "migration_failed", message: failure.sentence };
+      }
     }
     // A role may change its own password, and nobody is shown that it did: whatever the
     // migration did, both roles are the platform's again before anything else connects.
@@ -439,13 +466,14 @@ async function migrate(
       const failure = describeDatabaseFailure(error, "Holding the roles of the Data Store");
       failed ??= { ...failure, code: "migration_failed", message: failure.sentence };
     }
+    if (appliedNow) {
+      applied.push({ number: migration.number, name: migration.name, sha256: migration.sha256 });
+      const mirrored = [...applied];
+      await writeOutcome(runtime, control, storeId, (current) =>
+        Promise.resolve({ ...current, level: migration.number, migrations: mirrored })
+      );
+    }
     if (failed) return fail(failed);
-    applied.push({ number: migration.number, name: migration.name, sha256: migration.sha256 });
-    const level = migration.number;
-    const mirrored = [...applied];
-    await writeOutcome(runtime, control, storeId, (current) =>
-      Promise.resolve({ ...current, level, migrations: mirrored })
-    );
   }
   const done = await writeOutcome(runtime, control, storeId, async (current, stores) => {
     const next = { ...current, level: applied.at(-1)?.number ?? 0, migrations: applied };

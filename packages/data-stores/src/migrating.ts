@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac } from "node:crypto";
 import { z } from "zod";
 import type { DataStoreAppliedMigration, DataStoreRecord } from "@vivd-catalyst/core";
 import type { DataStoreMigration } from "./definition";
@@ -12,20 +12,8 @@ import type { DataStoreServer } from "./server";
 
 /** How long reading the applied migrations of a store may take before the attempt fails. */
 const DATA_STORE_LEVEL_READ_TIMEOUT_MS = 15_000;
-/**
- * How many rows of the record of applied migrations are read. A store has at most 500
- * migrations; rows beyond them are ones a migration wrote itself, which count for nothing.
- */
-const DATA_STORE_LEDGER_MAX_ROWS = 5_000;
 
 type StoreDatabase = Pick<DataStoreRecord, "id" | "location" | "roles">;
-
-const ledgerRow = z.object({
-  number: z.number().int(),
-  name: z.string(),
-  sha256: z.string(),
-  proof: z.string()
-});
 
 /**
  * The signature of one row of the record: only the platform holds the key, so a row a
@@ -37,23 +25,20 @@ function proofOf(key: string, migration: DataStoreAppliedMigration): string {
     .digest("hex");
 }
 
-function holds(key: string, row: z.infer<typeof ledgerRow>): boolean {
-  const expected = Buffer.from(proofOf(key, row));
-  const given = Buffer.from(row.proof);
-  return given.length === expected.length && timingSafeEqual(given, expected);
-}
-
 /**
- * The migrations a store's database has applied, as the platform recorded them there: the
- * rows whose signature holds, one per number. It is read as the platform's own role, since
- * the migration role may add to the record and not read it.
+ * Of the migrations the platform knows of, those the store's database holds a signed row for.
+ * The read asks for the signatures the platform itself can make and for nothing else, so no
+ * number of rows a migration added to the record bounds or delays what is found. It is read
+ * as the platform's own role, since the migration role may add to the record and not read it.
  */
-export async function readAppliedMigrations(
+export async function readSignedMigrations(
   server: DataStoreServer,
   record: StoreDatabase,
+  known: readonly DataStoreAppliedMigration[],
   ledgerKey: string,
   signal: AbortSignal
 ): Promise<DataStoreAppliedMigration[]> {
+  const proofs = new Map(known.map((migration) => [proofOf(ledgerKey, migration), migration]));
   const rows = await server.executor.change(
     {
       ...server.asPlatform(record.location.database),
@@ -62,30 +47,28 @@ export async function readAppliedMigrations(
     },
     async (sql) =>
       z
-        .array(ledgerRow)
+        .array(z.object({ proof: z.string() }))
         .parse(
-          await sql.run(
-            `select number, name, sha256, proof from catalyst.migrations order by number, applied_at limit ${DATA_STORE_LEDGER_MAX_ROWS}`
-          )
+          await sql.run("select distinct proof from catalyst.migrations where proof = any ($1)", [
+            { type: "text[]", value: [...proofs.keys()] }
+          ])
         )
   );
-  const applied = new Map<number, DataStoreAppliedMigration>();
-  for (const row of rows) {
-    if (!applied.has(row.number) && holds(ledgerKey, row)) {
-      applied.set(row.number, { number: row.number, name: row.name, sha256: row.sha256 });
-    }
-  }
-  return [...applied.values()];
+  return rows
+    .flatMap((row) => proofs.get(row.proof) ?? [])
+    .sort((left, right) => left.number - right.number);
 }
 
 /** Why a migration was not applied although the database raised no error of its own. */
 export class DataStoreMigrationRefusal extends Error {
-  readonly code: "migration_changed_role" | "migration_left_transaction";
+  readonly code = "migration_changed_role";
+  /** Whether the migration was applied all the same: its role changed only as it committed. */
+  readonly applied: boolean;
 
-  constructor(code: DataStoreMigrationRefusal["code"]) {
-    super(code);
+  constructor(applied: boolean) {
+    super("migration_changed_role");
     this.name = "DataStoreMigrationRefusal";
-    this.code = code;
+    this.applied = applied;
   }
 }
 
@@ -98,8 +81,6 @@ function heldInTransaction(sql: string): string {
   return `do $catalyst_migration$ begin execute '${sql.replaceAll("'", "''")}'; end $catalyst_migration$`;
 }
 
-const TRANSACTION = "select pg_catalog.pg_current_xact_id()::text as id";
-
 /** The settings and the connection limit of the store's roles, as this transaction sees them. */
 const ROLE_STATE = `
   select r.rolname as name, r.rolconnlimit as connection_limit,
@@ -109,6 +90,20 @@ const ROLE_STATE = `
   from pg_catalog.pg_roles r where r.rolname = any ($1)
   order by r.rolname
 `;
+
+const roleState = z.array(
+  z.object({
+    name: z.string(),
+    connection_limit: z.number(),
+    settings: z.string(),
+    per_database: z.number()
+  })
+);
+
+/** Whether the roles of a store carry exactly what the platform gave them. */
+function rolesAreUnchanged(record: StoreDatabase, rows: unknown): boolean {
+  return JSON.stringify(roleState.parse(rows)) === JSON.stringify(expectedRoleState(record));
+}
 
 function expectedRoleState(record: StoreDatabase) {
   return (["app", "migration"] as const)
@@ -124,9 +119,12 @@ function expectedRoleState(record: StoreDatabase) {
 /**
  * Applies one migration as the migration role: the file's statements and the row that records
  * it, in one transaction. Either both are there afterwards or neither is, so a migration is
- * never applied twice and never recorded without its effect. A migration that changed the
- * settings of a role of its store is rolled back and refused, and so is one after which the
- * transaction is no longer the one that was opened.
+ * never applied twice and never recorded without its effect.
+ *
+ * A migration that changed the settings of a role of its store is rolled back and refused.
+ * What it left to the end of the transaction, such as a deferred trigger, is made to happen
+ * before that is looked at; and the roles are looked at once more after the commit, so a
+ * change that still came through is this migration's and no later one's.
  */
 export async function applyMigration(
   server: DataStoreServer,
@@ -135,6 +133,7 @@ export async function applyMigration(
   ledgerKey: string,
   signal: AbortSignal
 ): Promise<void> {
+  const roles = [{ type: "text[]" as const, value: [record.roles.app, record.roles.migration] }];
   // Whatever a change throws leaves it as a failure of the database, so the refusal is kept
   // here and raised once the change has rolled back.
   let refusal: DataStoreMigrationRefusal | undefined;
@@ -146,18 +145,10 @@ export async function applyMigration(
         signal
       },
       async (sql) => {
-        const [opened] = await sql.run(TRANSACTION);
         await sql.script(heldInTransaction(migration.sql));
-        const [now] = await sql.run(TRANSACTION);
-        if (opened?.id === undefined || opened.id !== now?.id) {
-          refusal = new DataStoreMigrationRefusal("migration_left_transaction");
-          throw refusal;
-        }
-        const roles = await sql.run(ROLE_STATE, [
-          { type: "text[]", value: [record.roles.app, record.roles.migration] }
-        ]);
-        if (JSON.stringify(roles) !== JSON.stringify(expectedRoleState(record))) {
-          refusal = new DataStoreMigrationRefusal("migration_changed_role");
+        await sql.script("set constraints all immediate");
+        if (!rolesAreUnchanged(record, await sql.run(ROLE_STATE, roles))) {
+          refusal = new DataStoreMigrationRefusal(false);
           throw refusal;
         }
         const applied = {
@@ -179,4 +170,11 @@ export async function applyMigration(
   } catch (error) {
     throw refusal ?? error;
   }
+  const after = await server.executor.query({
+    ...server.asPlatform(server.platformDatabase),
+    signal,
+    sql: ROLE_STATE,
+    parameters: roles
+  });
+  if (!rolesAreUnchanged(record, after.rows)) throw new DataStoreMigrationRefusal(true);
 }

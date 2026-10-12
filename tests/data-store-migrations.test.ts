@@ -132,7 +132,7 @@ describe("the migrations of a Data Store", () => {
       failure: {
         code: "migration_failed",
         message:
-          "'migrations/0002_halves.sql' holds a statement that cannot run in the one transaction of a migration, such as one that ends it (SQLSTATE 0A000). Nothing of it was applied."
+          "'migrations/0002_halves.sql' asks for something the database does not support (SQLSTATE 0A000)."
       }
     });
     // Nothing of the file stayed, so the corrected file applies.
@@ -226,5 +226,154 @@ describe("the migrations of a Data Store", () => {
       "ghost",
       "notes"
     ]);
+  });
+  it("reads its record whole, however many rows a migration added to it", async () => {
+    const world = await published("flood");
+    const flood: StoreFile = {
+      path: "migrations/0002_flood.sql",
+      // More rows than any bound on a read, each sorting before the platform's own.
+      text: hidden(
+        "insert into catalyst.migrations (number, name, sha256, proof) select 0, 'ghost', 'x', 'y' from generate_series(1, 6000)"
+      )
+    };
+
+    await publish(world, [manifest(), init, flood]);
+    await settle(world, world.id, 2);
+    await publish(world, [
+      manifest(),
+      init,
+      flood,
+      { path: "migrations/0003_notes.sql", text: "create table notes (id integer);" }
+    ]);
+
+    expect((await settle(world, world.id, 3)).failure).toBeUndefined();
+  });
+
+  it("runs nothing when the key of its record is lost or the record in the store falls short of the platform's", async () => {
+    const next: StoreFile = {
+      path: "migrations/0002_notes.sql",
+      text: "create table notes (id integer);"
+    };
+    const stopped = async (
+      label: string,
+      lose: (id: string, database: string) => Promise<void>
+    ) => {
+      const world = await published(label);
+      await lose(world.id, world.record.location.database);
+      await publish(world, [manifest(), init, next]);
+      const record = await failureOf(world);
+      // Neither the first migration again nor the next one: the store is as it was.
+      expect(await refusal(call(world, "query", { sql: "select * from notes" }))).toMatchObject({
+        details: { sqlState: "42P01" }
+      });
+      return { level: record.level, failure: record.failure };
+    };
+    const keyLost = {
+      level: 1,
+      failure: {
+        code: "ledger_key_lost",
+        message:
+          "The store has applied 1 migration and the key that signs its record of them cannot be read from the Secret Store. No migration was run. Restore the Secret Store key the record was written with."
+      }
+    };
+
+    expect(
+      await stopped("key_gone", async (id) => {
+        await db.sql`delete from secrets where connection_asset_id = ${id} and subject = 'data_store:ledger'`;
+      })
+    ).toEqual(keyLost);
+    expect(
+      await stopped("key_unreadable", async (id) => {
+        await db.sql`
+          update secrets set ciphertext = decode(repeat('00', octet_length(ciphertext)), 'hex')
+          where connection_asset_id = ${id} and subject = 'data_store:ledger'`;
+      })
+    ).toEqual(keyLost);
+    expect(
+      await stopped("ledger_short", async (_id, database) => {
+        await connect(database)`delete from catalyst.migrations`;
+      })
+    ).toEqual({
+      level: 1,
+      failure: {
+        code: "ledger_mismatch",
+        message:
+          "The platform has recorded 1 applied migration for the store and the record in the store's database holds 0 of them. No migration was run. The database was changed or restored apart from the platform's record."
+      }
+    });
+  });
+
+  it("refuses the migration whose deferred trigger changes its role when the transaction ends", async () => {
+    const world = await published("deferred");
+    const { record } = world;
+    const settingsOf = async () =>
+      (
+        await db.sql<{ rolconfig: string[] }[]>`
+          select rolconfig from pg_roles where rolname = ${record.roles.migration}`
+      )[0]?.rolconfig;
+    const before = await settingsOf();
+
+    await publish(world, [
+      manifest(),
+      init,
+      {
+        path: "migrations/0002_deferred.sql",
+        text: `create table late (id integer);
+          create function unbind() returns trigger language plpgsql as $f$
+            begin execute 'alter ro' || 'le current_user set statement_timeout = 0'; return null; end $f$;
+          create constraint trigger at_the_end after insert on late
+            deferrable initially deferred for each row execute function unbind();
+          insert into late values (1);`
+      }
+    ]);
+
+    expect(await failureOf(world)).toMatchObject({
+      level: 1,
+      failure: { code: "migration_changed_role" }
+    });
+    expect(await settingsOf()).toEqual(before);
+    expect(await refusal(call(world, "query", { sql: "select * from late" }))).toMatchObject({
+      details: { sqlState: "42P01" }
+    });
+  });
+
+  it("clears a setting a role carries for another database before a migration, and blames no later migration for it", async () => {
+    const world = await published("per_database");
+    const { record } = world;
+    await db.sql.unsafe(
+      `alter role "${record.roles.migration}" in database postgres set work_mem = '1MB'`
+    );
+
+    await publish(world, [
+      manifest(),
+      init,
+      { path: "migrations/0002_notes.sql", text: "create table notes (id integer);" }
+    ]);
+
+    expect((await settle(world, world.id, 2)).failure).toBeUndefined();
+    const [left] = await db.sql<{ count: number }[]>`
+      select count(*)::integer as count from pg_db_role_setting s
+      join pg_roles r on r.oid = s.setrole
+      where r.rolname = ${record.roles.migration} and s.setdatabase <> 0`;
+    expect(left?.count).toBe(0);
+  });
+
+  it("names an error of the author as what it is, not as transaction control", async () => {
+    const world = await published("author_error");
+
+    await publish(world, [
+      manifest(),
+      init,
+      {
+        path: "migrations/0002_far.sql",
+        text: "create table far as select * from elsewhere.public.findings;"
+      }
+    ]);
+
+    expect((await failureOf(world)).failure).toEqual({
+      code: "migration_failed",
+      message:
+        "'migrations/0002_far.sql' asks for something the database does not support (SQLSTATE 0A000)."
+    });
   });
 });
