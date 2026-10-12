@@ -413,6 +413,66 @@ test("a newer version that cannot be loaded leaves the page as it is and says so
   }
 });
 
+// Fails without the change: the notice stood in the row that stays at the lower edge, and with
+// its three sentences and two buttons it took most of a phone's window, over the text it is
+// about.
+test("the notice of a newer version leaves the text in reach on a phone, in German", async ({
+  page
+}) => {
+  const name = "e2e_phone_probe";
+  await page.addInitScript(
+    (theme) => {
+      window.localStorage.setItem("vivd-catalyst:locale", "de");
+      if (theme) window.localStorage.setItem("vivd-catalyst:theme", theme);
+    },
+    shotsDir ? shotsTheme : undefined
+  );
+  await signInViaApi(page, superadminUser);
+  await deleteSkill(page, name);
+  await putSkill(page, name, "The first text.");
+  try {
+    await page.setViewportSize(NARROW);
+    await page.goto(`/build/skills/${name}`);
+    const text = page.locator("form").getByRole("textbox", { name: /^Inhalt/u });
+    await text.fill("Mein ungespeicherter Text.");
+    await putSkill(page, name, "Somebody else was faster.");
+    await page.getByRole("button", { name: "Änderungen speichern", exact: true }).click();
+    const conflict = page.locator("[data-build-conflict]");
+    await expect(conflict).toContainText(
+      "Die neuere Version zu laden ersetzt Ihren Text. Kopieren Sie vorher, was Sie behalten wollen."
+    );
+    await expect(conflict.getByRole("button", { name: "Neuere Version laden" })).toBeVisible();
+    await expect(conflict.getByRole("button", { name: "Verlauf öffnen" })).toBeVisible();
+    await expectNoSidewaysScroll(page);
+    if (shotsDir) {
+      await mkdir(shotsDir, { recursive: true });
+      await page.screenshot({
+        path: join(shotsDir, `build-conflict-de-390-${shotsTheme}.png`),
+        animations: "disabled"
+      });
+    }
+
+    // The notice is in the window when it appears. It rests at the end of the page, so the
+    // text scrolls into the window whole, with nothing over it.
+    await expect(conflict).toBeInViewport({ ratio: 1 });
+    await text.evaluate((element) => element.scrollIntoView({ block: "center" }));
+    await expect(text).toBeInViewport({ ratio: 1 });
+    const textBox = await text.boundingBox();
+    const footerBox = await page.locator("[data-page-footer]").boundingBox();
+    if (!textBox || !footerBox) throw new Error("The text and the footer are on the page");
+    expect(textBox.y + textBox.height).toBeLessThanOrEqual(footerBox.y);
+    await expect(text).toHaveValue("Mein ungespeicherter Text.");
+    if (shotsDir) {
+      await page.screenshot({
+        path: join(shotsDir, `build-conflict-de-390-text-${shotsTheme}.png`),
+        animations: "disabled"
+      });
+    }
+  } finally {
+    await deleteSkill(page, name);
+  }
+});
+
 test("an asset that was deleted meanwhile says so, keeps the text and offers the way out", async ({
   page
 }) => {

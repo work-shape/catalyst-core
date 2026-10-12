@@ -118,8 +118,9 @@ const allowedPageErrors: readonly AllowedPageError[] = [
       `${requestAnswered(412).source}|${requestAnswered(404).source}|net::ERR_FAILED`,
       "u"
     ),
-    path: /^\/api\/v1\/assets\/skill\/e2e_(?:reload|deleted)_probe$/u,
+    path: /^\/api\/v1\/assets\/skill\/e2e_(?:reload|deleted|phone)_probe$/u,
     tests: [
+      "the notice of a newer version leaves the text in reach on a phone, in German",
       "a newer version that cannot be loaded leaves the page as it is and says so",
       "an asset that was deleted meanwhile says so, keeps the text and offers the way out"
     ]

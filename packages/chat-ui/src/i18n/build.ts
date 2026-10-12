@@ -7,9 +7,9 @@ export const build = defineTranslations({
     "build.changesCount": "{count} changes",
     "build.chooseSkills": "Choose skills",
     "build.conflict":
-      "Somebody saved this while you were editing. Your text is still here and nothing was overwritten.",
+      "Somebody saved this while you were editing. Your text is still here and nothing was overwritten. Loading the newer version replaces your text, so copy what you want to keep first.",
     "build.conflictBy":
-      "{name} saved this on {time}, while you were editing. Your text is still here and nothing was overwritten.",
+      "{name} saved this on {time}, while you were editing. Your text is still here and nothing was overwritten. Loading the newer version replaces your text, so copy what you want to keep first.",
     "build.conflictDeletedBy":
       "{name} deleted this on {time}, while you were editing. Your text is still here, but it can no longer be saved.",
     "build.assetRefused": "You may not read this asset.",
@@ -107,9 +107,9 @@ export const build = defineTranslations({
     "build.changesCount": "{count} Änderungen",
     "build.chooseSkills": "Skills auswählen",
     "build.conflict":
-      "Jemand hat dies gespeichert, während Sie es bearbeitet haben. Ihr Text ist noch da und nichts wurde überschrieben.",
+      "Jemand hat dies gespeichert, während Sie es bearbeitet haben. Ihr Text ist noch da und nichts wurde überschrieben. Die neuere Version zu laden ersetzt Ihren Text. Kopieren Sie vorher, was Sie behalten wollen.",
     "build.conflictBy":
-      "{name} hat dies am {time} gespeichert, während Sie es bearbeitet haben. Ihr Text ist noch da und nichts wurde überschrieben.",
+      "{name} hat dies am {time} gespeichert, während Sie es bearbeitet haben. Ihr Text ist noch da und nichts wurde überschrieben. Die neuere Version zu laden ersetzt Ihren Text. Kopieren Sie vorher, was Sie behalten wollen.",
     "build.conflictDeletedBy":
       "{name} hat dies am {time} gelöscht, während Sie es bearbeitet haben. Ihr Text steht noch hier, lässt sich aber nicht mehr speichern.",
     "build.assetRefused": "Sie dürfen dieses Asset nicht lesen.",

@@ -135,6 +135,13 @@ export function AssetEditorShell({
   }, [unsaved, onUnsavedChange]);
 
   const formRef = useRef<HTMLFormElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
+  const hasNotice = Boolean(notice);
+  // A notice that appears is shown: where the footer rests at the end of the page it may be
+  // below the window.
+  useEffect(() => {
+    if (hasNotice) footerRef.current?.scrollIntoView({ block: "nearest" });
+  }, [hasNotice]);
   const submit = (event: FormEvent) => {
     event.preventDefault();
     control.submit().then(
@@ -262,7 +269,13 @@ export function AssetEditorShell({
           ))}
         </AssetLanguageProvider>
         {notice || general.length > 0 || (canWrite && (dirty || saving)) ? (
-          <PageFooter className="grid gap-2 py-3">
+          <PageFooter
+            ref={footerRef}
+            className="grid gap-2 py-3"
+            // A notice takes several lines: on a phone it rests at the end of the page, so it
+            // does not stand over the text it is about.
+            pinned={hasNotice ? "wide" : "always"}
+          >
             {notice}
             {general.map((message) => (
               <FormNotice key={message} tone="error">

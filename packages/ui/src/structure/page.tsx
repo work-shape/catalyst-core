@@ -107,17 +107,33 @@ export function Page({
   );
 }
 
+export type PageFooterPinned = "always" | "wide";
+
+const pageFooterPinned: Record<PageFooterPinned, string> = {
+  always: "sticky bottom-0",
+  wide: "sm:sticky sm:bottom-0"
+};
+
 /**
  * What stays at the lower edge of a scrolling `Page`, inside its content: a save row and the
  * notices that belong to it. The page's end space is above it, not below: at the end of the
  * page it rests on the lower edge.
+ *
+ * `pinned="wide"` keeps it at the lower edge only where the window is wide. On a phone it rests
+ * at the end of the page: for a footer that holds a notice of several lines, which would stand
+ * over the fields it is about.
  */
-export function PageFooter({ className, ...props }: ComponentProps<"div">) {
+export function PageFooter({
+  pinned = "always",
+  className,
+  ...props
+}: ComponentProps<"div"> & { pinned?: PageFooterPinned }) {
   return (
     <div
       data-page-footer=""
       className={cn(
-        "sticky bottom-0 z-(--layer-sticky-header) mt-(--layout-page-end) -mb-(--layout-page-end) border-t bg-background",
+        pageFooterPinned[pinned],
+        "z-(--layer-sticky-header) mt-(--layout-page-end) -mb-(--layout-page-end) border-t bg-background",
         className
       )}
       {...props}

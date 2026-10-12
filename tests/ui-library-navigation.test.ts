@@ -523,6 +523,17 @@ describe("the space a page ends with", () => {
     );
   });
 
+  // Fails without the variant: a footer with a notice of several lines stayed at the lower
+  // edge of a phone and stood over the fields the notice is about.
+  it("rests at the end of the page on a phone where it is pinned for wide windows only", () => {
+    const classes = render(createElement(PageFooter, { pinned: "wide" }, "NOTICE"))
+      .match(/data-page-footer="" class="([^"]*)"/u)?.[1]
+      ?.split(" ");
+    expect(classes).toEqual(expect.arrayContaining(["sm:sticky", "sm:bottom-0"]));
+    expect(classes).not.toContain("sticky");
+    expect(classes).not.toContain("bottom-0");
+  });
+
   it("is enclosed by one line only: a section before the footer draws none", () => {
     // Fails without the rule: the section's line and the footer's line enclosed the end space.
     const markup = render(createElement(Section, { title: "LAST" }, "FIELDS"));
