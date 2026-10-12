@@ -59,7 +59,6 @@ export function SettingsArea({ settings }: { settings: SettingsAreaModel }) {
           width={page?.width}
           subRail={
             <SubRail
-              mode="routes"
               title={t("settings")}
               label={t("settings.pages")}
               groups={groups}

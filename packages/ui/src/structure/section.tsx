@@ -21,7 +21,7 @@ export interface SectionProps extends Omit<HTMLAttributes<HTMLElement>, "title">
 
 /**
  * One section of a page. It is flat: no frame, no fill, no shadow, and a hairline between it
- * and the next section. Its `id` is the anchor a `SubRail` in `anchors` mode scrolls to. The
+ * and the next section. Its `id` is the anchor a `PageOutline` scrolls to. The
  * first section, and one directly under a list `PageHeader`, starts without the top padding.
  */
 export function Section({

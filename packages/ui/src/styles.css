@@ -133,9 +133,9 @@
   --text-code--line-height: 1.5rem;
   --text-code--font-weight: 400;
 
-  /* Layout measures that only Page, PageHeader, Section, SubRail, Sidebar and SurfaceFrame
-     apply. `split-min` is what each side of a split keeps: the conversation and the surface
-     beside it. */
+  /* Layout measures that only Page, PageHeader, Section, SubRail, PageOutline, Sidebar and
+     SurfaceFrame apply. `split-min` is what each side of a split keeps: the conversation and
+     the surface beside it. */
   --layout-header: 4rem;
   --layout-gutter: 1.5rem;
   /* The height of what floats over the top of a page's scroll area, such as the button that
@@ -165,6 +165,7 @@
   --layout-sidebar: 17.5rem;
   --layout-sidebar-collapsed: 3rem;
   --layout-subrail: 14rem;
+  --layout-outline: 11.25rem;
   --layout-content-narrow: 44rem;
   --layout-content: 64rem;
   --layout-split-min: 23.75rem;
@@ -175,6 +176,10 @@
   /* The room a Page needs to keep a SubRail beside its content: the rail, one gutter and the
      40rem the content keeps. Below it the SubRail is a Select above the content. */
   --container-subrail: 55.5rem;
+  /* The room a Page needs to keep a PageOutline beside its content: the outline, one gutter,
+     the 40rem the content keeps and the page's own gutters. Below it the outline is one line
+     above the content. */
+  --container-outline: 55.75rem;
 
   /* Layer order. Dialog uses the browser's top layer and needs no entry. */
   --layer-sidebar-edge: 20;

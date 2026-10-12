@@ -23,6 +23,7 @@ import { Input, Textarea } from "../forms/input";
 import { SaveBar } from "../forms/save-bar";
 import { Select } from "../forms/select";
 import { Switch } from "../forms/switch";
+import { PageOutline, type PageOutlineItem } from "../navigation/page-outline";
 import { SubRail, type SubRailGroup } from "../navigation/sub-rail";
 import {
   DropdownMenu,
@@ -171,7 +172,6 @@ function BuildListSample({ text }: { text: GalleryText }) {
     <Page
       subRail={
         <SubRail
-          mode="routes"
           title={text.navBuild}
           label={text.buildKinds}
           groups={kinds}
@@ -339,16 +339,11 @@ function AssetPageSample({ text }: { text: GalleryText }) {
     search: `${prefix}search`,
     history: `${prefix}history`
   };
-  const index: SubRailGroup[] = [
-    {
-      id: "sections",
-      items: [
-        { id: anchors.overview, label: text.assetOverview },
-        { id: anchors.sources, label: text.assetSources, count: sources.length },
-        { id: anchors.search, label: text.assetSearch },
-        { id: anchors.history, label: text.assetHistory }
-      ]
-    }
+  const index: PageOutlineItem[] = [
+    { id: anchors.overview, label: text.assetOverview },
+    { id: anchors.sources, label: text.assetSources, count: sources.length },
+    { id: anchors.search, label: text.assetSearch },
+    { id: anchors.history, label: text.assetHistory }
   ];
   const revisions = [
     {
@@ -403,9 +398,7 @@ function AssetPageSample({ text }: { text: GalleryText }) {
       >
         {text.assetBanner}
       </Banner>
-      <Page
-        subRail={<SubRail mode="anchors" belowHeader label={text.assetSections} groups={index} />}
-      >
+      <Page outline={<PageOutline belowHeader items={index} />}>
         <Section
           id={anchors.overview}
           headingLevel={3}
@@ -554,7 +547,6 @@ function SettingsFormSample({ text }: { text: GalleryText }) {
         width="narrow"
         subRail={
           <SubRail
-            mode="routes"
             title={text.settings}
             label={text.subRailSettings}
             groups={pages}

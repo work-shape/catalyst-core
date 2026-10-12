@@ -832,6 +832,24 @@ id from config_assets where status = 'deleted')`.
   head: the id stands at the top of the page's first section, read-only with a copy button. On
   an App draft the sentence that names the missing publish right is a line under the head.
   `@vivd-catalyst/ui`: a `detail` `PageHeader` no longer shows `description`.
+- **Build, the sections of a page:** the page of an agent, a skill and a Connection no longer
+  lists its sections in a column on the left that looked like the list of pages in Build and
+  Settings. The sections are an outline on the right of the content, under "On this page": a
+  thin line marks the section in view and follows the scrolling, a count stands after the name,
+  and a section a refused save names is marked. A link scrolls to its section and hands the
+  focus to the section's heading. The content starts at the page's left edge, is at most 44rem
+  wide, and each section's title stands above its fields. In a narrow window and on a phone the
+  outline is one line above the content, "On this page: Overview", that names the section in
+  view and offers the others. Build's list of kinds and the Settings pages are unchanged.
+- **UI library (breaking for a client assembly and for a Page on the next App Kit version):**
+  new `PageOutline`, which `Page` takes as `outline`, with the labels `onThisPage` and
+  `sectionHasError` in `UiLabels`. `SubRail` only opens pages: `mode` is gone, `value` and
+  `onValueChange` are required, and `SubRailRoutesProps` and `SubRailAnchorsProps` are removed
+  in favour of `SubRailProps`. Code that passed `mode="routes"` drops the prop; code that
+  passed `mode="anchors"` hands its sections to `<Page outline={<PageOutline items={…} />}>`.
+  A `Page` takes `subRail` or `outline`, not both. A released App Kit version keeps the
+  `SubRail` it was built with.
+
 - **Every process of an instance is assembled from one build (breaking for a client
   assembly):** `defineClientInstance` gains `runWorkspaceCommandWorker()` and
   `runArtifactPreviewWorker()`, which hand the worker the capabilities of the build as

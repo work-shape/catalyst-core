@@ -362,7 +362,7 @@ describe("agent page", () => {
     expect(agentPage({ canManageAgentModels: true })).toContain('href="#model"');
   });
 
-  it("lists the sections in an index, with how many things each one holds", () => {
+  it("lists the sections in the page's outline, with how many things each one holds", () => {
     const markup = agentPage({
       config: {
         toolNames: ["read_skill", "show_view"],
@@ -371,7 +371,7 @@ describe("agent page", () => {
       },
       canManageAgentModels: true
     });
-    const index = /<nav aria-label="Sections of this page".*?<\/nav>/u.exec(markup)?.[0] ?? "";
+    const index = /<nav aria-label="On this page".*?<\/nav>/u.exec(markup)?.[0] ?? "";
     const entries = [...index.matchAll(/<a href="#([^"]*)"[^>]*>(.*?)<\/a>/gu)].map(
       ([, id, body = ""]) =>
         `${id}: ${body
@@ -388,7 +388,9 @@ describe("agent page", () => {
       "tools: Tools 2",
       "prompts: Starter prompts 0"
     ]);
-    // Every entry of the index leads to a section of the page.
+    // The sections are no list of pages: nothing of the kinds' rail is on the page.
+    expect(markup).not.toContain("data-sub-rail");
+    // Every entry of the outline leads to a section of the page.
     for (const id of ["overview", "instructions", "model", "skills", "tools", "prompts"]) {
       expect(section(markup, id)).not.toBe("");
     }
@@ -593,6 +595,18 @@ describe("refused save", () => {
     expect(markup.match(/The tool documents\.read is not allowed/gu)).toHaveLength(1);
     expect(markup.match(/data-field-refusal/gu)).toHaveLength(1);
     expect(section(markup, "details")).not.toContain("data-field-refusal");
+  });
+
+  it("marks the section a refusal names in the page's outline, and no other", () => {
+    const linkTo = (markup: string, id: string) =>
+      new RegExp(`<a href="#${id}"[^>]*>.*?</a>`, "u").exec(markup)?.[0] ?? "";
+    const refused = page(outcome);
+
+    expect(linkTo(refused, "tools")).toContain('data-invalid=""');
+    expect(linkTo(refused, "tools")).toContain("Has an error");
+    expect(linkTo(refused, "details")).not.toContain("data-invalid");
+    expect(refused.match(/data-invalid=""/gu)).toHaveLength(1);
+    expect(page({ ok: true })).not.toContain("data-invalid");
   });
 
   it("says a refusal that names no field after the sections, as the instance said it", () => {

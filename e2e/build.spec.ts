@@ -685,8 +685,8 @@ for (const locale of ["en", "de"] as const) {
       await signInViaApi(page, superadminUser);
       const words =
         locale === "en"
-          ? { agents: "Agents", sections: "Sections of this page", history: "History" }
-          : { agents: "Agenten", sections: "Abschnitte dieser Seite", history: "Verlauf" };
+          ? { agents: "Agents", sections: "On this page", history: "History" }
+          : { agents: "Agenten", sections: "Auf dieser Seite", history: "Verlauf" };
 
       for (const size of [WIDE, NARROW]) {
         await page.setViewportSize(size);
@@ -707,8 +707,13 @@ for (const locale of ["en", "de"] as const) {
 
         await page.goto("/build/agents/research_assistant");
         await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-        // Beside the content while there is room for it, a choice above the content otherwise.
-        await expect(page.locator(`[aria-label="${words.sections}"]:visible`)).toHaveCount(1);
+        // Links beside the content while there is room for it, a choice above it otherwise.
+        const outline = page.getByRole("navigation", { name: words.sections });
+        await expect(outline).toBeVisible();
+        await expect(outline.getByRole("link").first()).toBeVisible({
+          visible: size === WIDE
+        });
+        await expect(outline.getByRole("combobox")).toBeVisible({ visible: size === NARROW });
         await expectNoSidewaysScroll(page);
 
         await page.getByRole("button", { name: words.history, exact: true }).click();

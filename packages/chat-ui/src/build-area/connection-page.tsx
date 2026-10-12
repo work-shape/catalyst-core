@@ -14,9 +14,9 @@ import {
   ListRow,
   Page,
   PageHeader,
+  PageOutline,
   Section,
   SkeletonList,
-  SubRail,
   type BadgeTone
 } from "@vivd-catalyst/ui";
 import type {
@@ -317,6 +317,7 @@ export function ConnectionPage({
 
   return (
     <Page
+      width="narrow"
       ref={page.ref}
       header={
         <PageHeader
@@ -339,22 +340,15 @@ export function ConnectionPage({
           }
         />
       }
-      subRail={
-        <SubRail
-          mode="anchors"
+      outline={
+        <PageOutline
           belowHeader
-          label={t("build.sections")}
-          groups={[
-            {
-              id: "sections",
-              items: sections.map(({ id, label, count }) => ({ id, label, count }))
-            }
-          ]}
+          items={sections.map(({ id, label, count }) => ({ id, label, count }))}
         />
       }
     >
       {page.above}
-      {/* The first line of the content starts where the first item of the index does. */}
+      {/* The first line of the content starts where the outline does. */}
       <div className="grid min-w-0 content-start pt-5">
         {config.origin === "release" ? (
           <Banner layout="line" className="mb-4" data-build-read-only="">
@@ -365,6 +359,7 @@ export function ConnectionPage({
           <Section
             key={section.id}
             id={section.id}
+            layout="stacked"
             title={section.label}
             description={section.description}
             count={section.count}

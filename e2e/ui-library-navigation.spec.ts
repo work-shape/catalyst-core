@@ -382,12 +382,11 @@ test("a drawer holds the focus, closes on Escape and on the backdrop, and gives 
   await expect(drawer).toBeHidden();
 });
 
-test("the sub-rail navigates routes, scrolls to anchors and follows the scroll", async ({
+test("the sub-rail opens pages, as links beside the content and as a select above it", async ({
   page
 }) => {
   const root = await openGallery(page, "Navigation");
   const routes = root.locator('[data-gallery-sample="subrail-routes"]');
-  const anchors = root.locator('[data-gallery-sample="subrail-anchors"]');
   const openRoute = routes.locator('[data-gallery-sample="subrail-route"]');
 
   // While its page keeps 40rem for the content beside it, it is a rail of links.
@@ -402,17 +401,6 @@ test("the sub-rail navigates routes, scrolls to anchors and follows the scroll",
     "page"
   );
 
-  const anchorRail = anchors.getByRole("navigation");
-  await anchorRail.getByRole("link", { name: /Skills/u }).click();
-  await expect(anchorRail.locator("[aria-current]")).toHaveText(/Skills/u);
-  await expect
-    .poll(() => offsetInFrame(anchors, anchors.getByRole("heading", { name: "Skills" })))
-    .toBeLessThan(80);
-  await anchors.evaluate((element) => element.scrollTo({ top: 0 }));
-  await expect(anchorRail.locator("[aria-current]")).toHaveText(/Overview/u);
-  await anchors.evaluate((element) => element.scrollTo({ top: element.scrollHeight }));
-  await expect(anchorRail.locator("[aria-current]")).toHaveText(/History/u);
-
   // With less room in the page it is the library's native select.
   await page.setViewportSize({ width: 1000, height: 800 });
   await expect(rail).toBeHidden();
@@ -420,17 +408,78 @@ test("the sub-rail navigates routes, scrolls to anchors and follows the scroll",
   expect(await routeSelect.evaluate((element) => element.tagName)).toBe("SELECT");
   await routeSelect.selectOption({ label: "Members (3)" });
   await expect(openRoute).toHaveText("Members");
-
-  const anchorSelect = anchors.getByRole("combobox", { name: "Sections of this page" });
-  await anchorSelect.selectOption({ label: "Instructions" });
-  await expect
-    .poll(() => offsetInFrame(anchors, anchors.getByRole("heading", { name: "Instructions" })))
-    .toBeLessThan(120);
-  await anchors.evaluate((element) => element.scrollTo({ top: element.scrollHeight }));
-  await expect.poll(() => selectedLabel(anchorSelect)).toBe("History");
-  await anchors.evaluate((element) => element.scrollTo({ top: 0 }));
-  await expect.poll(() => selectedLabel(anchorSelect)).toBe("Overview");
 });
+
+for (const sample of ["page-outline", "page-outline-header"]) {
+  test(`the page outline scrolls to a section, follows the scroll and hands the focus on (${sample})`, async ({
+    page
+  }) => {
+    const root = await openGallery(page, "Navigation");
+    const frame = root.locator(`[data-gallery-sample="${sample}"]`);
+    const outline = frame.getByRole("navigation", { name: "On this page" });
+    const current = outline.locator("[aria-current]");
+    const heading = (name: string) => frame.getByRole("heading", { name, exact: true });
+    // Where a section rests once the outline scrolled to it: under the head, or the top room.
+    const top = sample === "page-outline-header" ? 64 : 24;
+
+    // Beside the content it is a list of links to the right of it, with the first one marked.
+    await expect(outline.getByRole("link")).toHaveCount(4);
+    await expect(current).toHaveText("Overview");
+    await expect(current).toHaveAttribute("aria-current", "location");
+    const contentBox = await heading("Overview").boundingBox();
+    const outlineBox = await outline.boundingBox();
+    expect(outlineBox?.width).toBe(180);
+    expect(outlineBox?.x).toBeGreaterThan((contentBox?.x ?? 0) + (contentBox?.width ?? 0));
+    // The mark is a line at the link's edge, not a fill.
+    expect(await style(current, "background-color")).toBe("rgba(0, 0, 0, 0)");
+    expect(await style(current, "border-left-width")).toBe("2px");
+    // A count stands after the name and an error is said in words.
+    await expect(outline.getByRole("link", { name: "Skills 4" })).toBeVisible();
+    await expect(outline.getByRole("link", { name: "Instructions Has an error" })).toBeVisible();
+
+    // A click scrolls to the section and hands the focus to its heading.
+    await outline.getByRole("link", { name: /Skills/u }).click();
+    await expect(current).toHaveText(/Skills/u);
+    await expect.poll(() => offsetInFrame(frame, heading("Skills"))).toBeLessThan(top + 40);
+    await expect.poll(() => offsetInFrame(frame, heading("Skills"))).toBeGreaterThanOrEqual(top);
+    await expect(heading("Skills")).toBeFocused();
+
+    // The mark follows the scrolling, and the outline stays where it is.
+    const restingAt = await offsetInFrame(frame, outline);
+    await frame.evaluate((element) => element.scrollTo({ top: 0 }));
+    await expect(current).toHaveText("Overview");
+    await frame.evaluate((element) => element.scrollTo({ top: element.scrollHeight }));
+    await expect(current).toHaveText("History");
+    await expect(current).toHaveCount(1);
+    expect(await offsetInFrame(frame, outline)).toBe(restingAt);
+
+    // The keyboard reaches a link and follows it.
+    await frame.evaluate((element) => element.scrollTo({ top: 0 }));
+    await outline.getByRole("link", { name: /Instructions/u }).focus();
+    await page.keyboard.press("Enter");
+    await expect(current).toHaveText(/Instructions/u);
+    await expect(heading("Instructions")).toBeFocused();
+
+    // With less room in the page it is one line above the content that names the section in
+    // view and offers the others.
+    await page.setViewportSize({ width: 1000, height: 800 });
+    await expect(outline.getByRole("link").first()).toBeHidden();
+    const choice = outline.getByRole("combobox");
+    await expect(choice).toBeVisible();
+    await expect(outline).toContainText("On this page:");
+    await frame.evaluate((element) => element.scrollTo({ top: 0 }));
+    await expect.poll(() => selectedLabel(choice)).toBe("Overview");
+    expect(await offsetInFrame(frame, outline)).toBeLessThan(
+      await offsetInFrame(frame, heading("Overview"))
+    );
+    await choice.selectOption({ label: "Skills (4)" });
+    await expect.poll(() => offsetInFrame(frame, heading("Skills"))).toBeLessThan(top + 40);
+    await frame.evaluate((element) => element.scrollTo({ top: element.scrollHeight }));
+    await expect.poll(() => selectedLabel(choice)).toBe("History");
+    await frame.evaluate((element) => element.scrollTo({ top: 0 }));
+    await expect.poll(() => selectedLabel(choice)).toBe("Overview");
+  });
+}
 
 const gallerySections = [
   "Foundations",

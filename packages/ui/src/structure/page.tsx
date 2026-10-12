@@ -10,13 +10,41 @@ const contentWidths: Record<PageWidth, string> = {
   wide: "max-w-none"
 };
 
-export interface PageProps extends ComponentProps<"div"> {
+/**
+ * The widest the row of the content and a `PageOutline` grows: the outline stays at the page's
+ * right edge, and in a very wide window no further from the content than a list page is wide.
+ */
+const outlineRowWidths: Record<PageWidth, string> = {
+  narrow: "max-w-[calc(var(--layout-content)+var(--layout-outline)+var(--layout-gutter)*3)]",
+  default: "max-w-[calc(var(--layout-content)+var(--layout-outline)+var(--layout-gutter)*3)]",
+  wide: "max-w-none"
+};
+
+/**
+ * The left column navigates, the right outline scrolls: a page names the other pages of its
+ * area in a `SubRail`, or its own sections in a `PageOutline`, not both.
+ */
+type PageNavigationProps =
+  | {
+      /**
+       * A `SubRail` in its own column left of the content while the content keeps 40rem. With
+       * less room in the page it sits above the content.
+       */
+      subRail?: ReactNode;
+      outline?: undefined;
+    }
+  | {
+      /**
+       * A `PageOutline` in its own column right of the content, which starts at the page's left
+       * edge, while the content keeps 40rem. With less room in the page it is a line above the
+       * content.
+       */
+      outline?: ReactNode;
+      subRail?: undefined;
+    };
+
+interface PageBaseProps extends ComponentProps<"div"> {
   width?: PageWidth;
-  /**
-   * A `SubRail` in its own column beside the content while the content keeps 40rem. With less
-   * room in the page it sits above the content.
-   */
-  subRail?: ReactNode;
   /**
    * A detail `PageHeader` across the whole page, above the sub-rail and the content. It brings
    * the page's gutter itself, so its first and last slot share the edges of what is under it.
@@ -24,9 +52,11 @@ export interface PageProps extends ComponentProps<"div"> {
   header?: ReactNode;
 }
 
+export type PageProps = PageBaseProps & PageNavigationProps;
+
 /**
  * The content column of a page: the gutter, the widest it grows, and the column of a
- * `SubRail`. Feature code sets no page padding of its own.
+ * `SubRail` or a `PageOutline`. Feature code sets no page padding of its own.
  *
  * The page's first line, its title line, starts `--layout-page-top` below the top edge, so no
  * page begins at the window's edge. It starts `--layout-page-inset` lower again where something
@@ -47,10 +77,48 @@ export function Page({
   className,
   width = "default",
   subRail,
+  outline,
   header,
   children,
   ...props
 }: PageProps) {
+  if (outline !== undefined) {
+    // The page is the container its outline measures: the room the page has, not the window.
+    return (
+      <div className={cn("@container/page w-full min-w-0", className)} {...props}>
+        {header === undefined ? null : (
+          <>
+            <div
+              aria-hidden="true"
+              className="h-[var(--layout-page-head-inset,var(--layout-page-inset))]"
+            />
+            {header}
+          </>
+        )}
+        <div
+          className={cn(
+            "grid min-w-0 gap-x-(--layout-gutter) px-(--layout-gutter) @outline/page:grid-cols-[minmax(0,1fr)_var(--layout-outline)]",
+            header === undefined && "pt-[calc(var(--layout-page-inset)+var(--spacing)*6)]",
+            outlineRowWidths[width]
+          )}
+        >
+          {/* Before the content, so the keyboard reaches the outline first and a narrow page
+              shows it above the content; beside the content it is the column on the right. */}
+          <div className="min-w-0 @outline/page:col-start-2 @outline/page:row-start-1">
+            {outline}
+          </div>
+          <div
+            className={cn(
+              "min-w-0 pb-(--layout-page-end) @outline/page:col-start-1 @outline/page:row-start-1",
+              contentWidths[width]
+            )}
+          >
+            {children}
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (header !== undefined) {
     // The page is the container its sub-rail measures: the room the page has, not the window.
     return (

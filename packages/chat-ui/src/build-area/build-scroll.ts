@@ -1,7 +1,4 @@
-/**
- * Room left above a section the page scrolls to, for the index that stays at the top of a
- * narrow page.
- */
+/** Room left above a section the page scrolls to, for the page's head, which stays at the top. */
 const SECTION_SCROLL_MARGIN_PX = 64;
 
 /**

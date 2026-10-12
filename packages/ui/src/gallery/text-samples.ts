@@ -43,7 +43,6 @@ export interface SampleGalleryText {
   assetBannerTitle: string;
   assetBanner: string;
   assetBannerAction: string;
-  assetSections: string;
   assetOverview: string;
   assetOverviewDescription: string;
   assetNameHint: string;
@@ -146,7 +145,6 @@ export const sampleGalleryText: Record<"en" | "de", SampleGalleryText> = {
     assetBannerTitle: "Publishing re-indexes 214 documents",
     assetBanner: "Search keeps answering from the published index until the new one is ready.",
     assetBannerAction: "Show changes",
-    assetSections: "Sections of this knowledge base",
     assetOverview: "Overview",
     assetOverviewDescription: "The name and what this knowledge base holds.",
     assetNameHint: "Agents and builders see this name.",
@@ -248,7 +246,6 @@ export const sampleGalleryText: Record<"en" | "de", SampleGalleryText> = {
     assetBanner:
       "Die Suche antwortet weiter aus dem veröffentlichten Index, bis der neue fertig ist.",
     assetBannerAction: "Änderungen zeigen",
-    assetSections: "Abschnitte dieser Wissensbasis",
     assetOverview: "Überblick",
     assetOverviewDescription: "Der Name und was diese Wissensbasis enthält.",
     assetNameHint: "Agenten und Builder sehen diesen Namen.",

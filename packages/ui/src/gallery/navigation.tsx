@@ -27,6 +27,7 @@ import {
 import { Sidebar } from "../navigation/sidebar";
 import { DocsAddressProvider, DocsLink } from "../navigation/docs-link";
 import { SkipLink } from "../navigation/skip-link";
+import { PageOutline, type PageOutlineItem } from "../navigation/page-outline";
 import { SubRail, type SubRailGroup } from "../navigation/sub-rail";
 import { Tabs, TabsContent, TabsLink, TabsList, TabsNav, TabsTrigger } from "../navigation/tabs";
 import { Page } from "../structure/page";
@@ -336,7 +337,7 @@ function SkipLinkSample({ text }: { text: GalleryText }) {
 
 type SettingsRoute = "profile" | "security" | "general" | "members" | "defaults";
 
-function SubRailRoutesSample({ text }: { text: GalleryText }) {
+function SubRailSample({ text }: { text: GalleryText }) {
   const [route, setRoute] = useState<SettingsRoute>("general");
   const item = (id: SettingsRoute, label: string, count?: number) => ({
     id,
@@ -379,7 +380,6 @@ function SubRailRoutesSample({ text }: { text: GalleryText }) {
       <Page
         subRail={
           <SubRail
-            mode="routes"
             title={text.settings}
             label={text.subRailSettings}
             groups={groups}
@@ -409,12 +409,12 @@ function toSettingsRoute(id: string, fallback: SettingsRoute): SettingsRoute {
   return settingsRoutes.find((candidate) => candidate === id) ?? fallback;
 }
 
-function SubRailAnchorsSample({
+function PageOutlineSample({
   text,
   underHeader = false
 }: {
   text: GalleryText;
-  /** The page has a detail head across its width: the rail and the content start under it. */
+  /** The page has a detail head across its width: the outline and the content start under it. */
   underHeader?: boolean;
 }) {
   // The gallery can show the same sample twice, side by side, so the anchors are made unique.
@@ -429,21 +429,18 @@ function SubRailAnchorsSample({
     { id: `${prefix}skills`, title: text.sectionSkills, body: text.sectionSkillsDescription },
     { id: `${prefix}history`, title: text.sectionHistory, body: text.sectionHistoryDescription }
   ];
-  const groups: SubRailGroup[] = [
-    {
-      id: "sections",
-      items: sections.map((section, index) => ({
-        id: section.id,
-        label: section.title,
-        count: index === 2 ? 4 : undefined
-      }))
-    }
-  ];
+  // Every state: the section in view, one with a count and one with an error.
+  const items: PageOutlineItem[] = sections.map((section, index) => ({
+    id: section.id,
+    label: section.title,
+    count: index === 2 ? 4 : undefined,
+    invalid: index === 1
+  }));
 
   return (
     <div
       className="h-80 overflow-y-auto rounded-lg border"
-      data-gallery-sample={underHeader ? "subrail-anchors-header" : "subrail-anchors"}
+      data-gallery-sample={underHeader ? "page-outline-header" : "page-outline"}
     >
       <Page
         header={
@@ -451,7 +448,7 @@ function SubRailAnchorsSample({
             <PageHeader
               variant="detail"
               headingLevel={2}
-              title={text.subRailAnchorsHeaderTitle}
+              title={text.pageOutlineHeaderTitle}
               secondaryActions={
                 <Button variant="outline" size="sm">
                   {text.sectionHistory}
@@ -460,14 +457,7 @@ function SubRailAnchorsSample({
             />
           ) : undefined
         }
-        subRail={
-          <SubRail
-            mode="anchors"
-            belowHeader={underHeader}
-            label={text.subRailSections}
-            groups={groups}
-          />
-        }
+        outline={<PageOutline belowHeader={underHeader} items={items} />}
       >
         {sections.map((section) => (
           <Section key={section.id} id={section.id} layout="stacked" title={section.title}>
@@ -611,19 +601,27 @@ export const navigationGallery: GalleryGroup = {
       components: ["SubRail"],
       render: (text) => (
         <>
-          <Samples label={text.subRailRoutes}>
+          <Samples>
             <div className="w-full">
-              <SubRailRoutesSample text={text} />
+              <SubRailSample text={text} />
             </div>
           </Samples>
-          <Samples label={text.subRailAnchors}>
+        </>
+      )
+    },
+    {
+      name: "PageOutline",
+      components: ["PageOutline"],
+      render: (text) => (
+        <>
+          <Samples label={text.pageOutlinePlain}>
             <div className="w-full">
-              <SubRailAnchorsSample text={text} />
+              <PageOutlineSample text={text} />
             </div>
           </Samples>
-          <Samples label={text.subRailAnchorsHeader}>
+          <Samples label={text.pageOutlineHeader}>
             <div className="w-full">
-              <SubRailAnchorsSample text={text} underHeader />
+              <PageOutlineSample text={text} underHeader />
             </div>
           </Samples>
         </>

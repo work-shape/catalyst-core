@@ -23,12 +23,10 @@ export interface LayoutGalleryText {
   navGroupPlain: string;
   navGroupFolding: string;
   navGroupPinned: string;
-  subRailRoutes: string;
-  subRailAnchors: string;
-  subRailAnchorsHeader: string;
-  subRailAnchorsHeaderTitle: string;
+  pageOutlinePlain: string;
+  pageOutlineHeader: string;
+  pageOutlineHeaderTitle: string;
   subRailSettings: string;
-  subRailSections: string;
   subRailScope: string;
   subRailYou: string;
   subRailWorkspace: string;
@@ -197,12 +195,10 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     navGroupPlain: "Group label",
     navGroupFolding: "Group that folds",
     navGroupPinned: "Label that stays while its items scroll",
-    subRailRoutes: "Routes",
-    subRailAnchors: "Anchors",
-    subRailAnchorsHeader: "Anchors under a page head",
-    subRailAnchorsHeaderTitle: "Support assistant",
+    pageOutlinePlain: "Sections of a page",
+    pageOutlineHeader: "Under a page head",
+    pageOutlineHeaderTitle: "Support assistant",
     subRailSettings: "Settings pages",
-    subRailSections: "Sections of this page",
     subRailScope: "Workspace",
     subRailYou: "You",
     subRailWorkspace: "Workspace",
@@ -370,12 +366,10 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     navGroupPlain: "Gruppenbezeichnung",
     navGroupFolding: "Einklappbare Gruppe",
     navGroupPinned: "Bezeichnung bleibt stehen, während die Einträge rollen",
-    subRailRoutes: "Seiten",
-    subRailAnchors: "Anker",
-    subRailAnchorsHeader: "Anker unter einem Seitenkopf",
-    subRailAnchorsHeaderTitle: "Support-Assistent",
+    pageOutlinePlain: "Abschnitte einer Seite",
+    pageOutlineHeader: "Unter einem Seitenkopf",
+    pageOutlineHeaderTitle: "Support-Assistent",
     subRailSettings: "Einstellungsseiten",
-    subRailSections: "Abschnitte dieser Seite",
     subRailScope: "Arbeitsbereich",
     subRailYou: "Du",
     subRailWorkspace: "Arbeitsbereich",

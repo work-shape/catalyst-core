@@ -46,6 +46,10 @@ export interface UiLabels {
   chartTruncated: string;
   /** In the box of a chart whose engine could not be loaded. */
   chartLoadFailed: string;
+  /** Names a `PageOutline`: the list of the sections of the page it stands on. */
+  onThisPage: string;
+  /** Said of a section a `PageOutline` marks because a field in it has an error. */
+  sectionHasError: string;
 }
 
 export const uiLabelsEn: UiLabels = {
@@ -82,7 +86,9 @@ export const uiLabelsEn: UiLabels = {
   countOne: "1 item",
   countMany: "{count} items",
   chartTruncated: "Only part of the data is shown.",
-  chartLoadFailed: "The chart could not be loaded."
+  chartLoadFailed: "The chart could not be loaded.",
+  onThisPage: "On this page",
+  sectionHasError: "Has an error"
 };
 
 export const uiLabelsDe: UiLabels = {
@@ -119,5 +125,7 @@ export const uiLabelsDe: UiLabels = {
   countOne: "1 Eintrag",
   countMany: "{count} Einträge",
   chartTruncated: "Nur ein Teil der Daten wird angezeigt.",
-  chartLoadFailed: "Das Diagramm konnte nicht geladen werden."
+  chartLoadFailed: "Das Diagramm konnte nicht geladen werden.",
+  onThisPage: "Auf dieser Seite",
+  sectionHasError: "Enthält einen Fehler"
 };
