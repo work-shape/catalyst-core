@@ -123,6 +123,13 @@ function registerWorkflowRoutes(
     execute: async (input, context) => {
       const run = await runOf(input.runId);
       const { containerStepRunId, status, iteration } = input;
+      if (iteration !== undefined && containerStepRunId === undefined) {
+        // Every loop counts its items from zero, so a number alone names an item of each.
+        throw new AppError(
+          "VALIDATION_FAILED",
+          "'iteration' names an item of one loop: give the 'containerStepRunId' of that loop's step run with it"
+        );
+      }
       const stepRuns = await required().listStepRuns({
         runId: run.id,
         filter: {

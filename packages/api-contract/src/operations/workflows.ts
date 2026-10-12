@@ -47,6 +47,8 @@ const workflowRunErrorSchema = z.object({
   code: z.string(),
   /** A sentence of the product. Never a value of the run and never text of an outside system. */
   message: z.string(),
+  /** Where the run's principal was refused for a right it does not hold: that right. */
+  action: z.string().optional(),
   /** On a run: the step run it ended at. */
   stepRunId: z.string().optional()
 });
@@ -123,7 +125,11 @@ export const startWorkflowRunRequestSchema = z.object({
   input: z.record(z.string(), z.unknown()).optional()
 });
 
-/** The filters of the step runs of a run: those of one block, one status, one item of a loop. */
+/**
+ * The filters of the step runs of a run: those of one block, one status, one item of a loop.
+ * `iteration` counts the items of one loop, so it is given with the `containerStepRunId` of
+ * that loop's step run and refused without it.
+ */
 export const listWorkflowStepRunsQuerySchema = listQuerySchema.extend({
   containerStepRunId: z.string().min(1).optional(),
   status: stepRunStatusSchema.optional(),
@@ -225,7 +231,7 @@ export const workflowOperations = {
     effect: "reading",
     query: listWorkflowStepRunsQuerySchema,
     response: page(workflowStepRunSchema, ["createdAt", "id"], false),
-    errors: ["NOT_FOUND"],
+    errors: ["NOT_FOUND", "VALIDATION_FAILED"],
     rateClass: "read"
   }),
   "workflows.cancel_run": defineRegisteredOperation({

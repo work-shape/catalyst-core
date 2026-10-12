@@ -10082,6 +10082,9 @@
                         "message": {
                           "type": "string"
                         },
+                        "action": {
+                          "type": "string"
+                        },
                         "stepRunId": {
                           "type": "string"
                         }
@@ -10320,6 +10323,9 @@
                           "type": "string"
                         },
                         "message": {
+                          "type": "string"
+                        },
+                        "action": {
                           "type": "string"
                         },
                         "stepRunId": {
@@ -10693,6 +10699,9 @@
                                 "type": "string"
                               },
                               "message": {
+                                "type": "string"
+                              },
+                              "action": {
                                 "type": "string"
                               },
                               "stepRunId": {
@@ -11069,6 +11078,9 @@
                               "message": {
                                 "type": "string"
                               },
+                              "action": {
+                                "type": "string"
+                              },
                               "stepRunId": {
                                 "type": "string"
                               }
@@ -11330,6 +11342,9 @@
                           "type": "string"
                         },
                         "message": {
+                          "type": "string"
+                        },
+                        "action": {
                           "type": "string"
                         },
                         "stepRunId": {
