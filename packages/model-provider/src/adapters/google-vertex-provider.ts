@@ -60,6 +60,7 @@ export interface GoogleVertexProviderOptions {
   projectId: string;
   region: ProviderRegion;
   tokens: GoogleAccessTokenSource;
+  labels?: Readonly<Record<string, string>>;
 }
 
 export class GoogleVertexProvider {
@@ -147,7 +148,10 @@ export class GoogleVertexProvider {
       response = await fetch(url, {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-        body: JSON.stringify(toVertexRequest(request)),
+        body: JSON.stringify({
+          ...toVertexRequest(request),
+          ...(this.options.labels ? { labels: this.options.labels } : {})
+        }),
         signal: request.signal
       });
     } catch (error) {

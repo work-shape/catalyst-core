@@ -422,6 +422,9 @@ infrastructure:
       model: gemini-3.1-flash-lite
       projectId: my-gcp-project
       credentialSecret: GOOGLE_VERTEX_CREDENTIALS
+      labels:
+        instance: internal-dev
+        environment: development
 modelBindings:
   - id: document-extraction
     providerId: vertex
@@ -443,6 +446,12 @@ the adapter serves the product's own calls, such as document extraction, and no 
 agent run offers tools, and Gemini needs its thought signatures sent back with a tool call,
 which the adapter does not carry yet. A binding on a `google-vertex` entry must therefore state
 `agentSelectable: false`; startup stops on one that does not and names the binding.
+
+Optional `labels` are static operator metadata attached to both ordinary and streaming
+requests for Google PayGo billing attribution. Use at most 64 labels, with lowercase ASCII
+letters, digits, underscores or hyphens; keys start with a letter and keys and values are at
+most 63 characters. Keep customer content and personal data out of labels. Labels do not
+create an access boundary, and billing reports take time to populate.
 
 The provider's check on **Instance > Infrastructure** asks Google for a token with the key. It
 shows that the key is taken. It does not show that the account may call the model on Vertex.

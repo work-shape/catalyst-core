@@ -8,7 +8,12 @@ const googleVertexConfigSchema = z.object({
   /** The Google Cloud project the calls are billed to. */
   projectId: z.string().min(1),
   /** Names the secret that holds the JSON key of the service account. */
-  credentialSecret: secretRef().default("GOOGLE_VERTEX_CREDENTIALS")
+  credentialSecret: secretRef().default("GOOGLE_VERTEX_CREDENTIALS"),
+  /** Static operator metadata for Google PayGo billing; never put user data here. */
+  labels: z
+    .record(z.string().regex(/^[a-z][a-z0-9_-]{0,62}$/), z.string().regex(/^[a-z0-9_-]{0,63}$/))
+    .refine((labels) => Object.keys(labels).length <= 64, "At most 64 billing labels are allowed")
+    .optional()
 });
 
 /**
@@ -33,7 +38,8 @@ export const googleVertexModelProvider = defineProvider({
         id: entry.id,
         projectId: config.projectId,
         region: entry.region,
-        tokens
+        tokens,
+        ...(config.labels ? { labels: config.labels } : {})
       });
       return {
         capabilities: () => GOOGLE_VERTEX_CAPABILITIES,
