@@ -1,0 +1,7 @@
+id: customer-list
+name: Customers
+description: The customers of the sample business system, read through the Connection with the rights of whoever looks.
+kit: 1.1.0
+# The Connections this App may call. An action names one of them.
+connections:
+  - sample-business

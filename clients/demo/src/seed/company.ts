@@ -109,12 +109,27 @@ interface SeedApp {
   /** How many of the source sets are written before the App is published. */
   publishedAfter: number;
   savedBy: PersonKey;
+  /**
+   * The Connection the App's actions call. An instance without it cannot store the App, so
+   * the seed leaves the App out there and says so.
+   */
+  connection?: string;
 }
 
-/** One App that is published, and one whose draft is a revision ahead of what is published. */
+/**
+ * One App that is published, one whose draft is a revision ahead of what is published, and
+ * one whose tile reads rows of the sample business system through a named action.
+ */
 export const apps: SeedApp[] = [
   { name: "client-onboarding", sourceSets: ["1"], publishedAfter: 1, savedBy: "mara" },
-  { name: "fee-estimate", sourceSets: ["1", "2"], publishedAfter: 1, savedBy: "mara" }
+  { name: "fee-estimate", sourceSets: ["1", "2"], publishedAfter: 1, savedBy: "mara" },
+  {
+    name: "customer-list",
+    sourceSets: ["1"],
+    publishedAfter: 1,
+    savedBy: "mara",
+    connection: "sample-business"
+  }
 ];
 
 type AssetKind = "agent" | "skill";

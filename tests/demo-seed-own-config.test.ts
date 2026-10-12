@@ -56,7 +56,14 @@ describe("the demo seed on the demo's own config", () => {
       "connection grant rows": 3,
       workspaces: 1,
       "workspace members": 4,
-      apps: 2
+      apps: 3
+    });
+    // This config brings the Connection `sample-business`, so the App whose action calls it is
+    // stored and published here too. Fails without S3-42: the seed knew no such App.
+    expect(seeded().before.apps.find((app) => app.name === "customer-list")).toMatchObject({
+      revision: 1,
+      publishedRevision: 1,
+      title: "Customers"
     });
     expectSecondRunChangedNothing(seeded());
     // The demo's own agent stays the default, not the first agent of the company.

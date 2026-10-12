@@ -1,3 +1,5 @@
+import { readdir, readFile } from "node:fs/promises";
+import { join, relative, resolve, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   appActionInputAsZod,
@@ -266,5 +268,33 @@ describe("the parameters of a call", () => {
         applyAppActionMapping(JSON.parse('{"__proto__": "{{customer}}"}'), { customer: "x" })
       )
     ).toEqual(["__proto__"]);
+  });
+});
+
+describe("the demo's App with a tile that reads rows", () => {
+  // Fails without the change: the build knew no kit 1.1.0, no `actions` of the kit and no
+  // action file. The seed writes this source on a demo instance only, so it is built here.
+  it("builds with the real build, with its action compiled against the listed Connection", async () => {
+    const directory = resolve("clients/demo/seed/apps/customer-list/1");
+    const entries = await readdir(directory, { recursive: true, withFileTypes: true });
+    const files: Record<string, string> = {};
+    for (const entry of entries.filter((candidate) => candidate.isFile())) {
+      const file = join(entry.parentPath, entry.name);
+      files[relative(directory, file).split(sep).join("/")] = await readFile(file, "utf8");
+    }
+
+    const built = await buildPage({ files: pageFiles(files) });
+
+    if (built.status !== "built") throw new Error(JSON.stringify(built.errors));
+    expect(built.kitVersion).toBe("1.1.0");
+    expect(built.manifest.connections).toEqual(["sample-business"]);
+    expect(compiledActionsOf(built.manifest)).toEqual([
+      expect.objectContaining({
+        name: "list-customers",
+        connection: "sample-business",
+        operation: "list_customers",
+        effect: "reading"
+      })
+    ]);
   });
 });

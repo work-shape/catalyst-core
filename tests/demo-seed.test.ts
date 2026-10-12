@@ -234,6 +234,11 @@ describe("the demo seed on the fixture instance", () => {
       "This instance has no Connection 'sample-business': the demo's release config brings it, so no right on it was granted."
     );
     expect(seeded().before.grants.some((row) => row.action.startsWith("connection."))).toBe(false);
+    // The App whose tile reads through that Connection could not be stored here, so it is
+    // left out and named. Fails without S3-42: the seed knew no such App.
+    expect(seeded().first.steps.find((step) => step.name === "apps")?.note).toBe(
+      "This instance lacks a Connection an App calls, so the seed left out 'customer-list' (Connection 'sample-business')."
+    );
   });
 
   it("changes nothing when it runs a second time", () => {

@@ -753,8 +753,13 @@ async function seedApps(
   }
   const workspaceId = await seedWorkspace(as, steps);
   let created = 0;
+  const leftOut: string[] = [];
   for (const app of apps) {
     const author = await as(app.savedBy);
+    if (app.connection !== undefined && !(await hasConnection(author, modules, app.connection))) {
+      leftOut.push(`'${app.name}' (Connection '${app.connection}')`);
+      continue;
+    }
     const stored = async () =>
       (await author.listApps(workspaceId)).find((candidate) => candidate.name === app.name);
     let current = await stored();
@@ -776,5 +781,27 @@ async function seedApps(
       }
     }
   }
-  steps.push({ name, created, existing: apps.length - created });
+  steps.push({
+    name,
+    created,
+    existing: apps.length - leftOut.length - created,
+    ...(leftOut.length > 0
+      ? {
+          note: `This instance lacks a Connection an App calls, so the seed left out ${leftOut.join(", ")}.`
+        }
+      : {})
+  });
+}
+
+/** Whether the instance holds the Connection an App's actions call. */
+async function hasConnection(
+  api: SeedApi,
+  modules: Awaited<ReturnType<SeedApi["listModules"]>>,
+  connection: string
+): Promise<boolean> {
+  const module = modules.find((candidate) => candidate.name === CONNECTIONS_MODULE);
+  if (module?.enabled !== true || !module.kinds.includes(CONNECTION_KIND)) {
+    return false;
+  }
+  return (await api.getAsset(CONNECTION_KIND, connection)) !== undefined;
 }

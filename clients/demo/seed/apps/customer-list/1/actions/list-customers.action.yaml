@@ -1,0 +1,14 @@
+# One named action: the tile calls it by this file's name, with the viewer's rights.
+connection: sample-business
+operation: list_customers
+effect: reading
+description: Lists customers of the sample business system, optionally of one segment.
+input:
+  schema:
+    type: object
+    properties:
+      segment: { type: string, enum: [retail, hospitality, office] }
+      limit: { type: integer, minimum: 1, maximum: 50 }
+  mapping:
+    segment: "{{segment}}"
+    limit: "{{limit}}"
