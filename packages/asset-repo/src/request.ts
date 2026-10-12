@@ -1,0 +1,134 @@
+import { OBJECT_ID } from "./git";
+
+// What the worker asks of the command, and what the command answers. Both are files, and each
+// side reads the other's as data: the command checks a request before it starts git, and the
+// worker checks a result before it believes it.
+
+/** One bundle, as the ledger names it. The order of the list is the order of the ledger. */
+export interface BundleReference {
+  /** The name of the file below the bundles directory. */
+  file: string;
+  tip: string;
+  /** The commit an incremental bundle stands on. `null` for a full bundle. */
+  prerequisite: string | null;
+}
+
+export interface CommitFolderRequest {
+  bundles: BundleReference[];
+  /** The commit the folder was written from, which becomes the parent. `null` for the first. */
+  base: string | null;
+  /** The opaque id of the user the ledger names as the author. */
+  author: string;
+  /** The time the ledger gives the revision, in seconds since 1970. */
+  time: number;
+  /** One line. The ledger makes it, so that a repeated save names the same commit. */
+  message: string;
+}
+
+export interface MaterialiseRequest {
+  bundles: BundleReference[];
+  /** The commit of the draft revision. */
+  draft: string;
+  /** Every revision of the ledger with its commit. */
+  revisions: { number: number; commit: string }[];
+}
+
+/** Why the command did nothing. `path` names the file that is the reason, where one is. */
+export interface AssetRepoRefusal {
+  status: "refused";
+  code: string;
+  path?: string;
+  message: string;
+}
+
+export type CommitFolderResult =
+  | {
+      status: "committed";
+      commit: string;
+      tree: string;
+      parent: string | null;
+      files: number;
+      /** The bundle that holds the commit, below the output directory. */
+      bundle: { file: string; kind: "full" | "incremental"; prerequisite: string | null };
+    }
+  | AssetRepoRefusal;
+
+export type MaterialiseResult =
+  { status: "materialised"; draft: string; revisions: number; commits: number } | AssetRepoRefusal;
+
+export class RequestError extends Error {}
+
+const BUNDLE_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,200}\.bundle$/u;
+const AUTHOR = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
+const MESSAGE = /^[^\u0000-\u001f\u007f]{1,200}$/u;
+
+function record(value: unknown, what: string): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new RequestError(`${what} is not an object`);
+  }
+  return Object.fromEntries(Object.entries(value));
+}
+
+function commit(value: unknown, what: string): string {
+  if (typeof value !== "string" || !OBJECT_ID.test(value)) {
+    throw new RequestError(`${what} is not a commit id`);
+  }
+  return value;
+}
+
+function list(value: unknown, what: string): unknown[] {
+  if (!Array.isArray(value)) {
+    throw new RequestError(`${what} is not a list`);
+  }
+  return [...value];
+}
+
+function bundles(value: unknown): BundleReference[] {
+  return list(value, "bundles").map((entry, index) => {
+    const bundle = record(entry, `bundles[${index}]`);
+    if (typeof bundle.file !== "string" || !BUNDLE_FILE.test(bundle.file)) {
+      throw new RequestError(`bundles[${index}].file is not the name of a bundle file`);
+    }
+    return {
+      file: bundle.file,
+      tip: commit(bundle.tip, `bundles[${index}].tip`),
+      prerequisite:
+        bundle.prerequisite === null
+          ? null
+          : commit(bundle.prerequisite, `bundles[${index}].prerequisite`)
+    };
+  });
+}
+
+export function parseCommitFolderRequest(value: unknown): CommitFolderRequest {
+  const request = record(value, "The request");
+  const { author, time, message } = request;
+  if (typeof author !== "string" || !AUTHOR.test(author)) {
+    throw new RequestError("author is not an opaque user id");
+  }
+  if (typeof time !== "number" || !Number.isSafeInteger(time) || time < 0) {
+    throw new RequestError("time is not a number of seconds");
+  }
+  if (typeof message !== "string" || !MESSAGE.test(message)) {
+    throw new RequestError("message is not one line of at most 200 characters");
+  }
+  const base = request.base === null ? null : commit(request.base, "base");
+  const named = bundles(request.bundles);
+  if ((base === null) !== (named.length === 0)) {
+    throw new RequestError("A first commit names no bundle, and every other names its base");
+  }
+  return { bundles: named, base, author, time, message };
+}
+
+export function parseMaterialiseRequest(value: unknown): MaterialiseRequest {
+  const request = record(value, "The request");
+  const revisions = list(request.revisions, "revisions").map((entry, index) => {
+    const revision = record(entry, `revisions[${index}]`);
+    const { number } = revision;
+    if (typeof number !== "number" || !Number.isSafeInteger(number) || number < 1) {
+      throw new RequestError(`revisions[${index}].number is not a revision number`);
+    }
+    return { number, commit: commit(revision.commit, `revisions[${index}].commit`) };
+  });
+  return { bundles: bundles(request.bundles), draft: commit(request.draft, "draft"), revisions };
+}

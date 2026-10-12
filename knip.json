@@ -33,6 +33,11 @@
       "project": ["src/**/*.ts"],
       "vite": false
     },
+    "packages/asset-repo": {
+      "entry": ["src/index.ts", "src/cli.ts"],
+      "project": ["src/**/*.ts"],
+      "vite": false
+    },
     "packages/client-assembly": {
       "entry": ["src/index.ts", "src/local-key-cli.ts"],
       "project": ["src/**/*.ts"],

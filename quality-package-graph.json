@@ -4,6 +4,7 @@
   "@vivd-catalyst/api-contract": ["@vivd-catalyst/asset-schemas"],
   "@vivd-catalyst/app-build": ["@vivd-catalyst/core"],
   "@vivd-catalyst/app-kit": ["@vivd-catalyst/ui"],
+  "@vivd-catalyst/asset-repo": [],
   "@vivd-catalyst/asset-schemas": [],
   "@vivd-catalyst/auth": ["@vivd-catalyst/core"],
   "@vivd-catalyst/capability-sdk": [
