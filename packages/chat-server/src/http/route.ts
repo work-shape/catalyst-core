@@ -2,6 +2,7 @@ import { checkResponse } from "./check-response";
 import { paginate, pageScope, storePage } from "./paging";
 import { timingSafeEqual } from "node:crypto";
 import {
+  isRegisteredOperation,
   operationPathParamNames,
   type Operation,
   type OperationPathParamName
@@ -177,6 +178,27 @@ type OperationBindingOf<Op extends Operation, Sent> = Omit<
 
 type OperationBinding<Op extends Operation> = OperationBindingOf<Op, FastifyReply>;
 
+/** The operation of the registry a request stands for, and the input of that operation. */
+export interface ResourceOperationTarget {
+  /** The name the registry resolves, such as `data_store.<id>.query`. */
+  operation: string;
+  input: unknown;
+}
+
+/**
+ * The route of a family of operations that exist once per resource: a Data Store, a
+ * Connection, a Knowledge Base, an App, a Workflow. The descriptor describes the route and
+ * nothing else. `target` names the resource's own operation, and the call runs as that one:
+ * its right, its policy, its run and its audit events carry that name, the same as a call of
+ * an agent or of a Workflow step. The descriptor's id is in no policy and in no audit event.
+ */
+export interface ResourceOperationBinding<Op extends Operation> {
+  target(input: OperationInput<Op>): ResourceOperationTarget;
+  /** What a caller reads when the resource has no such operation. */
+  notFound: string;
+  bodyLimitBytes?: number;
+}
+
 /**
  * What a module of the assembly registers its operations on. It is the `operation` of a route
  * of the server without the web framework: an operation of a module answers JSON or a page.
@@ -185,6 +207,11 @@ export interface ModuleRoutes {
   operation<const Op extends Operation>(
     operation: Op,
     binding: OperationBindingOf<Op, never>
+  ): void;
+  /** Registers the route of a family of per-resource operations. See the binding. */
+  resourceOperation<const Op extends Operation>(
+    operation: Op,
+    binding: ResourceOperationBinding<Op>
   ): void;
 }
 
@@ -198,6 +225,14 @@ export interface Route {
    * binding sets `recordsEveryCall`.
    */
   operation<const Op extends Operation>(operation: Op, binding: OperationBinding<Op>): void;
+  /**
+   * Registers the route of a family of operations that exist per resource. The call runs
+   * through `runOperation` as the operation `target` names, never as the descriptor.
+   */
+  resourceOperation<const Op extends Operation>(
+    operation: Op,
+    binding: ResourceOperationBinding<Op>
+  ): void;
   /** Every operation registered on this server so far, through whichever helper. */
   readonly registered: readonly Operation[];
 }
@@ -389,7 +424,75 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
       }
     });
   }
-  return Object.assign(route, { registered, operation: registerOperation });
+  function registerResourceOperation<const Op extends Operation>(
+    operation: Op,
+    binding: ResourceOperationBinding<Op>
+  ): void;
+  function registerResourceOperation(
+    operation: Operation,
+    binding: {
+      target(input: Record<string, unknown>): ResourceOperationTarget;
+      notFound: string;
+      bodyLimitBytes?: number;
+    }
+  ): void {
+    // The descriptor declares what a call of the registry answers, and is not in the registry.
+    if (!isRegisteredOperation(operation)) {
+      throw new Error(`Operation '${operation.id}' is not defined as a registered operation`);
+    }
+    if (operation.auth !== "user" && operation.auth !== "principal") {
+      throw new Error(`Operation '${operation.id}' must authenticate its caller`);
+    }
+    if (operation.response.kind !== "json") {
+      throw new Error(`Operation '${operation.id}' must answer JSON`);
+    }
+    if ((operation.requires ?? []).length > 0) {
+      throw new Error(
+        `Operation '${operation.id}' is the route of per-resource operations and names no right: the right is the resource operation's`
+      );
+    }
+    registered.push(operation);
+    app.route({
+      method: operation.method,
+      url: operation.path,
+      ...(binding.bodyLimitBytes === undefined ? {} : { bodyLimit: binding.bodyLimitBytes }),
+      handler: async (request, reply) => {
+        const { correlationId, caller, params, query, body } = await admit(
+          operation,
+          request,
+          reply
+        );
+        if (!caller.identity) {
+          throw new AppError("INTERNAL", `Operation '${operation.id}' was reached by nobody`);
+        }
+        const target = binding.target({
+          ...inputFieldsSchema.parse(body ?? {}),
+          ...inputFieldsSchema.parse(query ?? {}),
+          ...params
+        });
+        if (!(await face.registry.resolve(target.operation))) {
+          throw new AppError("NOT_FOUND", binding.notFound);
+        }
+        return face.answer(
+          operation,
+          {
+            identity: caller.identity,
+            origin: originOf(caller.identity, request),
+            correlationId,
+            input: target.input,
+            idempotencyKey: readIdempotencyKey(request),
+            runs: target.operation
+          },
+          reply
+        );
+      }
+    });
+  }
+  return Object.assign(route, {
+    registered,
+    operation: registerOperation,
+    resourceOperation: registerResourceOperation
+  });
 }
 
 /**

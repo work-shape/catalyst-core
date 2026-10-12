@@ -1,3 +1,4 @@
+import type { OperationScope } from "./identity";
 import { workflowDatasetReferenceSchema } from "./workflows";
 import { z } from "zod";
 import type { AssetKindActions } from "./asset-kinds";
@@ -85,6 +86,19 @@ export const DATA_STORE_OPERATION_RIGHTS = {
   describe: DATA_STORE_ACTIONS.read,
   preview_rows: DATA_STORE_ACTIONS.read
 } as const satisfies Record<DataStoreOperationVerb, string>;
+
+/**
+ * The scope a credential needs for each verb over HTTP. Rows have scopes of their own;
+ * `describe` reads the store's definition and stays under `config_assets:read`. A scope only
+ * caps the key: the grants of its holder still decide.
+ */
+export const DATA_STORE_OPERATION_SCOPES = {
+  query: "data_store_rows:read",
+  insert: "data_store_rows:write",
+  load: "data_store_rows:write",
+  describe: "config_assets:read",
+  preview_rows: "data_store_rows:read"
+} as const satisfies Record<DataStoreOperationVerb, OperationScope>;
 
 /**
  * What `insert` does with a row that a unique constraint of the table refuses. `fail` refuses

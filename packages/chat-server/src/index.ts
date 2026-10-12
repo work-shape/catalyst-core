@@ -9,7 +9,13 @@ import { rememberFramework } from "./http/framework";
 import { createInProcessRateLimiter } from "./http/rate-limit";
 import { createRoute, type ChatServerExtensions } from "./http/route";
 
-export type { ChatServerExtensions, ModuleRoutes, RouteRegistration } from "./http/route";
+export type {
+  ChatServerExtensions,
+  ModuleRoutes,
+  ResourceOperationBinding,
+  ResourceOperationTarget,
+  RouteRegistration
+} from "./http/route";
 export {
   createWorkflowLiveCheck,
   requireWorkflowRunAs,

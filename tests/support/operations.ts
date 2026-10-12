@@ -203,6 +203,31 @@ export const registeredTestOperations = {
       true
     )
   }),
+  /** One thing a box has, registered under the name the registry resolves for the box. */
+  testBoxRedRead: defineRegisteredOperation({
+    ...registeredTestOperation,
+    id: "test_box.red.read",
+    method: "POST",
+    path: "/api/v1/test/operations/internal/red",
+    scope: "governance:read",
+    requires: ["audit.view"],
+    effect: "reading",
+    body: z.object({ shelf: z.string() }),
+    response: json(z.object({ box: z.string(), shelf: z.string() }))
+  }),
+  /** The route of the family `test_box.<id>.read`: it names no right and is in no registry. */
+  testBoxesRead: defineRegisteredOperation({
+    ...registeredTestOperation,
+    id: "test_boxes.read",
+    method: "POST",
+    path: "/api/v1/test/operations/boxes/:box/read",
+    scope: "governance:read",
+    requires: [],
+    effect: "reading",
+    body: z.object({ shelf: z.string() }),
+    response: json(z.object({ box: z.string(), shelf: z.string() })),
+    errors: ["NOT_FOUND"]
+  }),
   /** Does what `mode` names, so one operation shows every way a changing call can end. */
   testRunChange: defineRegisteredOperation({
     ...registeredTestOperation,

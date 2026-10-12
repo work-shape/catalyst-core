@@ -85,8 +85,13 @@ export interface OperationFace {
       identity: AuthenticatedIdentity;
       origin: OperationOrigin;
       correlationId: string;
-      input: Record<string, unknown>;
+      input: unknown;
       idempotencyKey: string | undefined;
+      /**
+       * The operation of the registry the call runs as, where the descriptor is the route of
+       * a family of operations that exist per resource. Without it the descriptor's own.
+       */
+      runs?: string;
     },
     reply: FastifyReply
   ): Promise<unknown>;
@@ -191,7 +196,7 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
     async answer(operation, call, reply) {
       const outcome = await runOperation(
         {
-          operation: operation.id,
+          operation: call.runs ?? operation.id,
           effect: operation.effect,
           input: call.input,
           actor: call.identity,

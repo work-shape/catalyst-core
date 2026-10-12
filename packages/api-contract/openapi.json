@@ -14800,7 +14800,9 @@
           "config_assets:read",
           "config_assets:write",
           "config_assets:publish",
-          "config_assets:release"
+          "config_assets:release",
+          "data_store_rows:read",
+          "data_store_rows:write"
         ]
       },
       "CancelRunRequest": {
@@ -17223,7 +17225,9 @@
                 "config_assets:read",
                 "config_assets:write",
                 "config_assets:publish",
-                "config_assets:release"
+                "config_assets:release",
+                "data_store_rows:read",
+                "data_store_rows:write"
               ]
             }
           },

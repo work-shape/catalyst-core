@@ -36,7 +36,12 @@ export const FIRST_PARTY_AUTH_SCOPES = [
   // Moving the published pointer of an asset. A credential that writes drafts with
   // `config_assets:write` publishes none of them without this one.
   "config_assets:publish",
-  "config_assets:release"
+  "config_assets:release",
+  // The rows of a Data Store: reading them, and adding or loading them. The definition of a
+  // store and its migrations stay under `config_assets:*`. A scope caps what a key may be
+  // used for; whether its holder may do it is decided by the grants.
+  "data_store_rows:read",
+  "data_store_rows:write"
 ] as const;
 
 export type ChatSessionAuthScope = (typeof CHAT_SESSION_AUTH_SCOPES)[number];
