@@ -41,6 +41,7 @@ import { databaseFailureError } from "./failures";
 import { DATA_STORE_ROLE_LIMITS } from "./role-limits";
 import type { DataStoreRuntime } from "./runtime";
 import { quoteIdentifier } from "./server";
+import { withFreshSize } from "./size";
 
 // The operations on the rows of one store. Each is called through `runOperation` like every
 // other operation: this file says who may call it and what it does, as the app role of the
@@ -169,6 +170,19 @@ function sharedColumns(rows: readonly JsonObject[]): string[] {
 
 const insertedRow = z.object({ count: z.number().int() });
 
+/** A column that may be empty in a unique index of a table whose empty values are distinct. */
+const NULLABLE_KEY_COLUMN = `
+  select a.attname as column_name
+  from pg_catalog.pg_index i
+  join pg_catalog.pg_class c on c.oid = i.indrelid
+  join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+  join pg_catalog.pg_attribute a on a.attrelid = c.oid and a.attnum = any (i.indkey)
+  where n.nspname = 'public' and c.relname = $1
+    and i.indisunique and not i.indnullsnotdistinct and not a.attnotnull
+  order by a.attnum
+  limit 1
+`;
+
 const query: StoreVerb = {
   verb: "query",
   effect: "reading",
@@ -197,7 +211,8 @@ const insert: StoreVerb = {
   use: `Adds rows to one table. Use it to record new rows; it changes and removes nothing that is stored. Name the table and send each row as an object of column name to value. All rows of one call name the same columns, and a column that is left out takes its default. "onConflict" says what happens to a row that a unique constraint of the table refuses: "fail", the default, adds no row of the call; "skip" leaves that row out and adds the others, which makes sending the same rows again safe. One call adds at most ${DATA_STORE_INSERT_MAX_ROWS} rows and ${DATA_STORE_INSERT_MAX_BYTES} bytes.`,
   async run({ runtime, store, target }, call) {
     const input = insertInputSchema.parse(call);
-    const { record } = store;
+    // Against a size of this minute: measured now where the stored one is older or missing.
+    const record = await withFreshSize(runtime, store.record, target.signal);
     if (record.sizeBytes !== undefined && record.sizeBytes >= record.sizeLimitBytes) {
       throw new AppError(
         "CONFLICT",
@@ -230,6 +245,25 @@ const insert: StoreVerb = {
         `The table '${table.name}' has no column '${unknown}' that an insert sets`,
         { reason: "column_unknown" }
       );
+    }
+    if (input.onConflict === "skip") {
+      // Two rows that are empty in a column of a key never conflict, so `skip` would not skip.
+      const loose = z.array(z.object({ column_name: z.string() })).parse(
+        (
+          await runtime.server.executor.query({
+            ...target,
+            sql: NULLABLE_KEY_COLUMN,
+            parameters: [table.name]
+          })
+        ).rows
+      )[0];
+      if (loose) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          `The table '${table.name}' has a unique constraint over the column '${loose.column_name}', which may be empty: rows that are empty there never conflict, so 'skip' would add the same row again. Make the column NOT NULL, or the constraint NULLS NOT DISTINCT.`,
+          { reason: "nullable_key", column: loose.column_name }
+        );
+      }
     }
     const names = columns.map(quoteIdentifier).join(", ");
     // The rows are one bound value. Postgres reads each column of it by the column's type.

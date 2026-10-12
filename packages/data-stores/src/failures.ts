@@ -5,6 +5,9 @@ import { AppError, type AppErrorCode } from "@vivd-catalyst/core";
 // value, so none is passed on: a failure is a fixed sentence for its SQLSTATE, with the code.
 
 const SQLSTATE_SENTENCES: Readonly<Record<string, string>> = {
+  "0A000": "asks for something the database does not support",
+  "25001": "holds a statement that cannot run inside a transaction",
+  "2D000": "tried to end the transaction it runs in",
   "23502": "leaves a column empty that must hold a value",
   "23503": "names a row that another table does not hold",
   "23505": "would store a value twice that must be unique",
