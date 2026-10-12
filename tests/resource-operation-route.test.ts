@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { registeredTestOperations as operations } from "./support/operations";
+import {
+  registeredTestOperations,
+  resourceRouteTestOperations as operations
+} from "./support/operations";
 import { clientInstanceId, createServer, errorOf, person } from "./support/operation-server";
 import type { TestRoute } from "./support/test-instance";
 
@@ -83,7 +86,7 @@ describe("the route of a family of per-resource operations", () => {
       createServer({
         register(route: TestRoute) {
           // The right is the resource operation's: a second one on the route is a second rule.
-          route.resourceOperation(operations.testRunRead, {
+          route.resourceOperation(registeredTestOperations.testRunRead, {
             target: ({ itemId }) => ({ operation: `test_item.${itemId}.read`, input: {} }),
             notFound: "The item is not available"
           });

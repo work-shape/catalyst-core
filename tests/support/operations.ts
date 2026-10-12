@@ -203,6 +203,29 @@ export const registeredTestOperations = {
       true
     )
   }),
+  /** Does what `mode` names, so one operation shows every way a changing call can end. */
+  testRunChange: defineRegisteredOperation({
+    ...registeredTestOperation,
+    id: "testRunChange",
+    method: "POST",
+    path: "/api/v1/test/operations/items",
+    scope: "governance:write",
+    requires: ["users.manage"],
+    effect: "changing",
+    body: z.object({
+      name: z.string().min(1),
+      mode: z.enum(["ok", "not-found", "throw", "large", "gated", "own-right"]).default("ok")
+    }),
+    response: json(z.object({ name: z.string(), filler: z.string().optional() })),
+    errors: ["NOT_FOUND"]
+  })
+};
+
+/**
+ * The fixtures of a route of a family of per-resource operations. They are a catalog of their
+ * own, since the first is named as a resource's operation is and no client has a method for it.
+ */
+export const resourceRouteTestOperations = {
   /** One thing a box has, registered under the name the registry resolves for the box. */
   testBoxRedRead: defineRegisteredOperation({
     ...registeredTestOperation,
@@ -226,22 +249,6 @@ export const registeredTestOperations = {
     effect: "reading",
     body: z.object({ shelf: z.string() }),
     response: json(z.object({ box: z.string(), shelf: z.string() })),
-    errors: ["NOT_FOUND"]
-  }),
-  /** Does what `mode` names, so one operation shows every way a changing call can end. */
-  testRunChange: defineRegisteredOperation({
-    ...registeredTestOperation,
-    id: "testRunChange",
-    method: "POST",
-    path: "/api/v1/test/operations/items",
-    scope: "governance:write",
-    requires: ["users.manage"],
-    effect: "changing",
-    body: z.object({
-      name: z.string().min(1),
-      mode: z.enum(["ok", "not-found", "throw", "large", "gated", "own-right"]).default("ok")
-    }),
-    response: json(z.object({ name: z.string(), filler: z.string().optional() })),
     errors: ["NOT_FOUND"]
   })
 };
@@ -278,6 +285,7 @@ export const testOperations = {
   testStream: fixtureOperation("GET", "/stream"),
   ...routeTestOperations,
   ...registeredTestOperations,
+  ...resourceRouteTestOperations,
   testProviderError: fixtureOperation("GET", "/test-provider-error"),
   testInternalError: fixtureOperation("GET", "/test-internal-error"),
   testExposedError: fixtureOperation("GET", "/test-exposed-error"),
