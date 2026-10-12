@@ -1,9 +1,14 @@
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import { type Locator, type Page } from "@playwright/test";
 import { expect, test } from "./test";
 import { loadNewerVersion } from "./build-fixtures";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
+/** Where the pictures of the conflict notice go, and in which theme. Unset, none is taken. */
+const shotsDir = process.env.E2E_SHOTS_DIR;
+const shotsTheme = process.env.E2E_SHOTS_THEME === "dark" ? "dark" : "light";
 const superadminUser = {
   email: "e2e-superadmin@example.test",
   password: "e2e-superadmin-password"
@@ -361,6 +366,12 @@ test("a newer version that cannot be loaded leaves the page as it is and says so
   await deleteSkill(page, name);
   await putSkill(page, name, "The first text.");
   try {
+    if (shotsDir) {
+      await page.addInitScript(
+        (theme) => window.localStorage.setItem("vivd-catalyst:theme", theme),
+        shotsTheme
+      );
+    }
     await page.setViewportSize(WIDE);
     await page.goto(`/build/skills/${name}`);
     await content(page).fill("My unsaved text.");
@@ -370,6 +381,13 @@ test("a newer version that cannot be loaded leaves the page as it is and says so
     await expect(conflict).toContainText(
       /E2E Superadmin saved this on .+, while you were editing\./u
     );
+    if (shotsDir) {
+      await mkdir(shotsDir, { recursive: true });
+      await page.screenshot({
+        path: join(shotsDir, `build-conflict-${shotsTheme}.png`),
+        animations: "disabled"
+      });
+    }
 
     // The read behind "Load the newer version" fails: the notice stays, the text stays, and
     // the page says that the load failed. It does not show the old version as the new one.
