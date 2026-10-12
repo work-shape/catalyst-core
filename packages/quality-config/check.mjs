@@ -2,7 +2,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { availableParallelism } from "node:os";
 import { getHeapStatistics } from "node:v8";
 import { ESLint } from "eslint";
 import { getFileInfo } from "prettier";
@@ -16,12 +17,13 @@ const target = process.argv[2] ?? "";
 const here = dirname(fileURLToPath(import.meta.url));
 const formatted = "js,jsx,mjs,cjs,ts,tsx,mts,cts,json,css,scss,html,yml,yaml".split(",");
 
-// The lint and the type checks each keep whole TypeScript programs in memory. Measured on
-// 12 October 2026: the lint needs 3.2 GB, the type check of the tests 2.2 GB, the type check
-// of the packages 1.5 GB. Node sizes its heap by the machine: 4 GB on a runner with 16 GB of
-// memory, 2 GB on one with 8 GB, where first the lint and later the type check of the tests
-// ran out of memory. On a smaller heap than this every target starts itself again with this
-// one, so no caller has to set it and no target is left on the machine's default.
+// The type checks and each part of the lint keep whole TypeScript programs in memory. Measured
+// on 12 October 2026: the type check of the tests needs 2.2 GB, the largest part of the lint
+// and the type check of the packages 1.5 GB each. Node sizes its heap by the machine: 4 GB on
+// a runner with 16 GB of memory, 2 GB on one with 8 GB, where first the lint and later the
+// type check of the tests ran out of memory. On a smaller heap than this every target starts
+// itself again with this one, so no caller has to set it and no target is left on the
+// machine's default. It is the ceiling: a target that nears it is split, as the lint was.
 const heapMegabytes = 4096;
 if (
   getHeapStatistics().heap_size_limit < heapMegabytes * 1024 * 1024 &&
@@ -98,6 +100,82 @@ const parseProject = (config) => {
   return ts.parseJsonConfigFileContent(result.config, ts.sys, dirname(resolve(root, config)));
 };
 
+// The typed lint needs a TypeScript program. One program for the whole repository, checked in
+// one process, needed 3.2 GB. The lint therefore runs in parts: each process takes this many
+// files in the order Git lists them, which keeps a package together, and builds a program from
+// those files and what they import. The largest part needs under half of `heapMegabytes`.
+const lintFilesPerProcess = 150;
+const partFlag = "--lint-part=";
+/** @typedef {{ messages: { rule: string, file: string, detail: string }[], files: string[] }} LintPart */
+
+/**
+ * Lints one part in this process.
+ * @param {string[]} part
+ * @returns {Promise<LintPart>}
+ */
+const lintPart = async (part) => {
+  const parsed = parseProject("tsconfig.lint.json");
+  // A declaration file and a file that declares globals or adds to another module change types
+  // in files that never import them, so every part's program has all of them.
+  const ambient = parsed.fileNames.filter(
+    (file) =>
+      file.endsWith(".d.ts") || /\bdeclare\s+(?:global|module)\b/.test(readFileSync(file, "utf8"))
+  );
+  const typed = part.filter((file) => /\.[cm]?tsx?$/.test(file)).map((file) => resolve(root, file));
+  const program = ts.createProgram([...typed, ...ambient], parsed.options);
+  const eslint = new ESLint({
+    cwd: root,
+    warnIgnored: false,
+    overrideConfig: [
+      {
+        files: ["**/*.{ts,tsx,mts,cts}"],
+        languageOptions: { parserOptions: { project: null, programs: [program] } }
+      }
+    ]
+  });
+  const results = await eslint.lintFiles(part);
+  /** @type {LintPart} */
+  const found = { messages: [], files: results.map((result) => result.filePath) };
+  for (const result of results) {
+    // Every message counts, whatever its severity: a rule set to "warn" still fails.
+    for (const message of [...result.messages, ...result.suppressedMessages]) {
+      const rule =
+        message.ruleId ??
+        (message.message.includes("noInlineConfig") ? "eslint/inline-config" : undefined);
+      if (message.fatal || !rule)
+        throw new Error(`${relative(root, result.filePath)}: ${message.message}`);
+      found.messages.push({
+        rule,
+        file: result.filePath,
+        detail: `${message.line}:${message.column} ${message.message}`
+      });
+    }
+  }
+  return found;
+};
+
+/**
+ * Starts this program again for one part and returns what it printed.
+ * @param {number} index
+ * @returns {Promise<LintPart>}
+ */
+const startPart = (index) =>
+  new Promise((done, failed) => {
+    const child = spawn(
+      process.execPath,
+      [...process.execArgv, process.argv[1] ?? "", "lint", `${partFlag}${index}`],
+      { cwd: root, stdio: ["ignore", "pipe", "inherit"] }
+    );
+    /** @type {Buffer[]} */
+    const output = [];
+    child.stdout.on("data", (chunk) => output.push(chunk));
+    child.on("error", failed);
+    child.on("close", (status) => {
+      if (status === 0) done(JSON.parse(Buffer.concat(output).toString("utf8")));
+      else failed(new Error(`lint part ${index} failed with status ${status}`));
+    });
+  });
+
 if (target === "format") {
   const patterns = [`**/*.{${formatted.join(",")}}`];
   const prettier = [resolve(here, "node_modules/prettier/bin/prettier.cjs")];
@@ -125,21 +203,28 @@ if (target === "format") {
     }
   }
 } else if (target === "lint") {
-  const eslint = new ESLint({ cwd: root, warnIgnored: false });
-  const results = await eslint.lintFiles(
-    files.filter((file) => /\.(?:[cm]?[jt]s|[jt]sx)$/.test(file))
-  );
-  for (const result of results) {
-    // Every message counts, whatever its severity: a rule set to "warn" still fails.
-    for (const message of [...result.messages, ...result.suppressedMessages]) {
-      const rule =
-        message.ruleId ??
-        (message.message.includes("noInlineConfig") ? "eslint/inline-config" : undefined);
-      if (message.fatal || !rule)
-        throw new Error(`${relative(root, result.filePath)}: ${message.message}`);
-      report(rule, result.filePath, `${message.line}:${message.column} ${message.message}`);
-    }
+  const lintable = files.filter((file) => /\.(?:[cm]?[jt]s|[jt]sx)$/.test(file));
+  const parts = Math.ceil(lintable.length / lintFilesPerProcess);
+  const own = process.argv.find((argument) => argument.startsWith(partFlag));
+  if (own) {
+    // One part of the lint, started by the run below: it prints what it found and stops here.
+    const index = Number(own.slice(partFlag.length));
+    const part = await lintPart(
+      lintable.slice(index * lintFilesPerProcess, (index + 1) * lintFilesPerProcess)
+    );
+    await new Promise((done) => process.stdout.write(JSON.stringify(part), done));
+    process.exit(0);
   }
+  /** @type {LintPart[]} */
+  const linted = Array.from({ length: parts });
+  let next = 0;
+  const worker = async () => {
+    for (let index = next++; index < parts; index = next++) linted[index] = await startPart(index);
+  };
+  await Promise.all(Array.from({ length: Math.min(3, availableParallelism(), parts) }, worker));
+  for (const part of linted)
+    for (const message of part.messages) report(message.rule, message.file, message.detail);
+  const results = linted.flatMap((part) => part.files.map((filePath) => ({ filePath })));
 
   // Knip owns unused files, exports and dependencies, and imports that no manifest declares.
   // It exits with 1 when it has findings.
