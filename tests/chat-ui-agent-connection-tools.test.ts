@@ -128,7 +128,9 @@ describe("tools of Connections on the agent page", () => {
     });
 
     // The instance's own tools keep their group, and the Connections are a second one.
-    expect(markup).toContain('<legend class="sr-only">Tools</legend>');
+    expect(markup).toContain('<legend class="text-label">Instance tools</legend>');
+    expect(markup).toContain("Tools this instance provides itself.");
+    expect(markup).toContain('<legend class="text-label">Connections</legend>');
     expect(markup).toContain('data-tool-group="connections"');
     expect(markup).toContain('data-connection-tools="crm"');
     expect(markup).toContain("Customer records");
@@ -162,7 +164,18 @@ describe("tools of Connections on the agent page", () => {
     for (const toolName of held) {
       expect(markup).toContain(`data-unavailable-option="${toolName}"`);
     }
-    expect(markup).toContain("The agent keeps it until you remove it.");
+    // They stand in a group of their own after the Connections, not inside one of them.
+    const group = markup.slice(markup.indexOf('data-tool-group="unavailable"'));
+    expect(markup.indexOf('data-tool-group="connections"')).toBeLessThan(
+      markup.length - group.length
+    );
+    expect(group).toContain('<legend class="text-label">No longer available</legend>');
+    expect(group).toContain(
+      "These tools are no longer offered to this agent. The agent keeps each one until you remove it."
+    );
+    for (const toolName of held) {
+      expect(group).toContain(`data-unavailable-option="${toolName}"`);
+    }
     expect(markup).toContain('aria-label="Remove"');
     // The reader learns nothing of a Connection the instance did not answer.
     expect(markup).not.toContain('data-connection-tools="payroll"');
@@ -226,6 +239,11 @@ describe("tools of Connections on the agent page", () => {
     expect(markup).toContain("Verbindungen");
     expect(markup).toContain("0 von 2 ausgewählt");
     expect(markup).toContain("Verbindung öffnen");
-    expect(markup).toContain("bis du sie entfernst");
+    expect(markup).toContain("Werkzeuge der Instanz");
+    expect(markup).toContain("Werkzeuge, die diese Instanz selbst bereitstellt.");
+    expect(markup).toContain("Nicht mehr verfügbar");
+    expect(markup).toContain(
+      "Diese Werkzeuge werden diesem Agenten nicht mehr angeboten. Der Agent behält sie, bis du sie entfernst."
+    );
   });
 });

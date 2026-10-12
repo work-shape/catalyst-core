@@ -3273,7 +3273,9 @@ test("superadmin config follows the German locale", async ({ page }) => {
     await expect(form.getByRole("heading", { name: section, level: 2, exact: true })).toBeVisible();
   }
   await expect(form.getByText("Denkaufwand", { exact: true })).toBeVisible();
-  await expect(form.getByRole("group", { name: "Werkzeuge", exact: true })).toBeVisible();
+  await expect(
+    form.getByRole("group", { name: "Werkzeuge der Instanz", exact: true })
+  ).toBeVisible();
   await expect(
     form.getByRole("heading", { name: "Einstiegsvorschläge", level: 2, exact: true })
   ).toBeVisible();
@@ -3377,8 +3379,10 @@ test("superadmin manages config assets with validation and conflict protection",
     await clickAgent();
     // Nothing was changed yet, so there is nothing to save.
     await expect(form().getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
-    await expect(fieldset("Tools").getByLabel("read_skill", { exact: true })).toBeVisible();
-    await expect(fieldset("Tools").getByLabel("show_view", { exact: true })).toBeVisible();
+    await expect(
+      fieldset("Instance tools").getByLabel("read_skill", { exact: true })
+    ).toBeVisible();
+    await expect(fieldset("Instance tools").getByLabel("show_view", { exact: true })).toBeVisible();
     const firstPromptText = fieldset("Prompt 1").getByRole("textbox", { name: /^Prompt/u });
     // The agent's models: the one that runs it, with its reasoning effort, and the ones people
     // may choose instead.
@@ -3432,7 +3436,7 @@ test("superadmin manages config assets with validation and conflict protection",
     ).toBeVisible();
     await expectVersion(original.version + 1);
 
-    await fieldset("Tools").getByLabel("read_skill", { exact: true }).check();
+    await fieldset("Instance tools").getByLabel("read_skill", { exact: true }).check();
     const updatedPrompt = `Keep this saved prompt ${Date.now()}.`;
     await firstPromptText.fill(updatedPrompt);
     await form().getByRole("button", { name: "Save changes", exact: true }).click();

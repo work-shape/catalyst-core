@@ -77,6 +77,7 @@ export function FieldRefusals({ messages }: { messages: readonly string[] }) {
 
 export function CheckboxGroup({
   label,
+  description,
   options,
   optionLabel,
   selected,
@@ -87,6 +88,11 @@ export function CheckboxGroup({
   onChange
 }: {
   label: string;
+  /**
+   * One line under the label. With it the label is a heading that shows, for a group that
+   * stands beside other groups of its section.
+   */
+  description?: string;
   options: readonly string[];
   /** Human-readable text for options that are ids rather than names. */
   optionLabel?: (option: string) => string;
@@ -106,7 +112,8 @@ export function CheckboxGroup({
 
   return (
     <fieldset className="grid min-w-0 gap-3">
-      <legend className="sr-only">{label}</legend>
+      <legend className={description ? "text-label" : "sr-only"}>{label}</legend>
+      {description ? <p className="text-caption text-muted-foreground">{description}</p> : null}
       {options.length === 0 ? (
         <p className="text-body text-muted-foreground">{emptyHint}</p>
       ) : (

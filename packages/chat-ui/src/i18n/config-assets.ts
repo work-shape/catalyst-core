@@ -114,6 +114,8 @@ export const configAssets = defineTranslations({
     configSystemPromptHint: "The agent's system prompt.",
     configTitle: "Title",
     configTools: "Tools",
+    configToolsOfInstance: "Instance tools",
+    configToolsOfInstanceHint: "Tools this instance provides itself.",
     configWelcomeMessage: "Welcome message",
     configWelcomeSubtitle: "Welcome subtitle"
   },
@@ -239,6 +241,8 @@ export const configAssets = defineTranslations({
     configSystemPromptHint: "Die Systemanweisung des Agenten.",
     configTitle: "Titel",
     configTools: "Werkzeuge",
+    configToolsOfInstance: "Werkzeuge der Instanz",
+    configToolsOfInstanceHint: "Werkzeuge, die diese Instanz selbst bereitstellt.",
     configWelcomeMessage: "Begrüßungsnachricht",
     configWelcomeSubtitle: "Begrüßungsuntertitel"
   }

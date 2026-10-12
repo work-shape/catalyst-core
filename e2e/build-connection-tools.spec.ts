@@ -99,7 +99,16 @@ test("an operation of a Connection is ticked on an agent, saved and still ticked
     await expect(group).toContainText("Reading");
     // The name nothing offers stays, marked.
     const unavailable = tools.locator(`[data-unavailable-option="${gone}"]`);
-    await expect(unavailable).toContainText("The agent keeps it until you remove it.");
+    await expect(unavailable).toContainText(gone);
+    // It stands in a group of its own, after the Connections.
+    const unavailableGroup = tools.getByRole("group", { name: "No longer available", exact: true });
+    await expect(unavailableGroup.locator(`[data-unavailable-option="${gone}"]`)).toBeVisible();
+    await expect(unavailableGroup).toContainText(
+      "These tools are no longer offered to this agent. The agent keeps each one until you remove it."
+    );
+    await expect(tools.getByRole("group", { name: "Instance tools", exact: true })).toContainText(
+      "Tools this instance provides itself."
+    );
 
     await box.click();
     await expect(group).toContainText("1 of 1 selected");

@@ -307,13 +307,13 @@ export function AgentEditor({
       label: t("configTools"),
       count: form.toolNames.length,
       refusalField: "tools",
-      // One group per source of tools: the instance's own first, under the section's heading,
-      // then the Connections under a heading of their own. A further source is a further
-      // sibling with its heading.
+      // One group per source of tools, each a sibling with its heading: the instance's own,
+      // then the Connections. A further source is a further sibling.
       body: (
         <>
           <CheckboxGroup
-            label={t("configTools")}
+            label={t("configToolsOfInstance")}
+            description={t("configToolsOfInstanceHint")}
             options={toolOptions(references, form.toolNames)}
             selected={form.toolNames}
             unavailable={(references?.moduleOffTools ?? []).map((tool) => ({

@@ -106,8 +106,6 @@ export const connections = defineTranslations({
     "connections.testNotAllowed":
       "You can read this connection. Testing it needs the right to change connections on the instance.",
     "connections.testRefused": "You may not test this connection. You can read it.",
-    "connections.toolUnavailable":
-      "Not available: the connection or the operation is gone, switched off, not offered to agents, or you may not see it. The agent keeps it until you remove it.",
     "connections.toolsEmpty": "No connection you may read offers an operation to agents.",
     "connections.toolsHeld": "Tools of connections this agent holds",
     "connections.toolsHint":
@@ -115,6 +113,9 @@ export const connections = defineTranslations({
     "connections.toolsLoading": "The connections are being checked.",
     "connections.toolsOpenConnection": "Open connection",
     "connections.toolsSelected": "{selected} of {count} selected",
+    "connections.toolsUnavailableText":
+      "These tools are no longer offered to this agent. The agent keeps each one until you remove it.",
+    "connections.toolsUnavailableTitle": "No longer available",
     "connections.toolsUnknown":
       "The connections could not be read, so this was not checked. The agent keeps it until you remove it."
   },
@@ -227,8 +228,6 @@ export const connections = defineTranslations({
     "connections.testNotAllowed":
       "Sie können diese Verbindung lesen. Zum Testen brauchen Sie das Recht, Verbindungen der Instanz zu ändern.",
     "connections.testRefused": "Sie dürfen diese Verbindung nicht testen. Lesen können Sie sie.",
-    "connections.toolUnavailable":
-      "Nicht verfügbar: Die Verbindung oder die Operation gibt es nicht mehr, sie ist aus, wird Agenten nicht angeboten oder du darfst sie nicht sehen. Der Agent behält sie, bis du sie entfernst.",
     "connections.toolsEmpty":
       "Keine Verbindung, die du lesen darfst, bietet Agenten eine Operation an.",
     "connections.toolsHeld": "Werkzeuge von Verbindungen, die dieser Agent führt",
@@ -237,6 +236,9 @@ export const connections = defineTranslations({
     "connections.toolsLoading": "Die Verbindungen werden geprüft.",
     "connections.toolsOpenConnection": "Verbindung öffnen",
     "connections.toolsSelected": "{selected} von {count} ausgewählt",
+    "connections.toolsUnavailableText":
+      "Diese Werkzeuge werden diesem Agenten nicht mehr angeboten. Der Agent behält sie, bis du sie entfernst.",
+    "connections.toolsUnavailableTitle": "Nicht mehr verfügbar",
     "connections.toolsUnknown":
       "Die Verbindungen ließen sich nicht lesen, deshalb wurde das nicht geprüft. Der Agent behält es, bis du es entfernst."
   }

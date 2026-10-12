@@ -22,9 +22,9 @@ On an instance with the module [`connections`](/configure/modules/#connections) 
 
 ## Giving an agent the tools of a Connection
 
-The **Tools** section of an agent's page lists the instance's own tools first and then, under **Connections**, one group for each Connection you may read (`connection.read`). A group holds a check box for each operation that agents may call and that is enabled and ready, with its description and whether it reads or changes. Ticking a box gives the agent the tool `connection.<name>.<operation>`. A group with more than 12 operations starts folded and shows how many of its operations the agent holds.
+The **Tools** section of an agent's page lists the instance's own tools under **Instance tools** and then, under **Connections**, one group for each Connection you may read (`connection.read`). A group holds a check box for each operation that agents may call and that is enabled and ready, with its description and whether it reads or changes. Ticking a box gives the agent the tool `connection.<name>.<operation>`. A group with more than 12 operations starts folded and shows how many of its operations the agent holds.
 
-A tool the agent already holds whose Connection or operation is gone, switched off, not offered to agents or not visible to you stays in the list, marked as not available. Saving keeps it until you remove it. At run time the agent goes on without such a tool.
+A tool the agent already holds whose Connection or operation is gone, switched off, not offered to agents or not visible to you stays on the page in a group **No longer available** at the end of the section. Saving keeps it until you remove it. At run time the agent goes on without such a tool.
 
 The instance checks on save that a name starting with `connection.` has the form `connection.<name>.<operation>`. It does not check that the Connection or the operation exists, because Connections change without a release.
 

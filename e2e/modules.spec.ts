@@ -156,7 +156,7 @@ test("an admin removes a tool of a module that is off from an agent and saves", 
     // The agent's page in the Build area.
     await page.goto(`/build/agents/${agentName}`);
     const form = page.locator("form");
-    const tools = form.getByRole("group", { name: "Tools", exact: true });
+    const tools = form.getByRole("group", { name: "Instance tools", exact: true });
     // The tool is not on offer, and the agent's reference to it is there to see and to remove.
     await expect(tools.getByLabel(staleTool, { exact: true })).toHaveCount(0);
     const stale = tools.locator(`[data-unavailable-option="${staleTool}"]`);
