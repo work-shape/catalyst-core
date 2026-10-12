@@ -553,11 +553,11 @@ test_deploy() {
   local app_dir=/opt/vivd-catalyst/fixture path
   for path in docker-compose.prod.yml deploy/Caddyfile backup-postgres.sh restore-postgres.sh \
     deploy/systemd/vivd-catalyst-fixture-backup.service \
-    deploy/systemd/vivd-catalyst-fixture-backup.timer
+    deploy/systemd/vivd-catalyst-fixture-backup.timer check-upload.mjs
   do
     assert_contains "$capture/rsync.log" " deploy@host.example.test $app_dir/$path "
   done
-  [[ "$(wc -l < "$capture/rsync.log" | tr -d ' ')" == "6" ]] \
+  [[ "$(wc -l < "$capture/rsync.log" | tr -d ' ')" == "7" ]] \
     || fail "deploy sent files that are not part of a release"
   if grep -R -q '@INSTANCE' "$capture/host"; then
     fail "a host file was sent with an unfilled placeholder"
@@ -635,6 +635,7 @@ echo "backup-postgres.sh $* prefix=$BACKUP_PREFIX app=$APP_DIR env=$ENV_FILE" >>
 [[ "${HOST_BACKUP_FAILS:-0}" != "1" ]]
 SH
   cp "$app_dir/backup-postgres.sh" "$app_dir/restore-postgres.sh"
+  cp "$kit_dir/host/check-upload.mjs" "$app_dir/"
   chmod +x "$bin"/* "$app_dir"/*.sh
   printf 'POSTGRES_DB=agent_chat\nPUBLIC_HOSTNAMES=a.example.test,b.example.test\nIMAGE_TAG=previous\n' \
     > "$host/app.env"
@@ -673,7 +674,8 @@ test_remote_deploy() {
     "docker $profile up -d api doc-worker artifact-preview-worker ui caddy workspace-command-worker" \
     "docker $profile exec -T api node -e" \
     "docker $profile up -d --no-deps --no-recreate --scale agent-run-worker=2 agent-run-worker" \
-    "docker inspect -f {{.Config.Image}} {{.State.Running}} api-new"
+    "docker inspect -f {{.Config.Image}} {{.State.Running}} api-new" \
+    "docker $profile exec -T api sh -c printf %s \"\$CHAT_SERVER_CREDENTIAL\" | node --input-type=module -e"
   do
     current="$(line_of "$log" "$step")"
     [[ -n "$current" ]] || fail "remote deploy did not run: $step"
@@ -716,6 +718,18 @@ test_remote_deploy() {
     assert_contains "$host/output" "Service $service is not running the release image"
   done
 
+  # The services run, and then a file has to get through them.
+  assert_contains "$scratch/host/output" "upload-check: a file uploaded as catalyst-deploy-check was processed"
+  host="$scratch/host-upload-stuck"
+  if run_remote_deploy "$capture" "$host" HOST_UPLOAD_CHECK=stuck; then
+    fail "remote deploy passed although the uploaded file was not processed"
+  fi
+  assert_contains "$host/output" 'its state is still "queued"'
+  assert_contains "$host/output" \
+    "upload-check: job of the file: conversation_attachment.preprocess is queued, attempt 0 of 3"
+  assert_contains "$host/output" "The upload check failed: $release runs"
+  assert_contains "$host/log" "logs --tail=50 doc-worker"
+
   # Without execution workspaces neither the worker nor the runner is touched.
   has_host_bash "the deploy without execution workspaces" || return 0
   capture="$scratch/deploy-capture-without-workspaces"
@@ -732,6 +746,67 @@ test_remote_deploy() {
   assert_not_contains "$host/log" "execution-workspaces"
   assert_not_contains "$host/log" "catalyst-runner-base"
   assert_not_contains "$host/log" "workspace-command-worker"
+}
+
+# Runs host/check-upload.mjs against the fake API in mode $2, as the deploy does: the script
+# as the argument of "-e", the credential ($3, default the fixture's) on stdin. Output and API
+# log land in $1.
+run_upload_check() {
+  local dir="$1" mode="$2" credential="${3-fixture-credential}" api status=0
+  mkdir -p "$dir"
+  : > "$dir/api.log"
+  rm -f "$dir/port"
+  node "$kit_dir/tests/support/upload-api.mjs" "$mode" "$dir/api.log" "$dir/port" &
+  api=$!
+  for _ in $(seq 50); do [[ -s "$dir/port" ]] && break; command sleep 0.1; done
+  printf '%s' "$credential" | node --input-type=module -e "$(cat "$kit_dir/host/check-upload.mjs")" -- \
+    --release=staging-2026.10.06-1 --wait=1 "--api=http://127.0.0.1:$(cat "$dir/port")" \
+    > "$dir/output" 2>&1 || status=$?
+  kill "$api" 2> /dev/null || true
+  wait "$api" 2> /dev/null || true
+  return "$status"
+}
+
+test_upload_check() {
+  local dir="$scratch/upload-check" removed
+  removed="DELETE /api/v1/conversations/conv_fixture Bearer fixture-token"
+
+  # A file that gets processed: signed in with the server credential as the check's own user,
+  # with the two conversation scopes, and everything it made is deleted.
+  run_upload_check "$dir/ready" ready || { cat "$dir/ready/output" >&2; fail "upload check failed"; }
+  assert_contains "$dir/ready/output" "upload-check: a file uploaded as catalyst-deploy-check was processed"
+  assert_contains "$dir/ready/api.log" "POST /api/v1/instance/session-tokens server-credential"
+  assert_contains "$dir/ready/api.log" "token for catalyst-deploy-check with conversation:read,conversation:write"
+  assert_contains "$dir/ready/api.log" "title Deploy check staging-2026.10.06-1 (synthetic, safe to delete)"
+  assert_contains "$dir/ready/api.log" "file deploy-check-synthetic.txt true"
+  assert_contains "$dir/ready/api.log" "DELETE /api/v1/conversations/conv_fixture/draft-attachments/att_fixture"
+  assert_contains "$dir/ready/api.log" "$removed"
+  assert_not_contains "$dir/ready/output" "fixture-credential"
+
+  # A file nobody processes fails after the wait, names its state and the attachment for the
+  # job lookup, and is removed all the same. So is one whose processing failed.
+  if run_upload_check "$dir/stuck" stuck; then fail "upload check passed for a file that stays queued"; fi
+  assert_contains "$dir/stuck/output" \
+    'upload-check: FAILED: the file was not processed within 1 s: its state is still "queued"'
+  assert_contains "$dir/stuck/output" "upload-check: attachment=att_fixture"
+  assert_contains "$dir/stuck/api.log" "$removed"
+  if run_upload_check "$dir/failed" failed; then fail "upload check passed for a failed file"; fi
+  assert_contains "$dir/failed/output" 'its state is "failed" (the converter gave up)'
+  assert_contains "$dir/failed/api.log" "$removed"
+
+  # What it cannot do is said in one line: sign in, and remove its conversation.
+  if run_upload_check "$dir/no-tokens" no-session-tokens; then fail "upload check passed without a sign-in"; fi
+  assert_contains "$dir/no-tokens/output" "this instance issues no session tokens (auth.sessionToken"
+  if run_upload_check "$dir/no-credential" ready ""; then
+    fail "upload check passed without the server credential"
+  fi
+  assert_contains "$dir/no-credential/output" "CHAT_SERVER_CREDENTIAL is not set in this container"
+  [[ ! -s "$dir/no-credential/api.log" ]] || fail "upload check called the API without a credential"
+  if run_upload_check "$dir/kept" keeps-conversation; then
+    fail "upload check passed although its conversation stayed"
+  fi
+  assert_contains "$dir/kept/output" \
+    'conversation conv_fixture "Deploy check staging-2026.10.06-1 (synthetic, safe to delete)" was not removed'
 }
 
 # Backup and restore run on the host; docker is replaced and logs its arguments.
@@ -1044,6 +1119,7 @@ test_release_manifest
 test_publish
 test_deploy
 test_remote_deploy
+test_upload_check
 test_host_backup_scripts
 test_deployment_policy
 test_worker_isolation_guards

@@ -443,6 +443,19 @@ id from config_assets where status = 'deleted')`.
   `approval_requests.count_pending` also answers `mine: { pending, total }`. A migration adds the
   index `approval_requests_client_requester_idx` to `approval_requests` and changes no data.
 
+- **Deployment kit, upload check:** a deploy now ends by putting a file through the instance.
+  `host/check-upload.mjs` runs in the `api` container, creates a conversation as the user
+  `catalyst-deploy-check` ("Deploy check (synthetic)"), uploads one small text file, waits up
+  to 60 s until it is `ready` and deletes both again. A file that is not processed fails the
+  deploy with its state and the job behind it, for example
+  `conversation_attachment.preprocess is queued, attempt 0 of 3`. **Operators:** the check signs
+  in with `CHAT_SERVER_CREDENTIAL`, which the `api` service already holds, through
+  `POST /api/v1/instance/session-tokens`; an instance without `auth.sessionToken` fails the
+  check with that reason. Nothing is to be provisioned. The user `catalyst-deploy-check`
+  appears among the instance's users after the first deploy and each run leaves two audit
+  events. An instance with `retention.allowUserDelete: false` cannot remove the check's
+  conversation and fails the check, naming the conversation.
+
 ### Changed
 
 - **Every process of an instance is assembled from one build (breaking for a client

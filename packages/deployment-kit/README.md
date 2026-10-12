@@ -59,6 +59,25 @@ A deploy sends the Compose file, the Caddyfile and the files under `host/` to th
 before migrations), migrate, start the services, roll `agent-run-worker` with a drain, and fail
 unless every service runs the digest of the release.
 
+The deploy ends with the upload check, `host/check-upload.mjs`, which runs inside the `api`
+container: it creates a conversation, uploads one small text file, waits up to 60 s until the
+file's state is `ready`, and deletes the file and the conversation again, also when it fails. A
+file that is not processed fails the deploy with its state and with the job read from
+`platform_jobs`, for example `conversation_attachment.preprocess is queued, attempt 0 of 3`.
+The release keeps running; the deploy says that uploads do not work on it.
+
+- **Identity:** the user `catalyst-deploy-check`, shown as "Deploy check (synthetic)". The
+  user is created on the first run and stays, with no role and no password. Its conversation
+  is titled "Deploy check RELEASE (synthetic, safe to delete)" and its file is
+  `deploy-check-synthetic.txt`; one that a check could not remove is named in the output.
+- **Credential:** `CHAT_SERVER_CREDENTIAL`, which the `api` service already has from the env
+  file of the instance. With it the check asks `POST /api/v1/instance/session-tokens` for a
+  session token of its user with the scopes `conversation:read` and `conversation:write`. The
+  instance therefore needs `auth.sessionToken` in its config. Nothing is provisioned for the
+  check and no secret is added to GitHub; a service principal cannot be used, because
+  conversations belong to users.
+- **Audit:** each run records `auth.session_token_issued` and `conversation.deleted`.
+
 `check` starts with `lib/check-deployment-policy.sh`: production Compose pins every first-party
 image by digest, `deploy.yml` requires a successful staging deployment, the bake targets are the
 image keys of a manifest, and the worker wiring under `verify/` holds. What a worker must not

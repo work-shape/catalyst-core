@@ -110,6 +110,8 @@ rsync -az \
   "$host_files/restore-postgres.sh" \
   "$ssh_target:$remote_app_dir/"
 rsync -az "$host_files/systemd/" "$ssh_target:$remote_app_dir/deploy/systemd/"
+# The upload check runs inside the api container, which reads it from this file.
+rsync -az "$kit_dir/host/check-upload.mjs" "$ssh_target:$remote_app_dir/"
 
 # The remote script is passed as an argument, never on stdin: with "bash -s" any
 # command that reads stdin (docker compose exec does) swallows the rest of the

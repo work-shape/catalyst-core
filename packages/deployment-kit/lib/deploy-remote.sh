@@ -193,3 +193,33 @@ if [[ "$EXECUTION_WORKSPACES" == "1" ]]; then
     "$(release_image workspace-command-worker "$WORKSPACE_COMMAND_WORKER_IMAGE_DIGEST")"
 fi
 echo "All services run the images of $IMAGE_TAG."
+
+# The services run; now a file has to get through them. check-upload.mjs uploads one synthetic
+# file as the user "catalyst-deploy-check", waits until it is processed and deletes it again.
+# It signs in with the server credential the api container already holds. The container's own
+# shell pipes the credential to it, so it is in no argument list and not in this script's
+# environment. When the file is not processed, the job that should have done it is read from
+# the queue, so the failure names the job kind and the state it is in.
+upload_check_output=""
+# shellcheck disable=SC2016
+if upload_check_output="$(compose exec -T api sh -c \
+  'printf %s "$CHAT_SERVER_CREDENTIAL" | node --input-type=module -e "$1" -- "--release=$2"' \
+  sh "$(cat "$REMOTE_APP_DIR/check-upload.mjs")" "$IMAGE_TAG" < /dev/null 2>&1)"; then
+  printf '%s\n' "$upload_check_output"
+else
+  printf '%s\n' "$upload_check_output" >&2
+  attachment_id="$(sed -n 's/^upload-check: attachment=\([A-Za-z0-9_-]\{1,\}\)$/\1/p' \
+    <<< "$upload_check_output" | tail -n 1)"
+  if [[ -n "$attachment_id" ]]; then
+    job_query="select kind || ' is ' || status || ', attempt ' || attempts || ' of ' || max_attempts
+      || coalesce(', ' || error_code, '') || coalesce(': ' || left(error_message, 200), '')
+      from platform_jobs where subject = '$attachment_id' order by created_at"
+    # shellcheck disable=SC2016
+    jobs_of_file="$(compose exec -T postgres sh -c \
+      'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At -c "$1"' sh "$job_query" < /dev/null 2>&1 || true)"
+    echo "upload-check: job of the file: ${jobs_of_file:-none was enqueued for $attachment_id}" >&2
+  fi
+  echo "The upload check failed: $IMAGE_TAG runs, but a file uploaded to it was not processed." >&2
+  compose logs --tail=50 doc-worker >&2 || true
+  exit 1
+fi

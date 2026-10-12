@@ -40,6 +40,22 @@ if [[ "$1" == "compose" ]]; then
     up)
       [[ " $* " == *" --scale agent-run-worker=2 "* ]] && touch "$state/agent-run-worker.started"
       ;;
+    exec)
+      # The upload check arrives as an argument; HOST_UPLOAD_CHECK=stuck makes it fail the way a
+      # file nobody processes does. The job lookup that follows is answered from the queue.
+      if [[ " $* " == *" api sh -c "*"node --input-type=module -e"* ]]; then
+        [[ "$*" == *'externalUserId: "catalyst-deploy-check"'* && "${*: -1}" == "$IMAGE_TAG" ]] \
+          || { echo "the upload check was not sent with its release" >&2; exit 1; }
+        if [[ "${HOST_UPLOAD_CHECK:-}" == "stuck" ]]; then
+          echo "upload-check: attachment=att_fixture"
+          echo 'upload-check: FAILED: the file was not processed within 60 s: its state is still "queued"'
+          exit 1
+        fi
+        echo "upload-check: a file uploaded as catalyst-deploy-check was processed in 2.0 s"
+      elif [[ " $* " == *" postgres sh -c "* && "$*" == *"subject = 'att_fixture'"* ]]; then
+        echo "conversation_attachment.preprocess is queued, attempt 0 of 3"
+      fi
+      ;;
   esac
   exit 0
 fi
