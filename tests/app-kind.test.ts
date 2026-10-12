@@ -381,6 +381,22 @@ describe("a kind with a draft and a published revision on an instance", () => {
       { params: { kind: "notice", name: "fresh" }, payload: { expectedRevision: 4 } },
       { status: 412, code: "REVISION_CONFLICT" }
     );
+    // Fails without the change: a discard that named no revision answered the schema's 422,
+    // where every other write answers that the revision is required.
+    const unnamed = await t.expectRefused(
+      t.admin.id,
+      "assets.discard_draft",
+      { params: { kind: "notice", name: "fresh" }, payload: {} },
+      { status: 428, code: "PRECONDITION_REQUIRED" }
+    );
+    expect(unnamed.details).toMatchObject({ reason: "precondition_required" });
+    // Who may not write the notice is told that, and not that a revision is missing.
+    await t.expectRefused(
+      t.kai.id,
+      "assets.discard_draft",
+      { params: { kind: "notice", name: "fresh" }, payload: {} },
+      { status: 403, code: "FORBIDDEN" }
+    );
   });
 
   it("answers a revert with the publish that does it, and a publish of an active kind with why not", async () => {

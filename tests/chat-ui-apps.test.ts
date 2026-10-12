@@ -588,6 +588,7 @@ describe("the draft of an App (layout 3)", () => {
 describe("the revisions of an App", () => {
   const revision = (number: number, overrides: Partial<ConfigAssetRevision> = {}) =>
     ({
+      assetId: "cfga_angebotsrechner",
       revision: number,
       operation: number === 1 ? "create" : "update",
       config: { name: "angebotsrechner", title: "Angebotsrechner", manifest: {} },

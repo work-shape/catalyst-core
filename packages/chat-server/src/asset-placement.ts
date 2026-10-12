@@ -100,7 +100,7 @@ export async function setAssetDefault(
     agentName: input.name,
     version: result.version
   });
-  return result;
+  return { version: result.version };
 }
 
 /** Sets the workspaces one asset is offered in. The next run that starts reads them. */

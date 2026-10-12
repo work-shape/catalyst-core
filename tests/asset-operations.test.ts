@@ -447,12 +447,20 @@ describe("assets.sync", () => {
       { type: "delete", kind: "agent", name: "kai-old", expectedRevision: 1 }
     ]);
     expect(applied.statusCode, applied.body).toBe(200);
+    // Each item names the asset it wrote: the id a later write is bound to.
+    const item = (type: string, kind: string, name: string) => ({
+      type,
+      kind,
+      name,
+      status: "applied",
+      id: expect.stringMatching(/^cfga_/u)
+    });
     expect(applied.json()).toEqual({
       version: 3,
       items: [
-        { type: "put", kind: "skill", name: "kai-guide", status: "applied", revision: 1 },
-        { type: "put", kind: "agent", name: "kai-intake", status: "applied", revision: 1 },
-        { type: "delete", kind: "agent", name: "kai-old", status: "applied", revision: 2 }
+        { ...item("put", "skill", "kai-guide"), revision: 1 },
+        { ...item("put", "agent", "kai-intake"), revision: 1 },
+        { ...item("delete", "agent", "kai-old"), revision: 2 }
       ],
       warnings: []
     });

@@ -540,6 +540,40 @@ describe("skill change approval workflow", () => {
     ).toContain("new_skill");
     expect(await f.revisions("new_skill")).toHaveLength(1);
   });
+  // Fails without the change: the set was validated before the lock alone, so a revert that
+  // removed a created skill and a write that gave the skill to another agent both passed, and
+  // that agent was left with a skill that is gone.
+  it("refuses a revert when another agent took the created skill between its check and its lock", async () => {
+    const f = await fixture();
+    const request = await f.propose(creation, "new_skill");
+    await f.approve(request.id);
+    const store = f.store.configAssets;
+    const apply = store.applyConfigAssetMutations.bind(store);
+    store.applyConfigAssetMutations = async (input) => {
+      store.applyConfigAssetMutations = apply;
+      await applyAtCurrentRevisions(store, {
+        clientInstanceId,
+        mutations: [
+          {
+            type: "upsert",
+            kind: "agent",
+            name: "other",
+            config: json({ ...f.agent, name: "other", skillNames: ["new_skill"] })
+          }
+        ]
+      });
+      return apply(input);
+    };
+    await expect(
+      f.workflow.revertRequest(reviewer, accessOf(reviewer), context, request.id)
+    ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+    const snapshot = await f.source.getSnapshot();
+    expect(snapshot.skills.map((candidate) => candidate.name)).toContain("new_skill");
+    expect(snapshot.agents.find((candidate) => candidate.name === "other")?.skillNames).toEqual([
+      "new_skill"
+    ]);
+    expect(await f.revisions("new_skill")).toHaveLength(1);
+  });
   it("allows only one concurrent revert", async () => {
     const f = await fixture();
     const request = await f.propose();

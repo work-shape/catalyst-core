@@ -532,10 +532,12 @@ describe("config asset admin routes", () => {
     for (const [field, change] of Object.entries(changes)) {
       const denied = await put(adminToken, { ...initial, ...change });
       expect(denied.statusCode).toBe(403);
-      expect(denied.json()).toMatchObject({
+      // The missing right is answered as every missing right is, before the write is read.
+      expect(denied.json(), field).toMatchObject({
         error: {
           code: "FORBIDDEN",
-          message: `Changing agent model settings (${field}) requires 'agent_models.manage' permission`
+          message: "Missing the right 'agent_models.manage'",
+          details: { action: "agent_models.manage" }
         }
       });
     }
@@ -758,9 +760,7 @@ describe("config asset admin routes", () => {
       payload: { config: { ...offered, modelReasoningEfforts: { other: "high" } } }
     });
     expect(denied.statusCode).toBe(403);
-    expect(denied.json().error.message).toBe(
-      "Changing agent model settings (modelReasoningEfforts) requires 'agent_models.manage' permission"
-    );
+    expect(denied.json().error.message).toBe("Missing the right 'agent_models.manage'");
 
     // A stored id that is no longer eligible does not block later edits of the agent.
     await applyAtCurrentRevisions(fixture.store.configAssets, {

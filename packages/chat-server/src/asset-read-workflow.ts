@@ -161,6 +161,7 @@ export class AssetReadWorkflow {
       newestFirst: true
     });
     return revisions.map((revision) => ({
+      assetId: revision.assetId,
       revision: revision.revision,
       operation: revision.operation,
       config: revision.config,

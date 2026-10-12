@@ -18,7 +18,7 @@ import {
   type AssetFileInput
 } from "./asset-files";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
-import { revisionConflictOf } from "./asset-revision";
+import { requirePrecondition, revisionConflictOf } from "./asset-revision";
 import { validateAssetSet, withDefinition, withoutDefinition } from "./asset-set";
 import {
   recordAssetEvent,
@@ -90,7 +90,7 @@ export class AssetDraftWorkflow {
     if (input.expectedRevision === null) {
       requireFreeName(target);
     }
-    requireOwnScope(target);
+    requireOwnScope(target, call.access);
     await requireExpectedRevision(this.options, call, target, input.expectedRevision);
     const files = decodeAssetFiles(input.files);
     // A new asset's id is made here: its files are stored under it before its row exists.
@@ -253,14 +253,15 @@ export class AssetDraftWorkflow {
   }
 
   /** Moves the draft back to the published revision. The revisions in between stay readable. */
-  async discardDraft(call: AssetCall, input: AssetAddress & { expectedRevision: number }) {
+  async discardDraft(call: AssetCall, input: AssetAddress & { expectedRevision?: number }) {
     const target = await this.host.target(input);
     const { kind, name } = target;
-    publishAction(kind);
     call.access.require(kind.actions.write, target.resource);
+    const expectedRevision = requirePrecondition(input, input.expectedRevision);
+    publishAction(kind);
     await this.host.authorizeEditing(call, "put");
     const asset = requireActive(target);
-    if (asset.revision !== input.expectedRevision) {
+    if (asset.revision !== expectedRevision) {
       throw await revisionConflictOf(this.options, call.access, target);
     }
     let discarded: { revision: number };
@@ -269,7 +270,7 @@ export class AssetDraftWorkflow {
         clientInstanceId: this.options.clientInstanceId,
         kind: kind.kind,
         name,
-        expectedRevision: input.expectedRevision
+        expectedRevision: expectedRevision
       });
     } catch (error) {
       throw isAppError(error) && error.code === "CONFLICT"
@@ -280,7 +281,7 @@ export class AssetDraftWorkflow {
       kind: kind.kind,
       name,
       revision: discarded.revision,
-      discardedRevision: input.expectedRevision
+      discardedRevision: expectedRevision
     });
     return { draftRevision: discarded.revision, publishedRevision: discarded.revision };
   }

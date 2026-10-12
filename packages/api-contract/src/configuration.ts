@@ -213,6 +213,12 @@ export const configAssetSummarySchema = z.object({
 export const configAssetConfigSchema = z.record(z.string(), z.unknown());
 
 export const configAssetRevisionSchema = z.object({
+  /**
+   * The id of the asset the revision counts. It stays the same from the first revision to
+   * the delete and across a name that is created again, so a caller that keeps it knows a
+   * later asset of the same name and number for another one.
+   */
+  assetId: z.string(),
   revision: z.number().int().positive(),
   operation: z.enum(["create", "update", "delete", "revert"]),
   config: configAssetConfigSchema.nullable(),

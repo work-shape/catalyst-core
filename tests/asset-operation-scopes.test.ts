@@ -116,13 +116,20 @@ describe("the scope of an asset call", () => {
           ...(id === undefined ? {} : { workspaceId: id })
         }
       });
-    for (const refused of [await overwrite(t.kai.id), await overwrite(t.admin.id)]) {
-      expect(refused.statusCode).toBe(422);
-      expect(errorSchema.parse(refused.json()).error).toMatchObject({
-        code: "VALIDATION_FAILED",
-        details: { reason: "invalid_scope" }
-      });
-    }
+    // Kai does not read the workspace's skill and is told the name alone, as for any write
+    // against another revision. The administrator reads it and is told where the name is.
+    const untold = await overwrite(t.kai.id);
+    expect(untold.statusCode).toBe(412);
+    expect(errorSchema.parse(untold.json()).error.details).toEqual({
+      reason: "revision_conflict",
+      conflicts: [{ kind: "skill", name: "kai-team-notes" }]
+    });
+    const told = await overwrite(t.admin.id);
+    expect(told.statusCode).toBe(422);
+    expect(errorSchema.parse(told.json()).error).toMatchObject({
+      code: "VALIDATION_FAILED",
+      details: { reason: "invalid_scope" }
+    });
     expect((await overwrite(t.kai.id, workspaceId)).statusCode).toBe(403);
     expect((await overwrite(t.lena.id, workspaceId)).statusCode).toBe(403);
     // No kind may be owned by a workspace yet, so the write is refused for the administrator too.

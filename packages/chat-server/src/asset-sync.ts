@@ -10,16 +10,15 @@ import {
   type PolicyTarget
 } from "@vivd-catalyst/core";
 import { z } from "zod";
-import { readDefinitionName, type WorkflowAssetKind } from "./asset-kinds/shared";
+import { readDefinitionName } from "./asset-kinds/shared";
 import {
   definitionsByName,
-  definitionsOf,
   findAssetSetIssues,
   withDefaultAgentName,
   type AssetSet,
   type AssetSetIssue
 } from "./asset-set";
-import { accessResource, errorIssues, type AssetCall } from "./asset-access";
+import { errorIssues, type AssetCall } from "./asset-access";
 import {
   assertDeleteWithinLimits,
   assertUpsertWithinLimits,
@@ -29,52 +28,42 @@ import {
   findIssuesOfChange,
   isHiddenEverywhere,
   isReleaseSync,
-  isReleasedKind,
-  itemWriteDecision,
   loadReferableAssets,
   loadStoredAssets,
   impliesDefaultChange,
   accessOfSyncCredential,
-  maxSyncItems,
-  missingUpsertRightOf,
-  preparedUpsert,
   releaseInitialAvailability,
-  requireAssetKindModuleOn,
-  requireAssetManagementOn,
   requireInteractiveEditingOn,
-  requireNamespaceOrRelease,
-  requireReleaseSync,
   toJsonObject
 } from "./asset-write-rules";
 import { currentRevisionOf } from "./asset-revision";
+import { readsOther, recordCommitted } from "./asset-target";
 import {
   isReady,
+  readsItem,
   refusalOf,
   refuseStale,
   refusedBatch,
   staleBatch,
   toRefusal,
-  type AssetSyncItem,
-  type ItemRefusal,
+  type AssetSyncInput,
   type PlannedItem,
   type ReadyItem,
   type StaleItem
 } from "./asset-sync-refusals";
+import {
+  REPLACED_REFUSAL,
+  authorizeItems,
+  defaultChangeRefusal,
+  leftByItems,
+  planDefaultChange,
+  replacedRefusal,
+  replacedSchema
+} from "./asset-sync-items";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
-import type { ChatServerOptions } from "./types";
 
-export interface AssetSyncInput {
-  /**
-   * The prefix of the one Namespace the batch belongs to. A release names none and may name
-   * any asset of the instance.
-   */
-  namespace?: string;
-  items: AssetSyncItem[];
-  /** The default agent a release names, `null` for none. Left out, the batch names none. */
-  defaultAgentName?: string | null;
-  /** The default agent the batch was made against, where its caller says so. */
-  expectedDefaultAgentName?: string | null;
-}
+export type { AssetSyncInput } from "./asset-sync-refusals";
+import type { ChatServerOptions } from "./types";
 
 /** What the store says of each asset a batch was stale for, under its lock. */
 const conflictsSchema = z.object({
@@ -176,35 +165,71 @@ async function checkBatch(
   } else {
     requireInteractiveEditingOn(options, releaseSync);
   }
-  const stale: ReadyItem[] = [];
+  // What the instance's rules refuse, before anything is told of a revision: a batch refused
+  // here carries no word of what an asset is at.
+  const storedWritable = (entry: ReadyItem) =>
+    entry.asset?.status === "active"
+      ? refusalOf(() => entry.kind.assertStoredWritable?.({ current: entry.asset?.config }))
+      : undefined;
   for (const entry of ready()) {
     const active = entry.asset?.status === "active";
-    if (entry.asset?.status === "active") {
-      const stored = entry.asset.config;
-      entry.refusal = refusalOf(() => entry.kind.assertStoredWritable?.({ current: stored }));
-      if (entry.refusal) continue;
+    // Told at once to a caller who reads the asset. For everyone else it waits until the
+    // revision the item names is the asset's: it depends on what is stored.
+    entry.refusal = readsItem(call.access, entry) ? storedWritable(entry) : undefined;
+    if (entry.refusal || entry.item.type !== "delete") continue;
+    if (releaseSync && !active) {
+      // A release says what the instance holds. An asset that is gone already is as it says.
+      entry.absent = true;
+      continue;
     }
-    if (entry.item.type === "delete") {
-      if (releaseSync && !active) {
-        // A release says what the instance holds. An asset that is gone already is as it says.
-        entry.absent = true;
-        continue;
+    entry.refusal = refusalOf(() => assertDeleteWithinLimits(call.access, "sync", entry.kind));
+  }
+  stopIfRefused();
+
+  const stale: StaleItem[] = [];
+  for (const entry of ready()) {
+    if (entry.absent) continue;
+    const replaced = replacedRefusal(entry);
+    if (replaced) {
+      entry.refusal = replaced;
+      continue;
+    }
+    if (entry.other) {
+      // The name is a workspace asset's. Who reads that asset is told so. For everyone else
+      // the item is at another revision than it names, and nothing more is said.
+      if (readsOther(call.access, entry)) {
+        entry.refusal = {
+          code: "VALIDATION_FAILED",
+          message: `Config ${entry.kind.kind} '${entry.name}' belongs to another scope`
+        };
+      } else {
+        stale.push({ entry, untold: true });
       }
-      entry.refusal =
-        refusalOf(() => assertDeleteWithinLimits(call.access, "sync", entry.kind)) ??
-        (active
-          ? undefined
-          : {
-              code: "NOT_FOUND",
-              message: `Config ${entry.kind.kind} '${entry.name}' was not found`
-            });
+      continue;
     }
-    // A deleted asset keeps its revision: a put creates it again only by naming that one.
-    if (!entry.refusal && currentRevisionOf(entry.asset) !== entry.item.expectedRevision) {
-      stale.push(entry);
+    const active = entry.asset?.status === "active";
+    if (entry.item.type === "delete" && !active && readsItem(call.access, entry)) {
+      entry.refusal = {
+        code: "NOT_FOUND",
+        message: `Config ${entry.kind.kind} '${entry.name}' was not found`
+      };
+      continue;
+    }
+    // A deleted asset keeps its revision: a put creates it again only by naming that one. A
+    // delete of an asset that is not there is stale for a caller who does not read it: that
+    // caller is not told whether there is an asset.
+    if (
+      (entry.item.type === "delete" && !active) ||
+      currentRevisionOf(entry.asset) !== entry.item.expectedRevision
+    ) {
+      stale.push({ entry, asset: entry.asset });
     }
   }
   await refuseStale(options, call.access, stale);
+  stopIfRefused();
+  for (const entry of ready()) {
+    entry.refusal = storedWritable(entry);
+  }
   stopIfRefused();
 
   const stored = await loadStoredAssets(options);
@@ -332,11 +357,27 @@ async function applyBatch(options: ChatServerOptions, call: AssetCall, checked: 
         entry.absent ? null : (entry.item.expectedRevision ?? null)
       ])
     ),
+    baseAssetIds: Object.fromEntries(
+      [...byKey].flatMap(([key, entry]) =>
+        entry.item.expectedAssetId === undefined ? [] : [[key, entry.item.expectedAssetId]]
+      )
+    ),
     ...(defaultChange ? { baseDefaultAgentName: storedDefault } : {}),
     ...releaseInitialAvailability(call.access, "sync"),
     mutations
   }).catch(async (error: unknown) => {
     // Another write got between the check above and the store's lock. Nothing was written.
+    const replaced =
+      isAppError(error) && error.code === "CONFLICT"
+        ? replacedSchema.safeParse(error.details)
+        : undefined;
+    if (replaced?.success) {
+      for (const { kind, name } of replaced.data.assets) {
+        const entry = byKey.get(assetKey(kind, name));
+        if (entry) entry.refusal = REPLACED_REFUSAL;
+      }
+      throw refusedBatch(planned);
+    }
     const found =
       isAppError(error) && error.code === "REVISION_CONFLICT"
         ? conflictsSchema.safeParse(error.details)
@@ -369,8 +410,14 @@ async function applyBatch(options: ChatServerOptions, call: AssetCall, checked: 
   // The recorder of the Operation Run: each row names the run that wrote it.
   const auditRecorder = call.audit;
   const items = [];
+  const records: (() => Promise<void>)[] = [];
   for (const entry of ready) {
-    if (entry.absent) {
+    // The revision the store gave the asset in this transaction. A delete of an asset that
+    // was not there wrote nothing and has none.
+    const key = assetKey(entry.kind.kind, entry.name);
+    const revision = result.revisions[key];
+    const id = result.assetIds[key];
+    if (entry.absent || revision === undefined || id === undefined) {
       items.push({
         type: "delete" as const,
         kind: entry.kind.kind,
@@ -379,24 +426,27 @@ async function applyBatch(options: ChatServerOptions, call: AssetCall, checked: 
       });
       continue;
     }
-    // The store appends exactly one revision to the one the batch was checked against. A
-    // name that is created again continues the revisions of its deleted row.
-    const revision = (entry.asset?.revision ?? 0) + 1;
-    await auditRecorder.record({
-      type: entry.item.type === "delete" ? "config_asset.deleted" : "config_asset.updated",
-      status: "success",
-      actor: auditActorFromIdentity(call.actor),
-      correlationId: call.correlationId,
-      metadata: { kind: entry.kind.kind, name: entry.name, revision, version: result.version }
+    records.push(async () => {
+      await auditRecorder.record({
+        type: entry.item.type === "delete" ? "config_asset.deleted" : "config_asset.updated",
+        status: "success",
+        actor: auditActorFromIdentity(call.actor),
+        correlationId: call.correlationId,
+        metadata: { kind: entry.kind.kind, name: entry.name, revision, version: result.version }
+      });
     });
     items.push({
       type: entry.item.type,
       kind: entry.kind.kind,
       name: entry.name,
       status: "applied" as const,
+      id,
       revision
     });
   }
+  // The batch is committed: every asset is written. A row of the trail that cannot be written
+  // is logged, the others are still written, and the caller is told what was written.
+  await recordCommitted(options, call, records);
   return {
     version: result.version,
     items,
@@ -424,187 +474,6 @@ async function hiddenAgentNamesOf(
   });
   const hidden = names.filter((name) => isHiddenEverywhere(availability.get(name)));
   return hidden.length > 0 ? { hiddenAgentNames: hidden } : {};
-}
-
-/**
- * What each item is by its own input, and the caller's right on every item that names an
- * asset: the write or the delete right at the asset's scope, or the release right in their
- * place. Throws the refusal of the batch where an item is refused by either, so a caller
- * without the rights learns nothing else.
- */
-async function authorizeItems(
-  options: ChatServerOptions,
-  access: ActorAccess,
-  input: AssetSyncInput
-): Promise<PlannedItem[]> {
-  // The module's switch is asked here because the release holder passes it: the operation
-  // itself belongs to no module, so the route does not refuse it before the caller is known.
-  requireAssetManagementOn(options, access, "sync");
-  requireNamespaceOrRelease(access, input.namespace);
-  if (input.defaultAgentName !== undefined || input.expectedDefaultAgentName !== undefined) {
-    requireReleaseSync(access, "sync");
-  }
-  if (input.items.length === 0 && input.defaultAgentName === undefined) {
-    throw new AppError("VALIDATION_FAILED", "A batch needs an item or a default agent");
-  }
-  const maxItems = maxSyncItems(access);
-  if (input.items.length > maxItems) {
-    throw new AppError("VALIDATION_FAILED", `A batch holds at most ${maxItems} items`);
-  }
-  const releaseSync = isReleaseSync(access, "sync");
-  const planned = planItems(options, input);
-  for (const entry of planned.filter(isReady)) {
-    if (releaseSync && !isReleasedKind(entry.kind)) {
-      entry.refusal = {
-        code: "VALIDATION_FAILED",
-        message: `Asset kind '${entry.kind.kind}' is not part of a release`
-      };
-      continue;
-    }
-    const row = await options.configAssets.store.getConfigAsset({
-      clientInstanceId: options.clientInstanceId,
-      kind: entry.kind.kind,
-      name: entry.name
-    });
-    const own = row?.scope.kind === "instance" ? row : undefined;
-    const resource = accessResource(entry.kind.kind, entry.name, INSTANCE_ASSET_SCOPE, own?.id);
-    const right = itemWriteDecision(
-      access,
-      "sync",
-      { kind: entry.kind, resource },
-      entry.item.type
-    );
-    if (!right.allowed) {
-      entry.refusal = {
-        code: "FORBIDDEN",
-        message: `Missing the right '${right.action}'`,
-        action: right.action
-      };
-    } else if (row && !own) {
-      // A Namespace is a prefix among the instance's own assets.
-      entry.refusal = {
-        code: "VALIDATION_FAILED",
-        message: `Config ${entry.kind.kind} '${entry.name}' belongs to another scope`
-      };
-    } else if (own) {
-      entry.asset = own;
-    }
-  }
-  if (planned.some((entry) => entry.refusal)) {
-    throw refusedBatch(planned);
-  }
-  // Asked once the caller holds the right on every item, and before the policy and the
-  // guardrails: a batch that names no revision for an asset is never taken as an overwrite.
-  for (const entry of planned.filter(isReady)) {
-    if (entry.item.expectedRevision === undefined) {
-      entry.refusal = {
-        code: "PRECONDITION_REQUIRED",
-        message: `'expectedRevision' is missing: send the revision that was read${entry.item.type === "put" ? ", or null to create the asset" : ""}`
-      };
-    }
-  }
-  if (planned.some((entry) => entry.refusal)) {
-    throw refusedBatch(planned);
-  }
-  await requireFurtherRights(options, access, input, planned);
-  return planned;
-}
-
-/**
- * The rights a batch needs beside those on its items: the write right on the instance where
- * it changes the instance default, and what a kind asks for a put beside its write right. They
- * are decided on what the caller sent, so they are known before the policy is asked. The
- * checks of the validated definitions stay where they are and decide again.
- */
-async function requireFurtherRights(
-  options: ChatServerOptions,
-  access: ActorAccess,
-  input: AssetSyncInput,
-  planned: PlannedItem[]
-): Promise<void> {
-  const ready = planned.filter(isReady);
-  const [stored, namespaces] = await Promise.all([
-    loadStoredAssets(options),
-    options.stores.access.listNamespaceRecords({ clientInstanceId: options.clientInstanceId })
-  ]);
-  const storedByName = definitionsByName(stored.set);
-  const defaultChange =
-    input.defaultAgentName === undefined && impliesDefaultChange(access)
-      ? planDefaultChange(
-          options.configAssets.kinds.kinds,
-          stored.set,
-          leftByItems(access, storedByName, ready, stored.set),
-          ready
-        )
-      : undefined;
-  if (defaultChange && !access.authorize(defaultChange.entry.kind.actions.write).allowed) {
-    defaultChange.entry.refusal = defaultChangeRefusal(defaultChange.entry.kind);
-  }
-  for (const entry of ready) {
-    if (entry.item.type !== "put" || entry.refusal) continue;
-    const current = storedByName(entry.kind.kind).get(entry.name);
-    const action = missingUpsertRightOf(access, "sync", entry.kind, {
-      name: entry.name,
-      current,
-      next: preparedUpsert(access, "sync", entry.kind, { current, next: entry.item.config }),
-      namespaces
-    });
-    if (action !== undefined) {
-      entry.refusal = { code: "FORBIDDEN", message: `Missing the right '${action}'`, action };
-    }
-  }
-  if (planned.some((entry) => entry.refusal)) {
-    throw refusedBatch(planned);
-  }
-}
-
-function defaultChangeRefusal(kind: WorkflowAssetKind): ItemRefusal {
-  return {
-    code: "FORBIDDEN",
-    message: `Missing the right '${kind.actions.write}' on the instance, which changing its default needs`,
-    action: kind.actions.write
-  };
-}
-
-/**
- * The set as the items would leave it. `storedByName` is what each put is prepared against.
- * Each name is looked up once and each kind's list is built once, so the cost grows with the
- * items and the stored assets and not with their product.
- */
-function leftByItems(
-  access: ActorAccess,
-  storedByName: (kind: string) => Map<string, unknown>,
-  entries: readonly ReadyItem[],
-  set: AssetSet
-): AssetSet {
-  /** Per kind: what the batch leaves under each name it carries, nothing for a delete. */
-  const carried = new Map<string, Map<string, { definition: unknown } | undefined>>();
-  for (const entry of entries) {
-    const ofKind = carried.get(entry.kind.kind) ?? new Map();
-    carried.set(entry.kind.kind, ofKind);
-    ofKind.set(
-      entry.name,
-      entry.item.type === "delete"
-        ? undefined
-        : {
-            definition: preparedUpsert(access, "sync", entry.kind, {
-              current: storedByName(entry.kind.kind).get(entry.name),
-              next: entry.item.config
-            })
-          }
-    );
-  }
-  const definitions = new Map(set.definitions);
-  for (const [kind, ofKind] of carried) {
-    definitions.set(kind, [
-      ...definitionsOf(set, kind).filter((candidate) => {
-        const name = readDefinitionName(candidate);
-        return name === undefined || !ofKind.has(name);
-      }),
-      ...[...ofKind.values()].flatMap((put) => (put ? [put.definition] : []))
-    ]);
-  }
-  return { ...set, definitions };
 }
 
 /**
@@ -643,73 +512,6 @@ export async function assetSyncPolicyTargets(
     });
   }
   return [...targets.values()];
-}
-
-/** What each item is by its own input: a registered kind, a name, inside a named prefix, once. */
-function planItems(options: ChatServerOptions, input: AssetSyncInput): PlannedItem[] {
-  const seen = new Set<string>();
-  return input.items.map((item, index): PlannedItem => {
-    requireAssetKindModuleOn(options.modules, item.kind);
-    const kind = options.configAssets.kinds.get(item.kind);
-    const name = item.type === "put" ? readDefinitionName(item.config) : item.name;
-    const base = { index, item, ...(name === undefined ? {} : { name }) };
-    const refuse = (message: string): PlannedItem => ({
-      ...base,
-      ...(kind ? { kind } : {}),
-      refusal: { code: "VALIDATION_FAILED", message }
-    });
-    if (!kind) {
-      return refuse(`Asset kind '${item.kind}' is not registered`);
-    }
-    if (kind.representation === "files") {
-      // Its revision is a set of files that is built and stored per write, which no batch is.
-      return refuse(
-        `A ${kind.kind} holds files: it is written with 'assets.put' and deleted with 'assets.delete', one at a time`
-      );
-    }
-    if (name === undefined) {
-      return refuse("Config asset must have a name");
-    }
-    if (input.namespace !== undefined && !name.startsWith(input.namespace)) {
-      return refuse(`Config ${kind.kind} '${name}' is outside Namespace '${input.namespace}'`);
-    }
-    const key = assetKey(kind.kind, name);
-    if (seen.has(key)) {
-      return refuse(`Config ${kind.kind} '${name}' is named by more than one item`);
-    }
-    seen.add(key);
-    return { ...base, kind };
-  });
-}
-
-/**
- * The change of the instance default the batch brings with it, with the item that causes it.
- * A batch that leaves a kind with assets and no default, or with a default that is gone, is
- * left to the validation of the set.
- */
-function planDefaultChange(
-  kinds: readonly WorkflowAssetKind[],
-  stored: AssetSet,
-  candidate: AssetSet,
-  entries: readonly ReadyItem[]
-): { entry: ReadyItem; agentName: string | undefined } | undefined {
-  for (const kind of kinds) {
-    if (!kind.holdsInstanceDefault) continue;
-    const before = definitionsOf(stored, kind.kind).length;
-    const after = definitionsOf(candidate, kind.kind).length;
-    const ofKind = entries.filter((entry) => entry.kind.kind === kind.kind);
-    if (before === 0 && stored.defaultAgentName === undefined && after > 0) {
-      const first = ofKind.find((entry) => entry.item.type === "put");
-      if (first) return { entry: first, agentName: first.name };
-    }
-    if (after === 0 && stored.defaultAgentName !== undefined) {
-      const last = ofKind.find(
-        (entry) => entry.item.type === "delete" && entry.name === stored.defaultAgentName
-      );
-      if (last) return { entry: last, agentName: undefined };
-    }
-  }
-  return undefined;
 }
 
 /**

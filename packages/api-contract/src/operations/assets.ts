@@ -170,7 +170,7 @@ export const assetOperations = {
     effect: "changing",
     body: discardAssetDraftRequestSchema,
     response: json(assetPointersResponseSchema),
-    errors: ["NOT_FOUND", "REVISION_CONFLICT"],
+    errors: ["NOT_FOUND", "REVISION_CONFLICT", "PRECONDITION_REQUIRED"],
     rateClass: "write"
   }),
   "assets.delete": defineRegisteredOperation({

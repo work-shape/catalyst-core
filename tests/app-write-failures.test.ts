@@ -66,10 +66,12 @@ describe("a write of an App that fails after its revision was committed", () => 
 
   it("keeps the files of the revision, for a new App and for a further revision", async () => {
     failing = true;
+    // The write is committed, so it is answered as made: the row that could not be written
+    // is logged, as the operation layer does for a call it could not record.
     const first = await create(t, "kept", "first");
-    expect(first.statusCode).toBeGreaterThanOrEqual(500);
+    expect(first.statusCode).toBe(200);
     const second = await t.putApp(t.admin.id, "kept", appFiles("second"));
-    expect(second.statusCode).toBeGreaterThanOrEqual(500);
+    expect(second.statusCode).toBe(200);
     failing = false;
 
     // Both revisions were committed before the failure, and each still has its files.

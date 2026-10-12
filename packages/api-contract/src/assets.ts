@@ -9,9 +9,16 @@ export const ASSET_SYNC_MAX_ITEMS = 200;
 export const ASSET_SYNC_BODY_MAX_BYTES = 20 * 1024 * 1024;
 
 /**
+ * How many bytes the definition of one item of a batch may hold, as JSON. Generous for a skill
+ * with its resources, and small enough that one item cannot take the body of a whole batch.
+ */
+export const ASSET_SYNC_ITEM_MAX_BYTES = 2 * 1024 * 1024;
+
+/**
  * How many items a release may hold: a batch of a holder of the release right, which is applied
- * in one transaction so that a release lands whole or not at all. Each item costs a handful of
- * statements in that transaction, and the request body limit of the server bounds the bytes.
+ * in one transaction so that a release lands whole or not at all. The transaction reads and
+ * writes its items in a fixed number of statements per `500` items, and the request body limit
+ * of the server bounds the bytes.
  */
 export const ASSET_RELEASE_SYNC_MAX_ITEMS = 2000;
 
@@ -246,8 +253,8 @@ export const publishAssetRequestSchema = z.object({
 });
 
 export const discardAssetDraftRequestSchema = z.object({
-  /** The draft revision the caller last read. */
-  expectedRevision: revisionNumberSchema,
+  /** The draft revision the caller last read. Required. */
+  expectedRevision: expectedRevisionSchema,
   workspaceId: workspaceIdSchema
 });
 
@@ -318,20 +325,30 @@ export const validateAssetResponseSchema = z.object({
   issues: z.array(assetValidationIssueSchema)
 });
 
+/**
+ * The id of the asset the expected revision was read of. A revision number alone does not say
+ * which asset it counts: after a database was restored or replaced, another asset of the same
+ * name can be at the same number. A caller that kept the id sends it, and an item whose asset
+ * has another id is refused with `CONFLICT` and the reason `asset_replaced`.
+ */
+const expectedAssetIdSchema = z.string().min(1).optional();
+
 export const assetSyncItemSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("put"),
     kind: z.string().min(1),
     config: assetDefinitionSchema,
     /** The revision the caller last read, or `null` to create the asset. Required. */
-    expectedRevision: expectedRevisionOrNewSchema
+    expectedRevision: expectedRevisionOrNewSchema,
+    expectedAssetId: expectedAssetIdSchema
   }),
   z.object({
     type: z.literal("delete"),
     kind: z.string().min(1),
     name: nameText(z.string().min(1)),
     /** The revision the caller last read. Required. */
-    expectedRevision: expectedRevisionSchema
+    expectedRevision: expectedRevisionSchema,
+    expectedAssetId: expectedAssetIdSchema
   })
 ]);
 
@@ -365,6 +382,9 @@ export const assetSyncAppliedItemSchema = z.discriminatedUnion("status", [
     kind: z.string(),
     name: z.string(),
     status: z.literal("applied"),
+    /** The id of the asset that was written. */
+    id: z.string(),
+    /** The revision this batch gave the asset. */
     revision: revisionNumberSchema
   }),
   // A delete in a release of an asset that is not there: nothing was written for it.

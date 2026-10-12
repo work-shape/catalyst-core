@@ -1,11 +1,13 @@
 import {
   AppError,
   type AssetScope,
+  type ConfigAssetRecord,
+  type ConfigAssetState,
   type ConfigAssetStore,
   type RegisteredAssetKind
 } from "@vivd-catalyst/core";
 import { assetSetOf, validateAssetSet, withDefaultAgentName, type AssetSet } from "./asset-set";
-import { readDefinitionName } from "./asset-kinds/shared";
+import { readDefinitionName, type WorkflowAssetKind } from "./asset-kinds/shared";
 import type { ChatServerOptions } from "./types";
 
 export type ConfigAssetWriterOptions = Pick<
@@ -36,10 +38,24 @@ export function assertScopeCanOwn(
   );
 }
 
-/** Shared write path. Callers own authorization; all writes validate the resulting bundle. */
+type MutationInput = Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0];
+
+/**
+ * Shared write path. Callers own authorization; every write validates the set it leaves.
+ *
+ * The set is read and checked here first, without a lock, so a write that would leave an
+ * invalid set is refused before it waits for one. The store then asks once more under the lock
+ * every asset write takes: the ids of the active revisions are compared with the ones read
+ * here, and only where another write changed the set in between is it read again and the
+ * check repeated. So two writes that each pass alone, one that refers to an asset and one
+ * that deletes it, cannot both be written: the second one is checked against the first.
+ *
+ * Under the lock that costs one read of an id per active asset, and after a concurrent write
+ * one read of the whole set.
+ */
 export async function applyValidatedConfigAssetMutations(
   options: ConfigAssetWriterOptions,
-  input: Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0]
+  input: Omit<MutationInput, "validate">
 ) {
   const { kinds } = options.configAssets;
   for (const mutation of input.mutations) {
@@ -57,15 +73,40 @@ export async function applyValidatedConfigAssetMutations(
       clientInstanceId: options.clientInstanceId
     })
   ]);
-  const stored = assetSetOf(assets, state.defaultAgentName);
+  const validate = (stored: { state: ConfigAssetState; assets: ConfigAssetRecord[] }) =>
+    validateMutations(kinds.kinds, input.mutations, stored);
+  validate({ state, assets });
+  const read = new Set(assets.map((asset) => asset.activeRevisionId));
+  return options.configAssets.store.applyConfigAssetMutations({
+    ...input,
+    async validate(locked) {
+      const ids = await locked.listActiveRevisionIds();
+      const unchanged =
+        locked.state.defaultAgentName === state.defaultAgentName &&
+        ids.length === read.size &&
+        ids.every((id) => read.has(id));
+      if (!unchanged) {
+        validate({ state: locked.state, assets: await locked.listActiveConfigAssets() });
+      }
+    }
+  });
+}
+
+/** Refuses the mutations for the set they would leave of the stored one. */
+function validateMutations(
+  kinds: readonly WorkflowAssetKind[],
+  mutations: MutationInput["mutations"],
+  current: { state: ConfigAssetState; assets: ConfigAssetRecord[] }
+): void {
+  const stored = assetSetOf(current.assets, current.state.defaultAgentName);
   const definitions = new Map(
     [...stored.definitions].map(([kind, ofKind]) => [
       kind,
       new Map(ofKind.map((config) => [readDefinitionName(config), config]))
     ])
   );
-  let defaultAgentName = state.defaultAgentName;
-  for (const mutation of input.mutations) {
+  let defaultAgentName = current.state.defaultAgentName;
+  for (const mutation of mutations) {
     if (mutation.type === "setDefaultAgent") {
       defaultAgentName = mutation.agentName;
       continue;
@@ -84,6 +125,5 @@ export async function applyValidatedConfigAssetMutations(
     },
     defaultAgentName
   );
-  validateAssetSet(kinds.kinds, candidate, stored);
-  return options.configAssets.store.applyConfigAssetMutations(input);
+  validateAssetSet(kinds, candidate, stored);
 }

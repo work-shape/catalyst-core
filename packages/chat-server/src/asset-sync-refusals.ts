@@ -10,6 +10,7 @@ import type { WorkflowAssetKind } from "./asset-kinds/shared";
 import {
   conflictMessage,
   describeConflicts,
+  readsHistory,
   type RevisionConflict,
   type StaleAsset
 } from "./asset-revision";
@@ -77,14 +78,34 @@ export function refusalOf(rule: () => void): ItemRefusal | undefined {
  * One write of a batch. Each names the revision it was made against: `null` on a put creates
  * the asset. An item that names none refuses the batch.
  */
-export type AssetSyncItem =
+type AssetSyncItem =
   | {
       type: "put";
       kind: string;
       config: Record<string, unknown>;
       expectedRevision?: number | null;
+      expectedAssetId?: string;
     }
-  | { type: "delete"; kind: string; name: string; expectedRevision?: number };
+  | {
+      type: "delete";
+      kind: string;
+      name: string;
+      expectedRevision?: number;
+      expectedAssetId?: string;
+    };
+
+export interface AssetSyncInput {
+  /**
+   * The prefix of the one Namespace the batch belongs to. A release names none and may name
+   * any asset of the instance.
+   */
+  namespace?: string;
+  items: AssetSyncItem[];
+  /** The default agent a release names, `null` for none. Left out, the batch names none. */
+  defaultAgentName?: string | null;
+  /** The default agent the batch was made against, where its caller says so. */
+  expectedDefaultAgentName?: string | null;
+}
 
 export interface PlannedItem {
   index: number;
@@ -93,6 +114,8 @@ export interface PlannedItem {
   kind?: WorkflowAssetKind;
   /** The instance's own row of the name, a deleted one included. */
   asset?: ConfigAssetRecord;
+  /** An asset a workspace owns carries the name. The batch never reads or writes it. */
+  other?: Pick<ConfigAssetRecord, "id" | "scope">;
   /** A delete of a release whose asset is not there: nothing is written for it. */
   absent?: boolean;
   refusal?: ItemRefusal;
@@ -111,20 +134,30 @@ export interface StaleItem {
   /** The row as the store read it under its lock, where it refused the batch. */
   asset?: StaleAsset["asset"];
   change?: StaleAsset["change"];
+  /** Only the name is told, whoever asks. */
+  untold?: true;
 }
 
 /** Refuses the batch for the items that were made against another revision, if any. */
 export async function refuseStale(
   options: ChatServerOptions,
   access: ActorAccess,
-  stale: readonly ReadyItem[]
+  stale: readonly StaleItem[]
 ): Promise<void> {
   if (stale.length === 0) return;
-  const items = stale.map((entry): StaleItem => ({ entry, asset: entry.asset }));
-  for (const [index, conflict] of (await conflictsOf(options, access, items)).entries()) {
-    const entry = stale[index];
+  for (const [index, conflict] of (await conflictsOf(options, access, stale)).entries()) {
+    const entry = stale[index]?.entry;
     if (entry) entry.refusal = staleRefusal(conflict);
   }
+}
+
+/** Whether the caller reads the asset an item names: its history, as a conflict tells it. */
+export function readsItem(access: ActorAccess, entry: ReadyItem): boolean {
+  return readsHistory(access, { kind: entry.kind, resource: itemResource(entry) });
+}
+
+function itemResource(entry: ReadyItem) {
+  return accessResource(entry.kind.kind, entry.name, INSTANCE_ASSET_SCOPE, entry.asset?.id);
 }
 
 /** The refusal of a batch the store found stale under its lock. */
@@ -150,12 +183,13 @@ function conflictsOf(
   return describeConflicts(
     options,
     access,
-    stale.map(({ entry, asset, change }) => ({
+    stale.map(({ entry, asset, change, untold }) => ({
       kind: entry.kind,
       name: entry.name,
-      resource: accessResource(entry.kind.kind, entry.name, INSTANCE_ASSET_SCOPE, entry.asset?.id),
+      resource: itemResource(entry),
       ...(asset ? { asset } : {}),
-      ...(change ? { change } : {})
+      ...(change ? { change } : {}),
+      ...(untold ? { untold } : {})
     }))
   );
 }

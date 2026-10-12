@@ -4,6 +4,7 @@ import {
   auditActorFromIdentity,
   findNamespaceOfAssetName,
   isAppError,
+  operationDenialError,
   type AuthenticatedIdentity,
   type ActorAccess,
   type ConfigAssetMutation,
@@ -53,6 +54,7 @@ import {
   isReleaseSync,
   loadReferableAssets,
   loadStoredAssets,
+  missingUpsertRightOf,
   type StoredAssets,
   requireInstanceDefaultChange,
   requireAssetKindModuleOn,
@@ -63,8 +65,10 @@ import {
 import {
   assertStoredWritable,
   notFound,
+  readsTarget,
   recordAssetEvent,
-  requireActive,
+  recordCommitted,
+  requireDeletable,
   requireExpectedRevision,
   requireOwnScope,
   type AssetAddress,
@@ -138,23 +142,109 @@ export class AssetWorkflow {
   }
 
   /**
-   * The right of a write that names the revision it was made against, and after it the
-   * precondition itself. A caller without the right learns nothing else, and a write that
-   * names no revision reaches neither the policy nor a guardrail.
+   * Every right of a write that names the revision it was made against, and after them the
+   * precondition itself: the right on the asset, then what the write needs beside it, then
+   * the revision. A caller without a right learns nothing else, and a write that names no
+   * revision reaches neither the policy nor a guardrail.
    */
   async authorizeRevisionWrite(
     access: ActorAccess,
-    input: AssetAddress & { expectedRevision?: number | null },
+    input: AssetAddress & {
+      expectedRevision?: number | null;
+      config?: Record<string, unknown>;
+      /** The revision a revert makes the content again: its config is what the write puts. */
+      revision?: number;
+    },
     right: "write" | "delete"
   ): Promise<OperationAuthorization> {
+    const target = await this.target(input);
     const decision =
       right === "delete"
-        ? await this.authorizeDelete(access, input)
-        : await this.authorizeWrite(access, input);
-    if (decision.allowed) {
+        ? deleteDecision(access, target)
+        : decide(access, target.kind.actions.write, target.resource);
+    if (!decision.allowed) {
+      return decision;
+    }
+    const config =
+      input.config ??
+      (input.revision === undefined
+        ? undefined
+        : ((await this.revisionOf(target, input.revision))?.config ?? undefined));
+    const further = await this.furtherRight(access, target, right, config);
+    if (further.allowed) {
       requirePrecondition(input, input.expectedRevision);
     }
-    return decision;
+    return further;
+  }
+
+  /**
+   * The rights a write of one asset needs beside the one on the asset: what the kind asks for
+   * a put of this definition, such as the right to manage model settings, and the write right
+   * on the instance where the write changes the instance default. They are decided on what the
+   * caller sent and on the stored asset, before the revision is: a caller who lacks one is
+   * told that and nothing of the revision.
+   */
+  private async furtherRight(
+    access: ActorAccess,
+    target: AssetTarget,
+    right: "write" | "delete",
+    config?: Record<string, unknown>
+  ): Promise<OperationAuthorization> {
+    const { kind, name } = target;
+    if (right === "write" && config !== undefined && kind.representation !== "files") {
+      const current = target.asset?.status === "active" ? target.asset.config : undefined;
+      const action = missingUpsertRightOf(access, "put", kind, {
+        name,
+        current,
+        next: kind.prepareInteractiveUpsert({ current, next: config }),
+        namespaces: await this.options.stores.access.listNamespaceRecords({
+          clientInstanceId: this.options.clientInstanceId
+        })
+      });
+      if (action !== undefined) {
+        return { allowed: false, action, reason: "no_grant" };
+      }
+    }
+    // Only a holder of the write right on the instance changes its default, so only for
+    // everyone else is the set read to see whether this write would.
+    const instanceWrite = access.authorize(kind.actions.write);
+    if (!kind.holdsInstanceDefault || instanceWrite.allowed) {
+      return { allowed: true };
+    }
+    const stored = await loadStoredAssets(this.options);
+    const changesDefault =
+      right === "delete"
+        ? target.asset?.status === "active" && clearsLastDefault(stored.set, kind, name)
+        : setsInitialDefault(stored.set, kind);
+    return changesDefault
+      ? { allowed: false, action: kind.actions.write, reason: instanceWrite.reason }
+      : { allowed: true };
+  }
+
+  private revisionOf(target: AssetTarget, revision: number) {
+    return this.options.configAssets.store.getConfigAssetRevision({
+      clientInstanceId: this.options.clientInstanceId,
+      kind: target.kind.kind,
+      name: target.name,
+      revision
+    });
+  }
+
+  /** Throws the refusal of `furtherRight`, as the operation layer answers a missing right. */
+  private async requireFurtherRight(
+    access: ActorAccess,
+    target: AssetTarget,
+    right: "write" | "delete",
+    config?: Record<string, unknown>
+  ): Promise<void> {
+    const further = await this.furtherRight(access, target, right, config);
+    if (!further.allowed) {
+      throw operationDenialError({
+        kind: "forbidden",
+        action: further.action,
+        reason: further.reason
+      });
+    }
   }
 
   /** A definition that names no asset is checked as the kind's right on the whole scope. */
@@ -225,9 +315,10 @@ export class AssetWorkflow {
     const target = await this.target(input);
     const { kind } = target;
     call.access.require(kind.actions.write, target.resource);
+    await this.requireFurtherRight(call.access, target, "write", input.config);
     const expectedRevision = requirePrecondition(input, input.expectedRevision);
     await this.authorizeEditing(call, "put");
-    assertStoredWritable(target);
+    assertStoredWritable(target, call.access);
     if (kind.representation === "files") {
       return this.drafts.putFiles(call, target, { ...input, expectedRevision });
     }
@@ -239,8 +330,9 @@ export class AssetWorkflow {
       );
     }
     requireMatchingConfigName(input.config, input.name);
-    requireOwnScope(target);
+    requireOwnScope(target, call.access);
     await requireExpectedRevision(this.options, call, target, expectedRevision);
+    assertStoredWritable(target, "always");
     return this.upsert(call, target, input.config, {
       expectedRevision,
       audit: "config_asset.updated"
@@ -254,6 +346,10 @@ export class AssetWorkflow {
   ) {
     const target = await this.target(input);
     call.access.require(target.kind.actions.write, target.resource);
+    const restored = await this.revisionOf(target, input.revision);
+    if (restored?.config) {
+      await this.requireFurtherRight(call.access, target, "write", restored.config);
+    }
     const expectedRevision = requirePrecondition(input, input.expectedRevision);
     await this.authorizeEditing(call, "revert");
     if (target.kind.lifecycle === "draft_published") {
@@ -263,20 +359,16 @@ export class AssetWorkflow {
         { reason: "use_publish" }
       );
     }
-    assertStoredWritable(target);
-    requireOwnScope(target);
-    if (!target.asset) {
+    assertStoredWritable(target, call.access);
+    requireOwnScope(target, call.access);
+    // A caller who does not read the asset is not told whether it was ever stored.
+    if (!target.asset && readsTarget(call.access, target)) {
       throw notFound(target);
     }
-    if (target.asset.revision !== expectedRevision) {
+    if (target.asset?.revision !== expectedRevision) {
       throw await revisionConflictOf(this.options, call.access, target);
     }
-    const restored = await this.options.configAssets.store.getConfigAssetRevision({
-      clientInstanceId: this.options.clientInstanceId,
-      kind: target.kind.kind,
-      name: target.name,
-      revision: input.revision
-    });
+    assertStoredWritable(target, "always");
     if (!restored || restored.config === null) {
       throw new AppError(
         "VALIDATION_FAILED",
@@ -298,14 +390,13 @@ export class AssetWorkflow {
     if (!right.allowed) {
       call.access.require(right.action, target.resource);
     }
+    await this.requireFurtherRight(call.access, target, "delete");
     const expectedRevision = requirePrecondition(input, input.expectedRevision);
     await this.authorizeEditing(call, "delete");
-    assertStoredWritable(target);
+    assertStoredWritable(target, call.access);
     assertDeleteWithinLimits(call.access, "delete", kind);
-    const asset = requireActive(target);
-    if (asset.revision !== expectedRevision) {
-      throw await revisionConflictOf(this.options, call.access, target);
-    }
+    await requireDeletable(this.options, call, target, expectedRevision);
+    assertStoredWritable(target, "always");
     if (kind.representation === "files") {
       return this.drafts.remove(call, target, expectedRevision);
     }
@@ -327,14 +418,16 @@ export class AssetWorkflow {
         ...(clearsDefault ? [{ type: "setDefaultAgent" as const, agentName: undefined }] : [])
       ]
     });
-    // The store appends exactly one revision to the one the batch was checked against.
-    const revision = expectedRevision + 1;
-    await this.record(call, "config_asset.deleted", {
-      kind: kind.kind,
-      name,
-      revision,
-      version: result.version
-    });
+    const revision = allocatedRevision(result, kind.kind, name);
+    await recordCommitted(this.options, call, [
+      () =>
+        this.record(call, "config_asset.deleted", {
+          kind: kind.kind,
+          name,
+          revision,
+          version: result.version
+        })
+    ]);
     return { version: result.version, revision, warnings: [] };
   }
 
@@ -483,20 +576,15 @@ export class AssetWorkflow {
       ...(setsDefault ? { baseDefaultAgentName: null } : {}),
       mutations
     });
-    const updated = requireActive(
-      await this.target({
-        kind: kind.kind,
-        name,
-        ...(target.scope.kind === "workspace" ? { workspaceId: target.scope.workspaceId } : {})
-      })
-    );
-    await this.record(call, write.audit, {
-      kind: kind.kind,
-      name,
-      revision: updated.revision,
-      version: result.version
-    });
-    return { version: result.version, revision: updated.revision, warnings: [] };
+    // The revision this write was given. The asset is not read again: by now another write
+    // may have given it a later one, which this caller did not make and must not be told as
+    // the revision of its own content.
+    const revision = allocatedRevision(result, kind.kind, name);
+    await recordCommitted(this.options, call, [
+      () =>
+        this.record(call, write.audit, { kind: kind.kind, name, revision, version: result.version })
+    ]);
+    return { version: result.version, revision, warnings: [] };
   }
 
   /**
@@ -539,7 +627,7 @@ export class AssetWorkflow {
     call: AssetCall,
     target: AssetTarget,
     batch: MutationBatch
-  ): Promise<{ version: number }> {
+  ): ReturnType<ConfigAssetStore["applyConfigAssetMutations"]> {
     try {
       return await applyValidatedConfigAssetMutations(this.options, {
         clientInstanceId: this.options.clientInstanceId,
@@ -584,10 +672,26 @@ export class AssetWorkflow {
       scope,
       ...(asset ? { asset } : {}),
       elsewhere: row !== undefined && asset === undefined,
+      ...(row !== undefined && asset === undefined
+        ? { other: { id: row.id, scope: row.scope } }
+        : {}),
       resource: accessResource(kind.kind, address.name, scope, asset?.id),
       address
     };
   }
+}
+
+/** The revision the store gave the asset in the write that just committed. */
+function allocatedRevision(
+  result: { revisions: Record<string, number> },
+  kind: string,
+  name: string
+): number {
+  const revision = result.revisions[assetKey(kind, name)];
+  if (revision === undefined) {
+    throw new AppError("INTERNAL", `The write of config ${kind} '${name}' has no revision`);
+  }
+  return revision;
 }
 
 /** What the kind refuses a write of the stored asset for, whatever the write says. */

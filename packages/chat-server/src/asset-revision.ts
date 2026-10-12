@@ -41,6 +41,11 @@ export interface StaleAsset {
   asset?: Pick<ConfigAssetRecord, "revision" | "status">;
   /** Who wrote the current revision and when, where the store said so with its refusal. */
   change?: { changedBy?: string; changedAt?: string };
+  /**
+   * Nothing but the name is told, whoever asks: the name is held by an asset of another owner
+   * that this caller may not read, so what the addressed scope holds of it says nothing true.
+   */
+  untold?: true;
 }
 
 type RevisionReader = Pick<ChatServerOptions, "clientInstanceId" | "configAssets">;
@@ -50,7 +55,10 @@ type RevisionReader = Pick<ChatServerOptions, "clientInstanceId" | "configAssets
  * kind with a draft the right its drafts are read with. It is what `assets.revisions.list`
  * asks, so a conflict tells nothing that list would refuse.
  */
-function readsHistory(access: ActorAccess, stale: StaleAsset): boolean {
+export function readsHistory(
+  access: ActorAccess,
+  stale: Pick<StaleAsset, "kind" | "resource">
+): boolean {
   const { read, write, publish } = stale.kind.actions;
   const holds = (action: string) => access.authorize(action, stale.resource).allowed;
   return stale.kind.lifecycle === "draft_published"
@@ -70,7 +78,7 @@ export async function describeConflicts(
   const conflicts: RevisionConflict[] = [];
   for (const entry of stale) {
     const named = { kind: entry.kind.kind, name: entry.name };
-    if (!readsHistory(access, entry)) {
+    if (entry.untold || !readsHistory(access, entry)) {
       conflicts.push(named);
       continue;
     }
@@ -132,6 +140,11 @@ function revisionConflictError(conflicts: readonly RevisionConflict[]): AppError
       : `${conflicts.length} assets are not at the revisions the call names`,
     { reason: REVISION_CONFLICT_REASON, conflicts }
   );
+}
+
+/** The refusal that tells the name and nothing else, whoever asks. */
+export function nameOnlyConflict(address: { kind: { kind: string }; name: string }): AppError {
+  return revisionConflictError([{ kind: address.kind.kind, name: address.name }]);
 }
 
 /** The refusal of one write made against another revision, told as its caller may read it. */

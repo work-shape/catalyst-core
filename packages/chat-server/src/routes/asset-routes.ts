@@ -92,7 +92,7 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
   });
 
   route.operation(apiOperations["assets.discard_draft"], {
-    authorize: (input, { access }) => workflow.authorizeWrite(access, input),
+    authorize: (input, { access }) => workflow.authorizeRevisionWrite(access, input, "write"),
     resource: assetResource,
     policyTargets: (input) => workflow.policyTargets(input),
     changeClass: "reversible",
