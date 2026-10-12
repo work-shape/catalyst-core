@@ -65,7 +65,7 @@ export function SurfaceFrame({
         data-flush={flush ? "" : undefined}
         className={cn(
           "min-h-0 flex-1 bg-background",
-          flush ? "overflow-hidden" : "overflow-y-auto p-4 [scrollbar-width:thin]"
+          flush ? "overflow-hidden" : "overflow-y-auto p-4"
         )}
       >
         {children}

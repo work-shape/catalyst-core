@@ -1,6 +1,13 @@
+/* The spreadsheet's stylesheet resets the scrollbar of every element
+   (`* { scrollbar-color: initial; scrollbar-width: initial }`). Unlayered, that rule beat every
+   layer and gave the whole interface the browser's own scrollbar. In a layer of its own it
+   still stands above the base layer, so the reset of the base cannot reach into a sheet, and
+   below the components layer, where the library sets the one scrollbar. */
+@layer theme, base, univer, components, utilities;
+
 /* Tailwind, the theme tokens and the default theme come with the shared UI library. */
 @import "@vivd-catalyst/ui/styles.css";
-@import "@univerjs/preset-sheets-core/lib/index.css";
+@import "@univerjs/preset-sheets-core/lib/index.css" layer(univer);
 
 @source "./**/*.{ts,tsx}";
 /* Streamdown ships its classes in dist/. The first three paths match the workspace layout
@@ -49,36 +56,6 @@
 
   .artifact-markdown {
     @apply mx-auto w-full max-w-4xl;
-  }
-
-  .chat-scrollbar {
-    scrollbar-width: thin;
-    scrollbar-color: color-mix(in srgb, var(--muted-foreground) 45%, transparent) transparent;
-  }
-
-  .chat-scrollbar::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-  }
-
-  .chat-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .chat-scrollbar::-webkit-scrollbar-thumb {
-    border: 2px solid transparent;
-    border-radius: 9999px;
-    background: color-mix(in srgb, var(--muted-foreground) 42%, transparent);
-    background-clip: content-box;
-  }
-
-  .chat-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in srgb, var(--foreground) 50%, transparent);
-    background-clip: content-box;
-  }
-
-  .chat-scrollbar::-webkit-scrollbar-corner {
-    background: transparent;
   }
 
   /* Reserves room for the floating Resources panel by shifting the thread
@@ -266,11 +243,6 @@
 
 .chat-user-message-bubble .chat-markdown [data-streamdown="code-block"] {
   color: var(--foreground);
-}
-
-.chat-user-message-bubble .chat-markdown [data-streamdown="code-block-body"] {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--muted-foreground) 45%, transparent) transparent;
 }
 
 .chat-markdown [data-streamdown="code-block-body"] pre code > span {

@@ -133,7 +133,7 @@ function AreaFrame({
     >
       <div
         ref={ref}
-        className="chat-scrollbar min-h-0 min-w-0 overflow-x-hidden overflow-y-auto [container-type:size] max-md:[--layout-page-inset:var(--layout-header)] max-md:[--layout-page-head-inset:0rem] max-md:[--layout-page-head-start:var(--layout-header-control)]"
+        className="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto [container-type:size] max-md:[--layout-page-inset:var(--layout-header)] max-md:[--layout-page-head-inset:0rem] max-md:[--layout-page-head-start:var(--layout-header-control)]"
       >
         {children}
       </div>

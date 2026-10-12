@@ -148,7 +148,7 @@ function SaveBarSamples({ text }: { text: GalleryText }) {
       </Samples>
       <Samples label={text.saveSticky}>
         <div
-          className="h-56 w-full overflow-y-auto rounded-lg border [scrollbar-width:thin]"
+          className="h-56 w-full overflow-y-auto rounded-lg border"
           data-gallery-sample="save-bar-sticky"
         >
           <Page width="narrow">

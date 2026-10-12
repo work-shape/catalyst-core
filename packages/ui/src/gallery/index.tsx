@@ -181,7 +181,7 @@ function SampleSection({ panels, language, text }: SectionProps) {
                 <PanelRoot
                   mode={panel}
                   language={language}
-                  className="max-h-160 overflow-y-auto rounded-lg border [scrollbar-width:thin]"
+                  className="max-h-160 overflow-y-auto rounded-lg border"
                 >
                   {sample.render(text)}
                 </PanelRoot>

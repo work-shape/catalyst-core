@@ -253,7 +253,7 @@ export function CollaborationWorkspaceEmojiGrid({
         aria-label={t("collaborationWorkspaceEmojiMoreLabel")}
         data-testid="collaboration-workspace-emoji-grid"
         data-overflow-below={fade.overflow.below ? "true" : "false"}
-        className="chat-scrollbar max-h-[12.25rem] overflow-y-auto p-1"
+        className="max-h-[12.25rem] overflow-y-auto p-1"
         onScroll={fade.onScroll}
       >
         <div className="grid grid-cols-[repeat(auto-fill,minmax(1.75rem,1fr))] content-start gap-1">

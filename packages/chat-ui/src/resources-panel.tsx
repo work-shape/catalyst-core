@@ -205,7 +205,7 @@ export function ResourcesPanel({
           <X size={15} aria-hidden="true" />
         </IconButton>
       </div>
-      <div className="chat-scrollbar min-h-0 overflow-y-auto p-2">
+      <div className="min-h-0 overflow-y-auto p-2">
         {loading ? (
           <div className="flex items-center justify-center gap-2 px-3 py-8 text-sm text-muted-foreground">
             <Spinner size="sm" />

@@ -211,7 +211,7 @@ export function Dialog({
             <X aria-hidden="true" />
           </Button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-5 [scrollbar-width:thin]">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">{children}</div>
         {footer === undefined ? null : (
           <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t px-5 py-3">
             {footer}

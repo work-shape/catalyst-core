@@ -191,7 +191,7 @@ function TextArtifactPreview({ blob }: { blob: Blob }) {
   const text = useBlobText(blob);
 
   return (
-    <pre className="chat-scrollbar h-full overflow-auto bg-background p-4 font-mono text-xs leading-5 text-foreground">
+    <pre className="h-full overflow-auto bg-background p-4 font-mono text-xs leading-5 text-foreground">
       {text ?? t("artifactPreviewLoading")}
     </pre>
   );
@@ -202,7 +202,7 @@ function MarkdownArtifactPreview({ blob }: { blob: Blob }) {
   const text = useBlobText(blob);
 
   return (
-    <div className="chat-scrollbar h-full overflow-auto bg-background px-5 py-6 text-foreground lg:px-7">
+    <div className="h-full overflow-auto bg-background px-5 py-6 text-foreground lg:px-7">
       {text === undefined ? (
         t("artifactPreviewLoading")
       ) : (

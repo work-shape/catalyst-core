@@ -95,12 +95,6 @@ export function CreateCollaborationWorkspaceDialog({
     <Dialog
       open={open}
       title={t("collaborationWorkspaceCreateTitle")}
-      /*
-        The body below caps its own height, so the frame should not need to
-        scroll; theming it keeps the fallback from showing an OS scrollbar under
-        the rounded border on an unusually short viewport.
-      */
-      className="chat-scrollbar"
       onClose={() => {
         if (!pending) {
           onClose();

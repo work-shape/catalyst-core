@@ -33,7 +33,7 @@ export function CodeBlock({ className, code, label, ...props }: CodeBlockProps) 
       tabIndex={0}
       data-slot="code-block"
       className={cn(
-        "min-h-0 min-w-0 overflow-auto rounded-md border bg-card font-mono text-code text-foreground outline-none [scrollbar-width:thin] focus-visible:ring-2 focus-visible:ring-ring",
+        "min-h-0 min-w-0 overflow-auto rounded-md border bg-card font-mono text-code text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring",
         className
       )}
       data-digits={digits}

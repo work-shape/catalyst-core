@@ -218,10 +218,58 @@
   outline-offset: -2px;
 }
 
+/* The one scrollbar of everything that scrolls: thin, no track, a quiet thumb mixed from the
+   theme's muted text colour where the element stands. Feature code styles no scrollbar; the
+   library hides one with `[scrollbar-width:none]`. The rule stands in the components layer:
+   above a vendor stylesheet an application layers over the base, below the utilities. */
+@layer components {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--muted-foreground) 45%, transparent) transparent;
+  }
+
+  /* A browser without `scrollbar-color` gets the same scrollbar from the older rules. */
+  @supports not (scrollbar-color: auto) {
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+
+    ::-webkit-scrollbar-track,
+    ::-webkit-scrollbar-corner {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      border: 2px solid transparent;
+      border-radius: 9999px;
+      background: color-mix(in srgb, var(--muted-foreground) 45%, transparent);
+      background-clip: content-box;
+    }
+  }
+}
+
 @layer base {
   * {
     border-color: var(--border);
     outline-color: var(--ring);
+  }
+
+  /* What the browser draws itself (a scrollbar's track, a field's autofill, a date picker)
+     follows the mode: the document's, and that of a dark `UiRoot` in a document that names none. */
+  :root[data-vivd-theme="light"] {
+    color-scheme: light;
+  }
+
+  :root[data-vivd-theme="dark"],
+  .dark {
+    color-scheme: dark;
+  }
+
+  /* A framed document that names no scheme is a light one. A frame with another scheme than
+     its document gets an opaque canvas, which would hide the background its host gives it. */
+  iframe {
+    color-scheme: light;
   }
 
   /* Lucide icons: stroke 1.5 at 16 and 20 px, 2 at 12 px. A `stroke-2` class overrides this,

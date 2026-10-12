@@ -101,7 +101,7 @@ export function CommandPalette({
             <div
               ref={fade.ref}
               style={fade.style}
-              className="min-h-0 flex-1 overflow-y-auto p-1 [scrollbar-width:thin]"
+              className="min-h-0 flex-1 overflow-y-auto p-1"
               onScroll={fade.onScroll}
             >
               {shown.map((group) =>

@@ -72,7 +72,7 @@ function PageHeaderSamples({ text }: { text: GalleryText }) {
       </Samples>
       <Samples label={text.headerDetail}>
         <div
-          className="h-48 w-full overflow-y-auto rounded-lg border [scrollbar-width:thin]"
+          className="h-48 w-full overflow-y-auto rounded-lg border"
           data-gallery-sample="header-detail"
         >
           <PageHeader
@@ -240,10 +240,7 @@ export const structureGallery: GalleryGroup = {
       render: (text) => (
         <div className="grid gap-3">
           {/* A page that scrolls ends with the page-end space; with a footer the space is above it. */}
-          <div
-            className="h-56 overflow-y-auto rounded-lg border [scrollbar-width:thin]"
-            data-gallery-sample="page-footer"
-          >
+          <div className="h-56 overflow-y-auto rounded-lg border" data-gallery-sample="page-footer">
             <Page width="narrow">
               <p className="min-h-64 rounded-md bg-muted px-3 py-2 text-caption text-muted-foreground">
                 {pageWidthLabel("narrow", text)}

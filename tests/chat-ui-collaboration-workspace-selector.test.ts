@@ -209,7 +209,7 @@ describe("collaboration workspace selector", () => {
       collaborationWorkspace({ id: "cw_b", name: "Beta" })
     ]);
 
-    expect(markup).toMatch(/<div class="chat-scrollbar[^"]*overflow-y-auto[^"]*"/u);
+    expect(markup).toMatch(/<div class="[^"]*overflow-y-auto[^"]*"/u);
     // The create/browse row stays outside the scroll container.
     expect(markup).toMatch(/<\/div><div class="mt-2 grid grid-cols-2 gap-1 border-t pt-2"/u);
   });

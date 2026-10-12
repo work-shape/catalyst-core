@@ -3003,7 +3003,10 @@ test("no page keeps room for the agent button: lists share one title line and a 
   const firstSection = page.locator('section nav a[href^="#"]').first();
   await expect(firstSection).toBeVisible();
   const restingTop = (await firstSection.boundingBox())?.y;
-  const scroller = page.locator("section .chat-scrollbar").first();
+  // The area's scroll container: the one the rail stands in.
+  const scroller = page
+    .locator("section > div.overflow-y-auto")
+    .filter({ has: page.locator('nav a[href^="#"]') });
   for (const top of SUB_RAIL_SCROLL_STEPS) {
     expect(
       await scroller.evaluate((element, to) => {

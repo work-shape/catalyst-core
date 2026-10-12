@@ -441,7 +441,7 @@ function SubRailAnchorsSample({
 
   return (
     <div
-      className="h-80 overflow-y-auto rounded-lg border [scrollbar-width:thin]"
+      className="h-80 overflow-y-auto rounded-lg border"
       data-gallery-sample={underHeader ? "subrail-anchors-header" : "subrail-anchors"}
     >
       <Page

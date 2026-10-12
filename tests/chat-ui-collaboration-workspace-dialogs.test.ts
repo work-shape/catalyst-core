@@ -937,7 +937,7 @@ describe("collaboration workspace emoji picker", () => {
       countOccurrences(markup, 'data-testid="collaboration-workspace-emoji-choice"')
     ).toBeGreaterThan(100);
     expect(markup).toMatch(
-      /data-testid="collaboration-workspace-emoji-grid"[^>]*class="chat-scrollbar/u
+      /data-testid="collaboration-workspace-emoji-grid"[^>]*class="[^"]*overflow-y-auto/u
     );
     /*
       A whole number of rows: h-7 tiles on a gap-1 row gap make a 2rem pitch, so
@@ -1019,7 +1019,7 @@ describe("collaboration workspace dialog chrome", () => {
     ]) {
       // Equal breathing room at both cut edges, and a gutter to the thumb.
       expect(markup).toMatch(
-        new RegExp(`${scrollBody}[^>]*class="chat-scrollbar overflow-y-auto py-5 pl-5 pr-3`, "u")
+        new RegExp(`${scrollBody}[^>]*class="overflow-y-auto py-5 pl-5 pr-3`, "u")
       );
       expect(markup).toContain(pinnedFooter);
     }
@@ -1042,7 +1042,7 @@ describe("collaboration workspace dialog chrome", () => {
       })
     );
 
-    expect(markup).toMatch(/role="listbox"[^>]*class="chat-scrollbar[^"]*overflow-y-auto/u);
+    expect(markup).toMatch(/role="listbox"[^>]*class="[^"]*overflow-y-auto/u);
     // The rounded frame is a wrapper, so the thumb never runs under its radius.
     expect(markup).toMatch(/<div class="absolute[^"]*rounded-md border[^"]*"><ul/u);
   });

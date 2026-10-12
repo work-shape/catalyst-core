@@ -227,7 +227,7 @@ export function CollaborationWorkspaceSelectorMenu({
           <div
             ref={fade.ref}
             style={fade.style}
-            className="chat-scrollbar -mx-1 grid max-h-[min(22rem,50vh)] auto-rows-max gap-1 overflow-y-auto px-1"
+            className="-mx-1 grid max-h-[min(22rem,50vh)] auto-rows-max gap-1 overflow-y-auto px-1"
             onScroll={fade.onScroll}
           >
             {personalCollaborationWorkspace ? (

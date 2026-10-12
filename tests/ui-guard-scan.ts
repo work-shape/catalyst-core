@@ -10,6 +10,7 @@ export type UiGuardCategory =
   | "hex"
   | "font-size"
   | "radius"
+  | "scrollbar"
   | "overlay-imports"
   | "library-imports"
   | "library-storage"
@@ -31,6 +32,8 @@ export const uiGuardHints: Record<UiGuardCategory, string> = {
   hex: "Use a theme token. Only packages/ui/src/theme may hold colour values.",
   "font-size": "Use one of the nine type styles (text-title … text-code), not an arbitrary size.",
   radius: "Use rounded-sm, -md, -lg, -xl or -full, not an arbitrary radius.",
+  scrollbar:
+    "Style no scrollbar: the base rule in packages/ui/src/styles.css gives every scroll area the one scrollbar. Only the library hides one.",
   "overlay-imports":
     "Import the component from @vivd-catalyst/ui. Only the library imports radix-ui and cmdk.",
   "library-imports":
@@ -72,6 +75,11 @@ const PALETTE =
 const HEX = /(?<![&\w])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})(?![\w-])/gu;
 const FONT_SIZE = /(?<![\w-])text-\[\d[^\]]*\]/gu;
 const RADIUS = /(?<![\w-])rounded(?:-[a-z]{1,2})?-\[[^\]]+\]/gu;
+/** A scrollbar style by any of its names: the properties, the older pseudo-elements, the old class. */
+const SCROLLBAR =
+  /(?<![\w-])(?:scrollbar-(?:width|color)(?::none)?|scrollbar(?:Width|Color)|(?:&::)?-webkit-scrollbar[\w-]*(?:\]:hidden)?|chat-scrollbar)(?![\w-])/gu;
+/** The library may hide a scrollbar, as the tab row does. */
+const SCROLLBAR_HIDDEN = /(?::none|\]:hidden)$/u;
 
 /** Every finding under `packages/<name>/src` and `clients/<name>` of the platform at `root`. */
 export function scanUiGuard(root: string): UiGuardFinding[] {
@@ -131,6 +139,14 @@ function scanStylesheet(file: string, text: string, findings: UiGuardFinding[]):
       found: match[0]
     });
   }
+  for (const match of code.matchAll(SCROLLBAR)) {
+    findings.push({
+      file,
+      line: code.slice(0, match.index).split("\n").length,
+      category: "scrollbar",
+      found: match[0]
+    });
+  }
 }
 
 function scanSource(file: string, text: string, findings: UiGuardFinding[]): void {
@@ -164,6 +180,11 @@ function scanSource(file: string, text: string, findings: UiGuardFinding[]): voi
     }
     for (const match of value.matchAll(RADIUS)) {
       add(node, "radius", match[0]);
+    }
+    for (const match of value.matchAll(SCROLLBAR)) {
+      if (!(inLibrary && SCROLLBAR_HIDDEN.test(match[0]))) {
+        add(node, "scrollbar", match[0]);
+      }
     }
   };
 
@@ -206,6 +227,13 @@ function scanSource(file: string, text: string, findings: UiGuardFinding[]): voi
     }
     if (inLibrary && ts.isIdentifier(node) && STORAGE_NAMES.has(node.text)) {
       add(node, "library-storage", node.text);
+    }
+    // A style object names the property without a string.
+    if (
+      ts.isIdentifier(node) &&
+      (node.text === "scrollbarWidth" || node.text === "scrollbarColor")
+    ) {
+      add(node, "scrollbar", node.text);
     }
     if (ts.isStringLiteralLike(node) || ts.isTemplateLiteralToken(node)) {
       scanText(node, node.text);

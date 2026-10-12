@@ -390,7 +390,7 @@ function ImagePagesArtifactPreview({
   }
 
   return (
-    <div className="chat-scrollbar h-full overflow-auto bg-slate-100">
+    <div className="h-full overflow-auto bg-slate-100">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-6 py-6">
         {artifact.preview?.truncated && artifact.preview.pageCount ? (
           <div className="rounded-md border bg-background px-4 py-3 text-sm text-muted-foreground">

@@ -32,9 +32,9 @@ const baselinePath = fileURLToPath(new URL("./ui-guard.baseline.json", import.me
 /**
  * Holds interface code to the shared UI library. Outside the library it counts what the library
  * replaces: raw form elements and dialogs, overlay roles, colours and sizes that bypass the
- * tokens, and overlay packages. Inside the library the same colours and sizes are held at zero,
- * and the library may import only its allow-list, keep nothing in storage and show no text of
- * its own.
+ * tokens, overlay packages, and a scrollbar styled anywhere but in the library's base rule.
+ * Inside the library the same colours and sizes are held at zero, and the library may import
+ * only its allow-list, keep nothing in storage and show no text of its own.
  *
  * Every count must equal its baseline line: above fails, and below fails too, so a stale line
  * cannot hide a later rise. `UPDATE_UI_GUARD=1 pnpm vitest run tests/ui-guard.test.ts` lowers
@@ -160,6 +160,7 @@ function categoryEntries(
     "hex",
     "font-size",
     "radius",
+    "scrollbar",
     "overlay-imports",
     "library-imports",
     "library-storage",

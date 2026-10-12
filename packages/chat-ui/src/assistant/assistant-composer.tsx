@@ -435,8 +435,6 @@ function DraftAttachmentList({
           ref={listRef}
           className="grid max-h-36 gap-1.5 overflow-y-auto sm:grid-cols-2"
           style={{
-            scrollbarWidth: "thin",
-            scrollbarColor: "var(--border) transparent",
             maskImage: attachmentFadeMask(overflow),
             WebkitMaskImage: attachmentFadeMask(overflow)
           }}

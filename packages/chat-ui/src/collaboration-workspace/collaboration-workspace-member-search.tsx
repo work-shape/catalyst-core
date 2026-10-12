@@ -222,7 +222,7 @@ export function CollaborationWorkspaceMemberCandidateList({
         role="listbox"
         id={collaborationWorkspaceMemberCandidateListId}
         aria-label={t("collaborationWorkspaceMemberCandidatesLabel")}
-        className="chat-scrollbar grid max-h-56 auto-rows-max gap-0.5 overflow-y-auto"
+        className="grid max-h-56 auto-rows-max gap-0.5 overflow-y-auto"
         onScroll={fade.onScroll}
       >
         {candidates.map((candidate, index) => (

@@ -37,7 +37,7 @@ export function CollaborationWorkspaceDialogScrollBody({
       data-testid="collaboration-workspace-dialog-scroll-body"
       data-overflow-above={fade.overflow.above ? "true" : "false"}
       data-overflow-below={fade.overflow.below ? "true" : "false"}
-      className={cn("chat-scrollbar overflow-y-auto py-5 pl-5 pr-3", className)}
+      className={cn("overflow-y-auto py-5 pl-5 pr-3", className)}
       onScroll={fade.onScroll}
     >
       <div className={cn("grid auto-rows-max content-start gap-5", contentClassName)}>

@@ -105,7 +105,7 @@ export function Sidebar({
         // scrolls with the list and does not lengthen the page.
         // The room under the last item is that between two groups, so the last item scrolls
         // clear of the footer's line.
-        className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 pb-4 [scrollbar-width:thin]"
+        className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 pb-4"
       >
         {/* The room above the first group is the content's, not the body's: a pinned group
             label lies over it, at the very top of what scrolls. */}

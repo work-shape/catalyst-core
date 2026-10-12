@@ -29,12 +29,7 @@ export function BrowseCollaborationWorkspacesDialog({
   const { t } = useTranslation();
 
   return (
-    <Dialog
-      open={open}
-      title={t("collaborationWorkspaceBrowseTitle")}
-      className="chat-scrollbar"
-      onClose={onClose}
-    >
+    <Dialog open={open} title={t("collaborationWorkspaceBrowseTitle")} onClose={onClose}>
       {/*
         Same chrome as the other workspace dialogs: a pinned intro, the
         directory scrolling between two rules, and a pinned Close.

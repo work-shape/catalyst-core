@@ -172,7 +172,7 @@ export function AssistantThread({
           scrollToBottomOnRunStart={false}
           scrollToBottomOnInitialize={!activeRunId}
           scrollToBottomOnThreadSwitch={!activeRunId}
-          className="chat-scrollbar chat-thread-inset relative flex min-h-0 flex-col overflow-y-auto overflow-x-hidden scroll-smooth"
+          className="chat-thread-inset relative flex min-h-0 flex-col overflow-y-auto overflow-x-hidden scroll-smooth"
         >
           <ConversationRunTopAnchor activeRunId={activeRunId} />
           <div className="mx-auto flex min-h-full w-full max-w-[var(--thread-max-width)] flex-1 flex-col px-5 pt-20">

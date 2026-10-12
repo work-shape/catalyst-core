@@ -204,7 +204,7 @@ export function AppsPageView({
       <div
         ref={scrollRef}
         // Below `md` the button that opens the sidebar floats over the page, which starts below it.
-        className="chat-scrollbar min-h-0 min-w-0 overflow-x-hidden overflow-y-auto [container-type:size] max-md:[--layout-page-inset:var(--layout-header)]"
+        className="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto [container-type:size] max-md:[--layout-page-inset:var(--layout-header)]"
       >
         <Page>
           <PageHeader title={t("apps.title")} description={t("apps.description")} />
