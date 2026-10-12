@@ -123,7 +123,7 @@ for (const composeFile of composeFiles) {
 
   assert(worker, `${composeFile}: artifact-preview-worker service is required`);
   assert(api, `${composeFile}: api service is required`);
-  const resolved = await resolveCompose(composeFile);
+  const resolved = await resolveCompose(composeFile, secretsTheWorkerMustNotReceive);
   const resolvedWorker = resolved.services["artifact-preview-worker"];
   assertWorkerIsolation(composeFile, resolved, "artifact-preview-worker", {
     secretNames: secretsTheWorkerMustNotReceive

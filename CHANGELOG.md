@@ -1456,7 +1456,7 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 ### Fixed
 
 - **Deployment kit, worker guards:** the Compose checks under `verify/` judge what a worker
-  must not have on the stack as `docker compose config --no-interpolate` resolves it: the
+  must not have on the stack as `docker compose config` resolves it: the
   files the deploy script passes with `-f`, and locally `docker-compose.yml` with
   `docker-compose.override.yml`. A secret that reaches a worker through a YAML anchor, a merge
   key or an override file is refused. Before, the checks read the text of the service block
@@ -1467,16 +1467,19 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
     key. Model key names are `OPENAI_API_KEY`, `AZURE_OPENAI_API_KEY`,
     `GOOGLE_VERTEX_CREDENTIALS` and every `credentialSecret` and `organizationSecret` a file
     under `config/` names.
-  - `use env_file`, `use secrets`, `use configs`, `use volumes_from`: the resolved file does
-    not show what they carry. A worker names each variable under `environment`. There is no
-    allow list; none of the operated deployments uses one of the four keys.
+  - `use env_file`, `use extends`, `use secrets`, `use configs`, `use volumes_from`: the
+    resolved file does not show what they carry. A worker names each variable under
+    `environment`. There is no allow list; none of the operated deployments uses one of the
+    five keys.
   - `set pid`, and `mount <path>` for `/etc/vivd-catalyst`, a directory that holds it, a
     path whose variable has no default, and, except on `workspace-command-worker`, the Docker
     socket under any path.
 
   `AWS_SECRET_ACCESS_KEY` left the lists of the workspace command worker and the artifact
   preview worker: both read and write the object stores, and the deployments hand them that
-  key through an anchor, which the text check never saw. `verify/compose-helpers.mjs` gains
+  key through an anchor, which the text check never saw. Compose fills the variables in
+  itself, in an environment where none has a value, so the check runs on the Compose of a
+  hosted runner; it is tested from Compose 2.29. `verify/compose-helpers.mjs` gains
   `resolveCompose`, `assertWorkerIsolation`, `reachesDockerSocket`, `serviceNames` and
   `modelSecretNames`.
 - **Workers no longer end on their own:** a job worker with nothing to do ended with exit code

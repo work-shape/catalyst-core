@@ -872,8 +872,12 @@ test_worker_isolation_guards() {
   printf 'infrastructure:\n  models:\n    main: { "credentialSecret": ACME_MODEL_KEY }\n' \
     > "$deployment/config/profiles/acme.yaml"
 
+  printf 'LOG_LEVEL=debug\n' > "$deployment/worker.env"
+
   for worker in agent-run-worker workspace-command-worker artifact-preview-worker; do
-    local guard=(env "DEPLOYMENT_ROOT=$deployment" node "$kit_dir/verify/$worker-compose.mjs")
+    # The check judges the files. What the caller's environment holds changes nothing.
+    local guard=(env "DEPLOYMENT_ROOT=$deployment" "DATA_ROOT=/etc/vivd-catalyst/fixture"
+      "ACME_MODEL_KEY=value" "BETTER_AUTH_SECRET=value" node "$kit_dir/verify/$worker-compose.mjs")
     # refused LINES MESSAGE [TOP-LEVEL]: the worker with LINES is refused with MESSAGE.
     refused() {
       write_guard_compose "$deployment" "$worker" "$1" "${3:-}"
@@ -884,13 +888,23 @@ test_worker_isolation_guards() {
     secret="ACME_MODEL_KEY"
     [[ "$worker" != "agent-run-worker" ]] || secret="BETTER_AUTH_SECRET"
 
-    # Without any of it the worker passes the guard and the check stops at the wiring.
-    write_guard_compose "$deployment" "$worker" ""
+    # Without any of it the worker passes the guard and the check stops at the wiring. A
+    # mount whose variable has a default is judged by the default.
+    write_guard_compose "$deployment" "$worker" \
+      '    volumes: ["${DATA_ROOT:-/var/lib/fixture}:${DATA_ROOT:-/var/lib/fixture}"]'
     expect_failure "${guard[@]}"
     assert_contains "$scratch/failure-output" "worker entrypoint"
 
     refused $'    environment:\n      <<: *leaked-environment' "receive $secret"
-    refused '    env_file: [/etc/vivd-catalyst/fixture/app.env]' "use env_file"
+    refused "    environment: { RENAMED: \"\${$secret:-}\" }" "receive $secret"
+    refused '    env_file: [worker.env]' "use env_file"
+    # The env file of the host is not where the check runs. Optional, it leaves no trace in
+    # the resolved stack; required, it stops Compose itself.
+    refused '    env_file: [{ path: /etc/vivd-catalyst/fixture/app.env, required: false }]' "use env_file"
+    write_guard_compose "$deployment" "$worker" '    env_file: [/etc/vivd-catalyst/fixture/app.env]'
+    expect_failure "${guard[@]}"
+    assert_contains "$scratch/failure-output" "docker-compose.yml: docker compose config failed"
+    refused '    extends: { service: api }' "use extends"
     refused '    secrets: [model-key]' "use secrets" \
       $'secrets:\n  model-key:\n    environment: ACME_MODEL_KEY'
     refused '    configs: [model-key]' "use configs" \

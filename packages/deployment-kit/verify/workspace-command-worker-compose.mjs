@@ -47,7 +47,7 @@ for (const composeFile of composeFiles) {
 
   assert(worker, `${composeFile}: workspace-command-worker service is required`);
   assert(api, `${composeFile}: api service is required`);
-  const resolved = await resolveCompose(composeFile);
+  const resolved = await resolveCompose(composeFile, secretsTheWorkerMustNotReceive);
   const resolvedWorker = resolved.services["workspace-command-worker"];
   assertWorkerIsolation(composeFile, resolved, "workspace-command-worker", {
     secretNames: secretsTheWorkerMustNotReceive,

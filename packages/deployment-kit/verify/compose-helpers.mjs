@@ -15,13 +15,24 @@ const DEFAULT_MODEL_SECRET_NAMES = [
 const MODEL_SECRET_KEYS = ["credentialSecret", "organizationSecret"];
 /** Where the env file of an instance lives on its host, see lib/deployment-env.sh. */
 const HOST_SECRET_DIR = "/etc/vivd-catalyst";
+/**
+ * What a variable without a default resolves to, before its name. It is a path, so that
+ * Compose reads a mount of such a variable as a mount of a host path.
+ */
+const UNSET_VARIABLE = "/variable-without-default/";
 const DOCKER_SOCKET_PATHS = ["/var/run/docker.sock", "/run/docker.sock"];
-/** Service keys that hand a container content the resolved Compose file does not show. */
-const UNSEEN_SOURCES = ["env_file", "secrets", "configs", "volumes_from"];
+/** Service keys that hand a container content the resolved stack does not show. */
+const UNSEEN_SOURCES = ["secrets", "configs", "volumes_from"];
+/**
+ * Service keys the resolved stack no longer has: Compose has followed them, and an env file
+ * that is optional and absent where the check runs has left nothing behind.
+ */
+const FOLLOWED_SOURCES = ["env_file", "extends"];
 
 export async function readPlatformDockerfile() {
-  const platformRoot = process.env.PLATFORM_DIR
-    ? pathToFileURL(`${resolve(process.env.PLATFORM_DIR)}/`)
+  const platformDir = process.env.PLATFORM_DIR;
+  const platformRoot = platformDir
+    ? pathToFileURL(`${resolve(platformDir)}/`)
     : new URL("../../../", import.meta.url);
   return readFile(new URL("docker/vivd-client.Dockerfile", platformRoot), "utf8");
 }
@@ -67,18 +78,17 @@ export function extractServiceBlock(contents, serviceName) {
 }
 
 // Runs `docker compose config` and returns what it resolves: YAML anchors, merge keys, `extends`
-// and every profile. Variables stay as written, so the call needs no env file and a value
-// still shows the variable it reads.
-function composeConfig(label, fileArguments, options) {
+// and every profile.
+function composeConfig(label, composeArguments, configArguments, options) {
   const rendered = spawnSync(
     "docker",
     [
       "compose",
-      ...fileArguments,
+      ...composeArguments,
       "--profile",
       "*",
       "config",
-      "--no-interpolate",
+      ...configArguments,
       "--format",
       "json"
     ],
@@ -91,6 +101,31 @@ function composeConfig(label, fileArguments, options) {
   }
   assert(rendered.status === 0, `${label}: docker compose config failed\n${rendered.stderr}`);
   return JSON.parse(rendered.stdout);
+}
+
+// The environment a stack is resolved in. No variable has a value there: one with a default
+// takes the default, and one without resolves to UNSET_VARIABLE and its name, so a value
+// still shows the variable it reads and a path shows that nothing says where it points. The
+// variables in `visibleNames` resolve to their name even where the file gives them a default.
+//
+// Compose fills the variables in itself. Left to `--no-interpolate`, Compose before 2.40
+// refuses a volume such as `${ROOT:-/var/lib/x}:/data` for its colons.
+async function resolutionEnvironment(files, visibleNames) {
+  const referenced = new Set();
+  const unresolved = new Set(visibleNames);
+  for (const file of files) {
+    const references = (await readFile(file, "utf8")).matchAll(
+      /(?<!\$)\$(?:\{([A-Za-z_][A-Za-z0-9_]*)(:?-)?|([A-Za-z_][A-Za-z0-9_]*))/gu
+    );
+    for (const [, braced, defaulted, bare] of references) {
+      referenced.add(braced ?? bare);
+      if (!defaulted) unresolved.add(braced ?? bare);
+    }
+  }
+  return {
+    ...Object.fromEntries(Object.entries(process.env).filter(([name]) => !referenced.has(name))),
+    ...Object.fromEntries(Array.from(unresolved, (name) => [name, `${UNSET_VARIABLE}${name}`]))
+  };
 }
 
 // The Compose files the stack of `composeFile` starts from. On the host these are the files
@@ -110,13 +145,19 @@ async function stackFiles(composeFile) {
 // The stack of a Compose file as Docker resolves it. What a service must not have is judged
 // on this, never on the text of its block, which shows nothing of what an anchor or an
 // override file brings in.
-export async function resolveCompose(composeFile) {
+export async function resolveCompose(composeFile, visibleNames = []) {
   const files = (await stackFiles(composeFile)).map(deploymentPath);
-  return composeConfig(
+  const resolved = composeConfig(
     composeFile,
-    files.flatMap((file) => ["-f", file]),
-    { cwd: dirname(files[0]) }
+    // No env file: the `.env` beside the Compose file holds values of a developer machine.
+    ["--env-file", "/dev/null", ...files.flatMap((file) => ["-f", file])],
+    [],
+    { cwd: dirname(files[0]), env: await resolutionEnvironment(files, visibleNames) }
   );
+  // Each file as it is written, for the keys in FOLLOWED_SOURCES.
+  const written = [];
+  for (const file of files) written.push(parseYaml(composeFile, await readFile(file, "utf8")));
+  return { ...resolved, written };
 }
 
 // Whether a resolved service names `name` in what it spells out: a variable it receives, a
@@ -125,20 +166,13 @@ export function serviceNames(service, name) {
   return JSON.stringify(service ?? {}).includes(name);
 }
 
-// A mount source with the defaults of its variables filled in: `${ROOT:-/var/lib/x}/objects`
-// is `/var/lib/x/objects`.
-function withVariableDefaults(source) {
-  return source.replace(/\$\{[A-Za-z_][A-Za-z0-9_]*:?-([^${}]*)\}/gu, "$1");
-}
-
 // The host paths a service mounts. A named volume that binds a host directory counts as that
 // directory.
 function mountedHostPaths(compose, service) {
   return (service.volumes ?? [])
     .map((volume) => compose.volumes?.[volume.source]?.driver_opts?.device ?? volume.source ?? "")
-    .map(withVariableDefaults)
-    .filter((source) => source.startsWith("/") || source.includes("$"))
-    .map((source) => (source.includes("$") ? source : posix.normalize(`${source}/`)));
+    .filter((source) => source.startsWith("/"))
+    .map((source) => posix.normalize(`${source}/`));
 }
 
 // Whether a mount of `source` shows `path`: it is the path, lies in it or holds it.
@@ -172,8 +206,9 @@ export function assertWorkerIsolation(composeFile, compose, workerName, options)
   for (const secretName of options.secretNames) {
     if (serviceNames(worker, secretName)) refuse(`receive ${secretName}`);
   }
-  for (const key of UNSEEN_SOURCES) {
-    if (worker[key] !== undefined) {
+  const writes = (key) => compose.written.some((file) => file?.services?.[workerName]?.[key]);
+  for (const key of [...FOLLOWED_SOURCES, ...UNSEEN_SOURCES]) {
+    if (worker[key] !== undefined || writes(key)) {
       refuse(
         `use ${key}: the check cannot see what it carries. Name each variable under environment`
       );
@@ -185,8 +220,9 @@ export function assertWorkerIsolation(composeFile, compose, workerName, options)
     );
   }
   for (const source of mountedHostPaths(compose, worker)) {
-    if (source.includes("$")) {
-      refuse(`mount ${source}: the check cannot see where a variable without a default points`);
+    if (source.includes(UNSET_VARIABLE)) {
+      const reference = source.replace(/\/$/u, "").replace(UNSET_VARIABLE, "${");
+      refuse(`mount ${reference}}: the check cannot see where a variable without a default points`);
     }
     if (mountShows(source, HOST_SECRET_DIR)) {
       refuse(`mount ${source}: ${HOST_SECRET_DIR} holds the secrets of the instance`);
@@ -202,9 +238,10 @@ export function assertWorkerIsolation(composeFile, compose, workerName, options)
 // run before a deployment has installed anything.
 function parseYaml(label, contents) {
   const wrapped = `services: {}\nx-parsed:\n${contents.replace(/^/gmu, "  ")}`;
-  return composeConfig(label, ["-p", "parsed", "-f", "-"], { input: wrapped, cwd: tmpdir() })[
-    "x-parsed"
-  ];
+  return composeConfig(label, ["-p", "parsed", "-f", "-"], ["--no-interpolate"], {
+    input: wrapped,
+    cwd: tmpdir()
+  })["x-parsed"];
 }
 
 // The values of the keys in MODEL_SECRET_KEYS at any depth of a parsed document.

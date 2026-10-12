@@ -23,7 +23,7 @@ for (const composeFile of ["docker-compose.yml", "docker-compose.prod.yml"]) {
 
   assert(worker, `${composeFile}: agent-run-worker service is required`);
   assert(api, `${composeFile}: api service is required`);
-  const resolved = await resolveCompose(composeFile);
+  const resolved = await resolveCompose(composeFile, secretsTheWorkerMustNotReceive);
   const resolvedWorker = resolved.services["agent-run-worker"];
   assertWorkerIsolation(composeFile, resolved, "agent-run-worker", {
     secretNames: secretsTheWorkerMustNotReceive
