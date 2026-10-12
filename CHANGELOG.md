@@ -71,6 +71,16 @@ contain breaking changes; a patch version does not.
   and changes no existing table, so the previous release runs on the migrated database. A
   changing call from the origin `schedule` now needs an idempotency key, as one from `app` and
   `workflow` does; nothing in the platform makes such a call yet.
+- **Runner image:** the platform's runner image (`workspace-command-runner`) carries git and the
+  fixed command `catalyst-asset-repo`, which commits a folder of plain files into a repository
+  kept as git bundles and makes a repository from bundles. It is the first part of keeping the
+  source of an App as a git repository (ADR-0029); no operation calls it yet. Git runs in this
+  image alone: the API image and the worker images carry none, and `pnpm check:images` fails
+  when one does. **Operators:** the image grows by git, about 95 MB unpacked. The runner image of
+  the capabilities repository does not carry the command yet.
+- **Database:** migration `0057_asset_repositories` adds the tables `asset_repo_bundles` and
+  `asset_checkouts` and the columns `commit` and `tree` on `config_asset_revisions`. They are
+  empty for every asset that exists. **Rollback:** an earlier release ignores them.
 - **Pages, plain HTML:** App Kit version `1.2.0`, with two new files, `page.css` and `theme.js`.
   A plain HTML Page that names it comes out with the look of the platform: the build links
   `page.css` and `theme.js` first into every HTML file of a Page with an `entry`, also one whose
