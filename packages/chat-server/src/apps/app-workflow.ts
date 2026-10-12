@@ -11,13 +11,16 @@ import {
   type ActorAccess,
   type AuthenticatedUser,
   type ConfigAssetRecord,
-  type OperationAuthorization
+  type FileSet,
+  type OperationAuthorization,
+  type Page
 } from "@vivd-catalyst/core";
 import { accessResource, decide, type AssetCall } from "../asset-access";
 import { APP_CONTENT_TOKEN_TTL_SECONDS, appContentPath, mintAppContentToken } from "../app-content";
 import type { WorkflowAssetKind } from "../asset-kinds/shared";
 import { recordAssetEvent } from "../asset-target";
 import { requireAssetKindModuleOn } from "../asset-write-rules";
+import type { PageRevisionOrigin } from "../asset-draft-workflow";
 import { AssetWorkflow } from "../asset-workflow";
 import { ConversationWorkflow } from "../conversations/conversation-workflow";
 import type { ChatServerOptions } from "../types";
@@ -32,10 +35,27 @@ export interface CreateAppFromPageInput {
   workspaceId: string;
 }
 
+/** What `apps.update_from_page` is called with. */
+export interface UpdateAppFromPageInput {
+  app: string;
+  conversationId: string;
+  pageId: string;
+  workspaceId: string;
+  expectedRevision: number;
+}
+
 /**
- * What an App has beside the operations of every asset: it is made from a Page, and its
- * revisions are opened by people. Every write goes through the asset workflow, so an App made
- * here is the same revision shape as one written with `assets.put`.
+ * How many Apps saved from one Page are read to find the one a caller may write. The
+ * interface saves one per Page; more exist only where people who cannot write each other's
+ * Apps saved the same Page, or where the API was called by hand.
+ */
+const APPS_FROM_PAGE_MAX = 50;
+
+/**
+ * What an App has beside the operations of every asset: it is made from a Page, its draft is
+ * written from that Page again, and its revisions are opened by people. Every write goes
+ * through the asset workflow, so an App made here is the same revision shape as one written
+ * with `assets.put`.
  */
 export class AppWorkflow {
   private readonly options: ChatServerOptions;
@@ -57,37 +77,26 @@ export class AppWorkflow {
     });
   }
 
+  /** The write right on the App, as a write of its draft with `assets.put` asks it. */
+  authorizeUpdate(
+    access: ActorAccess,
+    input: UpdateAppFromPageInput
+  ): Promise<OperationAuthorization> {
+    return this.assets.authorizeWrite(access, appAddress(input.app, input.workspaceId));
+  }
+
   /**
    * Saves the newest revision of a Page as an App with a draft. The files are copied: the
-   * conversation of the Page may expire while the App stays.
+   * conversation of the Page may expire while the App stays. The App remembers the Page.
    */
   async createFromPage(call: AssetCall, input: CreateAppFromPageInput) {
-    if (isAuthenticatedServicePrincipal(call.actor)) {
-      throw new AppError("FORBIDDEN", "A Page is read by a person");
-    }
-    const conversation = await this.conversations.requireConversationAccess(
-      asConversationId(input.conversationId),
-      call.actor
-    );
-    const address = { clientInstanceId: this.options.clientInstanceId };
-    const page = isPageId(input.pageId)
-      ? await this.options.stores.pages.getPage({
-          ...address,
-          conversationId: conversation.id,
-          pageId: input.pageId
-        })
-      : undefined;
-    const source = page
-      ? await this.options.stores.pages.getPageFileSet({ ...address, pageId: page.id })
-      : undefined;
-    if (!source) {
-      throw new AppError("NOT_FOUND", "Page is not available");
-    }
+    const { source, origin } = await this.newestPageRevision(call.actor, input);
     const created = await this.assets.drafts.createFromFileSet(
       call,
-      { kind: APP_ASSET_KIND, name: input.name, workspaceId: input.workspaceId },
+      appAddress(input.name, input.workspaceId),
       {
         source,
+        origin,
         config: appConfigOf({ name: input.name, title: input.title, manifest: source.manifest }),
         firstCommit: "Create from a Page"
       }
@@ -108,6 +117,130 @@ export class AppWorkflow {
       revision: created.revision,
       fileSetId: created.fileSetId
     };
+  }
+
+  /**
+   * Writes the newest revision of the Page an App was saved from as a new draft revision of
+   * the App. Nothing is published: the App's users are served what they were served before.
+   * The App keeps the name people read, which whoever saved it chose.
+   */
+  async updateFromPage(call: AssetCall, input: UpdateAppFromPageInput) {
+    const { source, origin } = await this.newestPageRevision(call.actor, input);
+    const updated = await this.assets.drafts.replaceFromFileSet(
+      call,
+      appAddress(input.app, input.workspaceId),
+      {
+        source,
+        origin,
+        expectedRevision: input.expectedRevision,
+        configOf: (current) =>
+          appConfigOf({
+            name: input.app,
+            manifest: source.manifest,
+            ...(typeof current.title === "string" ? { title: current.title } : {})
+          })
+      }
+    );
+    return {
+      id: updated.id,
+      name: input.app,
+      workspaceId: input.workspaceId,
+      revision: updated.revision,
+      fileSetId: updated.fileSetId
+    };
+  }
+
+  /**
+   * The App a Page was saved as, for one caller who reads the Page: among the Apps saved from
+   * it that the caller may write, the one the caller saved, and without one the earliest.
+   * Nothing for a caller who may write none of them, whether or not one exists.
+   */
+  async fromPage(
+    caller: { user: AuthenticatedUser; access: ActorAccess },
+    input: { conversationId: string; pageId: string }
+  ) {
+    const page = await this.requirePage(caller.user, input);
+    const kind = this.kind();
+    const saved = await this.options.configAssets.store.listConfigAssetsFromPage({
+      clientInstanceId: this.options.clientInstanceId,
+      kind: kind.kind,
+      pageId: page.id,
+      limit: APPS_FROM_PAGE_MAX
+    });
+    const viewerId = getSubjectUserId(caller.user);
+    const writable = saved.filter(
+      ({ asset }) =>
+        caller.access.authorize(
+          kind.actions.write,
+          accessResource(kind.kind, asset.name, asset.scope, asset.id)
+        ).allowed
+    );
+    const found =
+      writable.find(({ savedBy }) => savedBy?.subjectUserId === viewerId) ?? writable.at(0);
+    const asset = found?.asset;
+    if (!asset || asset.scope.kind !== "workspace") {
+      return { app: null };
+    }
+    const title = asset.config?.title;
+    const origin = asset.revisionOrigin;
+    return {
+      app: {
+        name: asset.name,
+        title: typeof title === "string" ? title : asset.name,
+        workspaceId: asset.scope.workspaceId,
+        draftRevision: asset.revision,
+        draftFromPage: origin?.kind === "page" && origin.pageId === page.id
+      }
+    };
+  }
+
+  /** The newest revision of a Page the caller reads, and what a copy of it records. */
+  private async newestPageRevision(
+    actor: AssetCall["actor"],
+    input: { conversationId: string; pageId: string }
+  ): Promise<{ source: FileSet; origin: PageRevisionOrigin }> {
+    if (isAuthenticatedServicePrincipal(actor)) {
+      throw new AppError("FORBIDDEN", "A Page is read by a person");
+    }
+    const page = await this.requirePage(actor, input);
+    const source = await this.options.stores.pages.getPageFileSet({
+      clientInstanceId: this.options.clientInstanceId,
+      pageId: page.id
+    });
+    if (!source) {
+      throw pageNotFound();
+    }
+    return {
+      source,
+      origin: {
+        kind: "page",
+        conversationId: page.conversationId,
+        pageId: page.id,
+        fileSetNumber: source.number
+      }
+    };
+  }
+
+  /** The Page of a conversation the caller may read. */
+  private async requirePage(
+    user: AuthenticatedUser,
+    input: { conversationId: string; pageId: string }
+  ): Promise<Page> {
+    const conversation = await this.conversations.requireConversationAccess(
+      asConversationId(input.conversationId),
+      user
+    );
+    const page = isPageId(input.pageId)
+      ? await this.options.stores.pages.getPage({
+          clientInstanceId: this.options.clientInstanceId,
+          conversationId: conversation.id,
+          pageId: input.pageId
+        })
+      : undefined;
+    if (!page) {
+      throw pageNotFound();
+    }
+    return page;
   }
 
   /**
@@ -190,6 +323,13 @@ export class AppWorkflow {
     requireAssetKindModuleOn(this.options.modules, APP_ASSET_KIND);
     return this.options.configAssets.kinds.require(APP_ASSET_KIND);
   }
+}
+
+const pageNotFound = () => new AppError("NOT_FOUND", "Page is not available");
+
+/** An App as the workflow of every asset addresses it. */
+function appAddress(name: string, workspaceId: string) {
+  return { kind: APP_ASSET_KIND, name, workspaceId };
 }
 
 /**

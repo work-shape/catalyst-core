@@ -10,8 +10,8 @@ import type { ResolvedChatServerOptions } from "../types";
 const APPS_MODULE = "apps";
 
 /**
- * What an App has beside the operations of every asset. Writing, publishing, discarding and
- * deleting an App are `assets.put`, `assets.publish`, `assets.discard_draft` and
+ * What an App has beside the operations of every asset: it is saved from a Page and updated
+ * from it. Writing its files, publishing, discarding and deleting an App are `assets.put`, `assets.publish`, `assets.discard_draft` and
  * `assets.delete` with the kind `app`.
  */
 export function registerAppRoutes(route: Route, options: ResolvedChatServerOptions): void {
@@ -41,6 +41,25 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
     module: APPS_MODULE,
     execute: (input, context) => actionList.list(context, input)
   });
+
+  route.operation(apiOperations["apps.update_from_page"], {
+    authorize: (input, { access }) => workflow.authorizeUpdate(access, input),
+    resource: (input) => ({
+      kind: APP_ASSET_KIND,
+      id: input.app,
+      name: input.app,
+      workspaceId: asCollaborationWorkspaceId(input.workspaceId)
+    }),
+    changeClass: "reversible",
+    module: APPS_MODULE,
+    execute: (input, context) => workflow.updateFromPage(context, input)
+  });
+
+  // Asked by the surface of a Page each time it opens. What it tells of an App is decided by
+  // the caller's right to write that App.
+  route(apiOperations["apps.get_from_page"], ({ user, access, params }) =>
+    workflow.fromPage({ user, access }, params)
+  );
 
   // Where a caller's right to an App is checked with the caller present. The address this
   // answers is all a file request carries: it is a secret until it expires, and it serves

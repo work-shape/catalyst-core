@@ -4,12 +4,14 @@ import {
   appActionsListQuerySchema,
   appActionsSchema,
   appConnectionCallRequestSchema,
+  appFromPageSchema,
   appPreviewRequestSchema,
   appSessionContextRequestSchema,
   appSessionContextSchema,
   appPreviewSchema,
   createAppFromPageRequestSchema,
-  createAppFromPageResponseSchema
+  createAppFromPageResponseSchema,
+  updateAppFromPageRequestSchema
 } from "../apps";
 import { defineOperation, defineRegisteredOperation, json } from "./define-operation";
 
@@ -50,8 +52,8 @@ const FRAME_CALL = {
 
 // What an App has beside the operations of every asset (`assets.put`, `assets.publish`,
 // `assets.discard_draft`, `assets.delete` with the kind `app`): it is made from a Page, and
-// its revisions are opened by people. The rights are the kind's own, decided on the App's
-// workspace, so neither operation names one in `requires`.
+// its draft is written from that Page again, and its revisions are opened by people. The rights
+// are the kind's own, decided on the App's workspace, so no operation names one in `requires`.
 export const appOperations = {
   "apps.create_from_page": defineRegisteredOperation({
     id: "apps.create_from_page",
@@ -67,6 +69,36 @@ export const appOperations = {
     response: json(createAppFromPageResponseSchema),
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
+  }),
+  "apps.update_from_page": defineRegisteredOperation({
+    id: "apps.update_from_page",
+    method: "POST",
+    path: "/api/v1/apps/:app/update-from-page",
+    summary:
+      "Write the newest revision of the Page an App was saved from as a new draft revision of the App",
+    tag: "Apps",
+    auth: "user",
+    scope: "config_assets:write",
+    requires: [],
+    effect: "changing",
+    body: updateAppFromPageRequestSchema,
+    response: json(createAppFromPageResponseSchema),
+    errors: ["NOT_FOUND", "CONFLICT", "REVISION_CONFLICT", "VALIDATION_FAILED"],
+    rateClass: "write"
+  }),
+  "apps.get_from_page": defineOperation({
+    id: "apps.get_from_page",
+    method: "GET",
+    path: "/api/v1/conversations/:conversationId/pages/:pageId/app",
+    summary: "Read the App a Page was saved as, where the caller may write it",
+    tag: "Apps",
+    auth: "user",
+    scope: "conversation:read",
+    requires: [],
+    effect: "reading",
+    response: json(appFromPageSchema),
+    errors: ["NOT_FOUND"],
+    rateClass: "read"
   }),
   // POST although it changes nothing: its answer is a credential and is never cached.
   "apps.preview": defineOperation({

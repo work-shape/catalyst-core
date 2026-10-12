@@ -34,8 +34,8 @@ import {
 } from "./schema";
 
 /** The revision the published pointer of an asset names, joined beside the active one. */
-const publishedRevisions = alias(configAssetRevisions, "published_revisions");
-const publishedColumns = {
+export const publishedRevisions = alias(configAssetRevisions, "published_revisions");
+export const publishedColumns = {
   id: publishedRevisions.id,
   revision: publishedRevisions.revision,
   fileSetId: publishedRevisions.fileSetId,

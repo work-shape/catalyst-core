@@ -19,6 +19,7 @@ import type {
   AuditActor,
   CollaborationWorkspace,
   ConfigAssetRecord,
+  ConfigAssetRevisionOrigin,
   ConfigAssetRevisionRecord,
   FileSetId,
   JsonObject
@@ -104,7 +105,7 @@ export const configAssetRevisions = pgTable(
     commit: text("commit"),
     tree: text("tree"),
     actor: jsonb("actor").$type<AuditActor>(),
-    origin: jsonb("origin").$type<ConfigAssetRevisionRecord["origin"]>(),
+    origin: jsonb("origin").$type<ConfigAssetRevisionOrigin>(),
     globalVersion: bigint("global_version", { mode: "number" }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull()
   },

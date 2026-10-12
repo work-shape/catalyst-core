@@ -8,6 +8,7 @@ import {
   type AuthenticatedIdentity,
   type ActorAccess,
   type ConfigAssetMutation,
+  type ConfigAssetRevisionOrigin,
   type ConfigAssetStore,
   type AssetRepoWrite,
   type FileSet,
@@ -522,6 +523,8 @@ export class AssetWorkflow {
       fileSet?: { assetId: string; fileSetId: FileSet["id"] };
       /** The commit the revision names, for an asset whose files are a repository. */
       repository?: AssetRepoWrite;
+      /** Where the revision came from, where it is not written as it stands. */
+      origin?: ConfigAssetRevisionOrigin;
     }
   ) {
     const { kind, name } = target;
@@ -579,6 +582,7 @@ export class AssetWorkflow {
       baseRevisions: { [assetKey(kind.kind, name)]: write.expectedRevision },
       // The default is set for the first asset only, so the instance has none before.
       ...(setsDefault ? { baseDefaultAgentName: null } : {}),
+      ...(write.origin ? { origin: write.origin } : {}),
       mutations
     });
     // The revision this write was given. The asset is not read again: by now another write
@@ -587,7 +591,14 @@ export class AssetWorkflow {
     const revision = allocatedRevision(result, kind.kind, name);
     await recordCommitted(this.options, call, [
       () =>
-        this.record(call, write.audit, { kind: kind.kind, name, revision, version: result.version })
+        this.record(call, write.audit, {
+          kind: kind.kind,
+          name,
+          revision,
+          version: result.version,
+          // A revision that copies a Page names it: the trail says where the content came from.
+          ...(write.origin?.kind === "page" ? { pageId: write.origin.pageId } : {})
+        })
     ]);
     return { version: result.version, revision, warnings: [] };
   }

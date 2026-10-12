@@ -232,8 +232,18 @@ export const configAssetRevisionSchema = z.object({
   operation: z.enum(["create", "update", "delete", "revert"]),
   config: configAssetConfigSchema.nullable(),
   actor: auditActorSchema.nullable(),
+  /** Where the revision came from: the approval that applied it, or the Page it copies. */
   origin: z
-    .object({ kind: z.literal("approval_request"), requestId: z.string(), summary: z.string() })
+    .discriminatedUnion("kind", [
+      z.object({ kind: z.literal("approval_request"), requestId: z.string(), summary: z.string() }),
+      z.object({
+        kind: z.literal("page"),
+        conversationId: z.string(),
+        pageId: z.string(),
+        /** The number of the Page revision the files were copied from. */
+        fileSetNumber: z.number().int().positive()
+      })
+    ])
     .optional(),
   globalVersion: z.number().int().positive(),
   createdAt: timestampSchema

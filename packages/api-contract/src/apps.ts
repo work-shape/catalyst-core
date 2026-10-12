@@ -47,6 +47,47 @@ export const createAppFromPageResponseSchema = z.object({
   fileSetId: z.string()
 });
 
+export const updateAppFromPageRequestSchema = z
+  .object({
+    conversationId: z.string().min(1),
+    /** The Page the App was saved from. An App saved from another Page is not written. */
+    pageId: z.string().min(1),
+    /** The workspace the App belongs to. */
+    workspaceId: z.string().min(1),
+    /**
+     * The draft revision the caller read, as `apps.get_from_page` answers it. A draft at
+     * another revision is not overwritten: the call is refused with the revision it is at.
+     */
+    expectedRevision: z.number().int().positive()
+  })
+  .strict();
+
+/**
+ * The App a Page was saved as, for the caller: the earliest one the caller may write, and
+ * before it one the caller saved. `app` is `null` where there is none, which is also what a
+ * caller is answered who may write none of them.
+ */
+export const appFromPageSchema = z.object({
+  app: z
+    .object({
+      /** The id of the App. */
+      name: z.string(),
+      /** What people read as the App's name. */
+      title: z.string(),
+      workspaceId: z.string(),
+      /** The revision `apps.update_from_page` names as `expectedRevision`. */
+      draftRevision: z.number().int().positive(),
+      /**
+       * Whether the draft is a copy of this Page. `false` once the draft was written another
+       * way, such as with `assets.put`: an update then replaces what that write made.
+       */
+      draftFromPage: z.boolean()
+    })
+    .nullable()
+});
+
+export type AppFromPageResponse = z.infer<typeof appFromPageSchema>;
+
 export const appPreviewRequestSchema = z.object({ mode: appModeSchema }).strict();
 
 /**

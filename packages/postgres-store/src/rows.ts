@@ -663,6 +663,7 @@ export function mapConfigAsset(
     config: revision.config,
     ...(revision.fileSetId ? { fileSetId: revision.fileSetId } : {}),
     ...(revision.commit && revision.tree ? { commit: revision.commit, tree: revision.tree } : {}),
+    ...(revision.origin ? { revisionOrigin: revision.origin } : {}),
     ...(row.publishedRevisionId ? { publishedRevisionId: row.publishedRevisionId } : {}),
     ...(published
       ? {

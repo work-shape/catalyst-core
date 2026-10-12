@@ -91,6 +91,8 @@ export interface ConfigAssetRecord {
   /** The commit and tree of the active revision, for an asset whose content is a repository. */
   commit?: string;
   tree?: string;
+  /** Where the active revision came from, where its write said so. */
+  revisionOrigin?: ConfigAssetRevisionOrigin;
   /**
    * The published pointer of a `draft_published` kind, with the number and the file set of
    * the revision it names. Absent before the first publish and on every `active` kind, where
@@ -103,6 +105,28 @@ export interface ConfigAssetRecord {
   publishedConfig?: JsonObject;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Where a revision came from, where it was not written as it stands: the approval that applied
+ * it, or the Page whose files it is a copy of. The first revision of an App that names a Page
+ * is how the App remembers the Page it was saved from; a later one says that the draft is that
+ * Page's again.
+ */
+export type ConfigAssetRevisionOrigin =
+  | { kind: "approval_request"; requestId: string; summary: string }
+  | {
+      kind: "page";
+      conversationId: string;
+      pageId: string;
+      /** The number of the Page revision the files were copied from. */
+      fileSetNumber: number;
+    };
+
+/** An asset whose first revision is a copy of a Page, with who saved it. */
+export interface ConfigAssetFromPage {
+  asset: ConfigAssetRecord;
+  savedBy: AuditActor | null;
 }
 
 export interface ConfigAssetRevisionRecord {
@@ -118,7 +142,7 @@ export interface ConfigAssetRevisionRecord {
   commit?: string;
   tree?: string;
   actor: AuditActor | null;
-  origin?: { kind: "approval_request"; requestId: string; summary: string };
+  origin?: ConfigAssetRevisionOrigin;
   globalVersion: number;
   createdAt: string;
 }
@@ -397,6 +421,17 @@ export interface ConfigAssetStore {
     clientInstanceId: ClientInstanceId;
     keys: readonly { kind: ConfigAssetKind; name: string }[];
   }): Promise<ConfigAssetRecord[]>;
+  /**
+   * The active assets of a kind that were saved from one Page, the earliest first. One read of
+   * at most `limit` rows. It reads the first revision of every active asset of the kind, so its
+   * cost grows with the assets of the kind on the instance and not with their revisions.
+   */
+  listConfigAssetsFromPage(input: {
+    clientInstanceId: ClientInstanceId;
+    kind: ConfigAssetKind;
+    pageId: string;
+    limit: number;
+  }): Promise<ConfigAssetFromPage[]>;
   /** The revisions of one asset, oldest first unless `newestFirst` is set. */
   listConfigAssetRevisions(input: {
     clientInstanceId: ClientInstanceId;
@@ -442,7 +477,7 @@ export interface ConfigAssetStore {
     baseAssetIds?: Record<string, string>;
     baseDefaultAgentName?: string | null;
     actor?: AuditActor;
-    origin?: ConfigAssetRevisionRecord["origin"];
+    origin?: ConfigAssetRevisionOrigin;
     /** Defaults to `all`. */
     initialAgentAvailability?: InitialAgentAvailability;
     mutations: ConfigAssetMutation[];
