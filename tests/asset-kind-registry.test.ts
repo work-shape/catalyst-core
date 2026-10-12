@@ -137,7 +137,8 @@ describe("asset kind registry", () => {
         delete: "gizmo.delete",
         publish: "gizmo.publish"
       },
-      summarize: (gizmo) => ({ name: gizmo.name, title: gizmo.name })
+      summarize: (gizmo) => ({ name: gizmo.name, title: gizmo.name }),
+      validate: () => []
     });
     expect(
       createAssetKindRegistry([{ ...drafted, authorizeLive }]).require("gizmo").lifecycle

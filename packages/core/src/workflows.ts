@@ -277,7 +277,51 @@ export type WorkflowStep =
       type: "notify";
       channel: "inbox" | "mail";
       input: WorkflowInputMapping;
-    });
+    })
+  | WorkflowConditionStep
+  | WorkflowParallelStep;
+
+/**
+ * What a `condition` tests: one field of an earlier output against a literal. `op` is a name
+ * of the engine's comparisons, which the slice that executes the block fixes.
+ */
+export interface WorkflowConditionTest {
+  ref: WorkflowReference;
+  op: string;
+  value: JsonValue;
+}
+
+/**
+ * Reserved: runs its `then` steps where the test holds and its `else` steps where it does not.
+ * The type is not in `WORKFLOW_STEP_TYPES` until an engine runs it, so a definition that
+ * carries one is refused with `WORKFLOW_ERROR_CODES.notSupported`. Its output is
+ * `WorkflowConditionOutput`. Spec: Branches, parallel paths and the canvas.
+ */
+export type WorkflowConditionStep = WorkflowStepBase & {
+  type: "condition";
+  when: WorkflowConditionTest;
+  then: readonly WorkflowStep[];
+  else?: readonly WorkflowStep[];
+};
+
+/** One path of a `parallel` step. Its id is unique in that step and names its step runs. */
+export interface WorkflowParallelBranch {
+  id: string;
+  name: string;
+  steps: readonly WorkflowStep[];
+}
+
+/**
+ * Reserved like `condition`: runs its branches at the same time and ends when every branch
+ * has ended; one failed branch fails the step after the others have ended. Its output is
+ * `WorkflowParallelOutput`.
+ */
+export type WorkflowParallelStep = WorkflowStepBase & {
+  type: "parallel";
+  branches: readonly WorkflowParallelBranch[];
+  /** How many branches run at once. All of them when left out. */
+  concurrency?: number;
+};
 
 /**
  * What a definition may say that this release reads and its engine may not run yet: `dataset`
@@ -637,14 +681,17 @@ export const WORKFLOW_RUN_MAX_DEPTH = 2;
  * datasets. `dataset_expired`: a read of a dataset that was deleted. `depth_limit`: a start of
  * a child run below the deepest level. `rate_limited`: a call found no room in the `limits` of
  * its operation; it is retryable. `not_supported_yet`: a definition names a field this
- * engine does not run.
+ * engine does not run. `block_depth`: blocks nest deeper than `WORKFLOW_MAX_BLOCK_DEPTH`.
+ * `reference_out_of_scope`: a step references a step inside a block it is not in.
  */
 export const WORKFLOW_ERROR_CODES = {
   datasetLimit: "dataset_limit",
   datasetExpired: "dataset_expired",
   depthLimit: "depth_limit",
   rateLimited: "rate_limited",
-  notSupported: "not_supported_yet"
+  notSupported: "not_supported_yet",
+  blockDepth: "block_depth",
+  referenceOutOfScope: "reference_out_of_scope"
 } as const;
 
 /**

@@ -35,6 +35,7 @@ import {
   WORKFLOW_STEP_FILES_FOLDER,
   WORKFLOW_STEP_RUN_STATUSES,
   WORKFLOW_STEP_TYPES,
+  WORKFLOW_RESERVED_STEP_TYPES,
   WORKFLOW_TRIGGER_KINDS,
   asClientInstanceId,
   asServicePrincipalId,
@@ -210,7 +211,10 @@ describe("the names of a Workflow", () => {
       "workflow"
     ]);
     expect(WORKFLOW_TRIGGER_KINDS).toEqual(["manual", "schedule", "parent"]);
-    expectTypeOf<WorkflowStep["type"]>().toEqualTypeOf<WorkflowStepType>();
+    // The reserved block types have a shape and are in no list of what a definition may name.
+    expectTypeOf<
+      Exclude<WorkflowStep["type"], (typeof WORKFLOW_RESERVED_STEP_TYPES)[number]>
+    >().toEqualTypeOf<WorkflowStepType>();
     expectTypeOf<WorkflowTrigger["kind"]>().toEqualTypeOf<WorkflowTriggerKind>();
   });
 
@@ -613,7 +617,7 @@ describe("the modules workflows and dataStores", () => {
   });
 });
 
-function stepTypes(step: WorkflowStep): WorkflowStepType[] {
+function stepTypes(step: WorkflowStep): WorkflowStep["type"][] {
   return step.type === "loop" ? [step.type, ...step.steps.flatMap(stepTypes)] : [step.type];
 }
 
