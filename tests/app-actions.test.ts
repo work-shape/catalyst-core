@@ -11,7 +11,7 @@ import {
   setupAppActions,
   type AppActionsInstance
 } from "./support/app-actions";
-import { agentOrigin } from "./support/connection-operations";
+import { agentOrigin, operationOf } from "./support/connection-operations";
 import { withTestSql } from "./support/test-sql";
 
 // A named action of a Page or an App, called by its frame through the interface, on real rows:
@@ -423,5 +423,42 @@ describe("a call a frame makes through the interface", () => {
 
     expect(response.statusCode).toBe(422);
     expect(JSON.stringify(response.json())).toContain("Declare the action changing");
+  });
+
+  // The write of an App is checked against the Connection as it is then. This is the rule of
+  // the call itself, for a Connection whose operation came to change something afterwards.
+  // Fails without it: the action would run the change as a read, with no Idempotency-Key and
+  // from a draft.
+  it("refuses a stored reading action at the call once the operation it stands for changes something, before the connector runs", async () => {
+    const crmOperations = (echo: "reading" | "changing") => ({
+      operations: [
+        operationOf("echo", { effect: echo, exposure: ["bridge", "agent"] }),
+        operationOf("write", { effect: "changing", exposure: ["bridge"] })
+      ]
+    });
+    await t.seed("crm", crmOperations("changing"));
+    try {
+      for (const mode of ["draft", "published"] as const) {
+        const frame = await openApp(t.admin.id, mode);
+        const before = t.handed.length;
+
+        expect((await can(t.admin.id, frame)).load).toBe("deny");
+        const response = await callAction(t.admin.id, frame, "load", { text: "weak" });
+
+        expect(response.statusCode, mode).toBe(409);
+        expect(refusal(response), mode).toMatchObject({
+          code: "CONFLICT",
+          message:
+            "The action 'load' is declared reading and the operation it calls changes something. Declare the action changing.",
+          details: { reason: "action_effect_too_weak" }
+        });
+        expect(t.handed.length, mode).toBe(before);
+      }
+    } finally {
+      // The Connection as every other test of the file reads it.
+      await t.seed("crm", crmOperations("reading"));
+    }
+    const frame = await openApp(t.admin.id, "published");
+    expectStatus(await callAction(t.admin.id, frame, "load", { text: "strong" }), 200);
   });
 });
