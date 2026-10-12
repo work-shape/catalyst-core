@@ -9,6 +9,7 @@ import {
   type ApprovalRequestWorkflowOptions
 } from "../approval-request-workflow";
 import { createAppActionOperationSource } from "../apps/action-source";
+import { guardAppOrigin } from "../apps/app-origin-guard";
 import { createHeldAssetPreviewer } from "../held-asset-preview";
 import {
   createOperationApprovalFiler,
@@ -77,7 +78,14 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
     : undefined;
   const deps: RunOperationDeps = {
     clientInstanceId,
-    registry,
+    // What every call resolves its operation through, when it is made and when it is executed
+    // after an approval. A call of a Connection operation that came from a frame of an App is
+    // asked there whether its App still stands and its caller may still use it.
+    registry: guardAppOrigin(registry, {
+      clientInstanceId,
+      store: options.stores.configAssets,
+      modules: options.modules
+    }),
     runs: options.stores.operationRuns,
     authorizer: options.authorizer,
     events: options.operations?.events ?? createAuditingEventEmitter(options.auditRecorder),

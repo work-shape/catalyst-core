@@ -15,6 +15,8 @@ export const operationRunOriginSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("mcp"), clientName: z.string().optional() }),
   z.object({
     kind: z.literal("app"),
+    /** The App the frame shows, by its name. A Page of a conversation names none. */
+    appName: z.string().optional(),
     appRevisionId: z.string(),
     actionName: z.string(),
     pageSessionId: z.string(),

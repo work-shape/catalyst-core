@@ -11,6 +11,7 @@ import {
   listActiveConfigAssets as listActivePostgresConfigAssets,
   listConfigAssetPage as listPostgresConfigAssetPage,
   listConfigAssetsByKey as listPostgresConfigAssetsByKey,
+  listPublishedConfigAssets as listPublishedPostgresConfigAssets,
   getConfigAssetRevision as getPostgresConfigAssetRevision,
   listConfigAssetRevisions as listPostgresConfigAssetRevisions
 } from "../postgres-config-asset-operations";
@@ -41,6 +42,7 @@ export function createPostgresConfigAssetsStore(db: PostgresConnection): ConfigA
     ): Promise<ConfigAssetRecord[]> {
       return listPostgresConfigAssetPage(db, input);
     },
+    listPublishedConfigAssets: (input) => listPublishedPostgresConfigAssets(db, input),
     async getConfigAsset(
       input: Parameters<ConfigAssetStore["getConfigAsset"]>[0]
     ): Promise<ConfigAssetRecord | undefined> {

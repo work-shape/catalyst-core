@@ -165,6 +165,32 @@ export async function listConfigAssetPage(
   });
 }
 
+export async function listPublishedConfigAssets(
+  db: PostgresConnection,
+  input: Parameters<ConfigAssetStore["listPublishedConfigAssets"]>[0]
+): Promise<ConfigAssetRecord[]> {
+  if (input.names?.length === 0) {
+    return [];
+  }
+  const rows = await db
+    .select({ asset: configAssets, revision: configAssetRevisions, published: publishedColumns })
+    .from(configAssets)
+    .innerJoin(configAssetRevisions, eq(configAssetRevisions.id, configAssets.activeRevisionId))
+    .innerJoin(publishedRevisions, eq(publishedRevisions.id, configAssets.publishedRevisionId))
+    .where(
+      and(
+        eq(configAssets.clientInstanceId, input.clientInstanceId),
+        eq(configAssets.kind, input.kind),
+        eq(configAssets.status, "active"),
+        input.names === undefined ? undefined : inArray(configAssets.name, [...input.names])
+      )
+    )
+    // Byte order through the operators of the prefix index, as a page of a list is read.
+    .orderBy(sql`${configAssets.name} using ~<~`)
+    .limit(input.limit);
+  return rows.map((row) => mapConfigAsset(row.asset, row.revision, row.published));
+}
+
 export async function getConfigAsset(
   db: PostgresConnection,
   input: Parameters<ConfigAssetStore["getConfigAsset"]>[0]

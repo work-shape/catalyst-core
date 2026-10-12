@@ -1,3 +1,6 @@
+// Follow-up ticket "operation face runs a definition in no registry" (S3-42 fix round, point
+// 12): this file calls `runOperation` itself only because a draft and a Page run a definition
+// no registry holds. Once the operation face has that method, this second caller goes.
 import {
   APP_ASSET_KIND,
   type AppActionCallResult,
@@ -12,8 +15,10 @@ import {
   APP_ACTION_CALLS_PER_MINUTE_PER_SESSION,
   APP_ACTION_INPUT_MAX_BYTES,
   APP_CONNECTION_CALL_ACTION_NAME,
-  APP_ID_PATTERN,
   AppError,
+  CONNECTION_ACTIONS,
+  CONNECTION_ASSET_KIND,
+  appActionOperationName,
   connectionCallError,
   connectionOperationName,
   getSubjectUserId,
@@ -21,9 +26,11 @@ import {
   isAppErrorCode,
   isFileSetId,
   operationDenialError,
+  pageActionOperationName,
   type ActorAccess,
   type AppActionRefusal,
   type AuthenticatedUser,
+  type CollaborationWorkspaceId,
   type OperationDefinition,
   type OperationOrigin,
   type ServedFileSet
@@ -39,7 +46,7 @@ import {
   appActionPermission,
   appResourceOf,
   authorizePublishedApp,
-  memoizedEnvironment,
+  preloadedEnvironment,
   type AppActionEnvironment,
   type AppActionHost
 } from "./action-source";
@@ -67,6 +74,14 @@ export interface FrameSession {
   host: AppActionHost;
   /** What the run's origin names as the revision: the App's revision, or the Page's file set. */
   revisionId: string;
+  /** The App the frame shows, by its name. A Page of a conversation has none. */
+  appName?: string;
+  /**
+   * The workspace the frame belongs to: the App's, or the one of the Page's conversation.
+   * Every call of the frame carries it, so a setting that is narrowed to a workspace counts
+   * for a named action and for a direct call of a Connection alike.
+   */
+  workspaceId: CollaborationWorkspaceId | undefined;
   conversationId?: ServedFileSet["conversationId"];
   actions: CompiledAppAction[];
   connections: string[];
@@ -97,7 +112,7 @@ function refusal(
 const sessionInvalid = () =>
   refusal("NOT_FOUND", "session_invalid", "The page session is not valid. Reload the page.");
 
-const manifestIdSchema = z.object({ id: z.string().regex(APP_ID_PATTERN) });
+const displayNameSchema = z.object({ displayName: z.string() });
 const runReferenceSchema = z.object({ operationRunId: z.string() });
 
 export class AppActionCalls {
@@ -108,7 +123,13 @@ export class AppActionCalls {
   constructor(options: ResolvedChatServerOptions) {
     this.options = options;
     this.conversations = new ConversationWorkflow(options);
-    this.environment = options.operationCalls.deps;
+    // A named action asks its App itself, so the operation it stands for is read from the
+    // registry as it is. The call path's own registry asks the App of a call's origin before
+    // a Connection operation (`guardAppOrigin`), which a direct call below goes through.
+    this.environment = {
+      registry: options.operationCalls.registry,
+      policy: options.operationCalls.deps.policy
+    };
   }
 
   /**
@@ -153,24 +174,27 @@ export class AppActionCalls {
       connections: declaredConnectionsOf(fileSet.manifest)
     };
     if (!fileSet.asset) {
-      const manifestId = manifestIdSchema.safeParse(fileSet.manifest);
-      try {
-        await this.conversations.requireConversationAccess(fileSet.conversationId, caller.user);
-      } catch (error) {
-        if (isAppError(error) && error.code === "NOT_FOUND") throw sessionInvalid();
-        throw error;
-      }
-      if (!manifestId.success) {
-        throw sessionInvalid();
-      }
+      const conversation = await this.conversations
+        .requireConversationAccess(fileSet.conversationId, caller.user)
+        .catch((error: unknown) => {
+          throw isAppError(error) && error.code === "NOT_FOUND" ? sessionInvalid() : error;
+        });
+      const pageId = fileSet.owner.id;
       return {
         ...shared,
         mode: "page",
-        // The conversation was checked for this caller just now, and a Page runs reads only,
-        // which never wait for anybody, so nothing asks again later.
-        host: { id: manifestId.data.id, resource: undefined, authorize: () => ({ allowed: true }) },
+        host: {
+          // Named by the Page, never by the id its manifest gives itself: that id is free
+          // text of whoever wrote the Page and could be the name of a published App.
+          operationName: (action) => pageActionOperationName(pageId, action),
+          resource: undefined,
+          // The conversation was checked for this caller just now, and a Page runs reads
+          // only, which never wait for anybody, so nothing asks again later.
+          authorize: () => ({ allowed: true })
+        },
         revisionId: fileSet.id,
-        conversationId: fileSet.conversationId
+        conversationId: fileSet.conversationId,
+        workspaceId: conversation.collaborationWorkspaceId
       };
     }
     const { asset } = fileSet;
@@ -183,14 +207,21 @@ export class AppActionCalls {
       throw sessionInvalid();
     }
     const resource = appResourceOf(asset);
+    // The view is the one the address was minted for. The file set does not say it: right after
+    // a publish or a discarded draft the draft and the published revision are one file set.
+    // An address that asked for the published view counts as that only while its file set is
+    // still what is published, and an address that names no view is taken as a draft.
     const published =
+      checked.claims.mode === "published" &&
       asset.publishedRevisionId !== undefined &&
       asset.revisionIds.includes(asset.publishedRevisionId);
     return {
       ...shared,
       mode: published ? "published" : "draft",
+      appName: asset.name,
+      workspaceId: resource.workspaceId,
       host: {
-        id: asset.name,
+        operationName: (action) => appActionOperationName(asset.name, action),
         resource,
         authorize: (context) =>
           published
@@ -205,12 +236,12 @@ export class AppActionCalls {
   }
 
   /**
-   * What each action of the shown manifest would come to for the viewer. One read of each
-   * Connection the actions name and one of the central settings, whatever the number of
-   * actions, and no call to an outside system.
+   * What each action of the shown manifest would come to for the viewer. Each Connection the
+   * actions name is read once, in two point reads, and the central settings once: a manifest
+   * of 100 actions on one Connection costs three reads, not 200. No outside system is called.
    */
   async can(session: FrameSession): Promise<Record<string, AppActionPermission>> {
-    const environment = memoizedEnvironment(this.environment);
+    const environment = await preloadedEnvironment(this.environment, session.actions);
     const can: Record<string, AppActionPermission> = {};
     for (const action of session.actions) {
       const permission =
@@ -222,7 +253,7 @@ export class AppActionCalls {
               {
                 actor: session.viewer,
                 origin: this.origin(session, action.name, action),
-                workspaceId: session.host.resource?.workspaceId,
+                workspaceId: session.workspaceId,
                 correlationId: "",
                 access: session.access,
                 resource: session.host.resource
@@ -254,7 +285,9 @@ export class AppActionCalls {
    * Calls one operation of a Connection the shown manifest lists. The run is the Connection
    * operation's own, with the origin `app`, so the exposure `bridge`, the right on the
    * Connection and the operation's policy are asked where every call of it asks them. The
-   * right on the App is asked before them.
+   * right on the App is asked before them, by the frame's own rule here and by the App the
+   * origin names where the registry resolves the operation (`guardAppOrigin`). The second is
+   * what still asks when a call that waited is executed.
    */
   async callConnection(
     session: FrameSession,
@@ -270,7 +303,7 @@ export class AppActionCalls {
         `The manifest does not list the Connection '${target.connection}' under 'connections'.`
       );
     }
-    const operation = await this.environment.registry.resolve(
+    const operation = await this.options.operationCalls.deps.registry.resolve(
       connectionOperationName(target.connection, target.operation)
     );
     if (!operation || operation.action !== null) {
@@ -301,6 +334,7 @@ export class AppActionCalls {
   ): Extract<OperationOrigin, { kind: "app" }> {
     return {
       kind: "app",
+      ...(session.appName === undefined ? {} : { appName: session.appName }),
       appRevisionId: session.revisionId,
       actionName,
       pageSessionId: session.pageSessionId,
@@ -353,7 +387,9 @@ export class AppActionCalls {
   /**
    * Runs the call through the call path. The definition is the one built from the manifest
    * the frame shows, so a draft and a Page run what a published revision would. A call that
-   * waited for an approval is executed later from the published App, by the source.
+   * waited for an approval is executed later from the registry: a named action from the
+   * published App while its revision is still the one the call was made in, and a Connection
+   * operation after its App was asked again.
    */
   private async run(
     session: FrameSession,
@@ -372,6 +408,7 @@ export class AppActionCalls {
           input,
           actor: session.viewer,
           origin,
+          workspaceId: session.workspaceId,
           idempotencyKey: call.idempotencyKey,
           correlationId: call.correlationId
         },
@@ -402,6 +439,8 @@ export class AppActionCalls {
       throw error;
     }
     const { result, run } = outcome;
+    // A refusal and a failure name their run too, so the frame's error can be traced.
+    const reference = outcome.unrecorded ? {} : { operationRunId: run.id };
     if (!outcome.unrecorded) call.header("operation-run-id", run.id);
     if (outcome.replayed) call.header("idempotent-replayed", "true");
     switch (result.status) {
@@ -409,14 +448,23 @@ export class AppActionCalls {
         return { runId: run.id, status: "done", result: result.output };
       case "pending_approval":
         return { runId: run.id, status: "pending_approval" };
-      case "denied":
-        throw operationDenialError(result.reason);
+      case "denied": {
+        const denied = operationDenialError(result.reason);
+        throw new AppError(denied.code, denied.message, {
+          ...detailsOf(denied.details),
+          ...(await this.refusedConnection(session, result.reason, origin)),
+          ...reference
+        });
+      }
       case "failed":
         throw isAppErrorCode(result.error.code)
-          ? new AppError(result.error.code, result.error.message, result.error.details, {
-              exposeMessage: true
-            })
-          : new AppError("INTERNAL", "The operation failed");
+          ? new AppError(
+              result.error.code,
+              result.error.message,
+              { ...detailsOf(result.error.details), ...reference },
+              { exposeMessage: true }
+            )
+          : new AppError("INTERNAL", "The operation failed", reference);
       case "expired":
         throw new AppError(
           "OPERATION_EXPIRED",
@@ -426,6 +474,46 @@ export class AppActionCalls {
       case "pending_confirmation":
         throw new AppError("INTERNAL", "A call of a frame cannot wait for a confirmation");
     }
+  }
+
+  /**
+   * What a refusal for the missing right `connection.use` adds for the person: that it is
+   * that refusal, and the Connection's label where the viewer may read the Connection. The
+   * interface makes the sentence from it in the person's language, so no App words it. A
+   * viewer who may not read the Connection is told no label, by the rule of the Connection's
+   * own refusal: a refusal must not show a Connection to somebody who may not see it. One
+   * point read, on this refusal only.
+   */
+  private async refusedConnection(
+    session: FrameSession,
+    denial: Extract<OperationOutcome["result"], { status: "denied" }>["reason"],
+    origin: OperationOrigin
+  ): Promise<{ connectionUseDenied?: true; connectionLabel?: string }> {
+    if (
+      denial.kind !== "forbidden" ||
+      denial.action !== CONNECTION_ACTIONS.use ||
+      origin.kind !== "app" ||
+      !origin.target
+    ) {
+      return {};
+    }
+    const asset = await this.options.stores.configAssets.getConfigAsset({
+      clientInstanceId: this.options.clientInstanceId,
+      kind: CONNECTION_ASSET_KIND,
+      name: origin.target.connection
+    });
+    const label = displayNameSchema.safeParse(asset?.config);
+    const readable =
+      asset !== undefined &&
+      session.access.authorize(CONNECTION_ACTIONS.read, {
+        kind: CONNECTION_ASSET_KIND,
+        assetId: asset.id,
+        name: asset.name
+      }).allowed;
+    return {
+      connectionUseDenied: true,
+      ...(readable && label.success ? { connectionLabel: label.data.displayName } : {})
+    };
   }
 }
 

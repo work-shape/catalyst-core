@@ -6,6 +6,7 @@ import {
   type CompiledAppAction
 } from "@vivd-catalyst/app-build";
 import {
+  APP_ACTION_OPERATION_PREFIX,
   AppError,
   CONNECTION_ASSET_KIND,
   POLICY_VALUES,
@@ -22,10 +23,12 @@ import {
   type ConfigAssetStore,
   type DataToolDescriptor,
   type DataToolSource,
+  type Logger,
   type ModuleSnapshot,
   type OperationAuthorization,
   type OperationAuthorizeContext,
   type OperationDefinition,
+  type OperationOrigin,
   type OperationRegistry,
   type OperationResource,
   type OperationSource,
@@ -53,10 +56,18 @@ const APPS_MODULE = "apps";
  */
 const APP_ACTION_DEFAULT_TIMEOUT_MS = 60_000;
 
-/** How many published Apps one listing of the source reads. */
+/**
+ * How many published Apps one listing of the source reads, in one query. Where more are
+ * published, the listing holds the actions of the first so many by name and says in
+ * `truncated` that it left some out.
+ */
 export const APP_ACTION_LIST_MAX_APPS = 2000;
 
-/** How many Apps the tool list of one agent is read from. Names of further Apps are left out. */
+/**
+ * How many Apps the tool list of one agent is read from, in one query. An agent whose list
+ * names actions of more Apps runs without the actions of the Apps after the first so many by
+ * name: the run lists them as missing, and a warning says how many Apps were left out.
+ */
 export const APP_ACTION_TOOL_MAX_APPS = 50;
 
 /** How long the description of an action is at most as a model is sent it. */
@@ -65,7 +76,7 @@ export const APP_ACTION_TOOL_DESCRIPTION_MAX_CHARS = 2000;
 /** What a definition of an action is built with: where its operation and the policy are read. */
 export interface AppActionEnvironment {
   /** Resolves the Connection operation an action stands for. */
-  registry: Pick<OperationRegistry, "resolve">;
+  registry: Pick<OperationRegistry, "resolve" | "resolveMany">;
   policy: {
     instanceDefaults: PolicyDefaults;
     centralSettings(): readonly CentralPolicySetting[] | Promise<readonly CentralPolicySetting[]>;
@@ -74,8 +85,12 @@ export interface AppActionEnvironment {
 
 /** The Page or the revision of an App an action belongs to. */
 export interface AppActionHost {
-  /** What the operation is named with: the id of the App, or the id of the Page's manifest. */
-  id: string;
+  /**
+   * The operation one action runs as: `app.<id>.<action>` for an App, and
+   * `page_action.<page id>.<action>` for a Page of a conversation, which is no App whatever
+   * id its manifest names.
+   */
+  operationName(action: string): string;
   /** What the run names as touched. A Page is no asset and names none. */
   resource: OperationResource | undefined;
   /** Whether the caller may use this Page or this revision of the App. Asked first. */
@@ -159,7 +174,7 @@ export async function appActionDefinition(
     : action.policy;
   const parameters = appActionInputAsZod(action.input.schema);
   const definition: OperationDefinition = {
-    name: appActionOperationName(host.id, action.name),
+    name: host.operationName(action.name),
     effect: action.effect,
     // A read of a customer's system is recorded, every time.
     ...(action.effect === "reading" ? { recordsEveryCall: true as const } : {}),
@@ -228,21 +243,32 @@ export async function appActionPermission(
 }
 
 /**
- * An environment that reads each Connection operation and the central settings once. For one
- * request that builds several definitions, such as the `can` map of a frame.
+ * An environment for one request that builds the definitions of several actions, such as the
+ * `can` map of a frame. It reads each Connection the actions name once, whatever the number
+ * of actions and of operations they stand for, and the central settings once. Each Connection
+ * is two point reads, so a manifest whose actions name `c` Connections costs `2c` reads and
+ * one of the settings. An operation that was not read here does not exist to it.
  */
-export function memoizedEnvironment(environment: AppActionEnvironment): AppActionEnvironment {
-  const resolved = new Map<string, Promise<OperationDefinition | undefined>>();
+export async function preloadedEnvironment(
+  environment: AppActionEnvironment,
+  actions: readonly Pick<CompiledAppAction, "connection" | "operation">[]
+): Promise<AppActionEnvironment> {
+  const targets = await environment.registry.resolveMany(
+    actions.map((action) => connectionOperationName(action.connection, action.operation))
+  );
   let settings: Promise<readonly CentralPolicySetting[]> | undefined;
   return {
     registry: {
-      resolve(name) {
-        const known = resolved.get(name);
-        if (known) return known;
-        const read = environment.registry.resolve(name);
-        resolved.set(name, read);
-        return read;
-      }
+      resolve: (name) => Promise.resolve(targets.get(name)),
+      resolveMany: (names) =>
+        Promise.resolve(
+          new Map(
+            names.flatMap((name) => {
+              const target = targets.get(name);
+              return target ? [[name, target] as const] : [];
+            })
+          )
+        )
     },
     policy: {
       instanceDefaults: environment.policy.instanceDefaults,
@@ -253,15 +279,40 @@ export function memoizedEnvironment(environment: AppActionEnvironment): AppActio
 
 export interface AppActionSourceDeps extends AppActionEnvironment {
   clientInstanceId: ClientInstanceId;
-  store: Pick<ConfigAssetStore, "getConfigAsset" | "listActiveConfigAssets">;
+  store: Pick<ConfigAssetStore, "getConfigAsset" | "listPublishedConfigAssets">;
   modules: Pick<ModuleSnapshot, "isEnabled">;
+  /** `APP_ACTION_LIST_MAX_APPS` unless a test of the limit sets a smaller one. */
+  listMaxApps?: number;
 }
 
 /** The App a published revision of which people are served, with what its actions need. */
 interface PublishedApp {
   host: AppActionHost;
+  /** The revision people are served: what a held call of an action is pinned to. */
+  revisionId: string;
   title: string;
   actions: CompiledAppAction[];
+}
+
+/**
+ * A call that waited for an approval was made in a frame of one revision, and the approver
+ * read what that revision's action does. It is executed only while that revision is still
+ * the published one. The compiled mapping is not kept with the call, since a revision that
+ * was replaced is no longer served to anybody and nothing of it should still run. So a call
+ * whose revision was replaced ends with this sentence, and nothing is carried out.
+ */
+export function requirePublishedRevision(
+  origin: OperationOrigin,
+  publishedRevisionId: string | undefined
+): void {
+  if (origin.kind === "app" && origin.appRevisionId !== publishedRevisionId) {
+    throw new AppError(
+      "CONFLICT",
+      "The App was published again after this call was made, so the call was not carried out and nothing was changed. Make the call again in the App.",
+      { reason: "app_revision_changed" },
+      { exposeMessage: true }
+    );
+  }
 }
 
 const titleSchema = z.object({ title: z.string() });
@@ -298,11 +349,12 @@ export function authorizePublishedApp(
 }
 
 function publishedApp(asset: ConfigAssetRecord | undefined): PublishedApp | undefined {
+  const revisionId = asset && liveRevisionId(asset, { lifecycle: "draft_published" });
   if (
     !asset ||
     asset.status !== "active" ||
     asset.scope.kind !== "workspace" ||
-    liveRevisionId(asset, { lifecycle: "draft_published" }) === undefined ||
+    revisionId === undefined ||
     !asset.publishedConfig
   ) {
     return undefined;
@@ -315,10 +367,14 @@ function publishedApp(asset: ConfigAssetRecord | undefined): PublishedApp | unde
   const title = titleSchema.safeParse(asset.publishedConfig);
   return {
     host: {
-      id: asset.name,
+      operationName: (action) => appActionOperationName(asset.name, action),
       resource,
-      authorize: (context) => authorizePublishedApp(context, resource)
+      authorize(context) {
+        requirePublishedRevision(context.origin, revisionId);
+        return authorizePublishedApp(context, resource);
+      }
     },
+    revisionId,
     title: title.success ? title.data.title : asset.name,
     actions: compiledActionsOf(asset.publishedConfig.manifest)
   };
@@ -327,7 +383,10 @@ function publishedApp(asset: ConfigAssetRecord | undefined): PublishedApp | unde
 /**
  * The source of the named actions of every published App. `resolve` reads the one App a name
  * stands for and the one Connection its action names. A draft is never read here: only what
- * an App's users are served has operations of this source.
+ * an App's users are served has operations of this source. A call from a frame that is
+ * resolved here is one that waited: it runs only where its revision is still the published
+ * one (`requirePublishedRevision`). `list` reads at most `APP_ACTION_LIST_MAX_APPS` published
+ * Apps in one query and each Connection they name once.
  */
 export function createAppActionOperationSource(deps: AppActionSourceDeps): OperationSource {
   const { clientInstanceId, store } = deps;
@@ -343,27 +402,51 @@ export function createAppActionOperationSource(deps: AppActionSourceDeps): Opera
       return (await appActionDefinition(deps, app.host, action)).definition;
     },
     async list() {
-      if (!deps.modules.isEnabled(APPS_MODULE)) return [];
-      const environment = memoizedEnvironment(deps);
-      const assets = await store.listActiveConfigAssets({ clientInstanceId, kind: APP_ASSET_KIND });
-      const definitions: OperationDefinition[] = [];
-      for (const asset of assets.slice(0, APP_ACTION_LIST_MAX_APPS)) {
-        const app = publishedApp(asset);
-        for (const action of app?.actions ?? []) {
-          if (!app) continue;
+      if (!deps.modules.isEnabled(APPS_MODULE)) return { operations: [], truncated: [] };
+      const maxApps = deps.listMaxApps ?? APP_ACTION_LIST_MAX_APPS;
+      // One more than is listed, so that a listing that leaves Apps out knows it.
+      const assets = await store.listPublishedConfigAssets({
+        clientInstanceId,
+        kind: APP_ASSET_KIND,
+        limit: maxApps + 1
+      });
+      const apps = assets.slice(0, maxApps).flatMap((asset) => publishedApp(asset) ?? []);
+      const environment = await preloadedEnvironment(
+        deps,
+        apps.flatMap((app) => app.actions)
+      );
+      const operations: OperationDefinition[] = [];
+      for (const app of apps) {
+        for (const action of app.actions) {
           const built = await appActionDefinition(environment, app.host, action);
-          if (built.callable) definitions.push(built.definition);
+          if (built.callable) operations.push(built.definition);
         }
       }
-      return definitions;
+      return {
+        operations,
+        truncated:
+          assets.length > maxApps
+            ? [
+                {
+                  prefix: APP_ACTION_OPERATION_PREFIX,
+                  limit: maxApps,
+                  limitName: "APP_ACTION_LIST_MAX_APPS"
+                }
+              ]
+            : []
+      };
     }
   };
 }
 
 export interface AppActionToolSourceDeps {
   clientInstanceId: ClientInstanceId;
-  store: Pick<ConfigAssetStore, "getConfigAsset">;
+  store: Pick<ConfigAssetStore, "listPublishedConfigAssets">;
   modules: Pick<ModuleSnapshot, "isEnabled">;
+  /** Told when a tool list names more Apps than one read takes. */
+  logger?: Pick<Logger, "warn">;
+  /** `APP_ACTION_TOOL_MAX_APPS` unless a test of the limit sets a smaller one. */
+  maxApps?: number;
   /** The Connections' own tool source: it says which operations an agent may carry now. */
   connectionTools: DataToolSource;
 }
@@ -371,8 +454,8 @@ export interface AppActionToolSourceDeps {
 /**
  * The named actions an agent lists, as tools. An action is described where its App is
  * published and the Connection operation it stands for is callable now and exposed to
- * agents, which the Connections' own tool source says. One read per App the list names, at
- * most `APP_ACTION_TOOL_MAX_APPS` of them, and one read of the Connections.
+ * agents, which the Connections' own tool source says. One query for the Apps the list
+ * names, at most `APP_ACTION_TOOL_MAX_APPS` of them, and one read of the Connections.
  */
 export function createAppActionToolSource(deps: AppActionToolSourceDeps): DataToolSource {
   const { clientInstanceId, store } = deps;
@@ -383,22 +466,34 @@ export function createAppActionToolSource(deps: AppActionToolSourceDeps): DataTo
         return parsed ? [{ name, ...parsed }] : [];
       });
       if (wanted.length === 0 || !deps.modules.isEnabled(APPS_MODULE)) return [];
-      const appNames = [...new Set(wanted.map((entry) => entry.app))].slice(
-        0,
-        APP_ACTION_TOOL_MAX_APPS
-      );
+      // By name, so that which Apps are left out does not change from one run to the next.
+      const named = [...new Set(wanted.map((entry) => entry.app))].sort();
+      const maxApps = deps.maxApps ?? APP_ACTION_TOOL_MAX_APPS;
+      const appNames = named.slice(0, maxApps);
+      if (named.length > appNames.length) {
+        deps.logger?.warn(
+          {
+            type: "app_action.tools_left_out",
+            namedApps: named.length,
+            leftOutApps: named.length - appNames.length,
+            limit: maxApps,
+            limitName: "APP_ACTION_TOOL_MAX_APPS"
+          },
+          "A tool list names actions of more Apps than one read takes; the actions of the Apps after the limit are left out"
+        );
+      }
       const apps = new Map(
-        await Promise.all(
-          appNames.map(
-            async (name) =>
-              [
-                name,
-                publishedApp(
-                  await store.getConfigAsset({ clientInstanceId, kind: APP_ASSET_KIND, name })
-                )
-              ] as const
-          )
-        )
+        (
+          await store.listPublishedConfigAssets({
+            clientInstanceId,
+            kind: APP_ASSET_KIND,
+            names: appNames,
+            limit: appNames.length
+          })
+        ).flatMap((asset) => {
+          const app = publishedApp(asset);
+          return app ? [[asset.name, app] as const] : [];
+        })
       );
       const found = wanted.flatMap((entry) => {
         const app = apps.get(entry.app);

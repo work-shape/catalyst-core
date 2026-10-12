@@ -70,7 +70,9 @@ describe("resolvePolicy: where the value comes from", () => {
     const allowed = [{ operation: "items.create", value: "allow" }] as const;
     expect(
       resolve({ definition: { ...changing, policyFloor: "approval" }, centralSettings: allowed })
-    ).toMatchObject({ value: "approval", next: "await_approval", source: "declared_default" });
+      // The floor names itself (fix round 11): before it said `declared_default`, so a run
+      // that was held by what its Connection operation asks read like the action's own default.
+    ).toMatchObject({ value: "approval", next: "await_approval", source: "policy_floor" });
     // A setting that is stricter than the floor stays, and names itself as the source.
     expect(
       resolve({

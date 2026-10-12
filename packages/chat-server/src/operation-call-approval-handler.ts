@@ -102,7 +102,7 @@ const payloadSchema = z.object({
    * or a guardrail. A request that was filed before this was kept names nothing.
    */
   heldBy: z
-    .enum(["instance_default", "declared_default", "central_setting", "guardrail"])
+    .enum(["instance_default", "declared_default", "policy_floor", "central_setting", "guardrail"])
     .optional(),
   expiresAt: z.string()
 });

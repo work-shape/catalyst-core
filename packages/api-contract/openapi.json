@@ -18760,6 +18760,9 @@
                 "type": "string",
                 "const": "app"
               },
+              "appName": {
+                "type": "string"
+              },
               "appRevisionId": {
                 "type": "string"
               },

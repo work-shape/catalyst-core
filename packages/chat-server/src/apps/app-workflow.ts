@@ -154,7 +154,10 @@ export class AppWorkflow {
       fileSetId: fileSet.id,
       viewerId: getSubjectUserId(caller.user),
       pageSessionId,
-      expiresAt
+      expiresAt,
+      // Signed into the address: a call the frame makes is decided by the view that was asked
+      // for, whichever revisions share this file set.
+      mode: input.mode
     });
     return {
       url: appContentPath(fileSet.id, token),

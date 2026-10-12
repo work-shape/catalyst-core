@@ -39,6 +39,12 @@ export type OperationOrigin =
   | { kind: "mcp"; clientName?: string }
   | {
       kind: "app";
+      /**
+       * The App the frame shows, by its name. A Page of a conversation names none. A call
+       * that is executed later is asked by it whether its App still stands and its caller may
+       * still use it.
+       */
+      appName?: string;
       appRevisionId: string;
       actionName: string;
       pageSessionId: string;

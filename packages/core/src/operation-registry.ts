@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import type { OperationDenial } from "./operation-denial";
 import type { AuditRecorder } from "./audit";
+import { PAGE_ACTION_OPERATION_PREFIX } from "./app-actions";
 import { DATA_TOOL_PREFIXES } from "./data-tool-names";
 import { AppError } from "./errors";
 import type { PlatformEventName } from "./events";
@@ -245,7 +246,32 @@ export interface OperationListScope {
  */
 export interface OperationSource {
   resolve(name: string): Promise<OperationDefinition | undefined>;
-  list(scope: OperationListScope): Promise<OperationDefinition[]>;
+  /**
+   * Of the named operations, those the source has, with one read per thing they belong to
+   * and never one per name. A source without it is asked for each name.
+   */
+  resolveMany?(names: readonly string[]): Promise<OperationDefinition[]>;
+  list(scope: OperationListScope): Promise<OperationListing>;
+}
+
+/** A source reads at most so much for one listing, and more than that exists. */
+export interface OperationListTruncation {
+  /** The name prefix of the operations of which some are left out. */
+  prefix: string;
+  /** How many of what the source counts one listing reads. */
+  limit: number;
+  /** The constant that sets the limit, as an operator finds it. */
+  limitName: string;
+}
+
+/**
+ * The operations of a listing, and what it leaves out. A source that reads a bounded number
+ * of rows never leaves operations out silently: it names itself in `truncated`.
+ */
+export interface OperationListing {
+  operations: OperationDefinition[];
+  /** One entry per source that left operations out. Empty where the listing is whole. */
+  truncated: OperationListTruncation[];
 }
 
 export interface OperationRegistry {
@@ -253,7 +279,12 @@ export interface OperationRegistry {
   register<Input, Output>(definition: OperationDefinition<Input, Output>): void;
   addSource(source: OperationSource): void;
   resolve(name: string): Promise<OperationDefinition | undefined>;
-  list(scope?: OperationListScope): Promise<OperationDefinition[]>;
+  /**
+   * Several operations by name, as `resolve` would answer each. A name nothing has is left
+   * out. A source that can reads what several names share once.
+   */
+  resolveMany(names: readonly string[]): Promise<Map<string, OperationDefinition>>;
+  list(scope?: OperationListScope): Promise<OperationListing>;
 }
 
 /**
@@ -262,7 +293,9 @@ export interface OperationRegistry {
  * App, `app.<id>.<action>`. An operation of the release may
  * not take such a name. `resolve` asks the release first, so one that did would stand in for
  * the data operation of that name, with rights and a policy of its own. They are the prefixes
- * of the data tools, `DATA_TOOL_PREFIXES`.
+ * of the data tools, `DATA_TOOL_PREFIXES`. The names a Page's actions run as,
+ * `page_action.<page id>.<action>`, are kept from the release in the same way: they are no
+ * data tool, since no source resolves them and no agent carries them.
  */
 
 export function createOperationRegistry(): OperationRegistry {
@@ -270,7 +303,9 @@ export function createOperationRegistry(): OperationRegistry {
   const sources: OperationSource[] = [];
   return {
     register(definition) {
-      const dataPrefix = DATA_TOOL_PREFIXES.find((prefix) => definition.name.startsWith(prefix));
+      const dataPrefix = [...DATA_TOOL_PREFIXES, PAGE_ACTION_OPERATION_PREFIX].find((prefix) =>
+        definition.name.startsWith(prefix)
+      );
       if (dataPrefix !== undefined) {
         throw new AppError(
           "INTERNAL",
@@ -297,9 +332,40 @@ export function createOperationRegistry(): OperationRegistry {
       }
       return undefined;
     },
+    async resolveMany(names) {
+      const found = new Map<string, OperationDefinition>();
+      let open = [...new Set(names)];
+      for (const name of open) {
+        const definition = registered.get(name);
+        if (definition) found.set(name, definition);
+      }
+      for (const source of sources) {
+        open = open.filter((name) => !found.has(name));
+        if (open.length === 0) break;
+        const asked = open;
+        const contributed = source.resolveMany
+          ? await source.resolveMany(asked)
+          : (await Promise.all(asked.map((name) => source.resolve(name)))).flatMap(
+              (definition) => definition ?? []
+            );
+        for (const definition of contributed) {
+          // A source is never trusted to answer a name it was not asked for.
+          if (asked.includes(definition.name) && !found.has(definition.name)) {
+            found.set(definition.name, definition);
+          }
+        }
+      }
+      return found;
+    },
     async list(scope = {}) {
       const contributed = await Promise.all(sources.map((source) => source.list(scope)));
-      return [...registered.values(), ...contributed.flat()];
+      return {
+        operations: [
+          ...registered.values(),
+          ...contributed.flatMap((listing) => listing.operations)
+        ],
+        truncated: contributed.flatMap((listing) => listing.truncated)
+      };
     }
   };
 }

@@ -70,6 +70,8 @@ export interface PolicyInput {
 export type PolicySource =
   | "instance_default"
   | "declared_default"
+  /** The operation's `policyFloor`: what it declares, or what an operation it stands for asks. */
+  | "policy_floor"
   | "central_setting"
   | "guardrail"
   | "surface_cannot_pause";
@@ -143,9 +145,10 @@ export function resolvePolicy(input: PolicyInput): PolicyResolution {
     stricter(left.value, right.value) === left.value ? left : right
   ));
   if (applies(definition.policyFloor) && stricter(value, definition.policyFloor) !== value) {
-    // The operation's own declaration, as its default is: no setting loosens it.
+    // No setting loosens it, and it is named as itself: an approver reads that no setting of
+    // the instance made the call wait.
     value = definition.policyFloor;
-    source = "declared_default";
+    source = "policy_floor";
   }
 
   if (input.guardrailOutcome === "block") {

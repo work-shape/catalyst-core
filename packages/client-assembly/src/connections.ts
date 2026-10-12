@@ -94,6 +94,7 @@ export function withConnections(
         clientInstanceId: parts.clientInstanceId,
         store: parts.stores.configAssets,
         modules: parts.modules,
+        logger: parts.logger,
         connectionTools: connections.toolSource
       })
     )

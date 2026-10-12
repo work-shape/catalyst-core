@@ -7,6 +7,16 @@
  */
 export const APP_ACTION_OPERATION_PREFIX = "app.";
 
+/**
+ * The prefix of the operation a named action of a Page of a conversation runs as:
+ * `page_action.<page id>.<action>`. A Page is no App and no published thing, so its runs
+ * never carry the name of an App's action, whatever id its manifest names. The name is only
+ * ever a run's: no registry resolves it, no agent carries it and no setting is read by it
+ * unless an administrator writes one for it. It does not start with `page.`, which names
+ * the operations that manage Pages.
+ */
+export const PAGE_ACTION_OPERATION_PREFIX = "page_action.";
+
 /** The id of an App, as its manifest names it. */
 export const APP_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/u;
 /** The name of a named action: lowercase letters, digits, '-' and '_', at most 63. */
@@ -15,6 +25,11 @@ export const APP_ACTION_NAME_PATTERN = /^[a-z0-9][a-z0-9_-]{0,62}$/u;
 /** The operation name of one named action of one App. */
 export function appActionOperationName(app: string, action: string): string {
   return `${APP_ACTION_OPERATION_PREFIX}${app}.${action}`;
+}
+
+/** The operation name a named action of one Page runs as, by the id of the Page. */
+export function pageActionOperationName(pageId: string, action: string): string {
+  return `${PAGE_ACTION_OPERATION_PREFIX}${pageId}.${action}`;
 }
 
 /**
@@ -62,7 +77,9 @@ export const APP_ACTION_REFUSALS = [
   "forbidden",
   "input_invalid",
   "session_invalid",
-  "rate_limited"
+  "rate_limited",
+  "app_revision_changed",
+  "app_gone"
 ] as const;
 
 export type AppActionRefusal = (typeof APP_ACTION_REFUSALS)[number];

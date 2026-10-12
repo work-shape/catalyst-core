@@ -181,7 +181,8 @@ function definitionOf(
 
 /**
  * The source of every Connection's operations. `resolve` reads the one Connection a name
- * stands for. `list` reads all of them in two reads. Neither contacts an outside system.
+ * stands for, and `resolveMany` each Connection its names belong to once. `list` reads all of
+ * them in two reads. Neither contacts an outside system.
  */
 export function createConnectionOperationSource(
   deps: ConnectionOperationSourceDeps
@@ -198,6 +199,27 @@ export function createConnectionOperationSource(
       if (!connection || !operation) return undefined;
       return definitionOf(deps, slots, connection, operation);
     },
+    async resolveMany(names) {
+      const wanted = names.flatMap((name) => parseConnectionOperationName(name) ?? []);
+      // One read of each Connection the names belong to, whatever the number of names.
+      const connections = await Promise.all(
+        [...new Set(wanted.map((entry) => entry.connection))].map((name) =>
+          readConnection(deps, name)
+        )
+      );
+      const byName = new Map(
+        connections.flatMap((connection) =>
+          connection ? [[connection.config.name, connection] as const] : []
+        )
+      );
+      return wanted.flatMap((entry) => {
+        const connection = byName.get(entry.connection);
+        const operation = connection?.config.operations.find(
+          (candidate) => candidate.name === entry.operation
+        );
+        return connection && operation ? [definitionOf(deps, slots, connection, operation)] : [];
+      });
+    },
     async list() {
       const definitions: OperationDefinition[] = [];
       for (const connection of await readConnections(deps)) {
@@ -206,7 +228,7 @@ export function createConnectionOperationSource(
           definitions.push(definitionOf(deps, slots, connection, operation));
         }
       }
-      return definitions;
+      return { operations: definitions, truncated: [] };
     }
   };
 }

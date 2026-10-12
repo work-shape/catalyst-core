@@ -603,7 +603,7 @@ describe("the names of a Connection's tools", () => {
     const t = await fixture();
     // An instance without a Connection contributes no operation.
     const source = createConnectionOperationSource(t.sourceDeps);
-    expect(await source.list({})).toEqual([]);
+    expect(await source.list({})).toEqual({ operations: [], truncated: [] });
     await t.seed("crm");
     const listActive = vi.spyOn(t.stores.configAssets, "listActiveConfigAssets");
     const tools = createConnectionToolSource(t.sourceDeps);

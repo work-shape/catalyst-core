@@ -13,7 +13,8 @@ import { defineOperation, defineRegisteredOperation, json } from "./define-opera
 
 /**
  * What a call of a frame declares. It runs through the call path as the operation its action
- * is (`app.<id>.<action>`, or the Connection's own), so every call is an Operation Run with
+ * is (`app.<id>.<action>` in an App, `page_action.<page id>.<action>` in a Page of a
+ * conversation, or the Connection's own), so every call is an Operation Run with
  * the origin `app`. The name of that operation is read from the manifest the frame shows and
  * is not this descriptor's id, which is why these are not defined with
  * `defineRegisteredOperation`. A call that waits for an approval answers `200` with the

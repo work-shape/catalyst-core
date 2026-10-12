@@ -201,6 +201,19 @@ export interface ConfigAssetStore {
     limit: number;
     readable(asset: ConfigAssetKey): boolean;
   }): Promise<ConfigAssetRecord[]>;
+  /**
+   * The active assets of a kind that have a published revision, each with the content of that
+   * revision, in the byte order of their names. One read of at most `limit` rows, whatever
+   * the number of assets: a caller that needs to know whether more exist asks for one more
+   * than it uses.
+   */
+  listPublishedConfigAssets(input: {
+    clientInstanceId: ClientInstanceId;
+    kind: ConfigAssetKind;
+    /** Only the assets of these names. */
+    names?: readonly string[];
+    limit: number;
+  }): Promise<ConfigAssetRecord[]>;
   getConfigAsset(input: {
     clientInstanceId: ClientInstanceId;
     kind: ConfigAssetKind;

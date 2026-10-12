@@ -93,7 +93,7 @@ export function createFakeConnection(options: { writePolicy?: "approval" } = {})
       resolveCalls.push(name);
       return Promise.resolve(existing().find((entry) => entry.name === name));
     },
-    list: () => Promise.resolve(existing())
+    list: () => Promise.resolve({ operations: existing(), truncated: [] })
   };
   const toolSource: DataToolSource = {
     describe(toolNames) {

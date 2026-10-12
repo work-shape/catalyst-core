@@ -133,11 +133,13 @@ export const agentOrigin = (toolName: string, agentName = "assistant"): Operatio
   toolCallId: asToolCallId("call_test"),
   toolName
 });
+/** The origin of a call of a Page of a conversation. A call of an App names its App. */
 export const appOrigin: OperationOrigin = {
   kind: "app",
   appRevisionId: "apprev_test",
   actionName: "load",
-  pageSessionId: "page_test"
+  pageSessionId: "page_test",
+  conversationId: asConversationId("conv_test")
 };
 
 const failedSchema = z.object({
@@ -169,7 +171,7 @@ interface InvokeOptions {
   idempotencyKey?: string;
 }
 
-interface ConnectionOperationsFixture extends AccessInstance {
+export interface ConnectionOperationsFixture extends AccessInstance {
   /** The credential of every Connection `seed` stores, and the key that encrypts it. */
   secret: string;
   storeKey: string;

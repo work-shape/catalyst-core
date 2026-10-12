@@ -1,17 +1,17 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { z } from "zod";
-import { buildPage } from "@vivd-catalyst/app-build/build";
-import { createAppActionToolSource, storePageFileSet } from "@vivd-catalyst/chat-server";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createAppActionToolSource } from "@vivd-catalyst/chat-server";
 import { createConnectionToolSource } from "@vivd-catalyst/connections";
+import { APP_ACTION_INPUT_MAX_BYTES } from "@vivd-catalyst/core";
+import { clientInstanceId } from "./support/access-instance";
+import { expectStatus } from "./support/app-instance";
 import {
-  APP_ACTION_INPUT_MAX_BYTES,
-  asConversationId,
-  type OperationRun
-} from "@vivd-catalyst/core";
-import { clientInstanceId, errorSchema } from "./support/access-instance";
-import { expectStatus, setupAppInstance, type AppFile } from "./support/app-instance";
-import { agentOrigin, fixtureOn, operationOf } from "./support/connection-operations";
-import { pageFiles } from "./support/page-build";
+  action,
+  appSource,
+  resultSchema,
+  setupAppActions,
+  type AppActionsInstance
+} from "./support/app-actions";
+import { agentOrigin } from "./support/connection-operations";
 import { withTestSql } from "./support/test-sql";
 
 // A named action of a Page or an App, called by its frame through the interface, on real rows:
@@ -22,224 +22,25 @@ import { withTestSql } from "./support/test-sql";
 // could reach, no operation `app.<id>.<action>` resolved, and the manifest of a stored App
 // held no compiled action.
 
-const action = (lines: string[]) => `${lines.join("\n")}\n`;
-const text = {
-  schema: "  schema: { type: object, properties: { text: { type: string } }, required: [text] }",
-  mapping: '  mapping: { text: "{{text}}" }'
-};
-
-/** An App with a reading action, a changing one and one on an operation agents alone reach. */
-function appSource(marker: string, id = "orders"): AppFile[] {
-  return [
-    {
-      path: "app.yaml",
-      text: JSON.stringify({
-        id,
-        name: "Orders",
-        kit: "1.1.0",
-        entry: "index.html",
-        connections: ["crm", "erp"]
-      })
-    },
-    { path: "index.html", text: `<!doctype html><title>Orders</title><p>${marker}</p>` },
-    {
-      path: "actions/load.action.yaml",
-      text: action([
-        "connection: crm",
-        "operation: echo",
-        "effect: reading",
-        "description: Reads one row.",
-        "input:",
-        text.schema,
-        text.mapping
-      ])
-    },
-    {
-      path: "actions/save.action.yaml",
-      text: action([
-        "connection: crm",
-        "operation: write",
-        "effect: changing",
-        "input:",
-        "  schema: { type: object, properties: { note: { type: string } }, required: [note] }",
-        '  mapping: { note: "{{note}}", source: app }'
-      ])
-    },
-    {
-      path: "actions/agent-only.action.yaml",
-      text: action([
-        "connection: erp",
-        "operation: echo",
-        "effect: reading",
-        "input:",
-        text.schema,
-        text.mapping
-      ])
-    }
-  ];
-}
-
-const frameSchema = z.looseObject({
-  url: z.string(),
-  fileSetId: z.string(),
-  pageSessionId: z.string()
-});
-const resultSchema = z.object({
-  runId: z.string(),
-  status: z.enum(["done", "pending_approval"]),
-  result: z.unknown().optional()
-});
-
-/** What the interface holds of a frame: the page session and what proves it to the instance. */
-interface Frame {
-  pageSessionId: string;
-  proof: { fileSetId: string; token: string };
-}
-
-function frameOf(preview: unknown): Frame {
-  const { url, fileSetId, pageSessionId } = frameSchema.parse(preview);
-  const segments = url.split("/").filter(Boolean);
-  const token = segments[segments.indexOf(fileSetId) + 1];
-  if (token === undefined) throw new Error("The address holds no token");
-  return { pageSessionId, proof: { fileSetId, token } };
-}
-
 describe("a call a frame makes through the interface", () => {
-  type Instance = Awaited<ReturnType<typeof setup>>;
-  let t: Instance;
+  let t: AppActionsInstance;
   let crm: string;
-
-  const setup = () =>
-    fixtureOn((options) =>
-      setupAppInstance({
-        modules: options.modules,
-        furtherKinds: options.furtherKinds,
-        server: options.server,
-        // The real build, in this process: it compiles the action files into the manifest.
-        build: ({ files, signal }) => buildPage({ files, signal })
-      })
-    );
-
   beforeAll(async () => {
-    t = await setup();
-    crm = await t.seed("crm", {
-      operations: [
-        operationOf("echo", { exposure: ["bridge", "agent"] }),
-        operationOf("write", { effect: "changing", exposure: ["bridge"] })
-      ]
-    });
-    await t.seed("erp", { operations: [operationOf("echo", { exposure: ["agent"] })] });
-    await t.seed("hidden", { operations: [operationOf("echo", { exposure: ["bridge"] })] });
-    for (const name of ["crm", "erp", "hidden"]) {
-      await t.grant(t.admin.id, "connection.use", { assetId: await t.assetId("connection", name) });
-    }
-    // Revision 1 is published. Revision 2 is a draft with other files.
-    expectStatus(await t.putApp(t.admin.id, "orders", appSource("published")), 200);
-    expectStatus(await t.publish(t.admin.id, "orders", 1), 200);
-    expectStatus(await t.putApp(t.admin.id, "orders", appSource("draft")), 200);
+    t = await setupAppActions();
+    crm = t.crm;
   });
-  afterAll(async () => {
-    vi.restoreAllMocks();
-    await t.close();
-  });
+  afterAll(() => t.closeAll());
 
-  const openApp = async (userId: string, mode: "draft" | "published") => {
-    const response = await t.call(userId, "apps.preview", {
-      params: { app: "orders" },
-      payload: { mode }
-    });
-    expectStatus(response, 200);
-    return frameOf(response.json());
-  };
-  /** A Page with the same actions in a conversation of `userId`, and its frame for them. */
-  const openPage = async (userId: string) => {
-    const created = await t.expectOk(userId, "conversations.create", {
-      payload: { title: "Orders" }
-    });
-    const conversation = z.object({ id: z.string() }).parse(created.json());
-    const sourceFiles = pageFiles(
-      Object.fromEntries(
-        appSource("page", "orders-page").flatMap((file) =>
-          "text" in file ? [[file.path, file.text]] : []
-        )
-      )
-    );
-    const built = await buildPage({ files: sourceFiles });
-    if (built.status !== "built") throw new Error(JSON.stringify(built.errors));
-    const stored = await storePageFileSet(
-      { clientInstanceId, stores: t.stores, pages: { objects: t.objects } },
-      {
-        conversationId: asConversationId(conversation.id),
-        pageName: "Orders",
-        kitVersion: built.kitVersion,
-        manifest: built.manifest,
-        sourceFiles,
-        builtFiles: built.files
-      }
-    );
-    const response = await t.call(userId, "pages.preview", {
-      params: { conversationId: conversation.id, pageId: stored.page.id },
-      payload: { fileSetId: stored.fileSet.id }
-    });
-    expectStatus(response, 200);
-    return frameOf(response.json());
-  };
-
-  const callAction = (
-    userId: string,
-    frame: Frame,
-    name: string,
-    input: unknown,
-    headers: Record<string, string> = {}
-  ) =>
-    t.call(userId, "apps.sessions.call_action", {
-      params: { pageSessionId: frame.pageSessionId, name },
-      payload: { ...frame.proof, input },
-      headers
-    });
-  const callConnection = (
-    userId: string,
-    frame: Frame,
-    target: { connection: string; operation: string },
-    input: unknown
-  ) =>
-    t.call(userId, "apps.sessions.call_connection", {
-      params: { pageSessionId: frame.pageSessionId, ...target },
-      payload: { ...frame.proof, input }
-    });
-  const can = async (userId: string, frame: Frame) => {
-    const response = await t.call(userId, "apps.sessions.context", {
-      params: { pageSessionId: frame.pageSessionId },
-      payload: frame.proof
-    });
-    expectStatus(response, 200);
-    return z.object({ can: z.record(z.string(), z.string()) }).parse(response.json()).can;
-  };
-  const refusal = (response: { json(): unknown }) => errorSchema.parse(response.json()).error;
-  /** Every run the instance holds that is not one of an asset write or a grant. */
-  const runs = async (): Promise<OperationRun[]> =>
-    (await t.stores.operationRuns.list({ clientInstanceId })).filter(
-      (run) => run.operation.startsWith("app.") || run.operation.startsWith("connection.")
-    );
-  const runOf = async (id: unknown) => {
-    const run = (await runs()).find((candidate) => candidate.id === id);
-    if (!run) throw new Error(`No run '${String(id)}'`);
-    return run;
-  };
-  /** Runs `work` while `userId` holds a right, and takes the right back. */
-  const withRight = async (
-    userId: string,
-    right: string,
-    scope: { assetId: string } | { workspaceId: string },
-    work: () => Promise<void>
-  ) => {
-    const grantId = await t.grant(userId, right, scope);
-    try {
-      await work();
-    } finally {
-      await t.stores.access.deleteGrant({ clientInstanceId, grantId });
-    }
-  };
+  const openApp: AppActionsInstance["openApp"] = (...args) => t.openApp(...args);
+  const openPage: AppActionsInstance["openPage"] = (...args) => t.openPage(...args);
+  const callAction: AppActionsInstance["callAction"] = (...args) => t.callAction(...args);
+  const callConnection: AppActionsInstance["callConnection"] = (...args) =>
+    t.callConnection(...args);
+  const can: AppActionsInstance["can"] = (...args) => t.can(...args);
+  const refusal: AppActionsInstance["refusal"] = (response) => t.refusal(response);
+  const runs: AppActionsInstance["runs"] = () => t.runs();
+  const runOf: AppActionsInstance["runOf"] = (id) => t.runOf(id);
+  const withRight: AppActionsInstance["withRight"] = (...args) => t.withRight(...args);
 
   it("reads through a published action for a member who may use the Connection: one run each call, with the origin app and no model call", async () => {
     await withRight(t.kai.id, "connection.use", { assetId: crm }, async () => {
@@ -307,8 +108,10 @@ describe("a call a frame makes through the interface", () => {
     });
     await t.grant(builder.id, "connection.use", { assetId: crm }, "deny");
     {
+      const page = await openPage(t.kai.id);
+      const { pageId } = page;
       const frames = {
-        page: { viewer: t.kai.id, frame: await openPage(t.kai.id) },
+        page: { viewer: t.kai.id, frame: page },
         draft: { viewer: builder.id, frame: await openApp(builder.id, "draft") },
         published: { viewer: t.kai.id, frame: await openApp(t.kai.id, "published") }
       };
@@ -322,9 +125,22 @@ describe("a call a frame makes through the interface", () => {
           code: "FORBIDDEN",
           details: { action: "connection.use" }
         });
+        // Fix round 7 and 13: the refusal names its run, and says that it is the missing
+        // right to use a Connection, so the interface words it in the viewer's language. The
+        // Connection's label is told to who may read the Connection, here the builder, and
+        // never to a member who may not. Fails without: neither field was sent.
+        expect(refusal(response).details, where).toEqual({
+          action: "connection.use",
+          reason: expect.any(String),
+          connectionUseDenied: true,
+          operationRunId: response.headers["operation-run-id"],
+          ...(viewer === builder.id ? { connectionLabel: expect.any(String) } : {})
+        });
         expect(t.handed.length, where).toBe(handed);
         expect(await runOf(response.headers["operation-run-id"]), where).toMatchObject({
-          operation: where === "page" ? "app.orders-page.load" : "app.orders.load",
+          // A Page's action runs under the Page's own id, never as `app.<manifest id>.…`:
+          // the manifest id is free text and could be the name of a published App.
+          operation: where === "page" ? `page_action.${pageId}.load` : "app.orders.load",
           status: "denied",
           actor: { kind: "user", id: viewer },
           denial: { kind: "forbidden", action: "connection.use" }

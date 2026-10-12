@@ -51,17 +51,32 @@ export interface AppContentClaims {
   pageSessionId: string;
   /** Seconds since the epoch. */
   expiresAt: number;
+  /**
+   * Which view of an App the address was asked for. The draft and the published revision can
+   * be one file set, right after a publish or a discarded draft, so the file set alone does not
+   * say which of the two a frame shows. A call the frame makes is decided by this. An address
+   * of a Page of a conversation names none.
+   */
+  mode?: AppContentMode;
 }
+
+/** The two views of an App an address can be minted for. */
+type AppContentMode = "draft" | "published";
 
 export type AppContentTokenRefusal = "token_invalid" | "token_expired";
 
 const payloadSchema = z
-  .object({ u: z.string().min(1), s: z.string().min(1), e: z.number().int().positive() })
+  .object({
+    u: z.string().min(1),
+    s: z.string().min(1),
+    e: z.number().int().positive(),
+    m: z.enum(["draft", "published"]).optional()
+  })
   .strict();
 
 /**
- * The token is `<payload>.<mac>`, both base64url. The payload names viewer, page session and
- * expiry. The file set is not in it: the MAC covers the file set id of the address the token
+ * The token is `<payload>.<mac>`, both base64url. The payload names viewer, page session,
+ * expiry and, for an App, the view it was asked for. The file set is not in it: the MAC covers the file set id of the address the token
  * stands in, so a token moved to another file set's address does not verify.
  */
 export function mintAppContentToken(
@@ -70,7 +85,12 @@ export function mintAppContentToken(
   claims: AppContentClaims
 ): string {
   const payload = Buffer.from(
-    JSON.stringify({ u: claims.viewerId, s: claims.pageSessionId, e: claims.expiresAt })
+    JSON.stringify({
+      u: claims.viewerId,
+      s: claims.pageSessionId,
+      e: claims.expiresAt,
+      ...(claims.mode === undefined ? {} : { m: claims.mode })
+    })
   ).toString("base64url");
   return `${payload}.${mac(key, clientInstanceId, claims.fileSetId, payload).toString("base64url")}`;
 }
@@ -113,7 +133,8 @@ export function checkAppContentToken(
       fileSetId: input.fileSetId,
       viewerId: parsed.data.u,
       pageSessionId: parsed.data.s,
-      expiresAt: parsed.data.e
+      expiresAt: parsed.data.e,
+      ...(parsed.data.m === undefined ? {} : { mode: parsed.data.m })
     }
   };
 }
