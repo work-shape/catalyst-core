@@ -8,10 +8,14 @@ import type {
 } from "@vivd-catalyst/api-contract";
 import {
   AppError,
+  JOB_WORKER_SILENT_MS,
+  infrastructureCheckOutcome,
   isSecretName,
   type ClientInstanceId,
   type InfrastructureCheckOutcome,
   type InfrastructureCheckStore,
+  type JobWorkerReport,
+  type JobsStore,
   type Logger,
   type ProviderCheckResult,
   type ProviderRegion,
@@ -26,6 +30,12 @@ import { INFRASTRUCTURE_CHECK_INTERVAL_MS } from "./job-kinds";
  * counted.
  */
 export const INFRASTRUCTURE_CHECK_NOW_MIN_INTERVAL_MS = 60_000;
+
+/**
+ * A check another process reports counts as failed when its result is older than this: two
+ * checks were missed. The page then says since when nothing was reported.
+ */
+const INFRASTRUCTURE_REPORT_STALE_MS = 2 * INFRASTRUCTURE_CHECK_INTERVAL_MS;
 
 /**
  * One thing the instance runs on, as the assembly hands it over: what may be shown of its
@@ -55,6 +65,12 @@ export interface InfrastructureEntry {
    * writes the outcome under this entry's id.
    */
   check?: () => Promise<ProviderCheckResult>;
+  /**
+   * The job kind of the check that the other process runs. The workers of that kind report
+   * that they are up, so a worker that is gone shows here after `JOB_WORKER_SILENT_MS` and
+   * not only when its last result is stale.
+   */
+  checkedByJobKind?: string;
 }
 
 /**
@@ -78,6 +94,8 @@ export class InfrastructureWorkflow {
       declaredSecretNames: ReadonlySet<string>;
       secrets: SecretResolver;
       store: InfrastructureCheckStore;
+      /** Where the workers report that they are up. */
+      jobs: Pick<JobsStore, "readWorkerReport">;
       clientInstanceId: ClientInstanceId;
       logger: Logger;
       now?: () => Date;
@@ -93,14 +111,28 @@ export class InfrastructureWorkflow {
       state.manualCheckAt === undefined
         ? undefined
         : state.manualCheckAt.getTime() + INFRASTRUCTURE_CHECK_NOW_MIN_INTERVAL_MS;
+    const now = this.now().getTime();
+    const checks = await Promise.all(
+      this.options.entries.map(async (entry) => {
+        const outcome = state.outcomes[entry.id];
+        const report =
+          entry.checkedByJobKind === undefined
+            ? undefined
+            : await this.options.jobs.readWorkerReport({
+                clientInstanceId,
+                kind: entry.checkedByJobKind
+              });
+        return { entry, outcome, report, check: checkOf(entry, outcome, report, now) };
+      })
+    );
+    const sandbox = checks.find(({ entry }) => entry.class === "sandbox");
     return {
-      items: await Promise.all(
-        this.options.entries.map((entry) => this.listed(entry, state.outcomes[entry.id]))
-      ),
+      items: await Promise.all(checks.map(({ entry, check }) => this.listed(entry, check))),
       checkIntervalSeconds: INFRASTRUCTURE_CHECK_INTERVAL_MS / 1000,
-      ...(availableAt !== undefined && availableAt > this.now().getTime()
+      ...(availableAt !== undefined && availableAt > now
         ? { checkAvailableAt: new Date(availableAt).toISOString() }
-        : {})
+        : {}),
+      ...(sandbox ? { codeExecution: codeExecutionOf(sandbox) } : {})
     };
   }
 
@@ -138,6 +170,7 @@ export class InfrastructureWorkflow {
 
   private async checkAll(): Promise<void> {
     const { clientInstanceId, store } = this.options;
+    const before = (await store.read({ clientInstanceId })).outcomes;
     const outcomes: Record<string, InfrastructureCheckOutcome> = {};
     await Promise.all(
       this.options.entries.map(async (entry) => {
@@ -150,13 +183,13 @@ export class InfrastructureWorkflow {
         } catch {
           result = { ok: false, errorClass: "failed" };
         }
-        const checkedAt = this.now().toISOString();
-        outcomes[entry.id] = result.ok
-          ? { ok: true, checkedAt }
-          : { ok: false, checkedAt, errorClass: result.errorClass };
+        outcomes[entry.id] = infrastructureCheckOutcome(
+          before[entry.id],
+          result,
+          this.now().toISOString()
+        );
       })
     );
-    const before = (await store.read({ clientInstanceId })).outcomes;
     await store.recordOutcomes({ clientInstanceId, outcomes });
     for (const entry of this.options.entries) {
       const outcome = outcomes[entry.id];
@@ -168,7 +201,7 @@ export class InfrastructureWorkflow {
 
   private async listed(
     entry: InfrastructureEntry,
-    outcome: InfrastructureCheckOutcome | undefined
+    check: InfrastructureCheck
   ): Promise<InfrastructureProvider> {
     return {
       id: entry.id,
@@ -182,7 +215,7 @@ export class InfrastructureWorkflow {
       ...(entry.bucket === undefined ? {} : { bucket: entry.bucket }),
       ...(entry.withheld?.length ? { withheld: [...entry.withheld] } : {}),
       secrets: (await Promise.all(entry.secrets.map((secret) => this.listedSecret(secret)))).flat(),
-      check: checkOf(entry, outcome)
+      check
     };
   }
 
@@ -219,15 +252,68 @@ export class InfrastructureWorkflow {
 
 function checkOf(
   entry: InfrastructureEntry,
-  outcome: InfrastructureCheckOutcome | undefined
+  outcome: InfrastructureCheckOutcome | undefined,
+  report: JobWorkerReport | undefined,
+  now: number
 ): InfrastructureCheck {
   if (!outcome) {
     // A provider another process holds has an outcome once that process published one.
     return { status: entry.check ? "pending" : "not_checked" };
   }
+  const silentSince = entry.check ? undefined : noReportSince(outcome, report, now);
+  if (silentSince !== undefined) {
+    return { status: "failed", checkedAt: silentSince, errorClass: "no_report" };
+  }
   return outcome.ok
     ? { status: "ok", checkedAt: outcome.checkedAt }
     : { status: "failed", checkedAt: outcome.checkedAt, errorClass: outcome.errorClass };
+}
+
+/**
+ * Since when the process that checks a provider has reported nothing, when that is too long:
+ * its workers went silent, or its last result is stale. A result that is newer than the last
+ * report by more than the silent time came from a worker of the previous release, which does
+ * not report that it is up: only the age of its result is judged.
+ */
+function noReportSince(
+  outcome: InfrastructureCheckOutcome,
+  report: JobWorkerReport | undefined,
+  now: number
+): string | undefined {
+  const checkedAt = Date.parse(outcome.checkedAt);
+  const seenAt = report === undefined ? undefined : Date.parse(report.seenAt);
+  if (
+    report !== undefined &&
+    seenAt !== undefined &&
+    seenAt + JOB_WORKER_SILENT_MS >= checkedAt &&
+    now - seenAt > JOB_WORKER_SILENT_MS
+  ) {
+    return report.seenAt;
+  }
+  return now - checkedAt > INFRASTRUCTURE_REPORT_STALE_MS ? outcome.checkedAt : undefined;
+}
+
+/** Whether code runs now, by the sandbox's check, and since when that has been so. */
+function codeExecutionOf(sandbox: {
+  outcome: InfrastructureCheckOutcome | undefined;
+  report: JobWorkerReport | undefined;
+  check: InfrastructureCheck;
+}): NonNullable<Infrastructure["codeExecution"]> {
+  const { outcome, report, check } = sandbox;
+  if (!outcome || (check.status !== "ok" && check.status !== "failed")) {
+    return { available: false };
+  }
+  if (check.status === "failed" && check.errorClass === "no_report") {
+    return { available: false, since: check.checkedAt };
+  }
+  const since = outcome.since ?? outcome.checkedAt;
+  // The sandbox answered before the worker that is up now came: code runs since that worker.
+  const aliveSince = check.status === "ok" ? report?.aliveSince : undefined;
+  return {
+    available: check.status === "ok",
+    since:
+      aliveSince !== undefined && Date.parse(aliveSince) > Date.parse(since) ? aliveSince : since
+  };
 }
 
 /**

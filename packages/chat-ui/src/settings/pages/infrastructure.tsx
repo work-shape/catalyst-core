@@ -65,7 +65,8 @@ const errorKeys: Record<ErrorClass, TranslationKey> = {
   not_found: "infrastructure.errorNotFound",
   bucket_missing: "infrastructure.errorBucketMissing",
   rejected: "infrastructure.errorRejected",
-  failed: "infrastructure.errorFailed"
+  failed: "infrastructure.errorFailed",
+  no_report: "infrastructure.errorNoReport"
 };
 
 /**
@@ -274,6 +275,8 @@ function Health({ check }: { check: InfrastructureCheck }) {
   const { t, locale } = useTranslation();
   const checkedAt =
     check.status === "ok" || check.status === "failed" ? check.checkedAt : undefined;
+  // A check nobody reports any more has no time it was checked: the time is in its reason.
+  const noReport = check.status === "failed" && check.errorClass === "no_report";
   return (
     <div data-check={check.status} data-checked-at={checkedAt}>
       <Badge tone={checkTones[check.status]} dot>
@@ -281,7 +284,7 @@ function Health({ check }: { check: InfrastructureCheck }) {
       </Badge>
       {check.status === "failed" ? (
         <TableCellDetail className="mt-1" data-error-class={check.errorClass}>
-          {t(errorKeys[check.errorClass])}
+          {t(errorKeys[check.errorClass], { time: formatTime(check.checkedAt, locale) })}
         </TableCellDetail>
       ) : null}
       {check.status === "not_checked" ? (
@@ -289,7 +292,7 @@ function Health({ check }: { check: InfrastructureCheck }) {
           {t("infrastructure.checkNotCheckedDetail")}
         </TableCellDetail>
       ) : null}
-      {checkedAt === undefined ? null : (
+      {checkedAt === undefined || noReport ? null : (
         <TableCellDetail className="mt-1">
           {t("infrastructure.checkedAt", { time: formatTime(checkedAt, locale) })}
         </TableCellDetail>

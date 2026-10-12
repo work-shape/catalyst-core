@@ -12367,6 +12367,9 @@
               "abort_error",
               "unknown_error"
             ]
+          },
+          "tool": {
+            "type": "string"
           }
         },
         "required": [
@@ -12988,30 +12991,7 @@
                 "$ref": "#/components/schemas/Timestamp"
               },
               "error": {
-                "type": "object",
-                "properties": {
-                  "code": {
-                    "type": "string"
-                  },
-                  "message": {
-                    "type": "string"
-                  },
-                  "category": {
-                    "type": "string",
-                    "enum": [
-                      "app_error",
-                      "internal_error",
-                      "runtime_interrupted",
-                      "abort_error",
-                      "unknown_error"
-                    ]
-                  }
-                },
-                "required": [
-                  "code",
-                  "message",
-                  "category"
-                ]
+                "$ref": "#/components/schemas/AgentRunError"
               }
             },
             "required": [
@@ -16919,6 +16899,20 @@
           },
           "checkAvailableAt": {
             "$ref": "#/components/schemas/Timestamp"
+          },
+          "codeExecution": {
+            "type": "object",
+            "properties": {
+              "available": {
+                "type": "boolean"
+              },
+              "since": {
+                "$ref": "#/components/schemas/Timestamp"
+              }
+            },
+            "required": [
+              "available"
+            ]
           }
         },
         "required": [
@@ -16987,7 +16981,8 @@
                   "not_found",
                   "bucket_missing",
                   "rejected",
-                  "failed"
+                  "failed",
+                  "no_report"
                 ]
               }
             },

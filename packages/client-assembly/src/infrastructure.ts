@@ -13,10 +13,10 @@ import {
   createProvider,
   defineJobHandler,
   defineProvider,
+  infrastructureCheckOutcome,
   ProviderRegistry,
   readDatabaseReadiness,
   runProviderCheck,
-  type InfrastructureCheckOutcome,
   type JobSchedule,
   type Logger,
   type ObjectStorage,
@@ -220,12 +220,9 @@ export function createSandboxCheckJobs(input: {
         // A sandbox that fails is a result, not a failed job.
         async run() {
           const result = await definition.check(input.sandbox);
-          const checkedAt = now().toISOString();
-          const outcome: InfrastructureCheckOutcome = result.ok
-            ? { ok: true, checkedAt }
-            : { ok: false, checkedAt, errorClass: result.errorClass };
           const store = input.stores.infrastructureChecks;
           const before = (await store.read({ clientInstanceId })).outcomes[provider.id];
+          const outcome = infrastructureCheckOutcome(before, result, now().toISOString());
           await store.recordOutcomes({ clientInstanceId, outcomes: { [provider.id]: outcome } });
           logProviderCheckChange(input.infrastructure.context.logger, provider, before, outcome);
         }
@@ -360,6 +357,7 @@ function providerOverview<Port extends ProviderPort>(
     ...shown,
     ...(withheld.length > 0 ? { withheld } : {}),
     secrets: validated.secrets.map((secret) => ({ name: secret.name, field: secret.field })),
+    ...(port === "sandbox" ? { checkedByJobKind: checkSandboxJob.kind } : {}),
     ...(PORTS_CHECKED_BY_THE_API.has(port)
       ? {
           // Creation resolves the provider's secrets, which can stall like the provider can:
@@ -411,6 +409,7 @@ export function createInfrastructureWorkflow(
     declaredSecretNames: declaredSecretNames(config, infrastructure.registry),
     secrets: infrastructure.secrets,
     store: stores.infrastructureChecks,
+    jobs: stores.jobs,
     clientInstanceId: getClientInstanceId(config),
     logger: infrastructure.context.logger
   });

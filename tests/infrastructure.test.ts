@@ -21,6 +21,7 @@ import {
 import { getClientInstanceId, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import {
   defineProvider,
+  JOB_WORKER_SILENT_MS,
   legacyPermissionFor,
   PROVIDER_CHECK_TIMEOUT_MS,
   runProviderCheck,
@@ -32,7 +33,8 @@ import type { ModelAdapterFactory } from "@vivd-catalyst/model-provider";
 import { createFakeSecrets } from "./support/fixtures";
 import { asCaller, createCallerAuthAdapter } from "./support/route-callers";
 import { createTestInstanceWith, getTestJobs } from "./support/test-instance";
-import { eventually } from "./support/assertions";
+import { eventually, required } from "./support/assertions";
+import { withTestSql } from "./support/test-sql";
 
 // Instance > Infrastructure over HTTP: what an operator reads of the providers, that a check
 // always ends, and that neither a secret nor a provider's own words leave the instance.
@@ -199,6 +201,7 @@ async function createServer(
       declaredSecretNames: declaredSecretNames(config, infrastructure.registry),
       secrets,
       store: stores.infrastructureChecks,
+      jobs: stores.jobs,
       clientInstanceId: getClientInstanceId(config),
       logger,
       now: () => now
@@ -225,6 +228,9 @@ async function createServer(
     root,
     advance(ms: number) {
       now = new Date(now.getTime() + ms);
+    },
+    setNow(to: Date) {
+      now = to;
     }
   };
 }
@@ -594,6 +600,110 @@ describe("Instance > Infrastructure: several processes of one instance", () => {
     expect(after.database?.check).toEqual(before.database?.check);
     expect(after["models.main"]?.check).toEqual(before["models.main"]?.check);
     expect(JSON.stringify(lines)).not.toContain(MARKER);
+  });
+
+  it("shows the sandbox as failed, with the time of its last result, once two checks were missed", async () => {
+    stubProviders();
+    const { server, config, infrastructure, advance } = await createServer();
+    const worker = createJobWorker({
+      stores: server.stores,
+      clientInstanceId: getClientInstanceId(config),
+      logger: recordingLogger().logger,
+      ...createSandboxCheckJobs({
+        config,
+        infrastructure,
+        sandbox: await createSandbox(config, infrastructure),
+        stores: server.stores,
+        now: () => new Date("2026-10-10T08:03:00.000Z")
+      })
+    });
+    await worker.runDue();
+    await worker.stop();
+    const get = async () =>
+      read(await server.call("instance.infrastructure.get", {}, administrator));
+
+    // 08:12:41, nine minutes and 41 seconds after the result: one check may still be late.
+    advance(12 * 60_000 + 41_000);
+    const late = await get();
+    expect(byId(late).sandbox?.check).toEqual({
+      status: "ok",
+      checkedAt: "2026-10-10T08:03:00.000Z"
+    });
+    expect(late.codeExecution).toMatchObject({ available: true });
+
+    // 08:13:19: two intervals of five minutes have passed without a result.
+    advance(38_000);
+    const stale = await get();
+    expect(byId(stale).sandbox?.check).toEqual({
+      status: "failed",
+      checkedAt: "2026-10-10T08:03:00.000Z",
+      errorClass: "no_report"
+    });
+    expect(stale.codeExecution).toEqual({ available: false, since: "2026-10-10T08:03:00.000Z" });
+  });
+
+  it("shows the sandbox as failed when its worker went silent, and as answering again when a worker is back", async () => {
+    stubProviders();
+    const { server, config, infrastructure, setNow } = await createServer();
+    const clientInstanceId = getClientInstanceId(config);
+    const startWorker = async (checkedAt: Date) =>
+      createJobWorker({
+        stores: server.stores,
+        clientInstanceId,
+        logger: recordingLogger().logger,
+        ...createSandboxCheckJobs({
+          config,
+          infrastructure,
+          sandbox: await createSandbox(config, infrastructure),
+          stores: server.stores,
+          now: () => checkedAt
+        })
+      });
+    const get = async () =>
+      read(await server.call("instance.infrastructure.get", {}, administrator));
+    // The workers report on the clock of the database, so this test reads on the real clock.
+    const now = new Date();
+    const checkedAt = new Date(now.getTime() - 47_000);
+    setNow(now);
+    const first = await startWorker(checkedAt);
+    await first.runDue();
+    await first.stop();
+    const running = await get();
+    expect(byId(running).sandbox?.check).toEqual({
+      status: "ok",
+      checkedAt: checkedAt.toISOString()
+    });
+    expect(running.codeExecution).toMatchObject({ available: true });
+
+    // 47 seconds pass in which no worker of the kind reports: more than three missed reports.
+    const [silent] = await withTestSql(
+      (sql) => sql<{ seen_at: Date }[]>`
+        update job_worker_reports
+        set seen_at = seen_at - interval '47 seconds',
+            alive_since = alive_since - interval '47 seconds'
+        where client_instance_id = ${clientInstanceId}
+        returning seen_at`
+    );
+    const silentSince = required(silent).seen_at.toISOString();
+    const stopped = await get();
+    expect(byId(stopped).sandbox?.check).toEqual({
+      status: "failed",
+      checkedAt: silentSince,
+      errorClass: "no_report"
+    });
+    expect(stopped.codeExecution).toEqual({ available: false, since: silentSince });
+
+    // A worker is back and checks the sandbox as it starts.
+    const second = await startWorker(now);
+    await second.runDue();
+    await second.stop();
+    const back = await get();
+    expect(byId(back).sandbox?.check).toEqual({ status: "ok", checkedAt: now.toISOString() });
+    expect(back.codeExecution?.available).toBe(true);
+    // Code runs since the worker that is up now came, not since the result of the one before.
+    expect(Date.parse(required(back.codeExecution?.since))).toBeGreaterThan(
+      Date.parse(silentSince) + JOB_WORKER_SILENT_MS
+    );
   });
 });
 

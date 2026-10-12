@@ -91,12 +91,18 @@ function readOutcome(value: unknown): InfrastructureCheckOutcome | undefined {
   if (typeof checkedAt !== "string" || Number.isNaN(Date.parse(checkedAt))) {
     return undefined;
   }
+  const storedSince: unknown = Reflect.get(value, "since");
+  // An outcome of the release before this one has none.
+  const since =
+    typeof storedSince === "string" && !Number.isNaN(Date.parse(storedSince))
+      ? { since: storedSince }
+      : {};
   const ok: unknown = Reflect.get(value, "ok");
   if (ok === true) {
-    return { ok: true, checkedAt };
+    return { ok: true, checkedAt, ...since };
   }
   const errorClass = PROVIDER_CHECK_ERROR_CLASSES.find(
     (known) => known === Reflect.get(value, "errorClass")
   );
-  return ok === false && errorClass ? { ok: false, checkedAt, errorClass } : undefined;
+  return ok === false && errorClass ? { ok: false, checkedAt, ...since, errorClass } : undefined;
 }

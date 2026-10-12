@@ -17,6 +17,15 @@ export type InfrastructureClass = z.infer<typeof infrastructureClassSchema>;
 export const infrastructureOriginSchema = z.enum(["operator", "instance"]);
 export type InfrastructureOrigin = z.infer<typeof infrastructureOriginSchema>;
 
+/**
+ * Why a check counts as failed. A provider's own classes, and `no_report`: the worker that
+ * checks the provider has stopped reporting, and `checkedAt` is when it last did.
+ */
+export const INFRASTRUCTURE_CHECK_ERROR_CLASSES = [
+  ...PROVIDER_CHECK_ERROR_CLASSES,
+  "no_report"
+] as const;
+
 /** The last check of a provider. It carries a class of failure and never a provider's text. */
 export const infrastructureCheckSchema = z.discriminatedUnion("status", [
   /** No check of it has ended yet. */
@@ -27,7 +36,7 @@ export const infrastructureCheckSchema = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("failed"),
     checkedAt: timestampSchema,
-    errorClass: z.enum(PROVIDER_CHECK_ERROR_CLASSES)
+    errorClass: z.enum(INFRASTRUCTURE_CHECK_ERROR_CLASSES)
   })
 ]);
 export type InfrastructureCheck = z.infer<typeof infrastructureCheckSchema>;
@@ -78,6 +87,12 @@ export const infrastructureSchema = z.object({
   /** How often the instance checks its providers by itself. */
   checkIntervalSeconds: z.number().int().min(1),
   /** From when `instance.infrastructure.check` runs again. Absent when it would run now. */
-  checkAvailableAt: timestampSchema.optional()
+  checkAvailableAt: timestampSchema.optional(),
+  /**
+   * Whether the agents can run code now: a worker takes commands and its sandbox answers.
+   * `since` is from when that has been so; absent while no check of the sandbox was ever
+   * reported. Absent on an instance without a command sandbox.
+   */
+  codeExecution: z.object({ available: z.boolean(), since: timestampSchema.optional() }).optional()
 });
 export type Infrastructure = z.infer<typeof infrastructureSchema>;

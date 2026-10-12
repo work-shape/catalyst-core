@@ -101,6 +101,8 @@ export const administration = defineTranslations({
     "infrastructure.errorBucketMissing": "The bucket does not exist. The check does not create it.",
     "infrastructure.errorRejected": "The provider refused the request.",
     "infrastructure.errorFailed": "The check failed.",
+    "infrastructure.errorNoReport":
+      "No report since {time}. The worker that checks it is not running.",
     "infrastructure.checkNow": "Check now",
     "infrastructure.checkNowWait": "Checked a moment ago. The next check can start at {time}.",
     "infrastructure.checkNowFailed": "The check could not be started.",
@@ -277,6 +279,8 @@ export const administration = defineTranslations({
       "Der Bucket existiert nicht. Die Prüfung legt ihn nicht an.",
     "infrastructure.errorRejected": "Der Anbieter hat die Anfrage abgelehnt.",
     "infrastructure.errorFailed": "Die Prüfung ist fehlgeschlagen.",
+    "infrastructure.errorNoReport":
+      "Keine Meldung seit {time}. Der Worker, der sie prüft, läuft nicht.",
     "infrastructure.checkNow": "Jetzt prüfen",
     "infrastructure.checkNowWait": "Gerade geprüft. Die nächste Prüfung kann um {time} starten.",
     "infrastructure.checkNowFailed": "Die Prüfung konnte nicht gestartet werden.",
