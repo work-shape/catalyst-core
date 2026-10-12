@@ -49,19 +49,35 @@ test("every page's title line starts under the frame's top room, and the area's 
       expect(await middle(areaName), path).toBe(titleLineMiddle);
     }
   }
+});
 
-  // A detail head rests with its first row on the same line, and pins at the top edge once
-  // the page scrolls: the room above it is the page's, not the head's.
+// Fails with top room over a pinned head: the head rested 42 px down and slid to the top edge
+// with the first scroll, and the list of sections beside the content moved with it.
+test("an editor's head is the top band from the start, and it and the section list stand still while the page scrolls", async ({
+  page
+}) => {
+  await page.setViewportSize(WIDE);
+  await signIn(page);
   await page.goto("/build/agents/research_assistant");
   const detail = page.locator('header[data-variant="detail"]');
   await expect(detail.getByRole("heading", { level: 1 })).toBeVisible();
   const back = detail.getByRole("button", { name: "Back to Agents" });
-  expect(await middle(back)).toBe(titleLineMiddle);
-  expect(await top(detail)).toBe(titleLineMiddle - HEADER / 2);
-  await detail.hover();
-  await page.mouse.wheel(0, 600);
-  await expect.poll(() => top(detail)).toBe(0);
+  const sections = page.getByRole("navigation", { name: "Sections of this page" });
+  const field = page.getByLabel("Display name");
+
+  expect(await top(detail)).toBe(0);
   expect(await middle(back)).toBe(HEADER / 2);
+  const sectionsTop = await top(sections);
+  expect(sectionsTop).toBeGreaterThanOrEqual(HEADER);
+  const fieldTop = await top(field);
+
+  await field.hover();
+  await page.mouse.wheel(0, 300);
+  // The content moved; the head and the section list did not.
+  await expect.poll(() => top(field)).toBe(fieldTop - 300);
+  expect(await top(detail)).toBe(0);
+  expect(await middle(back)).toBe(HEADER / 2);
+  expect(await top(sections)).toBe(sectionsTop);
 });
 
 test("in a narrow window the area's name stands beside the sidebar button, over the select of its pages", async ({

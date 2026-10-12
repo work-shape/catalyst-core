@@ -34,10 +34,10 @@ export interface PageProps extends ComponentProps<"div"> {
  * The content scrolls up to the top edge; the sub-rail rests where it is pinned, so it does not
  * move with the content.
  *
- * A detail header rests with its first row on the title line. The room above it scrolls away:
- * the header pins at the top edge and the sub-rail directly below it. Where the area says the
- * floating control stands beside the head, the head has no room above it and starts at the top
- * edge.
+ * A page with a detail header has no top room: that head is pinned, so it is the top band from
+ * the start and never moves, and the sub-rail stays directly below it. Only what floats over
+ * the scroll area lowers it, and that room scrolls away. Where the area says the floating
+ * control stands beside the head, the head starts at the top edge there too.
  *
  * A page ends with `--layout-page-end` of empty space below its last element.
  * The space under the page belongs to the content column. On the row it would end the rail's
@@ -55,13 +55,11 @@ export function Page({
     // The page is the container its sub-rail measures: the room the page has, not the window.
     return (
       <div className={cn("@container/page w-full min-w-0", className)} {...props}>
-        {/* The head's first row is a control high and stands in the middle of the head's least
-            height, so this much room above the head puts that row on the title line. An area
-            whose floating control stands beside the head sets the head's own inset instead. */}
+        {/* A pinned head takes no top room: it would slide to the edge with the first scroll.
+            An area whose floating control stands beside the head sets the head's own inset. */}
         <div
           aria-hidden="true"
-          data-page-head-room=""
-          className="h-[var(--layout-page-head-inset,calc(var(--layout-page-inset)+var(--layout-page-top)-(var(--layout-header)-var(--spacing)*9)/2))]"
+          className="h-[var(--layout-page-head-inset,var(--layout-page-inset))]"
         />
         {header}
         {subRail === undefined ? (

@@ -145,8 +145,9 @@
   --layout-page-inset: 0rem;
   /* The room above a page's title line: the first line of a page, which holds its name and
      primary action. Page applies it, so every page's name starts at the same height and none
-     starts at the window's edge. A SubRail heads its column with the area's name on that line,
-     and a detail PageHeader rests with its first row on it. In a narrow window, where the
+     starts at the window's edge. A SubRail heads its column with the area's name on that line.
+     A page under a detail PageHeader gets none: that head is pinned and is the top band from
+     the start. In a narrow window, where the
      button that opens the sidebar floats above the page, the room is one step under that
      button. Feature code sets no top padding of its own. */
   --layout-page-top: 3.5rem;

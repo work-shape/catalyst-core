@@ -816,15 +816,15 @@ id from config_assets where status = 'deleted')`.
   an account whose label is an e-mail address keeps "Personal workspace". The name stored on
   the row is unchanged and still not shown.
 - **Page frame:** every page of Build, Settings, the Inbox and Apps starts its title line 56 px
-  under the top edge, where it started 24 px under it, and an asset page in Build no longer
-  starts its head at the edge: the head rests with its back button on that line and moves to the
-  top edge once the page scrolls. The column of pages in Build and in Settings is headed by the
-  area's name, "Build" or "Settings", level with the open page's name. In a window too narrow
-  for the column the name stands over the select of the area's pages; under 768 px it stands
-  beside the button that opens the sidebar. `@vivd-catalyst/ui`: the room is the new token
-  `--layout-page-top`, which `Page` applies in every layout, and `SubRail` in `routes` mode
-  takes the area's name as `title`. A screen built on `Page` gets the room without a change;
-  one that set a top padding of its own to make up for it now has both.
+  under the top edge, where it started 24 px under it. A page whose head is pinned, such as an
+  asset page in Build, is unchanged: its head is the top band from the start. The column of
+  pages in Build and in Settings is headed by the area's name, "Build" or "Settings", level
+  with the open page's name. In a window too narrow for the column the name stands over the
+  select of the area's pages; under 768 px it stands beside the button that opens the sidebar.
+  `@vivd-catalyst/ui`: the room is the new token `--layout-page-top`, which `Page` applies in
+  every layout without a pinned head, and `SubRail` in `routes` mode takes the area's name as
+  `title`. A screen built on `Page` gets the room without a change; one that set a top padding
+  of its own to make up for it now has both.
 - **Every process of an instance is assembled from one build (breaking for a client
   assembly):** `defineClientInstance` gains `runWorkspaceCommandWorker()` and
   `runArtifactPreviewWorker()`, which hand the worker the capabilities of the build as

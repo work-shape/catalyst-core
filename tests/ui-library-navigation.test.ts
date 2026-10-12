@@ -591,9 +591,9 @@ describe("the room above a page's title line", () => {
       groups: [{ id: "g", items: [{ id: "a", label: "A" }] }]
     });
 
-  // Fails with the paddings the layouts carried: six steps of spacing over a list page and
-  // nothing over a detail head, so a page's name stood at the window's edge.
-  it("is the page-top token in every layout, and no fixed step of spacing", () => {
+  // Fails with the padding the layouts carried: six steps of spacing over a list page, so its
+  // name stood near the window's edge.
+  it("is the page-top token where the head scrolls with the page, and nothing over a pinned head", () => {
     const head = createElement(PageHeader, { variant: "detail", title: "HEAD" });
     const plain = render(createElement(Page, null, "BODY"));
     expect(plain).toMatch(
@@ -607,13 +607,32 @@ describe("the room above a page's title line", () => {
     expect(beside).toContain(
       "@subrail/page:top-[calc(var(--layout-page-inset)+var(--layout-page-top)-var(--spacing))]"
     );
-    // Over a detail head the room is an element of its own, so it scrolls away under the head.
-    const headed = render(createElement(Page, { header: head }, "BODY"));
-    const room = headed.match(/data-page-head-room="" class="([^"]*)"/u)?.[1];
-    expect(room).toContain("var(--layout-page-head-inset,");
-    expect(room).toContain("var(--layout-page-top)");
-    expect(headed.indexOf("data-page-head-room")).toBeLessThan(headed.indexOf("HEAD"));
-    for (const markup of [plain, beside, headed]) {
+    // Fails with room over a detail head: the head is pinned, so it rested lower than it stays
+    // and slid to the top edge with the first scroll, and the rail under it with it.
+    for (const headed of [
+      render(createElement(Page, { header: head }, "BODY")),
+      render(
+        createElement(
+          Page,
+          {
+            header: head,
+            subRail: createElement(SubRail, {
+              mode: "anchors",
+              belowHeader: true,
+              label: "Sections",
+              groups: [{ id: "g", items: [{ id: "a", label: "A" }] }]
+            })
+          },
+          "BODY"
+        )
+      )
+    ]) {
+      expect(headed).not.toContain("--layout-page-top");
+      expect(headed).toContain(
+        'class="h-[var(--layout-page-head-inset,var(--layout-page-inset))]"'
+      );
+    }
+    for (const markup of [plain, beside]) {
       expect(markup).not.toMatch(/var\(--spacing\)\*6/u);
     }
   });
