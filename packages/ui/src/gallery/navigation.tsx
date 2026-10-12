@@ -7,6 +7,7 @@ import {
   List as ListIcon,
   MessageSquare,
   PanelLeft,
+  Plus,
   Settings,
   ShieldCheck,
   SquarePen,
@@ -210,6 +211,16 @@ function NavItemSamples({ text }: { text: GalleryText }) {
           <NavItem icon={<Hammer aria-hidden="true" />} asChild>
             {sampleLink(() => undefined, text.navBuild)}
           </NavItem>
+        </NavGroup>
+        <NavGroup
+          label={text.navRecent}
+          labelAction={
+            <IconButton size="sm" label={text.navNewChat}>
+              <Plus aria-hidden="true" />
+            </IconButton>
+          }
+        >
+          <NavItem>{text.navConversationOffer}</NavItem>
         </NavGroup>
         <NavGroup label={text.navRowActions}>
           {[text.navConversationTax, text.navConversationLease].map((title, index) => (

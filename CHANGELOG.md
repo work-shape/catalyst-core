@@ -316,6 +316,10 @@ contain breaking changes; a patch version does not.
 - **Database:** migration `0065_asset_repo_commit_request` adds the columns `request` and
   `result` to `asset_repo_bundles`: what a pending save commits, without bytes, and how its
   commit ended. **Rollback:** an earlier release ignores them.
+- **New chat from the Recent heading:** the "Recent" heading of the main rail has a small plus
+  at its right end that starts a new chat as the "New chat" row does. It shows while the pointer
+  is over the Recent section or the keyboard is on it, and always on a screen without hover.
+  `NavGroup` of `@vivd-catalyst/ui` has the slot for it, `labelAction`.
 - **Agents page:** the main rail has a row "Agents" directly under New chat, for everyone in a
   session with workspaces. It opens `/w/<workspace>/agents`, a page with one card per agent the
   person may use in that workspace: the name, the description, the first three starter prompts

@@ -50,7 +50,7 @@ test("standalone login renders the authenticated chat workspace", async ({ page 
   );
   await expect(page.getByRole("button", { name: "Search", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "New chat", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "New chat", exact: true }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Language" })).toHaveCount(0);
   await expect(page.locator("header").getByText("Ready", { exact: true })).toHaveCount(0);
   await expect(settingsGear(page)).toHaveCount(0);
@@ -360,7 +360,7 @@ test("switching between conversations keeps the composer at the bottom from the 
 
   // From the start page to a conversation it is in the middle, then at the bottom, and in no
   // frame between the two.
-  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
   await expect.poll(() => composerBottomGap(page)).toBeCloseTo(startGap, 0);
   const frames = recordComposerBottomGaps(page);
   await rowOf(`Docked two ${stamp}`).click();
@@ -560,7 +560,7 @@ test("the first message puts the agent's icon in the header at once, without its
   await expect(headerChip).toHaveAccessibleName("Select agent: Application Assistant");
   await expect(headerChip).toHaveText("");
   expect(await headerChip.boundingBox()).toEqual(headerChipBox);
-  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
   await expect(startChip).toHaveText("Application Assistant");
   await expect(headerChip).toHaveCount(0);
   expect(await startChip.boundingBox()).toEqual(startChipBox);
@@ -1417,7 +1417,7 @@ test("new conversation action opens an unsaved draft screen", async ({ page }) =
   });
 
   await page.goto("/");
-  const newConversationButton = page.getByRole("button", { name: "New chat", exact: true });
+  const newConversationButton = page.getByRole("button", { name: "New chat", exact: true }).first();
   await expect(newConversationButton).toBeVisible();
   await expect(page.getByRole("button", { name: "Select agent" })).toHaveAccessibleName(
     "Select agent: Application Assistant"
@@ -1458,7 +1458,7 @@ test("new conversation action returns from a persisted conversation to a clean d
   await expect(createdConversation).toHaveCount(1);
   await expect(createdConversation).toHaveAttribute("data-selected", "true");
 
-  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
 
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
   await expect(input).toHaveValue("");
@@ -1483,7 +1483,7 @@ test("standalone conversation routes are addressable and follow rail navigation"
   await expect(targetConversation).toHaveAttribute("data-selected", "true");
   await expect(page).toHaveURL(conversationUrlPattern(conversation.id));
 
-  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
   await input.fill("Route-scoped new draft");
 
@@ -1930,7 +1930,7 @@ test("first message from the root route moves to the persisted conversation rout
   const createdConversation = page.getByTestId("conversation-row").filter({ hasText: messageText });
   await expect(createdConversation).toHaveAttribute("data-selected", "true");
 
-  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
   await expect(page.getByPlaceholder("Message")).toHaveValue("");
   await expect(createdConversation).toHaveCount(1);
@@ -2129,7 +2129,7 @@ test("composer drafts are scoped to the new screen and selected conversations", 
   await expect(input).toHaveValue("");
   await input.fill("Selected conversation draft");
 
-  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
   await expect(input).toHaveValue("New screen draft");
 
   await targetConversation.getByRole("button").first().click();
@@ -3228,7 +3228,7 @@ test("a Studio row is a link, the heading takes the focus, and unsaved changes a
   await expect(instructions).toHaveValue("Unsaved instructions.");
 
   // So does a way out of Studio; discarding leaves, and nothing was stored.
-  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
   await expect(question).toBeVisible();
   await question.getByRole("button", { name: "Discard changes", exact: true }).click();
   await expect(page).not.toHaveURL(/\/build\//u);

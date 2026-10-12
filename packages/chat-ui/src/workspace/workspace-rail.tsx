@@ -1,4 +1,4 @@
-import { Blocks, PanelLeft, Search, Settings, SquarePen } from "lucide-react";
+import { Blocks, PanelLeft, Plus, Search, Settings, SquarePen } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
 import type { ConversationListItem, SafeConfig } from "@vivd-catalyst/api-client";
 import {
@@ -223,6 +223,7 @@ function RecentConversations({
   deletingConversation,
   canMoveConversation,
   onLoadMoreConversations,
+  onCreateConversation,
   onSelectConversation,
   onReloadConversations,
   onRenameConversation,
@@ -238,7 +239,15 @@ function RecentConversations({
   const recent = recentConversations(conversations, openConversation);
 
   return (
-    <NavGroup label={t("nav.recent")}>
+    <NavGroup
+      label={t("nav.recent")}
+      // The same start as the "New chat" row, where the pointer is when a person reads the list.
+      labelAction={
+        <IconButton size="sm" label={t("nav.newChat")} onClick={onCreateConversation}>
+          <Plus aria-hidden="true" />
+        </IconButton>
+      }
+    >
       {recent.length > 0 ? (
         recent.map((conversation) => (
           <ConversationButton

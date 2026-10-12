@@ -22,6 +22,55 @@ const longRunWords = 500;
 
 const rail = (page: Page) => page.getByRole("navigation", { name: "Main navigation" });
 
+// Fails without the plus: the "Recent" heading then held its name alone, and a person reading
+// the list went back to the top of the rail for a new chat.
+test("the Recent heading offers New chat on hover and by the keyboard, in both languages", async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page, reviewer);
+  for (const words of [
+    { locale: "en", navigation: "Main navigation", recent: "Recent", newChat: "New chat" },
+    { locale: "de", navigation: "Hauptnavigation", recent: "Zuletzt", newChat: "Neuer Chat" }
+  ]) {
+    await page.goto("/inbox");
+    await page.evaluate(
+      (locale) => window.localStorage.setItem("vivd-catalyst:locale", locale),
+      words.locale
+    );
+    await page.reload();
+    const navigation = page.getByRole("navigation", { name: words.navigation });
+    const group = navigation.getByRole("group", { name: words.recent });
+    const plus = group.getByRole("button", { name: words.newChat, exact: true });
+    const heading = group.getByText(words.recent, { exact: true });
+    const shown = () =>
+      plus.evaluate((button) => getComputedStyle(button.parentElement ?? button).opacity);
+
+    // At rest it is unseen and keeps its room, so the heading stands where it stood.
+    await page.mouse.move(800, 450);
+    await expect.poll(shown).toBe("0");
+    const resting = await heading.boundingBox();
+    await group.hover();
+    await expect.poll(shown).toBe("1");
+    expect(await heading.boundingBox()).toEqual(resting);
+    // The keyboard reaches it without the pointer.
+    await page.mouse.move(800, 450);
+    await expect.poll(shown).toBe("0");
+    await plus.focus();
+    await expect.poll(shown).toBe("1");
+
+    await plus.click();
+    await expect(page).toHaveURL(/\/w\/[^/]+$/u);
+    await expect(page.locator("textarea").first()).toBeFocused();
+  }
+  // The collapsed strip has no list and no heading, and so no plus.
+  await page.evaluate(() => window.localStorage.removeItem("vivd-catalyst:locale"));
+  await page.reload();
+  const navigation = rail(page);
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(navigation.getByRole("button", { name: "New chat", exact: true })).toHaveCount(1);
+});
+
 // Fails with the Chat row: the rail then held a "Chat" button above the Inbox, and it was the
 // current item in a conversation instead of the conversation's own row.
 test("the rail has no Chat entry, and New chat starts a conversation whose row is the current one", async ({
@@ -32,12 +81,13 @@ test("the rail has no Chat entry, and New chat starts a conversation whose row i
 
   await expect(navigation.getByRole("button", { name: /^Inbox/u })).toBeVisible();
   await expect(navigation.getByRole("button", { name: "Chat", exact: true })).toHaveCount(0);
-  await expect(navigation.getByRole("button", { name: "New chat", exact: true })).toHaveCount(1);
+  // The row, and the plus on the "Recent" heading that does the same.
+  await expect(navigation.getByRole("button", { name: "New chat", exact: true })).toHaveCount(2);
 
   // From another area New chat leads to the start page, with the cursor in the composer.
   await navigation.getByRole("button", { name: /^Inbox/u }).click();
   await expect(page).toHaveURL(/\/inbox$/u);
-  await navigation.getByRole("button", { name: "New chat", exact: true }).click();
+  await navigation.getByRole("button", { name: "New chat", exact: true }).first().click();
   await expect(page).toHaveURL(/\/w\/[^/]+$/u);
   const composer = page.getByPlaceholder("Message");
   await expect(composer).toBeFocused();
@@ -346,7 +396,7 @@ test("the collapsed rail keeps the search and New chat, and no entry for a list 
   await expect(page.getByRole("dialog", { name: "Search" })).toBeVisible();
   await page.keyboard.press("Escape");
 
-  await navigation.getByRole("button", { name: "New chat", exact: true }).click();
+  await navigation.getByRole("button", { name: "New chat", exact: true }).first().click();
   await expect(page).toHaveURL(/\/w\/[^/]+$/u);
   await expect(page.getByPlaceholder("Message")).toBeFocused();
   await expect(navigation.locator("[aria-current]")).toHaveCount(0);
