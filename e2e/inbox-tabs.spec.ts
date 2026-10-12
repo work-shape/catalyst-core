@@ -15,6 +15,14 @@ import { expect, test } from "./test";
 const INBOX_FAST_ANSWER_MS = 60;
 /** A list answer long enough to notice. */
 const INBOX_SLOW_ANSWER_MS = 700;
+/**
+ * How far the two clocks of the watch may differ. The browser counts the delay of a loading
+ * layout on the animation clock, which stands at the start of a frame; the watch reads the
+ * time inside the frame, when it sees the layout come into the page and when it sees it show.
+ * So a layout that waited the whole delay can read up to one frame short of it: 178.2 ms
+ * against 180 ms was measured beside other files. One frame at 60 Hz.
+ */
+const INBOX_FRAME_MS = 17;
 /** How long a tab is watched after the click: longer than the slow answer. */
 const INBOX_WATCH_MS = 1_100;
 
@@ -143,7 +151,9 @@ test("a tab opened for the first time flashes no loading layout for a fast answe
   // The rule itself, whatever the answer took: no loading layout shows before the delay is over.
   const expectUnseenForTheDelay = (seen: Watched) => {
     expect(seen.loadingDelayMs).toBeGreaterThan(0);
-    expect(seen.shownAfterMs ?? seen.loadingDelayMs).toBeGreaterThanOrEqual(seen.loadingDelayMs);
+    expect(seen.shownAfterMs ?? seen.loadingDelayMs).toBeGreaterThanOrEqual(
+      seen.loadingDelayMs - INBOX_FRAME_MS
+    );
   };
 
   // A fast answer: the list is there before a loading layout would show, so none does, and
