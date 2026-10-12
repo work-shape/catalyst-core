@@ -16,8 +16,9 @@ export async function listConfigAssetsFromPage(
   db: PostgresConnection,
   input: Parameters<ConfigAssetStore["listConfigAssetsFromPage"]>[0]
 ): Promise<ConfigAssetFromPage[]> {
-  // Per asset, the index on `(asset_id, revision)` backwards to the first revision that names
-  // a Page: one probe where the newest does, and all of its revisions where none does.
+  // Every active asset of the kind is read, and of each its revisions from the newest back to
+  // the first that names a Page: one where the newest does, all of them where none does. No
+  // index narrows the read to a Page.
   const linked = db
     .select({ actor: pageRevisions.actor, origin: pageRevisions.origin })
     .from(pageRevisions)
@@ -45,7 +46,8 @@ export async function listConfigAssetsFromPage(
       )
     )
     .orderBy(asc(configAssets.createdAt), asc(configAssets.id))
-    .limit(input.limit);
+    .limit(input.limit)
+    .offset(input.offset ?? 0);
   return rows.map((row) => ({
     asset: mapConfigAsset(row.asset, row.revision, row.published),
     savedBy: row.savedBy

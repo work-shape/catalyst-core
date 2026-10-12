@@ -10,6 +10,7 @@ import {
   liveRevisionId,
   type ActorAccess,
   type AuthenticatedUser,
+  type ConfigAssetFromPage,
   type ConfigAssetRecord,
   type FileSet,
   type OperationAuthorization,
@@ -45,12 +46,8 @@ export interface UpdateAppFromPageInput {
   link?: boolean | undefined;
 }
 
-/**
- * How many Apps saved from one Page are read to find the one a caller may write. The
- * interface saves one per Page; more exist only where people who cannot write each other's
- * Apps saved the same Page, or where the API was called by hand.
- */
-const APPS_FROM_PAGE_MAX = 50;
+/** How many Apps of one Page one read answers. The interface makes one per Page. */
+const APPS_FROM_PAGE_BATCH = 50;
 
 /**
  * What an App has beside the operations of every asset: it is made from a Page, its draft is
@@ -164,14 +161,23 @@ export class AppWorkflow {
   ) {
     const page = await this.requirePage(caller.user, input);
     const kind = this.kind();
-    const saved = await this.options.configAssets.store.listConfigAssetsFromPage({
-      clientInstanceId: this.options.clientInstanceId,
-      kind: kind.kind,
-      pageId: page.id,
-      limit: APPS_FROM_PAGE_MAX
-    });
     const viewerId = getSubjectUserId(caller.user);
-    const writable = saved.filter(({ asset }) => this.mayWrite(caller.access, asset));
+    // Every App of the Page is read, in parts, and the caller's right decides on each: an App
+    // the caller may write is found however many of other people come before it.
+    const writable: ConfigAssetFromPage[] = [];
+    for (let offset = 0; ; offset += APPS_FROM_PAGE_BATCH) {
+      const part = await this.options.configAssets.store.listConfigAssetsFromPage({
+        clientInstanceId: this.options.clientInstanceId,
+        kind: kind.kind,
+        pageId: page.id,
+        limit: APPS_FROM_PAGE_BATCH,
+        offset
+      });
+      writable.push(...part.filter(({ asset }) => this.mayWrite(caller.access, asset)));
+      if (part.length < APPS_FROM_PAGE_BATCH) {
+        break;
+      }
+    }
     const found =
       writable.find(({ savedBy }) => savedBy?.subjectUserId === viewerId) ?? writable.at(0);
     const asset = found?.asset;

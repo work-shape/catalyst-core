@@ -52,7 +52,7 @@ export interface AssetWorkflowHost {
       fileSet?: { assetId: string; fileSetId: FileSet["id"] };
       repository?: AssetRepoWrite;
       origin?: ConfigAssetRevisionOrigin;
-      pageLinked?: boolean;
+      pageLink?: () => Promise<boolean>;
     }
   ): Promise<{ version: number; revision: number; warnings: never[] }>;
   authorizeEditing(call: AssetCall, surface: "put"): Promise<void>;
@@ -152,7 +152,7 @@ export class AssetDraftWorkflow {
       /** Starts the repository of a new asset, with the one line its first commit carries. */
       firstCommit?: string;
       origin?: ConfigAssetRevisionOrigin;
-      pageLinked?: boolean;
+      pageLink?: () => Promise<boolean>;
     }
   ) {
     const target = await this.host.target(address);
@@ -164,7 +164,7 @@ export class AssetDraftWorkflow {
         fileSet: { assetId: write.assetId, fileSetId: write.fileSet.id },
         ...(repository ? { repository } : {}),
         ...(write.origin ? { origin: write.origin } : {}),
-        ...(write.pageLinked ? { pageLinked: true } : {})
+        ...(write.pageLink ? { pageLink: write.pageLink } : {})
       });
       return {
         written: {
@@ -272,7 +272,9 @@ export class AssetDraftWorkflow {
     const target = await this.requireFilesWrite(call, address);
     requireOwnScope(target, call.access);
     const asset = requireActive(target);
-    const pageLinked = await this.linksPage(target, asset.id, input);
+    // Asked twice: here, so a refused write copies no file, and under the lock of the write,
+    // where no other write can give the asset another Page any more.
+    await this.linksPage(target, asset.id, input);
     await requireExpectedRevision(this.options, call, target, input.expectedRevision);
     const { written } = await this.writeCopy(call, address, {
       assetId: asset.id,
@@ -280,9 +282,9 @@ export class AssetDraftWorkflow {
       config: input.configOf(asset.config),
       expectedRevision: input.expectedRevision,
       origin: input.origin,
-      pageLinked
+      pageLink: () => this.linksPage(target, asset.id, input)
     });
-    return { ...written, id: asset.id, pageLinked };
+    return { ...written, id: asset.id };
   }
 
   /** The target of a write from a stored file set, for a caller who may write it. */
@@ -338,7 +340,7 @@ export class AssetDraftWorkflow {
       expectedRevision: number | null;
       origin: PageRevisionOrigin;
       firstCommit?: string;
-      pageLinked?: boolean;
+      pageLink?: () => Promise<boolean>;
     }
   ) {
     const fileSet = await copyFileSetToAsset(this.options, {
@@ -355,7 +357,7 @@ export class AssetDraftWorkflow {
       expectedRevision: write.expectedRevision,
       origin: write.origin,
       ...(write.firstCommit === undefined ? {} : { firstCommit: write.firstCommit }),
-      ...(write.pageLinked ? { pageLinked: true } : {})
+      ...(write.pageLink ? { pageLink: write.pageLink } : {})
     });
   }
 

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
 import {
@@ -79,6 +79,19 @@ describe("a Page put into an App that is not its own", () => {
     });
     return (await t.open(previewSchema.parse(response.json()).url)).body;
   };
+  /** `app.write` in the workspace is held through a role; the row a role stands for, once. */
+  let kaiWriting: Promise<unknown> | undefined;
+  const kaiWrites = () =>
+    (kaiWriting ??= t.stores.access.createGrant({
+      clientInstanceId,
+      holderKind: "user",
+      holderId: t.kai.id,
+      action: "app.write",
+      effect: "allow",
+      scopeKind: "workspace",
+      scopeId: t.workspaceId,
+      grantedBy: t.admin.id
+    }));
   const refusalOf = (response: Awaited<ReturnType<AppInstance["call"]>>) =>
     errorSchema.parse(response.json()).error;
   const updatedEvents = async (correlationId: string) =>
@@ -227,5 +240,150 @@ describe("a Page put into an App that is not its own", () => {
     expect(await stored("moved")).toMatchObject({ revision: 2 });
     expect(await draftBody("moved")).toContain("written meanwhile");
     expect((await asked(t.admin.id, page)).app).toBeNull();
+  });
+
+  it("refuses an update of an App that another write gave another Page while the update was on its way", async () => {
+    const own = await t.storePage("the page of the app", {}, { shared: false });
+    const other = await t.storePage("the page of the other writer");
+    await t.expectOk(t.admin.id, "apps.create_from_page", {
+      payload: { ...own, name: "raced", title: "Raced", workspaceId: t.workspaceId }
+    });
+    expectStatus(await t.publish(t.admin.id, "raced", 1), 200);
+    // The second writer comes in after the update read which Page the App has: it puts the
+    // other Page into the App and discards that draft, so the App is at revision 1 again.
+    const store = t.stores.configAssets;
+    const read = store.getConfigAssetPageOrigin.bind(store);
+    let waiting = true;
+    const spy = vi.spyOn(store, "getConfigAssetPageOrigin").mockImplementation(async (input) => {
+      const answer = await read(input);
+      if (waiting) {
+        waiting = false;
+        expectStatus(await update(t.admin.id, other, "raced", 1, { link: true }), 200);
+        expectStatus(
+          await t.call(t.admin.id, "assets.discard_draft", {
+            params: { kind: "app", name: "raced" },
+            payload: { expectedRevision: 2, workspaceId: t.workspaceId }
+          }),
+          200
+        );
+      }
+      return answer;
+    });
+
+    const late = await update(t.admin.id, own, "raced", 1);
+    spy.mockRestore();
+
+    // The revision the update names is the draft's again, and the App is the other Page's now.
+    expectStatus(late, 409);
+    expect(refusalOf(late).details).toMatchObject({ reason: "app_not_from_page" });
+    expect(
+      await t.stores.configAssets.listConfigAssetRevisions({
+        clientInstanceId,
+        kind: "app",
+        name: "raced"
+      })
+    ).toHaveLength(2);
+    expect((await asked(t.admin.id, other)).app).toMatchObject({ name: "raced" });
+    expect((await asked(t.admin.id, own)).app).toBeNull();
+  });
+
+  it("copies no file for an update that names another revision than the draft's", async () => {
+    const page = await t.storePage("copied once");
+    await t.expectOk(t.admin.id, "apps.create_from_page", {
+      payload: { ...page, name: "not-copied", title: "Not copied", workspaceId: t.workspaceId }
+    });
+    const puts = vi.spyOn(t.objects, "put");
+
+    const stale = await update(t.admin.id, page, "not-copied", 7);
+    const copied = puts.mock.calls.length;
+    puts.mockRestore();
+
+    // Refused before the files of the Page are copied below the App, not by the store after.
+    expectStatus(stale, 412);
+    expect(copied).toBe(0);
+  });
+
+  it("finds an App the caller may write behind more than one read of other people's Apps", async () => {
+    const page = await t.storePage("saved very often", {}, { shared: true });
+    const elsewhere = await t.sharedWorkspace("Elsewhere");
+    // Fifty Apps of the Page in a workspace where kai writes nothing, as their saves left them.
+    await t.expectOk(t.admin.id, "apps.create_from_page", {
+      payload: {
+        ...(await t.storePage("another page")),
+        name: "as-saved",
+        title: "As saved",
+        workspaceId: t.workspaceId
+      }
+    });
+    const asSaved = (await stored("as-saved"))?.config ?? {};
+    for (let index = 0; index < 50; index += 1) {
+      const name = `elsewhere-${String(index).padStart(2, "0")}`;
+      await t.stores.configAssets.applyConfigAssetMutations({
+        clientInstanceId,
+        baseRevisions: { [`app:${name}`]: null },
+        origin: { kind: "page", ...page, fileSetNumber: 1 },
+        mutations: [
+          {
+            type: "upsert",
+            kind: "app",
+            name,
+            config: { ...asSaved, name, title: name },
+            scope: { kind: "workspace", workspaceId: elsewhere },
+            draft: true
+          }
+        ]
+      });
+    }
+    await t.expectOk(t.admin.id, "apps.create_from_page", {
+      payload: { ...page, name: "the-51st", title: "The 51st", workspaceId: t.workspaceId }
+    });
+    await kaiWrites();
+
+    expect((await asked(t.kai.id, page)).app).toMatchObject({ name: "the-51st" });
+  });
+
+  it("checks the write right again on the App it writes, whatever was decided when the call came in", async () => {
+    const page = await t.storePage("checked twice", {}, { shared: true });
+    await t.expectOk(t.admin.id, "apps.create_from_page", {
+      payload: { ...page, name: "checked-twice", title: "Checked", workspaceId: t.workspaceId }
+    });
+    const app = await stored("checked-twice");
+    if (!app) throw new Error("The App was not saved");
+    // Kai writes the Apps of the workspace and is denied this one.
+    await kaiWrites();
+    await t.stores.access.createGrant({
+      clientInstanceId,
+      holderKind: "user",
+      holderId: t.kai.id,
+      action: "app.write",
+      effect: "deny",
+      scopeKind: "asset",
+      scopeId: app.id,
+      grantedBy: t.admin.id
+    });
+    // The check of the incoming call is answered an App of the name that is not the denied
+    // one, as if the name had been another App's a moment before. The write reads the real one.
+    const store = t.stores.configAssets;
+    const read = store.getConfigAsset.bind(store);
+    let first = true;
+    const spy = vi.spyOn(store, "getConfigAsset").mockImplementation(async (input) => {
+      const row = await read(input);
+      if (first && row?.name === "checked-twice") {
+        first = false;
+        return { ...row, id: "cfga_another" };
+      }
+      return row;
+    });
+
+    const refused = await update(t.kai.id, page, "checked-twice", 1);
+    spy.mockRestore();
+
+    expect(first).toBe(false);
+    expectStatus(refused, 403);
+    expect(refusalOf(refused)).toMatchObject({
+      code: "FORBIDDEN",
+      details: { action: "app.write" }
+    });
+    expect(await stored("checked-twice")).toMatchObject({ revision: 1 });
   });
 });

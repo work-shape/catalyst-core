@@ -82,7 +82,7 @@ import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
 import type { ChatServerOptions } from "./types";
 
 type MutationBatch = Omit<
-  Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0],
+  Parameters<typeof applyValidatedConfigAssetMutations>[1],
   "clientInstanceId" | "actor"
 >;
 /**
@@ -525,8 +525,11 @@ export class AssetWorkflow {
       repository?: AssetRepoWrite;
       /** Where the revision came from, where it is not written as it stands. */
       origin?: ConfigAssetRevisionOrigin;
-      /** The write made the asset the asset of the Page its origin names. */
-      pageLinked?: boolean;
+      /**
+       * Asked under the lock of the write: whether the write makes the asset the asset of the
+       * Page its origin names. It refuses the write by throwing.
+       */
+      pageLink?: () => Promise<boolean>;
     }
   ) {
     const { kind, name } = target;
@@ -580,7 +583,16 @@ export class AssetWorkflow {
     if (setsDefault) {
       mutations.push({ type: "setDefaultAgent", agentName: name });
     }
+    let pageLinked = false;
+    const { pageLink } = write;
     const result = await this.apply(call, target, {
+      ...(pageLink
+        ? {
+            underLock: async () => {
+              pageLinked = await pageLink();
+            }
+          }
+        : {}),
       baseRevisions: { [assetKey(kind.kind, name)]: write.expectedRevision },
       // The default is set for the first asset only, so the instance has none before.
       ...(setsDefault ? { baseDefaultAgentName: null } : {}),
@@ -600,7 +612,7 @@ export class AssetWorkflow {
           version: result.version,
           // A revision that copies a Page names it: the trail says where the content came from.
           ...(write.origin?.kind === "page" ? { pageId: write.origin.pageId } : {}),
-          ...(write.pageLinked ? { pageLinked: true } : {})
+          ...(pageLinked ? { pageLinked: true } : {})
         })
     ]);
     return { version: result.version, revision, warnings: [] };

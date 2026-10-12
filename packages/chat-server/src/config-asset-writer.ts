@@ -56,7 +56,14 @@ type MutationInput = Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0
  */
 export async function applyValidatedConfigAssetMutations(
   options: ConfigAssetWriterOptions,
-  input: Omit<MutationInput, "validate">
+  input: Omit<MutationInput, "validate"> & {
+    /**
+     * Asked under the lock of the write, after the set was checked and before anything is
+     * written. What it throws refuses the batch. It is where a writer decides what depends on
+     * a state no other write can change any more.
+     */
+    underLock?(): Promise<void>;
+  }
 ) {
   const { kinds } = options.configAssets;
   for (const mutation of input.mutations) {
@@ -80,8 +87,9 @@ export async function applyValidatedConfigAssetMutations(
   const read = new Set(assets.map((asset) => asset.activeRevisionId));
   // The `files` store, which holds the bundle of a write that adds a commit to a repository.
   const objects = options.pages?.objects;
+  const { underLock, ...batch } = input;
   return options.configAssets.store.applyConfigAssetMutations({
-    ...input,
+    ...batch,
     ...(objects
       ? {
           repositoryObjectSize: (key: string) =>
@@ -103,6 +111,7 @@ export async function applyValidatedConfigAssetMutations(
       if (!unchanged) {
         validate({ state: locked.state, assets: await locked.listActiveConfigAssets() });
       }
+      await underLock?.();
     }
   });
 }

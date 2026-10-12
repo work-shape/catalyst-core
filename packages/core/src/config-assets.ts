@@ -433,6 +433,8 @@ export interface ConfigAssetStore {
     kind: ConfigAssetKind;
     pageId: string;
     limit: number;
+    /** How many of them to pass over first: the next read of a caller who reads in parts. */
+    offset?: number;
   }): Promise<ConfigAssetFromPage[]>;
   /** The Page an asset is updated from: the origin of its newest revision that names one. */
   getConfigAssetPageOrigin(input: {
