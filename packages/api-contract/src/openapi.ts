@@ -1,4 +1,4 @@
-import { APP_ERROR_STATUS_CODES, IDEMPOTENCY_KEY_MAX_LENGTH } from "@vivd-catalyst/core";
+import { APP_ERROR_STATUS_CODES, IDEMPOTENCY_KEY_MAX_LENGTH } from "@vivd-catalyst/asset-schemas";
 import { z } from "zod";
 import packageManifest from "../package.json" with { type: "json" };
 import { API_ERROR_MEANINGS, appErrorCodeSchema, type ApiErrorCode } from "./errors";

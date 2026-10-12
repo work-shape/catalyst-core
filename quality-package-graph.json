@@ -1,9 +1,10 @@
 {
   "@vivd-catalyst/agent-runtime": ["@vivd-catalyst/core", "@vivd-catalyst/model-provider"],
   "@vivd-catalyst/api-client": ["@vivd-catalyst/api-contract"],
-  "@vivd-catalyst/api-contract": ["@vivd-catalyst/core"],
+  "@vivd-catalyst/api-contract": ["@vivd-catalyst/asset-schemas"],
   "@vivd-catalyst/app-build": ["@vivd-catalyst/core"],
   "@vivd-catalyst/app-kit": ["@vivd-catalyst/ui"],
+  "@vivd-catalyst/asset-schemas": [],
   "@vivd-catalyst/auth": ["@vivd-catalyst/core"],
   "@vivd-catalyst/capability-sdk": [
     "@vivd-catalyst/core",
@@ -31,6 +32,7 @@
   "@vivd-catalyst/chat-widget": ["@vivd-catalyst/chat-ui"],
   "@vivd-catalyst/client-assembly": [
     "@vivd-catalyst/agent-runtime",
+    "@vivd-catalyst/api-client",
     "@vivd-catalyst/app-build",
     "@vivd-catalyst/auth",
     "@vivd-catalyst/capability-sdk",
@@ -48,29 +50,23 @@
     "@vivd-catalyst/usage-governance",
     "@vivd-catalyst/web-access"
   ],
-  "@vivd-catalyst/config-cli": [
-    "@vivd-catalyst/api-client",
-    "@vivd-catalyst/api-contract",
-    "@vivd-catalyst/config-schema",
-    "@vivd-catalyst/core"
-  ],
-  "@vivd-catalyst/config-schema": ["@vivd-catalyst/core"],
+  "@vivd-catalyst/config-schema": ["@vivd-catalyst/asset-schemas", "@vivd-catalyst/core"],
   "@vivd-catalyst/connections": [
     "@vivd-catalyst/config-schema",
     "@vivd-catalyst/core",
     "@vivd-catalyst/web-access"
   ],
-  "@vivd-catalyst/core": [],
+  "@vivd-catalyst/core": ["@vivd-catalyst/asset-schemas"],
   "@vivd-catalyst/data-source": ["@vivd-catalyst/core", "@vivd-catalyst/tool-sdk"],
   "@vivd-catalyst/demo": [
     "@vivd-catalyst/api-client",
     "@vivd-catalyst/chat-ui",
     "@vivd-catalyst/client-assembly",
-    "@vivd-catalyst/config-cli",
     "@vivd-catalyst/config-schema",
     "@vivd-catalyst/core",
     "@vivd-catalyst/tool-sdk",
-    "@vivd-catalyst/ui"
+    "@vivd-catalyst/ui",
+    "@work-shape/catalyst-cli"
   ],
   "@vivd-catalyst/deployment-kit": [],
   "@vivd-catalyst/docs": ["@vivd-catalyst/api-contract"],
@@ -91,5 +87,10 @@
   "@vivd-catalyst/ui": [],
   "@vivd-catalyst/usage-governance": ["@vivd-catalyst/core"],
   "@vivd-catalyst/web-access": ["@vivd-catalyst/core", "@vivd-catalyst/tool-sdk"],
-  "@vivd-solutions/registry-canary": []
+  "@vivd-solutions/registry-canary": [],
+  "@work-shape/catalyst-cli": [
+    "@vivd-catalyst/api-client",
+    "@vivd-catalyst/api-contract",
+    "@vivd-catalyst/asset-schemas"
+  ]
 }

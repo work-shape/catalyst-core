@@ -1,10 +1,13 @@
 import { readFile } from "node:fs/promises";
-import { basename, dirname, extname, resolve } from "node:path";
+import { dirname, extname, resolve } from "node:path";
 import yaml from "js-yaml";
+import {
+  parseSkillMarkdown as parseSkillFileMarkdown,
+  SkillMarkdownError
+} from "@vivd-catalyst/asset-schemas";
 import { AppError } from "@vivd-catalyst/core";
 import {
   clientInstanceConfigFileSchema,
-  skillFileFrontmatterSchema,
   uiConfigOverlaySchema,
   uiConfigSchema,
   type ClientInstanceConfig
@@ -134,47 +137,20 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
+/** Reads a `SKILL.md`. A file that is no skill is refused as a validation failure. */
 export function parseSkillMarkdown(
   contents: string,
   skillFile: string,
   skillPath: string
 ): unknown {
-  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/u.exec(contents);
-  if (!match) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      `Skill file '${skillFile}' must start with YAML frontmatter`
-    );
+  try {
+    return parseSkillFileMarkdown(contents, skillFile, skillPath);
+  } catch (error) {
+    if (error instanceof SkillMarkdownError) {
+      throw new AppError("VALIDATION_FAILED", error.message, error.details);
+    }
+    throw error;
   }
-
-  const frontmatterRaw = yaml.load(match[1] ?? "");
-  const frontmatter = skillFileFrontmatterSchema.safeParse(frontmatterRaw);
-  if (!frontmatter.success) {
-    throw new AppError("VALIDATION_FAILED", `Skill file '${skillFile}' frontmatter is invalid`, {
-      issues: frontmatter.error.issues
-    });
-  }
-
-  const content = (match[2] ?? "").trim();
-  return {
-    ...frontmatter.data,
-    name: frontmatter.data.name ?? deriveSkillName(skillPath),
-    content
-  };
-}
-
-function deriveSkillName(skillPath: string): string {
-  const extension = extname(skillPath);
-  const filename = basename(skillPath);
-  const sourceName =
-    filename.toLowerCase() === "skill.md"
-      ? basename(dirname(skillPath))
-      : basename(skillPath, extension);
-  return sourceName
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/gu, "_")
-    .replace(/^_+|_+$/gu, "");
 }
 
 function hasOwnProperty(input: unknown, key: string): boolean {

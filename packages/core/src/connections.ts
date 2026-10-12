@@ -1,3 +1,11 @@
+import {
+  CONNECTION_EXPOSURES,
+  CONNECTION_HEALTH_STATES,
+  CONNECTION_NAME_MAX_LENGTH,
+  CONNECTION_NAME_PATTERN,
+  type ConnectionExposure,
+  type ConnectionHealth
+} from "@vivd-catalyst/asset-schemas";
 import type { AssetKindSchema, AssetValidationIssue } from "./asset-kinds";
 import { AppError } from "./errors";
 import { createPlatformId, type ClientInstanceId } from "./ids";
@@ -19,12 +27,7 @@ export const CONNECTION_ACTIONS = {
   approve: "connection.approve"
 } as const;
 
-/**
- * The immutable machine name. It is part of every operation name of the Connection
- * (`connection.<name>.<operation>`), so it holds no dot. A Namespace prefix fits in front.
- */
-export const CONNECTION_NAME_PATTERN = /^[a-z][a-z0-9]*([_-][a-z0-9]+)*$/u;
-export const CONNECTION_NAME_MAX_LENGTH = 64;
+export { CONNECTION_NAME_MAX_LENGTH, CONNECTION_NAME_PATTERN };
 export const CONNECTION_NAME_RULE =
   "Connection name must be lowercase words of letters and digits joined by hyphens or underscores";
 
@@ -45,9 +48,7 @@ export const CONNECTION_MAX_ACCEPTED_OPERATIONS = 100;
 /** What an operation does to the outside system. A hint of that system never decides it. */
 export type ConnectionOperationEffect = "reading" | "changing";
 
-/** Who may call an accepted operation. An operation exposed to nobody is callable by nobody. */
-export const CONNECTION_EXPOSURES = ["agent", "bridge", "workflow"] as const;
-export type ConnectionExposure = (typeof CONNECTION_EXPOSURES)[number];
+export { CONNECTION_EXPOSURES, type ConnectionExposure };
 
 /**
  * The stricter policy an operation may carry. It only tightens: `deny` on any operation,
@@ -255,15 +256,7 @@ export interface ConnectionCredentialResolver {
   resolve(input: { handle: ConnectionSecretHandle; binding: SecretBinding }): Promise<string>;
 }
 
-/** The health of a Connection as its page and its list show it. */
-export const CONNECTION_HEALTH_STATES = [
-  "unknown",
-  "ok",
-  "failed",
-  "needs_configuration",
-  "secret_unreadable"
-] as const;
-export type ConnectionHealth = (typeof CONNECTION_HEALTH_STATES)[number];
+export { CONNECTION_HEALTH_STATES, type ConnectionHealth };
 
 /** Runtime state of one Connection. It has no revision and holds no secret. */
 export interface ConnectionStateRecord {

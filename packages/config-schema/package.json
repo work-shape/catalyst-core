@@ -39,6 +39,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@vivd-catalyst/asset-schemas": "workspace:*",
     "@vivd-catalyst/core": "workspace:*",
     "js-yaml": "^4.2.0",
     "zod": "^4.4.3"

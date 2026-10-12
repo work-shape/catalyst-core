@@ -10,6 +10,7 @@ import {
 
 const sourceAlias = {
   "@vivd-catalyst/agent-runtime": "packages/agent-runtime/src/index.ts",
+  "@vivd-catalyst/asset-schemas": "packages/asset-schemas/src/index.ts",
   "@vivd-catalyst/api-contract": "packages/api-contract/src/index.ts",
   "@vivd-catalyst/api-client": "packages/api-client/src/index.ts",
   "@vivd-catalyst/app-kit/client": "packages/app-kit/src/client.ts",

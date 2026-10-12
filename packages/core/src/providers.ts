@@ -1,18 +1,17 @@
+import {
+  PROVIDER_CHECK_ERROR_CLASSES,
+  PROVIDER_PORTS,
+  PROVIDER_REGIONS,
+  type ProviderCheckErrorClass,
+  type ProviderPort,
+  type ProviderRegion
+} from "@vivd-catalyst/asset-schemas";
 import { z } from "zod";
 import { AppError } from "./errors";
 import type { Logger } from "./logger";
 import { secretRefFields, SecretNotResolvedError, type SecretResolver } from "./secrets";
 
-/** What an instance takes from outside its own processes. A closed list. */
-export const PROVIDER_PORTS = ["models", "mail", "objectStorage", "sandbox", "secrets"] as const;
-export type ProviderPort = (typeof PROVIDER_PORTS)[number];
-
-/**
- * Where a provider processes the data an instance sends it. Product-owned and closed: a vendor's
- * own region name is a separate field of its adapter, such as `bucketRegion`.
- */
-export const PROVIDER_REGIONS = ["eu", "global"] as const;
-export type ProviderRegion = (typeof PROVIDER_REGIONS)[number];
+export { PROVIDER_PORTS, PROVIDER_REGIONS, type ProviderPort, type ProviderRegion };
 
 /**
  * Fields of an entry that belong to the port and are read by the product whatever adapter
@@ -59,21 +58,7 @@ export type ProviderDescription = Record<string, string | number | boolean>;
  */
 export const PROVIDER_CHECK_TIMEOUT_MS = 5_000;
 
-/**
- * Why a check failed. Product-owned and closed: it is all of a failure that reaches a log, the
- * API or a page, so a provider's own error text, which can repeat a key or an address, cannot.
- */
-export const PROVIDER_CHECK_ERROR_CLASSES = [
-  "unreachable",
-  "timeout",
-  "access_denied",
-  "not_found",
-  // The bucket an object store is configured with does not exist. The check creates none.
-  "bucket_missing",
-  "rejected",
-  "failed"
-] as const;
-export type ProviderCheckErrorClass = (typeof PROVIDER_CHECK_ERROR_CLASSES)[number];
+export { PROVIDER_CHECK_ERROR_CLASSES, type ProviderCheckErrorClass };
 
 export type ProviderCheckResult = { ok: true } | { ok: false; errorClass: ProviderCheckErrorClass };
 

@@ -1,13 +1,10 @@
-export const localeCodes = ["en", "de"] as const;
+import {
+  localeCodes,
+  type LocaleCode,
+  type LocalizedStringConfig
+} from "@vivd-catalyst/asset-schemas";
 
-export type LocaleCode = (typeof localeCodes)[number];
-
-export type LocalizedStringConfig =
-  | string
-  | {
-      en?: string;
-      de?: string;
-    };
+export { localeCodes, type LocaleCode, type LocalizedStringConfig };
 
 export interface LocalizationConfig {
   defaultLocale: LocaleCode;

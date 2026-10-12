@@ -101,9 +101,6 @@ importers:
       '@vivd-catalyst/client-assembly':
         specifier: workspace:*
         version: link:../../packages/client-assembly
-      '@vivd-catalyst/config-cli':
-        specifier: workspace:*
-        version: link:../../packages/config-cli
       '@vivd-catalyst/config-schema':
         specifier: workspace:*
         version: link:../../packages/config-schema
@@ -116,6 +113,9 @@ importers:
       '@vivd-catalyst/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@work-shape/catalyst-cli':
+        specifier: workspace:*
+        version: link:../../packages/config-cli
       lucide-react:
         specifier: ^1.17.0
         version: 1.17.0(react@19.2.7)
@@ -200,9 +200,9 @@ importers:
 
   packages/api-contract:
     dependencies:
-      '@vivd-catalyst/core':
+      '@vivd-catalyst/asset-schemas':
         specifier: workspace:*
-        version: link:../core
+        version: link:../asset-schemas
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -296,6 +296,28 @@ importers:
       tw-animate-css:
         specifier: ^1.4.0
         version: 1.4.0
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/asset-schemas:
+    dependencies:
+      js-yaml:
+        specifier: ^4.2.0
+        version: 4.3.2
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
+      '@types/node':
+        specifier: ^24.13.1
+        version: 24.13.1
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.4)(typescript@6.0.3)(yaml@2.9.1)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -578,6 +600,9 @@ importers:
       '@vivd-catalyst/agent-runtime':
         specifier: workspace:*
         version: link:../agent-runtime
+      '@vivd-catalyst/api-client':
+        specifier: workspace:*
+        version: link:../api-client
       '@vivd-catalyst/app-build':
         specifier: workspace:*
         version: link:../app-build
@@ -648,21 +673,12 @@ importers:
 
   packages/config-cli:
     dependencies:
-      '@vivd-catalyst/api-client':
-        specifier: workspace:*
-        version: link:../api-client
-      '@vivd-catalyst/api-contract':
-        specifier: workspace:*
-        version: link:../api-contract
-      '@vivd-catalyst/config-schema':
-        specifier: workspace:*
-        version: link:../config-schema
-      '@vivd-catalyst/core':
-        specifier: workspace:*
-        version: link:../core
       js-yaml:
         specifier: ^4.2.0
         version: 4.2.0
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/js-yaml':
         specifier: ^4.0.9
@@ -670,6 +686,15 @@ importers:
       '@types/node':
         specifier: ^24.13.1
         version: 24.13.1
+      '@vivd-catalyst/api-client':
+        specifier: workspace:*
+        version: link:../api-client
+      '@vivd-catalyst/api-contract':
+        specifier: workspace:*
+        version: link:../api-contract
+      '@vivd-catalyst/asset-schemas':
+        specifier: workspace:*
+        version: link:../asset-schemas
       tsup:
         specifier: ^8.5.1
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.4)(typescript@6.0.3)(yaml@2.9.1)
@@ -679,6 +704,9 @@ importers:
 
   packages/config-schema:
     dependencies:
+      '@vivd-catalyst/asset-schemas':
+        specifier: workspace:*
+        version: link:../asset-schemas
       '@vivd-catalyst/core':
         specifier: workspace:*
         version: link:../core
@@ -735,6 +763,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@vivd-catalyst/asset-schemas':
+        specifier: workspace:*
+        version: link:../asset-schemas
       zod:
         specifier: 4.4.3
         version: 4.4.3

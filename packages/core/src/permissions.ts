@@ -1,3 +1,10 @@
+import {
+  ACTIONS,
+  NAMESPACE_PREFIX_MAX_LENGTH,
+  NAMESPACE_PREFIX_MIN_LENGTH,
+  NAMESPACE_PREFIX_PATTERN,
+  type PlatformAction
+} from "@vivd-catalyst/asset-schemas";
 import { AppError } from "./errors";
 import { operationDenialError } from "./operation-denial";
 import {
@@ -24,34 +31,7 @@ export const PERMISSIONS = [
 
 export type Permission = (typeof PERMISSIONS)[number];
 
-export const ACTIONS = [
-  "agent.read",
-  "agent.write",
-  "agent.delete",
-  "skill.read",
-  "skill.write",
-  "skill.delete",
-  "skill.approve",
-  "connection.read",
-  "connection.use",
-  "connection.write",
-  "connection.delete",
-  "connection.approve",
-  "app.read",
-  "app.write",
-  "app.publish",
-  "app.delete",
-  "app.use",
-  "operations.approve",
-  "users.manage",
-  "usage.view",
-  "audit.view",
-  "api_access.manage",
-  "agent_models.manage",
-  "assets.release"
-] as const;
-
-export type PlatformAction = (typeof ACTIONS)[number];
+export { ACTIONS, type PlatformAction };
 
 export const LEGACY_PERMISSION_ACTIONS = {
   // Who approves a skill change approves an operation call that waits for an approval.
@@ -184,10 +164,7 @@ export interface Authorizer {
 /** The free-text reference `x` of a tool is checked as the action `ref:x`. */
 export const PERMISSION_REF_ACTION_PREFIX = "ref:";
 
-/** A Namespace prefix: lowercase words joined by single hyphens, ending in one hyphen. */
-export const NAMESPACE_PREFIX_PATTERN = /^[a-z][a-z0-9]*(-[a-z0-9]+)*-$/u;
-export const NAMESPACE_PREFIX_MIN_LENGTH = 2;
-export const NAMESPACE_PREFIX_MAX_LENGTH = 32;
+export { NAMESPACE_PREFIX_MAX_LENGTH, NAMESPACE_PREFIX_MIN_LENGTH, NAMESPACE_PREFIX_PATTERN };
 
 /**
  * The actions a grant row can be written for, each with the scope kinds it can be written at,

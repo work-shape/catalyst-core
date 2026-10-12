@@ -1,7 +1,7 @@
 {
   "name": "@vivd-catalyst/api-contract",
   "version": "0.6.3",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",
@@ -45,7 +45,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@vivd-catalyst/core": "workspace:*",
+    "@vivd-catalyst/asset-schemas": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {

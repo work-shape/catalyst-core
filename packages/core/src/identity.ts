@@ -1,3 +1,11 @@
+import {
+  AUTH_SCOPE_WILDCARD,
+  CHAT_SESSION_AUTH_SCOPES,
+  FIRST_PARTY_AUTH_SCOPES,
+  type ChatSessionAuthScope,
+  type FirstPartyAuthScope,
+  type OperationScope
+} from "@vivd-catalyst/asset-schemas";
 import { AppError } from "./errors";
 import type { AgentRunId, ApiCredentialId, ClientInstanceId, ServicePrincipalId } from "./ids";
 import type { JobId } from "./jobs";
@@ -5,45 +13,14 @@ import type { LocaleCode } from "./localization";
 
 export type UserRole = "user" | "admin" | "superadmin" | string;
 
-export const AUTH_SCOPE_WILDCARD = "*" as const;
-
-export const CHAT_SESSION_AUTH_SCOPES = [
-  "me:read",
-  "me:delete",
-  "config:read",
-  "conversation:read",
-  "conversation:write",
-  "run:start",
-  "run:observe",
-  "run:cancel",
-  "run:command"
-] as const;
-
-const CHAT_SESSION_ALLOWED_AUTH_SCOPES = CHAT_SESSION_AUTH_SCOPES;
-
-export const FIRST_PARTY_AUTH_SCOPES = [
+export {
   AUTH_SCOPE_WILDCARD,
-  ...CHAT_SESSION_ALLOWED_AUTH_SCOPES,
-  "collaboration_workspace:read",
-  "collaboration_workspace:manage",
-  "me:write",
-  "governance:read",
-  "governance:write",
-  "user_admin:read",
-  "user_admin:write",
-  "api_access:read",
-  "api_access:write",
-  "config_assets:read",
-  "config_assets:write",
-  // Moving the published pointer of an asset. A credential that writes drafts with
-  // `config_assets:write` publishes none of them without this one.
-  "config_assets:publish",
-  "config_assets:release"
-] as const;
-
-export type ChatSessionAuthScope = (typeof CHAT_SESSION_ALLOWED_AUTH_SCOPES)[number];
-export type FirstPartyAuthScope = (typeof FIRST_PARTY_AUTH_SCOPES)[number];
-export type OperationScope = Exclude<FirstPartyAuthScope, "*">;
+  CHAT_SESSION_AUTH_SCOPES,
+  FIRST_PARTY_AUTH_SCOPES,
+  type ChatSessionAuthScope,
+  type FirstPartyAuthScope,
+  type OperationScope
+};
 export type AuthScope = FirstPartyAuthScope | (string & {});
 
 export type AuthPrincipalKind = "user" | "service";
@@ -203,5 +180,5 @@ export function requireAuthScope(user: { scopes?: AuthScope[] }, scope: AuthScop
 }
 
 export function isChatSessionAuthScope(scope: string): scope is ChatSessionAuthScope {
-  return CHAT_SESSION_ALLOWED_AUTH_SCOPES.includes(scope as ChatSessionAuthScope);
+  return CHAT_SESSION_AUTH_SCOPES.includes(scope as ChatSessionAuthScope);
 }

@@ -3,7 +3,7 @@ import {
   type OperationEffect,
   type OperationScope,
   type PlatformAction
-} from "@vivd-catalyst/core";
+} from "@vivd-catalyst/asset-schemas";
 import { operationRunSchema } from "../operation-runs";
 import { listEnvelopeSchema } from "../shared";
 import type { z } from "zod";

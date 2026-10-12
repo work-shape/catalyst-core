@@ -10,7 +10,7 @@ import {
   type AgentConfig,
   type SkillConfig,
   type SkillResourceConfig
-} from "@vivd-catalyst/config-schema";
+} from "@vivd-catalyst/asset-schemas";
 
 export const MANIFEST_FILENAME = "catalyst.yaml";
 export const STATE_FILENAME = ".catalyst-state.json";

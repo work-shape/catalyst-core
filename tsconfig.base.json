@@ -26,6 +26,7 @@
       "@vivd-catalyst/app-kit": ["packages/app-kit/src/index.ts"],
       "@vivd-catalyst/app-build": ["packages/app-build/src/index.ts"],
       "@vivd-catalyst/app-build/build": ["packages/app-build/src/build.ts"],
+      "@vivd-catalyst/asset-schemas": ["packages/asset-schemas/src/index.ts"],
       "@vivd-catalyst/api-contract": ["packages/api-contract/src/index.ts"],
       "@vivd-catalyst/api-client": ["packages/api-client/src/index.ts"],
       "@vivd-catalyst/auth": ["packages/auth/src/index.ts"],

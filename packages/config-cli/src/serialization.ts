@@ -5,7 +5,7 @@ import {
   skillConfigSchema,
   type AgentConfig,
   type SkillConfig
-} from "@vivd-catalyst/config-schema";
+} from "@vivd-catalyst/asset-schemas";
 
 export interface AssetProvenance {
   instance: string;

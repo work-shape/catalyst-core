@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { localizedStringSchema } from "@vivd-catalyst/asset-schemas";
 import {
   localeCodes,
   resolveLocalePreference,
@@ -36,17 +37,7 @@ export const localizationConfigSchema = z
     }
   });
 
-const localizedStringMapSchema = z
-  .object({
-    en: z.string().min(1).optional(),
-    de: z.string().min(1).optional()
-  })
-  .strict()
-  .refine((value) => value.en !== undefined || value.de !== undefined, {
-    message: "At least one localized value is required"
-  });
-
-export const localizedStringSchema = z.union([z.string().min(1), localizedStringMapSchema]);
+export { localizedStringSchema };
 
 export interface ConfigLocaleInput {
   requestedLocale?: string;

@@ -1,10 +1,15 @@
+import {
+  REASONING_EFFORTS,
+  SKILL_RESOURCE_MEDIA_TYPES,
+  type AgentConfig,
+  type AgentInitialPromptConfig,
+  type ReasoningEffortConfig,
+  type SkillConfig,
+  type SkillResourceConfig,
+  type SkillResourceMediaType
+} from "@vivd-catalyst/asset-schemas";
 import type { LocalizationConfig, LocalizedStringConfig } from "./localization";
 import type { ProviderRegion } from "./providers";
-
-export interface AgentInitialPromptConfig {
-  title: LocalizedStringConfig;
-  prompt: LocalizedStringConfig;
-}
 
 export type ModelProviderAuthModeConfig = "bearer" | "api-key";
 
@@ -32,8 +37,6 @@ export interface OpenAiCompatibleContextManagementConfig {
     compactThresholdTokens: number;
   };
 }
-export const REASONING_EFFORTS = ["none", "low", "medium", "high", "xhigh", "max"] as const;
-export type ReasoningEffortConfig = (typeof REASONING_EFFORTS)[number];
 
 export const AGENT_EDITABLE_FIELDS = [
   "displayName",
@@ -167,30 +170,6 @@ export function defaultReasoningEffortForAgentBinding(
   );
 }
 
-export interface AgentConfig {
-  name: string;
-  displayName: LocalizedStringConfig;
-  description?: LocalizedStringConfig;
-  welcomeMessage?: LocalizedStringConfig;
-  welcomeSubtitle?: LocalizedStringConfig;
-  instructions: string;
-  modelProviderId?: string;
-  modelBindingId?: string;
-  reasoningEffort?: ReasoningEffortConfig;
-  fastMode?: boolean;
-  /** Bindings users may pick for this agent in the chat, besides its own `modelBindingId`. */
-  userSelectableModelBindingIds?: string[];
-  /**
-   * Reasoning effort per user-selectable binding. `reasoningEffort` stays the effort of the
-   * agent's own model and is not applied to a model a user picked instead.
-   */
-  modelReasoningEfforts?: Record<string, ReasoningEffortConfig>;
-  maxSteps?: number;
-  toolNames: string[];
-  skillNames: string[];
-  initialPrompts: AgentInitialPromptConfig[];
-}
-
 /**
  * The bindings a user may pick for this agent besides its own: the listed ids whose binding
  * still exists and is one agents may use. Stale ids are ignored rather than failing the agent.
@@ -235,28 +214,16 @@ export interface AgentSkillChangesPolicy {
   allowSkillCreation: boolean;
 }
 
-export interface SkillConfig {
-  name: string;
-  title: string;
-  description: string;
-  content: string;
-  resources?: SkillResourceConfig[];
-}
-
-export const SKILL_RESOURCE_MEDIA_TYPES = [
-  "text/markdown",
-  "text/plain",
-  "application/json",
-  "application/yaml"
-] as const;
-
-export type SkillResourceMediaType = (typeof SKILL_RESOURCE_MEDIA_TYPES)[number];
-
-export interface SkillResourceConfig {
-  path: string;
-  mediaType: SkillResourceMediaType;
-  content: string;
-}
+export {
+  REASONING_EFFORTS,
+  SKILL_RESOURCE_MEDIA_TYPES,
+  type AgentConfig,
+  type AgentInitialPromptConfig,
+  type ReasoningEffortConfig,
+  type SkillConfig,
+  type SkillResourceConfig,
+  type SkillResourceMediaType
+};
 
 export type { LocalizationConfig, LocalizedStringConfig };
 

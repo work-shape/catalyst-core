@@ -1,3 +1,4 @@
+import { IDEMPOTENCY_KEY_MAX_LENGTH, type OperationEffect } from "@vivd-catalyst/asset-schemas";
 import type { OperationDenial } from "./operation-denial";
 import type { ManagedArtifactRef, ToolDisplayOutput } from "./files";
 import type { AuthenticatedIdentity, RuntimeCallContext } from "./identity";
@@ -12,13 +13,7 @@ import type { StructuredResultPublication } from "./structured-result";
 import type { ISODateString } from "./time";
 import type { ToolExecutionRequest, ToolExecutionResult } from "./tool-execution";
 
-export type OperationEffect = "reading" | "changing";
-
-/**
- * The longest `Idempotency-Key` a caller may send, in characters. It protects the index the
- * key is looked up in. A longer key is refused with VALIDATION_FAILED naming this limit.
- */
-export const IDEMPOTENCY_KEY_MAX_LENGTH = 255;
+export { IDEMPOTENCY_KEY_MAX_LENGTH, type OperationEffect };
 
 /** From the loosest to the strictest. Where several values meet, the strictest wins. */
 export const POLICY_VALUES = ["allow", "confirm", "approval", "deny"] as const;
