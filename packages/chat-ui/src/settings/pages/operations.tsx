@@ -17,6 +17,7 @@ import {
   isOperationRunFilterDefault,
   isOperationRunFilterReadsOnly,
   operationRunFilterShowsReads,
+  operationRunOfSearch,
   operationRunQuery,
   type OperationRunFilter
 } from "../../operations/operations-model";
@@ -64,7 +65,11 @@ export function OperationsPage() {
     getNextPageParam: (page) => page.nextCursor,
     refetchInterval: OPERATIONS_REFRESH_MS
   });
-  const [open, setOpen] = useState<OperationRunResource>();
+  // A link to one run, such as the one a test of an App's action gives, opens the page on it.
+  const [open, setOpen] = useState<OpenRun | undefined>(() => {
+    const id = operationRunOfSearch(window.location.search);
+    return id === undefined ? undefined : { id };
+  });
   const runs = runsQuery.data?.pages.flatMap((page) => page.items);
   // An empty list of reads says the same sentence as its empty text, so it is said once.
   const readsEmpty = runs?.length === 0 && isOperationRunFilterReadsOnly(applied);
@@ -111,7 +116,11 @@ export function OperationsPage() {
               )}
             </EmptyState>
           ) : (
-            <OperationRunsTable runs={runs} workspaces={workspaces} onOpen={setOpen} />
+            <OperationRunsTable
+              runs={runs}
+              workspaces={workspaces}
+              onOpen={(row) => setOpen({ id: row.id, row })}
+            />
           )}
           {runsQuery.hasNextPage ? (
             <Button
@@ -128,21 +137,38 @@ export function OperationsPage() {
           ) : null}
         </div>
       </Section>
-      <OperationRunDialog run={open} workspaces={workspaces} onClose={() => setOpen(undefined)} />
+      <OperationRunDialog
+        run={open}
+        workspaces={workspaces}
+        onClose={() => {
+          setOpen(undefined);
+          // The address stops naming the run, so a reload shows the list.
+          if (operationRunOfSearch(window.location.search) !== undefined) {
+            window.history.replaceState(window.history.state, "", window.location.pathname);
+          }
+        }}
+      />
     </>
   );
 }
 
+/** The run the dialog shows: named by its id, with what its row held where a row opened it. */
+interface OpenRun {
+  id: string;
+  row?: OperationRunResource;
+}
+
 /**
  * One run in full. It opens with what the row held and keeps up with the run itself, so a call
- * that waits shows its decision once it has one, also after the row left the filtered list.
+ * that waits shows its decision once it has one, also after the row left the filtered list. A
+ * run the address names is read by its id.
  */
 function OperationRunDialog({
   run,
   workspaces,
   onClose
 }: {
-  run: OperationRunResource | undefined;
+  run: OpenRun | undefined;
   workspaces: readonly OperationRunWorkspace[];
   onClose(): void;
 }) {
@@ -153,10 +179,10 @@ function OperationRunDialog({
     queryKey: [...scope, "run", runId],
     queryFn: ({ signal }) => client.operations.get_run({ params: { runId: runId ?? "" }, signal }),
     enabled: runId !== undefined,
-    placeholderData: run,
+    placeholderData: run?.row,
     refetchInterval: OPERATIONS_REFRESH_MS
   });
-  const shown = runQuery.data ?? run;
+  const shown = runQuery.data ?? run?.row;
 
   return (
     <Dialog
@@ -180,7 +206,11 @@ function OperationRunDialog({
             }
           />
         </div>
-      ) : null}
+      ) : runQuery.error ? (
+        <Banner tone="danger">{t("operations.detailLoadFailed")}</Banner>
+      ) : (
+        <SkeletonList rows={6} />
+      )}
     </Dialog>
   );
 }

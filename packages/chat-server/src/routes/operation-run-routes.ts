@@ -7,12 +7,13 @@ import {
   type OperationRun
 } from "@vivd-catalyst/core";
 import type { Route } from "../http/route";
-import { toOperationRunResource } from "../operations/operation-run-resource";
+import { readOperationRunApps, toOperationRunResource } from "../operations/operation-run-resource";
 import type { ResolvedChatServerOptions } from "../types";
 
 export function registerOperationRunRoutes(route: Route, options: ResolvedChatServerOptions): void {
   const { clientInstanceId } = options;
   const runs = options.stores.operationRuns;
+  const apps = { clientInstanceId, store: options.stores.configAssets };
 
   // A caller reads the run of its own call. Anybody else's run is governance evidence and
   // takes the right the list takes. A run of another instance does not exist.
@@ -24,7 +25,7 @@ export function registerOperationRunRoutes(route: Route, options: ResolvedChatSe
     if (!isCallerOf(run, identity)) {
       access.require("audit.view", { kind: "operation_run", workspaceId: run.workspaceId });
     }
-    return toOperationRunResource(run);
+    return toOperationRunResource(run, await readOperationRunApps(apps, [run]));
   });
 
   route(apiOperations["operations.list_runs"], async ({ query, paging }) => {
@@ -44,7 +45,8 @@ export function registerOperationRunRoutes(route: Route, options: ResolvedChatSe
       },
       page: paging
     });
-    return listed.map(toOperationRunResource);
+    const madeIn = await readOperationRunApps(apps, listed);
+    return listed.map((run) => toOperationRunResource(run, madeIn));
   });
 }
 

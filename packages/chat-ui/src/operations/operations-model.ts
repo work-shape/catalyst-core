@@ -1,6 +1,7 @@
 import type { LocaleCode, OperationRunResource } from "@vivd-catalyst/api-client";
 import type { BadgeTone } from "@vivd-catalyst/ui";
 import type { TranslationKey } from "../i18n";
+import { workspaceRoutePath } from "../routes";
 
 export type OperationRunStatus = OperationRunResource["status"];
 export type OperationRunOrigin = OperationRunResource["origin"];
@@ -163,6 +164,38 @@ export function operationRunOriginKindOf(value: string): OperationRunOriginKind 
   return operationRunOriginKinds.find((kind) => kind === value);
 }
 
+/** The App a call came from, as a row and the detail of its run name it. */
+export interface OperationRunAppFacts {
+  /** What people read as the App's name. A deleted App has none left and goes by its id. */
+  name: string;
+  deleted: boolean;
+  /** The number of the revision the call was made in, where the instance still knows it. */
+  revision?: number;
+  action: string;
+  /** The Connection and the operation the call reached, by name. */
+  target?: { connection: string; operation: string };
+}
+
+/**
+ * What a run with the origin `app` says of its App. A call of a Page of a conversation names
+ * no App and has none of this.
+ */
+export function operationRunApp(
+  run: Pick<OperationRunResource, "origin" | "app">
+): OperationRunAppFacts | undefined {
+  const { origin, app } = run;
+  if (origin.kind !== "app" || origin.appName === undefined) {
+    return undefined;
+  }
+  return {
+    name: app?.title ?? origin.appName,
+    deleted: app?.deleted ?? false,
+    ...(app?.revision === undefined ? {} : { revision: app.revision }),
+    action: origin.actionName,
+    ...(origin.target ? { target: origin.target } : {})
+  };
+}
+
 /** The agent a call came through, where it came through one. */
 export function operationRunAgentName(origin: OperationRunOrigin): string | undefined {
   return origin.kind === "agent" ? origin.agentName : undefined;
@@ -266,4 +299,18 @@ export function formatOperationRunDuration(
     return `${unit(Math.floor(ms / MINUTE_MS), "minute")} ${unit(Math.floor((ms % MINUTE_MS) / SECOND_MS), "second")}`;
   }
   return `${unit(Math.floor(ms / HOUR_MS), "hour")} ${unit(Math.floor((ms % HOUR_MS) / MINUTE_MS), "minute")}`;
+}
+
+/** The parameter in the address of Instance > Operations that names the run it opens with. */
+const OPERATION_RUN_PARAM = "run";
+
+/** Where one run is read in the interface: Instance > Operations, open on that run. */
+export function operationRunHref(runId: string): string {
+  const page = workspaceRoutePath({ kind: "settings", group: "instance", page: "operations" });
+  return `${page}?${new URLSearchParams({ [OPERATION_RUN_PARAM]: runId }).toString()}`;
+}
+
+/** The run the address of the page names, read from its query. */
+export function operationRunOfSearch(search: string): string | undefined {
+  return new URLSearchParams(search).get(OPERATION_RUN_PARAM) || undefined;
 }

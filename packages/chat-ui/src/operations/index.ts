@@ -4,6 +4,8 @@ export {
   isOperationRunFilterDefault,
   isOperationRunFilterReadsOnly,
   operationRunFilterShowsReads,
+  operationRunHref,
+  operationRunOfSearch,
   operationRunOriginFields,
   operationRunQuery,
   operationRunWorkspaceLabel

@@ -18761,6 +18761,25 @@
           "origin": {
             "$ref": "#/components/schemas/OperationRunOrigin"
           },
+          "app": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "deleted": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "deleted"
+            ]
+          },
           "workspaceId": {
             "type": "string"
           },

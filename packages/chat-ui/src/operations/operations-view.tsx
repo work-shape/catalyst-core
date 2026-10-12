@@ -28,6 +28,7 @@ import {
   operationEffectFilterLabelKeys,
   operationOriginLabelKeys,
   operationRunAgentName,
+  operationRunApp,
   operationRunEffectOf,
   operationRunEffects,
   operationRunOriginFields,
@@ -38,6 +39,7 @@ import {
   operationRunWorkspaceLabel,
   operationStatusLabelKeys,
   operationStatusTones,
+  type OperationRunAppFacts,
   type OperationRunFilter
 } from "./operations-model";
 
@@ -181,6 +183,7 @@ export function OperationRunsTable({
       <TableBody>
         {runs.map((run) => {
           const agentName = operationRunAgentName(run.origin);
+          const app = operationRunApp(run);
           return (
             <TableRow key={run.id} data-operation-run-id={run.id} data-status={run.status}>
               <TableCell>
@@ -196,11 +199,15 @@ export function OperationRunsTable({
               </TableCell>
               <TableCell>
                 {run.actor.label}
-                <TableCellDetail data-origin={run.origin.kind}>
+                <TableCellDetail
+                  data-origin={run.origin.kind}
+                  data-origin-app={app ? (app.deleted ? "deleted" : "active") : undefined}
+                >
                   <span className="sr-only">{t("operations.origin")}: </span>
                   {agentName
                     ? t("operations.throughAgent", { agent: agentName })
                     : t(operationOriginLabelKeys[run.origin.kind])}
+                  {app ? ` · ${operationRunAppText(app, t)}` : null}
                 </TableCellDetail>
               </TableCell>
               <TableCell className="wrap-anywhere" data-workspace-id={run.workspaceId}>
@@ -244,6 +251,7 @@ export function OperationRunDetail({
 }) {
   const { t, locale } = useTranslation();
   const { decision, error, usage } = run;
+  const app = operationRunApp(run);
   const time = (value: string | undefined) =>
     value === undefined ? undefined : formatDateTime(value, locale);
   const count = (value: number) => value.toLocaleString(locale);
@@ -272,6 +280,23 @@ export function OperationRunDetail({
       <Fact name="origin" label={t("operations.origin")}>
         {t(operationOriginLabelKeys[run.origin.kind])}
       </Fact>
+      {app ? (
+        <Fact name="origin.app" label={t("operations.fieldApp")}>
+          {app.deleted ? t("operations.appDeleted", { id: app.name }) : app.name}
+          {app.revision === undefined ? null : (
+            <Detail>{t("operations.appRevision", { number: app.revision })}</Detail>
+          )}
+        </Fact>
+      ) : null}
+      {app?.target ? (
+        <Fact name="origin.target" label={t("operations.fieldTarget")}>
+          {app.target.connection}
+          <span aria-hidden="true" className="text-muted-foreground">
+            {" · "}
+          </span>
+          <span className="font-mono text-code">{app.target.operation}</span>
+        </Fact>
+      ) : null}
       {operationRunOriginFields(run.origin).map((entry) => (
         <Fact key={entry.field} name={`origin.${entry.field}`} label={t(entry.labelKey)} mono>
           {entry.value}
@@ -355,6 +380,19 @@ export function OperationRunDetail({
       </Fact>
     </KeyValueList>
   );
+}
+
+/** The App of a call in one line: its name, the revision where it is known, and the action. */
+function operationRunAppText(
+  app: OperationRunAppFacts,
+  t: ReturnType<typeof useTranslation>["t"]
+): string {
+  const name = app.deleted ? t("operations.appDeleted", { id: app.name }) : app.name;
+  return [
+    name,
+    ...(app.revision === undefined ? [] : [t("operations.appRevision", { number: app.revision })]),
+    app.action
+  ].join(" · ");
 }
 
 /** One labelled fact of a run. A fact the run does not have is left out. */

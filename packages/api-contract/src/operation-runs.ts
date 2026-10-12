@@ -55,6 +55,19 @@ export const operationRunSchema = z.object({
     label: z.string()
   }),
   origin: operationRunOriginSchema,
+  /**
+   * The App a call with the origin `app` came from, as the instance holds it when the run is
+   * read. Nothing of it is kept on the run. A run of a Page of a conversation has none.
+   */
+  app: z
+    .object({
+      /** What people read as the App's name. Absent once the App is deleted. */
+      title: z.string().optional(),
+      /** The number of the revision the call was made in, while the App still points at it. */
+      revision: z.number().int().positive().optional(),
+      deleted: z.boolean()
+    })
+    .optional(),
   workspaceId: z.string().optional(),
   /** The request another person decides, while and after the run waits for it. */
   approvalRequestId: z.string().optional(),
