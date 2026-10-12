@@ -10,13 +10,18 @@ contain breaking changes; a patch version does not.
 - **Claude on Amazon Bedrock:** a model provider `aws-bedrock` beside `openai-compatible` and
   `google-vertex`. It calls Claude through the Bedrock runtime in Frankfurt
   (`eu-central-1`) with a Bedrock API key named by `credentialSecret` (default
-  `AWS_BEARER_TOKEN_BEDROCK`). The entry must state `region: eu`, and `model` must be the ARN of
-  an application inference profile in `eu-central-1`: a model id, a shared `eu.anthropic.…`
-  profile or another region stops startup. It carries text, images, tool calls and streaming, and
-  a binding on it can be chosen for agents. It does not carry reasoning efforts, documents, a
-  JSON answer format or web search yet. **Operators:** the API and the agent run worker need
-  the secret. Add a rate card row per profile ARN; without one the calls are recorded as
-  unpriced.
+  `AWS_BEARER_TOKEN_BEDROCK`). The entry must state `region: eu` and `accountId`, and `model`
+  must be the ARN of an application inference profile of that account in `eu-central-1`: a model
+  id, a shared `eu.anthropic.…` profile, another region or another account stops startup. It
+  carries text, images, tool calls and streaming, and a binding on it can be chosen for agents.
+  An answer has at most 16,000 output tokens. It does not carry reasoning efforts, documents, a
+  JSON answer format or web search yet. It is checked against Claude Sonnet 4.6 only: the
+  Claude 5.5 models think by default and bill thinking as output, so keep a 5.5 profile out of
+  the config until thinking support is built and checked. **Operators:** the API and the agent
+  run worker need the secret. Startup stops unless `usage.costs.customer.models` holds a row
+  with a price above zero for the entry's model and for the model of every binding on it. The
+  adapter fixes the endpoint; the profile, the key's IAM policy, Bedrock's data retention and
+  invocation logging decide the rest and are the operator's to set, see the configuration docs.
 - **Pages, plain HTML:** App Kit version `1.2.0`, with two new files, `page.css` and `theme.js`.
   A plain HTML Page that names it comes out with the look of the platform: the build links
   `page.css` and `theme.js` first into every HTML file of a Page with an `entry`, also one whose
@@ -494,6 +499,13 @@ id from config_assets where status = 'deleted')`.
   with this release, for example from `low` to `very_low`; the four earlier values of a
   binding's `usageTier` stay valid and keep their words. The UI library has `LevelMeter` and
   the tokens `--level-1` to `--level-6` for it.
+- **Model names in logs and the audit:** where a model call names a binding, the log lines
+  `model_provider.error` and `model_usage.record_failed` carry `bindingId` in place of `model`,
+  the refusal of something a model does not support reads "Model binding '…' of provider '…'
+  does not support", and the audit events of a generated conversation title carry
+  `modelBindingId` in place of `model`. A call without a binding names the model as before. The
+  usage ledger keeps the model id. **Operators:** a log query or alert on the `model` field of
+  these lines needs `bindingId` as well.
 - **Every process of an instance is assembled from one build (breaking for a client
   assembly):** `defineClientInstance` gains `runWorkspaceCommandWorker()` and
   `runArtifactPreviewWorker()`, which hand the worker the capabilities of the build as
@@ -1544,6 +1556,10 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   .../asset-schemas/dist/index.js`. The image build now loads the Vite plugin and fails when
   a package is missing, and `pnpm check:images` builds this image too.
 
+- **Model providers and redirects:** no model adapter follows a redirect any more. A provider
+  endpoint that answered with a redirect had the API key, the access token and the conversation
+  sent on to the host the redirect named. The call now fails as a refused request and is not sent
+  again; this holds for `openai-compatible`, `google-vertex` and their provider checks.
 - **Deployment kit, worker guards:** the Compose checks under `verify/` judge what a worker
   must not have on the stack as `docker compose config` resolves it: the
   files the deploy script passes with `-f`, and locally `docker-compose.yml` with

@@ -459,8 +459,7 @@ shows that the key is taken. It does not show that the account may call the mode
 ### Claude on Amazon Bedrock
 
 The `aws-bedrock` provider calls Claude models through the Bedrock runtime in Frankfurt,
-`bedrock-runtime.eu-central-1.amazonaws.com`. The entry must state `region: eu`. There is no
-setting for another endpoint or AWS region, so no request leaves the EU.
+`bedrock-runtime.eu-central-1.amazonaws.com`. The entry must state `region: eu`.
 
 ```yaml
 infrastructure:
@@ -468,6 +467,7 @@ infrastructure:
     bedrock:
       provider: aws-bedrock
       region: eu
+      accountId: "123456789012"
       model: arn:aws:bedrock:eu-central-1:123456789012:application-inference-profile/abcd1234efgh
       credentialSecret: AWS_BEARER_TOKEN_BEDROCK
 modelBindings:
@@ -476,31 +476,81 @@ modelBindings:
     model: arn:aws:bedrock:eu-central-1:123456789012:application-inference-profile/abcd1234efgh
     label: Claude Sonnet 4.6
     vendor: anthropic
+usage:
+  costs:
+    customer:
+      id: example-customer
+      version: "2026-10"
+      currency: EUR
+      models:
+        - providerId: bedrock
+          model: arn:aws:bedrock:eu-central-1:123456789012:application-inference-profile/abcd1234efgh
+          uncachedInputPricePerMillionTokens: <your price, above zero>
+          cachedInputPricePerMillionTokens: <your price, above zero>
+          outputPricePerMillionTokens: <your price, above zero>
 ```
 
-`model` is the ARN of an application inference profile in `eu-central-1`, in the entry and in
-every binding on it. AWS attributes usage and cost to that profile, so the profile is what
-separates one consumer's calls from another's. A model id, a shared profile id such as
-`eu.anthropic.…`, a foundation model ARN and a profile of another region stop startup; the
-message says why and does not repeat the id. An ARN says nothing a person can read, so give
-each binding a `label` and a `vendor`. Usage records and the rate card keep the ARN.
+`accountId` is the AWS account the instance's profiles belong to, twelve digits in quotes. It is
+no secret. `model` is the ARN of an application inference profile of that account in
+`eu-central-1`, in the entry and in every binding on it. AWS attributes usage and cost to that
+profile, so the profile is what separates one consumer's calls from another's. A model id, a
+shared profile id such as `eu.anthropic.…`, a foundation model ARN, a profile of another region
+and a profile of another account stop startup, and a call that names one is refused before
+anything is sent; the message says why and does not repeat the id. An ARN says nothing a person
+can read, so give each binding a `label` and a `vendor`. The usage ledger and the rate card keep
+the ARN, which is what joins a call to the AWS bill. Log lines, the audit and refusals name the
+binding.
+
+What the adapter enforces, and what it cannot:
+
+- The adapter sends every request to the Frankfurt endpoint, follows no redirect, and has no
+  setting for another endpoint or AWS region. It calls only profiles of the configured account
+  in `eu-central-1`.
+- Where the model runs is decided by the profile, not by the adapter. The operator makes sure
+  each application inference profile is built on an EU model or an EU inference profile
+  (`eu.…`), never on a global one.
+- The operator gives the key an IAM policy that allows `bedrock:InvokeModel` and
+  `bedrock:InvokeModelWithResponseStream` on these profiles alone and denies every other region.
+- The operator sets Bedrock's data retention for the account to none and leaves model invocation
+  logging off, or accepts that prompts and answers are stored where the logging writes them.
 
 `credentialSecret` names the secret that holds a Bedrock API key, sent as a bearer token. The
 API and the agent run worker create every entry of `infrastructure.models` and need the secret;
-a capability worker needs it when one of its bindings is on the entry. The key's policy needs
-`bedrock:InvokeModel` and `bedrock:InvokeModelWithResponseStream` on the profiles and nothing
-else.
+a capability worker needs it when one of its bindings is on the entry.
+
+**Prices are required.** Bedrock bills every token to the profile, so the instance makes no call
+it cannot price. Startup stops when the entry's own model or the model of a binding on it has no
+row in `usage.costs.customer.models` with the entry's id as `providerId`, the same ARN as
+`model`, and a price above zero for uncached input, cached input and output. The message names
+the binding or the entry.
 
 The adapter reads text and images, calls tools, also several at once, and streams. A binding on
 it can be chosen for agents. In this version it declares no reasoning efforts, no documents, no
 JSON answer format, no web search, no fast tier and no server-side compaction; a call that asks
 for one of them is refused before it is sent, and an agent with web search configured runs
-without it. The adapter asks for no prompt cache. An image above 3.75 MB is left out of the
-request, and the model is told so.
+without it. The adapter asks for no prompt cache.
+
+**Claude 5.5 profiles are not supported yet.** The adapter is checked against Claude Sonnet 4.6.
+The Claude 5.5 models think by default, and thinking is billed as output; the adapter does not
+steer thinking or send it back in later turns yet. Keep a binding on a 5.5 profile out of the
+config until thinking support is built and checked.
+
+Limits of one request:
+
+- An answer has at most 16,000 output tokens, the amount admission reserves for a call, so an
+  answer never uses more output than the budget held for it. A longer answer ends there. Every
+  Claude model from the 4 generation on allows this much; Bedrock refuses the request for an
+  older model with a smaller limit.
+- An image above 3.75 MB is left out. Of more than 20 images the newest 20 are sent. The model
+  is told what was left out.
+- A request above 20 MB is not sent; the user reads that the conversation is too long.
+- A stream that sends nothing for 10 minutes fails the call. Such a call is not sent again.
 
 Bedrock's refusals reach people as the product's own messages. The provider's words, with any
 account id masked, are written to the `model_provider.error` log line together with the
-exception name and the AWS request id.
+exception name and the AWS request id. A refused key, permission, bill or request is not sent
+again, nor is a failure of a type the adapter does not know. Throttling, a timeout and a failing
+or overloaded model are sent again within the gateway's bounds.
 
 The provider's check on **Instance > Infrastructure** sends the key with a request Bedrock
 refuses as invalid. It shows that the key is taken. It does not show that the key may call a
@@ -752,7 +802,7 @@ Providers and their settings:
 | --------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `models`        | `openai-compatible`         | `model`, `api`, `reasoningEffort`, `contextManagement`, `baseUrl`, `credentialSecret` (default `OPENAI_API_KEY`), `authMode`, `organizationSecret`                                                           |
 | `models`        | `google-vertex`             | `model`, `projectId`, `credentialSecret` (default `GOOGLE_VERTEX_CREDENTIALS`): the JSON key of a service account. Gemini on Vertex AI; `region` decides the endpoint and location.                          |
-| `models`        | `aws-bedrock`               | `model`: the ARN of an application inference profile in `eu-central-1`; `credentialSecret` (default `AWS_BEARER_TOKEN_BEDROCK`): a Bedrock API key. Claude on Amazon Bedrock; `region` must be `eu`. |
+| `models`        | `aws-bedrock`               | `accountId`: the AWS account of the profiles; `model`: the ARN of an application inference profile of that account in `eu-central-1`; `credentialSecret` (default `AWS_BEARER_TOKEN_BEDROCK`): a Bedrock API key. Claude on Amazon Bedrock; `region` must be `eu`; every model needs a price. |
 | `models`        | `deterministic`             | `model`. Answers without a model; for tests and local runs.                                                                                                                                                  |
 | `mail`          | `mailjet`                   | `appUrl`, `sender`, `apiKeySecret` (default `MAILJET_API_KEY`), `apiSecretSecret` (default `MAILJET_API_SECRET`)                                                                                             |
 | `mail`          | `capture`                   | `appUrl`, `sender`. Development only.                                                                                                                                                                        |
