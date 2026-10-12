@@ -1,10 +1,10 @@
 import { z } from "zod";
 import { defineRegisteredOperation, json } from "./define-operation";
 
-// The rows of one Data Store over HTTP: the four verbs of a store, each with the store's id
-// in its path. They run as the store's app role and need the caller's right on that store
-// (`data_store.read`, and `data_store.insert` to add rows), which is decided on the store the
-// call names. A Workflow step and an agent reach the same verbs as `data_store.<id>.<verb>`.
+// The routes to the rows of one Data Store: four verbs, each with the store's id in its path.
+// A route is no operation of its own. Its call runs as the store's operation
+// `data_store.<id>.<verb>`, the one a Workflow step and an agent call, with that operation's
+// right (`data_store.read`, and `data_store.insert` to add rows), policy, run and audit trail.
 
 /** How many rows one insert adds at most. */
 const DATA_STORE_INSERT_MAX_ROWS = 1_000;
@@ -90,15 +90,16 @@ const dataStorePreviewQuerySchema = z.object({
 const READ = {
   tag: "Data Stores",
   auth: "principal",
-  scope: "config_assets:read",
+  scope: "data_store_rows:read",
   requires: [],
   effect: "reading",
   errors: ["NOT_FOUND", "CONFLICT", "TIMEOUT"],
   rateClass: "read"
 } as const;
 
-// None names its right in `requires`: the right is the store's own and is decided on the
-// store the call names, where a grant on the asset or on its workspace can answer it.
+// None names its right in `requires`: the right is the store operation's. The scopes are the
+// ones the contract names per verb (`DATA_STORE_OPERATION_SCOPES`); `describe` reads the
+// definition of a store and stays under `config_assets:read`.
 export const dataStoreOperations = {
   "data_stores.query": defineRegisteredOperation({
     ...READ,
@@ -116,7 +117,7 @@ export const dataStoreOperations = {
     summary: "Add rows to one table of one Data Store",
     tag: "Data Stores",
     auth: "principal",
-    scope: "config_assets:write",
+    scope: "data_store_rows:write",
     requires: [],
     effect: "changing",
     body: dataStoreInsertRequestSchema,
@@ -126,6 +127,7 @@ export const dataStoreOperations = {
   }),
   "data_stores.describe": defineRegisteredOperation({
     ...READ,
+    scope: "config_assets:read",
     id: "data_stores.describe",
     method: "GET",
     path: "/api/v1/data-stores/:store/describe",

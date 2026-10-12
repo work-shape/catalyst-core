@@ -6009,17 +6009,17 @@
         "security": [
           {
             "sessionCookie": [
-              "config_assets:write"
+              "data_store_rows:write"
             ]
           },
           {
             "sessionToken": [
-              "config_assets:write"
+              "data_store_rows:write"
             ]
           },
           {
             "accessToken": [
-              "config_assets:write"
+              "data_store_rows:write"
             ]
           }
         ],
@@ -6187,17 +6187,17 @@
         "security": [
           {
             "sessionCookie": [
-              "config_assets:read"
+              "data_store_rows:read"
             ]
           },
           {
             "sessionToken": [
-              "config_assets:read"
+              "data_store_rows:read"
             ]
           },
           {
             "accessToken": [
-              "config_assets:read"
+              "data_store_rows:read"
             ]
           }
         ],
@@ -6331,17 +6331,17 @@
         "security": [
           {
             "sessionCookie": [
-              "config_assets:read"
+              "data_store_rows:read"
             ]
           },
           {
             "sessionToken": [
-              "config_assets:read"
+              "data_store_rows:read"
             ]
           },
           {
             "accessToken": [
-              "config_assets:read"
+              "data_store_rows:read"
             ]
           }
         ],
