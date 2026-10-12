@@ -80,27 +80,41 @@ async function setLook(page: Page, theme: "light" | "dark", locale: "en" | "de")
   );
 }
 
+/** One picture: the theme, the language, and the width and the height of the window. */
+type Look = readonly ["light" | "dark", "en" | "de", number, number?];
+
+/** Both themes, and German and 390 wide once each. */
+const usualLooks: readonly Look[] = [
+  ["light", "en", 1440],
+  ["dark", "en", 1440],
+  ["light", "de", 1440],
+  ["dark", "en", 390]
+];
+
 /**
- * Pictures of one state in both themes, and in German and at 390 wide once each. `reach` leads
- * to the state after a load, since the theme and the language are read at load.
+ * Pictures of one state, one per look. `reach` leads to the state after a load, since the
+ * theme and the language are read at load. A look that names a height is a window lower than
+ * the usual one, and its picture says so in its name.
  */
-async function shoot(page: Page, name: string, reach: () => Promise<void>): Promise<void> {
+async function shoot(
+  page: Page,
+  name: string,
+  reach: () => Promise<void>,
+  looks: readonly Look[] = usualLooks
+): Promise<void> {
   if (!shotsDir) {
     return;
   }
   await mkdir(shotsDir, { recursive: true });
-  const looks = [
-    ["light", "en", 1440],
-    ["dark", "en", 1440],
-    ["light", "de", 1440],
-    ["dark", "en", 390]
-  ] as const;
-  for (const [theme, locale, width] of looks) {
+  for (const [theme, locale, width, height] of looks) {
     await setLook(page, theme, locale);
-    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    await page.setViewportSize({ width, height: height ?? (width === 390 ? 844 : 900) });
     await reach();
     await page.screenshot({
-      path: join(shotsDir, `${name}-${theme}-${locale}-${width}.png`),
+      path: join(
+        shotsDir,
+        `${name}-${theme}-${locale}-${width}${height === undefined ? "" : `x${height}`}.png`
+      ),
       animations: "disabled"
     });
   }
@@ -114,6 +128,11 @@ async function closed(page: Page, dialog: Locator): Promise<void> {
   await expect(dialog).toBeHidden();
   await expect(page.locator("[data-radix-focus-guard]")).toHaveCount(0);
 }
+
+// A route that holds or rewrites an answer ends with its test.
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+});
 
 // The test plants a Connection: it takes its turn with the specs that start an API, which
 // would delete a planted Connection.
@@ -141,7 +160,7 @@ test("a builder reads the actions of a draft, tests a reading one and finds its 
       { name: "book", effect: "changing" as const, exposure: ["bridge"], enabled: true }
     ]
   };
-  test.setTimeout(shotsDir ? 420_000 : 180_000);
+  test.setTimeout(shotsDir ? 600_000 : 180_000);
   await page.setViewportSize({ width: 1440, height: 900 });
   page.setDefaultTimeout(30_000);
   await signIn(page, builder);
@@ -200,13 +219,41 @@ test("a builder reads the actions of a draft, tests a reading one and finds its 
     await expect(row("load-rows")).toContainText("Reading");
     await expect(row("load-rows")).toContainText("Stock system");
     await expect(row("load-rows")).toContainText("echo");
-    await expect(row("load-rows")).toContainText("Runs");
-    // A changing action is refused in a draft, and nothing offers to test it.
+    await expect(row("load-rows")).toContainText("Can be tested");
+    // One line over the list says what it is, to a reader who knows none of the words.
+    await expect(draft.locator("[data-app-actions-intro]")).toContainText(
+      "What this app can read or change in other systems."
+    );
+    // A changing action is not carried out in a draft, and nothing offers to test it.
     await expect(row("book-row")).toContainText("Changing");
-    await expect(row("book-row")).toContainText("Refused in drafts");
+    await expect(row("book-row")).toContainText("Not carried out in a draft");
     await expect(row("book-row").getByRole("button")).toHaveCount(0);
     await expect(draft.getByRole("button", { name: /^Test /u })).toHaveCount(1);
-    await shoot(page, "actions-list", () => openActions(appId));
+
+    // At 390 wide each action is a block: nothing runs out of sight sideways, and the test
+    // is on the screen under nothing else.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openActions(appId);
+    const narrowTest = row("load-rows").getByRole("button", { name: "Test load-rows" });
+    await expect(narrowTest).toBeInViewport({ ratio: 1 });
+    await expect(row("load-rows")).toContainText("Can be tested");
+    expect(
+      await actions.evaluate((table) => {
+        const box = table.parentElement;
+        return box !== null && box.scrollWidth <= box.clientWidth;
+      })
+    ).toBe(true);
+    expect(
+      await narrowTest.evaluate((button) => {
+        const { left, top, width, height } = button.getBoundingClientRect();
+        return button.contains(document.elementFromPoint(left + width / 2, top + height / 2));
+      })
+    ).toBe(true);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await shoot(page, "actions-list", () => openActions(appId), [
+      ...usualLooks,
+      ["light", "en", 390]
+    ]);
 
     // An App without actions, and a list the instance did not answer.
     await openActions(plainId);
@@ -235,6 +282,10 @@ test("a builder reads the actions of a draft, tests a reading one and finds its 
     };
     await row("load-rows").getByRole("button", { name: "Test load-rows" }).click();
     await expect(dialog).toContainText("Stock system");
+    // The place the call is listed in is a link for this builder, who may open it.
+    await expect(
+      dialog.getByRole("link", { name: "It is listed under Operations." })
+    ).toHaveAttribute("href", "/settings/instance/operations");
     await expect(input).toHaveValue('{\n  "text": ""\n}');
     await shoot(page, "test-idle", openTest);
     await input.fill("{text: 1}");
@@ -245,24 +296,68 @@ test("a builder reads the actions of a draft, tests a reading one and finds its 
     await expect(dialog.getByRole("alert")).toHaveText("“text” must be a text.");
     await expect(dialog.locator("[data-app-action-test-status]")).toHaveCount(0);
 
-    await input.fill('{"text": "Alster Papier"}');
-    await runTest.click();
+    // A call of an outside system can take half a minute. While this one is held the dialog
+    // says that it waits, and its button takes no second call.
     const outcome = dialog.locator("[data-app-action-test-status]");
+    const actionCall = "**/api/v1/app-content-sessions/*/actions/load-rows";
+    let answer = () => {};
+    const answered = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    await page.route(actionCall, async (route) => {
+      await answered;
+      // A picture's load left the call of the load before it behind.
+      await route.continue().catch(() => undefined);
+    });
+    const hold = async () => {
+      await input.fill('{"text": "Alster Papier"}');
+      await runTest.click();
+      await expect(outcome).toHaveAttribute("data-app-action-test-status", "running");
+    };
+    await hold();
+    await expect(outcome).toContainText("Waiting for the answer.");
+    await expect(dialog.locator('button[aria-busy="true"]')).toBeDisabled();
+    await shoot(
+      page,
+      "test-working",
+      async () => {
+        await openTest();
+        await hold();
+      },
+      [
+        ["light", "en", 1440],
+        ["dark", "en", 1440]
+      ]
+    );
+    answer();
     await expect(outcome).toHaveAttribute("data-app-action-test-status", "done");
+    await page.unroute(actionCall);
     await expect(outcome).toContainText("Done");
     await expect(outcome.getByRole("region")).toContainText('"text": "Alster Papier"');
     const runLink = outcome.getByRole("link", { name: "Open the run in Operations" });
     const runHref = await runLink.getAttribute("href");
     expect(runHref).toMatch(/^\/settings\/instance\/operations\?run=/u);
-    await shoot(page, "test-result", async () => {
+    const reachResult = async () => {
       await openTest();
       await input.fill('{"text": "Alster Papier"}');
       await runTest.click();
       await expect(outcome).toHaveAttribute("data-app-action-test-status", "done");
-    });
+    };
+    // In a window 640 high the dialog scrolls what it holds, and its buttons stay in reach.
+    await page.setViewportSize({ width: 1440, height: 640 });
+    await reachResult();
+    await outcome.scrollIntoViewIfNeeded();
+    await expect(runTest).toBeInViewport({ ratio: 1 });
+    await expect(dialog.getByRole("button", { name: "Close" }).last()).toBeInViewport({ ratio: 1 });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await shoot(page, "test-result", reachResult, [
+      ...usualLooks,
+      ["light", "en", 1440, 640],
+      ["dark", "en", 1440, 640]
+    ]);
 
     // A call the instance refuses is shown as what it answered, with its status.
-    await page.route("**/api/v1/app-content-sessions/*/actions/load-rows", (route) =>
+    await page.route(actionCall, (route) =>
       route.fulfill({
         status: 403,
         json: {
@@ -287,8 +382,8 @@ test("a builder reads the actions of a draft, tests a reading one and finds its 
     };
     await refuse();
     await expect(outcome).toContainText("You may not use the connection Stock system");
-    await shoot(page, "test-refused", refuse);
-    await page.unroute("**/api/v1/app-content-sessions/*/actions/load-rows");
+    await shoot(page, "test-refused", refuse, [...usualLooks, ["dark", "de", 1440]]);
+    await page.unroute(actionCall);
 
     // The link leads to the run in Instance > Operations: origin App, the action, done, the
     // Connection and its operation, and nothing of the input or the result.
@@ -346,7 +441,7 @@ test("a builder reads the actions of a draft, tests a reading one and finds its 
       await draft.getByRole("radio", { name: side }).click();
       await expect(actions).toHaveCount(0);
       await draft.getByRole("radio", { name: "Actions" }).click();
-      await expect(row("load-rows")).toContainText("Runs");
+      await expect(row("load-rows")).toContainText("Can be tested");
     }
 
     // Published, the App's Details list its actions with effect and outcome, and an agent's

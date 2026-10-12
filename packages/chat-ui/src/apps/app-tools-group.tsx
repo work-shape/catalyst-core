@@ -24,7 +24,12 @@ export type AppToolsRead =
   | { status: "loading" }
   /** The read failed, or the instance has no Apps. Nothing can be offered. */
   | { status: "unknown" }
-  | { status: "ready"; apps: AppActions["apps"] };
+  | {
+      status: "ready";
+      apps: AppActions["apps"];
+      /** The instance has more published Apps than one answer lists, and left some out. */
+      truncated: boolean;
+    };
 
 /** Whether a tool name is one of an App's action, by its form alone. */
 export function isAppToolName(toolName: string): boolean {
@@ -40,9 +45,17 @@ interface AppToolGroupView {
 
 interface AppToolsView {
   groups: AppToolGroupView[];
-  /** The names the agent holds that no group offers. Empty until the instance answered. */
+  /** The answer left Apps out: the groups are not every App the reader may read. */
+  cut: boolean;
+  /**
+   * The names the agent holds that no group offers, where the answer is whole. Empty until
+   * the instance answered.
+   */
   unavailable: string[];
-  /** The names the agent holds while nothing is known of them: shown, never judged. */
+  /**
+   * The names the agent holds of which nothing is known: before the instance answered, and
+   * those no group offers where the answer left Apps out. Shown, never judged.
+   */
   unchecked: string[];
 }
 
@@ -50,7 +63,7 @@ interface AppToolsView {
 export function appToolsView(read: AppToolsRead, selected: readonly string[]): AppToolsView {
   const held = selected.filter(isAppToolName);
   if (read.status !== "ready") {
-    return { groups: [], unavailable: [], unchecked: held };
+    return { groups: [], cut: false, unavailable: [], unchecked: held };
   }
   const offering = read.apps.flatMap((app) => {
     const tools = app.actions
@@ -64,6 +77,7 @@ export function appToolsView(read: AppToolsRead, selected: readonly string[]): A
     return tools.length > 0 ? [{ name: app.name, title: app.title, tools }] : [];
   });
   const offered = new Set(offering.flatMap((app) => app.tools.map((tool) => tool.toolName)));
+  const unoffered = held.filter((toolName) => !offered.has(toolName));
   return {
     groups: offering.map((app) => ({
       ...app,
@@ -73,8 +87,10 @@ export function appToolsView(read: AppToolsRead, selected: readonly string[]): A
         groupCount: offering.length
       })
     })),
-    unavailable: held.filter((toolName) => !offered.has(toolName)),
-    unchecked: []
+    cut: read.truncated,
+    // An action of an App the answer left out is as available as ever.
+    unavailable: read.truncated ? [] : unoffered,
+    unchecked: read.truncated ? unoffered : []
   };
 }
 
@@ -90,7 +106,7 @@ export function useAppToolsRead(): AppToolsRead {
     retry: false
   });
   return query.data
-    ? { status: "ready", apps: query.data.apps }
+    ? { status: "ready", apps: query.data.apps, truncated: query.data.truncated }
     : query.isPending
       ? { status: "loading" }
       : { status: "unknown" };
@@ -117,8 +133,9 @@ export function AppToolsGroup({
   const { t } = useTranslation();
   const view = appToolsView(read, selected);
   const held = [...view.unchecked, ...view.unavailable];
-  // An instance that offers nothing of Apps shows the group only for what the agent holds.
-  if (view.groups.length === 0 && held.length === 0) {
+  // An instance that offers nothing of Apps shows the group only for what the agent holds,
+  // and to say that Apps were left out.
+  if (view.groups.length === 0 && held.length === 0 && !view.cut) {
     return null;
   }
   const remove = disabled
@@ -128,6 +145,11 @@ export function AppToolsGroup({
     <fieldset className="grid min-w-0 gap-3" data-tool-group="apps">
       <legend className="text-label">{t("apps.title")}</legend>
       <p className="text-caption text-muted-foreground">{t("apps.toolsHint")}</p>
+      {view.cut ? (
+        <p className="text-caption text-muted-foreground" data-app-tools-cut>
+          {t("apps.toolsCut")}
+        </p>
+      ) : null}
       {view.groups.map((group) => (
         <ToolGroup
           key={group.name}
@@ -144,11 +166,13 @@ export function AppToolsGroup({
         <div className="grid min-w-0 gap-2">
           <p className="text-caption text-muted-foreground">
             {t(
-              read.status === "ready"
-                ? "apps.toolsUnavailable"
-                : read.status === "loading"
-                  ? "apps.toolsLoading"
-                  : "apps.toolsUnknown"
+              read.status === "loading"
+                ? "apps.toolsLoading"
+                : read.status === "unknown"
+                  ? "apps.toolsUnknown"
+                  : view.cut
+                    ? "apps.toolsHeldUnlisted"
+                    : "apps.toolsUnavailable"
             )}
           </p>
           <ul aria-label={t("apps.toolsHeld")} className="flex min-w-0 flex-wrap gap-2">

@@ -24,10 +24,11 @@ export interface AppsHost {
   /** Opens a new conversation of the workspace with this text in its composer. */
   startChat(prompt: string): void;
   /**
-   * Where the run of a call is read, for a reader who may open Instance > Operations. Absent
-   * for everybody else: nothing links to a page its reader is not shown.
+   * Where the runs of calls are read, Instance > Operations, and where one run is, for a
+   * reader who may open that place. Absent for everybody else: nothing links to a page its
+   * reader is not shown.
    */
-  operationRunHref?(runId: string): string;
+  operations?: { href: string; runHref(runId: string): string };
 }
 
 const AppsHostContext = createContext<AppsHost | undefined>(undefined);

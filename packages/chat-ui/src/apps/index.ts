@@ -8,6 +8,7 @@ export {
   appActionTestable,
   appActionTestOutcome,
   formatAppActionResult,
+  keptWhileItServes,
   readAppActionInput
 } from "./app-actions-model";
 export type { AppActionsRead } from "./app-data";

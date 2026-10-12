@@ -38,7 +38,9 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
   const record = useApp(workspace?.id ?? "", app, workspace !== undefined);
   const [shown, setShown] = useState<AppPreviewResponse>();
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const actions = useAppActions(app, detailsOpen);
+  // The list is read by whoever reads the App's record. Everybody else is shown the names of
+  // the record, and no request is made that the instance would refuse.
+  const actions = useAppActions(app, detailsOpen && rights?.read === true);
   const showRoute = host?.showRoute;
   const workspaceId = workspace?.id;
 

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import type { AppAction } from "@vivd-catalyst/api-client";
 import {
   Badge,
@@ -9,30 +9,33 @@ import {
   InlineError,
   KeyValue,
   KeyValueList,
+  Spinner,
   Textarea
 } from "@vivd-catalyst/ui";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { useTranslation } from "../i18n";
-import { operationStatusLabelKeys, operationStatusTones } from "../operations/operations-model";
+import { operationStatusLabelKeys } from "../operations/operations-model";
 import { useFrameCallTexts } from "../pages/frame-call-texts";
-import { createFrameCalls, type FrameCalls } from "../pages/frame-calls";
+import { createFrameCalls } from "../pages/frame-calls";
 import { AppActionTarget } from "./app-action-facts";
 import {
   appActionInputStart,
   appActionParameterTypeKeys,
   appActionTestOutcome,
+  appActionTestTones,
   formatAppActionResult,
+  keptWhileItServes,
   readAppActionInput,
   type AppActionInputProblem,
   type AppActionTestOutcome
 } from "./app-actions-model";
-import { useAppsHost } from "./apps-host";
+import { useAppsHost, type AppsHost } from "./apps-host";
 
 /**
  * The test of one reading action of a draft. It is the call a tile of the draft makes: the
- * dialog asks for the address of the draft's frame once and calls the action through it, with
- * the builder's own session. So the right on the App, the right on the Connection and the
- * policy are asked where every call asks them, and the call leaves its Operation Run.
+ * dialog asks for the address of the draft's frame and calls the action through it, with the
+ * builder's own session. So the right on the App, the right on the Connection and the policy
+ * are asked where every call asks them, and the call leaves its Operation Run.
  */
 export function ActionTestDialog({
   app,
@@ -50,8 +53,18 @@ export function ActionTestDialog({
   const [problem, setProblem] = useState<AppActionInputProblem>();
   const [working, setWorking] = useState(false);
   const [outcome, setOutcome] = useState<AppActionTestOutcome>();
-  // The frame of this dialog: one address for every test made while it is open.
-  const calls = useRef<FrameCalls>(undefined);
+  // The frame of this dialog: one address for the tests made while it serves.
+  const frame = useMemo(
+    () =>
+      keptWhileItServes(async () =>
+        createFrameCalls(
+          client,
+          await client.apps.preview({ params: { app }, body: { mode: "draft" } }),
+          texts
+        )
+      ),
+    [client, app, texts]
+  );
 
   const test = async () => {
     const read = readAppActionInput(text, action.inputSchema);
@@ -61,15 +74,11 @@ export function ActionTestDialog({
     }
     setWorking(true);
     try {
-      calls.current ??= createFrameCalls(
-        client,
-        await client.apps.preview({ params: { app }, body: { mode: "draft" } }),
-        texts
-      );
+      const calls = await frame();
       setOutcome(
-        calls.current
+        calls
           ? appActionTestOutcome(
-              await calls.current.run({ type: "action", name: action.name, input: read.input })
+              await calls.run({ type: "action", name: action.name, input: read.input })
             )
           : { status: "failed" }
       );
@@ -88,7 +97,7 @@ export function ActionTestDialog({
       problem={problem}
       working={working}
       outcome={outcome}
-      runHref={host?.operationRunHref}
+      operations={host?.operations}
       onTextChange={(next) => {
         setText(next);
         setProblem(undefined);
@@ -109,7 +118,7 @@ export function ActionTestDialogView({
   problem,
   working,
   outcome,
-  runHref,
+  operations,
   onTextChange,
   onTest,
   onClose
@@ -120,26 +129,41 @@ export function ActionTestDialogView({
   problem: AppActionInputProblem | undefined;
   working: boolean;
   outcome: AppActionTestOutcome | undefined;
-  /** Where a run is read, for a reader who may open it. */
-  runHref?: (runId: string) => string;
+  /** Where runs are read, for a reader who may open that place. */
+  operations?: AppsHost["operations"];
   onTextChange(text: string): void;
   onTest(): void;
   onClose(): void;
 }) {
   const { t } = useTranslation();
+  // A refusal does not change by asking again, so the way out leads and the test steps back.
+  const refused = !working && outcome?.status === "denied";
   return (
     <Dialog
       open
       size="lg"
       title={t("apps.actionTestTitle", { name: action.name })}
-      description={t("apps.actionTestBody")}
+      description={
+        <>
+          {t("apps.actionTestBody")}{" "}
+          {operations ? (
+            <Button asChild variant="link" size="sm" className="h-auto px-0 align-baseline">
+              <a href={operations.href} data-app-action-test-operations>
+                {t("apps.actionTestListed")}
+              </a>
+            </Button>
+          ) : (
+            t("apps.actionTestListed")
+          )}
+        </>
+      }
       onClose={onClose}
       footer={
         <>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant={refused ? "primary" : "outline"} onClick={onClose}>
             {t("close")}
           </Button>
-          <Button loading={working} onClick={onTest}>
+          <Button variant={refused ? "outline" : "primary"} loading={working} onClick={onTest}>
             {t("apps.actionTest")}
           </Button>
         </>
@@ -164,7 +188,20 @@ export function ActionTestDialogView({
             onChange={(event) => onTextChange(event.target.value)}
           />
         </Field>
-        {outcome ? <TestOutcome outcome={outcome} action={action} runHref={runHref} /> : null}
+        {working ? (
+          // The answer of an outside system can take half a minute. What the call before
+          // answered is gone meanwhile: it is not the answer to this input.
+          <p
+            role="status"
+            className="flex animate-loading-appear items-center gap-2 text-body text-muted-foreground"
+            data-app-action-test-status="running"
+          >
+            <Spinner size="sm" />
+            {t("apps.actionTestRunning")}
+          </p>
+        ) : outcome ? (
+          <TestOutcome outcome={outcome} action={action} runHref={operations?.runHref} />
+        ) : null}
       </div>
     </Dialog>
   );
@@ -211,7 +248,7 @@ function TestOutcome({
       data-app-action-test-status={outcome.status}
     >
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <Badge tone={operationStatusTones[outcome.status]} dot>
+        <Badge tone={appActionTestTones[outcome.status]} dot>
           {t(operationStatusLabelKeys[outcome.status])}
         </Badge>
         {href ? (

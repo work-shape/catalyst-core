@@ -1,6 +1,7 @@
 import type { AppAction, AppMode } from "@vivd-catalyst/api-client";
 import type { BadgeTone } from "@vivd-catalyst/ui";
 import type { TranslationKey } from "../i18n";
+import { PAGE_ADDRESS_LIFETIME_MS, PAGE_ADDRESS_RENEWAL_MARGIN_MS } from "../pages/page-address";
 import type { AppRights } from "./app-model";
 
 // The named actions of an App as the interface shows them: what a row says of an action, who
@@ -21,17 +22,24 @@ const policyOutcomes: Record<AppAction["policy"], AppActionOutcome> = {
 };
 
 /**
- * What a place says a call of an action would come to. In the draft a changing action is
- * refused whatever the policy says, and the Actions side says that, not the policy's word.
- * Everywhere else it is the policy's word.
+ * What a place says a call of an action would come to. The Actions side of a draft says what
+ * the draft does with it: a changing action is not carried out there whatever the policy
+ * says, and a reading one that would run can be tested. Everywhere else it is the policy's
+ * word.
  */
 export function appActionOutcome(
   action: Pick<AppAction, "effect" | "policy">,
   /** The place shows the draft as its frame runs it: in safe mode. */
   safeMode: boolean
 ): AppActionOutcome {
-  return safeMode && action.effect === "changing"
-    ? { labelKey: "apps.actionRefusedInDraft", tone: "neutral" }
+  if (!safeMode) {
+    return policyOutcomes[action.policy];
+  }
+  if (action.effect === "changing") {
+    return { labelKey: "apps.actionNotCarriedOutInDraft", tone: "neutral" };
+  }
+  return action.policy === "allow"
+    ? { labelKey: "apps.actionTestableInDraft", tone: "success" }
     : policyOutcomes[action.policy];
 }
 
@@ -238,6 +246,18 @@ export type AppActionTestOutcome =
       runId?: string;
     };
 
+/**
+ * The colour of each way a test ends. A refusal is red here, where the builder just asked
+ * and did not get: the list of runs in Instance > Operations shows the same refusal quietly,
+ * as a call that is over and needs nobody.
+ */
+export const appActionTestTones: Record<AppActionTestOutcome["status"], BadgeTone> = {
+  done: "success",
+  pending_approval: "warning",
+  denied: "danger",
+  failed: "danger"
+};
+
 /** The codes of a refused call. Every other code is a failure. */
 const REFUSAL_CODES: readonly string[] = ["forbidden", "policy_denied", "guardrail_blocked"];
 
@@ -258,5 +278,31 @@ export function appActionTestOutcome(
     // `failed` is the client's own word for a call that got no answer of the instance.
     ...(code === "failed" ? {} : { message }),
     ...(runId === undefined ? {} : { runId })
+  };
+}
+
+/**
+ * How long a test dialog uses one address of the draft's frame: the lifetime of its token
+ * less the margin a mounted preview renews with. A dialog left open over that asks again.
+ */
+const TEST_FRAME_SERVES_MS = PAGE_ADDRESS_LIFETIME_MS - PAGE_ADDRESS_RENEWAL_MARGIN_MS;
+
+/**
+ * What a test dialog calls through, made from one address of the draft's frame and kept
+ * while that address serves. Asked after the address expired, it asks for a new one, so a
+ * dialog that stayed open for an hour still tests. The time is this device's alone, counted
+ * from the asking, as a mounted preview counts it.
+ */
+export function keptWhileItServes<Frame>(
+  ask: () => Promise<Frame>,
+  now: () => number = Date.now
+): () => Promise<Frame> {
+  let held: { frame: Frame; servesUntil: number } | undefined;
+  return async () => {
+    const askedAt = now();
+    if (!held || askedAt >= held.servesUntil) {
+      held = { frame: await ask(), servesUntil: askedAt + TEST_FRAME_SERVES_MS };
+    }
+    return held.frame;
   };
 }

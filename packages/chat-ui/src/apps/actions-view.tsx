@@ -54,7 +54,7 @@ export function AppActionsView({
   const { t } = useTranslation();
   if (read.status === "loading") {
     return (
-      <ActionsPage>
+      <ActionsPage intro>
         <SkeletonList rows={3} />
       </ActionsPage>
     );
@@ -85,17 +85,19 @@ export function AppActionsView({
       </ActionsPage>
     );
   }
+  const testable = (action: AppAction) => appActionTestable(action, read.view, rights);
   // The column of the test is there only where a row has one: no room is kept for nothing.
-  const tests = read.actions.some((action) => appActionTestable(action, read.view, rights));
+  const tests = read.actions.some(testable);
   return (
-    <ActionsPage>
-      <Table data-app-actions="ready">
+    <ActionsPage intro>
+      {/* Too narrow for the columns, each action is a block with its test in reach. */}
+      <Table narrow="stack" data-app-actions="ready">
         <TableHeader>
           <TableRow>
             <TableHead>{t("apps.actionName")}</TableHead>
             <TableHead>{t("apps.actionEffect")}</TableHead>
             <TableHead>{t("apps.actionCalls")}</TableHead>
-            <TableHead>{t("apps.actionForYou")}</TableHead>
+            <TableHead>{t("apps.actionInDraft")}</TableHead>
             {tests ? (
               <TableHead>
                 <span className="sr-only">{t("apps.actionTest")}</span>
@@ -106,7 +108,6 @@ export function AppActionsView({
         <TableBody>
           {read.actions.map((action) => (
             <TableRow key={action.name} data-app-action={action.name}>
-              {/* The cells keep a width a name fits in: a narrow surface scrolls the table. */}
               <TableCell className="min-w-44">
                 <code className="font-mono text-code wrap-anywhere">{action.name}</code>
                 {action.description ? (
@@ -118,7 +119,7 @@ export function AppActionsView({
               <TableCell>
                 <AppActionEffect effect={action.effect} />
               </TableCell>
-              <TableCell className="min-w-44" data-unavailable={action.unavailable}>
+              <TableCell stacked="full" className="min-w-44" data-unavailable={action.unavailable}>
                 <AppActionTarget action={action} />
                 <TableCellDetail>
                   {action.unavailable
@@ -126,21 +127,24 @@ export function AppActionsView({
                     : t("apps.actionKindConnection")}
                 </TableCellDetail>
               </TableCell>
-              <TableCell className="whitespace-nowrap">
+              {/* A row without a test gives its room to what a call would come to. */}
+              <TableCell
+                colSpan={tests && !testable(action) ? 2 : undefined}
+                stacked={testable(action) ? undefined : "full"}
+                className="whitespace-nowrap"
+              >
                 <AppActionOutcomeBadge action={action} safeMode={read.view === "draft"} />
               </TableCell>
-              {tests ? (
+              {testable(action) ? (
                 <TableCell className="text-right">
-                  {appActionTestable(action, read.view, rights) ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      aria-label={t("apps.actionTestOf", { name: action.name })}
-                      onClick={() => onTest(action)}
-                    >
-                      {t("apps.actionTest")}
-                    </Button>
-                  ) : null}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    aria-label={t("apps.actionTestOf", { name: action.name })}
+                    onClick={() => onTest(action)}
+                  >
+                    {t("apps.actionTest")}
+                  </Button>
                 </TableCell>
               ) : null}
             </TableRow>
@@ -151,11 +155,25 @@ export function AppActionsView({
   );
 }
 
-/** The Actions side scrolls on its own under the head of the draft. */
-function ActionsPage({ children }: { children: ReactNode }) {
+/**
+ * The Actions side scrolls on its own under the head of the draft. `intro` says in one line
+ * what the list is, over the list and over the room it loads into.
+ */
+function ActionsPage({ intro = false, children }: { intro?: boolean; children: ReactNode }) {
+  const { t } = useTranslation();
   return (
     <div className="h-full min-h-0 overflow-y-auto">
-      <Page width="default">{children}</Page>
+      <Page width="default">
+        {intro ? (
+          <p
+            className="mb-4 max-w-prose px-3 text-body text-muted-foreground"
+            data-app-actions-intro
+          >
+            {t("apps.actionsIntro")}
+          </p>
+        ) : null}
+        {children}
+      </Page>
     </div>
   );
 }

@@ -304,10 +304,14 @@ export function formatOperationRunDuration(
 /** The parameter in the address of Instance > Operations that names the run it opens with. */
 const OPERATION_RUN_PARAM = "run";
 
+/** Where the runs are read in the interface: Instance > Operations. */
+export function operationRunsHref(): string {
+  return workspaceRoutePath({ kind: "settings", group: "instance", page: "operations" });
+}
+
 /** Where one run is read in the interface: Instance > Operations, open on that run. */
 export function operationRunHref(runId: string): string {
-  const page = workspaceRoutePath({ kind: "settings", group: "instance", page: "operations" });
-  return `${page}?${new URLSearchParams({ [OPERATION_RUN_PARAM]: runId }).toString()}`;
+  return `${operationRunsHref()}?${new URLSearchParams({ [OPERATION_RUN_PARAM]: runId }).toString()}`;
 }
 
 /** The run the address of the page names, read from its query. */

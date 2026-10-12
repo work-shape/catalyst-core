@@ -15,7 +15,7 @@ import { AppsArea, isAppsRoute } from "./apps/apps-area";
 import { AppsHostProvider, type AppsHost } from "./apps/apps-host";
 import { InboxArea } from "./inbox";
 import { LoginPanel } from "./login-panel";
-import { operationRunHref } from "./operations/operations-model";
+import { operationRunHref, operationRunsHref } from "./operations/operations-model";
 import { PageHostProvider } from "./pages/page-host";
 import { ResourcesPanel, ResourcesPanelToggle, useResourcesPanelState } from "./resources-panel";
 import { isResourcesPanelAvailable } from "./resources-panel-model";
@@ -295,7 +295,9 @@ function ChatWorkspaceContent({
       : undefined,
     showRoute: model.route.showRoute,
     startChat: model.apps.startChat,
-    ...(canViewAudit(model.auth.user) ? { operationRunHref } : {})
+    ...(canViewAudit(model.auth.user)
+      ? { operations: { href: operationRunsHref(), runHref: operationRunHref } }
+      : {})
   };
 
   const workspace = (

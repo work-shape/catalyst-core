@@ -5,6 +5,7 @@ export {
   isOperationRunFilterReadsOnly,
   operationRunFilterShowsReads,
   operationRunHref,
+  operationRunsHref,
   operationRunOfSearch,
   operationRunOriginFields,
   operationRunQuery,
