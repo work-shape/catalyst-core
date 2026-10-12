@@ -10,6 +10,9 @@ import {
   fileSetObjectPrefix,
   isAppError,
   isPageBuildId,
+  JOB_UNCLAIMED_MS,
+  JOB_WORKER_CHECK_INTERVAL_MS,
+  noWorkerTakesJobs,
   readObjectBytes,
   subjectDedupeKey,
   isJsonObject,
@@ -73,30 +76,12 @@ export const PAGE_BUILD_WAIT_MS = 5 * 60 * 1000;
  * repeats, and the build is told to store nothing.
  */
 export const APP_BUILD_WAIT_MS = 60_000;
-/**
- * How long a build may be due before the save asks whether any worker takes builds, and the
- * window in which a worker must have shown itself: by running a build now, or by having
- * claimed or ended one within this time. A worker that is alive claims a due job within a
- * second when one of its slots is free, so this only has to cover a worker that restarts.
- */
-export const PAGE_BUILD_UNCLAIMED_MS = 30 * 1000;
-/**
- * How many of the newest builds that a worker took are read for the time a worker last claimed
- * or ended one. Builds are taken in the order they were queued, so the last ones taken are
- * among the newest.
- */
-export const PAGE_BUILD_WORKER_SIGNS_READ = 20;
-/** How often a save that still waits asks the queue whether a worker takes builds. */
-export const PAGE_BUILD_WORKER_CHECK_INTERVAL_MS = 5 * 1000;
 /** What a save is told when its build did not end within the wait although workers take builds. */
 export const PAGE_BUILD_BUSY_MESSAGE =
   "The Page was not built in time: the workers that build Pages are busy with other builds, or its build did not end. Nothing was saved. Save the Page again.";
 /** What a save is told when no worker takes builds. */
 export const PAGE_BUILD_NO_WORKER_MESSAGE =
   "No workspace command worker takes Page builds on this instance: the build was not started. An operator has to start that worker. Nothing was saved.";
-
-/** The states a job has only after a worker claimed it. */
-const JOB_STATUSES_A_WORKER_SET = ["running", "succeeded", "failed", "dead"] as const;
 
 /** Ends the transaction that would publish a revision for a save that has its answer already. */
 class BuildAlreadyAnswered extends Error {}
@@ -426,9 +411,9 @@ export interface PageBuildClientOptions {
   waitMs?: number;
   /** Replaces `APP_BUILD_WAIT_MS`, the wait of the build of an asset's files. For tests. */
   assetWaitMs?: number;
-  /** Replaces `PAGE_BUILD_UNCLAIMED_MS`. For tests. */
+  /** Replaces `JOB_UNCLAIMED_MS`. For tests. */
   unclaimedMs?: number;
-  /** Replaces `PAGE_BUILD_WORKER_CHECK_INTERVAL_MS`. For tests. */
+  /** Replaces `JOB_WORKER_CHECK_INTERVAL_MS`. For tests. */
   workerCheckIntervalMs?: number;
   pollIntervalMs?: number;
   now?: () => Date;
@@ -445,36 +430,8 @@ export function createPageBuildClient(
   const assetWaitMs = options.assetWaitMs ?? APP_BUILD_WAIT_MS;
   const pollIntervalMs = options.pollIntervalMs ?? PAGE_BUILD_POLL_INTERVAL_MS;
   const now = options.now ?? (() => new Date());
-  const unclaimedMs = options.unclaimedMs ?? PAGE_BUILD_UNCLAIMED_MS;
-  const workerCheckIntervalMs =
-    options.workerCheckIntervalMs ?? PAGE_BUILD_WORKER_CHECK_INTERVAL_MS;
-  /**
-   * Whether no worker takes builds: a build has been due for `unclaimedMs`, none is running,
-   * and no build was claimed or ended within `unclaimedMs` either. One look at the queue
-   * between two builds of a busy worker finds none running, so the builds that ended count
-   * too: a save queued behind a busy worker keeps waiting.
-   */
-  const noWorkerTakesBuilds = async (clientInstanceId: ClientInstanceId): Promise<boolean> => {
-    const kinds = await options.stores.jobs.summarizeByKind({ clientInstanceId });
-    const builds = kinds.find((kind) => kind.kind === pageBundleJob.kind);
-    if (
-      builds === undefined ||
-      builds.running > 0 ||
-      builds.waitingSince === undefined ||
-      Date.now() - Date.parse(builds.waitingSince) < unclaimedMs
-    ) {
-      return false;
-    }
-    const taken = await options.stores.jobs.listOverview({
-      clientInstanceId,
-      filters: { kind: pageBundleJob.kind, statuses: JOB_STATUSES_A_WORKER_SET },
-      page: { limit: PAGE_BUILD_WORKER_SIGNS_READ }
-    });
-    const since = Date.now() - unclaimedMs;
-    return !taken.some((job) =>
-      [job.startedAt, job.finishedAt].some((at) => at !== undefined && Date.parse(at) >= since)
-    );
-  };
+  const unclaimedMs = options.unclaimedMs ?? JOB_UNCLAIMED_MS;
+  const workerCheckIntervalMs = options.workerCheckIntervalMs ?? JOB_WORKER_CHECK_INTERVAL_MS;
   /** Queues one build and waits for how it ended. `key` orders the builds of one owner. */
   const run = async (input: {
     clientInstanceId: ClientInstanceId;
@@ -524,7 +481,11 @@ export function createPageBuildClient(
           let noWorker = false;
           if (Date.now() >= nextWorkerCheck) {
             nextWorkerCheck = Date.now() + workerCheckIntervalMs;
-            noWorker = await noWorkerTakesBuilds(input.clientInstanceId).catch(() => false);
+            noWorker = await noWorkerTakesJobs(options.stores.jobs, {
+              clientInstanceId: input.clientInstanceId,
+              kind: pageBundleJob,
+              unclaimedMs
+            }).catch(() => false);
           }
           if (noWorker || input.signal?.aborted || Date.now() >= deadline) {
             const gaveUp: PageBuildFailure = input.signal?.aborted
@@ -544,8 +505,8 @@ export function createPageBuildClient(
               finishedAt: now().toISOString()
             });
             if (written) {
-              // A build no worker claimed yet is taken out of the queue. One that runs finds
-              // the result on its row and stores nothing.
+              // A build no worker claimed yet is withdrawn. One that runs finds the result on
+              // its row and stores nothing.
               await options.stores.jobs
                 .withdraw(pageBundleJob, {
                   clientInstanceId: input.clientInstanceId,

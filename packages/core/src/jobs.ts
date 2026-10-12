@@ -9,10 +9,38 @@ export type JobId = Brand<string, "JobId">;
 /**
  * A job between attempts is `queued` with its attempts and last error. `dead` means the attempts
  * are used up. `failed` means the handler raised an error it marked as not retryable, or a
- * schedule tick failed. The executor has no waiting state: what waits, waits on its own record
- * and a wake enqueues a job.
+ * schedule tick failed. `cancelled` means the job was withdrawn: its subject was given up
+ * before an attempt did its work. The executor has no waiting state: what waits, waits on its
+ * own record and a wake enqueues a job.
  */
 export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "dead" | "cancelled";
+
+/** The error class of a withdrawn job. It tells a job nobody ran from one that ran and ended. */
+export const JOB_WITHDRAWN_ERROR_CODE = "WITHDRAWN";
+
+/**
+ * How long a job may be due before its caller asks whether any worker takes its kind, and the
+ * window in which a worker must have shown itself: by running a job of the kind now, or by
+ * having claimed or ended one within this time. A worker that is alive claims a due job at its
+ * next poll, a second later, when one of its slots is free, so this only has to cover a worker
+ * that restarts. A caller that waits for such a job is told that no worker takes it.
+ */
+export const JOB_UNCLAIMED_MS = 30 * 1000;
+/** How often a caller that still waits asks the queue whether a worker takes its job's kind. */
+export const JOB_WORKER_CHECK_INTERVAL_MS = 5 * 1000;
+/**
+ * How many of the newest jobs of a kind that a worker took are read for the time a worker last
+ * claimed or ended one. Jobs are taken in the order they were queued, so the last ones taken
+ * are among the newest.
+ */
+const JOB_WORKER_SIGNS_READ = 20;
+/** How often a job worker reports that it serves its kinds. One statement per report. */
+export const JOB_WORKER_REPORT_INTERVAL_MS = 10 * 1000;
+/**
+ * A kind whose workers reported nothing for this long has no worker: three reports are missed.
+ * Instance > Infrastructure then shows what that worker checks as failed.
+ */
+export const JOB_WORKER_SILENT_MS = 3 * JOB_WORKER_REPORT_INTERVAL_MS;
 
 /** What a kind needs of its payload schema. A Zod schema satisfies it. */
 export interface JobPayloadSchema<Payload extends JsonObject> {
@@ -203,6 +231,15 @@ export interface JobKindSummary {
   waitingSince?: ISODateString;
 }
 
+/** The last report of the workers that serve a kind. */
+export interface JobWorkerReport {
+  kind: string;
+  /** Since when the reports came without a gap of `JOB_WORKER_SILENT_MS`. */
+  aliveSince: ISODateString;
+  /** When a worker of the kind last reported. */
+  seenAt: ISODateString;
+}
+
 export type RetryJobResult =
   | { outcome: "requeued"; job: JobOverview }
   | { outcome: "not_found" }
@@ -230,6 +267,11 @@ export interface JobsStore {
     kind: JobKind,
     options: { clientInstanceId: ClientInstanceId; dedupeKey: string }
   ): Promise<void>;
+  /** The last report of the workers that serve `kind`. Missing when none ever reported. */
+  readWorkerReport(input: {
+    clientInstanceId: ClientInstanceId;
+    kind: string;
+  }): Promise<JobWorkerReport | undefined>;
   /**
    * Removes ended jobs: succeeded and cancelled ones 7 days after they ended, failed and dead
    * ones 30 days after. A dead job whose subject is still marked for deletion is kept.
@@ -259,6 +301,17 @@ export class NonRetryableJobError extends AppError {
   }
 }
 
+/**
+ * A handler throws this when it finds its subject withdrawn: whoever queued the job cancelled
+ * it before this attempt did any of its work. The job becomes `cancelled`, never `succeeded`.
+ */
+export class JobWithdrawnError extends AppError {
+  constructor(message: string) {
+    super("CONFLICT", message);
+    this.name = "JobWithdrawnError";
+  }
+}
+
 /** Thrown by `control.transaction` when the job's lease is no longer this attempt's. */
 export class JobLeaseLostError extends AppError {
   constructor(jobId: JobId) {
@@ -280,3 +333,39 @@ export const scheduledJobPayloadSchema: JobPayloadSchema<ScheduledJobPayload> = 
     return {};
   }
 };
+
+/** The states a job has only after a worker claimed it. */
+const JOB_STATUSES_A_WORKER_SET = ["running", "succeeded", "failed", "dead"] as const;
+
+/**
+ * Whether no worker takes the jobs of `kind`: one has been due for `unclaimedMs`, none is
+ * running, and none was claimed or ended within `unclaimedMs` either. One look at the queue
+ * between two jobs of a busy worker finds none running, so the jobs that ended count too: a
+ * caller queued behind a busy worker keeps waiting.
+ */
+export async function noWorkerTakesJobs(
+  jobs: Pick<JobsStore, "summarizeByKind" | "listOverview">,
+  input: { clientInstanceId: ClientInstanceId; kind: JobKind; unclaimedMs?: number }
+): Promise<boolean> {
+  const { clientInstanceId } = input;
+  const unclaimedMs = input.unclaimedMs ?? JOB_UNCLAIMED_MS;
+  const kinds = await jobs.summarizeByKind({ clientInstanceId });
+  const ofKind = kinds.find((summary) => summary.kind === input.kind.kind);
+  if (
+    ofKind === undefined ||
+    ofKind.running > 0 ||
+    ofKind.waitingSince === undefined ||
+    Date.now() - Date.parse(ofKind.waitingSince) < unclaimedMs
+  ) {
+    return false;
+  }
+  const taken = await jobs.listOverview({
+    clientInstanceId,
+    filters: { kind: input.kind.kind, statuses: JOB_STATUSES_A_WORKER_SET },
+    page: { limit: JOB_WORKER_SIGNS_READ }
+  });
+  const since = Date.now() - unclaimedMs;
+  return !taken.some((job) =>
+    [job.startedAt, job.finishedAt].some((at) => at !== undefined && Date.parse(at) >= since)
+  );
+}

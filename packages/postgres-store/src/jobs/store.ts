@@ -1,6 +1,8 @@
 import { and, asc, eq, gt, inArray, lt, lte, not, sql } from "drizzle-orm";
 import {
   AppError,
+  JOB_WITHDRAWN_ERROR_CODE,
+  JOB_WORKER_SILENT_MS,
   createPlatformId,
   scheduleDedupeKey,
   type ClientInstanceId,
@@ -9,12 +11,13 @@ import {
   type JobId,
   type JobKind,
   type JobSchedule,
+  type JobWorkerReport,
   type JobsStore,
   type JsonObject,
   type PruneEndedJobsResult
 } from "@vivd-catalyst/core";
 import type { PostgresConnection } from "../postgres-database";
-import { platformJobs } from "../schema/jobs";
+import { jobWorkerReports, platformJobs } from "../schema/jobs";
 import { productUsers } from "../schema/users";
 import { collaborationWorkspaces } from "../schema/workspaces";
 import { listJobOverview, retryJob, summarizeJobsByKind } from "./admin-queries";
@@ -84,6 +87,7 @@ export function createPostgresJobsStore(db: PostgresConnection, enqueued: () => 
           )
         );
     },
+    readWorkerReport: (input) => readJobWorkerReport(db, input),
     pruneEndedJobs: (input) => pruneEndedJobs(db, input),
     summarizeByKind: (input) => summarizeJobsByKind(db, input),
     listOverview: (input) => listJobOverview(db, input),
@@ -167,6 +171,91 @@ export async function enqueueJob<Payload extends JsonObject>(
       return { ...mapJob(existing), payload: kind.payloadSchema.parse(existing.payload) };
   }
   throw new AppError("CONFLICT", `Job of kind '${kind.kind}' could not be enqueued`);
+}
+
+const WITHDRAWN_MESSAGE = "The job was withdrawn before a worker claimed it";
+
+/**
+ * Ends the queued jobs of these dedupe keys as `cancelled` with the error class `WITHDRAWN`,
+ * where `withdraw` removes the job: the row says that nobody ran it. A job an attempt has
+ * claimed stays. A store that cancels subject rows calls this in the same transaction.
+ */
+export async function withdrawQueuedJobs(
+  db: PostgresConnection,
+  input: { clientInstanceId: ClientInstanceId; kind: string; dedupeKeys: readonly string[] }
+): Promise<void> {
+  if (input.dedupeKeys.length === 0) return;
+  await db
+    .update(platformJobs)
+    .set({
+      status: "cancelled",
+      finishedAt: sql`now()`,
+      errorCode: JOB_WITHDRAWN_ERROR_CODE,
+      errorMessage: WITHDRAWN_MESSAGE
+    })
+    .where(
+      and(
+        eq(platformJobs.clientInstanceId, input.clientInstanceId),
+        eq(platformJobs.kind, input.kind),
+        inArray(platformJobs.dedupeKey, [...input.dedupeKeys]),
+        eq(platformJobs.status, "queued")
+      )
+    );
+}
+
+/**
+ * Reports that a worker serves these kinds, in one statement. A kind whose last report is
+ * older than `JOB_WORKER_SILENT_MS` starts a new time of being alive.
+ */
+export async function reportJobWorker(
+  db: PostgresConnection,
+  input: { clientInstanceId: ClientInstanceId; kinds: readonly string[] }
+): Promise<void> {
+  if (input.kinds.length === 0) return;
+  // In one order for every worker, so two that report the same kinds never wait on each other.
+  const kinds = [...input.kinds].sort();
+  await db
+    .insert(jobWorkerReports)
+    .values(
+      kinds.map((kind) => ({
+        clientInstanceId: input.clientInstanceId,
+        kind,
+        aliveSince: sql`now()`,
+        seenAt: sql`now()`
+      }))
+    )
+    .onConflictDoUpdate({
+      target: [jobWorkerReports.clientInstanceId, jobWorkerReports.kind],
+      set: {
+        aliveSince: sql`case
+          when ${jobWorkerReports.seenAt} < now() - ${delay(JOB_WORKER_SILENT_MS)} then now()
+          else ${jobWorkerReports.aliveSince}
+        end`,
+        seenAt: sql`now()`
+      }
+    });
+}
+
+async function readJobWorkerReport(
+  db: PostgresConnection,
+  input: { clientInstanceId: ClientInstanceId; kind: string }
+): Promise<JobWorkerReport | undefined> {
+  const [row] = await db
+    .select()
+    .from(jobWorkerReports)
+    .where(
+      and(
+        eq(jobWorkerReports.clientInstanceId, input.clientInstanceId),
+        eq(jobWorkerReports.kind, input.kind)
+      )
+    );
+  return row
+    ? {
+        kind: row.kind,
+        aliveSince: row.aliveSince.toISOString(),
+        seenAt: row.seenAt.toISOString()
+      }
+    : undefined;
 }
 
 /**
@@ -457,7 +546,7 @@ export async function lockExhaustedJob(
 
 export type JobEnding =
   | { status: "succeeded" }
-  | { status: "failed" | "dead"; errorCode: string; errorMessage: string }
+  | { status: "failed" | "dead" | "cancelled"; errorCode: string; errorMessage: string }
   /** Another attempt after the kind's backoff. */
   | { status: "retry"; kind: JobKind; errorCode: string; errorMessage: string }
   /** Queued again, due at once, with the attempt given back. */
@@ -485,6 +574,7 @@ export async function endJobAttempt(
       return;
     case "failed":
     case "dead":
+    case "cancelled":
       await tx
         .update(platformJobs)
         .set({

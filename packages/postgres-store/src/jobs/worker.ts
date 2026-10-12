@@ -1,7 +1,10 @@
 import { describeWithoutMessage, reasonCodeOf } from "../error-without-message";
 import {
   AppError,
+  JOB_WITHDRAWN_ERROR_CODE,
+  JOB_WORKER_REPORT_INTERVAL_MS,
   JobLeaseLostError,
+  JobWithdrawnError,
   NonRetryableJobError,
   createPlatformId,
   scheduleDedupeKey,
@@ -32,6 +35,7 @@ import {
   mapJob,
   onJobsEnqueued,
   renewLockedJobLease,
+  reportJobWorker,
   type JobEnding,
   type JobLease,
   type JobRow
@@ -116,6 +120,7 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
   let passRequested = false;
   let stopListening: (() => void) | undefined;
   let schedulesCheckedAt: number | undefined;
+  let reportedAt: number | undefined;
   let passing: Promise<void> = Promise.resolve();
   let passes = 0;
   let sleeping = false;
@@ -256,7 +261,17 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
         await bound.run(control);
         outcome = { type: "ended", ending: { status: "succeeded" } };
       } catch (error) {
-        if (stopping && !draining) {
+        if (error instanceof JobWithdrawnError) {
+          // Whoever queued the job gave it up: it did no work, so it did not succeed.
+          outcome = {
+            type: "ended",
+            ending: {
+              status: "cancelled",
+              errorCode: JOB_WITHDRAWN_ERROR_CODE,
+              errorMessage: error.message
+            }
+          };
+        } else if (stopping && !draining) {
           // The worker asked the handler to stop; that is no failure of the job.
           outcome = { type: "ended", ending: { status: "released" } };
         } else {
@@ -336,6 +351,22 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
     schedulesCheckedAt = now;
   }
 
+  /**
+   * Tells the instance which kinds this worker claims, every `JOB_WORKER_REPORT_INTERVAL_MS`.
+   * A report that fails is no reason to stop claiming: the next pass tries again.
+   */
+  async function reportServedKinds(): Promise<void> {
+    const now = Date.now();
+    if (reportedAt !== undefined && now - reportedAt < JOB_WORKER_REPORT_INTERVAL_MS) return;
+    const kinds = [...handlers.values()].map((handler) => handler.kind.kind);
+    try {
+      await reportJobWorker(db, { clientInstanceId, kinds });
+      reportedAt = now;
+    } catch (error) {
+      logger.warn(describeWithoutMessage(error), "Job worker report failed");
+    }
+  }
+
   /** Passes of one worker run one after another, so each counts its free slots exactly. */
   function pass(): Promise<Pass> {
     passes += 1;
@@ -352,6 +383,7 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
   async function onePass(): Promise<Pass> {
     const started: Promise<void>[] = [];
     if (stopping) return { started };
+    await reportServedKinds();
     await ensureSchedules();
     const withWork = await listKindsWithWork(db, { clientInstanceId, kinds: [...handlers.keys()] });
     for (const handler of handlers.values()) {

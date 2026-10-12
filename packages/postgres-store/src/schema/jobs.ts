@@ -1,5 +1,14 @@
 import { sql } from "drizzle-orm";
-import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex
+} from "drizzle-orm/pg-core";
 import type { ClientInstanceId, JobId, JobStatus, JsonObject } from "@vivd-catalyst/core";
 
 /** The one queue of the product. `jobs/` holds the only code that reads or writes it. */
@@ -42,4 +51,20 @@ export const platformJobs = pgTable(
       .where(sql`${table.dedupeKey} is not null and ${table.status} in ('queued', 'running')`),
     index("platform_jobs_finished_idx").on(table.clientInstanceId, table.finishedAt)
   ]
+);
+
+/**
+ * One row per job kind that a worker of the instance serves: when its workers last reported and
+ * since when they did so without a gap. The queue itself shows a worker only while a job is
+ * running; this shows one that is up and has nothing to do.
+ */
+export const jobWorkerReports = pgTable(
+  "job_worker_reports",
+  {
+    clientInstanceId: text("client_instance_id").$type<ClientInstanceId>().notNull(),
+    kind: text("kind").notNull(),
+    aliveSince: timestamp("alive_since", { withTimezone: true }).notNull(),
+    seenAt: timestamp("seen_at", { withTimezone: true }).notNull()
+  },
+  (table) => [primaryKey({ columns: [table.clientInstanceId, table.kind] })]
 );
