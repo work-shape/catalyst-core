@@ -21,6 +21,23 @@ export function deferred<T>(): {
   });
   return { promise, resolve: required(resolve), reject: required(reject) };
 }
+/**
+ * A point where `parties` calls meet. `arrive()` resolves for all of them together, once the
+ * last one has arrived, so none of them goes on before every other one is there. A test of
+ * calls "at the same time" puts it between a call's read and its write: without it the calls
+ * overlap only when the machine happens to schedule them so.
+ */
+export function barrier(parties: number): { arrive(): Promise<void> } {
+  const all = deferred<void>();
+  let arrived = 0;
+  return {
+    arrive() {
+      arrived += 1;
+      if (arrived === parties) all.resolve();
+      return all.promise;
+    }
+  };
+}
 export function text(value: unknown): string {
   if (typeof value !== "string") throw new Error("Expected a string");
   return value;

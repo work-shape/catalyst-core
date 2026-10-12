@@ -18,7 +18,7 @@ import {
   type SecretBinding,
   type SecretResolver
 } from "@vivd-catalyst/core";
-import { required } from "./support/assertions";
+import { barrier, required } from "./support/assertions";
 import { connection } from "./support/connections";
 import {
   dumpDatabaseText,
@@ -229,11 +229,32 @@ describe("the Secret Store", () => {
   it("lets one of two writers at the same time win and tells the other of the conflict", async () => {
     // Fails without the change: both writers computed the same next version, the store
     // dropped one of them and both were told `changed: true`.
-    const store = storeWith();
-    await store.put({ binding: first, value: generateTestSecret(), source: "runtime" });
+    // "At the same time" is made, not hoped for: every writer has read the stored secret
+    // before any of them writes. Without that a writer that reads after another one has
+    // written is a second write in its own right, and how many writers win depends on the
+    // load of the machine.
+    const writersAtTheSameTime = (count: number) => {
+      const allHaveRead = barrier(count);
+      return createSecretStore({
+        clientInstanceId,
+        keyring,
+        store: {
+          ...stores.connections,
+          async findSecret(input) {
+            try {
+              return await stores.connections.findSecret(input);
+            } finally {
+              await allHaveRead.arrive();
+            }
+          }
+        }
+      });
+    };
+    await storeWith().put({ binding: first, value: generateTestSecret(), source: "runtime" });
     for (let round = 0; round < 5; round += 1) {
       const before = required((await readRows())[0]).version;
       const values = Array.from({ length: 6 }, () => generateTestSecret());
+      const store = writersAtTheSameTime(values.length);
       const results = await Promise.allSettled(
         values.map((value) => store.put({ binding: first, value, source: "runtime" }))
       );
@@ -243,32 +264,33 @@ describe("the Secret Store", () => {
       const lost = results.flatMap((result) =>
         result.status === "rejected" ? [result.reason as unknown] : []
       );
-      // Each success is its own version, and the stored value is the one of the last.
-      const versions = won.map(({ written }) => written.version);
-      expect(new Set(versions).size).toBe(versions.length);
-      expect(won.length).toBeGreaterThanOrEqual(1);
-      expect(won.length + lost.length).toBe(values.length);
+      // All of them read the same version, so one of them writes the next and the others lose.
+      expect(won).toHaveLength(1);
+      const winner = required(won[0]);
+      expect(winner.written).toMatchObject({ version: before + 1, changed: true });
+      expect(lost).toHaveLength(values.length - 1);
       for (const error of lost) {
         expect(error).toMatchObject({
           code: "CONFLICT",
           details: { reason: "secret_write_conflict" }
         });
       }
+      // The stored value is the winner's.
       const row = required((await readRows())[0]);
-      expect(row.version).toBe(before + won.length);
-      const last = required(won.find(({ written }) => written.version === row.version));
+      expect(row.version).toBe(before + 1);
       expect(await resolverWith().resolve({ handle: row.handle, binding: first })).toBe(
-        values[last.index]
+        values[winner.index]
       );
     }
     // A first write against a first write: one row, one winner.
+    const firstWriters = writersAtTheSameTime(4);
     const fresh = await Promise.allSettled(
       Array.from({ length: 4 }, () =>
-        store.put({ binding: second, value: generateTestSecret(), source: "runtime" })
+        firstWriters.put({ binding: second, value: generateTestSecret(), source: "runtime" })
       )
     );
     expect(fresh.filter((result) => result.status === "fulfilled")).toHaveLength(1);
-    expect(await store.status(second)).toMatchObject({ state: "set", version: 1 });
+    expect(await storeWith().status(second)).toMatchObject({ state: "set", version: 1 });
   });
 
   it("hands the value to the resolver for the binding of the call and to nothing else", async () => {
