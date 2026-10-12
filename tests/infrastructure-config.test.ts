@@ -113,6 +113,75 @@ describe("infrastructure section", () => {
     await start(false);
   });
 
+  it("stops startup on a Bedrock model without a price above zero, naming the binding", async () => {
+    const profile = (name: string): string =>
+      `arn:aws:bedrock:eu-central-1:000000000000:application-inference-profile/${name}`;
+    const bedrock = {
+      provider: "aws-bedrock",
+      region: "eu",
+      model: profile("entry"),
+      accountId: "000000000000",
+      credentialSecret: "BEDROCK_KEY"
+    };
+    const price = (model: string, input = 3, cached = 0.3, output = 15) => ({
+      providerId: "bedrock",
+      model,
+      uncachedInputPricePerMillionTokens: input,
+      cachedInputPricePerMillionTokens: cached,
+      outputPricePerMillionTokens: output
+    });
+    const start = async (prices: ReturnType<typeof price>[] | undefined): Promise<void> => {
+      const { instance } = await createTestInstanceOnSecrets(
+        {
+          config: parseClientInstanceConfig(
+            config(
+              { models: { ...models, bedrock } },
+              {
+                modelBindings: [{ id: "claude", providerId: "bedrock", model: profile("bound") }],
+                ...(prices
+                  ? {
+                      usage: {
+                        costs: {
+                          customer: { id: "card", version: "1", currency: "EUR", models: prices }
+                        }
+                      }
+                    }
+                  : {})
+              }
+            )
+          ),
+          tools: [],
+          seedAssets: false
+        },
+        { BEDROCK_KEY: "test-bedrock-key" }
+      );
+      await instance.close();
+    };
+    const unpriced = (named: string): string =>
+      `${named} has no price: its provider bills every token, so 'usage.costs.customer.models' needs a row with this provider id and model and a price above zero for uncached input, cached input and output`;
+
+    for (const prices of [
+      undefined,
+      [],
+      [price(profile("entry"))],
+      [price(profile("entry")), price(profile("bound"), 0)],
+      [price(profile("entry")), price(profile("bound"), 3, 0)],
+      [price(profile("entry")), price(profile("bound"), 3, 0.3, 0)],
+      // A row of another provider entry with the same model is no price of this one.
+      [price(profile("entry")), { ...price(profile("bound")), providerId: "local" }]
+    ]) {
+      const error = await failure(() => start(prices));
+      expect(error.message).toBe(unpriced("Model binding 'claude'"));
+      // The message names the binding and never the profile, which holds the account id.
+      expect(error.message).not.toContain("arn:aws");
+    }
+    // The entry's own model can be called without a binding, so it needs a price as well.
+    expect((await failure(() => start([price(profile("bound"))]))).message).toBe(
+      unpriced("Model provider 'bedrock'")
+    );
+    await start([price(profile("entry")), price(profile("bound"))]);
+  });
+
   it("stops startup on a provider type that is not registered, naming the port and the field", async () => {
     const error = await startupFailure({
       models: { main: { provider: "acme-llm", region: "eu", model: "m" } }

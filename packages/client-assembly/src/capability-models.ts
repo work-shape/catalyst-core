@@ -122,6 +122,39 @@ export async function createInstanceModels(input: {
       );
     }
   }
+  // What a call can name: a binding, or a provider entry with the entry's own model.
+  const callable = [
+    ...bindings.map((binding) => ({
+      named: `Model binding '${binding.id}'`,
+      ref: { bindingId: binding.id },
+      providerId: binding.providerId,
+      model: binding.model ?? allProviders.find(({ id }) => id === binding.providerId)?.model
+    })),
+    ...providers.map((provider) => ({
+      named: `Model provider '${provider.id}'`,
+      ref: { providerId: provider.id },
+      providerId: provider.id,
+      model: provider.model
+    }))
+  ];
+  for (const { named, ref, providerId, model } of callable) {
+    if (!gateway.capabilities(ref).priceRequired) continue;
+    const rate = config.usage.costs.customer?.models.find(
+      (candidate) => candidate.providerId === providerId && candidate.model === model
+    );
+    const priced =
+      rate !== undefined &&
+      rate.uncachedInputPricePerMillionTokens > 0 &&
+      rate.cachedInputPricePerMillionTokens > 0 &&
+      rate.outputPricePerMillionTokens > 0;
+    if (!priced) {
+      // The model id is not repeated: for this provider it holds the account id.
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `${named} has no price: its provider bills every token, so 'usage.costs.customer.models' needs a row with this provider id and model and a price above zero for uncached input, cached input and output`
+      );
+    }
+  }
   return {
     governance,
     gateway,
