@@ -50,7 +50,7 @@ test("the Recent heading offers New chat on hover and by the keyboard, in both l
     await page.mouse.move(800, 450);
     await expect.poll(shown).toBe("0");
     const resting = await heading.boundingBox();
-    await group.hover();
+    await heading.hover();
     await expect.poll(shown).toBe("1");
     expect(await heading.boundingBox()).toEqual(resting);
     // The keyboard reaches it without the pointer.
