@@ -94,7 +94,7 @@ const allowedPageErrors: readonly AllowedPageError[] = [
       "the instance answers 404 and the page says that there is no such agent.",
     matches: requestAnswered(404),
     path: /^\/api\/v1\/assets\/agent\/not_an_agent$/u,
-    tests: ["Build opens on a list, and a list and an asset each have an address"]
+    tests: ["Studio opens on a list, and a list and an asset each have an address"]
   },
   {
     name: "refused-asset-in-build",

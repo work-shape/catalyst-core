@@ -225,7 +225,7 @@ function isConnectionCallReason(value: unknown): value is ConnectionCallReason {
 }
 
 /** Where an administrator looks after a Connection, as the sentences name it. */
-const WHERE = "Build > Connections";
+const WHERE = "Studio > Connections";
 
 /** Where an administrator gives a right, as the sentence of a missing right names it. */
 const WHERE_RIGHTS = "Settings > Instance > Access";

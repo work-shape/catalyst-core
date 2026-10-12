@@ -815,6 +815,11 @@ id from config_assets where status = 'deleted')`.
   the workspace name an App or a Page is given. The first name comes from the display label;
   an account whose label is an e-mail address keeps "Personal workspace". The name stored on
   the row is unchanged and still not shown.
+- **Studio:** the area that was named "Build" ("Bauen" in German) is named "Studio" in both
+  languages: its row in the main rail, the head of its column, the palette's "Go to" entry, the
+  sentences that name it and the documentation. The sentence of a failed Connection call now
+  ends with "Studio > Connections". Its addresses stay `/build/...`, and it shows to the same
+  people as before.
 - **Page frame:** every page of Build, Settings, the Inbox and Apps starts its title line 56 px
   under the top edge, where it started 24 px under it. A page whose head is pinned, such as an
   asset page in Build, is unchanged: its head is the top band from the start. The column of

@@ -260,7 +260,7 @@ describe("the three texts a model misread", () => {
     const reading = connectionCallSentence("upstream_timeout", "Sample business", "reading");
 
     expect(reading).toBe(
-      "The connection Sample business did not answer in time. This action only reads, so trying again is safe. If it keeps failing, an administrator can check it under Build > Connections."
+      "The connection Sample business did not answer in time. This action only reads, so trying again is safe. If it keeps failing, an administrator can check it under Studio > Connections."
     );
     expect(reading).not.toMatch(/chang/u);
     expect(reading).not.toMatch(NO_CODE_OR_ADDRESS);
@@ -275,7 +275,7 @@ describe("the three texts a model misread", () => {
     const sentence = connectionCallSentence("egress_denied", "Sample business");
 
     expect(sentence).toBe(
-      "The network path from this instance to the outside system of the connection Sample business has not been allowed yet. The connection itself is switched on. Trying again will not help until an administrator allows the path. The state is shown under Build > Connections."
+      "The network path from this instance to the outside system of the connection Sample business has not been allowed yet. The connection itself is switched on. Trying again will not help until an administrator allows the path. The state is shown under Studio > Connections."
     );
     expect(sentence).not.toMatch(/disabled|switched off|not available/u);
     expect(sentence).not.toMatch(NO_CODE_OR_ADDRESS);

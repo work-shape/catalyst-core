@@ -2887,7 +2887,7 @@ test("standalone auth gates superadmin views", async ({ page }) => {
   await expect(settingsPages(page).getByRole("group", { name: "Instance" })).toHaveCount(0);
 });
 
-test("the Settings pages and Build are route-backed", async ({ page }) => {
+test("the Settings pages and Studio are route-backed", async ({ page }) => {
   await signInViaApi(page, superadminUser);
 
   await page.goto("/");
@@ -2907,7 +2907,7 @@ test("the Settings pages and Build are route-backed", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Usage", level: 1 })).toBeVisible();
   await expect(page.getByText("Billable this month")).toBeVisible();
 
-  await page.getByRole("button", { name: "Build", exact: true }).click();
+  await page.getByRole("button", { name: "Studio", exact: true }).click();
   await expect(page).toHaveURL(/\/build\/agents$/u);
   await expect(page.getByRole("heading", { name: "Agents", level: 1 })).toBeVisible();
   await expect(settingsPages(page)).toHaveCount(0);
@@ -3092,12 +3092,12 @@ test("the Settings sub-rail stands still while the page scrolls up to the top ed
   }
 });
 
-test("Build opens on a list, and a list and an asset each have an address", async ({ page }) => {
+test("Studio opens on a list, and a list and an asset each have an address", async ({ page }) => {
   await signInViaApi(page, superadminUser);
   await page.goto("/");
 
-  // Build lands on the Agents list: names as titles, the id beneath, nothing to select first.
-  await page.getByRole("button", { name: "Build", exact: true }).click();
+  // Studio lands on the Agents list: names as titles, the id beneath, nothing to select first.
+  await page.getByRole("button", { name: "Studio", exact: true }).click();
   await expect(page).toHaveURL(/\/build\/agents$/u);
   await expect(page.getByRole("heading", { name: "Agents", level: 1 })).toBeVisible();
   const agents = page.getByRole("list", { name: "Agents" });
@@ -3153,7 +3153,7 @@ test("Build opens on a list, and a list and an asset each have an address", asyn
 
   // The kind rail switches the list; New starts a skill from there.
   await page
-    .getByRole("navigation", { name: "Kinds in Build" })
+    .getByRole("navigation", { name: "Kinds in Studio" })
     .getByRole("button", { name: /^Skills/u })
     .click();
   await expect(page).toHaveURL(/\/build\/skills$/u);
@@ -3166,7 +3166,7 @@ test("Build opens on a list, and a list and an asset each have an address", asyn
   await expect(newSkill).toBeHidden();
   await expect(page.getByRole("heading", { name: "Skills", level: 1 })).toBeVisible();
 
-  // Build without a kind, and the old Config address, open the list last visited.
+  // Studio without a kind, and the old Config address, open the list last visited.
   await page.goto("/build");
   await expect(page).toHaveURL(/\/build\/skills$/u);
   await page.goto("/admin/config");
@@ -3181,7 +3181,7 @@ test("Build opens on a list, and a list and an asset each have an address", asyn
   await expect(page).toHaveURL(/\/build\/agents$/u);
 });
 
-test("a Build row is a link, the heading takes the focus, and unsaved changes are asked about", async ({
+test("a Studio row is a link, the heading takes the focus, and unsaved changes are asked about", async ({
   page,
   context
 }) => {
@@ -3227,7 +3227,7 @@ test("a Build row is a link, the heading takes the focus, and unsaved changes ar
   await expect(page).toHaveURL(/\/build\/agents\/research_assistant$/u);
   await expect(instructions).toHaveValue("Unsaved instructions.");
 
-  // So does a way out of Build; discarding leaves, and nothing was stored.
+  // So does a way out of Studio; discarding leaves, and nothing was stored.
   await page.getByRole("button", { name: "New chat", exact: true }).click();
   await expect(question).toBeVisible();
   await question.getByRole("button", { name: "Discard changes", exact: true }).click();
@@ -3255,12 +3255,12 @@ test("superadmin config follows the German locale", async ({ page }) => {
   await page.goto("/admin/config");
 
   await expect(page).toHaveURL(/\/build\/agents$/u);
-  await expect(page.getByRole("region", { name: "Bauen" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Bauen", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Studio" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Studio", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Agenten", level: 1 })).toBeVisible();
   await expect(
     page
-      .getByRole("navigation", { name: "Arten in Bauen" })
+      .getByRole("navigation", { name: "Arten im Studio" })
       .getByRole("button", { name: /^Skills/u })
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Neuer Agent", exact: true })).toBeVisible();
@@ -3321,14 +3321,14 @@ test("superadmin manages config assets with validation and conflict protection",
       })
       .toBe(version);
   };
-  /** Opens a kind's list from wherever Build is: back out of an asset page, then the kind rail. */
+  /** Opens a kind's list from wherever Studio is: back out of an asset page, then the kind rail. */
   const openList = async (kind: "Agents" | "Skills") => {
     const back = page.getByRole("button", { name: /^Back to /u });
     if ((await back.count()) > 0) {
       await back.click();
     }
     await page
-      .getByRole("navigation", { name: "Kinds in Build" })
+      .getByRole("navigation", { name: "Kinds in Studio" })
       .getByRole("button", { name: new RegExp(`^${kind}`, "u") })
       .click();
     await expect(page.getByRole("heading", { name: kind, level: 1 })).toBeVisible();
@@ -3375,7 +3375,7 @@ test("superadmin manages config assets with validation and conflict protection",
 
   try {
     await page.goto("/admin/config");
-    await expect(page.getByRole("region", { name: "Build" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Studio" })).toBeVisible();
     await expect(page).toHaveURL(/\/build\/agents$/u);
     await expect(page.getByText(/Version \d+/u)).toHaveCount(0);
 
@@ -3497,7 +3497,7 @@ test("superadmin manages config assets with validation and conflict protection",
       .getByRole("button", { name: "Delete", exact: true })
       .click();
     await expectVersion(original.version + 4);
-    // A deleted asset has no page: Build is back on the kind's list, which is empty again.
+    // A deleted asset has no page: Studio is back on the kind's list, which is empty again.
     await expect(page).toHaveURL(/\/build\/skills$/u);
     await expect(page.getByText(/^No skills yet\./u)).toBeVisible();
 
@@ -3556,9 +3556,9 @@ test("an instance admin opens every group of the Settings rail", async ({ page }
     "aria-current",
     "true"
   );
-  // Build stands in the main rail as an area of its own, not among the Settings pages.
-  await expect(page.getByRole("button", { name: "Build", exact: true })).toBeVisible();
-  await expect(rail.getByRole("button", { name: "Build" })).toHaveCount(0);
+  // Studio stands in the main rail as an area of its own, not among the Settings pages.
+  await expect(page.getByRole("button", { name: "Studio", exact: true })).toBeVisible();
+  await expect(rail.getByRole("button", { name: "Studio" })).toHaveCount(0);
 
   await rail.getByRole("button", { name: "API access", exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/instance\/api-access$/u);
@@ -3587,7 +3587,7 @@ test("an instance admin opens every group of the Settings rail", async ({ page }
   await expect(rail).toHaveCount(0);
 });
 
-// A grant in a Namespace opens Build for this user: no spec hands one out while this runs.
+// A grant in a Namespace opens Studio for this user: no spec hands one out while this runs.
 test("a plain user finds only their own pages in the Settings rail", async ({
   page,
   accessState: _accessState
@@ -3607,7 +3607,7 @@ test("a plain user finds only their own pages in the Settings rail", async ({
     await expect(rail.getByRole("button", { name: closed, exact: true })).toHaveCount(0);
   }
   await expect(rail.getByRole("group", { name: "Instance" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Build", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Studio", exact: true })).toHaveCount(0);
 
   // The server refuses what the rail hides: the list of users stays closed to this user.
   const users = await page.request.get(`${apiBaseUrl}/api/v1/instance/users`);
@@ -4192,7 +4192,7 @@ test("under 768 px the rail is a drawer that the header opens and a choice close
   await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
 });
 
-// A grant in a Namespace opens Build for this user: no spec hands one out while this runs.
+// A grant in a Namespace opens Studio for this user: no spec hands one out while this runs.
 test("the command palette opens from the rail and the keyboard, searches titles on the server and opens a conversation", async ({
   page,
   accessState: _accessState
@@ -4232,7 +4232,7 @@ test("the command palette opens from the rail and the keyboard, searches titles 
   await expect(palette.getByRole("option", { name: "Profile", exact: true })).toBeVisible();
   await expect(palette.getByRole("option", { name: "Security", exact: true })).toBeVisible();
   await expect(palette.getByRole("option", { name: "Users", exact: true })).toHaveCount(0);
-  await expect(palette.getByRole("option", { name: "Build", exact: true })).toHaveCount(0);
+  await expect(palette.getByRole("option", { name: "Studio", exact: true })).toHaveCount(0);
   expect(searches).toBe(0);
   // Escape closes it and the focus is back on what opened it.
   await page.keyboard.press("Escape");
@@ -4322,13 +4322,13 @@ test("the palette lists the eight most recent conversations and reaches the rest
   await expect(palette.getByRole("option")).toHaveText([oldest ?? ""]);
 });
 
-test("the palette's Go to group offers an administrator the instance pages and Build", async ({
+test("the palette's Go to group offers an administrator the instance pages and Studio", async ({
   page
 }) => {
   await signInViaUi(page, superadminUser);
   await page.getByRole("button", { name: "Search", exact: true }).click();
   const palette = page.getByRole("dialog", { name: "Search" });
-  for (const name of ["Profile", "Users", "Usage", "Audit", "Build"]) {
+  for (const name of ["Profile", "Users", "Usage", "Audit", "Studio"]) {
     await expect(palette.getByRole("option", { name, exact: true })).toBeVisible();
   }
   await palette.getByRole("option", { name: "Usage", exact: true }).click();

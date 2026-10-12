@@ -138,7 +138,7 @@ export const administration = defineTranslations({
       "The Pages of a conversation and the sandboxed frame that shows them.",
     "modules.connections": "Connections",
     "modules.connectionsDescription":
-      "Connections to outside systems: the asset kind, its rights and its list in Build.",
+      "Connections to outside systems: the asset kind, its rights and its list in Studio.",
     "modules.workflows": "Workflows",
     "modules.workflowsDescription":
       "Workflows: steps that run on a schedule or a manual start, and their runs.",
@@ -326,7 +326,7 @@ export const administration = defineTranslations({
       "Die Pages einer Unterhaltung und der abgeschirmte Rahmen, der sie anzeigt.",
     "modules.connections": "Verbindungen",
     "modules.connectionsDescription":
-      "Verbindungen zu externen Systemen: die Asset-Art, ihre Rechte und ihre Liste in Bauen.",
+      "Verbindungen zu externen Systemen: die Asset-Art, ihre Rechte und ihre Liste im Studio.",
     "modules.workflows": "Workflows",
     "modules.workflowsDescription":
       "Workflows: Schritte, die nach Zeitplan oder von Hand starten, und ihre Läufe.",

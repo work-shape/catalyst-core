@@ -43,7 +43,7 @@ export const build = defineTranslations({
     "build.namespaceAll": "All Namespaces",
     "build.namespaceFilter": "Namespace",
     "build.noAccess":
-      "Build is not available to you. It opens for people who hold a right on an agent or a skill.",
+      "Studio is not available to you. It opens for people who hold a right on an agent or a skill.",
     "build.noMatchInNamespace": "Nothing in this Namespace.",
     "build.noSkillsChosen": "No skills chosen.",
     "build.pendingApproval":
@@ -86,9 +86,9 @@ export const build = defineTranslations({
     "build.identifier": "ID",
     "build.kindAgents": "Agents",
     "build.kindSkills": "Skills",
-    "build.kinds": "Kinds in Build",
+    "build.kinds": "Kinds in Studio",
     "build.listActions": "More actions",
-    "build.loadFailed": "Build could not be loaded.",
+    "build.loadFailed": "Studio could not be loaded.",
     "build.leaveConfirm": "Discard changes",
     "build.leaveDescription":
       "What you changed on this page is not saved yet. Leaving discards it.",
@@ -145,7 +145,7 @@ export const build = defineTranslations({
     "build.namespaceAll": "Alle Namespaces",
     "build.namespaceFilter": "Namespace",
     "build.noAccess":
-      "Bauen steht Ihnen nicht zur Verfügung. Es öffnet sich für Personen mit einem Recht an einem Agenten oder einem Skill.",
+      "Studio steht Ihnen nicht zur Verfügung. Es öffnet sich für Personen mit einem Recht an einem Agenten oder einem Skill.",
     "build.noMatchInNamespace": "Nichts in diesem Namespace.",
     "build.noSkillsChosen": "Keine Skills ausgewählt.",
     "build.pendingApproval":
@@ -188,9 +188,9 @@ export const build = defineTranslations({
     "build.identifier": "ID",
     "build.kindAgents": "Agenten",
     "build.kindSkills": "Skills",
-    "build.kinds": "Arten in Bauen",
+    "build.kinds": "Arten im Studio",
     "build.listActions": "Weitere Aktionen",
-    "build.loadFailed": "Bauen konnte nicht geladen werden.",
+    "build.loadFailed": "Studio konnte nicht geladen werden.",
     "build.leaveConfirm": "Änderungen verwerfen",
     "build.leaveDescription":
       "Was Sie auf dieser Seite geändert haben, ist noch nicht gespeichert. Beim Verlassen geht es verloren.",

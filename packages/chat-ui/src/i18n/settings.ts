@@ -5,7 +5,7 @@ export const settings = defineTranslations({
   en: {
     // The rail, the groups and the pages of the Settings area. The two `nav.` keys join the
     // navigation area once the main rail has its own file.
-    "nav.build": "Build",
+    "nav.build": "Studio",
     "nav.paletteGoTo": "Go to",
     "settings.you": "You",
     "settings.workspace": "Workspace",
@@ -241,7 +241,7 @@ export const settings = defineTranslations({
     "settings.usersSummary": "{total} users · {active} active"
   },
   de: {
-    "nav.build": "Bauen",
+    "nav.build": "Studio",
     "nav.paletteGoTo": "Gehe zu",
     "settings.you": "Du",
     "settings.workspace": "Arbeitsbereich",

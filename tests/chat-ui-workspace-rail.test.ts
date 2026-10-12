@@ -284,12 +284,12 @@ describe("workspace rail frame", () => {
   });
 });
 
-describe("workspace rail Build row and Settings gear", () => {
-  it("shows Build above the account row only to a viewer who may open it", () => {
+describe("workspace rail Studio row and Settings gear", () => {
+  it("shows Studio above the account row only to a viewer who may open it", () => {
     expect(renderRail()).not.toContain("lucide-blocks");
 
     const markup = renderRail(undefined, undefined, [], { canViewBuild: true, view: "build" });
-    expect(markup).toMatch(/<button[^>]*aria-current="true"[^>]*>(?:(?!<\/button>).)*Build/u);
+    expect(markup).toMatch(/<button[^>]*aria-current="true"[^>]*>(?:(?!<\/button>).)*Studio/u);
   });
 
   it("offers the gear to a viewer with an administration page and marks it on Settings", () => {

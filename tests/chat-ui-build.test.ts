@@ -205,7 +205,7 @@ const skillPages: BuildAssetKind = {
 };
 const pageKinds = [agentKind, skillPages];
 
-describe("Build frame", () => {
+describe("Studio frame", () => {
   it("lands on the Agents list, titled by the name with the id beneath", () => {
     const markup = render({});
 
@@ -258,10 +258,10 @@ describe("Build frame", () => {
       }
     );
 
-    expect(both).toContain('aria-label="Kinds in Build"');
+    expect(both).toContain('aria-label="Kinds in Studio"');
     expect(both).toContain('<option value="agents">Agents</option>');
     expect(both).toContain('<option value="skills" selected="">Skills</option>');
-    expect(one).not.toContain('aria-label="Kinds in Build"');
+    expect(one).not.toContain('aria-label="Kinds in Studio"');
   });
 
   it("shows a planted kind as a third rail item, with its list and its asset page", () => {
@@ -414,10 +414,10 @@ describe("Build frame", () => {
     expect(page).not.toContain("There is no agent");
   });
 
-  it("says that Build could not be loaded and offers to try again", () => {
+  it("says that Studio could not be loaded and offers to try again", () => {
     const area = render(
       {},
-      { source: source({ overrides: { kinds: [], error: "Build could not be loaded." } }) }
+      { source: source({ overrides: { kinds: [], error: "Studio could not be loaded." } }) }
     );
     const list = render(
       { kindPath: "agents" },
@@ -429,7 +429,7 @@ describe("Build frame", () => {
     );
 
     expect(area).toContain('role="alert"');
-    expect(area).toContain("Build could not be loaded.");
+    expect(area).toContain("Studio could not be loaded.");
     expect(area).toContain("Try again");
     expect(area).not.toContain("There is nothing to build on this instance yet.");
     expect(list).toContain('role="alert"');
@@ -457,7 +457,7 @@ describe("Build frame", () => {
   });
 });
 
-describe("Build for a Namespace holder", () => {
+describe("Studio for a Namespace holder", () => {
   const holder = (namespaces: Namespaces, input: SourceInput = {}) =>
     source({ permissions: [], namespaces, ...input });
 
@@ -515,7 +515,7 @@ describe("Build for a Namespace holder", () => {
   });
 });
 
-describe("Build asset page", () => {
+describe("Studio asset page", () => {
   const taxSkill = asset("skill", "tax-review", {
     namespace: "tax-",
     config: {
@@ -662,7 +662,7 @@ describe("Build asset page", () => {
   });
 });
 
-describe("Build addresses", () => {
+describe("Studio addresses", () => {
   const kinds = visibleBuildKinds(buildAssetKinds, source().kinds);
 
   it("opens the kind last visited at /build, else the first one, and marks the address for correction", () => {
@@ -703,7 +703,7 @@ describe("Build addresses", () => {
     ).toEqual({ kind: viewed, name: "crm", corrected: false });
   });
 
-  it("maps a place in Build to its route and back", () => {
+  it("maps a place in Studio to its route and back", () => {
     for (const location of [{}, { kindPath: "agents" }, { kindPath: "skills", name: "a.b" }]) {
       expect(buildLocationOfRoute(buildRouteOfLocation(location))).toEqual(location);
     }

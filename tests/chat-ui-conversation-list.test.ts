@@ -141,7 +141,7 @@ describe("workspace rail without a Chat row", () => {
     for (const collapsed of [false, true]) {
       const several = renderRail(many(1), { inbox, collapsed, sections: [inboxSection, second] });
       expect(groupStarts(several, "New chat", "Inbox")).toHaveLength(0);
-      expect(groupStarts(several, "Inbox", "Build")).toHaveLength(0);
+      expect(groupStarts(several, "Inbox", "Studio")).toHaveLength(0);
     }
     // The next group is the list under "Recent", with or without a section before it.
     for (const markup of [renderRail(many(1), { inbox }), renderRail(many(1))]) {

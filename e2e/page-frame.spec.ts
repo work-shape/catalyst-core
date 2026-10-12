@@ -30,8 +30,8 @@ test("every page's title line starts under the frame's top room, and the area's 
   const titleLineMiddle = PAGE_TOP + TITLE_LINE / 2;
 
   const lists: { path: string; title: string; area?: string }[] = [
-    { path: "/build/agents", title: "Agents", area: "Build" },
-    { path: "/build/skills", title: "Skills", area: "Build" },
+    { path: "/build/agents", title: "Agents", area: "Studio" },
+    { path: "/build/skills", title: "Skills", area: "Studio" },
     { path: "/settings/instance/users", title: "Users", area: "Settings" },
     { path: "/settings/you/profile", title: "Profile", area: "Settings" },
     { path: "/inbox", title: "Inbox" },
@@ -90,7 +90,7 @@ test("in a narrow window the area's name stands beside the sidebar button, over 
   await signIn(page);
 
   for (const { path, title, area, pages } of [
-    { path: "/build/agents", title: "Agents", area: "Build", pages: "Kinds in Build" },
+    { path: "/build/agents", title: "Agents", area: "Studio", pages: "Kinds in Studio" },
     { path: "/settings/instance/users", title: "Users", area: "Settings", pages: "Settings pages" }
   ]) {
     await page.goto(path);

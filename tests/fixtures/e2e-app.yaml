@@ -195,7 +195,7 @@ administration:
 modules:
   apps:
     enabled: true
-  # Connections are on: Build lists them and the Access page grants their rights. The suite's
+  # Connections are on: Studio lists them and the Access page grants their rights. The suite's
   # server names one connector type, `test`, which contacts nothing.
   connections:
     enabled: true

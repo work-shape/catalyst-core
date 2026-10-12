@@ -127,7 +127,7 @@ describe("area route table", () => {
     expect(workspaceRouteFromPath("/admin")).toEqual({ kind: "administration" });
   });
 
-  it("leads the old Config address to Build, which opens a list", () => {
+  it("leads the old Config address to Studio, which opens a list", () => {
     const row = areaRoutePaths().find((candidate) => candidate.path === "/admin/config");
 
     expect(row?.route).toBeUndefined();
@@ -135,7 +135,7 @@ describe("area route table", () => {
     expect(workspaceRouteFromPath("/admin/config")).toEqual({ kind: "build" });
   });
 
-  it("reads the id of a Build asset as written, with its Namespace prefix and dots", () => {
+  it("reads the id of a Studio asset as written, with its Namespace prefix and dots", () => {
     expect(workspaceRouteFromPath("/build/agents/tax-steuer_agent.v2")).toEqual({
       kind: "build-asset",
       assetKind: "agents",

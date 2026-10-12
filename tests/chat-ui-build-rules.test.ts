@@ -17,7 +17,7 @@ import {
   type Namespaces
 } from "./chat-ui-build-fixtures";
 
-describe("Build ids", () => {
+describe("Studio ids", () => {
   it("makes an id from the name people read", () => {
     expect(assetIdFromTitle("Tax Review")).toBe("tax_review");
     expect(assetIdFromTitle("  Steuer-Prüfung (Köln) 2026 ")).toBe("steuer_prufung_koln_2026");
@@ -29,7 +29,7 @@ describe("Build ids", () => {
   });
 });
 
-describe("Build rights", () => {
+describe("Studio rights", () => {
   const rights = (permissions: string[], namespaces: Namespaces = []) =>
     resolveBuildRights({ permissions }, platformContext(namespaces, instanceActions(permissions)));
   const taxAgent = { kind: "agent", namespace: "tax-" };
@@ -128,14 +128,14 @@ describe("Build rights", () => {
       expect(nobody.mayCreate("agent")).toBe(false);
       expect(nobody.namespaces).toEqual([]);
     }
-    // The session alone opens Build for an instance reader before the instance answered.
+    // The session alone opens Studio for an instance reader before the instance answered.
     expect(resolveBuildRights({ permissions: ["config_assets.read"] }, undefined).readsAny).toBe(
       true
     );
   });
 });
 
-describe("Build refusals", () => {
+describe("Studio refusals", () => {
   const { t } = createTranslationContext("en");
   const refusal = (code: string, message: string, details?: Record<string, unknown>) =>
     new ApiError(code === "REVISION_CONFLICT" ? 412 : code === "FORBIDDEN" ? 403 : 400, message, {
