@@ -55,6 +55,32 @@ const DEFAULT_TREE_LIMITS: TreeLimits = {
 const REFUSED_SEGMENT = /^(?:\.git|\.gitmodules|\.gitattributes|\.\.|\.|git~\d+)$/iu;
 const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/u;
 
+/**
+ * The code points HFS+ drops from a name before it compares it, as git lists them: with one
+ * of them in it a name reads as `.git` or `.gitmodules` on such a file system and as something
+ * else here. No name of a file needs one, so a path that holds one is refused.
+ */
+function isIgnorable(character: string): boolean {
+  const code = character.codePointAt(0) ?? 0;
+  return (
+    (code >= 0x200c && code <= 0x200f) ||
+    (code >= 0x202a && code <= 0x202e) ||
+    (code >= 0x206a && code <= 0x206f) ||
+    code === 0xfeff
+  );
+}
+
+/** A path as it can be shown: what is not seen is written as its code point. */
+function printable(path: string): string {
+  return [...path]
+    .map((character) =>
+      CONTROL_CHARACTER.test(character) || isIgnorable(character)
+        ? `<U+${(character.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, "0")}>`
+        : character
+    )
+    .join("");
+}
+
 /** The reason a path cannot be in a tree, or nothing when it can. */
 export function pathRefusal(path: string, limits: TreeLimits = DEFAULT_TREE_LIMITS) {
   const refuse = (code: TreeRefusal["code"], message: string): TreeRefusal => ({
@@ -68,10 +94,15 @@ export function pathRefusal(path: string, limits: TreeLimits = DEFAULT_TREE_LIMI
       `A path is longer than ${limits.maxPathBytes} bytes (ASSET_REPO_MAX_PATH_BYTES): '${path.slice(0, 80)}…'`
     );
   }
-  if (path.startsWith("/") || CONTROL_CHARACTER.test(path) || path.includes("\\")) {
+  if (
+    path.startsWith("/") ||
+    CONTROL_CHARACTER.test(path) ||
+    path.includes("\\") ||
+    [...path].some(isIgnorable)
+  ) {
     return refuse(
       "path_refused",
-      `The path '${printable(path)}' is absolute or holds a backslash or a control character`
+      `The path '${printable(path)}' is absolute or holds a backslash, a control character or a character that is not shown`
     );
   }
   for (const segment of path.split("/")) {
@@ -153,8 +184,4 @@ export function treeRefusal(
     }
   }
   return undefined;
-}
-
-function printable(path: string): string {
-  return path.replace(/[\u0000-\u001f\u007f]/gu, "?");
 }

@@ -257,6 +257,14 @@ describe("committing a folder", () => {
     );
   });
 
+  // Fails where such a name reaches git: git refuses it and the command ends without a result.
+  it("refuses a name with a character that is not shown, with a refusal that names the path", async () => {
+    for (const path of [".g\u200cit/config", ".gitmodule\u200cs"]) {
+      const commit = await commitFolder(scratch, { files: { ...source, [path]: "x\n" } });
+      expect(commit.result, path).toMatchObject({ status: "refused", code: "path_refused" });
+    }
+  });
+
   it("refuses a file over the cap and names it", async () => {
     const commit = await commitFolder(scratch, {
       files: { ...source, "data/big.bin": new Uint8Array(ASSET_REPO_MAX_FILE_BYTES + 1) }
@@ -361,10 +369,17 @@ describe("the trees the store takes", () => {
       ".gitattributes",
       "c:stream",
       "trailing./x",
-      "trailing /x"
+      "trailing /x",
+      // What HFS+ drops from a name: these read as `.git` and `.gitmodules` there.
+      ".g\u200cit/config",
+      ".gitmodule\u200cs",
+      "a/.gi\u200dt",
+      "\ufeff.git",
+      "left\u202eright"
     ]) {
       expect(refused([file(path)]), path).toEqual(["path_refused", path]);
     }
+    expect(treeRefusal([file(".g\u200cit")])?.message).toContain(".g<U+200C>it");
     const long = "a".repeat(513);
     expect(refused([file(long)])).toEqual(["path_too_long", long]);
     expect(refused([file("big", ASSET_REPO_MAX_FILE_BYTES + 1)])).toEqual([
