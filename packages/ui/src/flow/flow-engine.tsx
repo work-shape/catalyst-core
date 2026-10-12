@@ -22,6 +22,7 @@ import { SidePanelPlacementContext } from "../overlays/side-panel";
 import { FlowControls, type FlowControlsSearch } from "./flow-controls";
 import {
   EngineContext,
+  FLOW_COMPACT_ZOOM,
   edgeTypes,
   nodeTypes,
   type EngineContextValue,
@@ -138,21 +139,49 @@ function Engine({
       return new Map(current).set(id, next);
     });
   }, []);
-  const toggle = useCallback((id: string) => {
-    setCollapsed((current) => {
-      const next = new Set(current);
-      if (!next.delete(id)) {
-        next.add(id);
+  /** The group the reader just folded or unfolded, and where its corner stood in the canvas. */
+  const heldRef = useRef<{ id: string; x: number; y: number }>(undefined);
+  const boxesRef = useRef<FlowLayout["boxes"]>(undefined);
+  const toggle = useCallback(
+    (id: string) => {
+      // Folding changes the layout around the group. The group stays where the reader pressed
+      // it, and the view is no longer fitted by itself: the reader arranged it.
+      const box = boxesRef.current?.get(id);
+      if (box) {
+        const view = flow.getViewport();
+        heldRef.current = { id, x: box.x * view.zoom + view.x, y: box.y * view.zoom + view.y };
+        movedRef.current = true;
       }
-      return next;
-    });
-  }, []);
+      setCollapsed((current) => {
+        const next = new Set(current);
+        if (!next.delete(id)) {
+          next.add(id);
+        }
+        return next;
+      });
+    },
+    [flow]
+  );
 
   const layout = useMemo(
     () => layoutFlow({ graph, direction, sizes, collapsed }),
     [graph, direction, sizes, collapsed]
   );
   const ready = layout.order.every((id) => sizes.has(id));
+  useLayoutEffect(() => {
+    boxesRef.current = layout.boxes;
+    const held = heldRef.current;
+    const box = held === undefined ? undefined : layout.boxes.get(held.id);
+    if (held === undefined || !box || !ready) {
+      return;
+    }
+    const view = flow.getViewport();
+    const x = held.x - box.x * view.zoom;
+    const y = held.y - box.y * view.zoom;
+    if (x !== view.x || y !== view.y) {
+      settled(flow.setViewport({ x, y, zoom: view.zoom }, { duration: 0 }));
+    }
+  }, [layout, ready, flow]);
 
   const { nodes, edges } = useMemo(() => {
     const groups = new Map((graph.groups ?? []).map((group) => [group.id, group]));
@@ -223,7 +252,7 @@ function Engine({
   const chromeInsets = useMemo<FlowInsets>(
     () =>
       narrow
-        ? { top: 16, right: 16, bottom: controls ? 64 : 16, left: 16 }
+        ? { top: 16, right: 16, bottom: controls ? 72 : 16, left: 16 }
         : { top: 32, right: 32, bottom: controls || minimap ? 76 : 32, left: 32 },
     [narrow, controls, minimap]
   );
@@ -231,9 +260,19 @@ function Engine({
   const fit = useCallback(
     (animate: boolean) => {
       settled(
-        flow.setViewport(fitFlowViewport(layout.bounds, size, chromeInsets, direction, MIN_ZOOM), {
-          duration: animate && !prefersReducedMotion() ? PAN_DURATION : 0
-        })
+        flow.setViewport(
+          fitFlowViewport(
+            layout.bounds,
+            size,
+            chromeInsets,
+            direction,
+            MIN_ZOOM,
+            FLOW_COMPACT_ZOOM
+          ),
+          {
+            duration: animate && !prefersReducedMotion() ? PAN_DURATION : 0
+          }
+        )
       );
     },
     [flow, layout.bounds, size, chromeInsets, direction]
@@ -275,6 +314,7 @@ function Engine({
       };
       const move = panIntoView(shown, freeArea());
       if (move.x !== 0 || move.y !== 0) {
+        heldRef.current = undefined;
         settled(
           flow.setViewport(
             { x: view.x + move.x, y: view.y + move.y, zoom: view.zoom },
@@ -372,6 +412,7 @@ function Engine({
     }
     setFound(next);
     movedRef.current = true;
+    heldRef.current = undefined;
     const view = flow.getViewport();
     // A match is shown large enough to read, in the middle of what is free.
     const zoom = Math.max(view.zoom, 1);
@@ -464,9 +505,10 @@ function Engine({
           zoomOnScroll={false}
           panOnScroll={!embedded}
           preventScrolling={!embedded}
-          // The library's own mark stays on the canvas, in the one corner nothing else stands
-          // in: the controls are at the left, the minimap and the panel at the right.
-          attributionPosition="bottom-center"
+          // The library's own mark stays on the canvas, where nothing else stands: between the
+          // controls at the left and the minimap and the panel at the right. A narrow canvas
+          // has no minimap, so the mark stands in that corner, on the strip of the controls.
+          attributionPosition={narrow ? "bottom-right" : "bottom-center"}
           className="[--xy-attribution-background-color:transparent]"
           // With a handler a node takes pointer events, which its own controls need.
           onNodeClick={noNodeClick}
@@ -479,6 +521,7 @@ function Engine({
           onMoveStart={(event) => {
             if (event) {
               movedRef.current = true;
+              heldRef.current = undefined;
             }
           }}
         >
@@ -488,16 +531,27 @@ function Engine({
             size={1.5}
             color="color-mix(in srgb, var(--foreground) 16%, transparent)"
           />
+          {narrow && controls ? (
+            // A narrow canvas has no free corner: a graph taller than it would pass under the
+            // controls. They stand on a strip of their own, which the graph ends above.
+            <div
+              aria-hidden="true"
+              data-slot="flow-strip"
+              className="absolute inset-x-0 bottom-0 z-4 h-15 border-t bg-background"
+            />
+          ) : null}
         </ReactFlow>
         {controls && !(narrow && panelShown) ? (
           <EngineControls
             narrow={narrow}
             onFit={() => {
               movedRef.current = false;
+              heldRef.current = undefined;
               fit(true);
             }}
             onMoved={() => {
               movedRef.current = true;
+              heldRef.current = undefined;
             }}
             search={
               narrow || searchLabel === undefined

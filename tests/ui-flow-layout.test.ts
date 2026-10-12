@@ -244,6 +244,41 @@ describe("fitFlowViewport", () => {
     expect(small.x).toBe(400);
   });
 
+  it("shows a wide graph whole top to bottom, where fitting its width already makes it small", () => {
+    const canvas = { width: 400, height: 700 };
+    // Fitting the width gives 0.5: under the size a node is read at, so the whole is shown.
+    const wide = fitFlowViewport(
+      { x: 0, y: 0, width: 800, height: 1750 },
+      canvas,
+      none,
+      "vertical",
+      0.2,
+      0.6
+    );
+    expect(wide.zoom).toBe(0.4);
+    expect(wide.y).toBe(0);
+    // A narrow graph stays readable and starts at the top.
+    const narrow = fitFlowViewport(
+      { x: 0, y: 0, width: 400, height: 1750 },
+      canvas,
+      none,
+      "vertical",
+      0.2,
+      0.6
+    );
+    expect(narrow.zoom).toBe(1);
+    // A graph that would have to become too small for that keeps its width.
+    const long = fitFlowViewport(
+      { x: 0, y: 0, width: 800, height: 7000 },
+      canvas,
+      none,
+      "vertical",
+      0.2,
+      0.6
+    );
+    expect(long.zoom).toBe(0.5);
+  });
+
   it("keeps the graph out from under what the insets cover", () => {
     const bounds = { x: 0, y: 0, width: 1000, height: 300 };
     const view = fitFlowViewport(
