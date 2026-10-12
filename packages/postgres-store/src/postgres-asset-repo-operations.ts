@@ -1,7 +1,9 @@
-import { and, asc, eq, inArray, isNull, max } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lt, max } from "drizzle-orm";
 import {
   AppError,
-  type AssetRepoBundle,
+  assetRepoBundleObjectKey,
+  type AssetRepoSave,
+  type AssetRepoSaveBundle,
   type AssetRepoWrite,
   type ClientInstanceId,
   type ConfigAssetMutation,
@@ -11,22 +13,188 @@ import type { PostgresConnection, PostgresTransaction } from "./postgres-databas
 import { assetCheckouts, assetRepoBundles } from "./schema";
 
 // The ledger of the repositories of assets. Postgres says which bundles make a repository and
-// which commit its draft is at; a write that adds a commit adds its bundle row in the
-// transaction that writes the revision, under the lock every write of an asset takes.
+// which commit its draft is at. A save writes a pending row before it puts its bundle; the
+// transaction that writes the revision makes that row part of the repository, under the lock
+// every write of an asset takes.
 
-function mapBundle(row: typeof assetRepoBundles.$inferSelect): AssetRepoBundle {
+type BundleRow = typeof assetRepoBundles.$inferSelect;
+
+/** The bundle a row names, once it names one. The table holds all of its columns or none. */
+function namedBundle(row: BundleRow): AssetRepoSaveBundle | undefined {
+  const { objectKey, kind, tipCommit, bytes, sha256 } = row;
+  if (
+    objectKey === null ||
+    kind === null ||
+    tipCommit === null ||
+    bytes === null ||
+    sha256 === null
+  ) {
+    return undefined;
+  }
+  return {
+    objectKey,
+    kind,
+    tipCommit,
+    ...(row.prerequisiteCommit ? { prerequisiteCommit: row.prerequisiteCommit } : {}),
+    bytes,
+    sha256
+  };
+}
+
+function mapSave(row: BundleRow): AssetRepoSave {
+  const bundle = namedBundle(row);
   return {
     assetId: row.assetId,
-    sequence: row.sequence,
-    objectKey: row.objectKey,
-    kind: row.kind,
-    tipCommit: row.tipCommit,
-    ...(row.prerequisiteCommit ? { prerequisiteCommit: row.prerequisiteCommit } : {}),
-    bytes: row.bytes,
-    sha256: row.sha256,
-    ...(row.supersededAt ? { supersededAt: row.supersededAt.toISOString() } : {}),
-    createdAt: row.createdAt.toISOString()
+    operationRunId: row.operationRunId,
+    state: row.state,
+    savedAt: row.savedAt.toISOString(),
+    ...(bundle ? { bundle } : {})
   };
+}
+
+const saveOf = (input: {
+  clientInstanceId: ClientInstanceId;
+  assetId: string;
+  operationRunId: AssetRepoSave["operationRunId"];
+}) =>
+  and(
+    eq(assetRepoBundles.clientInstanceId, input.clientInstanceId),
+    eq(assetRepoBundles.assetId, input.assetId),
+    eq(assetRepoBundles.operationRunId, input.operationRunId)
+  );
+
+export async function beginAssetRepoSave(
+  db: PostgresConnection,
+  input: Parameters<ConfigAssetStore["beginAssetRepoSave"]>[0]
+): ReturnType<ConfigAssetStore["beginAssetRepoSave"]> {
+  // A commit carries whole seconds, so the row holds exactly the time of the commit.
+  const now = new Date(Math.floor(Date.now() / 1000) * 1000);
+  // Of two attempts that start at once, one writes the row and both read it.
+  await db
+    .insert(assetRepoBundles)
+    .values({ ...input, state: "pending", savedAt: now, createdAt: now })
+    .onConflictDoNothing();
+  const [row] = await db.select().from(assetRepoBundles).where(saveOf(input)).limit(1);
+  if (!row) {
+    throw new AppError("CONFLICT", "The save of this Operation Run is not this instance's", {
+      reason: "save_not_pending"
+    });
+  }
+  return mapSave(row);
+}
+
+export async function nameAssetRepoSaveBundle(
+  db: PostgresConnection,
+  input: Parameters<ConfigAssetStore["nameAssetRepoSaveBundle"]>[0]
+): ReturnType<ConfigAssetStore["nameAssetRepoSaveBundle"]> {
+  const { bundle } = input;
+  const expectedKey = assetRepoBundleObjectKey({
+    assetId: input.assetId,
+    commit: bundle.tipCommit,
+    sha256: bundle.sha256
+  });
+  if (bundle.objectKey !== expectedKey) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "The key of a bundle holds its asset, the commit it ends on and the SHA-256 of its bytes"
+    );
+  }
+  if ((bundle.kind === "full") !== (bundle.prerequisiteCommit === undefined)) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "A full bundle stands on nothing, and an incremental one names the commit it stands on"
+    );
+  }
+  await db.transaction(async (tx) => {
+    const [row] = await tx.select().from(assetRepoBundles).where(saveOf(input)).for("update");
+    if (row?.state !== "pending") {
+      throw new AppError("CONFLICT", "The save is not pending any more", {
+        reason: "save_not_pending"
+      });
+    }
+    if (
+      row.objectKey !== null &&
+      row.objectKey !== bundle.objectKey &&
+      row.objectKey !== input.replaces
+    ) {
+      throw new AppError("CONFLICT", "The save named another bundle before", {
+        reason: "pending_bundle_differs",
+        objectKey: row.objectKey
+      });
+    }
+    // The key holds the commit and the hash, so only a save of the same files on the same base
+    // by the same author in the same second names it too. One of the two is enough.
+    const [other] = await tx
+      .select({ operationRunId: assetRepoBundles.operationRunId })
+      .from(assetRepoBundles)
+      .where(eq(assetRepoBundles.objectKey, bundle.objectKey))
+      .limit(1);
+    if (other && other.operationRunId !== input.operationRunId) {
+      throw new AppError("CONFLICT", "Another save named this bundle", {
+        reason: "bundle_named_by_another_save"
+      });
+    }
+    await tx
+      .update(assetRepoBundles)
+      .set({
+        objectKey: bundle.objectKey,
+        kind: bundle.kind,
+        tipCommit: bundle.tipCommit,
+        prerequisiteCommit: bundle.prerequisiteCommit ?? null,
+        bytes: bundle.bytes,
+        sha256: bundle.sha256
+      })
+      .where(saveOf(input));
+  });
+}
+
+export async function sweepPendingAssetRepoSaves(
+  db: PostgresConnection,
+  input: Parameters<ConfigAssetStore["sweepPendingAssetRepoSaves"]>[0]
+): ReturnType<ConfigAssetStore["sweepPendingAssetRepoSaves"]> {
+  return db.transaction(async (tx) => {
+    // The lock of the row is what a finishing save waits for: it then finds no row and is
+    // refused, so no live row is left naming an object that was removed.
+    // A row whose save is finishing right now is waited for and is not pending after.
+    const rows = await tx
+      .select()
+      .from(assetRepoBundles)
+      .where(
+        and(eq(assetRepoBundles.state, "pending"), lt(assetRepoBundles.savedAt, input.olderThan))
+      )
+      .orderBy(asc(assetRepoBundles.savedAt))
+      .limit(input.limit)
+      .for("update");
+    for (const row of rows) {
+      if (row.objectKey !== null) {
+        await input.removeObject({
+          clientInstanceId: row.clientInstanceId,
+          assetId: row.assetId,
+          objectKey: row.objectKey
+        });
+      }
+      await tx
+        .delete(assetRepoBundles)
+        .where(
+          and(
+            eq(assetRepoBundles.assetId, row.assetId),
+            eq(assetRepoBundles.operationRunId, row.operationRunId),
+            eq(assetRepoBundles.state, "pending")
+          )
+        );
+    }
+    return { removed: rows.length };
+  });
+}
+
+/** Removes the rows of assets that are being removed. Their objects lie below the assets' prefixes. */
+export async function deleteAssetRepoBundles(
+  tx: PostgresTransaction,
+  assetIds: readonly string[]
+): Promise<void> {
+  if (assetIds.length > 0) {
+    await tx.delete(assetRepoBundles).where(inArray(assetRepoBundles.assetId, [...assetIds]));
+  }
 }
 
 export async function listAssetRepoBundles(
@@ -40,11 +208,25 @@ export async function listAssetRepoBundles(
       and(
         eq(assetRepoBundles.clientInstanceId, input.clientInstanceId),
         eq(assetRepoBundles.assetId, input.assetId),
+        eq(assetRepoBundles.state, "live"),
         input.includeSuperseded ? undefined : isNull(assetRepoBundles.supersededAt)
       )
     )
     .orderBy(asc(assetRepoBundles.sequence));
-  return rows.map(mapBundle);
+  return rows.flatMap((row) => {
+    const bundle = namedBundle(row);
+    return bundle && row.sequence !== null
+      ? [
+          {
+            assetId: row.assetId,
+            sequence: row.sequence,
+            ...bundle,
+            ...(row.supersededAt ? { supersededAt: row.supersededAt.toISOString() } : {}),
+            createdAt: row.createdAt.toISOString()
+          }
+        ]
+      : [];
+  });
 }
 
 export async function getAssetCheckout(
@@ -105,12 +287,6 @@ export function lockedRepoWrites(
     if (writes.some((other) => keyOf(other) === keyOf(mutation))) {
       throw new AppError("VALIDATION_FAILED", "A batch adds one commit to an asset at most");
     }
-    if ((write.bundle.kind === "full") !== (write.baseCommit === null)) {
-      throw new AppError(
-        "VALIDATION_FAILED",
-        "The first commit of a repository comes in a full bundle, and every other in an incremental one"
-      );
-    }
     const row = stored.find((candidate) => keyOf(candidate.asset) === keyOf(mutation));
     const draftCommit = row?.asset.status === "active" ? row.revision.commit : null;
     if (write.baseCommit !== draftCommit) {
@@ -134,23 +310,23 @@ export function repoColumns(mutation: { repository?: AssetRepoWrite }): {
 }
 
 /**
- * Adds the bundle row of each repository write and binds its folder, once the revisions of the
- * batch are written. `revisions` and `assetIds` are what the batch gave each asset it wrote,
- * keyed `<kind>:<name>`.
+ * Makes the pending bundle of each repository write part of its repository and binds its
+ * folder, once the revisions of the batch are written. A save whose row the sweeper removed,
+ * or whose bundle is not the one of this commit on this base, is refused, and with it the
+ * batch. `revisions` and `assetIds` are what the batch gave each asset it wrote, keyed
+ * `<kind>:<name>`.
  */
 export async function insertRepoWrites(
   tx: PostgresTransaction,
   clientInstanceId: ClientInstanceId,
   now: Date,
   locked: readonly LockedRepoWrite[],
-  written: {
-    revisions: Readonly<Record<string, number>>;
-    assetIds: Readonly<Record<string, string>>;
-  }
+  revisions: Readonly<Record<string, number>>,
+  assetIds: Readonly<Record<string, string>>
 ): Promise<void> {
   const writes = locked.flatMap((entry) => {
-    const assetId = written.assetIds[keyOf(entry)];
-    const revision = written.revisions[keyOf(entry)];
+    const assetId = assetIds[keyOf(entry)];
+    const revision = revisions[keyOf(entry)];
     return assetId === undefined || revision === undefined
       ? []
       : [{ assetId, revision, write: entry.write }];
@@ -178,18 +354,27 @@ export async function insertRepoWrites(
       });
     }
     sequences.set(assetId, sequence + 1);
-    await tx.insert(assetRepoBundles).values({
-      assetId,
-      sequence: sequence + 1,
-      clientInstanceId,
-      objectKey: write.bundle.objectKey,
-      kind: write.bundle.kind,
-      tipCommit: write.commit,
-      prerequisiteCommit: write.baseCommit,
-      bytes: write.bundle.bytes,
-      sha256: write.bundle.sha256,
-      createdAt: now
-    });
+    const save = { clientInstanceId, assetId, operationRunId: write.operationRunId };
+    const [pending] = await tx.select().from(assetRepoBundles).where(saveOf(save)).for("update");
+    if (pending?.state !== "pending" || pending.objectKey === null) {
+      throw new AppError("CONFLICT", "The save has no pending bundle any more", {
+        reason: "save_not_pending"
+      });
+    }
+    if (
+      pending.tipCommit !== write.commit ||
+      pending.prerequisiteCommit !== write.baseCommit ||
+      (pending.kind === "full") !== (write.baseCommit === null)
+    ) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "The bundle of the save is not the one of this commit on this base: the first commit of a repository comes in a full bundle, and every other in an incremental one that stands on its base"
+      );
+    }
+    await tx
+      .update(assetRepoBundles)
+      .set({ state: "live", sequence: sequence + 1 })
+      .where(saveOf(save));
     if (write.checkout) {
       const bound = {
         assetId,

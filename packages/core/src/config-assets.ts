@@ -3,9 +3,14 @@ import type { StorePage } from "./paging";
 import type { AuditActor } from "./audit";
 import type { AgentConfig, SkillConfig } from "./config";
 import type { CollaborationWorkspaceKind } from "./collaboration-workspace";
-import type { ClientInstanceId, CollaborationWorkspaceId, ConversationId } from "./ids";
+import type {
+  ClientInstanceId,
+  CollaborationWorkspaceId,
+  ConversationId,
+  OperationRunId
+} from "./ids";
 import type { JsonObject } from "./json";
-import type { FileSetId } from "./pages";
+import { assetObjectPrefix, type FileSetId } from "./pages";
 
 /**
  * The id of a registered asset kind, such as `agent`. The registry of the instance says which
@@ -126,7 +131,7 @@ export interface ConfigAssetRevisionRecord {
 export interface AssetRepoBundle {
   assetId: string;
   sequence: number;
-  /** Where the bytes are, in the `files` store. Written once and never overwritten. */
+  /** Where the bytes are, in the `files` store: `assetRepoBundleObjectKey` of them. */
   objectKey: string;
   /** A full bundle stands on nothing; an incremental one on `prerequisiteCommit`. */
   kind: "full" | "incremental";
@@ -149,9 +154,47 @@ export interface AssetCheckout {
 }
 
 /**
+ * Where the bytes of a bundle are. The key holds the commit the bundle ends on and the SHA-256
+ * of its bytes, so an object that is put a second time under a key has the same bytes, and
+ * two different packs of one commit have two keys. Nothing is ever replaced by other bytes.
+ */
+export function assetRepoBundleObjectKey(input: {
+  assetId: string;
+  commit: string;
+  sha256: string;
+}): string {
+  return `${assetObjectPrefix(input.assetId)}repo/${input.commit}-${input.sha256}.bundle`;
+}
+
+/** The bundle a save wrote, as it names it to the ledger before it puts the object. */
+export type AssetRepoSaveBundle = Pick<
+  AssetRepoBundle,
+  "objectKey" | "kind" | "tipCommit" | "prerequisiteCommit" | "bytes" | "sha256"
+>;
+
+/**
+ * One save of an asset's repository, as the ledger holds it from before its object is put.
+ * It is keyed by the Operation Run of the save, so a save that is tried again finds it.
+ */
+export interface AssetRepoSave {
+  assetId: string;
+  operationRunId: OperationRunId;
+  /** `pending` until the transaction that writes the revision made the bundle part of the repository. */
+  state: "pending" | "live";
+  /**
+   * The time the commit of the save carries, in whole seconds. It is set once, so every
+   * attempt of the run builds the same commit from the same files.
+   */
+  savedAt: string;
+  /** The bundle the save named, once it did. */
+  bundle?: AssetRepoSaveBundle;
+}
+
+/**
  * What a write of an asset whose content is a repository adds to the ledger, in the
- * transaction that writes the revision: the commit and tree the revision names and the row of
- * the bundle that holds the commit. The bundle is in the object store before the write.
+ * transaction that writes the revision: the commit and tree the revision names, and the
+ * pending bundle of the save, which becomes part of the repository. The save named the bundle
+ * and put its object before the write.
  */
 export interface AssetRepoWrite {
   commit: string;
@@ -162,8 +205,11 @@ export interface AssetRepoWrite {
    * and nothing is written. `null` for the first commit of a repository.
    */
   baseCommit: string | null;
-  /** The bundle that holds `commit`. It is full when `baseCommit` is `null`. */
-  bundle: { objectKey: string; kind: AssetRepoBundle["kind"]; bytes: number; sha256: string };
+  /**
+   * The save whose pending bundle holds `commit`. The bundle is full when `baseCommit` is
+   * `null` and stands on `baseCommit` otherwise. A save the sweeper removed is refused.
+   */
+  operationRunId: OperationRunId;
   /** The folder that holds the files of `commit` after the write. */
   checkout?: { conversationId: ConversationId; folder: string };
 }
@@ -415,6 +461,45 @@ export interface ConfigAssetStore {
     assetId: string;
     includeSuperseded?: true;
   }): Promise<AssetRepoBundle[]>;
+  /**
+   * Starts a save, or finds the one the Operation Run started before. The first call writes a
+   * pending row with the time of the save; every later call of the run answers that row, so a
+   * second attempt commits with the same time. The asset need not exist yet.
+   */
+  beginAssetRepoSave(input: {
+    clientInstanceId: ClientInstanceId;
+    assetId: string;
+    operationRunId: OperationRunId;
+  }): Promise<AssetRepoSave>;
+  /**
+   * Names the bundle of a pending save, before its object is put, so no object is in the
+   * store that no row names. Naming the same bundle again changes nothing. A save that named
+   * another bundle before is refused with the reason `pending_bundle_differs` and that key,
+   * unless `replaces` is that key: its caller removed that object first. A save that is not
+   * pending any more is refused with the reason `save_not_pending`.
+   */
+  nameAssetRepoSaveBundle(input: {
+    clientInstanceId: ClientInstanceId;
+    assetId: string;
+    operationRunId: OperationRunId;
+    bundle: AssetRepoSaveBundle;
+    replaces?: string;
+  }): Promise<void>;
+  /**
+   * Removes the saves that are still pending and older than `olderThan`, oldest first:
+   * `removeObject` is called for the object of each under the lock of its row, and the row
+   * goes once it returned. A save that is being finished is left alone, and one that is swept
+   * cannot be finished any more.
+   */
+  sweepPendingAssetRepoSaves(input: {
+    olderThan: Date;
+    limit: number;
+    removeObject(object: {
+      clientInstanceId: ClientInstanceId;
+      assetId: string;
+      objectKey: string;
+    }): Promise<void>;
+  }): Promise<{ removed: number }>;
   /** The checkout a folder of a conversation is, where it is one. */
   getAssetCheckout(input: {
     clientInstanceId: ClientInstanceId;
