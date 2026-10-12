@@ -446,7 +446,10 @@ test("an asset that was deleted meanwhile says so, keeps the text and offers the
 });
 
 test("an agent's availability and the default agent are changed by the asset operations", async ({
-  page
+  page,
+  // The agent is offered in every workspace from the moment it is stored until the test
+  // narrows it, so the tests that count the agents of the instance wait for this one.
+  instanceAgentsChange: _instanceAgentsChange
 }) => {
   const name = "e2e_placement_probe";
   await signInViaApi(page, superadminUser);
