@@ -27,10 +27,10 @@ import {
   type DataStoreDefinition
 } from "./definition";
 import { describeDatabaseFailure } from "./failures";
-import { applyMigration, readAppliedMigrations } from "./migrating";
-import { DataStoreProvisioningError, provisionDataStore } from "./provisioning";
+import { DataStoreMigrationRefusal, applyMigration, readAppliedMigrations } from "./migrating";
+import { DataStoreProvisioningError, assertStoreRoles, provisionDataStore } from "./provisioning";
 import type { DataStoreRuntime } from "./runtime";
-import { measureDataStores } from "./size";
+import { measureDataStores, recordStoreSize } from "./size";
 
 // The jobs that bring a store's database to its published revision. Publishing writes the
 // store's record and enqueues in the same transaction; the handlers read the record anew,
@@ -279,6 +279,30 @@ async function failAttempt(
   throw new NonRetryableJobError(message, { reason: code });
 }
 
+/** The secrets of a store, each made where an earlier attempt did not get that far. */
+function storeSecrets(runtime: DataStoreRuntime, control: JobControl, storeId: string) {
+  return control.transaction(async (stores) => ({
+    app: await runtime.credentials.ensure(stores.connections, storeId, "app"),
+    migration: await runtime.credentials.ensure(stores.connections, storeId, "migration"),
+    ledger: await runtime.credentials.ensure(stores.connections, storeId, "ledger")
+  }));
+}
+
+/**
+ * Measures a store whose database was just made or changed, so the size limit holds from the
+ * first insert. A store that cannot be measured now is measured by the first insert.
+ */
+async function measureNow(
+  runtime: DataStoreRuntime,
+  control: JobControl,
+  record: DataStoreRecord
+): Promise<void> {
+  await recordStoreSize(runtime, (work) => control.transaction(work), record, control.signal).catch(
+    () =>
+      runtime.logger.warn({ storeId: record.id }, "The size of a Data Store could not be measured")
+  );
+}
+
 function provisioningFailure(error: unknown): DataStoreFailure & { retryable: boolean } {
   if (error instanceof DataStoreProvisioningError) {
     return { code: error.code, message: error.message, retryable: false };
@@ -291,7 +315,9 @@ function provisioningFailure(error: unknown): DataStoreFailure & { retryable: bo
           "The platform's database role may not create the database or the roles of a Data Store. Grant it CREATEDB and CREATEROLE; publishing the store again then provisions it.",
         retryable: false
       }
-    : { ...failure, code: "provisioning_failed", message: failure.sentence };
+    : // Every step finds what is there and adds what is missing, so another attempt can only
+      // help: two stores provisioned at once may meet on a row of the server's catalog.
+      { ...failure, code: "provisioning_failed", message: failure.sentence, retryable: true };
 }
 
 async function provision(
@@ -303,11 +329,8 @@ async function provision(
   const record = await claimStore(runtime, control, storeId);
   if (!record || record.status !== "provisioning") return;
   try {
-    const passwords = await control.transaction(async (stores) => ({
-      app: await runtime.credentials.ensure(stores.connections, storeId, "app"),
-      migration: await runtime.credentials.ensure(stores.connections, storeId, "migration")
-    }));
-    await provisionDataStore(runtime.server, record, passwords, control.signal);
+    const secrets = await storeSecrets(runtime, control, storeId);
+    await provisionDataStore(runtime.server, record, secrets, control.signal);
   } catch (error) {
     return failAttempt(
       runtime,
@@ -323,6 +346,7 @@ async function provision(
     return next;
   });
   if (ready) {
+    await measureNow(runtime, control, ready);
     await runtime.auditRecorder.record({
       type: "data_store.provisioned",
       status: "success",
@@ -332,6 +356,16 @@ async function provision(
     });
   }
 }
+
+/** What Postgres answers a statement with that ends, splits or cannot share a transaction. */
+const OUTSIDE_A_TRANSACTION: ReadonlySet<string> = new Set(["0A000", "25001", "2D000"]);
+
+/** What a migration that was rolled back and refused is told, after the name of its file. */
+const REFUSALS: Record<DataStoreMigrationRefusal["code"], string> = {
+  migration_changed_role: "changed the settings of a role of its store. Nothing of it was applied.",
+  migration_left_transaction:
+    "ended the transaction it ran in. What it changed before that stays, and the store needs an operator before another migration is published."
+};
 
 /** The published definition of a store, or nothing where its asset is gone or unpublished. */
 async function publishedDefinition(
@@ -365,9 +399,11 @@ async function migrate(
     failAttempt(runtime, control, job, "data_store.migration_failed", failure);
 
   let applied;
+  let secrets: Awaited<ReturnType<typeof storeSecrets>>;
   try {
-    // What the database itself recorded decides, not the mirror on the record.
-    applied = await readAppliedMigrations(runtime.server, record, control.signal);
+    secrets = await storeSecrets(runtime, control, storeId);
+    // What the platform recorded in the database itself decides, not the mirror on the record.
+    applied = await readAppliedMigrations(runtime.server, record, secrets.ledger, control.signal);
   } catch (error) {
     const failure = describeDatabaseFailure(error, "Reading the level of the Data Store");
     return fail({ ...failure, code: "migration_failed", message: failure.sentence });
@@ -377,12 +413,33 @@ async function migrate(
 
   const pending = published.definition.migrations.slice(applied.length);
   for (const migration of pending) {
+    const file = `'${migrationFileName(migration)}'`;
+    let failed: (DataStoreFailure & { retryable: boolean; sqlState?: string }) | undefined;
     try {
-      await applyMigration(runtime.server, record, migration, control.signal);
+      await applyMigration(runtime.server, record, migration, secrets.ledger, control.signal);
     } catch (error) {
-      const failure = describeDatabaseFailure(error, `'${migrationFileName(migration)}'`);
-      return fail({ ...failure, code: "migration_failed", message: failure.sentence });
+      const failure = describeDatabaseFailure(error, file);
+      failed =
+        error instanceof DataStoreMigrationRefusal
+          ? { code: error.code, message: `${file} ${REFUSALS[error.code]}`, retryable: false }
+          : {
+              ...failure,
+              code: "migration_failed",
+              message:
+                failure.sqlState !== undefined && OUTSIDE_A_TRANSACTION.has(failure.sqlState)
+                  ? `${file} holds a statement that cannot run in the one transaction of a migration, such as one that ends it (SQLSTATE ${failure.sqlState}). Nothing of it was applied.`
+                  : failure.sentence
+            };
     }
+    // A role may change its own password, and nobody is shown that it did: whatever the
+    // migration did, both roles are the platform's again before anything else connects.
+    try {
+      await assertStoreRoles(runtime.server, record, secrets, control.signal);
+    } catch (error) {
+      const failure = describeDatabaseFailure(error, "Holding the roles of the Data Store");
+      failed ??= { ...failure, code: "migration_failed", message: failure.sentence };
+    }
+    if (failed) return fail(failed);
     applied.push({ number: migration.number, name: migration.name, sha256: migration.sha256 });
     const level = migration.number;
     const mirrored = [...applied];
@@ -397,6 +454,7 @@ async function migrate(
     return next;
   });
   if (done && pending.length > 0) {
+    await measureNow(runtime, control, done);
     await runtime.auditRecorder.record({
       type: "data_store.migrated",
       status: "success",

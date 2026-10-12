@@ -81,11 +81,11 @@ export const dataStoreDefinitionSchema = z
           message: `Migrations are numbered from 0001 without a gap: expected ${fileNumber(index + 1)}, found ${fileNumber(migration.number)}`
         });
       }
-      if (namesReservedSchema(migration.sql)) {
+      for (const refusal of migrationTextRefusals(migration.sql)) {
         context.addIssue({
           code: "custom",
           path: ["migrations", index, "sql"],
-          message: `'${migrationFileName(migration)}' names the schema '${DATA_STORE_RESERVED_SCHEMA}', which the platform keeps for itself in every store (DATA_STORE_RESERVED_SCHEMA). A migration creates and changes objects in other schemas.`
+          message: `'${migrationFileName(migration)}' ${refusal}`
         });
       }
     });
@@ -94,25 +94,55 @@ export const dataStoreDefinitionSchema = z
 export type DataStoreDefinition = z.infer<typeof dataStoreDefinitionSchema>;
 export type DataStoreMigration = DataStoreDefinition["migrations"][number];
 
+/** The words that end or split a transaction wherever they stand in a statement. */
+const TRANSACTION_WORDS: ReadonlySet<string> = new Set([
+  "commit",
+  "rollback",
+  "savepoint",
+  "abort"
+]);
+/** `begin` and `start` open a transaction where one of these follows; a block of a function has statements there. */
+const TRANSACTION_OPENING =
+  /\b(?:begin\s*(?:;|$|transaction\b|work\b|isolation\b|read\b|deferrable\b|not\s+deferrable\b)|start\s+transaction\b|prepare\s+transaction\b)/iu;
+/** A statement that creates, changes or drops a role, or makes the session another one. */
+const ROLE_STATEMENT =
+  /\b(?:(?:create|alter|drop)\s+(?:role|user|group)\b|(?:set|reset)\s+(?:(?:local|session)\s+)?(?:role|session\s+authorization)\b)/iu;
+
 /**
- * Whether a migration names the platform's schema as an identifier, quoted or not. A comment
- * and a quoted value are no identifier. The body of a dollar-quoted text is read as SQL,
- * because that is what a function and a `do` block hold. This is the refusal an author reads
- * early; what the migration role may do there is decided by its grants.
+ * Why the text of a migration is refused, as the end of a sentence that starts with its file.
+ * A comment and a quoted value are no statement. The body of a dollar-quoted text is read as
+ * SQL, because that is what a function and a `do` block hold. This is the refusal an author
+ * reads early. A statement that is put together when it runs is not read here: the runner
+ * holds a migration in its transaction and to its role whatever its text says.
  */
-function namesReservedSchema(sql: string): boolean {
+function migrationTextRefusals(sql: string): string[] {
   const code = sql
     .replace(/--[^\n]*|\/\*[\s\S]*?\*\/|'(?:[^']|'')*'/gu, " ")
-    .replace(/\$[A-Za-z_]*\$/gu, " ");
+    .replace(/\$[A-Za-z_]*\$/gu, " ; ");
+  const refusals: string[] = [];
+  let namesSchema = false;
+  let endsTransaction = TRANSACTION_OPENING.test(code);
   for (const [, quoted, bare] of code.matchAll(/"((?:[^"]|"")*)"|([A-Za-z_][A-Za-z0-9_$]*)/gu)) {
-    if (
-      quoted === DATA_STORE_RESERVED_SCHEMA ||
-      bare?.toLowerCase() === DATA_STORE_RESERVED_SCHEMA
-    ) {
-      return true;
-    }
+    const word = bare?.toLowerCase();
+    namesSchema ||= quoted === DATA_STORE_RESERVED_SCHEMA || word === DATA_STORE_RESERVED_SCHEMA;
+    endsTransaction ||= word !== undefined && TRANSACTION_WORDS.has(word);
   }
-  return false;
+  if (namesSchema) {
+    refusals.push(
+      `names the schema '${DATA_STORE_RESERVED_SCHEMA}', which the platform keeps for itself in every store (DATA_STORE_RESERVED_SCHEMA). A migration creates and changes objects in other schemas.`
+    );
+  }
+  if (endsTransaction) {
+    refusals.push(
+      "holds transaction control. A migration runs in one transaction, which the platform opens and ends: take 'begin', 'commit', 'rollback' and 'savepoint' out of it."
+    );
+  }
+  if (ROLE_STATEMENT.test(code.replace(/"(?:[^"]|"")*"/gu, " "))) {
+    refusals.push(
+      "creates, changes or takes a role. A migration runs as the migration role of its store and leaves every role as it is."
+    );
+  }
+  return refusals;
 }
 
 function fileNumber(number: number): string {

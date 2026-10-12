@@ -10,7 +10,11 @@ A Data Store is an asset of kind `data_store`: a folder with `store.yaml` (`id`,
 - Two login roles per store. The **app role** reads and writes rows of the tables in `public` and owns nothing: it cannot create, alter or drop. The **migration role** creates and changes objects in `public` and applies the migration files.
 - Statement timeout and connection limit are set on each role in Postgres (app role 15 seconds and 10 connections, migration role 10 minutes and 2), so they hold when the platform's own checks fail.
 - `PUBLIC` loses every privilege on the store's database and on its schema `public`, and `CONNECT` on the platform's database. A store role therefore reaches its own database and nothing else the platform owns.
-- The applied migrations are recorded in the store's database (`catalyst.migrations`, in the transaction of each migration) and mirrored on the platform's record of the store (`data_stores`).
+- The applied migrations are recorded in the store's database (`catalyst.migrations`, in the transaction of each migration) and mirrored on the platform's record of the store (`data_stores`). Each row carries a signature made with a key only the platform holds. The migration role may add rows and neither read nor change them, and a row without a signature that holds is not read as applied.
+- A migration runs as one statement of a block, so Postgres itself refuses whatever would end or split its transaction: nothing of a migration stays unless all of it does. Text that holds transaction control or a role statement is refused when it is written.
+- A role may change its own password and settings; Postgres gives no way to forbid that. A migration that changed the settings of a role is rolled back and refused. A changed password cannot be seen, so after every migration both roles get their password, connection limit and settings again.
+- Where the platform's role is a superuser, no role of a store lists sessions or ends one in the store's database (`pg_stat_activity`, `pg_terminate_backend`, `pg_cancel_backend`). Where it is not, a query of a store can still end another query of the same store, since both run as the app role.
+- Where the platform's role owns `postgres` and `template1` or is a superuser, `PUBLIC` loses `CONNECT` on them when the first store is provisioned. A role of the operator's own that connected there through `PUBLIC` needs a `GRANT CONNECT` of its own.
 
 All roles, the database and its grants are created in one function, `provisionDataStore` (`src/provisioning.ts`).
 
@@ -36,6 +40,8 @@ An instance whose `secretStore.keys` is empty does not start with the module on:
 
 **Region.** A store lives on the Postgres server of the instance, so its rows are where the platform's own rows are and no provider is involved. The recorded location (`host`, `port`, `database`) is where a later slice points a store at another server; this slice writes the platform's own server there and reads the address from the record on every call.
 
+**Size.** A store is measured when it is provisioned, after every migration and once a day. An insert believes a size that is at most a minute old (`DATA_STORE_SIZE_FRESH_MS`) and measures first otherwise: one statement that sums the files of the store's database. A store therefore passes its limit by at most what one minute of inserts adds.
+
 **Shared server.** Stores share CPU, memory, disk and connection slots with the platform database. The limits on the roles, the bounded pool per store (`dataStores.poolMaxConnections` of release config, 5 by default), the caps on every result and the size limit are the protection; each limit is a named constant at the top of the module that enforces it.
 
 ## Release config
@@ -48,4 +54,4 @@ The platform keeps what it records in a store's database in the schema `catalyst
 
 ## Adding the same rows twice
 
-`insert` takes `onConflict`. With `skip` a row that a unique constraint of the table refuses is left out and counted in `skipped`, so a rerun of a run, and the next run over the same rows, add only what is new. That is the one way this package has for it. A repeated call with the same idempotency key is answered by the call path with the first answer, as for every changing operation.
+`insert` takes `onConflict`. `skip` is refused on a table with a unique constraint over a column that may be empty, unless the constraint is `NULLS NOT DISTINCT`: rows that are empty in a key never conflict. With `skip` a row that a unique constraint of the table refuses is left out and counted in `skipped`, so a rerun of a run, and the next run over the same rows, add only what is new. That is the one way this package has for it. A repeated call with the same idempotency key is answered by the call path with the first answer, as for every changing operation.

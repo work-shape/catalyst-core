@@ -110,6 +110,20 @@ contain breaking changes; a patch version does not.
     reaches it: a role of the operator's own that connected through `PUBLIC` needs
     `GRANT CONNECT` of its own. The module needs `secretStore.keys`, where the passwords of the
     store roles are kept; without a key startup stops and names the setting.
+  - **Migrations are held to their transaction and their role:** a migration whose text holds
+    transaction control (`begin`, `commit`, `rollback`, `savepoint`) or a role statement
+    (`alter role`, `create role`, `set role`, `set session authorization`) is refused when it
+    is written. One that tries either out of sight fails as `migration_failed` or
+    `migration_changed_role` and leaves nothing behind. After every migration both roles of the
+    store get their password and settings again. On a server whose platform role is a
+    superuser, provisioning also takes `pg_stat_activity`, `pg_terminate_backend` and
+    `pg_cancel_backend` from the store's roles and `CONNECT` on `postgres` and `template1`
+    from `PUBLIC`: **a role of the operator's own that connects to `postgres` through
+    `PUBLIC`, such as a monitoring agent, needs `GRANT CONNECT` of its own.**
+  - **Size limit:** a store is measured when it is provisioned and after every migration, and
+    an insert measures first when the stored size is older than a minute. `insert` with
+    `onConflict: skip` is refused (`nullable_key`) on a table whose unique constraint spans a
+    nullable column without `NULLS NOT DISTINCT`.
   - **Refusals:** a migration that names the schema `catalyst`, which the platform keeps for
     itself in every store, is refused when it is written. A publish whose `scope` is not the
     owner of the store answers `scope_mismatch`. A publish that changes or removes an applied

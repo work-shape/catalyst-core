@@ -106,6 +106,27 @@ describe("the roles of a Data Store", () => {
     expect(await sqlState(connect(otherRecord.location.database, appRole)`select 1`)).toBe(denied);
   });
 
+  it("keeps a reader of a store from seeing or ending another session, and out of the server's own databases", async () => {
+    const world = await published("sessions");
+    const { record } = world;
+    const denied = "needs a privilege its role does not hold (SQLSTATE 42501).";
+
+    for (const sql of [
+      "select pg_terminate_backend(pid) from pg_stat_activity",
+      "select pg_cancel_backend(pg_backend_pid())",
+      "select pid from pg_stat_get_activity(null)",
+      "select pid from pg_stat_activity"
+    ]) {
+      expect(await refusal(call(world, "query", { sql })), sql).toMatchObject({
+        message: `The query ${denied}`
+      });
+    }
+    const [reach] = await db.sql<{ postgres: boolean; template1: boolean }[]>`
+      select has_database_privilege(${record.roles.app}, 'postgres', 'CONNECT') as postgres,
+        has_database_privilege(${record.roles.app}, 'template1', 'CONNECT') as template1`;
+    expect(reach).toEqual({ postgres: false, template1: false });
+  });
+
   it("lets the migration role change the schema and keeps it out of the platform database", async () => {
     const world = await published("migration_role");
     const { record } = world;
@@ -116,6 +137,7 @@ describe("the roles of a Data Store", () => {
     await migration`create table notes (id integer)`;
     expect(await sqlState(migration`create schema mine`)).toBe("42501");
     expect(await sqlState(migration`delete from catalyst.migrations`)).toBe("42501");
+    expect(await sqlState(migration`select * from catalyst.migrations`)).toBe("42501");
     expect(await sqlState(migration`create role intruder`)).toBe("42501");
     // What the migration role creates, the app role reads and writes without a grant per table.
     const inStore = connect(record.location.database);

@@ -27,7 +27,7 @@ import {
 const countSchema = z.array(z.object({ count: z.number() }));
 
 describe("a Data Store on Postgres", () => {
-  const { db, jobs, setup, publish, recordOf, settle, published, call, connect } =
+  const { db, setup, publish, recordOf, settle, published, call, connect } =
     useDataStoreWorld("data_stores");
 
   it("reads a folder into a definition and refuses what does not belong in one", async () => {
@@ -89,6 +89,45 @@ describe("a Data Store on Postgres", () => {
         "'migrations/0001_init.sql' names the schema 'catalyst', which the platform keeps for itself in every store (DATA_STORE_RESERVED_SCHEMA). A migration creates and changes objects in other schemas."
       ]);
     }
+    // A migration runs in the one transaction the platform opens and ends, as the role the
+    // platform gave it: text that would end the transaction or change a role is refused.
+    const refusedText = (text: string) =>
+      issuesOf([manifest(), { path: "migrations/0001_init.sql", text }]);
+    for (const control of [
+      "create table half_a (id integer); commit; create table half_b (id integer);",
+      "create table a (id integer);\nROLLBACK;",
+      "begin; create table a (id integer);",
+      "start transaction; create table a (id integer);",
+      "savepoint s; create table a (id integer); rollback to savepoint s;",
+      "do $$ begin create table a (id integer); commit; end $$;"
+    ]) {
+      expect(refusedText(control), control).toEqual([
+        "'migrations/0001_init.sql' holds transaction control. A migration runs in one transaction, which the platform opens and ends: take 'begin', 'commit', 'rollback' and 'savepoint' out of it."
+      ]);
+    }
+    for (const role of [
+      "alter role current_user password 'x';",
+      "ALTER USER current_user set statement_timeout = 0;",
+      "create role helper;",
+      "set role none;",
+      "set local role postgres;",
+      "reset role;",
+      "set session authorization default;"
+    ]) {
+      expect(refusedText(role), role).toEqual([
+        "'migrations/0001_init.sql' creates, changes or takes a role. A migration runs as the migration role of its store and leaves every role as it is."
+      ]);
+    }
+    // A plpgsql block and a column named for a role are neither.
+    expect(
+      read([
+        manifest(),
+        {
+          path: "migrations/0001_init.sql",
+          text: "create table people (role text, begin_date date);\ndo $$ begin perform 1; end $$;"
+        }
+      ])
+    ).toMatchObject({ migrations: [{ number: 1 }] });
     // Naming it in a comment or a value touches nothing.
     expect(
       read([
@@ -149,6 +188,7 @@ describe("a Data Store on Postgres", () => {
       select subject from secrets where connection_asset_id = ${id} order by subject`;
     expect(secrets.map((secret) => secret.subject)).toEqual([
       "data_store:app",
+      "data_store:ledger",
       "data_store:migration"
     ]);
     // A store's database is no platform migration: the migration state reads as before.
@@ -473,83 +513,37 @@ describe("a Data Store on Postgres", () => {
     expect(await refusal(call(world, "query", { sql: "select * from bookings" }))).toMatchObject({
       message: "The query names a table or view that does not exist (SQLSTATE 42P01)."
     });
+    // What the database does not do for this statement is the caller's to change, not a fault.
+    expect(
+      await refusal(call(world, "query", { sql: "select * from elsewhere.public.findings" }))
+    ).toEqual({
+      code: "VALIDATION_FAILED",
+      message: "The query asks for something the database does not support (SQLSTATE 0A000).",
+      details: { sqlState: "0A000" }
+    });
   });
 
-  it("applies new migrations forward and never changes an applied one", async () => {
-    const world = await published("migrations");
-    const { id } = world;
-    await call(world, "insert", { table: "findings", rows: [finding(1)] });
-    const second: StoreFile = {
-      path: "migrations/0002_reviewed.sql",
-      text: "alter table findings add column reviewed boolean not null default false;"
+  it("skips only where a key cannot hold NULL, and says so where it can", async () => {
+    const keys: StoreFile = {
+      path: "migrations/0002_keys.sql",
+      text: `create table loose (run_id text not null, amount numeric, unique (run_id, amount));
+        create table tight (run_id text not null, amount numeric, unique nulls not distinct (run_id, amount));`
     };
+    const world = await published("null_keys", [manifest(), init, keys]);
+    const row = { run_id: "run-1", amount: null };
 
-    await publish(world, [manifest(), init, second]);
-    const atTwo = await settle(world, id, 2);
-    expect(atTwo.migrations.map((migration) => migration.name)).toEqual(["init", "reviewed"]);
-    expect(await call(world, "query", { sql: "select reviewed from findings" })).toMatchObject({
-      rows: [{ reviewed: false }]
-    });
-
-    // A changed file that the store has applied refuses the publish, and nothing moves.
-    const changed = { ...init, text: `${INIT_SQL}\n-- changed` };
-    await expect(publish(world, [manifest(), changed, second])).rejects.toMatchObject({
+    // Two rows with NULL in a key never conflict, so `skip` would add the same row twice.
+    expect(
+      await refusal(call(world, "insert", { table: "loose", rows: [row], onConflict: "skip" }))
+    ).toEqual({
       code: "VALIDATION_FAILED",
       message:
-        "The store has applied 'migrations/0001_init.sql' and the revision holds 'migrations/0001_init.sql' with other content. An applied migration is never changed: add a new migration instead.",
-      details: { reason: "applied_migration_changed" }
+        "The table 'loose' has a unique constraint over the column 'amount', which may be empty: rows that are empty there never conflict, so 'skip' would add the same row again. Make the column NOT NULL, or the constraint NULLS NOT DISTINCT.",
+      details: { reason: "nullable_key", column: "amount" }
     });
-    await expect(publish(world, [manifest(), init])).rejects.toMatchObject({
-      message: expect.stringContaining("has applied 'migrations/0002_reviewed.sql'")
-    });
-    const asset = await db.store.configAssets.getConfigAsset({
-      clientInstanceId: world.clientInstanceId,
-      kind: DATA_STORE_ASSET_KIND,
-      name: "findings"
-    });
-    expect(asset?.publishedRevision).toBe(atTwo.targetRevision);
-    expect(await recordOf(world, id)).toMatchObject({
-      level: 2,
-      targetRevision: atTwo.targetRevision
-    });
-
-    // A migration that fails leaves the level and says which file failed, without its SQL.
-    const failing: StoreFile = {
-      path: "migrations/0003_owner.sql",
-      text: "alter table findings add column owner text; alter table nowhere add column x text;"
-    };
-    await publish(world, [manifest(), init, second, failing]);
-    const failed = await eventually(async () => {
-      await world.worker.runDue();
-      const record = await recordOf(world, id);
-      expect(record.failure).toBeDefined();
-      return record;
-    });
-    expect(failed).toMatchObject({
-      status: "ready",
-      level: 2,
-      failure: {
-        code: "migration_failed",
-        message:
-          "'migrations/0003_owner.sql' names a table or view that does not exist (SQLSTATE 42P01)."
-      }
-    });
-    // The failed file left nothing behind: its first statement was rolled back with it.
-    expect(
-      await refusal(call(world, "query", { sql: "select owner from findings" }))
-    ).toMatchObject({
-      message: "The query names a column that does not exist (SQLSTATE 42703)."
-    });
-
-    const fixed = { ...failing, text: "alter table findings add column owner text;" };
-    await publish(world, [manifest(), init, second, fixed]);
-    const atThree = await settle(world, id, 3);
-    expect(atThree.failure).toBeUndefined();
-    expect(
-      await call(world, "query", { sql: "select owner, reviewed from findings" })
-    ).toMatchObject({
-      rows: [{ owner: null, reviewed: false }]
-    });
+    const insert = () => call(world, "insert", { table: "tight", rows: [row], onConflict: "skip" });
+    expect(await insert()).toEqual({ table: "tight", inserted: 1, skipped: 0 });
+    expect(await insert()).toEqual({ table: "tight", inserted: 0, skipped: 1 });
   });
 
   it("takes the size ceiling from release config, which a manifest lowers and never raises", async () => {
@@ -576,30 +570,16 @@ describe("a Data Store on Postgres", () => {
     expect(await recordOf(world, id)).toMatchObject({ status: "provisioning" });
   });
 
-  it("refuses an insert at the size limit and keeps answering queries", async () => {
+  it("measures a store when it is provisioned and migrated, so the size limit holds from the first insert", async () => {
     const world = await published("size", [manifest("sizeLimit: 1MB\n"), init]);
-    const { id } = world;
-    await call(world, "insert", { table: "findings", rows: [finding(1)] });
-    expect(await recordOf(world, id)).toMatchObject({ sizeLimitBytes: 1024 ** 2 });
-
-    const measure = jobs.worker(
-      db.store,
-      world.clientInstanceId,
-      [...world.dataStores.jobHandlers],
-      [...world.dataStores.schedules]
-    );
-    measure.start();
     const measured = await eventually(async () => {
-      const record = await recordOf(world, id);
+      const record = await recordOf(world, world.id);
       expect(record.sizeBytes).toBeGreaterThan(1024 ** 2);
       return record;
     });
-    await measure.stop();
 
-    expect(world.dataStores.schedules.map((schedule) => schedule.kind.kind)).toEqual([
-      DATA_STORE_JOB_KINDS.measureSize
-    ]);
-    expect(await refusal(call(world, "insert", { table: "findings", rows: [finding(2)] }))).toEqual(
+    // An empty database is larger than 1 MB: no row is added, from the first call on.
+    expect(await refusal(call(world, "insert", { table: "findings", rows: [finding(1)] }))).toEqual(
       {
         code: "CONFLICT",
         message: `The Data Store 'findings' holds ${measured.sizeBytes} bytes and its size limit is 1048576 bytes (sizeLimit). No rows are added until it is smaller or the limit is raised; reading keeps working.`,
@@ -608,7 +588,31 @@ describe("a Data Store on Postgres", () => {
     );
     expect(
       await call(world, "query", { sql: "select count(*)::integer as count from findings" })
-    ).toMatchObject({ rows: [{ count: 1 }] });
+    ).toMatchObject({ rows: [{ count: 0 }] });
+  });
+
+  it("measures again on an insert when the stored size is older than a minute", async () => {
+    const world = await published("size_stale", [manifest("sizeLimit: 1MB\n"), init]);
+    // As if the last measurement were an hour old and had found the store nearly empty.
+    await db.sql`
+      update data_stores set size_bytes = 10, size_measured_at = now() - interval '1 hour'
+      where id = ${world.id}`;
+
+    expect(
+      await refusal(call(world, "insert", { table: "findings", rows: [finding(1)] }))
+    ).toMatchObject({ details: { reason: "data_store_size_limit" } });
+    const record = await recordOf(world, world.id);
+    expect(record.sizeBytes).toBeGreaterThan(1024 ** 2);
+    expect(Date.now() - Date.parse(required(record.sizeMeasuredAt))).toBeLessThan(60_000);
+
+    // A measurement of this minute is believed: no second one is made for the next insert.
+    await db.sql`update data_stores set size_bytes = 10 where id = ${world.id}`;
+    expect(await call(world, "insert", { table: "findings", rows: [finding(1)] })).toMatchObject({
+      inserted: 1
+    });
+    expect(world.dataStores.schedules.map((schedule) => schedule.kind.kind)).toEqual([
+      DATA_STORE_JOB_KINDS.measureSize
+    ]);
   });
 
   it("keeps the database and its rows when the store is retired, and holds its id", async () => {

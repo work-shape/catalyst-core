@@ -9,23 +9,33 @@ import type { ClientInstanceId, ConnectionsStore, SecretBinding } from "@vivd-ca
 /** The two roles of a store: the one its rows are reached as, and the one that changes its schema. */
 export type DataStoreRole = "app" | "migration";
 
-/** The bytes of a role's password before encoding. It is random and nobody types it. */
+/**
+ * What the Secret Store keeps per store: the password of each role, and the key the platform
+ * signs its record of applied migrations with, which no role of the store ever holds.
+ */
+type DataStoreSecret = DataStoreRole | "ledger";
+
+/** The bytes of a secret before encoding. It is random and nobody types it. */
 const DATA_STORE_PASSWORD_BYTES = 32;
 
 /**
- * The passwords of the store roles, kept in the Secret Store: one secret per store and role,
- * bound to the store's asset. A password leaves this object only towards a connection that is
- * being opened and towards the verifier Postgres is sent.
+ * The secrets of a store, kept in the Secret Store and bound to the store's asset. A password
+ * leaves this object only towards a connection that is being opened and towards the verifier
+ * Postgres is sent, and the ledger key only towards the signature of a migration's record.
  */
 export interface DataStoreCredentials {
-  /** The password of a role, or nothing where none is stored or the stored one cannot be opened. */
-  read(rows: ConnectionsStore, storeId: string, role: DataStoreRole): Promise<string | undefined>;
-  /** The password of a role, made and stored when `read` has none. */
-  ensure(rows: ConnectionsStore, storeId: string, role: DataStoreRole): Promise<string>;
+  /** The secret, or nothing where none is stored or the stored one cannot be opened. */
+  read(
+    rows: ConnectionsStore,
+    storeId: string,
+    secret: DataStoreSecret
+  ): Promise<string | undefined>;
+  /** The secret, made and stored when `read` has none. */
+  ensure(rows: ConnectionsStore, storeId: string, secret: DataStoreSecret): Promise<string>;
 }
 
-function bindingOf(storeId: string, role: DataStoreRole): SecretBinding {
-  return { connectionAssetId: storeId, subject: `data_store:${role}` };
+function bindingOf(storeId: string, secret: DataStoreSecret): SecretBinding {
+  return { connectionAssetId: storeId, subject: `data_store:${secret}` };
 }
 
 export function createDataStoreCredentials(input: {
