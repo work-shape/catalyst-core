@@ -208,7 +208,7 @@
       "target": "lint",
       "rule": "catalyst/fetch-boundary",
       "scope": "packages/config-cli",
-      "count": 5,
+      "count": 4,
       "owner": "PA-3"
     },
     {

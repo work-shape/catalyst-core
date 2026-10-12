@@ -48,6 +48,8 @@ export interface ConfigApiOptions {
   sleep?: (milliseconds: number) => Promise<void>;
 }
 
+type FetchImpl = NonNullable<ConfigApiOptions["fetchImpl"]>;
+
 export async function createConfigApi(options: ConfigApiOptions) {
   const baseUrl = options.baseUrl.replace(/\/+$/u, "");
   const fetchImpl = withoutRedirects(options.fetchImpl ?? fetch);
@@ -211,7 +213,7 @@ function assertSafeApiKeyExchangeUrl(url: string): void {
  * request, and a followed redirect would send them to an address the caller never named.
  * The redirect comes back as the answer and is reported.
  */
-function withoutRedirects(fetchImpl: typeof fetch): typeof fetch {
+function withoutRedirects(fetchImpl: FetchImpl): FetchImpl {
   return (input, init) => fetchImpl(input, { ...init, redirect: "manual" });
 }
 
@@ -225,7 +227,7 @@ function isLoopbackHostname(hostname: string): boolean {
 }
 
 async function exchangeApiKey(
-  fetchImpl: typeof fetch,
+  fetchImpl: FetchImpl,
   baseUrl: string,
   apiKey: string
 ): Promise<string> {

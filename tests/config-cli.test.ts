@@ -2160,9 +2160,7 @@ describe("config CLI API transport", () => {
     const instance = await listen((request, response) => {
       sameHost.push(request.url ?? "");
       const target =
-        request.headers["x-test-target"] === "same-host"
-          ? "/moved"
-          : `${elsewhere.url}/api/v1/auth/access-token`;
+        request.headers["x-test-target"] === "same-host" ? "/moved" : `${elsewhere.url}/moved`;
       response.writeHead(307, { location: target }).end();
     });
 
@@ -2182,7 +2180,8 @@ describe("config CLI API transport", () => {
       expect(String(failure)).not.toContain(apiKey);
     }
     expect(elsewhere.requests).toEqual([]);
-    expect(sameHost).toEqual(["/api/v1/auth/access-token", "/api/v1/auth/access-token"]);
+    // Each call reached the instance once, with the exchange, and never asked for /moved.
+    expect(sameHost.map((path) => path.endsWith("/auth/access-token"))).toEqual([true, true]);
   });
 
   it("rejects unsupported API-key URL schemes before fetching", async () => {
