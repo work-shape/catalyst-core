@@ -121,6 +121,12 @@ export interface PostgresExecutor {
 export interface CreatePostgresExecutorInput {
   secrets: ScopedSecretResolver;
   pinAddress: PinPostgresAddress;
+  /**
+   * The most connections one pool of this executor holds, for an executor whose databases the
+   * platform runs itself and sizes from release config. Left out, the ceiling that protects a
+   * customer's database applies: `POSTGRES_POOL_MAX_CONNECTIONS`.
+   */
+  poolMaxConnections?: number;
 }
 
 export function createPostgresExecutor(input: CreatePostgresExecutorInput): PostgresExecutor {
@@ -159,7 +165,7 @@ export function createPostgresExecutor(input: CreatePostgresExecutorInput): Post
     // Read once, before anything is awaited. What the address check saw is what is dialled,
     // whatever the caller does to its object meanwhile.
     const location = frozenLocation(target.location);
-    const limits = resolvePostgresLimits(target.limits);
+    const limits = resolvePostgresLimits(target.limits, input.poolMaxConnections);
     const { signal } = target;
     const pool = poolFor(location, target.credentialHandle);
     const connection = await pool.acquire(limits.maxConnections, signal);

@@ -46,9 +46,16 @@ export interface PostgresLimits {
 
 export type ResolvedPostgresLimits = Required<PostgresLimits>;
 
-export function resolvePostgresLimits(limits: PostgresLimits = {}): ResolvedPostgresLimits {
+/**
+ * `poolMaxConnections` is the ceiling of the pools of an executor whose databases are the
+ * platform's own to size. Every other executor has `POSTGRES_POOL_MAX_CONNECTIONS`.
+ */
+export function resolvePostgresLimits(
+  limits: PostgresLimits = {},
+  poolMaxConnections = POSTGRES_POOL_MAX_CONNECTIONS
+): ResolvedPostgresLimits {
   return {
-    maxConnections: lowered(limits.maxConnections, POSTGRES_POOL_MAX_CONNECTIONS),
+    maxConnections: lowered(limits.maxConnections, poolMaxConnections),
     statementTimeoutMs: lowered(limits.statementTimeoutMs, POSTGRES_STATEMENT_TIMEOUT_MS),
     maxRows: lowered(limits.maxRows, POSTGRES_RESULT_MAX_ROWS),
     maxBytes: lowered(limits.maxBytes, POSTGRES_RESULT_MAX_BYTES)
