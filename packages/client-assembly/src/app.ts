@@ -206,15 +206,15 @@ export async function createClientInstanceApp(
     sessionToken,
     serviceAccessToken
   };
-  const server = await createChatServer(serverOptions);
+  const server = await createChatServer(serverOptions, { routes: execution.modulesStarted.routes });
   const serverJobs = createChatServerJobs(serverOptions);
   const jobs = createJobWorker({
     stores: store,
     clientInstanceId,
     logger,
     modules: execution.modules,
-    handlers: [...serverJobs.handlers, ...execution.moduleAssembly.jobHandlers],
-    schedules: [...serverJobs.schedules, ...execution.moduleAssembly.schedules]
+    handlers: [...serverJobs.handlers, ...execution.modulesStarted.jobHandlers],
+    schedules: [...serverJobs.schedules, ...execution.modulesStarted.schedules]
   });
   const agentRunJobs = inProcess ? createInProcessAgentRunWorker(execution, inProcess) : undefined;
 
@@ -449,6 +449,7 @@ export async function createClientInstanceExecutionAssembly(
           ]
         : []),
       ...capabilityContributions.flatMap((contribution) => contribution.tools ?? []),
+      ...moduleAssembly.tools,
       ...input.tools
     ]
   });
@@ -459,7 +460,13 @@ export async function createClientInstanceExecutionAssembly(
     modules
   });
   const toolOptions = withConnections(connections, operationCalls, connectionParts);
-  moduleAssembly.operationSources.forEach((source) => operationCalls.registry.addSource(source));
+  const modulesStarted = await moduleAssembly.start({
+    operationCalls,
+    authorizer,
+    auditRecorder,
+    modelGateway,
+    tools: toolRegistry
+  });
   const defaultModelProvider = modelProviders[0];
   if (!defaultModelProvider) {
     throw new AppError("VALIDATION_FAILED", "At least one model provider is required");
@@ -537,7 +544,7 @@ export async function createClientInstanceExecutionAssembly(
     operationCalls,
     approvalRequestHandlers: handlers,
     connections,
-    moduleAssembly,
+    modulesStarted,
     async close() {
       await closeCapabilityContributions(capabilityContributions);
       await store.close?.();

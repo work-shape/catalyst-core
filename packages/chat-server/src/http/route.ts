@@ -108,8 +108,11 @@ type UnavailableResult<Response> = Response extends {
   ? ResponseShape<z.input<Unavailable>>
   : never;
 
-/** A JSON operation returns its payload; a stream or a file is sent by the handler itself. */
-type RouteResult<Op extends Operation> = Op["response"] extends {
+/**
+ * A JSON operation returns its payload; a stream or a file is sent by the handler itself, which
+ * then answers `Sent`.
+ */
+type RouteResultOr<Op extends Operation, Sent> = Op["response"] extends {
   kind: "json";
   schema: infer Schema extends z.ZodType;
 }
@@ -118,7 +121,9 @@ type RouteResult<Op extends Operation> = Op["response"] extends {
     ? z.input<Schema> extends { items: infer Items }
       ? ResponseShape<Items>
       : never
-    : FastifyReply;
+    : Sent;
+
+type RouteResult<Op extends Operation> = RouteResultOr<Op, FastifyReply>;
 
 /**
  * What the handler of an operation that declares `deferred` returns when the call was accepted
@@ -154,7 +159,7 @@ type RightsCheck<Op extends Operation> = Op["requires"] extends readonly [unknow
     };
 
 /** What a registration adds to the descriptor: what the call touches and what it does. */
-type OperationBinding<Op extends Operation> = Omit<
+type OperationBindingOf<Op extends Operation, Sent> = Omit<
   AssembledOperationBinding,
   "resource" | "policyTargets" | "execute" | "authorize" | "inputWithoutSecrets"
 > &
@@ -167,8 +172,21 @@ type OperationBinding<Op extends Operation> = Omit<
     execute(
       input: OperationInput<Op>,
       context: OperationBindingContext
-    ): RouteResult<Op> | Promise<RouteResult<Op>>;
+    ): RouteResultOr<Op, Sent> | Promise<RouteResultOr<Op, Sent>>;
   };
+
+type OperationBinding<Op extends Operation> = OperationBindingOf<Op, FastifyReply>;
+
+/**
+ * What a module of the assembly registers its operations on. It is the `operation` of a route
+ * of the server without the web framework: an operation of a module answers JSON or a page.
+ */
+export interface ModuleRoutes {
+  operation<const Op extends Operation>(
+    operation: Op,
+    binding: OperationBindingOf<Op, never>
+  ): void;
+}
 
 export interface Route {
   <const Op extends Operation>(operation: Op, handler: RouteHandler<Op>): void;
@@ -182,6 +200,15 @@ export interface Route {
   operation<const Op extends Operation>(operation: Op, binding: OperationBinding<Op>): void;
   /** Every operation registered on this server so far, through whichever helper. */
   readonly registered: readonly Operation[];
+}
+
+/** Registers the operations of one module through `routes.operation`. */
+export type RouteRegistration = (routes: ModuleRoutes) => void;
+
+/** What an assembly adds to a server beside its options. */
+export interface ChatServerExtensions {
+  /** Routes of the modules the assembly builds, registered after the server's own. */
+  routes?: readonly RouteRegistration[];
 }
 
 /** The status of a probe's `unavailable` answer: a proxy keeps the process out of rotation. */

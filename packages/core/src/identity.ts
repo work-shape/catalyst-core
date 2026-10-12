@@ -7,7 +7,13 @@ import {
   type OperationScope
 } from "@vivd-catalyst/asset-schemas";
 import { AppError } from "./errors";
-import type { AgentRunId, ApiCredentialId, ClientInstanceId, ServicePrincipalId } from "./ids";
+import type {
+  AgentRunId,
+  ApiCredentialId,
+  ClientInstanceId,
+  ServicePrincipalId,
+  WorkflowRunId
+} from "./ids";
 import type { JobId } from "./jobs";
 import type { LocaleCode } from "./localization";
 
@@ -74,11 +80,24 @@ export interface AuthenticatedServicePrincipal {
   scopes: AuthScope[];
 }
 
-export type AuthenticatedIdentity = AuthenticatedUser | AuthenticatedServicePrincipal;
+/**
+ * The service principal a Workflow Run acts as, as the actor of the calls its steps make. No
+ * credential authenticated it: the published definition names it under `runAs`, and whoever
+ * published that definition held the right to let it act. Its rights are the principal's own,
+ * read from its record and its grants like those of a principal that presents a credential.
+ */
+export interface WorkflowRunPrincipal extends Omit<AuthenticatedServicePrincipal, "credentialId"> {
+  workflowRunId: WorkflowRunId;
+}
+
+/** A service principal as an actor, whether a credential or a Workflow Run stands behind it. */
+export type ActingServicePrincipal = AuthenticatedServicePrincipal | WorkflowRunPrincipal;
+
+export type AuthenticatedIdentity = AuthenticatedUser | ActingServicePrincipal;
 
 export function isAuthenticatedServicePrincipal(
   identity: AuthenticatedIdentity
-): identity is AuthenticatedServicePrincipal {
+): identity is ActingServicePrincipal {
   return "kind" in identity && identity.kind === "service";
 }
 

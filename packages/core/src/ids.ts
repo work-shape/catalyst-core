@@ -16,6 +16,12 @@ export type ManagedArtifactId = Brand<string, "ManagedArtifactId">;
 export type ManagedFileId = Brand<string, "ManagedFileId">;
 export type UserId = Brand<string, "UserId">;
 export type ServicePrincipalId = Brand<string, "ServicePrincipalId">;
+export type WorkflowRunId = Brand<string, "WorkflowRunId">;
+/**
+ * One execution of one step in one run. A step inside a loop has one per item, and every
+ * attempt of that execution keeps it.
+ */
+export type WorkflowStepRunId = Brand<string, "WorkflowStepRunId">;
 export type ApiCredentialId = Brand<string, "ApiCredentialId">;
 export type ToolCallId = Brand<string, "ToolCallId">;
 export type AuditEventId = Brand<string, "AuditEventId">;

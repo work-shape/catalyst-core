@@ -145,6 +145,9 @@ export const administration = defineTranslations({
     "modules.dataStores": "Data stores",
     "modules.dataStoresDescription":
       "Data Stores: a database of the platform per store, for Apps and Workflows.",
+    "modules.knowledge": "Knowledge bases",
+    "modules.knowledgeDescription":
+      "Knowledge Bases: sources an agent searches and queries, and their ingestion.",
     newPasswordsDoNotMatch: "New passwords do not match",
     passwordUpdated: "Password updated",
     passwordUpdateFailed: "Password update failed",
@@ -330,6 +333,9 @@ export const administration = defineTranslations({
     "modules.dataStores": "Datenspeicher",
     "modules.dataStoresDescription":
       "Datenspeicher: je Speicher eine Datenbank der Plattform, für Apps und Workflows.",
+    "modules.knowledge": "Wissensbasen",
+    "modules.knowledgeDescription":
+      "Wissensbasen: Quellen, die ein Agent durchsucht und abfragt, und ihre Aufnahme.",
     passwordUpdated: "Passwort aktualisiert",
     passwordUpdateFailed: "Passwortaktualisierung fehlgeschlagen",
     profile: "Profil",

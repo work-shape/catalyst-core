@@ -323,7 +323,8 @@ describe("the snapshot in a running instance", () => {
       // And it carries one Connection, to the sample business system.
       connections: { enabled: true },
       workflows: { enabled: false },
-      dataStores: { enabled: false }
+      dataStores: { enabled: false },
+      knowledge: { enabled: false }
     });
     expect(safe.features).toEqual({
       attachments: { enabled: false, accept: "" },
@@ -372,7 +373,8 @@ describe("the snapshot in a running instance", () => {
         apps: { enabled: false },
         connections: { enabled: false },
         workflows: { enabled: false },
-        dataStores: { enabled: false }
+        dataStores: { enabled: false },
+        knowledge: { enabled: false }
       });
       expect(answer.features.resources).toEqual({ enabled: false });
     } finally {

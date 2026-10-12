@@ -34,6 +34,20 @@ describe("permissions", () => {
       "app.publish",
       "app.delete",
       "app.use",
+      "workflow.read",
+      "workflow.write",
+      "workflow.publish",
+      "workflow.delete",
+      "workflow.use",
+      "data_store.read",
+      "data_store.write",
+      "data_store.publish",
+      "data_store.delete",
+      "knowledge_base.read",
+      "knowledge_base.write",
+      "knowledge_base.publish",
+      "knowledge_base.delete",
+      "knowledge_base.use",
       "operations.approve",
       "users.manage",
       "usage.view",
@@ -42,9 +56,10 @@ describe("permissions", () => {
       "agent_models.manage",
       "assets.release"
     ]);
-    // The rights of a Connection and of an App came after the legacy keys: no key names one,
-    // so nobody holds one through the legacy column.
-    const unkeyed = (action: string) => /^(?:connection|app)\./u.test(action);
+    // The rights of a Connection, an App, a Workflow, a Data Store and a Knowledge Base came
+    // after the legacy keys: no key names one, so nobody holds one through the legacy column.
+    const unkeyed = (action: string) =>
+      /^(?:connection|app|workflow|data_store|knowledge_base)\./u.test(action);
     const keyed = ACTIONS.filter((action) => !unkeyed(action));
     expect(keyed).toHaveLength(14);
     for (const action of ACTIONS.filter(unkeyed)) {
@@ -112,6 +127,20 @@ describe("permissions", () => {
       "app.publish",
       "app.delete",
       "app.use",
+      "workflow.read",
+      "workflow.write",
+      "workflow.publish",
+      "workflow.delete",
+      "workflow.use",
+      "data_store.read",
+      "data_store.write",
+      "data_store.publish",
+      "data_store.delete",
+      "knowledge_base.read",
+      "knowledge_base.write",
+      "knowledge_base.publish",
+      "knowledge_base.delete",
+      "knowledge_base.use",
       "operations.approve",
       "users.manage",
       "usage.view",
@@ -133,11 +162,13 @@ describe("permissions", () => {
       PERMISSIONS.filter((permission) => permission !== "config_assets.release")
     );
     for (const role of ["user", "admin", "superadmin"] as const) {
-      // The legacy keys of a role name what they named: a Connection or App right has no key.
+      // The legacy keys of a role name what they named: a right of a later kind has no key.
       expect(
         new Set(
           ROLE_DEFAULT_ACTIONS[role]
-            .filter((action) => !/^(?:connection|app)\./u.test(action))
+            .filter(
+              (action) => !/^(?:connection|app|workflow|data_store|knowledge_base)\./u.test(action)
+            )
             .map(legacyPermissionFor)
         )
       ).toEqual(new Set(ROLE_DEFAULT_PERMISSIONS[role]));

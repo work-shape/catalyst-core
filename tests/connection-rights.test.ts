@@ -103,7 +103,9 @@ describe("the vocabulary of Connection rights", () => {
     });
     // What an administrator held before, action by action, is what the role holds now.
     expect(
-      ROLE_DEFAULT_ACTIONS.admin.filter((action) => !/^(?:connection|app)\./u.test(action))
+      ROLE_DEFAULT_ACTIONS.admin.filter(
+        (action) => !/^(?:connection|app|workflow|data_store|knowledge_base)\./u.test(action)
+      )
     ).toEqual([
       "agent.read",
       "agent.write",

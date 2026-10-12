@@ -1,3 +1,4 @@
+import type { AssetKindActions } from "./asset-kinds";
 import type { JsonObject } from "./json";
 
 // The names and shapes of a Data Store and of a Knowledge Base that more than one package
@@ -20,16 +21,80 @@ export const KNOWLEDGE_BASE_ASSET_KIND = "knowledge_base";
 export const KNOWLEDGE_BASE_MANIFEST_FILE = "kb.yaml";
 
 /**
+ * The rights of the kind. It has no `use`: a person reaches the rows through an App, whose
+ * `app.use` is checked. Spec: One data store primitive, scope.
+ */
+export const DATA_STORE_ACTIONS = {
+  read: "data_store.read",
+  write: "data_store.write",
+  publish: "data_store.publish",
+  delete: "data_store.delete"
+} as const satisfies AssetKindActions;
+
+/** The rights of the kind. `use` searches and queries the published revision. */
+export const KNOWLEDGE_BASE_ACTIONS = {
+  read: "knowledge_base.read",
+  write: "knowledge_base.write",
+  publish: "knowledge_base.publish",
+  delete: "knowledge_base.delete",
+  use: "knowledge_base.use"
+} as const satisfies AssetKindActions;
+
+/**
  * The prefix of every operation on the rows of one Data Store: `data_store.<id>.<verb>`. The
- * name has three parts and the id holds no dot, so it never reads as one of the two-part names
- * of the operations that manage stores, such as `data_store.publish`.
+ * id holds no dot. It is singular. Operations that manage Data Stores have a two-part name in
+ * the plural, such as `data_stores.publish`.
  */
 export const DATA_STORE_OPERATION_PREFIX = "data_store.";
 
-/** What an operation on the rows of a Data Store does: `query` reads, `insert` adds rows. */
-export const DATA_STORE_OPERATION_VERBS = ["query", "insert"] as const;
+/**
+ * What an operation of one Data Store does, and the right on that store it needs. `query` runs
+ * read-only SQL and `insert` adds rows. `describe` answers the store's tables and columns
+ * (`DataStoreSchema`) and `preview_rows` the first rows of one table, at most
+ * `DATA_STORE_PREVIEW_ROW_LIMIT`: the two reads of the store's page.
+ *
+ * The kind has no `use`, so `insert` needs `data_store.write`. A step of a Workflow calls these
+ * as the run's principal, so that service principal is granted the right on the store. No right
+ * is implied by the Workflow or by whoever published it.
+ */
+export const DATA_STORE_OPERATION_VERBS = ["query", "insert", "describe", "preview_rows"] as const;
 
 export type DataStoreOperationVerb = (typeof DATA_STORE_OPERATION_VERBS)[number];
+
+/** The right on the store each verb needs. */
+export const DATA_STORE_OPERATION_RIGHTS = {
+  query: DATA_STORE_ACTIONS.read,
+  insert: DATA_STORE_ACTIONS.write,
+  describe: DATA_STORE_ACTIONS.read,
+  preview_rows: DATA_STORE_ACTIONS.read
+} as const satisfies Record<DataStoreOperationVerb, string>;
+
+/** The most rows `preview_rows` answers. */
+export const DATA_STORE_PREVIEW_ROW_LIMIT = 50;
+
+export interface DataStoreColumn {
+  name: string;
+  /** The SQL type as the database names it. */
+  type: string;
+  nullable: boolean;
+  default?: string;
+  primaryKey: boolean;
+  comment?: string;
+}
+
+export interface DataStoreTable {
+  name: string;
+  comment?: string;
+  columns: readonly DataStoreColumn[];
+  /** The planner's estimate, not a count. */
+  rowEstimate: number;
+}
+
+/** What `describe` answers: the tables of one store at its migration level. */
+export interface DataStoreSchema {
+  schemaLevel: number;
+  tables: readonly DataStoreTable[];
+}
 
 /** The operation name of one verb on one Data Store. */
 export function dataStoreOperationName(store: string, verb: DataStoreOperationVerb): string {
@@ -65,6 +130,13 @@ export const DATA_STORE_JOB_KINDS = {
 } as const;
 
 export type DataStoreJobKind = (typeof DATA_STORE_JOB_KINDS)[keyof typeof DATA_STORE_JOB_KINDS];
+
+/**
+ * What the platform keeps of each Data Store, as `PlatformStores.dataStores`: where it lives and
+ * the level it is at. It is bound to a transaction like every store of the platform. The first
+ * slice of the store gives it its methods.
+ */
+export interface DataStoreRecordsStore {}
 
 /** A Data Store as a manifest names it. Spec: apps-and-pages.md, Manifest, `dataStores`. */
 export interface DataStoreReference {

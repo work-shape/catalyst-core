@@ -1,5 +1,7 @@
-import type { Brand, ServicePrincipalId } from "./ids";
+import type { AssetKindActions } from "./asset-kinds";
+import type { WorkflowStepRunId } from "./ids";
 import type { JsonObject, JsonValue } from "./json";
+import type { PlatformAction } from "./permissions";
 
 // The names and shapes of a Workflow that more than one package reads: the asset kind, the
 // parsed `workflow.yaml`, a run and its step runs, who a run acts as, and what its jobs and
@@ -63,6 +65,10 @@ export type WorkflowInputMapping = Readonly<Record<string, WorkflowInputValue>>;
 interface WorkflowStepBase {
   /** Unique in the definition. References, wiring and step runs name the step by it. */
   id: string;
+  /** What a person calls the step, in the language of whoever builds the Workflow. */
+  name: string;
+  /** One plain sentence on what the step does, in the same language. The run page shows it. */
+  description?: string;
 }
 
 /** The schemas a step declares itself, as JSON Schema. An operation step takes its operation's. */
@@ -80,6 +86,13 @@ export type WorkflowStep =
   | (WorkflowStepBase & {
       type: "loop";
       items: WorkflowReference;
+      /** What one item is called in a sentence, such as "Mandant". The page counts in it. */
+      itemName?: string;
+      /**
+       * The dotted path of the field of an item that labels its iteration for a person, such
+       * as a number and a name. The engine keeps its value on the step run as `label`.
+       */
+      itemLabel?: string;
       steps: readonly WorkflowStep[];
     })
   /** Runs one script file of the step files folder on its input as JSON and returns JSON. */
@@ -113,7 +126,14 @@ export interface WorkflowManifest {
   id: string;
   name: string;
   description?: string;
-  /** The id of the service principal a run of this Workflow acts as. */
+  /**
+   * The name of the service principal a run of this Workflow acts as (`WorkflowRunPrincipal`).
+   * A name is given by a person and is the same on every instance the definition is pushed to,
+   * which the random id of a principal is not. Publishing a revision that names a principal,
+   * and a test run of a draft that names one, need `WORKFLOW_RUN_AS_ACTION` beside
+   * `workflow.publish` or `workflow.write`. A definition without it is refused on save.
+   * Spec: Who a run acts as.
+   */
   runAs: string;
   /** The schema of the run's input, as JSON Schema: the output schema of the trigger step. */
   inputs: JsonObject;
@@ -124,9 +144,6 @@ export interface WorkflowManifest {
   steps: readonly WorkflowStep[];
   wiring: readonly WorkflowWire[];
 }
-
-export type WorkflowRunId = Brand<string, "WorkflowRunId">;
-export type WorkflowStepRunId = Brand<string, "WorkflowStepRunId">;
 
 /** `test` runs the draft with changing operations blocked. Spec: Draft, test run and go-live. */
 export const WORKFLOW_RUN_MODES = ["live", "test"] as const;
@@ -159,15 +176,32 @@ export const WORKFLOW_STEP_RUN_STATUSES = [
 export type WorkflowStepRunStatus = (typeof WORKFLOW_STEP_RUN_STATUSES)[number];
 
 /**
- * Who a Workflow Run acts as: the service principal its definition names under `runAs`. Every
- * operation a step calls carries this principal as the `actor` of its call, and the rights of
- * the call are the principal's. The origin of the call says which run and step made it.
+ * Where a step run stands in its loop. `index` is the row's `iteration`, counted from zero, and
+ * `label` is the value of the loop's `itemLabel` field for that item. A step outside a loop
+ * has none.
  */
-export interface WorkflowRunPrincipal {
-  kind: "service";
-  id: ServicePrincipalId;
-  displayLabel: string;
+export interface WorkflowStepRunIteration {
+  index: number;
+  label?: string;
 }
+
+/**
+ * How far the step run of a loop step is, counted by the engine so that no reader counts the
+ * step runs of the items itself. An item is done when its last step is, and failed when one of
+ * its steps is.
+ */
+export interface WorkflowLoopCounts {
+  total: number;
+  done: number;
+  failed: number;
+  running: number;
+}
+
+/**
+ * What the engine keeps of runs and step runs, as `PlatformStores.workflowRuns`. It is bound to
+ * a transaction like every store of the platform. The engine's first slice gives it its methods.
+ */
+export interface WorkflowRunsStore {}
 
 /**
  * The job kinds of the engine. `execute_step` runs one step run and queues what follows it.
@@ -183,9 +217,9 @@ export type WorkflowRunJobKind =
   (typeof WORKFLOW_RUN_JOB_KINDS)[keyof typeof WORKFLOW_RUN_JOB_KINDS];
 
 /**
- * The prefix of every operation of a Workflow. `workflow.<id>.start` has three parts and the id
- * holds no dot, so it never reads as one of the two-part names of the operations that manage
- * Workflows, such as `workflow.test`. Spec: platform-access.md, section 9.
+ * The prefix of every operation of one Workflow: `workflow.<id>.start`. The id holds no dot.
+ * It is singular. Operations that manage Workflows and their runs have a two-part name in the
+ * plural, such as `workflows.test` and `workflows.get_run`.
  */
 export const WORKFLOW_OPERATION_PREFIX = "workflow.";
 
@@ -195,9 +229,27 @@ export function workflowStartOperationName(workflow: string): string {
 }
 
 /**
- * The idempotency key of the changing operation a step calls: one per run and step, so a
- * retried attempt answers with the first result. Spec: Engine on the shared job executor.
+ * The idempotency key of the changing operation a step calls: the id of its step run, the `id`
+ * of its row in `workflow_step_runs`. A step inside a loop has one step run per item, told
+ * apart by `iteration`, so each item's call is its own, and a retried attempt of one step run
+ * answers with its first result. Spec: Engine on the shared job executor.
  */
-export function workflowStepIdempotencyKey(runId: WorkflowRunId, stepId: string): string {
-  return `${runId}:${stepId}`;
+export function workflowStepIdempotencyKey(stepRunId: WorkflowStepRunId): string {
+  return `workflow_step:${stepRunId}`;
 }
+
+/** The rights of the kind. `use` starts the published revision. Spec: access-and-permissions.md. */
+export const WORKFLOW_ACTIONS = {
+  read: "workflow.read",
+  write: "workflow.write",
+  publish: "workflow.publish",
+  delete: "workflow.delete",
+  use: "workflow.use"
+} as const satisfies AssetKindActions;
+
+/**
+ * The right over the service principal a Workflow names in `runAs`, needed to publish the
+ * Workflow and to run its draft as a test: either lends the principal's grants. In the first
+ * slice it is the right that manages service principals. Spec: Who a run acts as.
+ */
+export const WORKFLOW_RUN_AS_ACTION = "api_access.manage" satisfies PlatformAction;

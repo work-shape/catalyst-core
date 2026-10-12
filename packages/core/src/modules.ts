@@ -13,7 +13,8 @@ export const MODULE_NAMES = [
   "apps",
   "connections",
   "workflows",
-  "dataStores"
+  "dataStores",
+  "knowledge"
 ] as const;
 
 export type ModuleName = (typeof MODULE_NAMES)[number];

@@ -4,7 +4,7 @@ import {
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
   type AuthenticatedIdentity,
-  type AuthenticatedServicePrincipal,
+  type ActingServicePrincipal,
   type AuthenticatedUser,
   type DelegatedActor,
   type UserRole
@@ -132,15 +132,13 @@ export function auditActorFromIdentity(identity: AuthenticatedIdentity): AuditAc
   return auditActorFromUser(identity);
 }
 
-export function auditActorFromServicePrincipal(
-  principal: AuthenticatedServicePrincipal
-): AuditActor {
+export function auditActorFromServicePrincipal(principal: ActingServicePrincipal): AuditActor {
   return {
     displayLabel: principal.displayLabel,
     roles: [],
     principalKind: "service",
     principalId: principal.id,
     principalDisplayLabel: principal.displayLabel,
-    credentialId: principal.credentialId
+    ...("credentialId" in principal ? { credentialId: principal.credentialId } : {})
   };
 }

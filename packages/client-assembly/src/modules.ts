@@ -9,7 +9,13 @@ import {
 import { resolveModuleSwitches, type ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { ClientInstanceCapability } from "./capabilities";
 import { assembleDataStores, dataStoresModule } from "./data-stores";
-import type { ModuleAssembly, ModuleAssemblyParts } from "./module-assembly";
+import { assembleKnowledge, knowledgeModule } from "./knowledge";
+import type {
+  AssembledModules,
+  ModuleAssembly,
+  ModuleAssemblyParts,
+  StartedModules
+} from "./module-assembly";
 import { assembleWorkflows, workflowsModule } from "./workflows";
 
 /** The Resources panel of a conversation and the list it reads. */
@@ -95,28 +101,39 @@ export const platformModules = [
   appsModule,
   connectionsModule,
   workflowsModule,
-  dataStoresModule
+  dataStoresModule,
+  knowledgeModule
 ];
 
 /** The seams of the modules that are assembled through one. A new one is one more entry. */
-const moduleSeams = [assembleWorkflows, assembleDataStores];
+const moduleSeams = [assembleWorkflows, assembleDataStores, assembleKnowledge];
 
 /**
  * Builds what the modules with a seam add to this process, each list in the order of the
  * seams. A module that is off adds nothing.
  */
-export async function assembleModules(
-  parts: ModuleAssemblyParts
-): Promise<Required<ModuleAssembly>> {
+export async function assembleModules(parts: ModuleAssemblyParts): Promise<AssembledModules> {
   const assemblies: ModuleAssembly[] = [];
   for (const seam of moduleSeams) {
     assemblies.push((await seam(parts)) ?? {});
   }
   return {
     assetKinds: assemblies.flatMap((assembly) => assembly.assetKinds ?? []),
-    operationSources: assemblies.flatMap((assembly) => assembly.operationSources ?? []),
-    jobHandlers: assemblies.flatMap((assembly) => assembly.jobHandlers ?? []),
-    schedules: assemblies.flatMap((assembly) => assembly.schedules ?? [])
+    tools: assemblies.flatMap((assembly) => assembly.tools ?? []),
+    async start(runtime): Promise<StartedModules> {
+      const started = [];
+      for (const assembly of assemblies) {
+        started.push((await assembly.start?.(runtime)) ?? {});
+      }
+      for (const source of started.flatMap((module) => module.operationSources ?? [])) {
+        runtime.operationCalls.registry.addSource(source);
+      }
+      return {
+        jobHandlers: started.flatMap((module) => module.jobHandlers ?? []),
+        schedules: started.flatMap((module) => module.schedules ?? []),
+        routes: started.flatMap((module) => module.routes ?? [])
+      };
+    }
   };
 }
 

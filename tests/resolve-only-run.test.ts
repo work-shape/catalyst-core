@@ -94,7 +94,7 @@ describe("a resolve-only run, as the release gate starts every built entry point
   // Fails without the change: the build knew neither module, so each process stopped on an
   // unknown module name.
   it.each(PROCESSES)(
-    "ends the %s with code 0 with the modules workflows and dataStores on, as with them off",
+    "ends the %s with code 0 with the modules workflows, dataStores and knowledge on, as with them off",
     async (name) => {
       const [on, off] = await Promise.all([
         resolveOnly(
@@ -106,7 +106,8 @@ describe("a resolve-only run, as the release gate starts every built entry point
             {},
             {
               workflows: { enabled: true },
-              dataStores: { enabled: true }
+              dataStores: { enabled: true },
+              knowledge: { enabled: true }
             }
           )
         ),

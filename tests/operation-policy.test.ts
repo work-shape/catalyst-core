@@ -349,6 +349,24 @@ describe("operation registry: who checks the right", () => {
     execute: () => Promise.resolve([])
   });
 
+  // Fails without `SOURCED_OPERATION_PREFIXES`: the three names of one Asset registered.
+  it("keeps the operations of one Workflow, Data Store and Knowledge Base from the release", () => {
+    for (const name of [
+      "workflow.booking-check.start",
+      "data_store.findings.insert",
+      "knowledge.findings.query"
+    ]) {
+      expect(() => createOperationRegistry().register({ ...definition(), name }), name).toThrow(
+        /names operations that come from data/u
+      );
+    }
+    // A name of two parts manages the kind, or is the one knowledge tool: it registers.
+    const registry = createOperationRegistry();
+    for (const name of ["workflows.test", "data_stores.publish", "knowledge.query"]) {
+      registry.register({ ...definition(), name });
+    }
+  });
+
   it("registers an operation with a named right or with its own check", () => {
     const registry = createOperationRegistry();
     registry.register(definition());

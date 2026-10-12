@@ -7,7 +7,9 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { installErrorHandler } from "./errors";
 import { rememberFramework } from "./http/framework";
 import { createInProcessRateLimiter } from "./http/rate-limit";
-import { createRoute } from "./http/route";
+import { createRoute, type ChatServerExtensions } from "./http/route";
+
+export type { ChatServerExtensions, ModuleRoutes, RouteRegistration } from "./http/route";
 import { createHttpRuntime } from "./http/runtime";
 import { registerAuditRoutes } from "./routes/audit-routes";
 import { registerOperationRunRoutes } from "./routes/operation-run-routes";
@@ -140,7 +142,10 @@ export { createInProcessRateLimiter } from "./http/rate-limit";
 export { createHttpRuntime } from "./http/runtime";
 export type { InProcessHttpServer } from "./http/runtime";
 
-export async function createChatServer(input: ChatServerOptions): Promise<HttpRuntime> {
+export async function createChatServer(
+  input: ChatServerOptions,
+  extensions: ChatServerExtensions = {}
+): Promise<HttpRuntime> {
   const allowedOrigins = normalizeAllowedOrigins(input.allowedOrigins);
   const authorizer = input.authorizer ?? createAuthorizer(input.stores.access);
   const operationCalls = input.operationCalls ?? createOperationCalls({ ...input, authorizer });
@@ -220,6 +225,7 @@ export async function createChatServer(input: ChatServerOptions): Promise<HttpRu
   registerApiAccessAdministrationRoutes(route, options);
   registerSuperadminRoutes(route, options);
   registerAccessRoutes(route, options);
+  for (const register of extensions.routes ?? []) register(route);
   registerApiReferenceRoutes(route, options);
 
   const runtime = createHttpRuntime(app);

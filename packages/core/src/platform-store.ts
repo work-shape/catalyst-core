@@ -9,6 +9,7 @@ import type { CollaborationWorkspaceStore } from "./collaboration-workspace";
 import type { ApprovalDecisionStore, ApprovalRequestStore } from "./approval-requests";
 import type { ConfigAssetStore } from "./config-assets";
 import type { ConnectionsStore } from "./connections";
+import type { DataStoreRecordsStore } from "./data-stores";
 import type {
   ExecutionWorkspaceCleanupStore,
   ExecutionWorkspaceFileStore,
@@ -25,6 +26,7 @@ import type { ModelUsageEventStore } from "./usage";
 import type { UserStore } from "./user";
 import type { ApiAccessStore } from "./api-access";
 import type { StructuredDataStore } from "./structured-data";
+import type { WorkflowRunsStore } from "./workflows";
 
 export interface ConversationsStore
   extends ConversationStore, ConversationRetentionStore, ModelProviderContinuationStore {}
@@ -71,6 +73,8 @@ export interface PlatformStores {
   infrastructureChecks: InfrastructureCheckStore;
   pages: PagesStore;
   connections: ConnectionsStore;
+  workflowRuns: WorkflowRunsStore;
+  dataStores: DataStoreRecordsStore;
   /** Resolves after commit; a rejected callback rolls back all domain writes. Nested calls use savepoints. */
   transaction<T>(fn: (stores: PlatformStores) => Promise<T>): Promise<T>;
   close?: () => Promise<void>;

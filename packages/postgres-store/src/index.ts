@@ -24,6 +24,8 @@ import { createPostgresOperationRunsStore } from "./stores/operationRuns";
 import { createPostgresInfrastructureChecksStore } from "./stores/infrastructure";
 import { createPostgresPagesStore } from "./stores/pages";
 import { createPostgresConnectionsStore } from "./stores/connections";
+import { createPostgresDataStoreRecordsStore } from "./stores/data-stores";
+import { createPostgresWorkflowRunsStore } from "./stores/workflow-runs";
 
 export interface PostgresStoresOptions {
   databaseUrl: string;
@@ -94,6 +96,8 @@ function bindStores(
     infrastructureChecks: createPostgresInfrastructureChecksStore(db),
     pages: createPostgresPagesStore(db),
     connections: createPostgresConnectionsStore(db),
+    workflowRuns: createPostgresWorkflowRunsStore(db),
+    dataStores: createPostgresDataStoreRecordsStore(db),
     transaction: (fn) => transact((_tx, stores) => fn(stores))
   };
 }

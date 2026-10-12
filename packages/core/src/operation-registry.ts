@@ -2,6 +2,7 @@ import type { z } from "zod";
 import type { OperationDenial } from "./operation-denial";
 import type { AuditRecorder } from "./audit";
 import { PAGE_ACTION_OPERATION_PREFIX } from "./app-actions";
+import { DATA_STORE_OPERATION_PREFIX, KNOWLEDGE_OPERATION_PREFIX } from "./data-stores";
 import { DATA_TOOL_PREFIXES } from "./data-tool-names";
 import { AppError } from "./errors";
 import type { PlatformEventName } from "./events";
@@ -17,6 +18,7 @@ import type {
 import type { OperationRunUsage } from "./operation-runs";
 import type { AccessResource, ActorAccess } from "./permissions";
 import type { ToolHandlerResult } from "./tool-execution";
+import { WORKFLOW_OPERATION_PREFIX } from "./workflows";
 
 /** How far a changing operation reaches. One that declares none counts as `irreversible`. */
 export type OperationChangeClass = "reversible" | "irreversible" | "outward";
@@ -298,14 +300,36 @@ export interface OperationRegistry {
  * data tool, since no source resolves them and no agent carries them.
  */
 
+/**
+ * The prefixes of the operations of one Workflow, one Data Store and one Knowledge Base:
+ * `<prefix><id>.<verb>`. They come from an `OperationSource` too. A name of that form is kept
+ * from the release. A name of two parts under the same prefix is not, so the one tool
+ * `knowledge.query` registers, and so does every plural name such as `workflows.test`.
+ */
+export const SOURCED_OPERATION_PREFIXES = [
+  WORKFLOW_OPERATION_PREFIX,
+  DATA_STORE_OPERATION_PREFIX,
+  KNOWLEDGE_OPERATION_PREFIX
+] as const;
+
+/** The prefix whose sources the name belongs to, where a registered operation may not take it. */
+function sourcePrefixOf(name: string): string | undefined {
+  return (
+    [...DATA_TOOL_PREFIXES, PAGE_ACTION_OPERATION_PREFIX].find((prefix) =>
+      name.startsWith(prefix)
+    ) ??
+    SOURCED_OPERATION_PREFIXES.find(
+      (prefix) => name.startsWith(prefix) && name.indexOf(".", prefix.length) > 0
+    )
+  );
+}
+
 export function createOperationRegistry(): OperationRegistry {
   const registered = new Map<string, OperationDefinition>();
   const sources: OperationSource[] = [];
   return {
     register(definition) {
-      const dataPrefix = [...DATA_TOOL_PREFIXES, PAGE_ACTION_OPERATION_PREFIX].find((prefix) =>
-        definition.name.startsWith(prefix)
-      );
+      const dataPrefix = sourcePrefixOf(definition.name);
       if (dataPrefix !== undefined) {
         throw new AppError(
           "INTERNAL",
