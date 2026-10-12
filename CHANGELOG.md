@@ -93,6 +93,16 @@ contain breaking changes; a patch version does not.
   through the API and the config CLI, talks to this machine only and can run any number of
   times. `clients/demo/sample-mcp` is a sample MCP server that the demo's Compose file runs as
   the service `sample-mcp`. The seed brings no Connection yet.
+- **Demo client, accounting sample:** the sample MCP server answers at a second address,
+  `/accounting/mcp`, with the same key: the books of 600 invented clients of one tax
+  consultancy, served as the Exampledata interface over DATEV data serves them. Its four reading
+  tools are `list_accounting_clients`, `list_fiscal_years`, `list_postings` and `list_accounts`.
+  The demo's release config brings the Connection `sample-accounting` for it, open to a Workflow
+  only. Each client has a legal form and an industry that decide the size and the content of
+  its ledger, its own customers and suppliers with personal accounts, and months with planted
+  bookings that break one of seven rules, in a known number. Everything follows from a fixed
+  seed, so a month answers the same forever. See "The sample accounting system and its
+  Connection" in `clients/demo/README.md`.
 - **Web access:** the public web fetcher refuses an IPv6 address that carries a blocked IPv4
   address in any form: IPv4-compatible, NAT64 `64:ff9b::/96`, 6to4 `2002::/16` and Teredo
   `2001:0::/32`, as it did IPv4-mapped ones.
