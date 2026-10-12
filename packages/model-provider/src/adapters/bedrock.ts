@@ -9,6 +9,11 @@ import {
 import type { ModelAdapterFactory } from "../types";
 
 const bedrockConfigSchema = z.object({
+  /**
+   * The AWS account the instance's application inference profiles belong to. Not a secret. A
+   * profile of another account is refused before a request is sent.
+   */
+  accountId: z.string().regex(/^\d{12}$/u, "must be the 12 digits of an AWS account id"),
   /** Names the secret that holds the Bedrock API key of this consumer. */
   credentialSecret: secretRef().default("AWS_BEARER_TOKEN_BEDROCK")
 });
@@ -32,7 +37,11 @@ export const bedrockModelProvider = defineProvider({
           `'${entryPath}.region' must be 'eu': the 'aws-bedrock' provider calls Bedrock in ${BEDROCK_REGION} and nowhere else`
         );
       }
-      const provider = new BedrockProvider({ id: entry.id, bearerToken });
+      const provider = new BedrockProvider({
+        id: entry.id,
+        accountId: config.accountId,
+        bearerToken
+      });
       provider.assertModel(entry.model);
       return {
         // Asked at startup for every binding, so a binding with a model id that is not a
@@ -45,7 +54,10 @@ export const bedrockModelProvider = defineProvider({
         stream: (request) => provider.stream(request)
       };
     };
-    build.check = (context) => new BedrockProvider({ id: entryPath, bearerToken }).check(context);
+    build.check = (context) =>
+      new BedrockProvider({ id: entryPath, accountId: config.accountId, bearerToken }).check(
+        context
+      );
     return build;
   },
   async check(build, context) {

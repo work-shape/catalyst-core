@@ -1,3 +1,4 @@
+import { crc32 } from "node:zlib";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppError } from "@vivd-catalyst/core";
 import {
@@ -10,6 +11,8 @@ import {
   BEDROCK_TEST_ACCOUNT_ID,
   answerWith,
   bedrock,
+  bedrockEventStream,
+  bedrockRefusal,
   collect,
   hello,
   message
@@ -28,7 +31,6 @@ import { RECORDED_BEDROCK_PROFILE } from "./support/model-adapter-recordings";
  */
 
 const ACCOUNT_ID = BEDROCK_TEST_ACCOUNT_ID;
-const HOST = "https://bedrock-runtime.eu-central-1.amazonaws.com";
 const user = (content: ModelMessage["content"]): ModelMessage => ({ role: "user", content });
 const weatherTool: ModelTool = {
   name: "get_weather",
@@ -39,125 +41,6 @@ const weatherTool: ModelTool = {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
-});
-
-describe("Bedrock adapter: what it sends", () => {
-  it("calls the Frankfurt runtime with the profile ARN, the key as a bearer token and no cache", async () => {
-    const sent = answerWith(() => Response.json(message([{ type: "text", text: "Hello." }])));
-    const adapter = await bedrock();
-
-    await adapter.complete({
-      model: RECORDED_BEDROCK_PROFILE,
-      messages: [
-        { role: "system", content: "Answer briefly." },
-        user("Say hello."),
-        { role: "assistant", content: "  " },
-        user("Again.")
-      ],
-      tools: [weatherTool]
-    });
-
-    expect(sent).toHaveLength(1);
-    expect(sent[0]?.url).toBe(
-      `${HOST}/model/${encodeURIComponent(RECORDED_BEDROCK_PROFILE)}/invoke`
-    );
-    expect(sent[0]?.headers.get("authorization")).toBe("Bearer test-bedrock-key");
-    expect(sent[0]?.body).toEqual({
-      anthropic_version: "bedrock-2023-05-31",
-      max_tokens: 64_000,
-      system: [{ type: "text", text: "Answer briefly." }],
-      // An assistant turn of white space alone is no turn, so the two user turns are one.
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: "Say hello." },
-            { type: "text", text: "Again." }
-          ]
-        }
-      ],
-      tools: [
-        {
-          name: "get_weather",
-          description: "Reads the weather of a city.",
-          input_schema: { type: "object", properties: { city: { type: "string" } } }
-        }
-      ]
-    });
-    // The route forbids explicit caches: nothing in a request asks for one.
-    expect(JSON.stringify(sent[0]?.body)).not.toMatch(/cache_control|cachePoint/u);
-  });
-
-  it("sends tool names through the name table and reads them back", async () => {
-    const tools: ModelTool[] = [
-      { name: "data.query", description: "Runs a query." },
-      { name: "data_query", description: "Runs another query." }
-    ];
-    let wireName = "";
-    const sent = answerWith((request) => {
-      wireName = String(records(request.body, "tools")[0]?.name);
-      return Response.json(
-        message([{ type: "tool_use", id: "toolu_1", name: wireName, input: { sql: "select 1" } }])
-      );
-    });
-    const adapter = await bedrock();
-
-    const completion = await adapter.complete({
-      model: RECORDED_BEDROCK_PROFILE,
-      messages: [
-        user("Query."),
-        {
-          role: "assistant",
-          content: "",
-          toolCalls: [{ toolCallId: "call:1/a", toolName: "data.query", input: "not an object" }]
-        },
-        { role: "tool", toolCallId: "call:1/a", content: "" }
-      ],
-      tools
-    });
-
-    const offered = records(sent[0]?.body, "tools").map((tool) => String(tool.name));
-    for (const name of offered) expect(name).toMatch(/^[a-zA-Z0-9_-]{1,64}$/u);
-    expect(new Set(offered).size).toBe(2);
-    expect(completion.toolCalls).toEqual([
-      { toolCallId: "toolu_1", toolName: "data.query", input: { sql: "select 1" } }
-    ]);
-    const [, assistant, result] = records(sent[0]?.body, "messages");
-    const call = records(assistant, "content")[0];
-    // An id another provider gave is sent in the format's characters, the same in both places.
-    expect(call).toMatchObject({ type: "tool_use", name: wireName, input: {} });
-    expect(call?.id).toMatch(/^[a-zA-Z0-9_-]{1,64}$/u);
-    expect(records(result, "content")[0]).toEqual({ type: "tool_result", tool_use_id: call?.id });
-  });
-
-  it("leaves out an image above Bedrock's limit and says so in its place", async () => {
-    const sent = answerWith(() => Response.json(message([{ type: "text", text: "Seen." }])));
-    const adapter = await bedrock();
-
-    await adapter.complete({
-      model: RECORDED_BEDROCK_PROFILE,
-      messages: [
-        user([
-          { type: "text", text: "Look." },
-          { type: "image", mimeType: "image/png", data: new Uint8Array(3_750_001) }
-        ])
-      ],
-      tools: []
-    });
-
-    expect(records(sent[0]?.body, "messages")).toEqual([
-      {
-        role: "user",
-        content: [
-          { type: "text", text: "Look." },
-          {
-            type: "text",
-            text: "[1 image was too large to include in the model input and was left out.]"
-          }
-        ]
-      }
-    ]);
-  });
 });
 
 describe("Bedrock adapter: what it reads", () => {
@@ -235,7 +118,7 @@ describe("Bedrock adapter: what it reads", () => {
       bedrockChunk({ type: "message_stop" })
     ]);
     // Seven bytes at a time: every prelude, header and payload is cut somewhere.
-    answerWith(() => eventStream(slices(stream, 7)));
+    answerWith(() => bedrockEventStream(slices(stream, 7)));
 
     const events = await collect(
       (await bedrock()).stream({
@@ -274,13 +157,13 @@ describe("Bedrock adapter: what it reads", () => {
 
   it("keeps the broken input of a tool call the output limit cut off", async () => {
     answerWith(() =>
-      eventStream([
+      bedrockEventStream([
         toolStart(0, "toolu_a", "get_weather"),
         jsonDelta(0, '{"city": "Ber'),
         bedrockChunk({
           type: "message_delta",
           delta: { stop_reason: "max_tokens" },
-          usage: { input_tokens: 40, output_tokens: 64_000 }
+          usage: { input_tokens: 40, output_tokens: 16_000 }
         }),
         bedrockChunk({ type: "message_stop" })
       ])
@@ -310,9 +193,76 @@ describe("Bedrock adapter: what it reads", () => {
     ]);
   });
 
+  it.each([
+    ["a list", '["Berlin"]'],
+    ["a text", '"Berlin"'],
+    ["a number", "7"],
+    ["nothing", "null"]
+  ])("hands on a tool call whose input is %s as one with invalid arguments", async (_name, raw) => {
+    const invalid = {
+      toolCallId: "toolu_a",
+      toolName: "get_weather",
+      input: {},
+      inputParseError: {
+        code: "invalid_json",
+        message: "Tool input must be a JSON object",
+        rawInput: raw
+      }
+    };
+    const request = {
+      model: RECORDED_BEDROCK_PROFILE,
+      messages: [user("Weather?")],
+      tools: [weatherTool]
+    };
+    const ending = [
+      bedrockChunk({
+        type: "message_delta",
+        delta: { stop_reason: "tool_use" },
+        usage: { input_tokens: 40, output_tokens: 9 }
+      }),
+      bedrockChunk({ type: "message_stop" })
+    ];
+
+    // The input in fragments, as a stream sends it.
+    answerWith(() =>
+      bedrockEventStream([
+        toolStart(0, "toolu_a", "get_weather"),
+        jsonDelta(0, raw.slice(0, 1)),
+        jsonDelta(0, raw.slice(1)),
+        ...ending
+      ])
+    );
+    const streamed = (await collect((await bedrock()).stream(request))).at(-1);
+    expect(streamed).toMatchObject({ type: "completed", completion: { toolCalls: [invalid] } });
+    vi.unstubAllGlobals();
+
+    // The input whole, in the block's start and in an answer that is not streamed.
+    const block: unknown = {
+      type: "tool_use",
+      id: "toolu_a",
+      name: "get_weather",
+      input: JSON.parse(raw)
+    };
+    answerWith(() =>
+      bedrockEventStream([
+        bedrockChunk({ type: "content_block_start", index: 0, content_block: block }),
+        ...ending
+      ])
+    );
+    if (raw !== "null") {
+      const whole = (await collect((await bedrock()).stream(request))).at(-1);
+      expect(whole).toMatchObject({ type: "completed", completion: { toolCalls: [invalid] } });
+    }
+    vi.unstubAllGlobals();
+    answerWith(() => Response.json(message([block], "tool_use")));
+    if (raw !== "null") {
+      expect((await (await bedrock()).complete(request)).toolCalls).toEqual([invalid]);
+    }
+  });
+
   it("ignores events, deltas, blocks and stream messages of types it does not know", async () => {
     answerWith(() =>
-      eventStream([
+      bedrockEventStream([
         bedrockEventStreamMessage(
           { ":event-type": "metadata_of_a_later_release", ":message-type": "event" },
           new TextEncoder().encode('{"anything":true}')
@@ -384,9 +334,14 @@ describe("Bedrock adapter: what it reads", () => {
 describe("Bedrock adapter: failures", () => {
   it("reports throttling as a rate limit, with Bedrock's words kept for the log alone", async () => {
     answerWith(() =>
-      refusal(429, "ThrottlingException", "Too many requests, please wait before trying again.", {
-        "retry-after": "7"
-      })
+      bedrockRefusal(
+        429,
+        "ThrottlingException",
+        "Too many requests, please wait before trying again.",
+        {
+          "retry-after": "7"
+        }
+      )
     );
 
     const failure = await complete(await bedrock());
@@ -410,12 +365,13 @@ describe("Bedrock adapter: failures", () => {
     ["serviceUnavailableException", "server_error", 503, true],
     ["modelTimeoutException", "timeout", 408, true],
     ["validationException", "invalid_request", 400, false],
-    ["exceptionOfALaterRelease", "server_error", undefined, true]
+    ["accessDeniedException", "invalid_request", 403, false],
+    ["exceptionOfALaterRelease", "server_error", undefined, false]
   ] as const)(
-    "reports %s inside a stream that had begun as %s",
+    "types %s inside a stream that had begun as %s",
     async (type, kind, status, retryable) => {
       answerWith(() =>
-        eventStream([
+        bedrockEventStream([
           bedrockChunk({ type: "message_start", message: { usage: { input_tokens: 8 } } }),
           bedrockStreamException(type, "SECRET-PROVIDER-WORDS")
         ])
@@ -431,9 +387,9 @@ describe("Bedrock adapter: failures", () => {
     }
   );
 
-  it("reports an overloaded model inside a stream as a server error that is sent again", async () => {
+  it("types an overloaded model inside a stream as a server error", async () => {
     answerWith(() =>
-      eventStream([
+      bedrockEventStream([
         bedrockChunk({ type: "error", error: { type: "overloaded_error", message: "Overloaded" } })
       ])
     );
@@ -450,7 +406,7 @@ describe("Bedrock adapter: failures", () => {
   });
 
   it.each([424, 500, 503, 529])("reports status %i as a server error", async (status) => {
-    answerWith(() => refusal(status, "ModelErrorException", "The model failed."));
+    answerWith(() => bedrockRefusal(status, "ModelErrorException", "The model failed."));
 
     expect(await complete(await bedrock())).toMatchObject({
       kind: "server_error",
@@ -465,7 +421,7 @@ describe("Bedrock adapter: failures", () => {
       `bedrock:InvokeModel on resource: arn:aws:bedrock:eu-central-1:${ACCOUNT_ID}:application-inference-profile/abc`;
     const bodies: Record<string, string>[] = [{ message: denied }, { Message: denied }];
     for (const body of bodies) {
-      answerWith(() => refusal(403, "AccessDeniedException", body));
+      answerWith(() => bedrockRefusal(403, "AccessDeniedException", body));
       const adapter = await bedrock();
 
       for (const failure of [
@@ -494,7 +450,11 @@ describe("Bedrock adapter: failures", () => {
 
   it("tells the user when the conversation is longer than the model's context", async () => {
     answerWith(() =>
-      refusal(400, "ValidationException", "prompt is too long: 1200000 tokens > 1000000 maximum")
+      bedrockRefusal(
+        400,
+        "ValidationException",
+        "prompt is too long: 1200000 tokens > 1000000 maximum"
+      )
     );
 
     const failure = await complete(await bedrock());
@@ -531,7 +491,7 @@ describe("Bedrock adapter: failures", () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     let cancelled = 0;
     answerWith(() =>
-      eventStream(
+      bedrockEventStream(
         [bedrockChunk({ type: "message_start", message: { usage: { input_tokens: 8 } } })],
         {
           staysOpen: true,
@@ -559,13 +519,13 @@ describe("Bedrock adapter: failures", () => {
     expect(cancelled).toBe(1);
   });
 
-  it("fails a stream that ends before the answer does, so the call is sent again", async () => {
+  it("fails a stream that ends before the answer does as a timeout", async () => {
     const cut = bedrockChunk({ type: "content_block_delta", index: 0, delta: {} });
     for (const pieces of [
       [bedrockChunk({ type: "message_start", message: {} })],
       [cut.subarray(0, cut.byteLength - 3)]
     ]) {
-      answerWith(() => eventStream(pieces));
+      answerWith(() => bedrockEventStream(pieces));
       const failure = await collect(
         (await bedrock()).stream({ model: RECORDED_BEDROCK_PROFILE, ...hello })
       ).catch((error: unknown) => error);
@@ -574,55 +534,54 @@ describe("Bedrock adapter: failures", () => {
     }
   });
 
-  it("refuses a stream message whose checksum or length is wrong", async () => {
-    const flipped = Uint8Array.from(bedrockChunk({ type: "message_stop" }));
-    flipped[flipped.byteLength - 6] = (flipped[flipped.byteLength - 6] ?? 0) ^ 0xff;
-    const oversized = Uint8Array.from(bedrockChunk({ type: "message_stop" }));
-    oversized[0] = 0xff;
-    for (const piece of [flipped, oversized]) {
-      answerWith(() => eventStream([piece]));
-      const failure = await collect(
-        (await bedrock()).stream({ model: RECORDED_BEDROCK_PROFILE, ...hello })
-      ).catch((error: unknown) => error);
-      expect(failure).toMatchObject({ kind: "invalid_response", retryable: false });
-      vi.unstubAllGlobals();
+  it.each([
+    ["a wrong message checksum", (frame: Uint8Array) => flipByte(frame, frame.byteLength - 2)],
+    ["a wrong prelude checksum", (frame: Uint8Array) => flipByte(frame, 9)],
+    // The prelude's own checksum holds, so only the bound on the length refuses these two.
+    ["a length above the largest message", () => prelude(0x7fffffff, 0)],
+    ["a length below its own headers", () => prelude(20, 64)]
+  ])("refuses a stream message with %s and does not wait for the rest", async (_name, corrupt) => {
+    answerWith(() => bedrockEventStream([corrupt(bedrockChunk({ type: "message_stop" }))]));
+
+    const failure = await collect(
+      (await bedrock()).stream({ model: RECORDED_BEDROCK_PROFILE, ...hello })
+    ).catch((error: unknown) => error);
+
+    expect(failure).toMatchObject({
+      kind: "invalid_response",
+      retryable: false,
+      message: "Model provider returned a malformed stream"
+    });
+  });
+
+  it("refuses a request above Bedrock's size before it is sent", async () => {
+    const sent = answerWith(() => Response.json(message([{ type: "text", text: "Hello." }])));
+    const adapter = await bedrock();
+    // Eight images below the limit of one image, together above the limit of a request.
+    const image = {
+      type: "image" as const,
+      mimeType: "image/png" as const,
+      data: new Uint8Array(3_000_000)
+    };
+    const request = {
+      model: RECORDED_BEDROCK_PROFILE,
+      messages: [user(Array.from({ length: 8 }, () => image))],
+      tools: []
+    };
+
+    for (const failure of [
+      await adapter.complete(request).catch((error: unknown) => error),
+      await collect(adapter.stream(request)).catch((error: unknown) => error)
+    ]) {
+      expect(failure).toMatchObject({
+        kind: "context_length_exceeded",
+        retryable: false,
+        message: "This conversation is too long for the model. Start a new conversation."
+      });
     }
+    expect(sent).toHaveLength(0);
   });
 });
-
-function refusal(
-  status: number,
-  type: string,
-  body: string | Record<string, string>,
-  headers: Record<string, string> = {}
-): Response {
-  return Response.json(typeof body === "string" ? { message: body } : body, {
-    status,
-    headers: {
-      "x-amzn-errortype": `${type}:http://internal.amazon.com/coral/com.amazon.bedrock/`,
-      "x-amzn-requestid": "0f8fad5b-d9cb-469f-a165-70867728950e",
-      ...headers
-    }
-  });
-}
-
-function eventStream(
-  pieces: Uint8Array[],
-  options: { staysOpen?: boolean; onCancel?: () => void } = {}
-): Response {
-  return new Response(
-    new ReadableStream<Uint8Array>({
-      start(controller) {
-        for (const piece of pieces) controller.enqueue(piece);
-        if (!options.staysOpen) controller.close();
-      },
-      cancel() {
-        options.onCancel?.();
-      }
-    }),
-    { status: 200, headers: { "content-type": "application/vnd.amazon.eventstream" } }
-  );
-}
 
 function toolStart(index: number, id: string, name: string): Uint8Array {
   return bedrockChunk({
@@ -638,6 +597,21 @@ function jsonDelta(index: number, partialJson: string): Uint8Array {
     index,
     delta: { type: "input_json_delta", partial_json: partialJson }
   });
+}
+
+function flipByte(frame: Uint8Array, index: number): Uint8Array {
+  const copy = Uint8Array.from(frame);
+  copy[index] = (copy[index] ?? 0) ^ 0xff;
+  return copy;
+}
+
+/** The first twelve bytes of a stream message: two lengths and their checksum. */
+function prelude(totalLength: number, headersLength: number): Uint8Array {
+  const bytes = Buffer.alloc(12);
+  bytes.writeUInt32BE(totalLength, 0);
+  bytes.writeUInt32BE(headersLength, 4);
+  bytes.writeUInt32BE(crc32(bytes.subarray(0, 8)), 8);
+  return Uint8Array.from(bytes);
 }
 
 function concatBytes(pieces: Uint8Array[]): Uint8Array {
@@ -670,13 +644,4 @@ function readable(error: unknown): string {
     String(error),
     error.stack ?? ""
   ].join("\n");
-}
-
-/** The objects in the list `key` of a request body or of one of its parts. */
-function records(value: unknown, key: string): Record<string, unknown>[] {
-  const isRecord = (item: unknown): item is Record<string, unknown> =>
-    item !== null && typeof item === "object" && !Array.isArray(item);
-  const items: unknown = isRecord(value) ? value[key] : undefined;
-  if (!Array.isArray(items)) throw new Error(`Expected a list '${key}'`);
-  return items.filter(isRecord);
 }

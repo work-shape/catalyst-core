@@ -75,7 +75,16 @@ async function readWithinIdleLimit(
   let timer: ReturnType<typeof setTimeout> | undefined;
   const idle = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(
-      () => reject(new AppError("TIMEOUT", "Model provider stream sent no data for 10 minutes")),
+      () =>
+        reject(
+          // Not sent again: three attempts would keep a user waiting for half an hour on a
+          // provider that answers nothing, so one idle limit bounds the whole call.
+          new ModelProviderError({
+            kind: "timeout",
+            retryable: false,
+            message: "Model provider stream sent no data for 10 minutes"
+          })
+        ),
       MODEL_STREAM_IDLE_TIMEOUT_MS
     );
   });

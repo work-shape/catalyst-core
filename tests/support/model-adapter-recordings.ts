@@ -272,6 +272,7 @@ export const conformanceAdapters: ConformanceAdapter[] = [
     provider: "aws-bedrock",
     region: "eu",
     model: RECORDED_BEDROCK_PROFILE,
+    accountId: "000000000000",
     credentialSecret: "REPLAY_MODEL_KEY"
   })
 ];

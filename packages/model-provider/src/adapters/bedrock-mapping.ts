@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { MODEL_CALL_RESERVED_OUTPUT_TOKENS } from "@vivd-catalyst/core";
 import { createProviderToolMetadata, type ProviderToolNames } from "../openai-compatible-mapping";
 import type { ModelAdapterRequest, ModelCompletion, ModelContent, ModelToolCall } from "../types";
 import {
@@ -11,13 +12,17 @@ import {
   type BedrockUsage
 } from "./bedrock-wire";
 
-// The Messages format requires an output limit. Every Claude model offered on this route gives
-// at least this much, so the limit cuts no answer a model would have finished; an answer that
-// reaches it ends there and the user reads it cut off.
-const BEDROCK_MAX_OUTPUT_TOKENS = 64_000;
+// The Messages format requires an output limit. It is what admission reserves for the answer
+// of a call, so an answer never uses more output than was held for it on the budget; a longer
+// one ends there and the user reads it cut off. Every Claude model from the 4 generation on gives
+// at least this much. Bedrock refuses the request for an older model with a smaller limit.
+const BEDROCK_MAX_OUTPUT_TOKENS = MODEL_CALL_RESERVED_OUTPUT_TOKENS;
 // Protects a request from being refused whole over one image: Bedrock takes an image of at most
 // 3.75 MB. A larger one is left out, and the model is told so in its place.
 const BEDROCK_IMAGE_MAX_BYTES = 3_750_000;
+// Protects a request from being refused whole over the number of its images: Bedrock takes 20
+// in one request. The newest are kept; an older one is left out, and the model is told so.
+const BEDROCK_MAX_IMAGES = 20;
 
 /** A request in the Messages format, and the table that turns its tool names back. */
 export function toBedrockRequest(request: ModelAdapterRequest): {
@@ -25,6 +30,15 @@ export function toBedrockRequest(request: ModelAdapterRequest): {
   toolNames: ProviderToolNames;
 } {
   const tools = createProviderToolMetadata(request.tools);
+  // Images that fit by their size, counted so that the oldest above the limit are left out.
+  let imagesToLeaveOut =
+    request.messages
+      .filter((message) => message.role === "user" || message.role === "tool")
+      .flatMap((message) => (typeof message.content === "string" ? [] : message.content))
+      .filter((part) => part.type === "image" && part.data.byteLength <= BEDROCK_IMAGE_MAX_BYTES)
+      .length - BEDROCK_MAX_IMAGES;
+  const toContentBlocks = (content: ModelContent): BedrockContentBlock[] =>
+    contentBlocks(content, () => imagesToLeaveOut-- > 0);
   const system: { type: "text"; text: string }[] = [];
   const messages: BedrockRequestMessage[] = [];
   const push = (role: BedrockRequestMessage["role"], content: BedrockRequestBlock[]): void => {
@@ -96,8 +110,11 @@ function toTextBlocks(content: ModelContent): { type: "text"; text: string }[] {
   return texts.filter((text) => text.trim().length > 0).map((text) => ({ type: "text", text }));
 }
 
-/** Text and images in the order they were given. A document is refused before it gets here. */
-function toContentBlocks(content: ModelContent): BedrockContentBlock[] {
+/**
+ * Text and images in the order they were given. A document is refused before it gets here.
+ * `leaveOut` is asked for every image that fits by its size.
+ */
+function contentBlocks(content: ModelContent, leaveOut: () => boolean): BedrockContentBlock[] {
   if (typeof content === "string") {
     return toTextBlocks(content);
   }
@@ -107,7 +124,7 @@ function toContentBlocks(content: ModelContent): BedrockContentBlock[] {
     if (part.type === "text") {
       blocks.push(...toTextBlocks(part.text));
     } else if (part.type === "image") {
-      if (part.data.byteLength > BEDROCK_IMAGE_MAX_BYTES) {
+      if (part.data.byteLength > BEDROCK_IMAGE_MAX_BYTES || leaveOut()) {
         omitted += 1;
         continue;
       }
@@ -126,8 +143,8 @@ function toContentBlocks(content: ModelContent): BedrockContentBlock[] {
       type: "text",
       text:
         omitted === 1
-          ? "[1 image was too large to include in the model input and was left out.]"
-          : `[${omitted} images were too large to include in the model input and were left out.]`
+          ? "[1 image could not be included in the model input and was left out.]"
+          : `[${omitted} images could not be included in the model input and were left out.]`
     });
   }
   return blocks;
@@ -165,11 +182,33 @@ export function readBedrockAnswer(
       toolCalls.push({
         toolCallId: block.id,
         toolName: toolNames.productNameFor(block.name),
-        input: isRecord(block.input) ? block.input : {}
+        ...readBedrockToolInput({ input: block.input ?? {} }, undefined)
       });
     }
   }
   return { text, toolCalls };
+}
+
+/**
+ * The input of a tool call as the tool gets it. The format's input is an object; a list, a
+ * number or a text is no input a tool can be called with, so the call is handed on as one whose
+ * arguments are invalid, with what the model wrote, and the model reads that as the tool's result.
+ */
+export function readBedrockToolInput(
+  parsed: Pick<ModelToolCall, "input" | "inputParseError">,
+  rawInput: string | undefined
+): Pick<ModelToolCall, "input" | "inputParseError"> {
+  if (parsed.inputParseError || isRecord(parsed.input)) {
+    return parsed;
+  }
+  return {
+    input: {},
+    inputParseError: {
+      code: "invalid_json",
+      message: "Tool input must be a JSON object",
+      rawInput: rawInput ?? JSON.stringify(parsed.input)
+    }
+  };
 }
 
 /** Stop reasons of an answer that is an answer: complete, cut at the output limit, or a call. */

@@ -5,7 +5,7 @@
         "url": "https://bedrock-runtime.eu-central-1.amazonaws.com/model/arn%3Aaws%3Abedrock%3Aeu-central-1%3A000000000000%3Aapplication-inference-profile%2Frecordedprofile/invoke",
         "body": {
           "anthropic_version": "bedrock-2023-05-31",
-          "max_tokens": 64000,
+          "max_tokens": 16000,
           "system": [
             {
               "type": "text",

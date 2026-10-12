@@ -3,6 +3,7 @@ import { readBedrockEventStream, type BedrockEventStreamMessage } from "./bedroc
 import {
   missingBedrockAnswerReason,
   readBedrockAnswer,
+  readBedrockToolInput,
   toBedrockModelUsage,
   toBedrockRequest
 } from "./bedrock-mapping";
@@ -42,12 +43,14 @@ const APPLICATION_INFERENCE_PROFILE = "application-inference-profile";
 
 /**
  * Why a model id is not one this adapter calls, or undefined for an application inference
- * profile in the adapter's region. Usage on Bedrock is attributed to a consumer by its
+ * profile of the configured account in the adapter's region. A profile of another account is
+ * refused before anything is sent: the key would be shown to a resource this instance does not
+ * own. Usage on Bedrock is attributed to a consumer by its
  * application inference profile and the consumer's credential may call that alone, so a model id
  * or a shared profile is refused here and never sent. The reason never repeats the id: an ARN
  * holds the account id.
  */
-function bedrockModelRefusal(model: string): string | undefined {
+function bedrockModelRefusal(model: string, accountId: string): string | undefined {
   const arn = BEDROCK_ARN.exec(model);
   if (!arn) {
     return "a model id or a shared inference profile such as 'eu.anthropic.…' is not attributed to this consumer";
@@ -58,6 +61,9 @@ function bedrockModelRefusal(model: string): string | undefined {
   if (arn[1] !== BEDROCK_REGION) {
     return `the profile is in another region, and calls go to ${BEDROCK_REGION} only`;
   }
+  if (arn[2] !== accountId) {
+    return "the profile belongs to another AWS account than the provider's 'accountId'";
+  }
   return undefined;
 }
 
@@ -65,7 +71,8 @@ function bedrockModelRefusal(model: string): string | undefined {
  * What Claude on Bedrock does through this adapter. Web search is not declared: Bedrock has
  * none. Reasoning efforts, document input and answer formats are not mapped yet, so a call that
  * asks for one is refused before it is sent. The adapter sets no cache breakpoint and asks for
- * no cache.
+ * no cache. Every token is billed to the consumer's profile, so a model without a price is
+ * not called.
  */
 export const BEDROCK_CAPABILITIES: ModelCapabilities = {
   reasoningEfforts: [],
@@ -77,12 +84,15 @@ export const BEDROCK_CAPABILITIES: ModelCapabilities = {
   imageInput: true,
   documentInput: false,
   structuredOutput: false,
-  streaming: true
+  streaming: true,
+  priceRequired: true
 };
 
 export interface BedrockProviderOptions {
   /** The entry's id, for diagnostics. */
   id: string;
+  /** The AWS account the instance's profiles belong to. A profile of another one is refused. */
+  accountId: string;
   /** The Bedrock API key, sent as a bearer token. */
   bearerToken: string;
 }
@@ -96,7 +106,7 @@ export class BedrockProvider {
 
   /** Throws a config error for a model this adapter does not call. */
   assertModel(model: string): void {
-    const refusal = bedrockModelRefusal(model);
+    const refusal = bedrockModelRefusal(model, this.options.accountId);
     if (refusal !== undefined) {
       throw new AppError(
         "VALIDATION_FAILED",
@@ -189,8 +199,8 @@ export class BedrockProvider {
           toolCallId: toolCall.id,
           toolName: toolCall.name,
           ...(toolCall.json.length > 0
-            ? parseToolInput(toolCall.json)
-            : { input: isRecord(toolCall.given) ? toolCall.given : {} })
+            ? readBedrockToolInput(parseToolInput(toolCall.json), toolCall.json)
+            : readBedrockToolInput({ input: toolCall.given ?? {} }, undefined))
         }))
     };
     this.assertAnswered(answer, stopReason, response.status, usage);
@@ -209,6 +219,7 @@ export class BedrockProvider {
         method: "POST",
         headers: this.headers("application/json"),
         body: "{}",
+        redirect: "manual",
         signal
       });
     } catch {
@@ -240,6 +251,15 @@ export class BedrockProvider {
   ): Promise<Response> {
     this.assertModel(request.model);
     const url = `https://${BEDROCK_RUNTIME_HOST}/model/${encodeURIComponent(request.model)}/${method}`;
+    const serialized = JSON.stringify(body);
+    if (Buffer.byteLength(serialized, "utf8") > BEDROCK_REQUEST_MAX_BYTES) {
+      // Refused here and never sent: Bedrock would refuse the whole request for its size.
+      throw new ModelProviderError({
+        kind: "context_length_exceeded",
+        message: CONTEXT_LENGTH_MESSAGE,
+        details: { providerId: this.options.id }
+      });
+    }
     let response: Response;
     try {
       response = await fetch(url, {
@@ -247,7 +267,10 @@ export class BedrockProvider {
         headers: this.headers(
           method === "invoke" ? "application/json" : "application/vnd.amazon.eventstream"
         ),
-        body: JSON.stringify(body),
+        body: serialized,
+        // A redirect is never followed: the key and the conversation go to the one host above.
+        // The answer with status 3xx is refused below like any other that is not a success.
+        redirect: "manual",
         signal: request.signal
       });
     } catch (error) {
@@ -332,16 +355,23 @@ export class BedrockProvider {
     });
   }
 
-  /** A failure Bedrock or the model reported inside a stream that had begun with status 200. */
+  /**
+   * A failure Bedrock or the model reported inside a stream that had begun with status 200. A
+   * type this adapter does not know is not sent again: it may be a refusal that no retry changes.
+   */
   private streamError(type: unknown, message: unknown): ModelProviderError {
     const providerCode = identifier(type);
-    const [kind, status] = STREAM_ERRORS[providerCode?.toLowerCase() ?? ""] ?? [
-      "server_error",
-      undefined
-    ];
+    const known = STREAM_ERRORS[providerCode?.toLowerCase() ?? ""];
+    const status = known?.[1];
+    const overflow =
+      (known?.[0] === "invalid_request" &&
+        typeof message === "string" &&
+        CONTEXT_LENGTH_REFUSAL.test(message)) ||
+      providerCode === "request_too_large";
     return new ModelProviderError({
-      kind,
-      message: "Model provider request failed",
+      kind: overflow ? "context_length_exceeded" : (known?.[0] ?? "server_error"),
+      message: overflow ? CONTEXT_LENGTH_MESSAGE : "Model provider request failed",
+      ...(known === undefined ? { retryable: false } : {}),
       ...(status === undefined ? {} : { status }),
       providerCode,
       providerMessage: logMessage(message),
@@ -384,6 +414,10 @@ const CONTEXT_LENGTH_MESSAGE =
 // Bedrock answers a prompt above the model's context window with status 400 and no code of its
 // own; only its sentence tells it from another refused request.
 const CONTEXT_LENGTH_REFUSAL = /prompt is too long|input is too long/iu;
+// Protects a call from a request Bedrock refuses whole for its size: the body of one
+// `InvokeModel` request may have 20 MB. A larger one is refused here as a conversation that is
+// too long, and nothing is sent.
+const BEDROCK_REQUEST_MAX_BYTES = 20_000_000;
 
 /** 424 is Bedrock's status for a model that failed while it answered: sent again like a 5xx. */
 function bedrockErrorKindForStatus(status: number): ModelProviderErrorKind {
@@ -392,22 +426,32 @@ function bedrockErrorKindForStatus(status: number): ModelProviderErrorKind {
 
 /**
  * The failures a stream reports, by Bedrock's exception type and by the model's error type, in
- * lower case. One that is not listed is a server error: the stream had begun and then failed.
+ * lower case, with the kind and the status the same failure has as an HTTP answer. Throttling,
+ * a timeout, an overloaded or failing model are sent again; a refused key, permission, bill or
+ * request never is.
  */
 const STREAM_ERRORS: Record<string, [ModelProviderErrorKind, number]> = {
   throttlingexception: ["rate_limit", 429],
+  modelnotreadyexception: ["rate_limit", 429],
   rate_limit_error: ["rate_limit", 429],
   modeltimeoutexception: ["timeout", 408],
   timeout_error: ["timeout", 408],
-  validationexception: ["invalid_request", 400],
-  invalid_request_error: ["invalid_request", 400],
-  accessdeniedexception: ["invalid_request", 403],
-  permission_error: ["invalid_request", 403],
   modelstreamerrorexception: ["server_error", 424],
+  modelerrorexception: ["server_error", 424],
   internalserverexception: ["server_error", 500],
   api_error: ["server_error", 500],
   serviceunavailableexception: ["server_error", 503],
-  overloaded_error: ["server_error", 529]
+  overloaded_error: ["server_error", 529],
+  validationexception: ["invalid_request", 400],
+  servicequotaexceededexception: ["invalid_request", 400],
+  invalid_request_error: ["invalid_request", 400],
+  authentication_error: ["invalid_request", 401],
+  billing_error: ["invalid_request", 402],
+  accessdeniedexception: ["invalid_request", 403],
+  permission_error: ["invalid_request", 403],
+  resourcenotfoundexception: ["invalid_request", 404],
+  not_found_error: ["invalid_request", 404],
+  request_too_large: ["invalid_request", 413]
 };
 
 /**

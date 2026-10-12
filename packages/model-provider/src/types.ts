@@ -182,6 +182,12 @@ export interface ModelCapabilities {
   documentInput: boolean;
   structuredOutput: boolean;
   streaming: boolean;
+  /**
+   * The provider bills the instance for every token, so no call is made without a price for
+   * it: startup stops on a provider entry or a binding whose model has no rate card row with a
+   * price above zero for input, cached input and output.
+   */
+  priceRequired?: boolean;
 }
 
 /** The answer format a call asks for instead of free text. */

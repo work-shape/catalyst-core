@@ -14,6 +14,7 @@ import { RECORDED_BEDROCK_PROFILE } from "./support/model-adapter-recordings";
 /** What an `aws-bedrock` entry may name: the EU, and a profile that attributes its calls. */
 
 const ACCOUNT_ID = BEDROCK_TEST_ACCOUNT_ID;
+const OTHER_ACCOUNT_ID = "999999999999";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -45,6 +46,11 @@ describe("Bedrock adapter: what a config may name", () => {
       "calls go to eu-central-1 only"
     ],
     [
+      "a profile of another AWS account",
+      `arn:aws:bedrock:eu-central-1:${OTHER_ACCOUNT_ID}:application-inference-profile/recordedprofile`,
+      "the profile belongs to another AWS account than the provider's 'accountId'"
+    ],
+    [
       "a profile with a path that leaves it",
       `arn:aws:bedrock:eu-central-1:${ACCOUNT_ID}:application-inference-profile/abc/../x`,
       "not attributed to this consumer"
@@ -65,7 +71,7 @@ describe("Bedrock adapter: what a config may name", () => {
       );
       expect(entry).toMatchObject(expected);
       // The message names the reason and never the id: an ARN holds the account id.
-      expect(entry instanceof Error ? entry.message : "").not.toContain(ACCOUNT_ID);
+      expect(entry instanceof Error ? entry.message : "").not.toMatch(/\d{12}/u);
 
       // A binding's model: startup asks the capabilities of every binding.
       const adapter = factory({
@@ -126,7 +132,31 @@ describe("Bedrock adapter: what a config may name", () => {
       imageInput: true,
       documentInput: false,
       structuredOutput: false,
-      streaming: true
+      streaming: true,
+      priceRequired: true
     });
+  });
+
+  it("needs the account id of the instance, and takes nothing but twelve digits", async () => {
+    await expect(bedrockFactory({ accountId: undefined })).rejects.toMatchObject({
+      message: expect.stringContaining("'infrastructure.models.bedrock.accountId'")
+    });
+    for (const accountId of ["12345678901", "1234567890123", "account-one", 123456789012]) {
+      await expect(bedrockFactory({ accountId })).rejects.toMatchObject({
+        message: expect.stringContaining("'infrastructure.models.bedrock.accountId'")
+      });
+    }
+    // The same profile is taken by the entry of its account and refused by another's.
+    const factory = await bedrockFactory({ accountId: OTHER_ACCOUNT_ID });
+    expect(
+      captured(() =>
+        factory({
+          id: "bedrock",
+          type: "aws-bedrock",
+          region: "eu",
+          model: RECORDED_BEDROCK_PROFILE
+        })
+      )
+    ).toMatchObject({ message: expect.stringContaining("another AWS account") });
   });
 });
