@@ -14,17 +14,6 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    services:
-      postgres:
-        image: public.ecr.aws/docker/library/postgres:17.6
-        env:
-          POSTGRES_USER: catalyst
-          POSTGRES_PASSWORD: local-check
-          POSTGRES_DB: catalyst_test
-        ports: [5432:5432]
-        options: >-
-          --health-cmd "pg_isready -U catalyst -d catalyst_test"
-          --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       POSTGRES_STORE_TEST_DATABASE_URL: postgresql://catalyst:local-check@localhost:5432/catalyst_test
     steps:
@@ -34,6 +23,12 @@ jobs:
           # The baseline guard needs the history back to where the pull request left its base,
           # and the compatibility step needs the release tags and their trees.
           fetch-depth: 0
+      # A step and not a service container: the script pulls the image by digest from the first
+      # of three registries that serves it, where a service container has one registry and
+      # fails the job when that one answers "toomanyrequests".
+      - name: Database
+        timeout-minutes: 5
+        run: .github/scripts/start-postgres.sh catalyst local-check catalyst_test 5432
       - name: Baseline counts may only fall
         if: github.event_name == 'pull_request'
         env:
@@ -48,7 +43,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
       # Installs the previous and the oldest supported release from their tags and runs their
-      # database tests against the schema of this commit, on the Postgres service above. The
+      # database tests against the schema of this commit, on the database started above. The
       # install reads the pnpm store that setup-node restored and fetches the rest.
       - name: Released database tests against this schema
         timeout-minutes: 10
@@ -71,17 +66,6 @@ jobs:
   images:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    services:
-      postgres:
-        image: public.ecr.aws/docker/library/postgres:17.6
-        env:
-          POSTGRES_USER: catalyst
-          POSTGRES_PASSWORD: local-check
-          POSTGRES_DB: catalyst_test
-        ports: [5432:5432]
-        options: >-
-          --health-cmd "pg_isready -U catalyst -d catalyst_test"
-          --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       POSTGRES_STORE_TEST_DATABASE_URL: postgresql://catalyst:local-check@localhost:5432/catalyst_test
       RUNNER_IMAGE_TAG: catalyst-runner-under-test:${{ github.run_id }}
@@ -89,6 +73,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
+      - name: Database
+        timeout-minutes: 5
+        run: .github/scripts/start-postgres.sh catalyst local-check catalyst_test 5432
       - run: bash scripts/check-image-build.sh
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -122,23 +109,15 @@ jobs:
     # The job takes 15 minutes on an ordinary runner (2 to build, 12 for 296 tests) and 22 on a
     # runner that is 1.6 times slower, which the hosted pool hands out now and then.
     timeout-minutes: 35
-    services:
-      # The suite's own database, with the names its runner expects on its default port. The
-      # runner would otherwise start `postgres:17` from Docker Hub, which rate-limits the runners.
-      postgres:
-        image: public.ecr.aws/docker/library/postgres:17.6
-        env:
-          POSTGRES_USER: agent_chat
-          POSTGRES_PASSWORD: agent_chat
-          POSTGRES_DB: agent_chat
-        ports: [55433:5432]
-        options: >-
-          --health-cmd "pg_isready -U agent_chat -d agent_chat"
-          --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
+      # The suite's own database, with the names its runner expects on its default port. The
+      # runner would otherwise start `postgres:17` from Docker Hub, which rate-limits the runners.
+      - name: Database
+        timeout-minutes: 5
+        run: .github/scripts/start-postgres.sh agent_chat agent_chat agent_chat 55433
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
