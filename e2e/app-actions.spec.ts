@@ -347,6 +347,8 @@ test("a tile of a published App reads rows through a named action with the viewe
     const written = await requestWithOrigin(page, "put", appUrl, {
       data: {
         workspaceId,
+        // The App is new: a write names the revision it read, and none was read.
+        expectedRevision: null,
         files: Object.entries(appSource({ id: appId, connection: connection.name })).map(
           ([path, text]) => ({ path, text })
         )
