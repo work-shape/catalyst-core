@@ -1,7 +1,7 @@
 {
   "name": "@vivd-catalyst/api-client",
   "version": "0.6.3",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vivd-solutions/vivd-catalyst.git",

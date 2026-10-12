@@ -82,3 +82,11 @@ export {
 export { createLogger } from "./logger";
 // For a worker that serves HTTP beside the instance, such as the document worker.
 export { createHttpRuntime } from "@vivd-catalyst/chat-server";
+export {
+  API_KEY_ENV_NAME,
+  createLocalApiKey,
+  runLocalKeyCli,
+  writeApiKeyToEnvFile,
+  type LocalApiKeyOptions,
+  type LocalKeyCliRuntime
+} from "./local-key";

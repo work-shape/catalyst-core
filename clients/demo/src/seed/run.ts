@@ -5,16 +5,15 @@ import {
   signInForSessionFetch,
   type ApiClientOptions
 } from "@vivd-catalyst/api-client";
+import { API_KEY_ENV_NAME, writeApiKeyToEnvFile } from "@vivd-catalyst/client-assembly";
 import {
-  API_KEY_ENV_NAME,
   ApiKeyExchangeError,
   canonicalizeAgentConfig,
   canonicalizeSkillConfig,
   createConfigApi,
   readManifest,
-  readWorkingCopy,
-  writeApiKeyToEnvFile
-} from "@vivd-catalyst/config-cli";
+  readWorkingCopy
+} from "@work-shape/catalyst-cli";
 import { loadClientInstanceConfigFromFile } from "@vivd-catalyst/config-schema";
 import {
   createEnvironmentSecretResolver,

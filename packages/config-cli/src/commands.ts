@@ -2,7 +2,6 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { ConfigApiError } from "./api";
 import { createUnifiedDiff } from "./diff";
-import { API_KEY_ENV_NAME, createLocalApiKey, writeApiKeyToEnvFile } from "./local-key";
 import { serializeAgentYaml, serializeSkillPackageForDisplay } from "./serialization";
 import {
   MANIFEST_FILENAME,
@@ -25,7 +24,6 @@ import {
   byKey,
   byName,
   canonicalBundleFiles,
-  commandEnv,
   connectApi,
   fetchRemoteAsset,
   formatCommandError,
@@ -56,8 +54,7 @@ export {
 } from "./command-support";
 export { pushConfig } from "./push";
 
-export type ConfigCommandName =
-  "pull" | "push" | "diff" | "validate" | "list" | "show" | "local-key";
+export type ConfigCommandName = "pull" | "push" | "diff" | "validate" | "list" | "show";
 
 export async function runConfigCommand(
   command: ConfigCommandName,
@@ -77,34 +74,11 @@ export async function runConfigCommand(
         return await listConfig(options);
       case "show":
         return await showConfig(options);
-      case "local-key":
-        return await localKey(options);
     }
   } catch (error) {
     writeError(options, formatCommandError(error));
     return 1;
   }
-}
-
-async function localKey(options: ConfigCommandOptions): Promise<number> {
-  const workingDir = resolveWorkingDir(options);
-  const instance = resolveInstance(await readManifest(workingDir), options.instance);
-  const apiKey = await createLocalApiKey({
-    baseUrl: instance.url,
-    configPath: options.appConfig
-      ? resolve(options.cwd, options.appConfig)
-      : resolve(workingDir, "config/app.yaml"),
-    env: commandEnv(options),
-    ...(options.fetchImpl === undefined ? {} : { fetchImpl: options.fetchImpl })
-  });
-  const envName = options.envName ?? API_KEY_ENV_NAME;
-  const file = await writeApiKeyToEnvFile(
-    options.envFile ? resolve(options.cwd, options.envFile) : resolve(workingDir, ".env"),
-    envName,
-    apiKey
-  );
-  writeOutput(options, `Created a key for ${instance.url} and wrote ${envName} to ${file}.`);
-  return 0;
 }
 
 export async function pullConfig(options: ConfigCommandOptions): Promise<number> {

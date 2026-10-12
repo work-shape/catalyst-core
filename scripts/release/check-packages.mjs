@@ -6,10 +6,18 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { inspectPublicPackage, PUBLIC_TOOL_DIR } from "./check-public-tarball.mjs";
 import { findMetadataDrift, listPackages, repoRoot, UNPUBLISHED } from "./package-metadata.mjs";
 
 // Installed together in the scratch consumer. Their workspace dependencies come along.
-const CONSUMER_SET = ["core", "config-schema", "api-contract", "api-client", "config-cli"];
+const CONSUMER_SET = [
+  "asset-schemas",
+  "core",
+  "config-schema",
+  "api-contract",
+  "api-client",
+  "config-cli"
+];
 // Installed next to them for its bin only; it has no module entry to import.
 const DEPLOYMENT_KIT = "deployment-kit";
 const MAX_TARBALL_BYTES = 300_000;
@@ -86,11 +94,14 @@ function inspectTarball(pkg, tarball, lockstepVersion, publishedNames) {
   if (manifest.version !== lockstepVersion) {
     report(`version ${manifest.version} is not the lockstep version ${lockstepVersion}`);
   }
-  if (!manifest.license) {
-    report("license is missing");
+  if (manifest.license !== pkg.group.license) {
+    report(`license is ${manifest.license}, expected ${pkg.group.license}`);
   }
-  if (manifest.publishConfig?.access !== "restricted") {
-    report("publishConfig.access is not restricted");
+  if (pkg.group.license === "MIT" && !has("LICENSE")) {
+    report("MIT package ships no LICENSE file");
+  }
+  if (manifest.publishConfig?.access !== pkg.group.access) {
+    report(`publishConfig.access is not ${pkg.group.access}`);
   }
   for (const section of ["dependencies", "peerDependencies", "optionalDependencies"]) {
     for (const [name, range] of Object.entries(manifest[section] ?? {})) {
@@ -290,6 +301,18 @@ try {
     const size = `${(bytes / 1024).toFixed(1)} kB`;
     console.log(`${name.padEnd(40)} ${size.padStart(10)} ${String(fileCount).padStart(5)} files`);
   }
+
+  step("Public tool tarball");
+  const unpacked = join(workDir, "public-tool");
+  mkdirSync(unpacked);
+  run("tar", ["-xzf", tarballs.get(PUBLIC_TOOL_DIR).tarball, "-C", unpacked]);
+  const publicProblems = inspectPublicPackage(join(unpacked, "package"));
+  problems.push(...publicProblems.map((problem) => `${PUBLIC_TOOL_DIR}: ${problem}`));
+  console.log(
+    publicProblems.length === 0
+      ? "third-party dependencies only, public source only, licence present, no credential"
+      : `${publicProblems.length} problem(s)`
+  );
 
   if (problems.length === 0) {
     step(`Scratch consumer in ${workDir}`);

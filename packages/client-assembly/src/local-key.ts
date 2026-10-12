@@ -1,5 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { parseArgs } from "node:util";
 import {
   completedOutput,
   createApiClient,
@@ -9,8 +10,9 @@ import {
 } from "@vivd-catalyst/api-client";
 import { loadClientInstanceConfigFromFile } from "@vivd-catalyst/config-schema";
 import { createEnvironmentSecretResolver, resolveOptionalSecret } from "@vivd-catalyst/core";
+import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 
-/** The variable `catalyst config` reads its key from. */
+/** The variable the `catalyst` command line tool reads its key from. */
 export const API_KEY_ENV_NAME = "CATALYST_API_KEY";
 
 const PRINCIPAL_LABEL = "Local config CLI";
@@ -111,4 +113,85 @@ export async function writeApiKeyToEnvFile(
   }
   await writeFile(file, lines.join("\n"), { mode: 0o600 });
   return file;
+}
+
+export interface LocalKeyCliRuntime {
+  cwd?: string;
+  fetchImpl?: ApiClientOptions["fetchImpl"];
+  env?: ClientInstanceEnv;
+  stdout?: (text: string) => void;
+  stderr?: (text: string) => void;
+}
+
+const helpText = `Usage: catalyst-local-key --instance <url> [options]
+
+Create an API key on a local development instance and write it to an env file.
+Refuses any host other than this machine. The key is never printed.
+
+Options:
+  --instance <url>       The local instance, such as http://127.0.0.1:4100
+  --config <app-config>  Client instance config (default: config/app.yaml)
+  --write-env <file>     Env file that receives the key (default: .env)
+  --env-name <variable>  Variable written (default: ${API_KEY_ENV_NAME})
+  --help                 Show this help
+`;
+
+/** Runs `catalyst-local-key`. Returns the exit code: 0 written, 1 failed, 2 wrong usage. */
+export async function runLocalKeyCli(
+  argv: string[],
+  runtime: LocalKeyCliRuntime = {}
+): Promise<number> {
+  const stdout = runtime.stdout ?? ((text: string) => process.stdout.write(text));
+  const stderr = runtime.stderr ?? ((text: string) => process.stderr.write(text));
+  const cwd = runtime.cwd ?? process.cwd();
+  let values: {
+    instance?: string;
+    config?: string;
+    "write-env"?: string;
+    "env-name"?: string;
+    help: boolean;
+  };
+  try {
+    ({ values } = parseArgs({
+      args: argv,
+      options: {
+        instance: { type: "string" },
+        config: { type: "string" },
+        "write-env": { type: "string" },
+        "env-name": { type: "string" },
+        help: { type: "boolean", short: "h", default: false }
+      },
+      strict: true
+    }));
+  } catch (error) {
+    stderr(`${error instanceof Error ? error.message : String(error)}\n\n${helpText}`);
+    return 2;
+  }
+  if (values.help) {
+    stdout(helpText);
+    return 0;
+  }
+  if (!values.instance || !URL.canParse(values.instance)) {
+    stderr(`--instance must be the URL of the local instance.\n\n${helpText}`);
+    return 2;
+  }
+  try {
+    const apiKey = await createLocalApiKey({
+      baseUrl: values.instance,
+      configPath: resolve(cwd, values.config ?? "config/app.yaml"),
+      env: readClientInstanceEnv(runtime.env),
+      ...(runtime.fetchImpl === undefined ? {} : { fetchImpl: runtime.fetchImpl })
+    });
+    const envName = values["env-name"] ?? API_KEY_ENV_NAME;
+    const file = await writeApiKeyToEnvFile(
+      resolve(cwd, values["write-env"] ?? ".env"),
+      envName,
+      apiKey
+    );
+    stdout(`Created a key for ${values.instance} and wrote ${envName} to ${file}.\n`);
+    return 0;
+  } catch (error) {
+    stderr(`${error instanceof Error ? error.message : String(error)}\n`);
+    return 1;
+  }
 }

@@ -6,7 +6,6 @@ import { runConfigCommand, type ConfigCommandName, type ConfigCommandOptions } f
 export * from "./api";
 export * from "./commands";
 export * from "./diff";
-export * from "./local-key";
 export * from "./serialization";
 export * from "./working-copy";
 
@@ -29,8 +28,6 @@ Commands:
   validate   Validate local assets and remote references
   list       List local and remote config assets and their sync status
   show       Print a remote asset: show <agent|skill> <name>
-  local-key  Create an API key on a local development instance and write it
-             to the env file. Refuses any host other than this machine
 
 Options:
   --instance <name-or-url>  Manifest instance name or direct URL
@@ -39,9 +36,6 @@ Options:
                             saw
   --only <agent:name|skill:name>
                             Sync selected assets; repeatable on push/pull
-  --config <app-config>     local-key: client instance config (default: config/app.yaml)
-  --write-env <file>        local-key: env file that receives the key (default: .env)
-  --env-name <variable>     local-key: variable written (default: CATALYST_API_KEY)
   --help                    Show this help
 
 Environment:
@@ -65,6 +59,12 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
     return 0;
   }
   const command = argv[1]!;
+  if (command === "local-key") {
+    stderr(
+      "'catalyst config local-key' is no longer part of this tool. Run the 'config:local-key' script of the client repository, which calls 'catalyst-local-key'.\n"
+    );
+    return 2;
+  }
   if (!isConfigCommand(command)) {
     stderr(`Unknown config command '${command}'.\n\n${helpText}`);
     return 2;
@@ -79,9 +79,6 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
         force: { type: "boolean", default: false },
         prune: { type: "boolean", default: false },
         only: { type: "string", multiple: true },
-        config: { type: "string" },
-        "write-env": { type: "string" },
-        "env-name": { type: "string" },
         help: { type: "boolean", short: "h", default: false }
       },
       allowPositionals: true,
@@ -107,15 +104,6 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
       stderr("--prune cannot be combined with --only.\n");
       return 2;
     }
-    if (
-      (parsed.values.config || parsed.values["write-env"] || parsed.values["env-name"]) &&
-      command !== "local-key"
-    ) {
-      stderr(
-        "--config, --write-env and --env-name are only valid with 'catalyst config local-key'.\n"
-      );
-      return 2;
-    }
     if (command === "show") {
       if (
         parsed.positionals.length !== 2 ||
@@ -135,9 +123,6 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
       ...(parsed.values.force ? { force: true } : {}),
       ...(parsed.values.prune ? { prune: true } : {}),
       ...(parsed.values.only === undefined ? {} : { only: parsed.values.only }),
-      ...(parsed.values.config === undefined ? {} : { appConfig: parsed.values.config }),
-      ...(parsed.values["write-env"] === undefined ? {} : { envFile: parsed.values["write-env"] }),
-      ...(parsed.values["env-name"] === undefined ? {} : { envName: parsed.values["env-name"] }),
       ...(command === "show"
         ? {
             assetKind: parsed.positionals[0] as "agent" | "skill",
@@ -163,8 +148,7 @@ function isConfigCommand(value: string): value is ConfigCommandName {
     value === "diff" ||
     value === "validate" ||
     value === "list" ||
-    value === "show" ||
-    value === "local-key"
+    value === "show"
   );
 }
 

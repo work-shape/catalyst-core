@@ -305,7 +305,7 @@ export const heldSkillChange: {
     "Eine Diagnose muss niemand nennen. Die Krankmeldung geht an die Teamleitung und an das HR-Team, nicht an das ganze Team."
 };
 
-/** The service principal of the config CLI, the one `catalyst config local-key` creates too. */
+/** The service principal of the config CLI, the one `catalyst-local-key` creates too. */
 export const cliPrincipal = {
   displayLabel: "Local config CLI",
   description: "Pushes the agents and skills of the demo from this machine.",

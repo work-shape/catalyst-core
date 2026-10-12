@@ -10,6 +10,7 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
 
 const requiredBuilds = [
+  ["packages/asset-schemas", "build"],
   ["packages/core", "build"],
   ["packages/config-schema", "build"],
   ["packages/api-contract", "build"],
@@ -304,16 +305,12 @@ async function pushConfigAssets() {
   );
 }
 
-/** The CLI signs in with an API key only; `catalyst config local-key` creates one. */
+/** The CLI signs in with an API key only; `catalyst-local-key` creates one. */
 async function createConfigApiKey() {
   await run(
     process.execPath,
     [
-      "packages/config-cli/dist/index.js",
-      "config",
-      "local-key",
-      "--dir",
-      e2eAssetsDir,
+      "packages/client-assembly/dist/local-key-cli.js",
       "--instance",
       e2eApiUrl,
       "--config",

@@ -1,15 +1,38 @@
 #!/usr/bin/env node
 // Single source for the publish metadata every platform package shares. Checks that the
-// package manifests match it; `--write` applies it. Licence, registry and access are each
-// one line here.
+// package manifests match it; `--write` applies it. The registry is one line here; licence
+// and access are set per package group.
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
-const LICENSE = "UNLICENSED";
-const ACCESS = "restricted";
+// Licence and registry access are set per package group. A package in no group is private
+// product code: no licence, and only people of the organisation may install it.
+const DEFAULT_GROUP = { license: "UNLICENSED", access: "restricted" };
+const PACKAGE_GROUPS = [
+  // The public command line tool. Its tarball is checked by check-public-tarball.mjs.
+  { license: "MIT", access: "public", dirs: ["config-cli"] },
+  // The source the public tool is bundled from. It is MIT with the tool. Publishing these
+  // as packages of their own is a later decision, so the registry access stays restricted.
+  {
+    license: "MIT",
+    access: "restricted",
+    dirs: ["asset-schemas", "api-contract", "api-client"]
+  }
+];
+
+/** The licence and the registry access of one package folder. */
+export function packageGroup(dir) {
+  const group = PACKAGE_GROUPS.find(({ dirs }) => dirs.includes(dir)) ?? DEFAULT_GROUP;
+  return { license: group.license, access: group.access };
+}
+
+/** The package folders that carry an MIT licence, and so a LICENSE file. */
+export const MIT_PACKAGE_DIRS = PACKAGE_GROUPS.filter(({ license }) => license === "MIT").flatMap(
+  ({ dirs }) => dirs
+);
 const REGISTRY = "https://registry.npmjs.org/";
 const REPOSITORY_URL = "git+https://github.com/vivd-solutions/vivd-catalyst.git";
 const NODE_ENGINE = ">=22";
@@ -85,6 +108,7 @@ export function listPackages() {
         manifestPath,
         manifest: JSON.parse(readFileSync(manifestPath, "utf8")),
         publishable: !(entry.name in UNPUBLISHED),
+        group: packageGroup(entry.name),
         assetsOnly: OVERRIDES[entry.name]?.assetsOnly === true,
         heldBack: OVERRIDES[entry.name]?.heldBack === true
       };
@@ -107,15 +131,16 @@ export function publishedExports(exports) {
 
 export function withPublishMetadata(dir, manifest) {
   const override = OVERRIDES[dir] ?? {};
+  const group = packageGroup(dir);
   const next = {
     ...manifest,
-    license: LICENSE,
+    license: group.license,
     repository: { type: "git", url: REPOSITORY_URL, directory: `packages/${dir}` },
     sideEffects: "sideEffects" in override ? override.sideEffects : false,
     engines: { node: NODE_ENGINE },
     files: override.files ?? ["dist"],
     publishConfig: {
-      access: ACCESS,
+      access: group.access,
       registry: REGISTRY,
       exports: publishedExports(manifest.exports)
     }

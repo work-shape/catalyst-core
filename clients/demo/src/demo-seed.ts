@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { readManifest, resolveInstance } from "@vivd-catalyst/config-cli";
+import { readManifest, resolveInstance } from "@work-shape/catalyst-cli";
 import { hostEnvironment } from "./env";
 import { assertLocalDevelopmentHost } from "./seed/adapters/local-network";
 import { seedDemo } from "./seed/run";

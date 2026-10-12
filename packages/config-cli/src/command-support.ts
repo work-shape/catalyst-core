@@ -7,7 +7,7 @@ import {
   skillConfigSchema,
   type AgentConfig,
   type SkillConfig
-} from "@vivd-catalyst/config-schema";
+} from "@vivd-catalyst/asset-schemas";
 import { BODY_TOO_LARGE_REASON, UNKNOWN_OPERATION_REASON } from "@vivd-catalyst/api-contract";
 import { ConfigApiError, createConfigApi, type ConfigApi } from "./api";
 import {
@@ -37,12 +37,6 @@ export interface ConfigCommandOptions {
   only?: string[];
   assetKind?: "agent" | "skill";
   assetName?: string;
-  /** `local-key`: the client instance config. Default: `config/app.yaml` in the working copy. */
-  appConfig?: string;
-  /** `local-key`: the env file that receives the key. Default: `.env` in the working copy. */
-  envFile?: string;
-  /** `local-key`: the variable written. Default: the one the CLI reads. */
-  envName?: string;
   fetchImpl?: typeof fetch;
   /** Waits between tries of a call. Tests pass one that does not wait. */
   sleep?: (milliseconds: number) => Promise<void>;
@@ -358,7 +352,7 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
 }
 
-export function commandEnv(options: ConfigCommandOptions): ConfigCliEnv {
+function commandEnv(options: ConfigCommandOptions): ConfigCliEnv {
   return readConfigCliEnv(options.env);
 }
 
@@ -366,7 +360,7 @@ export async function connectApi(url: string, options: ConfigCommandOptions) {
   const apiKey = commandEnv(options).CATALYST_API_KEY;
   if (!apiKey) {
     throw new Error(
-      "Missing CLI credentials. Set CATALYST_API_KEY to a key created under Administration, API Access. For a local development instance, 'catalyst config local-key' creates one."
+      "Missing CLI credentials. Set CATALYST_API_KEY to a key created under Administration, API Access."
     );
   }
   return createConfigApi({

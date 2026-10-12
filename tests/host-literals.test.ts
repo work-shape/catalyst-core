@@ -22,7 +22,8 @@ describe("provider addresses and secrets in product source", () => {
       "packages/client-assembly/src/artifact-preview-worker.ts",
       // The sign-in address of a seed user. Its password comes from the resolver.
       "packages/client-assembly/src/auth.ts",
-      "packages/config-cli/src/local-key.ts",
+      // The sign-in address of the seeded superadmin, for a key on a local instance.
+      "packages/client-assembly/src/local-key.ts",
       // The secret resolver: the one place that reads a secret.
       "packages/core/src/secrets.ts",
       // The fixed list of variables the Docker client itself needs.

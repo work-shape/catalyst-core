@@ -1,0 +1,38 @@
+name: Publish public CLI
+
+# Publishes the public command line tool to npm. It is switched off: the job runs only when
+# the repository variable PUBLISH_PUBLIC_CLI is set to "true", and only when a person starts
+# it. The token is the repository secret NPM_TOKEN, which a maintainer creates and scopes to
+# this one package. Nothing here runs on a push.
+on:
+  workflow_dispatch:
+
+jobs:
+  publish:
+    if: ${{ vars.PUBLISH_PUBLIC_CLI == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      # Builds the tool, packs it, reads every file of the tarball and installs it with npm
+      # in an empty directory. A tarball that fails is not published.
+      - name: The tarball stands on its own
+        run: node scripts/release/check-public-tarball.mjs
+      - name: Pack
+        run: pnpm --dir packages/config-cli pack --pack-destination "$RUNNER_TEMP/public-cli"
+      - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish "$RUNNER_TEMP"/public-cli/*.tgz --access public --provenance

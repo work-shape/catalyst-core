@@ -33,6 +33,11 @@
       "project": ["src/**/*.ts"],
       "vite": false
     },
+    "packages/client-assembly": {
+      "entry": ["src/index.ts", "src/local-key-cli.ts"],
+      "project": ["src/**/*.ts"],
+      "vite": false
+    },
     "packages/app-kit": {
       "entry": ["src/index.ts", "src/router-entry.ts", "scripts/release.mjs"],
       "project": ["src/**/*.{ts,tsx}", "scripts/**/*.mjs"],
