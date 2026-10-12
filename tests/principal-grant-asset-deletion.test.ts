@@ -5,8 +5,9 @@ import { denied, forWorkflows, setup, type Setup } from "./support/principal-gra
 import { withTestSql } from "./support/test-sql";
 
 // A grant row and the asset it names, where the two can part: a write beside the deletion
-// of the asset. Each test here failed before its fix: the write read the asset outside its
-// transaction and took no lock on it.
+// of the asset, and a text no row can hold. Each test here failed before its fix: the write
+// read the asset outside its transaction and took no lock on it, and a NUL byte reached the
+// record of the refusal and answered 500.
 
 describe("a grant write and the deletion of the asset it names", () => {
   const row = (s: Setup, assetId: string, holder: "principal" | "user" = "principal") => ({
@@ -85,5 +86,51 @@ describe("a grant write and the deletion of the asset it names", () => {
       await t.seed(name, forWorkflows);
       expect((await s.step(name)).result).toMatchObject(denied("connection.use", "no_grant"));
     }
+  });
+});
+
+describe("an input no row can hold", () => {
+  // The contract's answer for a field no schema takes is 422, as for a NUL in an asset name.
+  it("refuses a NUL character as invalid input and writes nothing", async () => {
+    const s = await setup();
+    const crm = await s.t.seed("crm", forWorkflows);
+    const withNul = [
+      s.payload(crm, { action: "connection.use\u0000" }),
+      s.payload(crm, { holderId: `${s.principal.id}\u0000` }),
+      s.payload(crm, { scopeId: `${crm}\u0000` }),
+      {
+        holderKind: "user",
+        holderId: s.t.kai.id,
+        action: "agent.read\u0000",
+        scopeKind: "asset",
+        scopeId: crm
+      }
+    ];
+    for (const payload of withNul) {
+      await s.t.expectRefused(
+        s.t.root.id,
+        "permissions.grant",
+        { payload },
+        {
+          status: 422,
+          code: "VALIDATION_FAILED"
+        }
+      );
+    }
+    for (const [operation, input] of [
+      ["permissions.revoke", { params: { grantId: "grant_\u0000" } }],
+      ["permissions.list", { query: { holderId: "sp_\u0000" } }],
+      [
+        "permissions.effective",
+        { query: { holderKind: "service_principal", holderId: "sp_\u0000" } }
+      ]
+    ] as const) {
+      const answer = await s.t.instance.call(operation, {
+        ...input,
+        headers: { "x-test-user": s.t.root.id }
+      });
+      expect(answer.statusCode, operation).toBeLessThan(500);
+    }
+    expect(await s.t.stores.access.listGrants({ clientInstanceId })).toEqual([]);
   });
 });

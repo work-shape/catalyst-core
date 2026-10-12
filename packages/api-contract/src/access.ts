@@ -10,6 +10,15 @@ export const grantHolderKindSchema = z.enum(["user", "service_principal", "role"
 export const grantScopeKindSchema = z.enum(["instance", "workspace", "namespace", "asset"]);
 export const grantEffectSchema = z.enum(["allow", "deny"]);
 
+/**
+ * Text a grant row holds or is looked up by. No store holds a NUL byte, and a refusal that
+ * repeats one cannot be recorded, so none is accepted.
+ */
+const storedText = z
+  .string()
+  .min(1)
+  .refine((value) => !value.includes("\u0000"), "The text must not contain a NUL byte");
+
 /** One row of who may do an action on a scope. A matching deny wins over every allow. */
 export const permissionGrantSchema = z.object({
   id: z.string(),
@@ -46,24 +55,24 @@ export const permissionGrantSchema = z.object({
  */
 export const createPermissionGrantRequestSchema = z.object({
   holderKind: grantHolderKindSchema,
-  holderId: z.string().min(1),
-  action: z.string().min(1),
+  holderId: storedText,
+  action: storedText,
   scopeKind: grantScopeKindSchema,
-  scopeId: z.string().min(1).optional(),
-  namespace: z.string().min(1).optional(),
+  scopeId: storedText.optional(),
+  namespace: storedText.optional(),
   effect: grantEffectSchema.default("allow")
 });
 
 export const listPermissionGrantsQuerySchema = listQuerySchema.extend({
   holderKind: grantHolderKindSchema.optional(),
-  holderId: z.string().min(1).optional(),
-  action: z.string().min(1).optional(),
+  holderId: storedText.optional(),
+  action: storedText.optional(),
   scopeKind: grantScopeKindSchema.optional()
 });
 
 export const effectivePermissionsQuerySchema = z.object({
   holderKind: z.enum(["user", "service_principal"]),
-  holderId: z.string().min(1)
+  holderId: storedText
 });
 
 /** Everything that allows or denies a holder something, each with the source that says so. */
