@@ -90,6 +90,32 @@ describe("the definition of a Connection", () => {
     ).toThrow(/not_supported_yet/u);
   });
 
+  // `service` only picks an icon, so the schema knows no list of services: a slug nobody has
+  // an icon for is kept, and what is no slug is refused.
+  it("keeps a service slug it has no icon for and refuses what is no slug", () => {
+    const base = {
+      name: "accounting",
+      displayName: "Accounting",
+      connectorType: "mcp",
+      ownerPrincipalId: "system",
+      authScheme: "bearer",
+      origin: "release"
+    };
+    expect(connectionConfigSchema.parse({ ...base, service: "no-such-system" }).service).toBe(
+      "no-such-system"
+    );
+    expect(connectionConfigSchema.parse(base).service).toBeUndefined();
+    for (const service of ["", "DATEV", "a b", "-datev", "a".repeat(41)]) {
+      expect(connectionConfigSchema.safeParse({ ...base, service }).success, service).toBe(false);
+    }
+    const config = parseClientInstanceConfig({
+      ...createTestConfig(),
+      modules: { assetManagement: { enabled: true }, connections: { enabled: true } },
+      connections: { accounting: { connectorType: "mcp", authScheme: "none", service: "datev" } }
+    });
+    expect(config.connections?.accounting?.service).toBe("datev");
+  });
+
   it("reads a definition and fills what it leaves out", () => {
     const parsed = connectionConfigSchema.parse({
       name: "exampledata",

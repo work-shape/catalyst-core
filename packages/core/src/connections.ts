@@ -102,11 +102,20 @@ export interface ConnectionOperationConfig {
   limits?: OperationLimits;
 }
 
+/** The `service` of a Connection: lowercase letters, digits and hyphens, 1 to 40 characters. */
+export const CONNECTION_SERVICE_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/u;
+
 /** A Connection as its revision holds it. It never holds a secret value. */
 export interface ConnectionConfig {
   name: string;
   displayName: string;
   description?: string;
+  /**
+   * The system behind the Connection, such as `datev`, as a slug (`CONNECTION_SERVICE_PATTERN`).
+   * It only picks an icon; a slug no icon is registered for shows the generic one. No right,
+   * egress rule or behaviour reads it.
+   */
+  service?: string;
   connectorType: string;
   /** The user or service principal accountable for the Connection. It bypasses no right. */
   ownerPrincipalId: string;

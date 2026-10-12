@@ -4,6 +4,7 @@ import {
   CONNECTION_NAME_MAX_LENGTH,
   CONNECTION_NAME_PATTERN,
   CONNECTION_NAME_RULE,
+  CONNECTION_SERVICE_PATTERN,
   CONNECTION_OPERATION_NAME_MAX_LENGTH,
   CONNECTION_OPERATION_NAME_PATTERN,
   CONNECTION_REFUSALS,
@@ -218,6 +219,7 @@ export const connectionConfigSchema: z.ZodType<ConnectionConfig, unknown> = z
     name: connectionNameSchema,
     displayName: z.string().trim().min(1).max(120),
     description: z.string().max(2000).optional(),
+    service: z.string().regex(CONNECTION_SERVICE_PATTERN).optional(),
     connectorType: z.string().regex(CONNECTOR_TYPE_PATTERN),
     ownerPrincipalId: z.string().min(1),
     settings: settingsSchema.default({}),
@@ -307,6 +309,7 @@ export const releaseConnectionConfigSchema = z
     connectorType: z.string().regex(CONNECTOR_TYPE_PATTERN),
     displayName: z.string().trim().min(1).max(120).optional(),
     description: z.string().max(2000).optional(),
+    service: z.string().regex(CONNECTION_SERVICE_PATTERN).optional(),
     /** Read by the Connector type's own strict schema when the instance starts. */
     settings: settingsSchema.default({}),
     authScheme: z.string().min(1).max(64),

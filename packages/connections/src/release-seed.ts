@@ -121,6 +121,7 @@ function toJsonObject(config: ConnectionConfig): JsonObject {
     origin: config.origin
   };
   if (config.description !== undefined) json.description = config.description;
+  if (config.service !== undefined) json.service = config.service;
   if (config.secretHandle !== undefined) json.secretHandle = config.secretHandle;
   return json;
 }
@@ -150,6 +151,7 @@ function definitionOf(
     name,
     displayName: entry.displayName ?? name,
     ...(entry.description === undefined ? {} : { description: entry.description }),
+    ...(entry.service === undefined ? {} : { service: entry.service }),
     connectorType: entry.connectorType,
     ownerPrincipalId: RELEASE_OWNER_PRINCIPAL_ID,
     settings: entry.settings,
