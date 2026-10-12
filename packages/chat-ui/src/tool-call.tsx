@@ -598,7 +598,7 @@ export function readToolDisplayProjection(input: {
 const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
   en: {
     read_skill: "Read instructions",
-    show_view: "Show view",
+    show_view: "Widget",
     "structured_data.publish": "Save structured data",
     "structured_data.read": "Read structured data",
     "structured_result.read": "Read structured result",
@@ -613,7 +613,7 @@ const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
   },
   de: {
     read_skill: "Anleitung lesen",
-    show_view: "Ansicht anzeigen",
+    show_view: "Widget",
     "structured_data.publish": "Strukturierte Daten speichern",
     "structured_data.read": "Strukturierte Daten lesen",
     "structured_result.read": "Strukturiertes Ergebnis lesen",
