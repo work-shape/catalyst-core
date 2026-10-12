@@ -95,8 +95,9 @@ test("the Agents page reads in German and keeps inside a phone's width", async (
   page,
   instanceAgents: _instanceAgents
 }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  // Signing in waits for the rail, which a phone keeps in a drawer: the window narrows after it.
   await signIn(page, member);
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
   await page.reload();
 
