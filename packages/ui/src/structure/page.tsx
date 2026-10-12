@@ -38,6 +38,9 @@ type PageNavigationProps =
        * A `PageOutline` in its own column right of the content, which starts at the page's left
        * edge, while the content keeps 40rem. With less room in the page it is a line above the
        * content.
+       *
+       * `null` leaves the column empty and the content where it is: a page of one section has
+       * no outline, and something else may take the column.
        */
       outline?: ReactNode;
       subRail?: undefined;
@@ -85,7 +88,7 @@ export function Page({
   if (outline !== undefined) {
     // The page is the container its outline measures: the room the page has, not the window.
     return (
-      <div className={cn("@container/page w-full min-w-0", className)} {...props}>
+      <div data-page="" className={cn("@container/page w-full min-w-0", className)} {...props}>
         {header === undefined ? null : (
           <>
             <div

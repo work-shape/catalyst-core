@@ -63,8 +63,13 @@ test("an agent's sections are an outline right of the content: its mark follows 
   await expect(heading("Tools")).toBeFocused();
   await expect(page).toHaveURL(/\/build\/agents\/research_assistant$/u);
 
-  // The mark follows the scrolling.
-  const scrollPage = (to: "top" | "end") =>
+  // A title above its fields is larger than their labels, so it is not taken for one.
+  const fontSize = (element: Element) => getComputedStyle(element).fontSize;
+  expect(await heading("Tools").evaluate(fontSize)).toBe("16px");
+  expect(await page.locator("form label").first().evaluate(fontSize)).toBe("14px");
+
+  // Scrolls what scrolls the page to a place, or by a distance, and answers where it is then.
+  const scrollPage = (to: "top" | "end" | number) =>
     page.locator("form").evaluate((form, where) => {
       for (let parent = form.parentElement; parent; parent = parent.parentElement) {
         const overflow = getComputedStyle(parent).overflowY;
@@ -72,20 +77,81 @@ test("an agent's sections are an outline right of the content: its mark follows 
           (overflow === "auto" || overflow === "scroll") &&
           parent.scrollHeight > parent.clientHeight
         ) {
-          parent.scrollTo({ top: where === "top" ? 0 : parent.scrollHeight });
-          return;
+          if (typeof where === "number") {
+            parent.scrollBy({ top: where });
+          } else {
+            parent.scrollTo({ top: where === "top" ? 0 : parent.scrollHeight });
+          }
+          return {
+            top: parent.scrollTop,
+            atEnd: parent.scrollTop + parent.clientHeight >= parent.scrollHeight - 1
+          };
         }
       }
+      return { top: 0, atEnd: true };
     }, to);
+
+  // The first entry is the top of the page: the language switch above the first section shows.
+  await outline.getByRole("link", { name: "Overview" }).click();
+  await expect(current).toHaveText("Overview");
+  expect((await scrollPage(0)).top).toBe(0);
+  await expect(page.getByRole("radiogroup", { name: "Texts in" })).toBeInViewport();
+  await expect(heading("Overview")).toBeFocused();
+
+  // The focus line of a link is whole: the outline scrolls on its own and clips what leaves it.
+  // A key was pressed last, so the focus the test hands over is shown as the keyboard's.
+  await page.keyboard.press("Tab");
+  await outline.getByRole("link", { name: /^Tools/u }).focus();
+  const focused = outline.locator("a:focus-visible");
+  await expect(focused).toHaveText(/^Tools/u);
+  const ring = await focused.evaluate((link) => {
+    const style = getComputedStyle(link);
+    const reach = Math.max(
+      0,
+      Number.parseFloat(style.outlineOffset) + Number.parseFloat(style.outlineWidth)
+    );
+    const box = link.getBoundingClientRect();
+    const clip = (link.closest("nav") ?? link).getBoundingClientRect();
+    return {
+      width: Number.parseFloat(style.outlineWidth),
+      left: box.left - reach - clip.left,
+      right: clip.right - box.right - reach
+    };
+  });
+  expect(ring.width).toBe(2);
+  expect(ring.left).toBeGreaterThanOrEqual(0);
+  expect(ring.right).toBeGreaterThanOrEqual(0);
+
+  // The mark follows the scrolling.
   await scrollPage("top");
   await expect(current).toHaveText("Overview");
   await heading("Instructions").evaluate((element) => {
     element.closest("section")?.scrollIntoView({ block: "start" });
   });
   await expect(current).toHaveText("Instructions");
-  await scrollPage("end");
+  // Scrolling to the end marks every section in its turn, the ones the page ends too early for
+  // as well: "Starter prompts" cannot reach the head and was never marked. The last one is
+  // marked at the end of the page.
+  await scrollPage("top");
+  await expect(current).toHaveText("Overview");
+  const marked: string[] = [];
+  for (let place = await scrollPage(0); !place.atEnd; place = await scrollPage(40)) {
+    await page.evaluate(() => new Promise((done) => requestAnimationFrame(done)));
+    const name = ((await current.textContent()) ?? "").replace(/\d+$/u, "");
+    if (marked[marked.length - 1] !== name) {
+      marked.push(name);
+    }
+  }
+  expect(marked).toEqual([
+    "Overview",
+    "Instructions",
+    "Model",
+    "Skills",
+    "Tools",
+    "Starter prompts"
+  ]);
+  await expect(current).toHaveText("Available in");
   await expect(current).toHaveCount(1);
-  await expect(current).not.toHaveText("Overview");
 
   // On a phone it is one line above the content that names the section in view.
   await page.setViewportSize(NARROW);
@@ -104,7 +170,11 @@ test("an agent's sections are an outline right of the content: its mark follows 
     .locator("option")
     .filter({ hasText: /^Tools/u })
     .textContent();
+  // The head has two lines here and is taller than the library's measure for a head of one.
+  // The section rests under the head as tall as it is, not under the measure.
+  expect((await head.boundingBox())?.height).toBeGreaterThan(64);
   await choice.selectOption({ label: tools ?? "" });
   await expect.poll(() => below("Tools")).toBeLessThan(40);
+  expect(await below("Tools")).toBeGreaterThanOrEqual(0);
   await expectNoSidewaysScroll(page);
 });

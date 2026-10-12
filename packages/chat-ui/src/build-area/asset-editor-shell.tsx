@@ -209,7 +209,8 @@ export function AssetEditorShell({
                 refusalsOf(outcome, section.refusalField).length > 0
             }))}
           />
-        ) : undefined
+        ) : // One section needs no outline. The content stays where it is on every asset page.
+        null
       }
     >
       {page.above}

@@ -39,6 +39,7 @@ export function PageOutline({ items, belowHeader = false, className }: PageOutli
     rootRef,
     listRef
   });
+  const hasError = items.some((item) => item.invalid);
 
   return (
     <nav
@@ -50,7 +51,7 @@ export function PageOutline({ items, belowHeader = false, className }: PageOutli
         // Beside the content it is pinned where it starts and scrolls on its own when it is
         // longer than the scroll area. Its first line is level with the content's first line.
         belowHeader
-          ? "top-(--layout-header) @outline/page:max-h-[calc(100cqh-var(--layout-header))] @outline/page:pt-5"
+          ? "top-(--page-outline-head,var(--layout-header)) @outline/page:max-h-[calc(100cqh-var(--page-outline-head,var(--layout-header)))] @outline/page:pt-5"
           : "top-(--layout-page-inset) @outline/page:top-[calc(var(--layout-page-inset)+var(--spacing)*6)] @outline/page:max-h-[calc(100cqh-var(--layout-page-inset)-var(--spacing)*6)] @outline/page:pt-0",
         className
       )}
@@ -71,6 +72,13 @@ export function PageOutline({ items, belowHeader = false, className }: PageOutli
           </select>
           <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-0 size-3" />
         </span>
+        {/* Closed, the line names one section: the mark says that some section has an error. */}
+        {hasError ? (
+          <span data-invalid="" className="flex shrink-0 items-center">
+            <CircleAlert aria-hidden="true" className="size-3 text-destructive" />
+            <span className="sr-only">{labels.sectionHasError}</span>
+          </span>
+        ) : null}
       </label>
       <div ref={listRef} className="hidden @outline/page:block">
         {/* The navigation carries this name already. */}
@@ -118,8 +126,9 @@ function PageOutlineLink({
       data-invalid={item.invalid ? "" : undefined}
       onClick={follow}
       className={cn(
-        // The marker is the link's own edge, drawn over the list's line.
-        "-ml-px flex min-w-0 items-center gap-1 border-l-2 border-transparent py-1 pl-3 text-caption text-muted-foreground transition-colors hover:text-foreground focus-visible:focus-ring",
+        // The marker is the link's own edge, drawn over the list's line. The focus line is drawn
+        // inside the link: the outline clips what leaves it, because it scrolls on its own.
+        "-ml-px flex min-w-0 items-center gap-1 border-l-2 border-transparent py-1 pl-3 text-caption text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
         current && "border-foreground font-medium text-foreground"
       )}
     >
@@ -140,16 +149,18 @@ function PageOutlineLink({
 }
 
 interface SectionMeasure {
-  /** The vertical position, in the viewport, that a section has reached when it is "current". */
+  /** What scrolls the page. */
+  scroller: Element;
+  /** The reading line: the vertical position, in the viewport, a section rests at when the outline scrolled to it. */
   line: number;
   targets: { id: string; element: HTMLElement }[];
 }
 
 /**
- * Which section is at the top of the view, and scrolling to one. The line the sections are
- * measured against is the outline's own top edge while it stands beside the content. The line
- * that stands in for it scrolls away with the page, so there the line is the top of what
- * scrolls, lowered by the sticky head the outline was told of.
+ * Which section holds the reading line, and scrolling to one. The reading line is the lower
+ * edge of the page's pinned head, as tall as the head is on this screen: a head of two lines on
+ * a phone covers more than one of one line. A page without a head has the line where the
+ * outline rests beside the content.
  */
 function useSectionTracking({
   ids,
@@ -184,38 +195,46 @@ function useSectionTracking({
       const element = findById(root, id);
       return element ? [{ id, element }] : [];
     });
-    if (getComputedStyle(list).display !== "none") {
-      return { line: root.getBoundingClientRect().top, targets };
-    }
     const first = targets[0];
-    // The outline's `top` is the height of the head it stays below, or nothing.
+    if (!first) {
+      return undefined;
+    }
+    const scroller = scrollParent(first.element);
+    const scrollerTop = Math.max(viewTop(scroller), 0);
+    const head = pageHead(root);
+    if (head) {
+      return { scroller, line: scrollerTop + head.getBoundingClientRect().height, targets };
+    }
+    if (getComputedStyle(list).display !== "none") {
+      return { scroller, line: root.getBoundingClientRect().top, targets };
+    }
+    // The outline's `top` is the room of what floats over the top of the page, or nothing.
     const below = Number.parseFloat(getComputedStyle(root).top);
-    const scrollerTop = first ? scrollParent(first.element).getBoundingClientRect().top : 0;
-    return { line: Math.max(scrollerTop, 0) + (Number.isFinite(below) ? below : 0), targets };
+    return { scroller, line: scrollerTop + (Number.isFinite(below) ? below : 0), targets };
   }, [idsKey, rootRef, listRef]);
 
   useEffect(() => {
     const follow = () => {
       const measured = measure();
-      const first = measured?.targets[0];
-      if (!measured || !first) {
+      if (!measured) {
         return;
       }
-      const last = measured.targets[measured.targets.length - 1] ?? first;
-      const scroller = scrollParent(first.element);
+      const { scroller } = measured;
       // Where the outline itself scrolled to, its choice stands: a section near the end cannot reach the line.
       const own = ownScrollRef.current;
       if (own?.scroller === scroller && own.top === scroller.scrollTop) {
         return;
       }
       ownScrollRef.current = undefined;
-      const atEnd =
-        scroller.scrollTop > 0 &&
-        scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1;
-      const passed = measured.targets.filter(
-        (target) => target.element.getBoundingClientRect().top <= measured.line + 1
-      );
-      select(atEnd ? last.id : (passed[passed.length - 1] ?? first).id);
+      const viewHeight = scroller.clientHeight;
+      const index = sectionAtLine({
+        tops: measured.targets.map((target) => target.element.getBoundingClientRect().top),
+        line: measured.line,
+        viewBottom: Math.max(viewTop(scroller), 0) + viewHeight,
+        scrolled: scroller.scrollTop,
+        left: scroller.scrollHeight - viewHeight - scroller.scrollTop
+      });
+      select(measured.targets[index]?.id ?? "");
     };
     follow();
     // Scroll events do not bubble; capturing on the document hears every scrolling ancestor.
@@ -233,23 +252,99 @@ function useSectionTracking({
     };
   }, [measure, select]);
 
+  // Beside the content the outline is pinned under the head, however tall the head is here.
+  useEffect(() => {
+    const root = rootRef.current;
+    const head = root ? pageHead(root) : null;
+    if (!root || !head) {
+      return undefined;
+    }
+    const apply = () => {
+      root.style.setProperty("--page-outline-head", `${head.getBoundingClientRect().height}px`);
+    };
+    apply();
+    const resized = new ResizeObserver(apply);
+    resized.observe(head);
+    return () => {
+      resized.disconnect();
+      root.style.removeProperty("--page-outline-head");
+    };
+  }, [rootRef]);
+
   const scrollTo = (id: string) => {
     const measured = measure();
     const target = measured?.targets.find((candidate) => candidate.id === id);
     if (!measured || !target) {
       return;
     }
-    const scroller = scrollParent(target.element);
-    scroller.scrollBy({
-      top: target.element.getBoundingClientRect().top - measured.line,
-      behavior: "instant"
-    });
+    const { scroller } = measured;
+    if (target === measured.targets[0]) {
+      // The first entry is the top of the page: what stands above the first section shows too.
+      scroller.scrollTo({ top: 0, behavior: "instant" });
+    } else {
+      scroller.scrollBy({
+        top: target.element.getBoundingClientRect().top - measured.line,
+        behavior: "instant"
+      });
+    }
     ownScrollRef.current = { scroller, top: scroller.scrollTop };
     select(id);
     focusSection(target.element);
   };
 
   return { value, scrollTo };
+}
+
+/**
+ * The index of the section to mark: the one that holds the reading line, which is the last
+ * whose top edge has reached it, or the first before any has.
+ *
+ * The sections at the end of a page cannot reach the line: the page ends first. Over the last
+ * stretch of the scrolling the line therefore moves down to where the last section rests at the
+ * end of the page. Each of them holds the line in its turn, and the last one only when the page
+ * is at its end and the section is in view.
+ */
+function sectionAtLine({
+  tops,
+  line,
+  viewBottom,
+  scrolled,
+  left
+}: {
+  /** The top edge of every section now, in the order of the page. */
+  tops: readonly number[];
+  line: number;
+  /** The lower edge of what scrolls. */
+  viewBottom: number;
+  /** How far the page is scrolled, and how far it can still scroll. */
+  scrolled: number;
+  left: number;
+}): number {
+  const lastTop = tops[tops.length - 1];
+  // How far below the line the last section rests at the end of the page, while it is in view.
+  const short = lastTop === undefined ? 0 : Math.min(lastTop - left, viewBottom - 1) - line;
+  // The line moves that far while the page scrolls that far, or all the way it scrolls.
+  const stretch = Math.min(short, scrolled + left);
+  const reading = stretch > 0 ? line + short * Math.min(Math.max(1 - left / stretch, 0), 1) : line;
+  let holder = 0;
+  tops.forEach((top, index) => {
+    if (top <= reading + 1) {
+      holder = index;
+    }
+  });
+  return holder;
+}
+
+/** The pinned head of the `Page` the outline stands in. */
+function pageHead(root: HTMLElement): HTMLElement | null {
+  return root.closest("[data-page]")?.querySelector<HTMLElement>("[data-page-head]") ?? null;
+}
+
+/** Where the view of what scrolls starts: the window scrolls from its own top edge. */
+function viewTop(scroller: Element): number {
+  return scroller === scroller.ownerDocument.scrollingElement
+    ? 0
+    : scroller.getBoundingClientRect().top;
 }
 
 /**

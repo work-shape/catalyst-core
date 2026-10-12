@@ -605,7 +605,9 @@ describe("refused save", () => {
     expect(linkTo(refused, "tools")).toContain('data-invalid=""');
     expect(linkTo(refused, "tools")).toContain("Has an error");
     expect(linkTo(refused, "details")).not.toContain("data-invalid");
-    expect(refused.match(/data-invalid=""/gu)).toHaveLength(1);
+    expect(refused.match(/<a [^>]*data-invalid=""/gu)).toHaveLength(1);
+    // The line that stands in for the outline on a phone names one section: it is marked too.
+    expect(refused).toMatch(/<\/select>.*<span data-invalid=""/u);
     expect(page({ ok: true })).not.toContain("data-invalid");
   });
 

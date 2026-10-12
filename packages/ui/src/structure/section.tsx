@@ -55,7 +55,12 @@ export function Section({
       >
         <div className="grid min-w-0 content-start gap-1">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <Heading className="min-w-0 text-heading">{title}</Heading>
+            {/* Above its fields a title is larger than their labels; beside them the column tells them apart. */}
+            <Heading
+              className={cn("min-w-0", layout === "stacked" ? "text-title-sm" : "text-heading")}
+            >
+              {title}
+            </Heading>
             {count === undefined ? null : <CountBadge count={count} tone="muted" />}
             {action === undefined ? null : <div className="ml-auto shrink-0">{action}</div>}
           </div>

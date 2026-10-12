@@ -1,6 +1,3 @@
-/** Room left above a section the page scrolls to, for the page's head, which stays at the top. */
-const SECTION_SCROLL_MARGIN_PX = 64;
-
 /**
  * The element that scrolls the page's content. Only this one is moved: asking the browser to
  * bring an element into view would also move every box around it, the window included.
@@ -29,11 +26,10 @@ export function scrollToSection(within: HTMLElement | null, id: string): void {
     return;
   }
   const scroller = scrollParentOf(target);
+  // The page's head stays at the top and is as tall as its content makes it on this screen.
+  const head = scroller?.querySelector("[data-page-head]")?.getBoundingClientRect().height ?? 0;
   scroller?.scrollBy({
-    top:
-      target.getBoundingClientRect().top -
-      scroller.getBoundingClientRect().top -
-      SECTION_SCROLL_MARGIN_PX,
+    top: target.getBoundingClientRect().top - scroller.getBoundingClientRect().top - head,
     behavior: "instant"
   });
 }

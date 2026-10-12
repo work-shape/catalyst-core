@@ -55,6 +55,8 @@ export function PageHeader({
   return (
     <header
       data-variant={variant}
+      // A `PageOutline` measures the pinned head: what it scrolls to rests below it.
+      data-page-head={detail ? "" : undefined}
       className={cn(
         "flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2",
         detail

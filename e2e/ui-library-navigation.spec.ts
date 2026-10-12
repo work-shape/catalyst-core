@@ -467,6 +467,9 @@ for (const sample of ["page-outline", "page-outline-header"]) {
     const choice = outline.getByRole("combobox");
     await expect(choice).toBeVisible();
     await expect(outline).toContainText("On this page:");
+    // Closed, the line names one section: it says that some section has an error.
+    await expect(outline.locator("label [data-invalid]")).toBeVisible();
+    await expect(outline.locator("label [data-invalid]")).toHaveText("Has an error");
     await frame.evaluate((element) => element.scrollTo({ top: 0 }));
     await expect.poll(() => selectedLabel(choice)).toBe("Overview");
     expect(await offsetInFrame(frame, outline)).toBeLessThan(

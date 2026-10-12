@@ -840,15 +840,21 @@ id from config_assets where status = 'deleted')`.
   focus to the section's heading. The content starts at the page's left edge, is at most 44rem
   wide, and each section's title stands above its fields. In a narrow window and on a phone the
   outline is one line above the content, "On this page: Overview", that names the section in
-  view and offers the others. Build's list of kinds and the Settings pages are unchanged.
+  view and offers the others, with a mark while a section has a refused field. A section rests
+  under the page's head as tall as the head is on that screen, "Overview" scrolls to the top of
+  the page, and the sections at the end of a page are marked in their turn while it scrolls to
+  its end. Build's list of kinds and the Settings pages are otherwise unchanged.
+- **Section titles above their fields are larger:** a `Section` with `layout="stacked"` shows
+  its title at 16 px instead of 14 px, so it is not taken for a field's label. This also
+  applies to the Settings pages that stack their sections.
 - **UI library (breaking for a client assembly and for a Page on the next App Kit version):**
   new `PageOutline`, which `Page` takes as `outline`, with the labels `onThisPage` and
   `sectionHasError` in `UiLabels`. `SubRail` only opens pages: `mode` is gone, `value` and
   `onValueChange` are required, and `SubRailRoutesProps` and `SubRailAnchorsProps` are removed
   in favour of `SubRailProps`. Code that passed `mode="routes"` drops the prop; code that
   passed `mode="anchors"` hands its sections to `<Page outline={<PageOutline items={…} />}>`.
-  A `Page` takes `subRail` or `outline`, not both. A released App Kit version keeps the
-  `SubRail` it was built with.
+  A `Page` takes `subRail` or `outline`, not both; `outline={null}` leaves the column empty and
+  the content where it is. A released App Kit version keeps the `SubRail` it was built with.
 
 - **Every process of an instance is assembled from one build (breaking for a client
   assembly):** `defineClientInstance` gains `runWorkspaceCommandWorker()` and
