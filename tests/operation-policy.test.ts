@@ -65,6 +65,27 @@ describe("resolvePolicy: where the value comes from", () => {
     });
   });
 
+  // Fails without the change: a setting of `allow` on the standing operation loosened it.
+  it("is never looser than the floor of an operation that stands for another one", () => {
+    const allowed = [{ operation: "items.create", value: "allow" }] as const;
+    expect(
+      resolve({ definition: { ...changing, policyFloor: "approval" }, centralSettings: allowed })
+    ).toMatchObject({ value: "approval", next: "await_approval", source: "declared_default" });
+    // A setting that is stricter than the floor stays, and names itself as the source.
+    expect(
+      resolve({
+        definition: { ...changing, policyFloor: "confirm" },
+        centralSettings: [{ operation: "items.create", value: "deny" }]
+      })
+    ).toEqual({ value: "deny", next: "refuse", source: "central_setting" });
+    // A floor a read cannot carry does not apply to a read. A refusal does.
+    expect(resolve({ definition: { ...reading, policyFloor: "approval" } }).value).toBe("allow");
+    expect(resolve({ definition: { ...reading, policyFloor: "deny" } })).toMatchObject({
+      value: "deny",
+      next: "refuse"
+    });
+  });
+
   it("takes the strictest of the central settings that match", () => {
     expect(
       resolve({

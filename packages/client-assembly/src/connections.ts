@@ -28,7 +28,12 @@ import {
   type PlatformStores,
   type SecretResolver
 } from "@vivd-catalyst/core";
-import { enqueueConnectionDiscovery, type ChatServerOptions } from "@vivd-catalyst/chat-server";
+import {
+  combineDataToolSources,
+  createAppActionToolSource,
+  enqueueConnectionDiscovery,
+  type ChatServerOptions
+} from "@vivd-catalyst/chat-server";
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import { readClientInstanceEnv } from "./env";
 import { PLATFORM_SECRET_NAMES } from "./infrastructure";
@@ -56,14 +61,18 @@ export interface InstanceConnections {
 
 /**
  * Adds the Connections' operations to the call path of this process and answers what the
- * agent tools of the instance are built with: the Connections' tool source among it, as it
- * is. Whoever builds the agent tools bounds its reads. Without Connections an agent has the
- * tools of the release only.
+ * agent tools of the instance are built with: the Connections' tool source among it, and with
+ * it the named actions of published Apps, which stand for operations of Connections. Whoever
+ * builds the agent tools bounds its reads. Without Connections an agent has the tools of the
+ * release only.
  */
 export function withConnections(
   connections: InstanceConnections | undefined,
   operationCalls: { registry: Pick<OperationRegistry, "addSource"> },
-  parts: Pick<InstanceConnectionParts, "clientInstanceId" | "logger" | "config">
+  parts: Pick<
+    InstanceConnectionParts,
+    "clientInstanceId" | "logger" | "config" | "stores" | "modules"
+  >
 ): {
   clientInstanceId: ClientInstanceId;
   logger: Logger;
@@ -77,7 +86,18 @@ export function withConnections(
   };
   if (!connections) return options;
   operationCalls.registry.addSource(connections.operationSource);
-  return { ...options, dataTools: connections.toolSource };
+  return {
+    ...options,
+    dataTools: combineDataToolSources(
+      connections.toolSource,
+      createAppActionToolSource({
+        clientInstanceId: parts.clientInstanceId,
+        store: parts.stores.configAssets,
+        modules: parts.modules,
+        connectionTools: connections.toolSource
+      })
+    )
+  };
 }
 
 /**

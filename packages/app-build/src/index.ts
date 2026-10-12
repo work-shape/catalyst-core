@@ -26,6 +26,17 @@ export {
   type PageBuildLimits
 } from "./limits";
 export { PAGE_MANIFEST_FILE, type BuiltPageManifest, type PageManifest } from "./manifest";
+export {
+  APP_ACTION_MAPPING_MAX_DEPTH,
+  APP_ACTION_MAPPING_MAX_NODES,
+  APP_ACTION_MAX_PARAMETERS,
+  appActionInputAsZod,
+  applyAppActionMapping,
+  compiledActionsOf,
+  declaredConnectionsOf,
+  type AppActionInputSchema,
+  type CompiledAppAction
+} from "./action-input";
 export { readPageBuildOutput, type PageBuildResultFile } from "./output";
 export { pageBuildCommandFile } from "./command-file";
 export type {

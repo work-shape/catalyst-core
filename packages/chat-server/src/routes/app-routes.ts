@@ -1,8 +1,9 @@
 import { APP_ASSET_KIND, apiOperations } from "@vivd-catalyst/api-contract";
-import { asCollaborationWorkspaceId } from "@vivd-catalyst/core";
+import { AppError, asCollaborationWorkspaceId } from "@vivd-catalyst/core";
+import { AppActionCalls } from "../apps/action-call";
 import { AppWorkflow } from "../apps/app-workflow";
 import type { Route } from "../http/route";
-import type { ChatServerOptions } from "../types";
+import type { ResolvedChatServerOptions } from "../types";
 
 /** The module that brings Pages and Apps. */
 const APPS_MODULE = "apps";
@@ -12,8 +13,9 @@ const APPS_MODULE = "apps";
  * deleting an App are `assets.put`, `assets.publish`, `assets.discard_draft` and
  * `assets.delete` with the kind `app`.
  */
-export function registerAppRoutes(route: Route, options: ChatServerOptions): void {
+export function registerAppRoutes(route: Route, options: ResolvedChatServerOptions): void {
   const workflow = new AppWorkflow(options);
+  const actions = new AppActionCalls(options);
 
   route.operation(apiOperations["apps.create_from_page"], {
     authorize: (input, { access }) => workflow.authorizeCreate(access, input),
@@ -35,4 +37,61 @@ export function registerAppRoutes(route: Route, options: ChatServerOptions): voi
     void reply.header("cache-control", "no-store");
     return workflow.preview({ user, access }, { app: params.app, mode: body.mode });
   });
+
+  // The three calls of a frame. The interface makes them with the viewer's session after the
+  // frame asked through the bridge, and names the frame by its page session. The right on the
+  // Page or the App is decided here and in the call path, with the caller present.
+  route(apiOperations["apps.sessions.context"], async ({ user, access, params, body, reply }) => {
+    void reply.header("cache-control", "no-store");
+    const session = await actions.session(
+      { user, access },
+      { pageSessionId: params.pageSessionId, fileSetId: body.fileSetId, token: body.token }
+    );
+    return { can: await actions.can(session) };
+  });
+
+  route(
+    apiOperations["apps.sessions.call_action"],
+    async ({ user, access, context, params, body, request, reply }) => {
+      void reply.header("cache-control", "no-store");
+      const session = await actions.session(
+        { user, access },
+        { pageSessionId: params.pageSessionId, fileSetId: body.fileSetId, token: body.token }
+      );
+      return actions.callAction(session, params.name, body.input, {
+        correlationId: context.correlationId,
+        idempotencyKey: idempotencyKeyOf(request.headers["idempotency-key"]),
+        header: (name, value) => void reply.header(name, value)
+      });
+    }
+  );
+
+  route(
+    apiOperations["apps.sessions.call_connection"],
+    async ({ user, access, context, params, body, request, reply }) => {
+      void reply.header("cache-control", "no-store");
+      const session = await actions.session(
+        { user, access },
+        { pageSessionId: params.pageSessionId, fileSetId: body.fileSetId, token: body.token }
+      );
+      return actions.callConnection(
+        session,
+        { connection: params.connection, operation: params.operation },
+        body.input,
+        {
+          correlationId: context.correlationId,
+          idempotencyKey: idempotencyKeyOf(request.headers["idempotency-key"]),
+          header: (name, value) => void reply.header(name, value)
+        }
+      );
+    }
+  );
+}
+
+/** The key of a changing call, as the caller sent it. One header, one value. */
+function idempotencyKeyOf(header: string | string[] | undefined): string | undefined {
+  if (Array.isArray(header)) {
+    throw new AppError("VALIDATION_FAILED", "A call takes one Idempotency-Key");
+  }
+  return header;
 }

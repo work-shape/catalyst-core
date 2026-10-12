@@ -40,7 +40,12 @@ import {
   type UserRecord
 } from "@vivd-catalyst/core";
 import { runOperation, type OperationOutcome } from "@vivd-catalyst/tool-execution";
-import { clientInstanceId, setupAccessInstance, type AccessInstance } from "./access-instance";
+import {
+  clientInstanceId,
+  setupAccessInstance,
+  type AccessInstance,
+  type AccessInstanceOptions
+} from "./access-instance";
 import { connection } from "./connections";
 import { generateSecretStoreKey, generateTestSecret } from "./test-connector";
 import { applyAtCurrentRevisions } from "./asset-revisions";
@@ -176,6 +181,8 @@ interface ConnectionOperationsFixture extends AccessInstance {
   /** Every credential a Connector type was handed. Never cleared. */
   handed: (string | undefined)[];
   sourceDeps: ConnectionOperationSourceDeps;
+  /** The call path of the instance, with the Connections' operations in its registry. */
+  operationCalls: ReturnType<typeof createOperationCalls>;
   /** Stores a Connection of the static type with its secret. Returns the asset id. */
   seed(name: string, overrides?: Record<string, JsonValue | undefined>): Promise<string>;
   /** Calls an operation through `runOperation`, as the person and from the origin named. */
@@ -195,9 +202,18 @@ interface ConnectionOperationsFixture extends AccessInstance {
   setBehaviour(next: Behaviour): void;
 }
 
-export async function fixture(
+export function fixture(options: { secret?: string } = {}): Promise<ConnectionOperationsFixture> {
+  return fixtureOn(setupAccessInstance, options);
+}
+
+/**
+ * The same fixture on an instance a test sets up itself, such as one with Apps. `setup` is
+ * handed the modules, the kinds and the server options the Connections need.
+ */
+export async function fixtureOn<Instance extends AccessInstance>(
+  setup: (options: AccessInstanceOptions) => Promise<Instance>,
   options: { secret?: string } = {}
-): Promise<ConnectionOperationsFixture> {
+): Promise<ConnectionOperationsFixture & Instance> {
   /** What happened, in order, across the call path, the stores and the Connector type. */
   const sequence: string[] = [];
   const secret = options.secret ?? generateTestSecret();
@@ -274,7 +290,7 @@ export async function fixture(
 
   let deps: ConnectionOperationSourceDeps | undefined;
   let calls: ReturnType<typeof createOperationCalls> | undefined;
-  const t = await setupAccessInstance({
+  const t = await setup({
     modules: { connections: { enabled: true } },
     furtherKinds: [createConnectionAssetKind({ connectorTypes })],
     server(stores, config) {
@@ -446,6 +462,7 @@ export async function fixture(
     executed,
     handed,
     sourceDeps,
+    operationCalls,
     seed,
     invoke,
     failure,

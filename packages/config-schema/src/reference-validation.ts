@@ -1,3 +1,4 @@
+import { parseAppActionOperationName } from "@vivd-catalyst/core";
 import type { AgentConfig } from "./schemas";
 
 export interface MissingAgentReference {
@@ -137,15 +138,19 @@ function isConnectionOperationName(name: string): boolean {
  * The tools an agent lists and this instance does not offer. A tool of the release is known
  * from the release. A tool that is an operation of a Connection exists as data and comes and
  * goes without a release, so a well-formed name of one is no missing reference: the run reads
- * whether it exists and goes on without one that does not. Any other name with that prefix is
- * a name of nothing and is reported.
+ * whether it exists and goes on without one that does not. The same holds for a named action
+ * of a published App, `app.<id>.<action>`. Any other name with one of the two prefixes is a
+ * name of nothing and is reported.
  */
 export function findMissingAgentToolReferences(
   agents: readonly AgentConfig[],
   enabledToolNames: readonly string[]
 ): MissingAgentReference[] {
   return findMissingAgentReferences(agents, enabledToolNames, (agent) =>
-    agent.toolNames.filter((toolName) => !isConnectionOperationName(toolName))
+    agent.toolNames.filter(
+      (toolName) =>
+        !isConnectionOperationName(toolName) && parseAppActionOperationName(toolName) === undefined
+    )
   );
 }
 

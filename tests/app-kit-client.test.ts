@@ -7,6 +7,7 @@ import {
 } from "@vivd-catalyst/api-contract";
 import { describe, expect, it } from "vitest";
 import {
+  AppCallError,
   createAppClient,
   createFrameTransport,
   type Transport
@@ -36,7 +37,7 @@ const theme = {
   accentStrongColor: "#1f4fb8"
 };
 
-const context: AppBridgeContext = {
+const context = {
   viewer: { kind: "member", id: "user-1", displayName: "Anna Beispiel" },
   workspace: { id: "ws-1", name: "Finanzen" },
   locale: "de",
@@ -44,12 +45,17 @@ const context: AppBridgeContext = {
   mode: "light",
   pageId: "page-1",
   fileSetNumber: 2,
-  initialRoute: "/zahlen"
-};
+  initialRoute: "/zahlen",
+  // What the viewer may do with each named action of the Page.
+  can: { load: "allow", save: "deny" }
+} satisfies AppBridgeContext;
 
 function hostMessage(message: HostMessage): unknown {
   return appBridgeHostMessageSchema.parse({ [APP_BRIDGE_MARK]: APP_BRIDGE_VERSION, ...message });
 }
+
+/** A call is sent once the client knows its session, which is a turn after it was made. */
+const sentCalls = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 function recordingTransport() {
   const sent: PageMessage[] = [];
@@ -91,8 +97,17 @@ describe("the two halves of the bridge", () => {
     await asked;
     client.navigate("/zahlen/2026?monat=3");
     client.resize(812.5);
+    void client.actions.call("load", { limit: 20 }, { idempotencyKey: "key-1" }).catch(() => 0);
+    void client.connections.call("crm", "list_customers", { limit: 20 }).catch(() => 0);
+    await sentCalls();
 
-    expect(sent.map((message) => message.type)).toEqual(["ready", "navigate", "resize"]);
+    expect(sent.map((message) => message.type)).toEqual([
+      "ready",
+      "navigate",
+      "resize",
+      "action",
+      "connection_call"
+    ]);
     for (const message of sent) {
       expect(appBridgePageMessageSchema.safeParse(envelope(message)).success).toBe(true);
     }
@@ -112,6 +127,34 @@ describe("the two halves of the bridge", () => {
       theme,
       mode: "dark"
     });
+    // An interface that says nothing about actions leaves the Page with none it may call.
+    const { can: _can, ...withoutCan } = context;
+    expect(
+      readHostMessage(
+        appBridgeHostMessageSchema.parse({
+          [APP_BRIDGE_MARK]: APP_BRIDGE_VERSION,
+          type: "context",
+          session: "s",
+          context: withoutCan
+        })
+      )
+    ).toMatchObject({ context: { can: {} } });
+    const done = {
+      type: "action_result",
+      session: "s",
+      requestId: "1",
+      ok: true,
+      result: { runId: "run-1", status: "done", result: { rows: [1, 2] } }
+    } as const;
+    expect(readHostMessage(hostMessage(done))).toEqual(done);
+    const refused = {
+      type: "action_result",
+      session: "s",
+      requestId: "2",
+      ok: false,
+      error: { code: "forbidden", message: "Not allowed", right: "connection.use", runId: "run-2" }
+    } as const;
+    expect(readHostMessage(hostMessage(refused))).toEqual(refused);
   });
 
   it("reads nothing out of what is no message of the interface", () => {
@@ -194,6 +237,96 @@ describe("the kit client", () => {
     deliver(hostMessage({ type: "theme", theme, mode: "light" }));
 
     expect(seen).toEqual(["dark"]);
+  });
+
+  it("sends one call with an id of its own and gives the caller the answer that names it", async () => {
+    const { transport, sent, deliver } = recordingTransport();
+    const client = createAppClient(transport);
+    const asked = client.getContext();
+    deliver(hostMessage({ type: "context", session: "session-1", context }));
+    await asked;
+
+    const first = client.actions.call("load", { limit: 20 });
+    const second = client.actions.call("save", { note: "x" }, { idempotencyKey: "key-1" });
+    await sentCalls();
+    const calls = sent.filter((message) => message.type === "action");
+
+    expect(calls).toEqual([
+      {
+        type: "action",
+        session: "session-1",
+        requestId: expect.any(String),
+        name: "load",
+        input: { limit: 20 }
+      },
+      {
+        type: "action",
+        session: "session-1",
+        requestId: expect.any(String),
+        name: "save",
+        input: { note: "x" },
+        idempotencyKey: "key-1"
+      }
+    ]);
+    const [load, save] = calls;
+    if (!load || !save) throw new Error("Two calls were sent");
+    expect(load.requestId).not.toBe(save.requestId);
+    // The answers arrive in the other order, and one of another session arrives first.
+    deliver(
+      hostMessage({
+        type: "action_result",
+        session: "session-2",
+        requestId: load.requestId,
+        ok: true,
+        result: { runId: "run-0", status: "done" }
+      })
+    );
+    deliver(
+      hostMessage({
+        type: "action_result",
+        session: "session-1",
+        requestId: save.requestId,
+        ok: false,
+        error: { code: "forbidden", message: "Not allowed", right: "connection.use" }
+      })
+    );
+    deliver(
+      hostMessage({
+        type: "action_result",
+        session: "session-1",
+        requestId: load.requestId,
+        ok: true,
+        result: { runId: "run-1", status: "done", result: { rows: [1] } }
+      })
+    );
+
+    expect(await first).toEqual({ runId: "run-1", status: "done", result: { rows: [1] } });
+    const refused = await second.catch((error: unknown) => error);
+    expect(refused).toBeInstanceOf(AppCallError);
+    expect(refused).toMatchObject({ code: "forbidden", right: "connection.use" });
+  });
+
+  it("ends a call nothing answers", async () => {
+    const { transport, deliver } = recordingTransport();
+    const client = createAppClient(transport, { callTimeoutMs: 5 });
+    const asked = client.getContext();
+    deliver(hostMessage({ type: "context", session: "session-1", context }));
+    await asked;
+
+    await expect(client.connections.call("crm", "list", {})).rejects.toMatchObject({
+      name: "AppCallError",
+      code: "timeout"
+    });
+  });
+
+  it("refuses a call as a call when no interface answers", async () => {
+    const { transport } = recordingTransport();
+    const client = createAppClient(transport, { contextTimeoutMs: 5 });
+
+    await expect(client.actions.call("load")).rejects.toMatchObject({
+      name: "AppCallError",
+      code: "not_connected"
+    });
   });
 
   it("says so when no interface answers", async () => {

@@ -155,6 +155,11 @@ interface OperationDefinitionBase<Input, Output> {
   /** The release's own policy value. Without one the instance default of the effect applies. */
   defaultPolicy?: PolicyValue;
   /**
+   * A value no call of the operation is looser than, whatever a central setting says. See
+   * `policyFloor` of the policy's input.
+   */
+  policyFloor?: PolicyValue;
+  /**
    * The answer holds a secret that is shown once, such as a new key. The run keeps no output,
    * so a repeated call with the same key answers OUTPUT_NOT_RETAINED and never the secret
    * again. The call is never held for an approval: a held call is executed later, when nobody
@@ -253,7 +258,8 @@ export interface OperationRegistry {
 
 /**
  * The name prefixes of operations that exist as data and come from an `OperationSource`: the
- * operations of a Connection, `connection.<name>.<operation>`. An operation of the release may
+ * operations of a Connection, `connection.<name>.<operation>`, and the named actions of an
+ * App, `app.<id>.<action>`. An operation of the release may
  * not take such a name. `resolve` asks the release first, so one that did would stand in for
  * the data operation of that name, with rights and a policy of its own. They are the prefixes
  * of the data tools, `DATA_TOOL_PREFIXES`.

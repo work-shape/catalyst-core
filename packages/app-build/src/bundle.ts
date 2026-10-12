@@ -1,5 +1,7 @@
 import { context, transform, type Loader, type Message, type Plugin } from "esbuild";
 import { fileSetPathIssue } from "@vivd-catalyst/core";
+import type { CompiledAppAction } from "./action-input";
+import { compileActions } from "./actions";
 import { resolveReference, rewriteHtml } from "./html";
 import { APP_KIT_PACKAGE, KIT_IMPORT_NAMES, kitFilePath, kitImportPath } from "./kit";
 import {
@@ -106,13 +108,30 @@ export async function buildPage(input: {
     return failed(parsed.errors);
   }
   const { manifest } = parsed;
+  const compiled = compileActions(manifest, input.files);
+  if (compiled.status === "errors") {
+    return failed(compiled.errors);
+  }
   const syntaxErrors = await checkSyntax(input.files);
   if (syntaxErrors.length > 0) {
     return failed(syntaxErrors);
   }
-  return manifest.entry === undefined
-    ? buildReactPage(manifest, input.files, sources, input.signal)
-    : buildHtmlPage(manifest, manifest.entry, input.files, sources, input.signal);
+  const built =
+    manifest.entry === undefined
+      ? await buildReactPage(manifest, input.files, sources, input.signal)
+      : await buildHtmlPage(manifest, manifest.entry, input.files, sources, input.signal);
+  return built.status === "built" ? withActions(built, compiled.actions) : built;
+}
+
+/**
+ * The built Page with its actions as they were compiled. A manifest lists the actions of its
+ * files and nothing an author wrote under `actions` by hand.
+ */
+function withActions(
+  built: Extract<PageBuildResult, { status: "built" }>,
+  actions: CompiledAppAction[]
+): PageBuildResult {
+  return actions.length > 0 ? { ...built, manifest: { ...built.manifest, actions } } : built;
 }
 
 async function buildReactPage(
@@ -269,11 +288,13 @@ function finish(
       }
     ]);
   }
+  // What an author wrote under `actions` is a declaration. The compiled actions take its place.
+  const { actions: _declared, ...authored } = manifest;
   return {
     status: "built",
     kitVersion: manifest.kit,
     manifest: {
-      ...manifest,
+      ...authored,
       entry: manifest.entry ?? DEFAULT_ENTRY,
       ...(pages ? { pages } : {})
     },

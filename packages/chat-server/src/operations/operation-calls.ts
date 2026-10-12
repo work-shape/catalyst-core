@@ -8,6 +8,7 @@ import {
   ApprovalRequestWorkflow,
   type ApprovalRequestWorkflowOptions
 } from "../approval-request-workflow";
+import { createAppActionOperationSource } from "../apps/action-source";
 import { createHeldAssetPreviewer } from "../held-asset-preview";
 import {
   createOperationApprovalFiler,
@@ -108,5 +109,16 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
     logger: options.logger,
     now: options.operations?.now
   };
+  // The named actions of published Apps, as operations of this registry. A name of one is
+  // read from the App when it is called, so nothing is read here.
+  registry.addSource(
+    createAppActionOperationSource({
+      clientInstanceId,
+      store: options.stores.configAssets,
+      modules: options.modules,
+      registry,
+      policy: deps.policy
+    })
+  );
   return { registry, deps, approvalRequestHandlers };
 }

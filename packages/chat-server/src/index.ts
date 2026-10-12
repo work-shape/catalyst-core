@@ -53,6 +53,14 @@ export type { ConversationRetentionRunSummary, OrphanedFileCleanupSummary } from
 export { ConversationRetentionWorkflow } from "./retention";
 export { createChatServerJobs } from "./jobs";
 export { createOperationCalls };
+export {
+  APP_ACTION_LIST_MAX_APPS,
+  APP_ACTION_TOOL_DESCRIPTION_MAX_CHARS,
+  APP_ACTION_TOOL_MAX_APPS,
+  combineDataToolSources,
+  createAppActionOperationSource,
+  createAppActionToolSource
+} from "./apps/action-source";
 export { createAuditingEventEmitter } from "./operations/event-emitter";
 export type { OperationCallsOptions } from "./operations/operation-calls";
 export {

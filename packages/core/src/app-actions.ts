@@ -1,0 +1,68 @@
+// What a named action of an App is called as an operation. The action itself, its input and
+// what it reaches are compiled by the build (`@vivd-catalyst/app-build`).
+
+/**
+ * The prefix of every operation that is a named action of an App: `app.<id>.<action>`. It is
+ * singular. Operations that manage Apps use the plural `apps.`.
+ */
+export const APP_ACTION_OPERATION_PREFIX = "app.";
+
+/** The id of an App, as its manifest names it. */
+export const APP_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/u;
+/** The name of a named action: lowercase letters, digits, '-' and '_', at most 63. */
+export const APP_ACTION_NAME_PATTERN = /^[a-z0-9][a-z0-9_-]{0,62}$/u;
+
+/** The operation name of one named action of one App. */
+export function appActionOperationName(app: string, action: string): string {
+  return `${APP_ACTION_OPERATION_PREFIX}${app}.${action}`;
+}
+
+/**
+ * The App and the action a name stands for, or nothing where the name is not one of a named
+ * action. Neither part holds a dot, so the name splits in one way only.
+ */
+export function parseAppActionOperationName(
+  name: string
+): { app: string; action: string } | undefined {
+  if (!name.startsWith(APP_ACTION_OPERATION_PREFIX)) return undefined;
+  const rest = name.slice(APP_ACTION_OPERATION_PREFIX.length);
+  const dot = rest.indexOf(".");
+  if (dot < 0) return undefined;
+  const app = rest.slice(0, dot);
+  const action = rest.slice(dot + 1);
+  return APP_ID_PATTERN.test(app) && APP_ACTION_NAME_PATTERN.test(action)
+    ? { app, action }
+    : undefined;
+}
+
+/**
+ * How large the input of one call of a frame may be, as the JSON it is sent as, in bytes. A
+ * larger one is refused before anything is read of it.
+ */
+export const APP_ACTION_INPUT_MAX_BYTES = 256 * 1024;
+
+/**
+ * How many calls one page session may make in a minute, actions and Connection calls together.
+ * A page session is one mount of one frame for one viewer, so the limit bounds what one open
+ * tile can ask of a Connection whatever its code does.
+ */
+export const APP_ACTION_CALLS_PER_MINUTE_PER_SESSION = 600;
+
+/** The name a run of `connections.call` of the kit carries as its action. */
+export const APP_CONNECTION_CALL_ACTION_NAME = "connections.call";
+
+/**
+ * Why a call of a frame was refused before or beside what the Connection says, as
+ * `details.reason` of the error and as the `code` the frame reads.
+ */
+export const APP_ACTION_REFUSALS = [
+  "action_unknown",
+  "connection_not_declared",
+  "draft_safe_mode",
+  "forbidden",
+  "input_invalid",
+  "session_invalid",
+  "rate_limited"
+] as const;
+
+export type AppActionRefusal = (typeof APP_ACTION_REFUSALS)[number];

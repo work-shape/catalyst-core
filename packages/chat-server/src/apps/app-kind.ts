@@ -2,7 +2,7 @@ import { APP_ASSET_KIND } from "@vivd-catalyst/api-contract";
 
 export { APP_ASSET_KIND };
 
-import { PAGE_MANIFEST_FILE } from "@vivd-catalyst/app-build";
+import { PAGE_MANIFEST_FILE, compiledActionsOf } from "@vivd-catalyst/app-build";
 import {
   CONNECTION_ASSET_KIND,
   defineAssetKind,
@@ -66,18 +66,51 @@ function appConnectionNames(config: unknown): string[] {
   return read.success ? read.data.manifest.connections : [];
 }
 
-/** What a manifest names that the instance does not hold, one issue per name. */
+const manifestOfConfigSchema = z.object({ manifest: z.unknown() });
+const connectionOperationsSchema = z.object({
+  operations: z.array(z.object({ name: z.string(), effect: z.string() }))
+});
+
+/**
+ * What a manifest names that the instance does not hold, one issue per name: a Connection, an
+ * operation a Connection does not accept, and an action that says it reads where the
+ * operation it stands for changes something. The build knows no Connection, so this is where
+ * an action is held against the operation it names.
+ */
 function findAppReferenceIssues(
   config: unknown,
   connections: readonly unknown[]
 ): AssetValidationIssue[] {
-  const known = new Set(connections.map((connection) => readDefinitionName(connection)));
-  return appConnectionNames(config)
+  const known = new Map(
+    connections.map((connection) => [readDefinitionName(connection), connection])
+  );
+  const issues: AssetValidationIssue[] = appConnectionNames(config)
     .filter((name) => !known.has(name))
     .map((name) => ({
       message: `The manifest names the Connection '${name}', which does not exist on this instance`,
       path: ["manifest", "connections"]
     }));
+  const manifest = manifestOfConfigSchema.safeParse(config);
+  for (const action of manifest.success ? compiledActionsOf(manifest.data.manifest) : []) {
+    const connection = connectionOperationsSchema.safeParse(known.get(action.connection));
+    // A Connection that is missing is named above, once.
+    if (!connection.success) continue;
+    const operation = connection.data.operations.find(
+      (candidate) => candidate.name === action.operation
+    );
+    if (!operation) {
+      issues.push({
+        message: `The action '${action.name}' calls the operation '${action.operation}' of the Connection '${action.connection}', which that Connection does not accept`,
+        path: ["manifest", "actions"]
+      });
+    } else if (operation.effect === "changing" && action.effect === "reading") {
+      issues.push({
+        message: `The action '${action.name}' is declared reading and the operation '${action.operation}' of the Connection '${action.connection}' changes something. Declare the action changing.`,
+        path: ["manifest", "actions"]
+      });
+    }
+  }
+  return issues;
 }
 
 /**

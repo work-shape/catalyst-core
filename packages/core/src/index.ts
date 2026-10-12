@@ -15,6 +15,7 @@ export * from "./events";
 export * from "./operation-policy";
 export * from "./operation-registry";
 export * from "./connection-operations";
+export * from "./app-actions";
 export * from "./data-tool-names";
 export * from "./data-tools";
 export * from "./operation-runs";

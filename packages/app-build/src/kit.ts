@@ -9,7 +9,7 @@ export const APP_KIT_PACKAGE = "@work-shape/catalyst-app-kit";
  * Every kit version this release can build against. A release that ships a kit version adds it
  * here; none is ever removed, because a stored Page names the version it was built with.
  */
-export const RELEASED_KIT_VERSIONS: readonly string[] = ["1.0.0"];
+export const RELEASED_KIT_VERSIONS: readonly string[] = ["1.0.0", "1.1.0"];
 
 /** Where the instance serves the files of a kit version. A path, never a host. */
 export const KIT_RUNTIME_PATH = "/app-runtime/kit";

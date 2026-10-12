@@ -1,6 +1,7 @@
 import { load, JSON_SCHEMA, YAMLException } from "js-yaml";
 import { fileSetPathIssue } from "@vivd-catalyst/core";
 import { z } from "zod";
+import { compiledAppActionSchema } from "./action-input";
 import { RELEASED_KIT_VERSIONS } from "./kit";
 import type { PageBuildError } from "./errors";
 
@@ -69,8 +70,12 @@ export const pageManifestSchema = z.strictObject({
 
 export type PageManifest = z.infer<typeof pageManifestSchema>;
 
-/** The manifest as a build writes it: the author's, with the entry and the pages it derived. */
+/**
+ * The manifest as a build writes it: the author's, with the entry and the pages it derived and
+ * with the actions as they were compiled from their files.
+ */
 export const builtPageManifestSchema = pageManifestSchema.extend({
+  actions: z.array(compiledAppActionSchema).max(MANIFEST_MAX_LIST_ENTRIES).optional(),
   entry: z.string().refine((value) => fileSetPathIssue(value) === undefined, {
     message: "a path of a built file"
   }),

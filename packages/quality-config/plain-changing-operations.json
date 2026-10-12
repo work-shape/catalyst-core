@@ -117,6 +117,7 @@
     "approval_requests.revert": "own",
     "approval_requests.withdraw": "own",
     "apps.preview": "asset_right",
+    "apps.sessions.context": "asset_right",
     "branding.get": "public",
     "captured_mail.list": "public",
     "config.get": "own",

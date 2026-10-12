@@ -42,6 +42,9 @@ const reportedError = z.strictObject({
       "import_unavailable",
       "syntax",
       "routes_invalid",
+      "action_invalid",
+      "connection_not_declared",
+      "cache_not_available",
       "output_too_large"
     ])
     .optional(),

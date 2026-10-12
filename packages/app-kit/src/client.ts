@@ -1,6 +1,8 @@
 import {
   envelope,
   readHostMessage,
+  type AppCallFailure,
+  type AppCallResult,
   type AppContext,
   type AppThemeChange,
   type HostMessage,
@@ -21,6 +23,37 @@ export interface Transport {
 
 /** The longest a Page waits for the interface to answer its first message. */
 const CONTEXT_TIMEOUT_MS = 10_000;
+/**
+ * The longest a Page waits for the answer to one call. The instance ends a call of a
+ * Connection earlier, so a call that runs into this was lost on the way.
+ */
+const CALL_TIMEOUT_MS = 180_000;
+
+/** A call that was refused or failed. `code` says why in a fixed word. */
+export class AppCallError extends Error {
+  override readonly name = "AppCallError";
+  readonly code: string;
+  /** The right a `forbidden` call lacks. */
+  readonly right?: string;
+  readonly runId?: string;
+
+  constructor(failure: AppCallFailure) {
+    super(failure.message);
+    this.code = failure.code;
+    if (failure.right !== undefined) this.right = failure.right;
+    if (failure.runId !== undefined) this.runId = failure.runId;
+  }
+}
+
+/** What one call may carry beside its input. */
+export interface AppCallOptions {
+  /**
+   * Names one changing call, so that sending it twice carries it out once. A changing action
+   * of a published App needs one. Make it when the person acts, and send the same one again
+   * when the answer was lost.
+   */
+  idempotencyKey?: string;
+}
 
 interface MessageSource {
   postMessage(message: unknown, targetOrigin: string): void;
@@ -126,18 +159,54 @@ export interface AppClient {
   navigate(path: string): void;
   /** Tells the interface how high the Page's content is, in pixels. */
   resize(height: number): void;
+  actions: {
+    /**
+     * Calls a named action of the manifest with the viewer's rights. A call that is refused
+     * or fails rejects with an `AppCallError`.
+     */
+    call(
+      name: string,
+      params?: Record<string, unknown>,
+      options?: AppCallOptions
+    ): Promise<AppCallResult>;
+  };
+  connections: {
+    /** Calls one operation of a Connection the manifest lists, with the viewer's rights. */
+    call(
+      connection: string,
+      operation: string,
+      input?: unknown,
+      options?: AppCallOptions
+    ): Promise<AppCallResult>;
+  };
 }
+
+type CallMessage = Extract<PageMessage, { type: "action" | "connection_call" }>;
+/** A call before the session and the id of its answer are known. */
+type NewCall =
+  | Omit<Extract<CallMessage, { type: "action" }>, "session" | "requestId">
+  | Omit<Extract<CallMessage, { type: "connection_call" }>, "session" | "requestId">;
 
 /** A client on a transport. A Page uses the one below; a test brings its own transport. */
 export function createAppClient(
   transport: Transport,
-  options: { contextTimeoutMs?: number } = {}
+  options: { contextTimeoutMs?: number; callTimeoutMs?: number } = {}
 ): AppClient {
   let session: string | undefined;
   let context: Promise<AppContext> | undefined;
   const themeListeners = new Set<(change: AppThemeChange) => void>();
   // What the Page said before the interface answered: the newest message of each kind.
   const pending = new Map<PageMessage["type"], PageMessage>();
+  // The calls that wait for their answer, by the id each was sent with.
+  const calls = new Map<
+    string,
+    {
+      resolve(result: AppCallResult): void;
+      reject(error: AppCallError): void;
+      timeout: ReturnType<typeof setTimeout>;
+    }
+  >();
+  let callCount = 0;
 
   function connect(): Promise<AppContext> {
     context ??= new Promise<AppContext>((resolve, reject) => {
@@ -155,6 +224,20 @@ export function createAppClient(
             for (const message of queued) {
               send(message);
             }
+          }
+          return;
+        }
+        if (incoming.type === "action_result") {
+          const waiting = incoming.session === session ? calls.get(incoming.requestId) : undefined;
+          if (!waiting) {
+            return;
+          }
+          calls.delete(incoming.requestId);
+          clearTimeout(waiting.timeout);
+          if (incoming.ok) {
+            waiting.resolve(incoming.result);
+          } else {
+            waiting.reject(new AppCallError(incoming.error));
           }
           return;
         }
@@ -177,8 +260,52 @@ export function createAppClient(
     transport.send(message.type === "ready" ? message : { ...message, session });
   }
 
+  /** Sends one call once the interface answered, and waits for the answer that names it. */
+  async function call(message: NewCall): Promise<AppCallResult> {
+    await connect().catch(() => undefined);
+    const callSession = session;
+    if (callSession === undefined) {
+      throw new AppCallError({ code: "not_connected", message: "The interface did not answer." });
+    }
+    callCount += 1;
+    const requestId = `${callCount}-${Math.random().toString(36).slice(2, 10)}`;
+    return new Promise<AppCallResult>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        calls.delete(requestId);
+        reject(
+          new AppCallError({ code: "timeout", message: "The interface did not answer the call." })
+        );
+      }, options.callTimeoutMs ?? CALL_TIMEOUT_MS);
+      calls.set(requestId, { resolve, reject, timeout });
+      transport.send({ ...message, session: callSession, requestId });
+    });
+  }
+
   return {
     getContext: connect,
+    actions: {
+      call: (name, params = {}, callOptions = {}) =>
+        call({
+          type: "action",
+          name,
+          input: params,
+          ...(callOptions.idempotencyKey === undefined
+            ? {}
+            : { idempotencyKey: callOptions.idempotencyKey })
+        })
+    },
+    connections: {
+      call: (connection, operation, input, callOptions = {}) =>
+        call({
+          type: "connection_call",
+          connection,
+          operation,
+          input: input ?? {},
+          ...(callOptions.idempotencyKey === undefined
+            ? {}
+            : { idempotencyKey: callOptions.idempotencyKey })
+        })
+    },
     onThemeChange(callback) {
       themeListeners.add(callback);
       void connect().catch(() => undefined);
@@ -208,3 +335,12 @@ export const onThemeChange: AppClient["onThemeChange"] = (callback) =>
   client().onThemeChange(callback);
 export const navigate: AppClient["navigate"] = (path) => client().navigate(path);
 export const resize: AppClient["resize"] = (height) => client().resize(height);
+/** The named actions of the manifest. `actions.call("loadRows", { limit: 20 })`. */
+export const actions: AppClient["actions"] = {
+  call: (name, params, options) => client().actions.call(name, params, options)
+};
+/** The Connections the manifest lists. `connections.call("crm", "list_customers", {})`. */
+export const connections: AppClient["connections"] = {
+  call: (connection, operation, input, options) =>
+    client().connections.call(connection, operation, input, options)
+};

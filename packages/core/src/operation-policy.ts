@@ -43,6 +43,12 @@ export interface PolicyInput {
     defaultPolicy?: PolicyValue;
     /** The answer holds a secret that is shown once, so the call cannot wait for an approval. */
     secret?: true;
+    /**
+     * A value the call is never looser than, whatever a central setting says. An operation
+     * that stands for another one, as a named action of an App stands for the operation of a
+     * Connection, carries here what that operation asks. A setting can tighten it further.
+     */
+    policyFloor?: PolicyValue;
   };
   origin: OperationOrigin;
   instanceDefaults: PolicyDefaults;
@@ -89,7 +95,8 @@ export type PolicyResolution = { source: PolicySource } & (
  * declared default or, without one, the instance default of its effect. An operation whose
  * answer holds a secret takes an instance default of `approval` as `confirm`. A central setting
  * replaces the base, and of several that match the strictest wins. A call with several targets
- * takes the strictest of what each target resolves to. A guardrail can only tighten. `confirm` and `approval` are values of changing operations: on a reading operation
+ * takes the strictest of what each target resolves to. An operation's `policyFloor` then
+ * tightens what came of it and never loosens it. A guardrail can only tighten. `confirm` and `approval` are values of changing operations: on a reading operation
  * they do not apply, wherever they come from, so a reading operation resolves to `allow` or
  * `deny`. A surface that can neither confirm nor pause is refused a call that would have to
  * wait for its own caller's confirmation. A call that needs another person's approval waits
@@ -135,6 +142,11 @@ export function resolvePolicy(input: PolicyInput): PolicyResolution {
   ({ value, source } = perTarget.reduce((left, right) =>
     stricter(left.value, right.value) === left.value ? left : right
   ));
+  if (applies(definition.policyFloor) && stricter(value, definition.policyFloor) !== value) {
+    // The operation's own declaration, as its default is: no setting loosens it.
+    value = definition.policyFloor;
+    source = "declared_default";
+  }
 
   if (input.guardrailOutcome === "block") {
     return { value: "deny", next: "refuse", source: "guardrail" };

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { appActionPermissionSchema } from "./app-bridge";
 import { pagePreviewSchema } from "./pages";
 
 /** The kind id of an App in the asset registry. */
@@ -60,3 +61,49 @@ export const appPreviewSchema = pagePreviewSchema.extend({
 });
 
 export type AppPreviewResponse = z.infer<typeof appPreviewSchema>;
+
+/**
+ * What names the frame a call comes from: the file set it shows and the token of its address,
+ * as `pages.preview` or `apps.preview` answered them to this caller. The server checks that
+ * the token was minted for this caller, this file set and the page session of the path.
+ */
+const pageSessionProof = {
+  fileSetId: z.string().min(1).max(200),
+  token: z.string().min(1).max(512)
+};
+
+export const appSessionContextRequestSchema = z.object(pageSessionProof).strict();
+
+/** What each action of the shown manifest would come to for the caller now. */
+export const appSessionContextSchema = z.object({
+  can: z.record(z.string(), appActionPermissionSchema)
+});
+
+export const appActionCallRequestSchema = z
+  .object({
+    ...pageSessionProof,
+    /** The parameters of the action, by name. */
+    input: z.record(z.string(), z.unknown()).default({})
+  })
+  .strict();
+
+export const appConnectionCallRequestSchema = z
+  .object({
+    ...pageSessionProof,
+    /** The input of the Connection's operation, as its accepted schema describes it. */
+    input: z.unknown().optional()
+  })
+  .strict();
+
+/**
+ * How a call of a frame went. `done` carries what the operation answered. `pending_approval`
+ * carries nothing: the call waits for another person and its run says how it ends.
+ */
+export const appActionCallResultSchema = z.object({
+  runId: z.string(),
+  status: z.enum(["done", "pending_approval"]),
+  result: z.unknown().optional()
+});
+
+export type AppSessionContextResponse = z.infer<typeof appSessionContextSchema>;
+export type AppActionCallResult = z.infer<typeof appActionCallResultSchema>;

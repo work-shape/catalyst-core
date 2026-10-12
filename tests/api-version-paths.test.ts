@@ -72,6 +72,9 @@ describe("the operation catalog", () => {
         "approval_requests.withdraw  POST /api/v1/approval-requests/:requestId/withdraw",
         "apps.create_from_page  POST /api/v1/apps",
         "apps.preview  POST /api/v1/apps/:app/preview",
+        "apps.sessions.call_action  POST /api/v1/app-content-sessions/:pageSessionId/actions/:name",
+        "apps.sessions.call_connection  POST /api/v1/app-content-sessions/:pageSessionId/connections/:connection/operations/:operation",
+        "apps.sessions.context  POST /api/v1/app-content-sessions/:pageSessionId/context",
         "assets.delete  POST /api/v1/assets/:kind/:name/delete",
         "assets.discard_draft  POST /api/v1/assets/:kind/:name/discard-draft",
         "assets.get  GET /api/v1/assets/:kind/:name",
@@ -225,6 +228,7 @@ describe("the operation catalog", () => {
     }
     const scopes = new Set(versioned.map((name) => descriptor(name).path.split("/")[3]));
     expect([...scopes].sort()).toEqual([
+      "app-content-sessions",
       "approval-requests",
       "apps",
       "assets",
@@ -406,7 +410,10 @@ describe("a running instance", () => {
       "assets.publish",
       "assets.discard_draft",
       "apps.create_from_page",
-      "apps.preview"
+      "apps.preview",
+      "apps.sessions.context",
+      "apps.sessions.call_action",
+      "apps.sessions.call_connection"
     ];
     // The export, import and validation of a release went when the CLI moved to `assets.sync`.
     const removed = 3;

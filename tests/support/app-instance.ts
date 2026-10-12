@@ -28,7 +28,8 @@ import {
   clientInstanceId,
   recordAuthAdapter,
   setupAccessInstance,
-  type AccessInstance
+  type AccessInstance,
+  type AccessInstanceOptions
 } from "./access-instance";
 import { MemoryObjectStorage } from "./memory-object-storage";
 import type { TestCallInput } from "./operations";
@@ -109,8 +110,12 @@ export interface AppInstanceOptions {
   explicitCredentials?: boolean;
   /** Kinds registered beside agent, skill and app. */
   furtherKinds?: WorkflowAssetKind[];
+  /** Modules that are on beside `apps`, such as `{ connections: { enabled: true } }`. */
+  modules?: AccessInstanceOptions["modules"];
   /** Further server options, such as a policy or an audit recorder of the test's own. */
-  server?: (stores: AccessInstance["stores"]) => Partial<TestServerOptions>;
+  server?: (
+    ...input: Parameters<NonNullable<AccessInstanceOptions["server"]>>
+  ) => Partial<TestServerOptions>;
 }
 
 export interface AppInstance extends AccessInstance {
@@ -153,9 +158,9 @@ export async function setupAppInstance(options: AppInstanceOptions = {}): Promis
   const objects = new MemoryObjectStorage();
   const pages = { objects, contentKey: deriveAppContentKey("content-secret-".repeat(4)) };
   const access = await setupAccessInstance({
-    modules: { apps: { enabled: true } },
+    modules: { ...options.modules, apps: { enabled: true } },
     furtherKinds: [createAppAssetKind(), ...(options.furtherKinds ?? [])],
-    server: (stores) => ({
+    server: (stores, config) => ({
       pages: {
         ...pages,
         assetBuilds: createPageBuildClient({
@@ -168,7 +173,7 @@ export async function setupAppInstance(options: AppInstanceOptions = {}): Promis
       ...(options.explicitCredentials
         ? { authAdapter: { ...recordAuthAdapter(stores), credentialMode: "explicit" as const } }
         : {}),
-      ...options.server?.(stores)
+      ...options.server?.(stores, config)
     })
   });
   const { stores, instance, admin, kai } = access;

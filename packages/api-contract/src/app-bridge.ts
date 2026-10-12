@@ -1,3 +1,4 @@
+import { IDEMPOTENCY_KEY_MAX_LENGTH } from "@vivd-catalyst/core";
 import { z } from "zod";
 
 // The bridge between a Page and the interface that shows it, as the interface reads it. A Page
@@ -13,8 +14,16 @@ export const APP_BRIDGE_MAX_PATH_CHARS = 2048;
 /** The highest content height a Page may report, in pixels. */
 export const APP_BRIDGE_MAX_HEIGHT_PX = 100_000;
 
+/** The longest id a Page may give one of its calls. The answer carries it back. */
+export const APP_BRIDGE_REQUEST_ID_MAX_CHARS = 100;
+/** The longest name of an action, a Connection or an operation a Page may send. */
+export const APP_BRIDGE_NAME_MAX_CHARS = 200;
+
 const mark = { [APP_BRIDGE_MARK]: z.literal(APP_BRIDGE_VERSION) };
 const session = z.string().min(1).max(200);
+const requestId = z.string().min(1).max(APP_BRIDGE_REQUEST_ID_MAX_CHARS);
+const calledName = z.string().min(1).max(APP_BRIDGE_NAME_MAX_CHARS);
+const idempotencyKey = z.string().min(1).max(IDEMPOTENCY_KEY_MAX_LENGTH).optional();
 
 /** What a Page posts. Unknown keys are refused, so a message is exactly one of these. */
 export const appBridgePageMessageSchema = z.discriminatedUnion("type", [
@@ -35,6 +44,28 @@ export const appBridgePageMessageSchema = z.discriminatedUnion("type", [
     type: z.literal("resize"),
     session,
     height: z.number().finite().min(0).max(APP_BRIDGE_MAX_HEIGHT_PX)
+  }),
+  // A call of a named action of the manifest. The interface makes it with the viewer's own
+  // session. The frame holds no credential and reaches nothing but the interface.
+  z.strictObject({
+    ...mark,
+    type: z.literal("action"),
+    session,
+    requestId,
+    name: calledName,
+    input: z.record(z.string(), z.unknown()),
+    idempotencyKey
+  }),
+  // A call of one operation of a Connection the manifest lists.
+  z.strictObject({
+    ...mark,
+    type: z.literal("connection_call"),
+    session,
+    requestId,
+    connection: calledName,
+    operation: calledName,
+    input: z.unknown(),
+    idempotencyKey
   })
 ]);
 
@@ -53,6 +84,15 @@ export const appBridgeThemeSchema = z.strictObject({
 
 export const appBridgeModeSchema = z.enum(["light", "dark"]);
 
+/**
+ * What the viewer's call of one action would come to now, as the server computed it: it runs,
+ * it runs as the viewer's own confirmation, it waits for another person's approval, or it is
+ * refused. A hint for what a Page shows. The call itself is checked again when it is made.
+ */
+export const appActionPermissionSchema = z.enum(["allow", "confirm", "approval", "deny"]);
+
+export type AppActionPermission = z.infer<typeof appActionPermissionSchema>;
+
 /** What `getContext()` of the kit answers. */
 export const appBridgeContextSchema = z.strictObject({
   viewer: z.strictObject({ kind: z.literal("member"), id: z.string(), displayName: z.string() }),
@@ -62,7 +102,9 @@ export const appBridgeContextSchema = z.strictObject({
   mode: appBridgeModeSchema,
   pageId: z.string(),
   fileSetNumber: z.number().int().positive(),
-  initialRoute: z.string()
+  initialRoute: z.string(),
+  /** Per action of the manifest. Absent where the interface could not read it. */
+  can: z.record(z.string(), appActionPermissionSchema).optional()
 });
 
 export type AppBridgeContext = z.infer<typeof appBridgeContextSchema>;
@@ -75,6 +117,31 @@ export const appBridgeHostMessageSchema = z.discriminatedUnion("type", [
     type: z.literal("theme"),
     theme: appBridgeThemeSchema,
     mode: appBridgeModeSchema
+  }),
+  // The answer to one `action` or `connection_call`, named by the id the Page gave it.
+  z.strictObject({
+    ...mark,
+    type: z.literal("action_result"),
+    session,
+    requestId,
+    ok: z.boolean(),
+    result: z
+      .strictObject({
+        runId: z.string(),
+        status: z.enum(["done", "pending_approval"]),
+        result: z.unknown().optional()
+      })
+      .optional(),
+    error: z
+      .strictObject({
+        /** `action_unknown`, `draft_safe_mode`, `forbidden`, `input_invalid` and so on. */
+        code: z.string(),
+        message: z.string(),
+        /** The right a `forbidden` call lacks. */
+        right: z.string().optional(),
+        runId: z.string().optional()
+      })
+      .optional()
   })
 ]);
 

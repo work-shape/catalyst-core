@@ -7,6 +7,9 @@ export type PageBuildErrorCode =
   | "import_unavailable"
   | "syntax"
   | "routes_invalid"
+  | "action_invalid"
+  | "connection_not_declared"
+  | "cache_not_available"
   | "output_too_large";
 
 /** One thing the author has to change, with the file and, where known, the place in it. */

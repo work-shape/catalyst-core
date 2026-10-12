@@ -43,6 +43,11 @@ export type OperationOrigin =
       actionName: string;
       pageSessionId: string;
       conversationId?: ConversationId;
+      /**
+       * The Connection and the operation of it the call reached, by their names. Kept so that
+       * a run of a named action says what it touched. Never an input or a result.
+       */
+      target?: { connection: string; operation: string };
     }
   | { kind: "workflow"; workflowRunId: string; stepRunId: string }
   | { kind: "schedule"; scheduleId: string };

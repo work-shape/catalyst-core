@@ -21,6 +21,13 @@ export interface AppTheme {
 
 export type AppThemeMode = "light" | "dark";
 
+/**
+ * What a call of an action would come to for the viewer now: it runs, it runs as the viewer's
+ * own confirmation, it waits for another person's approval, or it is refused. The interface
+ * computes it. It is a hint for what to show, and the call itself is checked when it is made.
+ */
+export type AppActionPermission = "allow" | "confirm" | "approval" | "deny";
+
 /** What a Page knows about where it runs and who looks at it. */
 export interface AppContext {
   /** The person the Page is shown to. `member` is the only kind today. */
@@ -36,6 +43,26 @@ export interface AppContext {
   fileSetNumber: number;
   /** The route the Page starts on. */
   initialRoute: string;
+  /** Per named action of the manifest. Empty where the interface told none. */
+  can: Record<string, AppActionPermission>;
+}
+
+/** How a call went. `pending_approval` carries no result: the call waits for another person. */
+export interface AppCallResult {
+  runId: string;
+  status: "done" | "pending_approval";
+  /** What the operation answered. Check its shape before using it. */
+  result?: unknown;
+}
+
+/** Why a call was refused or failed, as the interface told it. */
+export interface AppCallFailure {
+  /** `action_unknown`, `draft_safe_mode`, `forbidden`, `input_invalid` or a Connection's reason. */
+  code: string;
+  message: string;
+  /** The right a `forbidden` call lacks. */
+  right?: string;
+  runId?: string;
 }
 
 export interface AppThemeChange {
@@ -47,11 +74,32 @@ export interface AppThemeChange {
 export type PageMessage =
   | { type: "ready" }
   | { type: "navigate"; session: string; path: string }
-  | { type: "resize"; session: string; height: number };
+  | { type: "resize"; session: string; height: number }
+  | {
+      type: "action";
+      session: string;
+      requestId: string;
+      name: string;
+      input: Record<string, unknown>;
+      idempotencyKey?: string;
+    }
+  | {
+      type: "connection_call";
+      session: string;
+      requestId: string;
+      connection: string;
+      operation: string;
+      input: unknown;
+      idempotencyKey?: string;
+    };
 
 /** What the interface sends. */
 export type HostMessage =
-  { type: "context"; session: string; context: AppContext } | ({ type: "theme" } & AppThemeChange);
+  | { type: "context"; session: string; context: AppContext }
+  | ({ type: "theme" } & AppThemeChange)
+  | ({ type: "action_result"; session: string; requestId: string } & (
+      { ok: true; result: AppCallResult } | { ok: false; error: AppCallFailure }
+    ));
 
 const THEME_KEYS = [
   "surfaceColor",
@@ -104,6 +152,51 @@ function readMode(value: unknown): AppThemeMode | undefined {
   return value === "light" || value === "dark" ? value : undefined;
 }
 
+const PERMISSIONS: readonly string[] = ["allow", "confirm", "approval", "deny"];
+
+function isPermission(value: unknown): value is AppActionPermission {
+  return typeof value === "string" && PERMISSIONS.includes(value);
+}
+
+function readCan(value: unknown): Record<string, AppActionPermission> {
+  const can: Record<string, AppActionPermission> = {};
+  if (isRecord(value)) {
+    for (const [name, permission] of Object.entries(value)) {
+      if (isPermission(permission)) {
+        Object.defineProperty(can, name, { value: permission, enumerable: true });
+      }
+    }
+  }
+  return can;
+}
+
+function readCallResult(value: unknown): AppCallResult | undefined {
+  if (
+    !isRecord(value) ||
+    typeof value.runId !== "string" ||
+    (value.status !== "done" && value.status !== "pending_approval")
+  ) {
+    return undefined;
+  }
+  return {
+    runId: value.runId,
+    status: value.status,
+    ...("result" in value ? { result: value.result } : {})
+  };
+}
+
+function readCallFailure(value: unknown): AppCallFailure | undefined {
+  if (!isRecord(value) || typeof value.code !== "string" || typeof value.message !== "string") {
+    return undefined;
+  }
+  return {
+    code: value.code,
+    message: value.message,
+    ...(typeof value.right === "string" ? { right: value.right } : {}),
+    ...(typeof value.runId === "string" ? { runId: value.runId } : {})
+  };
+}
+
 function readContext(value: unknown): AppContext | undefined {
   if (!isRecord(value) || !isRecord(value.viewer)) {
     return undefined;
@@ -135,7 +228,8 @@ function readContext(value: unknown): AppContext | undefined {
     mode,
     pageId: value.pageId,
     fileSetNumber: value.fileSetNumber,
-    initialRoute: value.initialRoute
+    initialRoute: value.initialRoute,
+    can: readCan(value.can)
   };
 }
 
@@ -152,6 +246,19 @@ export function readHostMessage(data: unknown): HostMessage | undefined {
     const theme = readTheme(data.theme);
     const mode = readMode(data.mode);
     return theme && mode ? { type: "theme", theme, mode } : undefined;
+  }
+  if (
+    data.type === "action_result" &&
+    typeof data.session === "string" &&
+    typeof data.requestId === "string"
+  ) {
+    const { session, requestId } = data;
+    if (data.ok === true) {
+      const result = readCallResult(data.result);
+      return result ? { type: "action_result", session, requestId, ok: true, result } : undefined;
+    }
+    const error = readCallFailure(data.error);
+    return error ? { type: "action_result", session, requestId, ok: false, error } : undefined;
   }
   return undefined;
 }
