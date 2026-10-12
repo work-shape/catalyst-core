@@ -119,8 +119,12 @@ auth:
       # The two people of the App actions spec. No other spec uses them: the admin writes and
       # publishes the App and may use its Connection through the role, and the member holds the
       # use right on the App alone until the spec grants the one on the Connection.
+      # Their labels start with "Zz" on purpose: the users list is sorted by label and shows ten
+      # rows a page, and `chat-standalone.spec.ts` looks for "E2E Superadmin", "E2E User" and a
+      # person it creates as "E2E Reset ..." on the first page. A label that sorts before those
+      # pushes them off it.
       - email: e2e-app-actions@example.test
-        displayLabel: E2E App Actions
+        displayLabel: E2E Zz App Actions
         passwordEnvName: E2E_APP_ACTIONS_PASSWORD
         developmentPassword: e2e-app-actions-password
         roles:
@@ -129,7 +133,7 @@ auth:
         permissionRefs:
           - demo-tools
       - email: e2e-app-actions-member@example.test
-        displayLabel: E2E App Actions Member
+        displayLabel: E2E Zz App Actions Member
         passwordEnvName: E2E_APP_ACTIONS_MEMBER_PASSWORD
         developmentPassword: e2e-app-actions-member-password
         roles:
