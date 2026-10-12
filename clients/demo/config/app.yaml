@@ -51,7 +51,8 @@ modules:
   # Needs the `files` store, Execution Workspaces and the workspace command worker below.
   apps:
     enabled: true
-  # Connections: outside systems an agent may call. The demo has one, `sample-business` below.
+  # Connections: outside systems the instance may call. The demo has two, `sample-business` for
+  # its agent and `sample-accounting` for a Workflow, both below.
   connections:
     enabled: true
 # The file area per conversation and the commands an agent runs in it. The commands run in the
@@ -267,6 +268,31 @@ connections:
       - name: top_customers
         effect: reading
         exposure: [agent, bridge]
+  # The sample accounting system: the bookings of 600 invented clients of a tax consultancy,
+  # served by the same Compose service at a second address with the same key. A Workflow reads
+  # it and checks the bookings with code, so no operation is open to an agent or a Page: no
+  # booking passes through a model.
+  sample-accounting:
+    connectorType: mcp
+    displayName: Sample accounting
+    description: Clients, fiscal years, charts of accounts and monthly bookings of 600 invented clients, paged as the Exampledata interface over DATEV data pages them. Sample data, read only.
+    settings:
+      url: http://sample-mcp:8787/accounting/mcp
+    authScheme: bearer
+    secret: DEMO_SAMPLE_MCP_KEY
+    operations:
+      - name: list_accounting_clients
+        effect: reading
+        exposure: [workflow]
+      - name: list_fiscal_years
+        effect: reading
+        exposure: [workflow]
+      - name: list_postings
+        effect: reading
+        exposure: [workflow]
+      - name: list_accounts
+        effect: reading
+        exposure: [workflow]
 runtime:
   maxSteps: 64
   repeatedToolCallLimit: 3

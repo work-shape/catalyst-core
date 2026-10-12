@@ -38,7 +38,7 @@ Open `http://127.0.0.1:5173`. Every seeded person signs in with the password of 
 
 ## Look at the Connection
 
-1. Open **Build > Connections**. One row is there: "Sample business", type `mcp`, enabled.
+1. Open **Build > Connections**. Two rows are there, both of type `mcp` and enabled: "Sample business", which this walk follows, and "Sample accounting", which a Workflow reads and no agent.
 2. Open it. The page shows the status Ready, the credential as set with its version and never its value, and six operations. Each one is reading, ready and callable by Agents and Apps. "Used by" names the Workflow Assistant.
 3. Press **Test connection**. The status reads "Ready" with the time of the test.
 4. Open **Settings** (the gear at the bottom of the sidebar) and there **Operations** under Instance. The test is the newest run in the list, `connections.test`, with Mara's name. Choose **All calls** to see the agent's reading calls as well.

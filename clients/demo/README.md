@@ -135,7 +135,7 @@ The demo runs with Execution Workspaces and the `apps` module on. Its agent read
 
 ## The sample business system and its Connection
 
-Beside the instance runs a small outside system: the Compose service `sample-mcp` (`sample-mcp/`), a remote MCP server with customers, orders and invoices of an invented wholesale company over the last twelve full months. The data is generated at start from a fixed seed, so it is the same for a whole month. The server has six reading tools, publishes no host port and answers only with its key.
+Beside the instance runs a small outside system: the Compose service `sample-mcp` (`sample-mcp/`), a remote MCP server with customers, orders and invoices of an invented wholesale company over the last twelve full months. The data is generated at start from a fixed seed, so it is the same for a whole month. At `/mcp` the server has six reading tools. It publishes no host port and answers only with its key.
 
 The instance reaches it through the Connection `sample-business` ("Sample business" under Build > Connections), which release config defines in `config/app.yaml`:
 
@@ -154,6 +154,61 @@ Which five customers ordered most in the last twelve months?
 ```
 
 [docs/try-connections.md](docs/try-connections.md) walks through the Connection page, three questions with what a right answer looks like, a refusal and a stopped sample server.
+
+## The sample accounting system and its Connection
+
+The same Compose service answers at a second address, `/accounting/mcp`, with the same key. It stands for another outside system: the books of 600 invented clients (Mandanten) of one tax consultancy, served as the Exampledata interface over DATEV data serves them, so that a Workflow can pull a month's bookings client by client before a real key exists. The code is in `sample-mcp/accounting/`.
+
+The instance reaches it through the Connection `sample-accounting` in `config/app.yaml`. Its four operations are reading and open to a Workflow only (`exposure: [workflow]`): no agent carries them and no Page may call them, because no booking passes through a model. The `egress.allow` entry of the first Connection covers it, since host and port are the same.
+
+| Tool                      | Input                                                 | Rows                                                                                                                                |
+| ------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `list_accounting_clients` | `page`, `page_size`                                   | The clients, by `client_id`.                                                                                                        |
+| `list_fiscal_years`       | `client_id`                                           | The client's fiscal years, oldest first, with `skr` (3 or 4), `account_length`, `consultant_number` and `client_number`. Not paged. |
+| `list_postings`           | `client_id`, `month` (`YYYY-MM`), `page`, `page_size` | The month's bookings, by `date` and then in a stable order.                                                                         |
+| `list_accounts`           | `client_id`                                           | The client's chart of accounts, by `account_number`. Not paged.                                                                     |
+
+**Paging.** `page` starts at 1. `page_size` is 100 when left out and at most 1,000 (`ACCOUNTING_MAXIMUM_PAGE_SIZE`). An answer is `{ rows }` with no total and no next marker, as Exampledata answers: read page 1, 2, 3 and so on and stop at the first page with fewer rows than `page_size`, which may be an empty one. The largest page of bookings measures 1.31 MiB as a Connection counts it (the rows twice, structured and as text), under its bound of 2 MiB, and is answered in about 20 ms.
+
+**Data.** Nothing is stored. A booking is a pure function of a fixed seed, the client, the month and the booking's place in the month, so every month from 2024-01 to 2026-12 gives the same rows forever, and a page costs time in proportion to the page. A client's count varies by up to 8 % from month to month inside its group:
+
+| Group  | Clients | Bookings a month |
+| ------ | ------- | ---------------- |
+| small  | 492     | 200 to 4,000     |
+| medium | 100     | 10,000 to 60,000 |
+| large  | 8       | exactly 100,000  |
+
+Clients book on a subset of SKR03 or SKR04 with four-digit accounts. About one in twelve has a fiscal year that does not start in January, and about one in four uses cost centres.
+
+**Planted findings.** A month is a clean ledger except for bookings that each break exactly one rule of `sample-mcp/accounting/rules.ts`, the only place a rule is worded (one German and one English sentence, and its parameters). `createAccountingSample().expectedFindings(client_id, month)` gives the count per rule, taken from what was planted, so a check's result can be asserted exactly. Not every month breaks every rule.
+
+| Rule id                    | A booking is a finding when                                                                                                                         |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `duplicate-posting`        | an earlier booking of the month has the same date, account, contra account, amount, document field 1 and text. The first of a group does not count. |
+| `vat-key-account-mismatch` | it has an input VAT key (8, 9) on a revenue account or a VAT key (2, 3) on an expense account.                                                      |
+| `blocked-account`          | its account or contra account is blocked in the chart.                                                                                              |
+| `round-amount-no-document` | its `document_field_1` is empty and its amount is at least 1,000 euros and a multiple of 100 euros.                                                 |
+| `date-outside-month`       | its `date` lies outside the requested month.                                                                                                        |
+| `expense-in-credit`        | it books an expense account in credit (`H`) and is no general reversal.                                                                             |
+| `missing-cost-centre`      | it books an expense account without `kost1` while another booking of the month carries one.                                                         |
+
+**What Exampledata documents and what the sample adds.** The rows of clients, fiscal years and bookings hold exactly the fields of the Enterprise API's `/api/accounting/clients`, `/clients/{clientId}/fiscal-years` and `/postings`. Three things are the sample's own:
+
+- The tool names and parameters. Exampledata's MCP server publishes no tool list, so the tools mirror its REST API.
+- `client_id` and `month` as plain parameters of `list_postings`. Exampledata selects with a `filter` expression (`fiscal_year gte 20260101 and client_id eq 1234`); a filter parser is out of scope.
+- `list_accounts`. The Enterprise API has no chart-of-accounts endpoint. Of its fields, `account_number` and `label` are the ones Exampledata's monthly balances name; `account_class`, `automatic_vat_key` and `blocked` are the sample's, there because the rules need them.
+
+**Assumptions to verify with a real key.** The public documentation does not pin these:
+
+- Dates of a booking are ISO strings (`YYYY-MM-DD`) and its `fiscal_year` is the start of the fiscal year as `"YYYYMMDD"`. The dates of a fiscal year are numbers (`20260101`), as documented. `created_at` is an ISO timestamp.
+- Amounts are numbers in euros with two decimals and never negative; `debit_credit_indicator` is `S` or `H` and refers to `account_number`; `net_amount + tax_amount = amount`, to be compared in cents.
+- A field without a value is the empty string (`document_field_1`, `document_field_2`, `kost1`, `kost2`, `follow_up_type`, `document_link`), and only `delivery_date` is `null`.
+- A booking is written once, with its revenue or expense account in `account_number`. A booking on an automatic account carries the key 0, and a general reversal keeps the key of what it reverses and sets `general_reversal` to 1.
+- `record_type` is `"posting"`, `gross_net_indicator` `"B"`, `exchange_rate` 1, `national_law` `"HGB"`, and `size_class_code` follows the size group. Their real values and meanings are not documented. The three name fields of a fiscal year all hold the client's name.
+- A fiscal year is named by the year it starts in.
+- There is no maximum `page_size` in the documentation; the sample's maximum is its own.
+
+Sources, read on 2026-10-12 without an account: <https://exampledata.com/en/docs/mcp-setup>, <https://exampledata.com/en/products/mcp/scope>, <https://api.exampledata.com/docs/enterprise>.
 
 ## Agent and skill configuration
 

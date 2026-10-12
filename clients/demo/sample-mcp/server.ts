@@ -3,6 +3,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
+import { createAccountingSample } from "./accounting/sample.js";
+import { registerAccountingTools } from "./accounting/tools.js";
 import { createSampleData, utcMonthAnchor } from "./data.js";
 import { registerSampleTools } from "./tools.js";
 
@@ -96,33 +98,49 @@ const namedRequestSchema = z.object({
     .catch(undefined)
 });
 
-/** What is logged of a request to `/mcp`: its answer and what it named, never a header or an argument. */
-function requestLine(status: number, body?: unknown): string {
+/** What is logged of a request to an endpoint: its answer and what it named, never a header or an argument. */
+function requestLine(path: string, status: number, body?: unknown): string {
   const named = namedRequestSchema.safeParse(body);
   const what = named.success ? [named.data.method, named.data.params?.name] : [];
-  return ["POST /mcp", status, ...what].filter((part) => part !== undefined).join(" ");
+  return [`POST ${path}`, status, ...what].filter((part) => part !== undefined).join(" ");
 }
 
 export function createSampleMcpServer(options: {
   key: string;
   anchor?: string;
   now?: Date;
-  /** Receives one line per request to `/mcp`, so the developer sees who calls. */
+  /** The seed of the accounting sample. Left out, it is the one fixed seed of the server. */
+  accountingSeed?: number;
+  /** Receives one line per request to an endpoint, so the developer sees who calls. */
   log?: (line: string) => void;
 }) {
   const key = z.string().min(MINIMUM_KEY_LENGTH).safeParse(options.key);
   if (!key.success) throw new SampleMcpKeyError();
   const digest = createHash("sha256").update(key.data).digest();
   const data = createSampleData(options.anchor ?? utcMonthAnchor(options.now ?? new Date()));
+  const accounting = createAccountingSample({ seed: options.accountingSeed });
+  // Each endpoint stands for one outside system, and a Connection is one MCP address. All of
+  // them share the key and everything below.
+  const endpoints = new Map<string, { name: string; register(mcp: McpServer): void }>([
+    ["/mcp", { name: "demo-sample-mcp", register: (mcp) => registerSampleTools(mcp, data) }],
+    [
+      "/accounting/mcp",
+      {
+        name: "demo-sample-accounting-mcp",
+        register: (mcp) => registerAccountingTools(mcp, accounting)
+      }
+    ]
+  ]);
   const cleanups = new Set<Promise<void>>();
 
   async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
-    const path = request.url?.split("?")[0];
+    const path = request.url?.split("?")[0] ?? "";
     if (path === "/healthz" && request.method === "GET") {
       json(response, 200, { status: "ok" });
       return;
     }
-    if (path !== "/mcp") {
+    const endpoint = endpoints.get(path);
+    if (endpoint === undefined) {
       json(response, 404, { error: "Not found." });
       return;
     }
@@ -138,15 +156,15 @@ export function createSampleMcpServer(options: {
     const matches = timingSafeEqual(digest, suppliedDigest);
     if (token === undefined || !matches) {
       response.setHeader("WWW-Authenticate", "Bearer");
-      options.log?.(requestLine(401));
+      options.log?.(requestLine(path, 401));
       json(response, 401, { error: "Unauthorized." });
       return;
     }
     const body = await readBody(request);
-    response.once("finish", () => options.log?.(requestLine(response.statusCode, body)));
+    response.once("finish", () => options.log?.(requestLine(path, response.statusCode, body)));
     if (response.destroyed) return;
-    const mcp = new McpServer({ name: "demo-sample-mcp", version: "1.0.0" });
-    registerSampleTools(mcp, data);
+    const mcp = new McpServer({ name: endpoint.name, version: "1.0.0" });
+    endpoint.register(mcp);
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true
