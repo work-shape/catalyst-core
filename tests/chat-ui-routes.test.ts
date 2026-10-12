@@ -47,14 +47,25 @@ const addresses: [path: string, route: WorkspaceRoute, view: Area][] = [
     { kind: "build-asset", assetKind: "skills", name: "tax-review" },
     "build"
   ],
-  ["/ui-library", { kind: "ui-library" }, "ui-library"]
+  ["/ui-library", { kind: "ui-library" }, "ui-library"],
+  // The Workflow pages over samples stand beside the library, behind the same right.
+  ["/ui-library/workflows", { kind: "workflow-samples" }, "ui-library"]
 ];
 
 describe("area route table", () => {
   it("has one row per area", () => {
     const areas = areaRoutes.map((row) => row.area);
 
-    expect(areas).toEqual(["chat", "agents", "apps", "settings", "inbox", "build", "ui-library"]);
+    expect(areas).toEqual([
+      "chat",
+      "agents",
+      "apps",
+      "workflows",
+      "settings",
+      "inbox",
+      "build",
+      "ui-library"
+    ]);
   });
 
   it.each(addresses)("resolves %s to the view it had before", (path, route, view) => {

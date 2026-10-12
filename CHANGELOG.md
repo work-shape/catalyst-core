@@ -328,6 +328,21 @@ contain breaking changes; a patch version does not.
   card shows the description whatever `ui.showAgentDescriptions` says. Nothing is edited there:
   a person who may read agents in Studio gets "Edit in Studio" on each card. The page reads the
   list the agent picker already reads and adds no call. `@vivd-catalyst/ui` gains `CardFooter`.
+- **Workflows, the pages on the canvas:** a Workflow opens as a drawing of its steps, left to
+  right on a wide page and top to bottom on a phone, fitted to the page when it opens. A loop
+  and a parallel part are frames around their steps, a condition is a step with one exit per
+  path, and a step that starts another Workflow opens that Workflow in place, with a trail back.
+  A press on a step opens one panel beside the drawing (a sheet on a phone) that says what the
+  step does. The page of a run draws the same graph with how far each step is: a loop shows its
+  counts and its bar however many entries it has, a failed step says why and its panel opens by
+  itself, and the entries of a loop are listed in the loop's panel, failed ones first, a page at
+  a time. A Workflow has two tabs, "Workflow" and "Runs". The drawing can be read with the
+  keyboard and cannot be rearranged. **Not in this release:** the instance runs no Workflow yet,
+  so on an instance the list of runs says so and no start is offered; the pages are shown over
+  sample Workflows and runs at `/ui-library/workflows`, behind the right that opens the UI
+  library. `condition` and `parallel` are drawn and run by no engine.
+- **UI library:** `Breadcrumb`, the way into a nested place with the current one marked, and
+  `IconTile`, the square an icon stands in on a node of a graph and in the head of its panel.
 - **Pages, plain HTML:** App Kit version `1.2.0`, with two new files, `page.css` and `theme.js`.
   A plain HTML Page that names it comes out with the look of the platform: the build links
   `page.css` and `theme.js` first into every HTML file of a Page with an `entry`, also one whose

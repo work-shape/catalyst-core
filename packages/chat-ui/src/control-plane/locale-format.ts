@@ -5,6 +5,11 @@ export function formatDateTime(value: string, locale: LocaleCode): string {
   return new Date(value).toLocaleString(locale);
 }
 
+/** A moment as a sentence names it: the day in words and the time without seconds. */
+export function formatMoment(value: string, locale: LocaleCode): string {
+  return new Date(value).toLocaleString(locale, { dateStyle: "long", timeStyle: "short" });
+}
+
 /** The day of a moment, and its time of day: the two lines of a moment in a narrow column. */
 export function formatDate(value: string, locale: LocaleCode): string {
   return new Date(value).toLocaleDateString(locale);

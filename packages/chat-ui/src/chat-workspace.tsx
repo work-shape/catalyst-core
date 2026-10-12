@@ -15,6 +15,8 @@ import { ControlPlaneRoutes } from "./control-plane/control-plane-routes";
 import { createTranslationContext, TranslationProvider, useTranslation } from "./i18n";
 import { AppsArea, isAppsRoute } from "./apps/apps-area";
 import { AppsHostProvider, type AppsHost } from "./apps/apps-host";
+import { WorkflowsArea, isWorkflowsRoute } from "./workflows/workflows-area";
+import { WorkflowsHostProvider } from "./workflows/workflows-host";
 import { InboxArea } from "./inbox";
 import { LoginPanel } from "./login-panel";
 import { operationRunHref, operationRunsHref } from "./operations/operations-model";
@@ -45,6 +47,12 @@ import { useWorkspaceChatModel, WORKSPACE_AUTH_SCOPE } from "./workspace/workspa
 import { WorkspaceProviders } from "./workspace/workspace-providers";
 import { useWorkspaceShortcuts } from "./workspace/workspace-shortcuts";
 
+// The Workflow screens on sample data: a page for whoever may open the UI library, loaded
+// only when it is opened.
+const WorkflowSamples = lazy(async () => {
+  const { WorkflowSamples: Samples } = await import("./workflows/samples/workflow-samples");
+  return { default: Samples };
+});
 // The gallery of the shared UI library is its own chunk, loaded only when its route is opened.
 const UiGallery = lazy(async () => {
   const { UiGallery: Gallery } = await import("@vivd-catalyst/ui/gallery");
@@ -154,6 +162,9 @@ function ChatWorkspaceContent({
   // With the module off the model leads an Apps address to the chat; nothing shows meanwhile.
   const appsRoute =
     model.apps.enabled && isAppsRoute(model.route.route) ? model.route.route : undefined;
+  // An address of the Workflows shows nothing until the instance has said whether the area is
+  // there for this person: the model leads a closed one to the chat.
+  const workflowsRoute = isWorkflowsRoute(model.route.route) ? model.route.route : undefined;
   const chatCovered =
     surfaceCovering && (inboxRoute ? inboxRoute.kind === "inbox-item" : displayPanel.open);
   const resourcesShown =
@@ -256,7 +267,15 @@ function ChatWorkspaceContent({
           </UiRoot>
         }
       >
-        <UiGallery initialMode={themeMode} initialLanguage={model.config.activeLocale} />
+        {model.route.route.kind === "workflow-samples" ? (
+          <WorkflowSamples
+            theme={model.config.theme}
+            mode={themeMode}
+            locale={model.config.activeLocale}
+          />
+        ) : (
+          <UiGallery initialMode={themeMode} initialLanguage={model.config.activeLocale} />
+        )}
       </Suspense>
     );
   }
@@ -382,6 +401,7 @@ function ChatWorkspaceContent({
             inbox={rail.inbox}
             agents={rail.agents}
             apps={rail.apps}
+            workflows={rail.workflows}
             view={rail.view}
             deletingConversation={rail.deletingConversation}
             canMoveConversation={rail.canMoveConversation}
@@ -420,16 +440,18 @@ function ChatWorkspaceContent({
               // from stands beside nothing there, so the header is no band over the App's head.
               // The Inbox and the Agents page have a page title where the band would stand: the
               // band would cover it.
-              surfaceBesideWidth={appsRoute || inboxRoute || agentsRoute ? 0 : surfaceBesideWidth}
+              surfaceBesideWidth={
+                appsRoute || workflowsRoute || inboxRoute || agentsRoute ? 0 : surfaceBesideWidth
+              }
               covered={chatCovered}
               selectedAgentName={model.config.activeAgentName}
-              // Only a conversation has an agent to choose: not the Inbox, the Agents page, Apps,
-              // Build or Settings.
+              // Only a conversation has an agent to choose: no other area has one.
               showAgentSelector={
                 !onStartPage &&
                 !inboxRoute &&
                 !agentsRoute &&
                 !appsRoute &&
+                !workflowsRoute &&
                 !model.controlPlane.build &&
                 !model.controlPlane.settings
               }
@@ -482,6 +504,26 @@ function ChatWorkspaceContent({
                       <PageHostProvider conversationId={undefined} {...pageHost}>
                         <AppsArea route={appsRoute} />
                       </PageHostProvider>
+                    ) : undefined
+                  }
+                  workflowsArea={
+                    workflowsRoute ? (
+                      model.workflows.access === "open" ? (
+                        <WorkflowsHostProvider
+                          value={{
+                            rights: model.workflows.rights,
+                            viewerId: model.auth.user.id,
+                            workspace: activeWorkspace
+                              ? { id: activeWorkspace.id, name: activeWorkspace.name }
+                              : undefined,
+                            showRoute: model.route.showRoute
+                          }}
+                        >
+                          <WorkflowsArea route={workflowsRoute} />
+                        </WorkflowsHostProvider>
+                      ) : (
+                        <div className="h-full bg-background" />
+                      )
                     ) : undefined
                   }
                   inboxArea={

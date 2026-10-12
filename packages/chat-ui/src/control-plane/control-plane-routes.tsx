@@ -8,6 +8,7 @@ export function ControlPlaneRoutes({
   inboxArea,
   agentsArea,
   appsArea,
+  workflowsArea,
   children
 }: {
   controlPlane: ControlPlaneModel;
@@ -20,6 +21,8 @@ export function ControlPlaneRoutes({
   agentsArea?: ReactNode;
   /** The Apps area, present while one of its routes is open and the module is on. */
   appsArea?: ReactNode;
+  /** The Workflows area, present while one of its routes is open. */
+  workflowsArea?: ReactNode;
   children: ReactNode;
 }) {
   const { settings, build } = controlPlane;
@@ -34,6 +37,10 @@ export function ControlPlaneRoutes({
 
   if (appsArea) {
     return <>{appsArea}</>;
+  }
+
+  if (workflowsArea) {
+    return <>{workflowsArea}</>;
   }
 
   if (build) {

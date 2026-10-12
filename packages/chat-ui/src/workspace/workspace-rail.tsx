@@ -55,6 +55,8 @@ interface WorkspaceRailProps {
   agents?: boolean;
   /** The Apps module is on: the Apps row shows. */
   apps?: boolean;
+  /** The Workflows area is open to the person: the Workflows row shows. */
+  workflows?: boolean;
   view: WorkspaceView;
   deletingConversation: boolean;
   canMoveConversation: boolean;
@@ -85,7 +87,8 @@ export function WorkspaceRail(props: WorkspaceRailProps) {
   const sections = shownRailSections(props.sections ?? railSections, {
     agents: props.agents,
     inbox: props.inbox,
-    apps: props.apps
+    apps: props.apps,
+    workflows: props.workflows
   });
 
   return (

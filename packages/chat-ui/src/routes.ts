@@ -2,7 +2,7 @@ import { appInterfacePath, type AppMode } from "@vivd-catalyst/api-client";
 
 /** The areas of the interface: what a route shows. */
 export type WorkspaceRouteView =
-  "chat" | "agents" | "apps" | "settings" | "inbox" | "build" | "ui-library";
+  "chat" | "agents" | "apps" | "workflows" | "settings" | "inbox" | "build" | "ui-library";
 
 /**
  * `collaboration-workspace-root` and `legacy-conversation` are unresolved chat
@@ -25,6 +25,14 @@ export type WorkspaceRoute =
   | { kind: "app"; collaborationWorkspaceId: string; app: string; appPath?: string }
   /** The draft of one App, for whoever may write it. */
   | { kind: "app-edit"; collaborationWorkspaceId: string; app: string }
+  /** The Workflows of one workspace. */
+  | { kind: "workflows"; collaborationWorkspaceId: string }
+  /** One Workflow: what it does, and its last runs. */
+  | { kind: "workflow"; collaborationWorkspaceId: string; workflow: string }
+  /** Every run of one Workflow. */
+  | { kind: "workflow-runs"; collaborationWorkspaceId: string; workflow: string }
+  /** One run of a Workflow with its steps. */
+  | { kind: "workflow-run"; collaborationWorkspaceId: string; workflow: string; run: string }
   /** One page of the Settings area. The Settings catalog knows the groups and the pages. */
   | { kind: "settings"; group: string; page: string }
   /**
@@ -43,7 +51,9 @@ export type WorkspaceRoute =
   /** The Inbox with one item open beside the lists. */
   | { kind: "inbox-item"; itemId: string }
   /** The gallery of the shared UI library. Administrators reach it by address; nothing links to it. */
-  | { kind: "ui-library" };
+  | { kind: "ui-library" }
+  /** The Workflow screens on sample data, beside the UI library and for the same readers. */
+  | { kind: "workflow-samples" };
 
 /** One address of an area: a path pattern, with `$name` for a segment that is read. A last
  * segment `$` alone reads everything after it, as the router's `_splat`. */
@@ -111,6 +121,15 @@ export const areaRoutes: readonly AreaRoute[] = [
     ]
   },
   {
+    area: "workflows",
+    paths: [
+      { path: "/w/$collaborationWorkspaceId/workflows", route: "workflows" },
+      { path: "/w/$collaborationWorkspaceId/workflows/$workflow", route: "workflow" },
+      { path: "/w/$collaborationWorkspaceId/workflows/$workflow/runs", route: "workflow-runs" },
+      { path: "/w/$collaborationWorkspaceId/workflows/$workflow/runs/$run", route: "workflow-run" }
+    ]
+  },
+  {
     area: "settings",
     paths: [
       { path: "/settings/$group/$page", route: "settings" },
@@ -139,7 +158,13 @@ export const areaRoutes: readonly AreaRoute[] = [
       { path: "/admin/config", redirectTo: "/build" }
     ]
   },
-  { area: "ui-library", paths: [{ path: "/ui-library", route: "ui-library" }] }
+  {
+    area: "ui-library",
+    paths: [
+      { path: "/ui-library", route: "ui-library" },
+      { path: "/ui-library/workflows", route: "workflow-samples" }
+    ]
+  }
 ];
 
 /** Every address of the table, in the order of its rows. */
@@ -241,6 +266,7 @@ function routeOf(
     case "build":
     case "inbox":
     case "ui-library":
+    case "workflow-samples":
       return { kind };
     case "inbox-item":
       return itemId ? { kind, itemId } : undefined;
@@ -255,7 +281,17 @@ function routeOf(
     case "new-conversation":
     case "agents":
     case "apps":
+    case "workflows":
       return collaborationWorkspaceId ? { kind, collaborationWorkspaceId } : undefined;
+    case "workflow":
+    case "workflow-runs":
+      return collaborationWorkspaceId && params.workflow
+        ? { kind, collaborationWorkspaceId, workflow: params.workflow }
+        : undefined;
+    case "workflow-run":
+      return collaborationWorkspaceId && params.workflow && params.run
+        ? { kind, collaborationWorkspaceId, workflow: params.workflow, run: params.run }
+        : undefined;
     case "app-edit":
       return collaborationWorkspaceId && params.app
         ? { kind, collaborationWorkspaceId, app: params.app }

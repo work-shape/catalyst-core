@@ -184,7 +184,8 @@ export function useControlPlaneModel({
   }, [goToDefaultChat, resolution, showRoute]);
 
   useEffect(() => {
-    if (isAuthenticated && route.kind === "ui-library" && !canViewUiLibrary) {
+    const forUiLibraryReaders = route.kind === "ui-library" || route.kind === "workflow-samples";
+    if (isAuthenticated && forUiLibraryReaders && !canViewUiLibrary) {
       goToDefaultChat({ replace: true });
     }
   }, [canViewUiLibrary, goToDefaultChat, isAuthenticated, route.kind]);

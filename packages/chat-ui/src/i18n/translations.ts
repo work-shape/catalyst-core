@@ -19,6 +19,7 @@ import { pages } from "./pages";
 import { settings } from "./settings";
 import { signIn } from "./sign-in";
 import { tools } from "./tools";
+import { workflows } from "./workflows";
 import { workspace } from "./workspace";
 import { combineTranslations } from "./translation-area";
 
@@ -47,6 +48,7 @@ export const translations = combineTranslations(common)
   .and(settings)
   .and(signIn)
   .and(tools)
+  .and(workflows)
   .and(workspace).messages;
 
 export type TranslationKey = keyof (typeof translations)["en"];

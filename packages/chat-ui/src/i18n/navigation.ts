@@ -23,7 +23,8 @@ export const navigation = defineTranslations({
     "nav.settings": "Settings",
     "nav.showChat": "Show chat",
     "nav.skipToContent": "Skip to content",
-    "nav.surfaceNoRenderer": "This content cannot be shown yet."
+    "nav.surfaceNoRenderer": "This content cannot be shown yet.",
+    "nav.workflows": "Workflows"
   },
   de: {
     "nav.agents": "Agenten",
@@ -46,6 +47,7 @@ export const navigation = defineTranslations({
     "nav.settings": "Einstellungen",
     "nav.showChat": "Chat anzeigen",
     "nav.skipToContent": "Zum Inhalt springen",
-    "nav.surfaceNoRenderer": "Dieser Inhalt kann noch nicht angezeigt werden."
+    "nav.surfaceNoRenderer": "Dieser Inhalt kann noch nicht angezeigt werden.",
+    "nav.workflows": "Workflows"
   }
 });

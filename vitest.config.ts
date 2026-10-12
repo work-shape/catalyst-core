@@ -27,6 +27,7 @@ const sourceAlias = {
   "@vivd-catalyst/chat-ui/operations": "packages/chat-ui/src/operations/index.ts",
   "@vivd-catalyst/chat-ui/agents": "packages/chat-ui/src/agents/index.ts",
   "@vivd-catalyst/chat-ui/apps": "packages/chat-ui/src/apps/index.ts",
+  "@vivd-catalyst/chat-ui/workflows": "packages/chat-ui/src/workflows/index.ts",
   "@vivd-catalyst/chat-ui/pages": "packages/chat-ui/src/pages/index.ts",
   "@vivd-catalyst/chat-ui/shell": "packages/chat-ui/src/shell.tsx",
   "@vivd-catalyst/chat-ui/reading-place": "packages/chat-ui/src/assistant/reading-place.ts",

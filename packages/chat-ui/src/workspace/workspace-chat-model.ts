@@ -63,6 +63,12 @@ import type { ResolvedThemeMode } from "../theme";
 import type { WorkspaceView } from "./workspace-rail";
 import { agentListStatus, type AgentListStatus } from "../agents/agents-model";
 import { NO_APP_RIGHTS, resolveAppRights, type AppRights } from "../apps/app-model";
+import {
+  resolveWorkflowRights,
+  workflowsAccess,
+  type WorkflowRights,
+  type WorkflowsAccess
+} from "../workflows/workflow-model";
 import { inboxRailEntry } from "../inbox/inbox-model";
 import type { WorkspaceRoute } from "./workspace-route";
 import { apiErrorStatus, applyFavicon, createEnvironmentDocumentTitle } from "../workspace-utils";
@@ -185,6 +191,13 @@ export interface WorkspaceChatModel {
   approvalRevision: ApprovalRevisionHost;
   agents: AgentsModel;
   apps: AppsModel;
+  workflows: WorkflowsModel;
+}
+
+/** What the workspace knows about Workflows: whether the area is there, and the reader's rights. */
+interface WorkflowsModel {
+  access: WorkflowsAccess;
+  rights: WorkflowRights;
 }
 
 /** What the workspace knows for the Agents page. The agents themselves are the picker's. */
@@ -289,6 +302,8 @@ export interface ConversationRailModel {
   agents: boolean;
   /** The Apps module is on: the Apps row shows. */
   apps: boolean;
+  /** The Workflows area is open to the person: the Workflows row shows. */
+  workflows: boolean;
   view: WorkspaceView;
   creatingConversation: boolean;
   deletingConversation: boolean;
@@ -739,20 +754,35 @@ export function useWorkspaceChatModel({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
     client,
-    enabled: isAuthenticated && appsEnabled
+    enabled:
+      isAuthenticated &&
+      (appsEnabled ||
+        (collaborationWorkspacesAvailable && instanceModules?.workflows?.enabled === true))
   });
   const appRights = useMemo(
     () => (appsEnabled ? resolveAppRights(platformContextQuery.data) : NO_APP_RIGHTS),
     [appsEnabled, platformContextQuery.data]
   );
-  // With the module off, an address of the Apps area leads to the chat.
-  const appsClosed = view === "apps" && instanceModules !== undefined && !appsEnabled;
+  const workflowsOpen = workflowsAccess({
+    modules: instanceModules,
+    workspaces: collaborationWorkspacesAvailable,
+    context: platformContextQuery.data
+  });
+  const workflowRights = useMemo(
+    () => resolveWorkflowRights(workflowsOpen === "open" ? platformContextQuery.data : undefined),
+    [workflowsOpen, platformContextQuery.data]
+  );
+  // With its module off, an address of the Apps or the Workflows area leads to the chat, as an
+  // unknown address does; so does an address of the Workflows for a person who may read none.
+  const areaClosed =
+    (view === "apps" && instanceModules !== undefined && !appsEnabled) ||
+    (view === "workflows" && workflowsOpen === "closed");
   const { goToDefaultChat } = routeState;
   useEffect(() => {
-    if (appsClosed) {
+    if (areaClosed) {
       goToDefaultChat(activeCollaborationWorkspaceId, { replace: true });
     }
-  }, [activeCollaborationWorkspaceId, appsClosed, goToDefaultChat]);
+  }, [activeCollaborationWorkspaceId, areaClosed, goToDefaultChat]);
   const activeAgent = config?.agents.find((agent) => agent.name === activeAgentName);
   const selectedThread =
     threadQuery.data?.conversation.id === selectedConversationId ? threadQuery.data : undefined;
@@ -1037,6 +1067,7 @@ export function useWorkspaceChatModel({
       inbox,
       agents: collaborationWorkspacesAvailable,
       apps: appsEnabled,
+      workflows: workflowsOpen === "open",
       view,
       creatingConversation: false,
       deletingConversation: deleteConversationMutation.isPending,
@@ -1056,8 +1087,12 @@ export function useWorkspaceChatModel({
       },
       deleteConversation: (conversationId) => deleteConversationMutation.mutate(conversationId),
       selectWorkspaceView: (nextView) => {
-        // The agents and the Apps of the open workspace: the row has no address without one.
-        if ((nextView === "agents" || nextView === "apps") && activeCollaborationWorkspaceId) {
+        // The agents, the Apps and the Workflows of the open workspace: the row has no address
+        // without one.
+        if (
+          (nextView === "agents" || nextView === "apps" || nextView === "workflows") &&
+          activeCollaborationWorkspaceId
+        ) {
           routeState.showRoute({
             kind: nextView,
             collaborationWorkspaceId: activeCollaborationWorkspaceId
@@ -1091,6 +1126,7 @@ export function useWorkspaceChatModel({
       rights: appRights,
       startChat: startNewConversationWith
     },
+    workflows: { access: workflowsOpen, rights: workflowRights },
     selectedChat: {
       client,
       config,
