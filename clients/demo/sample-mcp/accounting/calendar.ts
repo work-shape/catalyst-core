@@ -5,7 +5,12 @@ export const FIRST_MONTH = "2024-01";
 export const LAST_MONTH = "2026-12";
 
 const FIRST_YEAR = Number(FIRST_MONTH.slice(0, 4));
-const MONTHS_PER_YEAR = 12;
+export const MONTHS_PER_YEAR = 12;
+const MONTH_COUNT =
+  (Number(LAST_MONTH.slice(0, 4)) - FIRST_YEAR) * MONTHS_PER_YEAR +
+  Number(LAST_MONTH.slice(5)) -
+  Number(FIRST_MONTH.slice(5)) +
+  1;
 const DAY_MS = 86_400_000;
 // A ledger has few bookings dated on a weekend.
 const SATURDAY_WEIGHT = 0.25;
@@ -20,23 +25,37 @@ export interface SampleMonth {
   days: number;
 }
 
-function twoDigits(value: number): string {
+export function twoDigits(value: number): string {
   return String(value).padStart(2, "0");
 }
 
+/**
+ * The month `index` months after the first one of the range. A month before the range has a
+ * negative index: the clients kept books before the sample starts, and a payment of the first
+ * month settles an invoice of the month before it.
+ */
+export function monthAt(index: number): SampleMonth {
+  const monthsOfEra = Number(FIRST_MONTH.slice(5)) - 1 + index;
+  const year = FIRST_YEAR + Math.floor(monthsOfEra / MONTHS_PER_YEAR);
+  const month = monthsOfEra - (year - FIRST_YEAR) * MONTHS_PER_YEAR + 1;
+  return { index, year, month, days: new Date(Date.UTC(year, month, 0)).getUTCDate() };
+}
+
+/** The months of the range as a request names them (`YYYY-MM`), oldest first. */
+export const SAMPLE_MONTHS: readonly string[] = Array.from({ length: MONTH_COUNT }, (_, index) => {
+  const { year, month } = monthAt(index);
+  return `${year}-${twoDigits(month)}`;
+});
+
 /** The month of the range that `text` names as `YYYY-MM`, or `undefined` outside it. */
 export function sampleMonth(text: string): SampleMonth | undefined {
-  if (!/^\d{4}-(0[1-9]|1[0-2])$/u.test(text) || text < FIRST_MONTH || text > LAST_MONTH) {
-    return undefined;
-  }
-  const year = Number(text.slice(0, 4));
-  const month = Number(text.slice(5));
-  return {
-    index: (year - FIRST_YEAR) * MONTHS_PER_YEAR + month - 1,
-    year,
-    month,
-    days: new Date(Date.UTC(year, month, 0)).getUTCDate()
-  };
+  const index = SAMPLE_MONTHS.indexOf(text);
+  return index === -1 ? undefined : monthAt(index);
+}
+
+/** A month as a booking text names it: `MM/YYYY`. */
+export function periodLabel({ year, month }: SampleMonth): string {
+  return `${twoDigits(month)}/${year}`;
 }
 
 /** The date `offsetDays` after the first day of the month (before it when negative), as `YYYY-MM-DD`. */

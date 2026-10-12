@@ -1,8 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { toolError, toolResult } from "../result.js";
-import { FIRST_MONTH, LAST_MONTH } from "./calendar.js";
-import { AccountingRequestError, type AccountingSample } from "./sample.js";
+import { toolResult } from "../result.js";
+import { FIRST_MONTH, LAST_MONTH, SAMPLE_MONTHS } from "./calendar.js";
+import type { AccountingSample } from "./sample.js";
 
 // The tools of `/accounting/mcp`. They mirror the reading endpoints of the Exampledata
 // Enterprise API: the same row fields, and its paging by `page` and `page_size` with no total
@@ -10,7 +10,7 @@ import { AccountingRequestError, type AccountingSample } from "./sample.js";
 
 export const ACCOUNTING_DEFAULT_PAGE_SIZE = 100;
 /**
- * The most rows one page holds. It keeps the largest page of bookings, measured at 1.31 MiB,
+ * The most rows one page holds. It keeps the largest page of bookings, measured at 1.40 MiB,
  * under three quarters of what one call of a Connection may answer (2 MiB, with the rows
  * counted twice: structured and as text). A larger `page_size` is refused as invalid input.
  */
@@ -64,7 +64,7 @@ const postingSchema = z.strictObject({
   debit_credit_indicator: z.enum(["S", "H"]),
   currency_code: z.string(),
   exchange_rate: z.number().positive(),
-  record_type: z.string(),
+  record_type: z.enum(["RE", "LO"]),
   accounting_transaction_key: z.number().int().nonnegative(),
   general_reversal: flagSchema,
   follow_up_index: z.number().int().nonnegative(),
@@ -78,7 +78,7 @@ const postingSchema = z.strictObject({
 const accountSchema = z.strictObject({
   account_number: z.number().int(),
   label: z.string(),
-  account_class: z.enum(["asset", "liability", "revenue", "expense"]),
+  account_class: z.enum(["asset", "liability", "equity", "revenue", "expense"]),
   automatic_vat_key: z.number().int().nullable(),
   blocked: z.boolean()
 });
@@ -98,20 +98,31 @@ const paging = {
     .max(ACCOUNTING_MAXIMUM_PAGE_SIZE)
     .default(ACCOUNTING_DEFAULT_PAGE_SIZE)
 };
-const clientId = z.number().int();
 const PAGING_ADVICE = `Rows come in pages: page starts at 1, page_size is at most ${ACCOUNTING_MAXIMUM_PAGE_SIZE} and ${ACCOUNTING_DEFAULT_PAGE_SIZE} when left out. There is no total: ask for page 1, 2, 3 and so on with the same page_size, and stop at the first page with fewer rows than page_size.`;
 
-/** The rows as a result, or the sentence of a request for a client or month that does not exist. */
-function answer(rows: () => unknown[]) {
-  try {
-    return toolResult({ rows: rows() });
-  } catch (error) {
-    if (error instanceof AccountingRequestError) return toolError(error.message);
-    throw error;
-  }
+/**
+ * The input of the tools that name a client or a month. The sample's clients have consecutive
+ * ids and its months are a fixed range, so the schema itself holds both ranges: a caller that
+ * validates against the advertised schema, as a Connection does, refuses any other client or
+ * month as invalid input before it calls, and the server refuses it the same way with a
+ * sentence that names the range.
+ */
+function selectors(sample: AccountingSample) {
+  const ids = sample.clients.map(({ client_id }) => client_id);
+  const [first, last] = [Math.min(...ids), Math.max(...ids)];
+  const outside = `client_id must be a whole number from ${first} to ${last}, the clients of the sample.`;
+  return {
+    client_id: z.number().int().min(first, outside).max(last, outside),
+    month: z.enum(
+      SAMPLE_MONTHS,
+      `month must be a month from ${FIRST_MONTH} to ${LAST_MONTH} as YYYY-MM.`
+    )
+  };
 }
 
 export function registerAccountingTools(server: McpServer, sample: AccountingSample): void {
+  const { client_id, month } = selectors(sample);
+  const answer = (rows: unknown[]) => toolResult({ rows });
   server.registerTool(
     "list_accounting_clients",
     {
@@ -121,8 +132,7 @@ export function registerAccountingTools(server: McpServer, sample: AccountingSam
       inputSchema: z.strictObject(paging),
       outputSchema: accountingOutputSchemas.list_accounting_clients
     },
-    ({ page, page_size }) =>
-      answer(() => sample.clients.slice((page - 1) * page_size, page * page_size))
+    ({ page, page_size }) => answer(sample.clients.slice((page - 1) * page_size, page * page_size))
   );
 
   server.registerTool(
@@ -132,27 +142,30 @@ export function registerAccountingTools(server: McpServer, sample: AccountingSam
       description:
         "List the fiscal years (Wirtschaftsjahre) of one client, oldest first, with what its books are kept by: the chart of accounts (skr 3 or 4), the account length, the consultant number and the client number. Use it to learn which chart a client books on and whether its fiscal year is the calendar year. All rows come at once.",
       annotations: { readOnlyHint: true },
-      inputSchema: z.strictObject({ client_id: clientId }),
+      inputSchema: z.strictObject({ client_id }),
       outputSchema: accountingOutputSchemas.list_fiscal_years
     },
-    ({ client_id }) => answer(() => sample.fiscalYears(client_id))
+    (input) => answer(sample.fiscalYears(input.client_id))
   );
 
   server.registerTool(
     "list_postings",
     {
       title: "List postings",
-      description: `List the bookings of one client in one month (YYYY-MM, from ${FIRST_MONTH} to ${LAST_MONTH}), ordered by date and stable between calls. A month holds between a few hundred and 100,000 bookings, so read it page by page with the largest page_size. ${PAGING_ADVICE} Amounts are euros with two decimals; net_amount plus tax_amount is amount. A booking has no id: its place in the month identifies it.`,
+      description: `List the bookings of one client in one month (YYYY-MM, from ${FIRST_MONTH} to ${LAST_MONTH}), ordered by date and stable between calls. A month holds between fifty and 100,000 bookings, so read it page by page with the largest page_size. ${PAGING_ADVICE} Amounts are euros with two decimals; net_amount plus tax_amount is amount. A booking has no id and no field that is unique: document_link names the document behind it, which several bookings may share.`,
       annotations: { readOnlyHint: true },
-      inputSchema: z.strictObject({
-        client_id: clientId,
-        month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/u),
-        ...paging
-      }),
+      inputSchema: z.strictObject({ client_id, month, ...paging }),
       outputSchema: accountingOutputSchemas.list_postings
     },
-    ({ client_id, month, page, page_size }) =>
-      answer(() => sample.postings(client_id, month, (page - 1) * page_size, page_size))
+    (input) =>
+      answer(
+        sample.postings(
+          input.client_id,
+          input.month,
+          (input.page - 1) * input.page_size,
+          input.page_size
+        )
+      )
   );
 
   server.registerTool(
@@ -160,11 +173,11 @@ export function registerAccountingTools(server: McpServer, sample: AccountingSam
     {
       title: "List accounts",
       description:
-        "List the chart of accounts of one client, ordered by account_number: each account's German label, its class (asset, liability, revenue or expense), the BU-Schlüssel an automatic account applies by itself, and whether the account is blocked for bookings. Use it to judge the account_number and contra_account_number of a booking. All rows come at once.",
+        "List the chart of accounts of one client, ordered by account_number: the four-digit general ledger accounts, then the client's personal accounts, a debtor for each customer (10000 to 69999) and a creditor for each supplier (70000 to 99999). Each account has its German label, which for a personal account is the name of the customer or supplier, its class (asset, liability, equity, revenue or expense), the BU-Schlüssel an automatic account applies by itself, and whether the account is blocked for bookings. Use it to judge the account_number and contra_account_number of a booking. All rows come at once, a few thousand for the largest client.",
       annotations: { readOnlyHint: true },
-      inputSchema: z.strictObject({ client_id: clientId }),
+      inputSchema: z.strictObject({ client_id }),
       outputSchema: accountingOutputSchemas.list_accounts
     },
-    ({ client_id }) => answer(() => sample.accounts(client_id))
+    (input) => answer(sample.accounts(input.client_id))
   );
 }

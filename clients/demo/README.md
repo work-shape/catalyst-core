@@ -31,15 +31,15 @@ Every seeded person signs in with the address below and the password in `DEMO_SE
 
 ### What it contains
 
-| Person         | Address                             | Role  | State                        | Rights beside the role                   |
-| -------------- | ----------------------------------- | ----- | ---------------------------- | ---------------------------------------- |
-| Mara Lindqvist | `mara.lindqvist@nordlicht-beratung.test`      | admin | active                       |                                          |
-| Jonas Brandt   | `jonas.brandt@nordlicht-beratung.test`     | admin | active                       | `api_access.manage`, `agent_models.manage` |
-| Tobias Keller  | `tobias.keller@nordlicht-beratung.test`    | user  | active                       |                                          |
-| Elif Aydin     | `elif.aydin@nordlicht-beratung.test`      | user  | active                       |                                          |
-| Sven Olsen     | `sven.olsen@nordlicht-beratung.test`      | user  | active                       | `config_assets.read`, `usage.view`       |
-| Lena Hoffmann  | `lena.hoffmann@nordlicht-beratung.test`      | user  | deactivated                  |                                          |
-| Noah Fischer   | `noah.fischer@nordlicht-beratung.test`      | user  | invited, never signed in     |                                          |
+| Person         | Address                                  | Role  | State                    | Rights beside the role                     |
+| -------------- | ---------------------------------------- | ----- | ------------------------ | ------------------------------------------ |
+| Mara Lindqvist | `mara.lindqvist@nordlicht-beratung.test` | admin | active                   |                                            |
+| Jonas Brandt   | `jonas.brandt@nordlicht-beratung.test`   | admin | active                   | `api_access.manage`, `agent_models.manage` |
+| Tobias Keller  | `tobias.keller@nordlicht-beratung.test`  | user  | active                   |                                            |
+| Elif Aydin     | `elif.aydin@nordlicht-beratung.test`     | user  | active                   |                                            |
+| Sven Olsen     | `sven.olsen@nordlicht-beratung.test`     | user  | active                   | `config_assets.read`, `usage.view`         |
+| Lena Hoffmann  | `lena.hoffmann@nordlicht-beratung.test`  | user  | deactivated              |                                            |
+| Noah Fischer   | `noah.fischer@nordlicht-beratung.test`   | user  | invited, never signed in |                                            |
 
 The superadmin is the one of the demo's config, so the instance has eight people in three roles.
 
@@ -58,10 +58,10 @@ The demo's server runs with one policy setting, in `src/policy.ts`, whether or n
 
 A held call is decided by anyone who holds `operations.approve`. Admins and the superadmin hold it, so Mara Lindqvist, Jonas Brandt or the superadmin can decide the seeded requests. A requester who holds the right can decide their own request. Elif Aydin does not hold it, so hers wait for somebody else.
 
-| Request in the Inbox                     | Asked by   | What approving does                                        | A rerun of the seed                                                                                         |
-| ---------------------------------------- | ---------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| New skill: Elternzeit: häufige Fragen    | Elif Aydin | Creates the skill `hr-parental-leave-faq`                  | Asks again after a decline. Leaves it once the skill exists.                                                |
-| Skill change: Urlaubsrichtlinie          | Elif Aydin | Replaces the last paragraph of `hr-leave-policy`           | Asks again while the request for the new skill waits. An approved change is replaced by the file of `seed/`. |
+| Request in the Inbox                  | Asked by   | What approving does                              | A rerun of the seed                                                                                          |
+| ------------------------------------- | ---------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| New skill: Elternzeit: häufige Fragen | Elif Aydin | Creates the skill `hr-parental-leave-faq`        | Asks again after a decline. Leaves it once the skill exists.                                                 |
+| Skill change: Urlaubsrichtlinie       | Elif Aydin | Replaces the last paragraph of `hr-leave-policy` | Asks again while the request for the new skill waits. An approved change is replaced by the file of `seed/`. |
 
 The seed asks for the change only while the request for the new skill waits: that request tells it that the instance holds such a call. On an instance that holds none it would be written at once.
 
@@ -86,28 +86,28 @@ A run that stopped half way is continued by the next one. An invited person who 
 
 Open Settings > Instance > Access > Check, pick the person, the kind and the asset, and compare.
 
-| Person         | Asset                            | Read | Write | Delete | Because                                                                                                   |
-| -------------- | -------------------------------- | ---- | ----- | ------ | --------------------------------------------------------------------------------------------------------- |
-| Mara Lindqvist | agent `sales-offer-writer`       | yes  | yes   | yes    | An admin may change every agent.                                                                          |
-| Mara Lindqvist | agent `hr-onboarding-guide`      | yes  | no    | no     | A deny on writing agents in `hr-` wins over her admin role, and whoever is denied writing does not delete. |
-| Tobias Keller  | agent `tax-deadline-planner`     | yes  | yes   | yes    | His rows in the Namespace `tax-` allow all three.                                                         |
-| Tobias Keller  | agent `tax-vat-checker`          | yes  | no    | no     | A deny on this one agent wins over the allow of its Namespace.                                            |
-| Sven Olsen     | agent `sales-offer-writer`       | yes  | yes   | no     | He reads through the right set on the Users page and writes through a row on this one agent.              |
-| Sven Olsen     | agent `sales-pitch-coach`        | yes  | no    | no     | His write row names another agent, and nothing covers this one.                                           |
-| Elif Aydin     | agent `hr-exit-interview`        | yes  | yes   | yes    | The agent does not exist yet. Her rows in `hr-` would let her create it.                                  |
-| Elif Aydin     | skill `tax-vat-rules`            | no   | no    | no     | Her rows end at the Namespace `hr-`.                                                                      |
-| Lena Hoffmann  | agent `sales-pitch-coach`        | no   | no    | no     | Her account is deactivated, so her rows in `sales-` allow nothing.                                        |
+| Person         | Asset                        | Read | Write | Delete | Because                                                                                                    |
+| -------------- | ---------------------------- | ---- | ----- | ------ | ---------------------------------------------------------------------------------------------------------- |
+| Mara Lindqvist | agent `sales-offer-writer`   | yes  | yes   | yes    | An admin may change every agent.                                                                           |
+| Mara Lindqvist | agent `hr-onboarding-guide`  | yes  | no    | no     | A deny on writing agents in `hr-` wins over her admin role, and whoever is denied writing does not delete. |
+| Tobias Keller  | agent `tax-deadline-planner` | yes  | yes   | yes    | His rows in the Namespace `tax-` allow all three.                                                          |
+| Tobias Keller  | agent `tax-vat-checker`      | yes  | no    | no     | A deny on this one agent wins over the allow of its Namespace.                                             |
+| Sven Olsen     | agent `sales-offer-writer`   | yes  | yes   | no     | He reads through the right set on the Users page and writes through a row on this one agent.               |
+| Sven Olsen     | agent `sales-pitch-coach`    | yes  | no    | no     | His write row names another agent, and nothing covers this one.                                            |
+| Elif Aydin     | agent `hr-exit-interview`    | yes  | yes   | yes    | The agent does not exist yet. Her rows in `hr-` would let her create it.                                   |
+| Elif Aydin     | skill `tax-vat-rules`        | no   | no    | no     | Her rows end at the Namespace `hr-`.                                                                       |
+| Lena Hoffmann  | agent `sales-pitch-coach`    | no   | no    | no     | Her account is deactivated, so her rows in `sales-` allow nothing.                                         |
 
 The table is `checkQuestions` in `src/seed/company.ts`, and `tests/demo-seed.test.ts` asks the instance every row of it.
 
 A Connection has a fourth action: using it, which is calling through it, is a right of its own beside reading its settings. Choose the kind Connections and the asset `sample-business`.
 
-| Person         | Read | Use | Write | Delete | Because                                                                                  |
-| -------------- | ---- | --- | ----- | ------ | ---------------------------------------------------------------------------------------- |
-| Mara Lindqvist | yes  | yes | yes   | yes    | An admin may do everything with every Connection.                                        |
-| Tobias Keller  | no   | yes | no    | no     | He holds the right to use this one Connection, which does not let him see its settings.  |
-| Sven Olsen     | yes  | yes | no    | no     | He holds the rights to read and to use this one Connection, and none to change it.       |
-| Elif Aydin     | no   | no  | no    | no     | No right of hers names a Connection.                                                     |
+| Person         | Read | Use | Write | Delete | Because                                                                                 |
+| -------------- | ---- | --- | ----- | ------ | --------------------------------------------------------------------------------------- |
+| Mara Lindqvist | yes  | yes | yes   | yes    | An admin may do everything with every Connection.                                       |
+| Tobias Keller  | no   | yes | no    | no     | He holds the right to use this one Connection, which does not let him see its settings. |
+| Sven Olsen     | yes  | yes | no    | no     | He holds the rights to read and to use this one Connection, and none to change it.      |
+| Elif Aydin     | no   | no  | no    | no     | No right of hers names a Connection.                                                    |
 
 This table is `connectionCheckQuestions` in `src/seed/company.ts`, and `tests/demo-seed-own-config.test.ts` asks an instance with the demo's own config every row of it.
 
@@ -166,21 +166,72 @@ The instance reaches it through the Connection `sample-accounting` in `config/ap
 | `list_accounting_clients` | `page`, `page_size`                                   | The clients, by `client_id`.                                                                                                        |
 | `list_fiscal_years`       | `client_id`                                           | The client's fiscal years, oldest first, with `skr` (3 or 4), `account_length`, `consultant_number` and `client_number`. Not paged. |
 | `list_postings`           | `client_id`, `month` (`YYYY-MM`), `page`, `page_size` | The month's bookings, by `date` and then in a stable order.                                                                         |
-| `list_accounts`           | `client_id`                                           | The client's chart of accounts, by `account_number`. Not paged.                                                                     |
+| `list_accounts`           | `client_id`                                           | The client's chart of accounts with its personal accounts, by `account_number`. Not paged.                                          |
 
-**Paging.** `page` starts at 1. `page_size` is 100 when left out and at most 1,000 (`ACCOUNTING_MAXIMUM_PAGE_SIZE`). An answer is `{ rows }` with no total and no next marker, as Exampledata answers: read page 1, 2, 3 and so on and stop at the first page with fewer rows than `page_size`, which may be an empty one. The largest page of bookings measures 1.31 MiB as a Connection counts it (the rows twice, structured and as text), under its bound of 2 MiB, and is answered in about 20 ms.
+**Paging.** `page` starts at 1. `page_size` is 100 when left out and at most 1,000 (`ACCOUNTING_MAXIMUM_PAGE_SIZE`). An answer is `{ rows }` with no total and no next marker, as Exampledata answers: read page 1, 2, 3 and so on and stop at the first page with fewer rows than `page_size`, which may be an empty one. The largest page of bookings measures 1.40 MiB as a Connection counts it (the rows twice, structured and as text), under its bound of 2 MiB, and is answered in about 20 ms.
 
-**Data.** Nothing is stored. A booking is a pure function of a fixed seed, the client, the month and the booking's place in the month, so every month from 2024-01 to 2026-12 gives the same rows forever, and a page costs time in proportion to the page. A client's count varies by up to 8 % from month to month inside its group:
+**Invalid input.** The clients have the consecutive ids 1001 to 1600 and the months run from 2024-01 to 2026-12, and the input schema of each tool says so (`minimum`, `maximum`, `enum`). A Connection validates a call against that schema before it sends it, so an unknown client or a month outside the range is refused as `input_invalid` (`VALIDATION_FAILED`, "Correct the input and try again") and never reaches the server. A caller that asks the server all the same gets a tool error with a sentence that names the range.
 
-| Group  | Clients | Bookings a month |
+**Data.** Nothing is stored. A booking is a pure function of a fixed seed, the client, the month and the booking's position in the month, so every month from 2024-01 to 2026-12 gives the same rows forever, and a page costs time in proportion to the page. A client's count varies by up to 8 % from month to month inside its size:
+
+| Size   | Clients | Bookings a month |
 | ------ | ------- | ---------------- |
-| small  | 492     | 200 to 4,000     |
-| medium | 100     | 10,000 to 60,000 |
+| micro  | 335     | 50 to 250        |
+| small  | 184     | 300 to 4,000     |
+| medium | 73      | 10,000 to 60,000 |
 | large  | 8       | exactly 100,000  |
 
-Clients book on a subset of SKR03 or SKR04 with four-digit accounts. About one in twelve has a fiscal year that does not start in January, and about one in four uses cost centres.
+The client list is the one of a real firm. The legal form decides how large a ledger may be, and the industry what is in it:
 
-**Planted findings.** A month is a clean ledger except for bookings that each break exactly one rule of `sample-mcp/accounting/rules.ts`, the only place a rule is worded (one German and one English sentence, and its parameters). `createAccountingSample().expectedFindings(client_id, month)` gives the count per rule, taken from what was planted, so a check's result can be asserted exactly. Not every month breaks every rule.
+| Legal form              | Clients | Sizes                |
+| ----------------------- | ------- | -------------------- |
+| Einzelunternehmen       | 150     | micro, small         |
+| Freiberufler            | 125     | micro, small         |
+| GmbH                    | 110     | small, medium, large |
+| GbR                     | 70      | micro, small         |
+| e. K.                   | 65      | micro, small         |
+| GmbH & Co. KG           | 45      | small, medium, large |
+| UG (haftungsbeschränkt) | 25      | micro, small         |
+| AG                      | 7       | medium, large        |
+| eG                      | 3       | small, medium        |
+
+| Industry            | Revenue                                                                             | What marks its books                                                        |
+| ------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| retail              | 60 % through the till at 19 % and 7 %, the rest invoiced                            | Goods are most of the cost, the margin is thin, December is the best month. |
+| crafts              | Invoiced at 19 %                                                                    | Material, subcontractors and wages; a weak winter.                          |
+| restaurant          | Through the till. Food eaten in is taxed at 19 % until 2025 and at 7 % from 2026    | Food bought at 7 %, a high payroll and rent.                                |
+| medical practice    | Exempt under § 4 Nr. 14 UStG, a small taxed part                                    | Almost no input VAT: purchases are booked gross.                            |
+| property management | Rent, each flat once a month with the same amount: exempt housing, taxed commercial | Repairs and utilities, little input VAT.                                    |
+| consulting          | Invoiced at 19 %, mostly on `Erlöse` with the key 3                                 | Payroll is half the revenue.                                                |
+| manufacturing       | Invoiced: domestic at 19 %, tax-free intra-community deliveries and exports         | Goods and wages; the only industry with the largest ledgers besides retail. |
+| freelancer          | Invoiced at 19 % with the key 3                                                     | Few bookings, few or no employees, the profit is the owner's income.        |
+
+A client's margin is drawn for its industry, higher where the owner draws the profit instead of a wage, and about one client in eight loses money. Revenue follows the industry's season. A profile gives the share of the revenue each cost takes and the usual amount of one booking, so the number of invoices, purchases and employees follows from the size of the ledger (`sample-mcp/accounting/profiles.ts`, `business.ts`).
+
+A month holds what such a business books (`activities.ts`):
+
+- Sales invoices in the client's own running number range (`AR 20451 Tessaro GmbH`) against the customer's debtor account, and the customer's payment against the bank about two weeks later with the invoice's number in `document_field_1`. The invoices of the first part of a month are paid in that month, the others in the next, so some are open at each month's end.
+- Purchases on account (`ER 2026-0412 Velmora Bürobedarf`) against the supplier's creditor account, and their payment the same way. Each client has its own suppliers and customers, the same every month, with a few that do most of the business. Each supplier has its own invoice number format and its numbers rise from month to month.
+- Till takings with the number of the till report and the cash brought to the bank, where the industry has a till.
+- Purchases paid by direct debit or in cash, one in a hundred a general reversal.
+- The payroll run once a month where there are employees: per payslip the net wage, the wage tax and both shares of social security (`Lohn 10/2026 Pers.-Nr. 0012 Lohnsteuer`), all with `record_type` `LO` and one `document_link`, then the payments to the health insurers, the employees and, on the 10th, the tax office.
+- Standing orders: the rent (`Miete 10/2026 Ladenlokal`), the bank's charge and, for an owner-run business, private withdrawals.
+
+Clients book on a subset of SKR03 or SKR04 with four-digit general ledger accounts. `list_accounts` also lists the personal accounts, because a booking's `contra_account_number` is one for every invoice and payment: a debtor from 10000 and a creditor from 70000 in both charts, labelled with the name of the customer or supplier. The largest client has about 3,200 accounts in one answer. 97 of the 600 clients book with cost centres, and 45 have a fiscal year that does not start in January.
+
+`createAccountingSample().businessOf(client_id)` names a client's industry and legal form, which no row says.
+
+**What identifies a posting.** Nothing does for certain. The documented `PostingDto` has no id, no journal or batch number and no line number, and no field or set of fields is promised to be unique. The sample invents none. The fields that come nearest:
+
+- `document_link` (Beleglink) is a GUID that names the document behind the booking, not the booking. The sample gives one to every booking with a kept document: an invoice, a receipt, a till report, the payroll journal. It is the same across restarts and pages. All payslip lines of a month share one, and a payment, a standing order and a bank charge have none (empty).
+- `document_field_1` is the invoice or receipt number. An invoice and its payment carry the same one.
+- `follow_up_index` is 0 for an original and above 0 for a follow-up booking the accounting system generates from it. The sample generates none, so it is 0 in every row.
+- `record_type` (Herkunftskennzeichen) says where a booking comes from: `RE` for the accounting itself, `LO` for the payroll.
+- `capitalisation_number` is the month's number where the month is locked and 0 in the three open months.
+
+A natural key over all fields of a row still collides: the sample plants exact duplicates on purpose (`duplicate-posting`), and real books contain them. A posting can be told from its neighbours by its position in the month only as long as nothing is booked late. `client_id` is a field the endpoint lets a caller select and filter by, but it is not part of the documented response schema; the sample keeps it in every row.
+
+**Planted findings.** A month is a clean ledger except for bookings that each break exactly one rule of `sample-mcp/accounting/rules.ts`, the only place a rule is worded (one German and one English sentence, and its parameters). `createAccountingSample().expectedFindings(client_id, month)` gives the count per rule, taken from what was planted, so a check's result can be asserted exactly. Not every month breaks every rule, and a month under 300 bookings breaks few. A planted booking is an office purchase on account with one thing wrong, added to the client's business. One dated outside the month never leaves its fiscal year.
 
 | Rule id                    | A booking is a finding when                                                                                                                         |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -192,19 +243,21 @@ Clients book on a subset of SKR03 or SKR04 with four-digit accounts. About one i
 | `expense-in-credit`        | it books an expense account in credit (`H`) and is no general reversal.                                                                             |
 | `missing-cost-centre`      | it books an expense account without `kost1` while another booking of the month carries one.                                                         |
 
-**What Exampledata documents and what the sample adds.** The rows of clients, fiscal years and bookings hold exactly the fields of the Enterprise API's `/api/accounting/clients`, `/clients/{clientId}/fiscal-years` and `/postings`. Three things are the sample's own:
+**What Exampledata documents and what the sample adds.** The rows of clients, fiscal years and bookings hold the fields of the Enterprise API's `/api/accounting/clients`, `/clients/{clientId}/fiscal-years` and `/postings`, and `client_id` in a booking as said above. Three things are the sample's own:
 
 - The tool names and parameters. Exampledata's MCP server publishes no tool list, so the tools mirror its REST API.
 - `client_id` and `month` as plain parameters of `list_postings`. Exampledata selects with a `filter` expression (`fiscal_year gte 20260101 and client_id eq 1234`); a filter parser is out of scope.
-- `list_accounts`. The Enterprise API has no chart-of-accounts endpoint. Of its fields, `account_number` and `label` are the ones Exampledata's monthly balances name; `account_class`, `automatic_vat_key` and `blocked` are the sample's, there because the rules need them.
+- `list_accounts`. The Enterprise API has no chart-of-accounts endpoint. Of its fields, `account_number` and `label` are the ones Exampledata's monthly balances name; `account_class`, `automatic_vat_key` and `blocked` are the sample's, there because the rules need them. That it lists the personal accounts is the sample's choice too.
 
 **Assumptions to verify with a real key.** The public documentation does not pin these:
 
 - Dates of a booking are ISO strings (`YYYY-MM-DD`) and its `fiscal_year` is the start of the fiscal year as `"YYYYMMDD"`. The dates of a fiscal year are numbers (`20260101`), as documented. `created_at` is an ISO timestamp.
 - Amounts are numbers in euros with two decimals and never negative; `debit_credit_indicator` is `S` or `H` and refers to `account_number`; `net_amount + tax_amount = amount`, to be compared in cents.
 - A field without a value is the empty string (`document_field_1`, `document_field_2`, `kost1`, `kost2`, `follow_up_type`, `document_link`), and only `delivery_date` is `null`.
-- A booking is written once, with its revenue or expense account in `account_number`. A booking on an automatic account carries the key 0, and a general reversal keeps the key of what it reverses and sets `general_reversal` to 1.
-- `record_type` is `"posting"`, `gross_net_indicator` `"B"`, `exchange_rate` 1, `national_law` `"HGB"`, and `size_class_code` follows the size group. Their real values and meanings are not documented. The three name fields of a fiscal year all hold the client's name.
+- A booking is written once, with its revenue or expense account in `account_number` and the personal account, the bank or the till in `contra_account_number`. A payment has the bank or the creditor in `account_number`. A booking on an automatic account carries the key 0, and a general reversal keeps the key of what it reverses and sets `general_reversal` to 1.
+- `record_type`: the documentation shows `RE` only. `LO` for the payroll is an assumption.
+- `document_link` is written as an upper-case GUID, as the documented example is. That an invoice's payment has none is an assumption.
+- `gross_net_indicator` is `"B"`, `exchange_rate` 1, `national_law` `"HGB"`, and `size_class_code` follows the size. Their real values and meanings are not documented. The three name fields of a fiscal year all hold the client's name.
 - A fiscal year is named by the year it starts in.
 - There is no maximum `page_size` in the documentation; the sample's maximum is its own.
 

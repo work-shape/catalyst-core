@@ -4,24 +4,39 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { loadClientInstanceConfigFromFile } from "@vivd-catalyst/config-schema";
-import { MCP_CALL_TIMEOUT_MS, MCP_RESULT_MAX_BYTES } from "@vivd-catalyst/connections";
+import {
+  compileJsonSchema,
+  MCP_CALL_TIMEOUT_MS,
+  MCP_RESULT_MAX_BYTES
+} from "@vivd-catalyst/connections";
+import { isJsonObject, unknownToJsonValue } from "@vivd-catalyst/core";
 import {
   ACCOUNTING_DEFAULT_PAGE_SIZE,
   ACCOUNTING_MAXIMUM_PAGE_SIZE,
   ACCOUNTING_RULES,
   accountingOutputSchemas,
   connectSampleMcpClient,
-  createAccountingSample,
   createSampleMcpServer,
   SIZE_GROUPS
 } from "@vivd-catalyst/demo/sample-mcp";
 import { required } from "./support/assertions";
+import {
+  cents,
+  clientIdsOf,
+  everyPosting,
+  isCreditor,
+  isDebtor,
+  MONTH,
+  MONTHS,
+  sample,
+  sizeGroupOf,
+  type Account,
+  type Posting
+} from "./support/sample-accounting";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const key = "test-only-sample-mcp-bearer-key-0001";
 const CONNECTION = "sample-accounting";
-const MONTHS = ["2024-02", "2026-11"] as const;
-const [MONTH] = MONTHS;
 /** The share of a Connection's result bound the largest page may fill. */
 const PAGE_BYTES_SHARE = 0.75;
 /** Wide, because one green run proves no timing: the largest page takes well under a second. */
@@ -30,14 +45,10 @@ const PAGE_TIME_BOUND_MS = MCP_CALL_TIMEOUT_MS / 6;
 type SampleClient = Awaited<ReturnType<typeof connectSampleMcpClient>>;
 type ToolName = keyof typeof accountingOutputSchemas;
 type RuleId = keyof typeof ACCOUNTING_RULES;
-type Posting = z.output<typeof accountingOutputSchemas.list_postings>["rows"][number];
-type Account = z.output<typeof accountingOutputSchemas.list_accounts>["rows"][number];
 type ToolResult = Awaited<ReturnType<SampleClient["callTool"]>>;
 
 const servers: ReturnType<typeof createSampleMcpServer>[] = [];
 const clients: SampleClient[] = [];
-/** The data of the server's own seed, as the generator gives it without a server. */
-const sample = createAccountingSample();
 
 async function start(options: { accountingSeed?: number; log?: (line: string) => void } = {}) {
   const server = createSampleMcpServer({ key, ...options });
@@ -86,25 +97,6 @@ function connectionBytes(result: ToolResult): number {
     JSON.stringify({ content: result.content, structuredContent: result.structuredContent })
   );
 }
-
-function sizeGroupOf(count: number) {
-  return required(SIZE_GROUPS.find((group) => count >= group.minimum && count <= group.maximum));
-}
-
-/** The client ids of a size group, the ones with the fewest bookings in `MONTH` first. */
-function clientIdsOf(group: (typeof SIZE_GROUPS)[number]["name"]): number[] {
-  return sample.clients
-    .map(({ client_id }) => ({ client_id, count: sample.postingCount(client_id, MONTH) }))
-    .filter(({ count }) => sizeGroupOf(count).name === group)
-    .sort((left, right) => left.count - right.count)
-    .map(({ client_id }) => client_id);
-}
-
-function everyPosting(clientId: number, month: string): Posting[] {
-  return sample.postings(clientId, month, 0, sample.postingCount(clientId, month));
-}
-
-const cents = (euros: number) => Math.round(euros * 100);
 
 /**
  * The places of the bookings that break each rule, checked as the rule's sentence in
@@ -245,10 +237,16 @@ describe("demo sample accounting", () => {
     expect(ids).toEqual([...new Set(ids)].sort((left, right) => left - right));
     expect(new Set(read.rows.map(({ name }) => name)).size).toBe(600);
     expect(new Set(read.rows.map(({ client_number }) => client_number)).size).toBe(600);
-    for (const { name } of read.rows) {
-      expect(name).toMatch(
-        /^[A-Z][a-z]+ [A-Z][a-z]+ (GmbH|UG \(haftungsbeschränkt\)|GmbH & Co\. KG|KG|OHG|AG|e\. K\.|eG)$/u
-      );
+    // Every name is two invented words with the trade of the industry, and the legal form
+    // where the form is part of a name.
+    for (const { client_id, name } of read.rows) {
+      const { legalForm } = sample.businessOf(client_id);
+      expect(name).toMatch(/[A-Z][a-z]+ (& )?[A-Z][a-z]+/u);
+      if (legalForm === "Einzelunternehmen" || legalForm === "Freiberufler") {
+        expect(name).not.toMatch(/(GmbH|GbR|UG|AG|KG|eG|e\. K\.)/u);
+      } else {
+        expect(name.endsWith(` ${legalForm}`)).toBe(true);
+      }
     }
     const unpaged = await rowsOf(
       client,
@@ -258,8 +256,9 @@ describe("demo sample accounting", () => {
     expect(unpaged).toEqual(sample.clients.slice(0, ACCOUNTING_DEFAULT_PAGE_SIZE));
 
     expect(SIZE_GROUPS).toEqual([
-      { name: "small", clients: 492, minimum: 200, maximum: 4_000 },
-      { name: "medium", clients: 100, minimum: 10_000, maximum: 60_000 },
+      { name: "micro", clients: 335, minimum: 50, maximum: 250 },
+      { name: "small", clients: 184, minimum: 300, maximum: 4_000 },
+      { name: "medium", clients: 73, minimum: 10_000, maximum: 60_000 },
       { name: "large", clients: 8, minimum: 100_000, maximum: 100_000 }
     ]);
     const tally = new Map<string, number>();
@@ -273,7 +272,7 @@ describe("demo sample accounting", () => {
       tally.set(required(group), (tally.get(required(group)) ?? 0) + 1);
       if (new Set(counts).size > 1) variedClients += 1;
     }
-    expect(Object.fromEntries(tally)).toEqual({ small: 492, medium: 100, large: 8 });
+    expect(Object.fromEntries(tally)).toEqual({ micro: 335, small: 184, medium: 73, large: 8 });
     // A count varies by month, except where it is exactly 100,000.
     expect(variedClients).toBeGreaterThan(500);
   });
@@ -323,13 +322,41 @@ describe("demo sample accounting", () => {
     expect(startMonths.has(1)).toBe(true);
     expect(startMonths.size).toBeGreaterThan(1);
     expect([...charts.keys()].sort()).toEqual([3, 4]);
-    for (const chart of charts.values()) {
+    for (const [skr, chart] of charts) {
       const numbers = chart.map(({ account_number }) => account_number);
       expect(numbers).toEqual([...new Set(numbers)].sort((left, right) => left - right));
-      expect(numbers.every((number) => number >= 1000 && number <= 9999)).toBe(true);
+      // Four-digit general ledger accounts, then the debtors and the creditors in their ranges.
+      const personal = chart.filter(({ account_number }) => account_number > 9_999);
+      expect(numbers.every((number) => number >= 1_000 && number <= 99_999)).toBe(true);
+      expect(personal.some(({ account_number }) => isDebtor(account_number))).toBe(true);
+      expect(personal.some(({ account_number }) => isCreditor(account_number))).toBe(true);
+      for (const account of personal) {
+        expect(account).toMatchObject({
+          account_class: isDebtor(account.account_number) ? "asset" : "liability",
+          automatic_vat_key: null,
+          blocked: false
+        });
+      }
+      expect(new Set(personal.map(({ label }) => label)).size).toBe(personal.length);
       expect(chart.some(({ blocked }) => blocked)).toBe(true);
       expect(chart.some(({ automatic_vat_key }) => automatic_vat_key !== null)).toBe(true);
+      // The tax-free export and the tax-free intra-community delivery are two accounts.
+      const labelOf = (number: number) =>
+        required(chart.find(({ account_number }) => account_number === number)).label;
+      expect(labelOf(skr === 3 ? 8120 : 4120)).toBe("Steuerfreie Umsätze § 4 Nr. 1a UStG");
+      expect(labelOf(skr === 3 ? 8125 : 4125)).toBe(
+        "Steuerfreie innergemeinschaftliche Lieferungen § 4 Nr. 1b UStG"
+      );
     }
+    // The longest chart, with every personal account, still fits one answer of a Connection.
+    const [mostAccounts] = sample.clients
+      .map(({ client_id }) => client_id)
+      .sort((left, right) => sample.accounts(right).length - sample.accounts(left).length);
+    const longest = await client.callTool({
+      name: "list_accounts",
+      arguments: { client_id: mostAccounts }
+    });
+    expect(connectionBytes(longest)).toBeLessThanOrEqual(PAGE_BYTES_SHARE * MCP_RESULT_MAX_BYTES);
     // One consultant number for every client.
     expect(
       new Set(
@@ -446,8 +473,10 @@ describe("demo sample accounting", () => {
       expect(rule.en).toMatch(/^A booking is a finding when .+\.$/u);
     }
     const sampled = [
-      ...clientIdsOf("small").slice(0, 12),
-      ...clientIdsOf("small").slice(-4),
+      ...clientIdsOf("micro").slice(0, 6),
+      ...clientIdsOf("micro").slice(-6),
+      ...clientIdsOf("small").slice(0, 6),
+      ...clientIdsOf("small").slice(-6),
       ...clientIdsOf("medium").slice(0, 3),
       ...clientIdsOf("large").slice(0, 1)
     ];
@@ -473,7 +502,17 @@ describe("demo sample accounting", () => {
 
         // What a ledger keeps whatever was planted.
         const chart = new Map(accounts.map((account) => [account.account_number, account]));
+        const [fiscalYear] = sample
+          .fiscalYears(clientId)
+          .filter((year) => String(year.fiscal_year_start) === required(rows[0]).fiscal_year);
+        const { fiscal_year_start: yearStart, fiscal_year_end: yearEnd } = required(fiscalYear);
         for (const row of rows) {
+          // Whatever its date, a booking lies in the fiscal year it names.
+          const day = Number(row.date.replaceAll("-", ""));
+          expect(day >= yearStart && day <= yearEnd, `${clientId} ${row.date}`).toBe(true);
+          expect(row.fiscal_year).toBe(String(yearStart));
+          expect(row.follow_up_index).toBe(0);
+          expect(row.document_link).toMatch(/^$|^[0-9A-F]{8}(-[0-9A-F]{4}){3}-[0-9A-F]{12}$/u);
           expect(cents(row.net_amount) + cents(row.tax_amount)).toBe(cents(row.amount));
           expect(cents(row.tax_amount)).toBe(
             Math.round((cents(row.amount) * row.tax_rate) / (100 + row.tax_rate))
@@ -489,53 +528,78 @@ describe("demo sample accounting", () => {
     expect(monthsWithoutSomeRule).toBeGreaterThan(0);
   }, 120_000);
 
-  it("refuses an unknown client and a month outside the range with a sentence, and invalid input", async () => {
+  it("refuses an unknown client and a month outside the range as invalid input that names the range", async () => {
     const { client } = await start();
-    const clientId = required(sample.clients[0]).client_id;
-    for (const name of ["list_fiscal_years", "list_accounts", "list_postings"]) {
-      const result = await client.callTool({
-        name,
-        arguments: { client_id: 999_999, ...(name === "list_postings" ? { month: MONTH } : {}) }
-      });
-      expect(result.isError).toBe(true);
-      expect(result.content).toEqual([
-        { type: "text", text: "No accounting client has the client_id 999999." }
-      ]);
+    const first = required(sample.clients[0]).client_id;
+    const last = required(sample.clients.at(-1)).client_id;
+    const { tools } = await client.listTools();
+    /**
+     * What a Connection reads of the input before it calls: it validates against the schema
+     * the tool advertises and refuses with `input_invalid`, which no retry mends.
+     */
+    const refusedByConnection = (name: ToolName, input: Record<string, unknown>) => {
+      const schema = unknownToJsonValue(
+        required(tools.find((tool) => tool.name === name)).inputSchema
+      );
+      const compiled = compileJsonSchema(isJsonObject(schema) ? schema : {});
+      return compiled.ok && compiled.validate(input).length > 0;
+    };
+    const refusal = async (name: ToolName, input: Record<string, unknown>) => {
+      expect(refusedByConnection(name, input), JSON.stringify(input)).toBe(true);
+      const result = await client.callTool({ name, arguments: input });
+      expect(result.isError, JSON.stringify(input)).toBe(true);
+      return JSON.stringify(result.content);
+    };
+
+    for (const name of ["list_fiscal_years", "list_accounts", "list_postings"] as const) {
+      const month = name === "list_postings" ? { month: MONTH } : {};
+      expect(refusedByConnection(name, { client_id: first, ...month })).toBe(false);
+      expect(refusedByConnection(name, { client_id: last, ...month })).toBe(false);
+      for (const client_id of [first - 1, last + 1, 999_999, -1]) {
+        expect(await refusal(name, { client_id, ...month })).toContain(
+          `client_id must be a whole number from ${first} to ${last}, the clients of the sample.`
+        );
+      }
     }
-    for (const month of ["2023-12", "2027-01"]) {
-      const result = await client.callTool({
-        name: "list_postings",
-        arguments: { client_id: clientId, month }
-      });
-      expect(result.isError).toBe(true);
-      expect(result.content).toEqual([
-        { type: "text", text: "The sample has bookings for the months 2024-01 to 2026-12 only." }
-      ]);
+    for (const month of ["2024-01", "2026-12"]) {
+      expect(refusedByConnection("list_postings", { client_id: first, month })).toBe(false);
+    }
+    for (const month of ["2023-12", "2027-01", "2026-13", "2026-3"]) {
+      expect(await refusal("list_postings", { client_id: first, month })).toContain(
+        "month must be a month from 2024-01 to 2026-12 as YYYY-MM."
+      );
     }
     for (const invalid of [
       { page: 0 },
       { page_size: 0 },
       { page_size: ACCOUNTING_MAXIMUM_PAGE_SIZE + 1 },
       { page: 1.5 },
-      { month: "2026-13" },
-      { month: "2026-3" },
       { client_id: "1001" },
       { total: true }
     ]) {
-      const result = await client.callTool({
-        name: "list_postings",
-        arguments: { client_id: clientId, month: MONTH, ...invalid }
-      });
-      expect(result.isError, JSON.stringify(invalid)).toBe(true);
+      await refusal("list_postings", { client_id: first, month: MONTH, ...invalid });
     }
     // A page behind the end is empty, not an error: that is how a caller finds the end.
     expect(
       await rowsOf(client, "list_postings", accountingOutputSchemas.list_postings, {
-        client_id: clientId,
+        client_id: first,
         month: MONTH,
         page: 1_000_000
       })
     ).toEqual([]);
+  });
+
+  it("opens every month of every client with the month's exact count", () => {
+    const everyMonth = [2024, 2025, 2026].flatMap((year) =>
+      Array.from({ length: 12 }, (_, month) => `${year}-${String(month + 1).padStart(2, "0")}`)
+    );
+    for (const { client_id } of sample.clients) {
+      for (const month of everyMonth) {
+        const count = sample.postingCount(client_id, month);
+        // The last booking exists and nothing stands behind it.
+        expect(sample.postings(client_id, month, count - 1, 2)).toHaveLength(1);
+      }
+    }
   });
 
   it("guards the second address with the same key and logs it under its own path", async () => {
