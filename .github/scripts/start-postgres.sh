@@ -5,17 +5,20 @@
 # A service container pulls from one registry and gives up after three tries within ten
 # seconds; public.ecr.aws answered "toomanyrequests: Data limit exceeded" to a hosted runner
 # and the job failed before its first step. This pulls the same image, by digest, from the
-# first of three registries that serves it without a sign-in, and tries the list three times.
+# first registry of its list that serves it without a sign-in, and tries the list three times.
 set -euo pipefail
 
 [[ $# -eq 4 ]] || { echo "usage: start-postgres.sh USER PASSWORD DATABASE HOST_PORT" >&2; exit 2; }
 user=$1 password=$2 database=$3 port=$4
 name=${CHECK_POSTGRES_NAME:-check-postgres}
 
-# postgres:17.6, the same index on all three registries.
-digest=sha256:00bc86618629af00d2937fdc5a5d63db3ff8450acf52f0636ec813c7f4902929
+# postgres:17.6 by the digest of .github/mirrored-images, the same index on every registry. The
+# organisation's own copy comes first: it is public, so a pull request from a fork reads it too,
+# and it has no limit for shared runner addresses. The public registries stay behind it.
+digest=$(awk '$1 == "postgres:17.6" { print $2 }' "$(dirname "${BASH_SOURCE[0]}")/../mirrored-images")
+[[ $digest == sha256:* ]] || { echo "start-postgres: .github/mirrored-images names no postgres:17.6" >&2; exit 2; }
 # CHECK_POSTGRES_REGISTRIES replaces the list, for trying this script out.
-read -r -a registries <<<"${CHECK_POSTGRES_REGISTRIES:-public.ecr.aws/docker/library mirror.gcr.io/library docker.io/library}"
+read -r -a registries <<<"${CHECK_POSTGRES_REGISTRIES:-ghcr.io/vivd-solutions/mirror public.ecr.aws/docker/library mirror.gcr.io/library docker.io/library}"
 
 # On a hosted runner the line is also an annotation on the run's summary page.
 fail() {

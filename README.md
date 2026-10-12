@@ -80,6 +80,29 @@ E2E_API_PORT=4211 E2E_UI_PORT=5274 E2E_POSTGRES_PORT=55434 pnpm test:e2e:chat-st
 The hosted check runs the same `pnpm test:e2e` as its own job. It provides the database itself
 and sets `E2E_EXTERNAL_POSTGRES=1`, so the runner starts no container there.
 
+### Images of the hosted checks
+
+A hosted runner shares its address with many others, and a public registry limits what an address
+may pull without a sign-in: `public.ecr.aws` answered "toomanyrequests" to the Postgres image and
+failed a release check twice. The checks therefore pull such an image from a copy in the
+organisation's own registry, `ghcr.io/vivd-solutions/mirror/NAME`, by digest.
+
+`.github/mirrored-images` lists the images, one `NAME:TAG DIGEST` per line. The workflow "Mirror
+images" copies what the registry does not hold yet, with all platforms and the digest of the
+original, from the first public registry that serves it. It runs when the list changes on `main`,
+every Monday and by hand. The weekly run pulls nothing; it fails when a copy is gone.
+
+Who pulls the copy: `.github/scripts/start-postgres.sh` here (first the copy, then the public
+registries), the service containers of the capabilities' `check.yml`, and those of a deployment's
+release checks. To move to another version, change the line in `.github/mirrored-images`, let
+"Mirror images" run on `main`, and then change the digest in the capabilities' and the
+deployments' workflows; the script here reads the list.
+
+The package `mirror/postgres` is public, because it is the unchanged official image and a pull
+request from a fork has to read it. An image that is built from, not started (`node`, `nginx`,
+`docker` in `docker/vivd-client.Dockerfile`), still comes from Docker Hub, which by GitHub's
+account does not limit hosted runners.
+
 Use `E2E_SKIP_BUILD=1` for a faster rerun when the package dist output is already fresh, or pass
 Playwright flags after `--`:
 
