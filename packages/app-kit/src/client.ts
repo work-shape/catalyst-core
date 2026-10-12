@@ -29,18 +29,28 @@ const CONTEXT_TIMEOUT_MS = 10_000;
  */
 const CALL_TIMEOUT_MS = 180_000;
 
-/** A call that was refused or failed. `code` says why in a fixed word. */
+/**
+ * A call that was refused or failed. `code` says why in a fixed word. `message` is the
+ * platform's sentence for the person who looks at the page, in that person's language where
+ * the platform has one: show it as it is and do not word a refusal yourself.
+ */
 export class AppCallError extends Error {
   override readonly name = "AppCallError";
   readonly code: string;
   /** The right a `forbidden` call lacks. */
   readonly right?: string;
+  /**
+   * `false` where the same call again cannot come out differently, such as a missing right.
+   * Offer no button to try again then.
+   */
+  readonly retryable: boolean;
   readonly runId?: string;
 
   constructor(failure: AppCallFailure) {
     super(failure.message);
     this.code = failure.code;
     if (failure.right !== undefined) this.right = failure.right;
+    this.retryable = failure.retryable !== false;
     if (failure.runId !== undefined) this.runId = failure.runId;
   }
 }

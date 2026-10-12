@@ -118,6 +118,11 @@ export function OperationCallBody({
               {t("operations.callWhySkillRule")}
             </Banner>
           ) : null}
+          {call.heldByFloor ? (
+            <Banner layout="line" role="note" data-testid="operation-call-why">
+              {t("operations.callWhyPolicyFloor")}
+            </Banner>
+          ) : null}
         </div>
       ) : null}
       {outcome ? (

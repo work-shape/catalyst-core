@@ -95,6 +95,11 @@ export interface OperationCallPreview {
   asset?: OperationCallAsset;
   /** A setting or a default of the instance made the call wait. Unknown for an older request. */
   heldByRule: boolean;
+  /**
+   * The operation's own floor made the call wait: what a named action declares or what the
+   * Connection operation it stands for asks. No setting of the instance lowers it.
+   */
+  heldByFloor: boolean;
 }
 
 /**
@@ -135,6 +140,7 @@ export function parseOperationCallPreview(preview: unknown): OperationCallPrevie
         : inputs.length,
     inputRemoved: preview.inputRemoved === true,
     heldByRule: standingRules.includes(readText(preview.heldBy) ?? ""),
+    heldByFloor: preview.heldBy === "policy_floor",
     ...(asset ? { asset } : {}),
     ...(workspaceId ? { workspaceId } : {}),
     ...(expiresAt ? { expiresAt } : {})

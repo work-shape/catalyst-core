@@ -287,7 +287,13 @@ describe("the kit client", () => {
         session: "session-1",
         requestId: save.requestId,
         ok: false,
-        error: { code: "forbidden", message: "Not allowed", right: "connection.use" }
+        error: {
+          code: "forbidden",
+          message: "Not allowed",
+          right: "connection.use",
+          retryable: false,
+          runId: "run-9"
+        }
       })
     );
     deliver(
@@ -303,7 +309,17 @@ describe("the kit client", () => {
     expect(await first).toEqual({ runId: "run-1", status: "done", result: { rows: [1] } });
     const refused = await second.catch((error: unknown) => error);
     expect(refused).toBeInstanceOf(AppCallError);
-    expect(refused).toMatchObject({ code: "forbidden", right: "connection.use" });
+    // Fails without the fix round: the kit read no `retryable`, so a page could not tell a
+    // refusal that trying again cannot change. The sentence is the interface's, as it is.
+    expect(refused).toMatchObject({
+      code: "forbidden",
+      message: "Not allowed",
+      right: "connection.use",
+      retryable: false,
+      runId: "run-9"
+    });
+    // A failure that says nothing of it may be tried again.
+    expect(new AppCallError({ code: "failed", message: "x" }).retryable).toBe(true);
   });
 
   it("ends a call nothing answers", async () => {

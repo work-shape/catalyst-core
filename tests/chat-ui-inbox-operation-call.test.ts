@@ -390,6 +390,23 @@ describe("inbox item of an operation call", () => {
     }
   });
 
+  // Fails without the fix round: a call held by an operation's floor said `declared_default`
+  // and the item gave no reason at all.
+  it("says that the action or its Connection operation asks for the approval where the floor held the call, in both languages", () => {
+    const held = { ...callPreview, operation: "app.orders.save", heldBy: "policy_floor" };
+
+    const german = call({ preview: held });
+    expect(german).toMatch(
+      /data-testid="operation-call-why"[^>]*>[\s\S]*Braucht eine Entscheidung, weil diese Aktion oder die Operation der Connection, die sie aufruft, eine Freigabe verlangt\. Keine Einstellung der Instanz senkt das\./u
+    );
+    expect(call({ preview: held }, "en")).toContain(
+      "Needs a decision because this action, or the Connection operation it calls, asks for an approval. No setting of the instance lowers that."
+    );
+    expect(call({ preview: { ...held, heldBy: "central_setting" } })).not.toContain(
+      'data-testid="operation-call-why"'
+    );
+  });
+
   it("shows a change as before and after, with what else changes about the skill", () => {
     const markup = put(changedSkill);
 

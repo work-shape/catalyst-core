@@ -58,23 +58,60 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * What a frame reads of a call that was refused or failed: a fixed word, the sentence of the
- * instance and, for a missing right, the right. A refusal for a right says `forbidden`. Every
- * other error says the reason the instance gave, or its error code in lower case.
+ * The sentences the interface words itself for a frame, in the language of the person who
+ * looks at it. An App shows them as they are, so no App words a refusal of the platform.
  */
-export function frameCallFailure(error: unknown): NonNullable<CallAnswer["error"]> {
+export interface FrameCallTexts {
+  /** The person lacks the right to use a Connection. With its label where they may read it. */
+  connectionUseDenied(connectionLabel: string | undefined): string;
+}
+
+/** The refusals the same call again cannot change. A frame offers no retry for them. */
+const FINAL_REFUSALS: readonly string[] = [
+  "forbidden",
+  "action_unknown",
+  "connection_not_declared",
+  "draft_safe_mode",
+  "input_invalid"
+];
+
+/**
+ * What a frame reads of a call that was refused or failed: a fixed word, a sentence, for a
+ * missing right the right, and the run where one was recorded. A refusal for a right says
+ * `forbidden`. Every other error says the reason the instance gave, or its error code in
+ * lower case. The sentence is the instance's, but for the missing right to use a Connection,
+ * which the interface words in the person's language.
+ */
+export function frameCallFailure(
+  error: unknown,
+  texts?: FrameCallTexts
+): NonNullable<CallAnswer["error"]> {
   if (!(error instanceof ApiError)) {
     return { code: "failed", message: "The call could not be made." };
   }
   const envelope = isRecord(error.payload) ? error.payload.error : undefined;
   const details = isRecord(envelope) && isRecord(envelope.details) ? envelope.details : {};
+  const run = typeof details.operationRunId === "string" ? { runId: details.operationRunId } : {};
   if (error.code === "FORBIDDEN" && typeof details.action === "string") {
-    return { code: "forbidden", message: error.message, right: details.action };
+    const label = typeof details.connectionLabel === "string" ? details.connectionLabel : undefined;
+    return {
+      code: "forbidden",
+      message:
+        texts && details.connectionUseDenied === true
+          ? texts.connectionUseDenied(label)
+          : error.message,
+      right: details.action,
+      retryable: false,
+      ...run
+    };
   }
   const reason = typeof details.reason === "string" ? details.reason : undefined;
+  const code = reason ?? error.code?.toLowerCase() ?? "failed";
   return {
-    code: reason ?? error.code?.toLowerCase() ?? "failed",
-    message: error.message
+    code,
+    message: error.message,
+    ...(FINAL_REFUSALS.includes(code) ? { retryable: false } : {}),
+    ...run
   };
 }
 
@@ -86,7 +123,8 @@ export interface FrameCallClient {
 /** The calls of the frame at `address`, made with the session of `client`. */
 export function createFrameCalls(
   client: FrameCallClient,
-  address: FrameAddress
+  address: FrameAddress,
+  texts?: FrameCallTexts
 ): FrameCalls | undefined {
   const proof = frameSessionProof(address);
   if (!proof) {
@@ -129,7 +167,7 @@ export function createFrameCalls(
           }
         };
       } catch (error) {
-        return { ok: false, error: frameCallFailure(error) };
+        return { ok: false, error: frameCallFailure(error, texts) };
       }
     }
   };

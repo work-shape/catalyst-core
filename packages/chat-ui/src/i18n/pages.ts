@@ -3,6 +3,10 @@ import { defineTranslations } from "./translation-area";
 /** A Page beside the conversation: its card in the thread, the preview and the source files. */
 export const pages = defineTranslations({
   en: {
+    "pages.connectionUseDenied":
+      "You may not use the connection {name}, so this cannot load. Trying again will not help. An administrator can give you the right under Settings > Instance > Access.",
+    "pages.connectionUseDeniedUnnamed":
+      "You may not use a connection this needs, so this cannot load. Trying again will not help. An administrator can give you the right under Settings > Instance > Access.",
     "pages.buildErrors": "{count} build errors",
     "pages.buildErrorsOne": "1 build error",
     "pages.cardBuilding": "Building the Page",
@@ -35,6 +39,10 @@ export const pages = defineTranslations({
     "pages.view": "View of the Page"
   },
   de: {
+    "pages.connectionUseDenied":
+      "Du darfst die Verbindung {name} nicht nutzen, deshalb lässt sich das nicht laden. Ein erneuter Versuch hilft nicht. Ein Administrator kann dir das Recht unter Einstellungen > Instanz > Zugriff geben.",
+    "pages.connectionUseDeniedUnnamed":
+      "Du darfst eine Verbindung nicht nutzen, die hierfür gebraucht wird, deshalb lässt sich das nicht laden. Ein erneuter Versuch hilft nicht. Ein Administrator kann dir das Recht unter Einstellungen > Instanz > Zugriff geben.",
     "pages.buildErrors": "{count} Build-Fehler",
     "pages.buildErrorsOne": "1 Build-Fehler",
     "pages.cardBuilding": "Die Page wird gebaut",

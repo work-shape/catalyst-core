@@ -139,6 +139,11 @@ export const appBridgeHostMessageSchema = z.discriminatedUnion("type", [
         message: z.string(),
         /** The right a `forbidden` call lacks. */
         right: z.string().optional(),
+        /**
+         * `false` where making the same call again cannot come out differently, such as a
+         * missing right. A page then offers no button to try again.
+         */
+        retryable: z.boolean().optional(),
         runId: z.string().optional()
       })
       .optional()

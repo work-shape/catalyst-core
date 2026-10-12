@@ -389,12 +389,21 @@ export function LivePagePreview({
    */
   address?: FrameAddress;
 }) {
-  const { locale } = useTranslation();
+  const { locale, t } = useTranslation();
   const { client } = useWorkspaceApiClient();
   const host = usePageHost();
   const calls = useMemo(
-    () => (address ? createFrameCalls(client, address) : undefined),
-    [client, address]
+    () =>
+      address
+        ? createFrameCalls(client, address, {
+            // The platform's own sentence, in the language of whoever looks at the frame.
+            connectionUseDenied: (name) =>
+              name === undefined
+                ? t("pages.connectionUseDeniedUnnamed")
+                : t("pages.connectionUseDenied", { name })
+          })
+        : undefined,
+    [client, address, t]
   );
   const callsRef = useRef(calls);
   const frameRef = useRef<HTMLIFrameElement>(null);

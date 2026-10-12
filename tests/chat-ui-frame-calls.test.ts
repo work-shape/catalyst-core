@@ -259,26 +259,81 @@ describe("the calls of a frame", () => {
     ]);
   });
 
-  it("tell a Page a fixed word for what refused it, and the right where one is missing", () => {
+  it("tell a Page a fixed word for what refused it, the right where one is missing, and that trying again will not help", () => {
     expect(
       frameCallFailure(
         refusal(403, "FORBIDDEN", "Not allowed", { action: "connection.use", reason: "no_grant" })
       )
-    ).toEqual({ code: "forbidden", message: "Not allowed", right: "connection.use" });
+    ).toEqual({
+      code: "forbidden",
+      message: "Not allowed",
+      right: "connection.use",
+      retryable: false
+    });
     expect(
       frameCallFailure(
         refusal(409, "CONFLICT", "A draft changes nothing", { reason: "draft_safe_mode" })
       )
-    ).toEqual({ code: "draft_safe_mode", message: "A draft changes nothing" });
+    ).toEqual({
+      code: "draft_safe_mode",
+      message: "A draft changes nothing",
+      retryable: false
+    });
     expect(
       frameCallFailure(
         refusal(403, "FORBIDDEN", "Not listed", { reason: "connection_not_declared" })
       )
-    ).toEqual({ code: "connection_not_declared", message: "Not listed" });
+    ).toEqual({ code: "connection_not_declared", message: "Not listed", retryable: false });
+    // A limit passes, so the Page may offer to try again.
     expect(frameCallFailure(refusal(429, "RATE_LIMITED", "Too many calls"))).toEqual({
       code: "rate_limited",
       message: "Too many calls"
     });
+  });
+
+  // Fails without the fix round: the run of a refused or failed call was dropped, so
+  // `AppCallError.runId` named nothing, and each App worded a missing right itself.
+  it("keep the run of a refusal and word a missing right on a Connection in the person's language", () => {
+    const texts = {
+      connectionUseDenied: (label: string | undefined) => `sentence for ${label ?? "no label"}`
+    };
+    const denied = (details: Record<string, unknown>) =>
+      frameCallFailure(
+        refusal(403, "FORBIDDEN", "Missing the right", {
+          action: "connection.use",
+          reason: "no_grant",
+          operationRunId: "oprun_1",
+          ...details
+        }),
+        texts
+      );
+
+    expect(denied({ connectionUseDenied: true, connectionLabel: "Warehouse" })).toEqual({
+      code: "forbidden",
+      message: "sentence for Warehouse",
+      right: "connection.use",
+      retryable: false,
+      runId: "oprun_1"
+    });
+    // A viewer who may not read the Connection is told no label.
+    expect(denied({ connectionUseDenied: true }).message).toBe("sentence for no label");
+    // Another missing right keeps the sentence of the instance.
+    expect(denied({ action: "app.use" }).message).toBe("Missing the right");
+    expect(
+      frameCallFailure(
+        refusal(502, "CONNECTION_FAILED", "The system answered an error", {
+          reason: "upstream_error",
+          operationRunId: "oprun_2"
+        })
+      )
+    ).toEqual({
+      code: "upstream_error",
+      message: "The system answered an error",
+      runId: "oprun_2"
+    });
+  });
+
+  it("tell a Page nothing of what is no answer of the instance", () => {
     // What is no answer of the instance tells the Page nothing about the interface.
     expect(frameCallFailure(new TypeError("fetch failed: secret-host"))).toEqual({
       code: "failed",

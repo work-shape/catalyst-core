@@ -62,6 +62,8 @@ export interface AppCallFailure {
   message: string;
   /** The right a `forbidden` call lacks. */
   right?: string;
+  /** `false` where the same call again cannot come out differently. */
+  retryable?: boolean;
   runId?: string;
 }
 
@@ -193,6 +195,7 @@ function readCallFailure(value: unknown): AppCallFailure | undefined {
     code: value.code,
     message: value.message,
     ...(typeof value.right === "string" ? { right: value.right } : {}),
+    ...(typeof value.retryable === "boolean" ? { retryable: value.retryable } : {}),
     ...(typeof value.runId === "string" ? { runId: value.runId } : {})
   };
 }
