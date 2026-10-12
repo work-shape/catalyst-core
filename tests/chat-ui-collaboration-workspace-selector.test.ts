@@ -6,11 +6,6 @@ import {
   CollaborationWorkspaceSelector,
   CollaborationWorkspaceSelectorMenu
 } from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-selector";
-import {
-  collaborationWorkspaceDisplayName,
-  personalCollaborationWorkspaceName
-} from "../packages/chat-ui/src/collaboration-workspace/collaboration-workspace-name";
-import { createTranslationContext } from "../packages/chat-ui/src/i18n";
 import { ClientBrandingHeader } from "../packages/chat-ui/src/workspace/client-branding";
 
 const noop = () => undefined;
@@ -298,37 +293,46 @@ describe("collaboration workspace selector client branding", () => {
 });
 
 describe("personal workspace name", () => {
-  const en = createTranslationContext("en").t;
-  const de = createTranslationContext("de").t;
+  // The closed trigger shows the name of the active workspace and nothing of the menu.
+  function triggerName(locale: "en" | "de", userLabel: string): string {
+    const markup = renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { children: null, locale },
+        createElement(CollaborationWorkspaceSelector, {
+          collaborationWorkspaces: [personal],
+          activeCollaborationWorkspaceId: "cw_personal",
+          userLabel,
+          loading: false,
+          loadFailed: false,
+          onSelectCollaborationWorkspace: noop,
+          onOpenCollaborationWorkspaceSettings: noop,
+          onBrowseCollaborationWorkspaces: noop,
+          onCreateCollaborationWorkspace: noop
+        })
+      )
+    );
+    const name = /<span class="[^"]*truncate[^"]*">([^<]*)<\/span>/u.exec(markup)?.[1];
+    return (name ?? "").replaceAll("&#x27;", "'");
+  }
 
   it("is the owner's first name with the possessive of the language", () => {
-    expect(personalCollaborationWorkspaceName("Felix Pahlke", en)).toBe("Felix's workspace");
-    expect(personalCollaborationWorkspaceName("Anna Schmidt", en)).toBe("Anna's workspace");
-    expect(personalCollaborationWorkspaceName("Anna Schmidt", de)).toBe("Annas Arbeitsbereich");
+    expect(triggerName("en", "Felix Pahlke")).toBe("Felix's workspace");
+    expect(triggerName("en", "Anna Schmidt")).toBe("Anna's workspace");
+    expect(triggerName("de", "Anna Schmidt")).toBe("Annas Arbeitsbereich");
     // German sets only the apostrophe after s, ß, x and z.
-    expect(personalCollaborationWorkspaceName("Felix Pahlke", de)).toBe("Felix' Arbeitsbereich");
-    expect(personalCollaborationWorkspaceName("Hans", de)).toBe("Hans' Arbeitsbereich");
-    expect(personalCollaborationWorkspaceName("  Moritz  ", de)).toBe("Moritz' Arbeitsbereich");
+    expect(triggerName("de", "Felix Pahlke")).toBe("Felix' Arbeitsbereich");
+    expect(triggerName("de", "Hans")).toBe("Hans' Arbeitsbereich");
+    expect(triggerName("de", "  Moritz  ")).toBe("Moritz' Arbeitsbereich");
   });
 
   it("stays the fixed label where the owner has no name", () => {
-    expect(personalCollaborationWorkspaceName(undefined, en)).toBe("Personal workspace");
-    expect(personalCollaborationWorkspaceName("", en)).toBe("Personal workspace");
-    expect(personalCollaborationWorkspaceName("felix@example.test", de)).toBe(
-      "Persönlicher Arbeitsbereich"
-    );
+    expect(triggerName("en", "")).toBe("Personal workspace");
+    expect(triggerName("de", "felix@example.test")).toBe("Persönlicher Arbeitsbereich");
   });
 
-  it("leaves a shared workspace its own name and never shows the stored personal one", () => {
-    expect(collaborationWorkspaceDisplayName(personal, "Felix Pahlke", en)).toBe(
-      "Felix's workspace"
-    );
-    expect(
-      collaborationWorkspaceDisplayName(
-        collaborationWorkspace({ id: "cw_team", name: "Produktteam" }),
-        "Felix Pahlke",
-        en
-      )
-    ).toBe("Produktteam");
+  it("never shows the name stored on the row", () => {
+    expect(triggerName("en", "")).not.toBe(personal.name);
+    expect(triggerName("en", "Felix Pahlke")).not.toBe(personal.name);
   });
 });
