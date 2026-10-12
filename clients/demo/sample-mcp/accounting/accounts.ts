@@ -127,15 +127,16 @@ function ledger(skr: Skr) {
     cleaning: account(4250, 6330, "Reinigung", "expense"),
     premisesRepairs: account(4260, 6335, "Instandhaltung betrieblicher Räume", "expense"),
     insurance: account(4360, 6400, "Versicherungen", "expense"),
-    vehicle: account(4530, 6530, "Laufende Kfz-Betriebskosten", "expense"),
-    vehicleRepairs: account(4540, 6540, "Kfz-Reparaturen", "expense"),
+    vehicle: account(4530, 6530, "Laufende Fahrzeug-Betriebskosten", "expense"),
+    vehicleRepairs: account(4540, 6540, "Fahrzeug-Reparaturen", "expense"),
     advertising: account(4600, 6600, "Werbekosten", "expense"),
     hospitality: account(4650, 6640, "Bewirtungskosten", "expense"),
     travel: account(4660, 6650, "Reisekosten Arbeitnehmer", "expense"),
+    // The one account the two charts word differently: SKR03 in the plural, SKR04 in the singular.
     machineRepairs: account(
       4800,
       6460,
-      "Reparaturen und Instandhaltungen von technischen Anlagen und Maschinen",
+      `Reparaturen und ${skr === 3 ? "Instandhaltungen" : "Instandhaltung"} von technischen Anlagen und Maschinen`,
       "expense"
     ),
     otherExpenses: account(4900, 6300, "Sonstige betriebliche Aufwendungen", "expense", {

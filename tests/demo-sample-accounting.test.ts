@@ -298,6 +298,15 @@ describe("demo sample accounting", () => {
       expect(labelOf(skr === 3 ? 8125 : 4125)).toBe(
         "Steuerfreie innergemeinschaftliche Lieferungen § 4 Nr. 1b UStG"
       );
+      // The labels are those of DATEV's frames: both charts say "Fahrzeug-", and the repairs of
+      // machines are worded in the plural in SKR03 and in the singular in SKR04.
+      expect(labelOf(skr === 3 ? 4530 : 6530)).toBe("Laufende Fahrzeug-Betriebskosten");
+      expect(labelOf(skr === 3 ? 4540 : 6540)).toBe("Fahrzeug-Reparaturen");
+      expect(labelOf(skr === 3 ? 4800 : 6460)).toBe(
+        skr === 3
+          ? "Reparaturen und Instandhaltungen von technischen Anlagen und Maschinen"
+          : "Reparaturen und Instandhaltung von technischen Anlagen und Maschinen"
+      );
     }
     // The longest chart, with every personal account, still fits one answer of a Connection.
     const [mostAccounts] = sample.clients
