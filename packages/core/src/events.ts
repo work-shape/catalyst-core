@@ -233,6 +233,26 @@ export const EVENTS = {
     name: "conversation.title_generation_failed",
     subject: "conversation"
   },
+  "data_store.migrated": {
+    ...LEGACY_AUDIT,
+    name: "data_store.migrated",
+    subject: "data_store"
+  },
+  "data_store.migration_failed": {
+    ...LEGACY_AUDIT,
+    name: "data_store.migration_failed",
+    subject: "data_store"
+  },
+  "data_store.provisioned": {
+    ...LEGACY_AUDIT,
+    name: "data_store.provisioned",
+    subject: "data_store"
+  },
+  "data_store.provisioning_failed": {
+    ...LEGACY_AUDIT,
+    name: "data_store.provisioning_failed",
+    subject: "data_store"
+  },
   "execution_workspace.cleaned_up": {
     ...LEGACY_AUDIT,
     name: "execution_workspace.cleaned_up",

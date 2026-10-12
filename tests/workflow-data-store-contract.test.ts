@@ -589,7 +589,7 @@ describe("the modules workflows and dataStores", () => {
     expect(on.isEnabled("dataStores")).toBe(true);
   });
 
-  it("contribute what is built of them, so nothing else is switched by any of them", () => {
+  it("contribute what is built: nothing for Knowledge yet, the runs and the job of Workflows, the kind and the jobs of Data Stores", () => {
     const nothing = {
       requires: [],
       kinds: [],
@@ -600,9 +600,7 @@ describe("the modules workflows and dataStores", () => {
       tools: [],
       ui: []
     };
-    for (const module of [dataStoresModule, knowledgeModule]) {
-      expect(module).toEqual({ ...nothing, name: module.name });
-    }
+    expect(knowledgeModule).toEqual({ ...nothing, name: "knowledge" });
     // The runs of a Workflow and the job that executes their steps. No kind yet.
     expect(workflowsModule).toEqual({
       ...nothing,
@@ -617,18 +615,24 @@ describe("the modules workflows and dataStores", () => {
       ],
       jobKinds: [WORKFLOW_RUN_JOB_KINDS.executeStep]
     });
+    expect(dataStoresModule).toEqual({
+      ...nothing,
+      name: "dataStores",
+      kinds: [DATA_STORE_ASSET_KIND],
+      jobKinds: Object.values(DATA_STORE_JOB_KINDS)
+    });
     const off = createModuleRegistry(platformModules).snapshot({});
     for (const [contribution, name] of [
       ["kind", WORKFLOW_ASSET_KIND],
-      ["kind", DATA_STORE_ASSET_KIND],
       ["kind", KNOWLEDGE_BASE_ASSET_KIND],
-      ["jobKind", DATA_STORE_JOB_KINDS.provision],
       ["tool", KNOWLEDGE_QUERY_TOOL_NAME]
     ] as const) {
       expect(off.offModuleOf(contribution, name), name).toBeUndefined();
     }
     expect(off.offModuleOf("jobKind", WORKFLOW_RUN_JOB_KINDS.executeStep)).toBe("workflows");
     expect(off.offModuleOf("operation", "workflows.start")).toBe("workflows");
+    expect(off.offModuleOf("kind", DATA_STORE_ASSET_KIND)).toBe("dataStores");
+    expect(off.offModuleOf("jobKind", DATA_STORE_JOB_KINDS.provision)).toBe("dataStores");
   });
 });
 
