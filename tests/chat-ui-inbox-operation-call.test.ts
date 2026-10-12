@@ -397,10 +397,10 @@ describe("inbox item of an operation call", () => {
 
     const german = call({ preview: held });
     expect(german).toMatch(
-      /data-testid="operation-call-why"[^>]*>[\s\S]*Braucht eine Entscheidung, weil diese Aktion oder die Operation der Connection, die sie aufruft, eine Freigabe verlangt\. Keine Einstellung der Instanz senkt das\./u
+      /data-testid="operation-call-why"[^>]*>[\s\S]*Braucht eine Entscheidung, weil diese Aktion oder die Operation der Verbindung, die sie aufruft, immer eine Freigabe verlangt\. Das lässt sich in dieser Instanz nicht abschalten\./u
     );
     expect(call({ preview: held }, "en")).toContain(
-      "Needs a decision because this action, or the Connection operation it calls, asks for an approval. No setting of the instance lowers that."
+      "Needs a decision because this action, or the connection operation it calls, always asks for an approval. No setting on this instance can switch that off."
     );
     expect(call({ preview: { ...held, heldBy: "central_setting" } })).not.toContain(
       'data-testid="operation-call-why"'

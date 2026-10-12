@@ -488,7 +488,7 @@ export class AppActionCalls {
     session: FrameSession,
     denial: Extract<OperationOutcome["result"], { status: "denied" }>["reason"],
     origin: OperationOrigin
-  ): Promise<{ connectionUseDenied?: true; connectionLabel?: string }> {
+  ): Promise<{ connectionUseDenied?: true; frame?: "page" | "app"; connectionLabel?: string }> {
     if (
       denial.kind !== "forbidden" ||
       denial.action !== CONNECTION_ACTIONS.use ||
@@ -512,6 +512,8 @@ export class AppActionCalls {
       }).allowed;
     return {
       connectionUseDenied: true,
+      // The sentence names what the person looks at: a Page of a conversation, or an App.
+      frame: session.mode === "page" ? "page" : "app",
       ...(readable && label.success ? { connectionLabel: label.data.displayName } : {})
     };
   }

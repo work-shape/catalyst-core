@@ -397,10 +397,12 @@ export function LivePagePreview({
       address
         ? createFrameCalls(client, address, {
             // The platform's own sentence, in the language of whoever looks at the frame.
-            connectionUseDenied: (name) =>
-              name === undefined
-                ? t("pages.connectionUseDeniedUnnamed")
-                : t("pages.connectionUseDenied", { name })
+            connectionUseDenied: (name, frame) =>
+              name !== undefined
+                ? t("pages.connectionUseDenied", { name })
+                : frame === "page"
+                  ? t("pages.connectionUseDeniedUnnamedPage")
+                  : t("pages.connectionUseDeniedUnnamed")
           })
         : undefined,
     [client, address, t]

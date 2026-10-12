@@ -295,7 +295,8 @@ describe("the calls of a frame", () => {
   // `AppCallError.runId` named nothing, and each App worded a missing right itself.
   it("keep the run of a refusal and word a missing right on a Connection in the person's language", () => {
     const texts = {
-      connectionUseDenied: (label: string | undefined) => `sentence for ${label ?? "no label"}`
+      connectionUseDenied: (label: string | undefined, frame: "page" | "app") =>
+        `sentence for ${label ?? `no label in the ${frame}`}`
     };
     const denied = (details: Record<string, unknown>) =>
       frameCallFailure(
@@ -316,7 +317,13 @@ describe("the calls of a frame", () => {
       runId: "oprun_1"
     });
     // A viewer who may not read the Connection is told no label.
-    expect(denied({ connectionUseDenied: true }).message).toBe("sentence for no label");
+    // It names what the person looks at, and never calls a Page an app.
+    expect(denied({ connectionUseDenied: true, frame: "app" }).message).toBe(
+      "sentence for no label in the app"
+    );
+    expect(denied({ connectionUseDenied: true, frame: "page" }).message).toBe(
+      "sentence for no label in the page"
+    );
     // Another missing right keeps the sentence of the instance.
     expect(denied({ action: "app.use" }).message).toBe("Missing the right");
     expect(

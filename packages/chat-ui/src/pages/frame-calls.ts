@@ -62,8 +62,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * looks at it. An App shows them as they are, so no App words a refusal of the platform.
  */
 export interface FrameCallTexts {
-  /** The person lacks the right to use a Connection. With its label where they may read it. */
-  connectionUseDenied(connectionLabel: string | undefined): string;
+  /**
+   * The person lacks the right to use a Connection. With its label where they may read it,
+   * and whether the frame is a Page of a conversation or an App, which the sentence names.
+   */
+  connectionUseDenied(connectionLabel: string | undefined, frame: "page" | "app"): string;
 }
 
 /** The refusals the same call again cannot change. A frame offers no retry for them. */
@@ -98,7 +101,7 @@ export function frameCallFailure(
       code: "forbidden",
       message:
         texts && details.connectionUseDenied === true
-          ? texts.connectionUseDenied(label)
+          ? texts.connectionUseDenied(label, details.frame === "page" ? "page" : "app")
           : error.message,
       right: details.action,
       retryable: false,

@@ -133,6 +133,7 @@ describe("a call a frame makes through the interface", () => {
           action: "connection.use",
           reason: expect.any(String),
           connectionUseDenied: true,
+          frame: where === "page" ? "page" : "app",
           operationRunId: response.headers["operation-run-id"],
           ...(viewer === builder.id ? { connectionLabel: expect.any(String) } : {})
         });
@@ -373,7 +374,9 @@ describe("a call a frame makes through the interface", () => {
         name: "app.orders.load",
         description: "Reads one row.",
         inputJsonSchema: expect.objectContaining({ required: ["text"] }),
-        effect: "reading"
+        effect: "reading",
+        // The published revision the description was read from, which pins a held call.
+        revisionId: expect.stringMatching(/^cfgr_/)
       },
       expect.objectContaining({ name: "app.orders.agent-only", effect: "reading" })
     ]);

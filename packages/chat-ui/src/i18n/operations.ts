@@ -110,7 +110,7 @@ export const operations = defineTranslations({
     "operations.callWhySkillRule":
       "Needs a decision because this instance holds new and changed skills for approval.",
     "operations.callWhyPolicyFloor":
-      "Needs a decision because this action, or the Connection operation it calls, asks for an approval. No setting of the instance lowers that.",
+      "Needs a decision because this action, or the connection operation it calls, always asks for an approval. No setting on this instance can switch that off.",
     "operations.callSkillEffectNew":
       "If you approve, the skill is saved. If you decline, nothing changes.",
     "operations.callSkillEffectChange":
@@ -255,7 +255,7 @@ export const operations = defineTranslations({
     "operations.callWhySkillRule":
       "Braucht eine Entscheidung, weil diese Instanz neue und geänderte Fähigkeiten zur Freigabe vorlegt.",
     "operations.callWhyPolicyFloor":
-      "Braucht eine Entscheidung, weil diese Aktion oder die Operation der Connection, die sie aufruft, eine Freigabe verlangt. Keine Einstellung der Instanz senkt das.",
+      "Braucht eine Entscheidung, weil diese Aktion oder die Operation der Verbindung, die sie aufruft, immer eine Freigabe verlangt. Das lässt sich in dieser Instanz nicht abschalten.",
     "operations.callSkillEffectNew":
       "Wenn du freigibst, wird die Fähigkeit gespeichert. Wenn du ablehnst, ändert sich nichts.",
     "operations.callSkillEffectChange":

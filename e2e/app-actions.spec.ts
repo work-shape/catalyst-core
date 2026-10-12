@@ -385,8 +385,8 @@ test("a tile of a published App reads rows through a named action with the viewe
     // language and names no Connection, since the member may not read it. Trying again cannot
     // help, so the tile offers no button for it.
     const UNNAMED = {
-      en: "You may not use a connection this needs, so this cannot load. Trying again will not help. An administrator can give you the right under Settings > Instance > Access.",
-      de: "Du darfst eine Verbindung nicht nutzen, die hierfür gebraucht wird, deshalb lässt sich das nicht laden. Ein erneuter Versuch hilft nicht. Ein Administrator kann dir das Recht unter Einstellungen > Instanz > Zugriff geben."
+      en: "You may not use a connection this app needs, so this cannot load. Trying again will not help. An administrator can give you the right under Settings > Instance > Access.",
+      de: "Du darfst eine Verbindung nicht nutzen, die diese App braucht, deshalb lässt sich das nicht laden. Ein erneuter Versuch hilft nicht. Ein Administrator kann dir das Recht unter Einstellungen > Instanz > Zugriff geben."
     };
     const refusal = appIn(memberPage).getByTestId("refusal");
     const refused = async () => {
