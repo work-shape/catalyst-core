@@ -20,6 +20,16 @@ A grant on one single asset, or on what one workspace owns, is checked by the in
 
 On an instance with the module [`connections`](/configure/modules/#connections) on, Build also lists Connections for a person who may read every Connection of the instance, which the administrator role allows, and for a person with a read grant in a Namespace, on one Connection or on the Connections of one workspace, who sees those Connections. A grant to use a Connection gives no entry in Build. A row shows the connector type, whether the instance or a workspace owns the Connection, and whether it is enabled. A row opens the [page of the Connection](#the-page-of-a-connection). Build starts no Connection and changes none: Connections come from the release config.
 
+## Giving an agent the tools of a Connection
+
+The **Tools** section of an agent's page lists the instance's own tools first and then, under **Connections**, one group for each Connection you may read (`connection.read`). A group holds a check box for each operation that agents may call and that is enabled and ready, with its description and whether it reads or changes. Ticking a box gives the agent the tool `connection.<name>.<operation>`. A group with more than 12 operations starts folded and shows how many of its operations the agent holds.
+
+A tool the agent already holds whose Connection or operation is gone, switched off, not offered to agents or not visible to you stays in the list, marked as not available. Saving keeps it until you remove it. At run time the agent goes on without such a tool.
+
+The instance checks on save that a name starting with `connection.` has the form `connection.<name>.<operation>`. It does not check that the Connection or the operation exists, because Connections change without a release.
+
+The list is read once when the page opens, in one answer without pages. A Connection accepts at most 100 operations (`CONNECTION_MAX_ACCEPTED_OPERATIONS` in `packages/core/src/connections.ts`).
+
 ## The page of a Connection
 
 The page of a Connection shows it and changes nothing. It never shows a credential or a reference to one.
