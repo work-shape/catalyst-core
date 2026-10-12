@@ -26,26 +26,30 @@ export function pageAppChoice(
   return host.rights.write ? { kind: "save" } : { kind: "none" };
 }
 
-/**
- * The action about Apps in the header of a Page: Update app where the Page was saved as an App
- * the reader may write, and Save as app everywhere else.
- */
-export function PageAppAction({
-  conversationId,
-  pageId,
-  pageName
-}: {
+interface PageAppActionProps {
   conversationId: string;
   pageId: string;
   /** The Page's title: the name Save as app proposes. */
   pageName: string;
-}) {
+}
+
+/**
+ * The action about Apps in the header of a Page: Update app where the Page was saved as an App
+ * the reader may write, and Save as app everywhere else. Without the Apps of a workspace it is
+ * nothing and asks the instance nothing.
+ */
+export function PageAppAction(props: PageAppActionProps) {
   const host = useAppsHost();
-  const read = useAppFromPage(
-    conversationId,
-    pageId,
-    host?.enabled === true && host.workspace !== undefined
-  );
+  return host?.enabled && host.workspace ? <PageAppActionOf host={host} {...props} /> : null;
+}
+
+function PageAppActionOf({
+  host,
+  conversationId,
+  pageId,
+  pageName
+}: PageAppActionProps & { host: AppsHost }) {
+  const read = useAppFromPage(conversationId, pageId, true);
   const choice = pageAppChoice(host, read);
   if (choice.kind === "update") {
     return <UpdateAppAction conversationId={conversationId} pageId={pageId} app={choice.app} />;
