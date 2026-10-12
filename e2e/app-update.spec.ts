@@ -195,10 +195,8 @@ test("a Page saved as an App updates the draft of that App, and nothing that is 
     await expect(dialog).toBeVisible();
   });
   await asked.getByRole("button", { name: "Update draft", exact: true }).click();
-  const done = page.getByRole("dialog", { name: `“${appName}” is updated` });
-  await expect(done).toContainText(
-    "The draft of the app now holds this page as it is. Open the app to check the draft and publish it."
-  );
+  const done = page.getByRole("dialog", { name: `The draft of “${appName}” is updated` });
+  await expect(done).toContainText("Open the draft to check and publish it.");
   if (shotsDir) {
     await page.screenshot({
       path: join(shotsDir, "update-app-done-light-en-1440.png"),
@@ -208,7 +206,7 @@ test("a Page saved as an App updates the draft of that App, and nothing that is 
   expect(await asset()).toMatchObject({ draftRevision: 2, publishedRevision: 1 });
 
   // The confirmation leads to the App: its draft is revision 2 with the Page as it is now.
-  await done.getByRole("button", { name: "Open app", exact: true }).click();
+  await done.getByRole("button", { name: "Open the draft", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${appPath}/edit$`, "u"));
   const draftReady = async () => {
     await expect(edit).toContainText(/(?:Draft · revision|Entwurf · Revision) 2/u);
@@ -282,7 +280,7 @@ test("a Page saved as an App updates the draft of that App, and nothing that is 
   await replace.click();
   await expect(done).toBeVisible();
   expect(await asset()).toMatchObject({ draftRevision: 4, publishedRevision: 2 });
-  await done.getByRole("button", { name: "Open app", exact: true }).click();
+  await done.getByRole("button", { name: "Open the draft", exact: true }).click();
   await expect(edit).toContainText("Draft · revision 4");
   await expect(
     appIn(page, "app-edit").getByRole("heading", { name: FOURTH_HEADING })
@@ -384,12 +382,24 @@ test("a Page is put into an App that was saved before Apps remembered their Page
   };
   await untilOffered();
   await expect(dialog).toContainText(
-    `The app “${appName}” already has this ID. Choose another ID to save a new app, or put this page into that app.`
+    `The app “${appName}” already has this ID. Choose another ID to save a new app, or update that app from this page.`
   );
   await shoot(page, "save-as-app-id-taken", ALL, async () => {
     await reopened();
     await untilOffered();
   });
+  // On a low window the offer and the footer are still reached.
+  await page.setViewportSize({ width: 1440, height: 640 });
+  await offer.scrollIntoViewIfNeeded();
+  await expect(offer).toBeInViewport();
+  await expect(dialog.getByRole("button", { name: "Save", exact: true })).toBeInViewport();
+  if (shotsDir) {
+    await page.screenshot({
+      path: join(shotsDir, "save-as-app-id-taken-light-en-1440x640.png"),
+      animations: "disabled"
+    });
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
 
   // The offer says what it replaces and what stays, before anything is written.
   await offer.click();
@@ -398,7 +408,6 @@ test("a Page is put into an App that was saved before Apps remembered their Page
   await expect(asked).toContainText(
     "The current draft of this app is replaced by this page as it is now. The published version does not change until someone publishes the draft."
   );
-  await expect(asked).toContainText("From then on this page shows “Update app” for this app.");
   expect(await asset()).toMatchObject({ draftRevision: 1, publishedRevision: 1 });
   await shoot(page, "link-app-dialog", ALL, async () => {
     await reopened();
@@ -421,8 +430,7 @@ test("a Page is put into an App that was saved before Apps remembered their Page
   await page.setViewportSize({ width: 1440, height: 900 });
 
   await replace.click();
-  const done = page.getByRole("dialog", { name: `“${appName}” is updated` });
-  await expect(done).toContainText("This page now updates this app.");
+  const done = page.getByRole("dialog", { name: `The draft of “${appName}” is updated` });
   await expect(done).toContainText(
     `The app keeps its name “${appName}”. The page is called “Revenue”.`
   );
@@ -438,7 +446,7 @@ test("a Page is put into an App that was saved before Apps remembered their Page
   expect(await asset()).toMatchObject({ draftRevision: 2, publishedRevision: 1 });
 
   // The new draft is the Page as it is; what is published is what it was, until it is published.
-  await done.getByRole("button", { name: "Open app", exact: true }).click();
+  await done.getByRole("button", { name: "Open the draft", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${appPath}/edit$`, "u"));
   const edit = page.getByTestId("app-edit");
   await expect(edit).toContainText("Draft · revision 2");

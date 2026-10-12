@@ -122,11 +122,9 @@ describe("Update app", () => {
   it("confirms with the App's name and the way to its draft", () => {
     const markup = dialog({ phase: "done" });
 
-    expect(markup).toContain("“Angebotsrechner” is updated");
-    expect(markup).toContain(
-      "The draft of the app now holds this page as it is. Open the app to check the draft and publish it."
-    );
-    expect(markup).toContain(">Open app</button>");
+    expect(markup).toContain("The draft of “Angebotsrechner” is updated");
+    expect(markup).toContain("Open the draft to check and publish it.");
+    expect(markup).toContain(">Open the draft</button>");
     expect(markup).toContain(">Close</button>");
     expect(markup).not.toContain(">Update draft</button>");
   });
@@ -146,8 +144,8 @@ describe("Update app", () => {
     expect(asked).toContain(">Entwurf ersetzen</button>");
     expect(asked).toContain("an anderer Stelle geändert");
     const done = dialog({ phase: "done" }, "de");
-    expect(done).toContain("„Angebotsrechner“ ist aktualisiert");
-    expect(done).toContain(">App öffnen</button>");
+    expect(done).toContain("Der Entwurf von „Angebotsrechner“ ist aktualisiert");
+    expect(done).toContain(">Entwurf öffnen</button>");
   });
 });
 
@@ -202,7 +200,7 @@ describe("a Page put into an App that has the id", () => {
     const markup = save(() => undefined);
 
     expect(markup).toContain(
-      "The app “Angebotsrechner” already has this ID. Choose another ID to save a new app, or put this page into that app."
+      "The app “Angebotsrechner” already has this ID. Choose another ID to save a new app, or update that app from this page."
     );
     expect(markup).toContain(">Update “Angebotsrechner” from this page</button>");
     // Without somebody to take the App over, the sentence stands alone.
@@ -216,7 +214,6 @@ describe("a Page put into an App that has the id", () => {
     expect(markup).toContain(
       "The current draft of this app is replaced by this page as it is now. The published version does not change until someone publishes the draft."
     );
-    expect(markup).toContain("From then on this page shows “Update app” for this app.");
     expect(markup).toContain(">Replace draft</button>");
     expect(markup).not.toContain(">Update draft</button>");
     expect(markup).not.toContain("another conversation");
@@ -233,24 +230,22 @@ describe("a Page put into an App that has the id", () => {
 
   it("says that the draft moved while the question stood", () => {
     expect(dialog({ changedElsewhere: true })).toContain(
-      "The draft of this app was changed just now. Replacing it also replaces that change."
+      "The draft of this app was changed just now. If you replace it, that change is lost."
     );
   });
 
-  it("confirms that the Page updates the App now, and that the App keeps its name where the Page has another", () => {
+  it("confirms the draft, and says that the App keeps its name where the Page has another", () => {
     const same = dialog({ phase: "done" });
-    expect(same).toContain("“Angebotsrechner” is updated");
-    expect(same).toContain("This page now updates this app.");
+    expect(same).toContain("The draft of “Angebotsrechner” is updated");
     expect(same).not.toContain("keeps its name");
 
     const other = dialog({ phase: "done", pageName: "Angebotsrechner 2026" });
     expect(other).toContain(
       "The app keeps its name “Angebotsrechner”. The page is called “Angebotsrechner 2026”."
     );
-    // An update of the Page's own App says the same about the name, and nothing about a link.
+    // An update of the Page's own App says the same about the name.
     const own = dialog({ phase: "done", link: undefined, pageName: "Angebotsrechner 2026" });
     expect(own).toContain("The app keeps its name “Angebotsrechner”.");
-    expect(own).not.toContain("This page now updates this app.");
   });
 
   it("is written in German as well", () => {

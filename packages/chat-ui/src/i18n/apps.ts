@@ -100,12 +100,10 @@ export const apps = defineTranslations({
     "apps.failedKit":
       "The app could not be loaded: this instance does not have the kit version it was built with.",
     "apps.linkCopied": "Link copied",
-    "apps.linkAfter": "From then on this page shows “Update app” for this app.",
     "apps.linkBody":
       "The current draft of this app is replaced by this page as it is now. The published version does not change until someone publishes the draft.",
-    "apps.linkDone": "This page now updates this app.",
     "apps.linkMoved":
-      "The draft of this app was changed just now. Replacing it also replaces that change.",
+      "The draft of this app was changed just now. If you replace it, that change is lost.",
     "apps.linkOffer": "Update “{name}” from this page",
     "apps.linkOtherConversation":
       "This app was last updated from a page in another conversation. That page will no longer show “Update app” for it.",
@@ -156,7 +154,7 @@ export const apps = defineTranslations({
     "apps.saveIdTaken":
       "An app with this ID already exists. Choose another ID to save this page as a new app.",
     "apps.saveIdTakenWritable":
-      "The app “{name}” already has this ID. Choose another ID to save a new app, or put this page into that app.",
+      "The app “{name}” already has this ID. Choose another ID to save a new app, or update that app from this page.",
     "apps.saveName": "Name",
     "apps.showMore": "Show more",
     "apps.starting": "The app is starting",
@@ -169,12 +167,10 @@ export const apps = defineTranslations({
     "apps.updateChanged":
       "The draft of this app was changed somewhere else since it was last updated from this page. Updating replaces those changes.",
     "apps.updateConfirm": "Update draft",
-    "apps.updateDone":
-      "The draft of the app now holds this page as it is. Open the app to check the draft and publish it.",
-    "apps.updateDoneTitle": "“{name}” is updated",
+    "apps.updateDone": "Open the draft to check and publish it.",
+    "apps.updateDoneTitle": "The draft of “{name}” is updated",
     "apps.updateFailed": "The app could not be updated.",
     "apps.updateKeptName": "The app keeps its name “{name}”. The page is called “{page}”.",
-    "apps.updateOpen": "Open app",
     "apps.updateReplace": "Replace draft",
     "apps.updateTitle": "Update “{name}”?"
   },
@@ -281,10 +277,8 @@ export const apps = defineTranslations({
     "apps.failedKit":
       "Die App konnte nicht geladen werden: Diese Instanz hat die Kit-Version nicht, mit der sie gebaut wurde.",
     "apps.linkCopied": "Link kopiert",
-    "apps.linkAfter": "Danach zeigt diese Page für diese App „App aktualisieren“.",
     "apps.linkBody":
       "Der aktuelle Entwurf dieser App wird durch diese Page ersetzt, so wie sie jetzt ist. Die veröffentlichte Version ändert sich erst, wenn jemand den Entwurf veröffentlicht.",
-    "apps.linkDone": "Diese Page aktualisiert jetzt diese App.",
     "apps.linkMoved":
       "Der Entwurf dieser App wurde gerade geändert. Beim Ersetzen geht auch diese Änderung verloren.",
     "apps.linkOffer": "„{name}“ aus dieser Page aktualisieren",
@@ -338,7 +332,7 @@ export const apps = defineTranslations({
     "apps.saveIdTaken":
       "Es gibt schon eine App mit dieser ID. Wähle eine andere ID, um die Page als neue App zu speichern.",
     "apps.saveIdTakenWritable":
-      "Die App „{name}“ hat diese ID schon. Wähle eine andere ID für eine neue App, oder übernimm die Page in diese App.",
+      "Die App „{name}“ hat diese ID schon. Wähle eine andere ID für eine neue App, oder aktualisiere diese App aus dieser Page.",
     "apps.saveName": "Name",
     "apps.showMore": "Mehr anzeigen",
     "apps.starting": "Die App wird gestartet",
@@ -351,12 +345,10 @@ export const apps = defineTranslations({
     "apps.updateChanged":
       "Der Entwurf dieser App wurde an anderer Stelle geändert, seit er zuletzt aus dieser Page aktualisiert wurde. Beim Aktualisieren werden diese Änderungen ersetzt.",
     "apps.updateConfirm": "Entwurf aktualisieren",
-    "apps.updateDone":
-      "Der Entwurf der App enthält die Page jetzt so, wie sie ist. Öffne die App, um den Entwurf zu prüfen und zu veröffentlichen.",
-    "apps.updateDoneTitle": "„{name}“ ist aktualisiert",
+    "apps.updateDone": "Öffne den Entwurf, um ihn zu prüfen und zu veröffentlichen.",
+    "apps.updateDoneTitle": "Der Entwurf von „{name}“ ist aktualisiert",
     "apps.updateFailed": "Die App konnte nicht aktualisiert werden.",
     "apps.updateKeptName": "Die App behält ihren Namen „{name}“. Die Page heißt „{page}“.",
-    "apps.updateOpen": "App öffnen",
     "apps.updateReplace": "Entwurf ersetzen",
     "apps.updateTitle": "„{name}“ aktualisieren?"
   }

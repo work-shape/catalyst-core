@@ -190,13 +190,12 @@ export function UpdateAppDialogView({
             <Button variant="outline" onClick={onClose}>
               {t("close")}
             </Button>
-            <Button onClick={onOpen}>{t("apps.updateOpen")}</Button>
+            <Button onClick={onOpen}>{t("apps.openDraft")}</Button>
           </>
         }
       >
         <div className="grid gap-3">
           <FormNotice tone="success">{t("apps.updateDone")}</FormNotice>
-          {link ? <p className="text-body">{t("apps.linkDone")}</p> : null}
           {pageName !== undefined && pageName.trim() !== name.trim() ? (
             <p className="text-body text-muted-foreground">
               {t("apps.updateKeptName", { name, page: pageName })}
@@ -229,7 +228,6 @@ export function UpdateAppDialogView({
         {link ? (
           <>
             <p className="text-body">{t("apps.linkBody")}</p>
-            <p className="text-body text-muted-foreground">{t("apps.linkAfter")}</p>
             {link === "none" ? null : (
               <p className="text-body">
                 {t(
