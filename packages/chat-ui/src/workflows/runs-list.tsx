@@ -1,5 +1,5 @@
 import { Button, List, ListRow, SkeletonList } from "@vivd-catalyst/ui";
-import { formatMoment } from "../control-plane/locale-format";
+import { formatMomentShort } from "../control-plane/locale-format";
 import { useTranslation } from "../i18n";
 import type { WorkflowRunList } from "./workflow-data";
 import type { WorkflowRunView } from "./workflow-views";
@@ -63,7 +63,8 @@ export function RunsList({
             return (
               <ListRow
                 key={run.id}
-                title={formatMoment(run.createdAt, locale)}
+                // The state stands beside the time, so the time is the short one and is never cut.
+                title={formatMomentShort(run.createdAt, locale)}
                 description={[startedByText(run, t), duration]
                   .filter((part) => part !== undefined)
                   .join(" · ")}

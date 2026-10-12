@@ -45,30 +45,106 @@ test("a Workflow opens with all of its drawing in view: the loop, the two paths 
   await expect(canvas.locator(".react-flow__attribution")).toBeVisible();
 });
 
-test("a step that starts another Workflow opens it in place, and the trail leads back", async ({
+test("a Workflow a step opens has its own address: Back leads one level up and the start is the child's", async ({
   page
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const canvas = await openSample(page, "quarter-close");
   const trail = page.locator('[data-slot="breadcrumb"]');
+  const heading = page.getByRole("heading", { level: 1 });
   await expect(trail).toHaveCount(0);
 
   await canvas
     .locator('[data-flow-id="remind"]')
     .getByRole("button", { name: "Open", exact: true })
     .click();
-  await expect(trail).toBeVisible();
+  await expect(page).toHaveURL(/at=quarter-close%2Fopen%2Fsend-reminders/u);
   await expect(trail.locator('[aria-current="page"]')).toHaveText("Send reminders");
+  await expect(heading).toHaveText("Send reminders");
   const child = page.getByTestId("workflow-canvas");
   await expect(child.locator('[data-slot="flow-engine"][data-ready]')).toBeVisible();
   await expect(child.locator('[data-flow-id="open_findings"]')).toBeVisible();
   await expect(child.locator('[data-flow-id="each_client"]')).toHaveCount(0);
 
-  await trail.getByRole("button", { name: "Quarter close", exact: true }).click();
+  // The start asks about the Workflow that is shown, not the one the reader came from.
+  await page.getByRole("button", { name: "Start now", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText("Send reminders");
+  await expect(dialog).not.toContainText("Quarter close");
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+
+  await page.goBack();
   await expect(trail).toHaveCount(0);
+  await expect(heading).toHaveText("Quarter close");
   await expect(
     page.getByTestId("workflow-canvas").locator('[data-flow-id="each_client"]')
   ).toBeVisible();
+
+  await page.goForward();
+  await expect(heading).toHaveText("Send reminders");
+  await trail.getByRole("link", { name: "Quarter close", exact: true }).click();
+  await expect(heading).toHaveText("Quarter close");
+});
+
+test("a done step shows what it returned as rows, and a failed run dims what it did not reach", async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const done = await openSample(page, "monthly-booking-check/runs/run-done");
+  await done.locator('[data-flow-id="clients"]').click();
+  const panel = done.locator('[data-step-panel="clients"]');
+  await panel.getByRole("tab", { name: "This run", exact: true }).click();
+  await expect(panel).toContainText("600 to “For each client”");
+  const output = panel.locator("[data-step-output]");
+  await expect(output.getByRole("columnheader")).toHaveText(["Number", "Name", "Client since"]);
+  await expect(output.getByRole("row")).toHaveCount(7);
+  await expect(output).toContainText("Nordlicht GmbH");
+  // The loop's failed share stands in the failure colour.
+  await expect(done.locator('[data-slot="flow-failed"]')).toHaveText("3 failed");
+
+  const failed = await openSample(page, "monthly-booking-check/runs/run-failed");
+  await expect(failed.locator('[data-flow-id="each_client"]')).toHaveAttribute(
+    "data-status",
+    "skipped"
+  );
+  await expect(failed.locator('[data-flow-id="result"]')).toHaveAttribute("data-status", "skipped");
+  // A run says who started it; how else it could start belongs to the Workflow's own page.
+  await expect(failed.locator('[data-flow-id="start"]')).not.toContainText("someone starts it");
+});
+
+test("folding a loop leaves it where it was, and the entries' filter stays above the list", async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const canvas = await openSample(page, "monthly-booking-check/runs/run-running");
+  const loop = canvas.locator('[data-slot="flow-group"][data-flow-id="each_client"]');
+  const before = await boxOf(loop);
+  await loop.locator('[data-slot="flow-fold"]').click();
+  await expect(loop).toHaveAttribute("data-collapsed", "");
+  await expect
+    .poll(async () => {
+      const after = await boxOf(loop);
+      return Math.abs(after.left - before.left) < 1 && Math.abs(after.top - before.top) < 1;
+    })
+    .toBe(true);
+  await loop.locator('[data-slot="flow-fold"]').click();
+  await expect(canvas.locator('[data-flow-id="bookings"]')).toBeVisible();
+  const again = await boxOf(loop);
+  expect(Math.abs(again.left - before.left)).toBeLessThan(1);
+  expect(Math.abs(again.top - before.top)).toBeLessThan(1);
+
+  await loop.getByRole("button", { name: "Show the 3 failed", exact: true }).click();
+  const entries = canvas.locator("[data-loop-entries]");
+  await entries.getByRole("radio", { name: /All/u }).click();
+  const filter = entries.getByRole("radiogroup");
+  const top = (await boxOf(filter)).top;
+  await canvas.locator('[data-slot="side-panel-body"]').evaluate((body) => body.scrollTo(0, 600));
+  // The filter stands at the top of what scrolls, and no row shows above it.
+  const body = await boxOf(canvas.locator('[data-slot="side-panel-body"]'));
+  const held = await boxOf(entries.locator(":scope > div").first());
+  expect(Math.abs((await boxOf(filter)).top - top)).toBeLessThan(2);
+  expect(Math.abs(held.top - body.top)).toBeLessThan(2);
 });
 
 test("the focus walks the steps, Enter opens the step's panel and Escape closes it", async ({
@@ -127,6 +203,26 @@ test("on a phone the Workflow runs top to bottom and a step opens as a sheet", a
       return second.top > first.bottom && Math.abs(second.left - first.left) < 1;
     })
     .toBe(true);
+
+  // The controls and the canvas library's mark stand on a strip the graph ends above, so
+  // neither covers a step of a Workflow taller than the screen.
+  const strip = await boxOf(canvas.locator('[data-slot="flow-strip"]'));
+  for (const part of ['[data-slot="flow-controls"]', ".react-flow__attribution"]) {
+    const box = await boxOf(canvas.locator(part));
+    expect(box.top).toBeGreaterThanOrEqual(strip.top);
+    expect(box.bottom).toBeLessThanOrEqual(strip.bottom + 1);
+  }
+
+  // A Workflow too wide to be read at the phone's width opens whole.
+  const large = await openSample(page, "quarter-close");
+  const frame = await boxOf(large);
+  const ground = await boxOf(large.locator('[data-slot="flow-strip"]'));
+  expect(
+    (await partsOf(large))
+      .filter((part) => part.top < frame.top || part.bottom > ground.top || part.left < frame.left)
+      .map((part) => part.id)
+  ).toEqual([]);
+  await openSample(page, "monthly-booking-check");
 
   await canvas.locator('[data-flow-id="clients"]').click();
   const panel = canvas.locator('[data-slot="side-panel"]');

@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { ApiError } from "@vivd-catalyst/api-client";
 import { WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
@@ -120,6 +120,26 @@ export function useWorkflow(
     problem: query.isError ? readProblem(query.error) : undefined,
     retry: () => void query.refetch().catch(() => undefined)
   };
+}
+
+/** The names of Workflows, by the order of their ids. A name is absent until it arrived. */
+export function useWorkflowNames(
+  workspaceId: string | undefined,
+  workflows: readonly string[]
+): (string | undefined)[] {
+  const source = useWorkflowsSource();
+  const keys = useWorkflowKeys();
+  return useQueries({
+    // The key and the read of `useWorkflow`, so a Workflow the reader came through is held.
+    queries: workflows.map((workflow) => ({
+      queryKey: [...keys.assets, "workflow", workspaceId ?? "", workflow],
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        source.getWorkflow(workspaceId ?? "", workflow, signal),
+      enabled: workspaceId !== undefined,
+      retry: retryUnlessGone
+    })),
+    combine: (results) => results.map((result) => result.data?.name)
+  });
 }
 
 /** The runs of one Workflow, newest first, as far as the reader has asked for them. */

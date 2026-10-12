@@ -29,7 +29,13 @@ export function WorkflowsArea({ route }: { route: WorkflowsRoute }) {
       return <WorkflowsPage />;
     case "workflow":
       // Another Workflow is another record and other runs.
-      return <WorkflowPage key={route.workflow} workflow={route.workflow} />;
+      return (
+        <WorkflowPage
+          key={`${route.workflow}/${route.opened ?? ""}`}
+          workflow={route.workflow}
+          opened={route.opened}
+        />
+      );
     case "workflow-runs":
       return <WorkflowRunsPage key={route.workflow} workflow={route.workflow} />;
     case "workflow-run":

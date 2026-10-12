@@ -4,6 +4,7 @@ export { CancelRunDialog, WorkflowRunPageView } from "./run-page";
 export { LoopEntriesView, defaultEntryFilter, loopEntries } from "./loop-entries";
 export { scheduleInWords } from "./schedule-words";
 export { StepPanel } from "./step-panel";
+export { stepOutputRows } from "./step-output";
 export { countsLine, placedSteps, workflowGraph, type CanvasRun } from "./workflow-canvas-model";
 export {
   toWorkflow,

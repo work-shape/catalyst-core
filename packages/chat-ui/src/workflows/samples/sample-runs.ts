@@ -76,6 +76,9 @@ function stepRun(
   return { id: `${runId}:${stepId}`, stepId, stepType, attempt: 1, ...rest };
 }
 
+/** The revision of every sample Workflow that is published now. */
+export const SAMPLE_REVISION = "revision-2";
+
 function monthly(
   id: string,
   rest: Partial<WorkflowRunResource> & Pick<WorkflowRunResource, "status" | "createdAt">
@@ -87,6 +90,7 @@ function monthly(
     startedBy: SCHEDULE,
     rootRunId: id,
     depth: 0,
+    definitionRevisionId: SAMPLE_REVISION,
     ...rest
   };
 }
@@ -166,6 +170,26 @@ function failed(clock: Clock): SampleRun {
   };
 }
 
+/** The start of a list of 600 clients, cut where a preview ends: in the middle of a record. */
+const CLIENTS_PREVIEW = {
+  text:
+    '{"items":[' +
+    [
+      ["10432", "Nordlicht GmbH", 2019],
+      ["10433", "Bäckerei Thomsen", 2021],
+      ["10436", "Brandt & Partner", 2016],
+      ["10441", "Elbwerk Studios UG", 2023],
+      ["10977", "Weber & Söhne KG", 2012],
+      ["11003", "Hafenkontor AG", 2018]
+    ]
+      .map(
+        ([number, name, since]) => `{"number":"${number}","name":"${name}","client_since":${since}}`
+      )
+      .join(",") +
+    ',{"number":"11004","na',
+  truncated: true
+};
+
 function done(clock: Clock): SampleRun {
   const id = "run-done";
   const counts = { total: 600, done: 597, failed: 3, running: 0 };
@@ -195,7 +219,8 @@ function done(clock: Clock): SampleRun {
         createdAt: clock.ago(1500),
         startedAt: clock.ago(1500),
         finishedAt: clock.ago(1499.9),
-        ...READS
+        ...READS,
+        outputPreview: CLIENTS_PREVIEW
       }),
       stepRun(id, "each_client", "loop", {
         status: "done",
@@ -240,6 +265,8 @@ function stopped(
   return {
     run: monthly(id, {
       status,
+      // The run that hit its limit started before the Workflow was last published.
+      ...(status === "limit_reached" ? { definitionRevisionId: "revision-1" } : {}),
       createdAt: clock.ago(minutes),
       ...(begun ? { startedAt: clock.ago(minutes) } : {}),
       ...(ended ? { finishedAt: clock.ago(minutes - 2) } : {}),

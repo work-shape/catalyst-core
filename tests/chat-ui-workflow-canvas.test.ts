@@ -10,6 +10,7 @@ import {
   toWorkflow,
   toWorkflowRun,
   toWorkflowStepRun,
+  stepOutputRows,
   workflowGraph,
   type CanvasRun
 } from "@vivd-catalyst/chat-ui/workflows";
@@ -273,7 +274,12 @@ describe("a loop over thousands of items", () => {
       countsLabel: en.t("workflows.run.count", { done: "12,000", total: "20,000" }),
       action: { label: en.t("workflows.canvas.showFailed", { count: "12" }) }
     });
-    expect(graph.groups[0]?.note).toContain(countsLine(counts, en));
+    // The failed stand beside the line, where the canvas gives them the failure colour.
+    expect(graph.groups[0]?.failedLabel).toBe("12 failed");
+    expect(graph.groups[0]?.note).toContain("11,988 done · 8 running · 7,992 to go");
+    expect(countsLine(counts, en)).toBe("11,988 done · 12 failed · 8 running · 7,992 to go");
+    // In a run the start says who started it, and not how else it could start.
+    expect(graph.nodes.find((node) => node.id === "start")?.summary).toBeUndefined();
   });
 
   it("shows each step of the loop through the counts the loop's step run carries", () => {
@@ -309,7 +315,9 @@ describe("a loop over thousands of items", () => {
       }
     });
     const graph = workflowGraph(workflow.steps, en, runOf([ended]));
-    expect(graph.groups[0]?.note).toContain("595 done · 5 failed");
+    expect(graph.groups[0]).toMatchObject({ failedLabel: "5 failed" });
+    expect(graph.groups[0]?.note).toContain("595 done");
+    expect(graph.groups[0]?.note).not.toContain("to go");
     expect(graph.nodes.find((node) => node.id === "save")).toMatchObject({
       status: "done",
       footer: "595 done"
@@ -419,8 +427,8 @@ describe("the shapes the contract reserves", () => {
       en.t("workflows.reason.missingRight")
     );
     expect(state("file")).toBe("skipped");
-    // The step after the block was never reached.
-    expect(state("result")).toBeUndefined();
+    // The run has ended: the step after the block was not reached, and is dimmed as such.
+    expect(state("result")).toBe("skipped");
     expect(graph.edges).toContainEqual(
       edge("any_findings", "file", { sourceExit: "else", state: "skipped" })
     );
@@ -549,5 +557,74 @@ describe("a schedule in words", () => {
     for (const cron of ["*/5 * * * *", "0 6 1 1 *", "0 6 1 * 1", "61 6 * * *", "0 6 * *"]) {
       expect(scheduleInWords(cron, en)).toBeUndefined();
     }
+  });
+});
+
+describe("what a step returned, as rows", () => {
+  const rows = [
+    { number: "10432", name: "Nordlicht GmbH", client_since: 2019, city: "Kiel" },
+    { number: "10433", name: "Bäckerei Thomsen", client_since: 2021, city: "Husum" }
+  ];
+
+  it("reads a list of records as a table and says how many rows it has", () => {
+    expect(stepOutputRows({ text: JSON.stringify({ items: rows }), truncated: false })).toEqual({
+      columns: ["Number", "Name", "Client since"],
+      rows: [
+        ["10432", "Nordlicht GmbH", "2019"],
+        ["10433", "Bäckerei Thomsen", "2021"]
+      ],
+      total: 2
+    });
+    expect(stepOutputRows({ text: JSON.stringify(rows), truncated: false })?.total).toBe(2);
+  });
+
+  it("keeps the whole records of a preview that was cut, and names no total", () => {
+    const text = JSON.stringify({ items: rows });
+    const cut = stepOutputRows({ text: text.slice(0, text.length - 20), truncated: true });
+    expect(cut?.rows).toEqual([["10432", "Nordlicht GmbH", "2019"]]);
+    // A step run carries the start of its output and no count.
+    expect(cut?.total).toBeUndefined();
+  });
+
+  it("has no rows for an output that is not a list of records", () => {
+    expect(stepOutputRows({ text: '{"summary":"597 checked"}', truncated: false })).toBeUndefined();
+    expect(stepOutputRows({ text: "[1,2,3]", truncated: false })).toBeUndefined();
+    expect(stepOutputRows({ text: '{"items":[{"a', truncated: true })).toBeUndefined();
+  });
+});
+
+describe("a run that ended before its last step", () => {
+  it("dims what it did not reach, a loop with the steps it holds", () => {
+    const workflow = definition([
+      trigger,
+      operation("clients"),
+      loop("each", [operation("save")]),
+      output
+    ]);
+    const graph = workflowGraph(
+      workflow.steps,
+      en,
+      runOf(
+        [
+          stepRun({ stepId: "start", stepType: "trigger" }),
+          stepRun({
+            stepId: "clients",
+            status: "failed",
+            error: { code: "FORBIDDEN", message: "runner may not call it." }
+          })
+        ],
+        "failed"
+      )
+    );
+    expect(graph.groups[0]?.status).toBe("skipped");
+    const state = (id: string) => graph.nodes.find((node) => node.id === id)?.status;
+    expect([state("clients"), state("save"), state("result")]).toEqual([
+      "failed",
+      "skipped",
+      "skipped"
+    ]);
+    // A run that is still going leaves what it has not reached as it is.
+    const going = workflowGraph(workflow.steps, en, runOf([stepRun({ stepId: "start" })]));
+    expect(going.groups[0]?.status).toBeUndefined();
   });
 });

@@ -109,6 +109,15 @@ describe("the addresses of the Workflows area", () => {
       "/w/cw_1/workflows/notify",
       { kind: "workflow", collaborationWorkspaceId: ws, workflow: "notify" }
     ],
+    // A Workflow a step opened has an address of its own, one level per Workflow opened.
+    [
+      "/w/cw_1/workflows/notify/open/remind",
+      { kind: "workflow", collaborationWorkspaceId: ws, workflow: "notify", opened: "remind" }
+    ],
+    [
+      "/w/cw_1/workflows/notify/open/remind/mail",
+      { kind: "workflow", collaborationWorkspaceId: ws, workflow: "notify", opened: "remind/mail" }
+    ],
     [
       "/w/cw_1/workflows/notify/runs",
       { kind: "workflow-runs", collaborationWorkspaceId: ws, workflow: "notify" }

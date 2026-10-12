@@ -1,7 +1,13 @@
 import { ApiError, type LocaleCode } from "@vivd-catalyst/api-client";
 import { toWorkflow, toWorkflowRun, toWorkflowStepRun } from "../workflow-mapping";
 import type { WorkflowRunsSource, WorkflowsSource } from "../workflow-source";
-import { SAMPLE_VIEWER_ID, sampleEntryStepRuns, sampleRuns, type SampleRun } from "./sample-runs";
+import {
+  SAMPLE_REVISION,
+  SAMPLE_VIEWER_ID,
+  sampleEntryStepRuns,
+  sampleRuns,
+  type SampleRun
+} from "./sample-runs";
 import { sampleWorkflows, type SampleWorkflow } from "./sample-workflows";
 
 // A source of Workflows and runs that reads the samples and keeps what a reader starts or
@@ -159,7 +165,10 @@ export function createSampleSource(locale: LocaleCode, now = Date.now()): Workfl
         throw missing("The Workflow");
       }
       return Promise.resolve(
-        toWorkflow({ name: sample.manifest.id, config: withReadings(sample), publishedRevision: 1 })
+        toWorkflow(
+          { name: sample.manifest.id, config: withReadings(sample), publishedRevision: 2 },
+          SAMPLE_REVISION
+        )
       );
     },
     runs

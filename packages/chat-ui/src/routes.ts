@@ -27,8 +27,11 @@ export type WorkspaceRoute =
   | { kind: "app-edit"; collaborationWorkspaceId: string; app: string }
   /** The Workflows of one workspace. */
   | { kind: "workflows"; collaborationWorkspaceId: string }
-  /** One Workflow: what it does, and its last runs. */
-  | { kind: "workflow"; collaborationWorkspaceId: string; workflow: string }
+  /**
+   * One Workflow on its canvas. `opened` is the way into the Workflows its steps start, as
+   * their ids joined by slashes: the last one is the Workflow that is shown.
+   */
+  | { kind: "workflow"; collaborationWorkspaceId: string; workflow: string; opened?: string }
   /** Every run of one Workflow. */
   | { kind: "workflow-runs"; collaborationWorkspaceId: string; workflow: string }
   /** One run of a Workflow with its steps. */
@@ -125,6 +128,7 @@ export const areaRoutes: readonly AreaRoute[] = [
     paths: [
       { path: "/w/$collaborationWorkspaceId/workflows", route: "workflows" },
       { path: "/w/$collaborationWorkspaceId/workflows/$workflow", route: "workflow" },
+      { path: "/w/$collaborationWorkspaceId/workflows/$workflow/open/$", route: "workflow" },
       { path: "/w/$collaborationWorkspaceId/workflows/$workflow/runs", route: "workflow-runs" },
       { path: "/w/$collaborationWorkspaceId/workflows/$workflow/runs/$run", route: "workflow-run" }
     ]
@@ -207,7 +211,12 @@ export function workspaceRouteNavigation(route: WorkspaceRoute): {
   to: string;
   params?: Record<string, string>;
 } {
-  const splat = route.kind === "app" ? appSplat(route.appPath) : undefined;
+  const splat =
+    route.kind === "app"
+      ? appSplat(route.appPath)
+      : route.kind === "workflow"
+        ? route.opened || undefined
+        : undefined;
   const to =
     areaRoutePaths().find(
       (candidate) =>
@@ -216,7 +225,7 @@ export function workspaceRouteNavigation(route: WorkspaceRoute): {
   const { kind: _kind, ...fields } = route;
   const params: Record<string, string> = {};
   for (const [name, value] of Object.entries(fields)) {
-    if (name !== "appPath" && typeof value === "string") {
+    if (name !== "appPath" && name !== "opened" && typeof value === "string") {
       params[name] = value;
     }
   }
@@ -284,6 +293,14 @@ function routeOf(
     case "workflows":
       return collaborationWorkspaceId ? { kind, collaborationWorkspaceId } : undefined;
     case "workflow":
+      return collaborationWorkspaceId && params.workflow
+        ? {
+            kind,
+            collaborationWorkspaceId,
+            workflow: params.workflow,
+            ...(params[SPLAT] ? { opened: params[SPLAT] } : {})
+          }
+        : undefined;
     case "workflow-runs":
       return collaborationWorkspaceId && params.workflow
         ? { kind, collaborationWorkspaceId, workflow: params.workflow }

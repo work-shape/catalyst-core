@@ -87,6 +87,8 @@ export interface WorkflowRunResource extends TimesResource, Partial<OnTheWire<Wo
   startedBy: { id: string; label: string };
   /** On a child run: the id of the Workflow of the run that started it. */
   parentWorkflow?: string;
+  /** The revision of the definition the run started on. */
+  definitionRevisionId?: string;
   error?: ErrorResource;
   outputPreview?: WorkflowOutputPreview;
 }
@@ -152,6 +154,7 @@ export function toWorkflowRun(run: WorkflowRunResource): WorkflowRunView {
     ...times(run),
     ...toFailure(run.error),
     ...toOutput(run.outputPreview),
+    ...(run.definitionRevisionId === undefined ? {} : { revisionId: run.definitionRevisionId }),
     ...(run.parentRunId === undefined || run.parentWorkflow === undefined
       ? {}
       : { parent: { runId: run.parentRunId, workflowId: run.parentWorkflow } })
@@ -338,6 +341,9 @@ function readSteps(value: unknown, known: StepNames): WorkflowStepView[] {
           }
         : {}),
       ...(itemName === undefined ? {} : { itemName }),
+      ...(kind === "loop" && isRecord(raw.items) && text(raw.items.step) !== undefined
+        ? { itemsFrom: text(raw.items.step) }
+        : {}),
       ...(kind === "loop" && typeof raw.concurrency === "number" && raw.concurrency > 1
         ? { concurrency: raw.concurrency }
         : {}),
@@ -376,7 +382,12 @@ function stepNames(value: unknown, names = new Map<string, string>()): Map<strin
 
 /** One Workflow from its record: the definition is the record's `config`. */
 export function toWorkflow(
-  asset: Pick<Asset, "name" | "config" | "publishedRevision">
+  asset: Pick<Asset, "name" | "config" | "publishedRevision">,
+  /**
+   * The id of the published revision, which a run names as the one it started on. The read of
+   * an asset answers the revision's number and not its id, so the instance cannot give it yet.
+   */
+  revisionId?: string
 ): WorkflowView {
   const definition = asset.config;
   const description = text(definition.description);
@@ -394,6 +405,7 @@ export function toWorkflow(
     name: text(definition.name) ?? asset.name,
     ...(description === undefined ? {} : { description }),
     published: asset.publishedRevision !== undefined,
+    ...(revisionId === undefined ? {} : { revisionId }),
     steps,
     startsByHand: steps.some((step) => step.starts?.byHand === true),
     needsInput:

@@ -117,29 +117,32 @@ export function LoopEntriesView({
   const { t } = useTranslation();
   const entries = read.stepRuns === undefined ? undefined : loopEntries(read.stepRuns);
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-3" data-loop-entries="">
-      <SegmentedControl
-        size="sm"
-        label={t("workflows.run.filter")}
-        value={filter}
-        onValueChange={(value) =>
-          onFilterChange(value === "failed" || value === "running" ? value : "all")
-        }
-      >
-        {counts.failed > 0 ? (
-          <SegmentedControlItem value="failed" count={counts.failed} exactCount>
-            {t("workflows.run.filterFailed")}
+    <div className="grid min-w-0 grid-cols-1" data-loop-entries="">
+      {/* The filter stays in sight while the list scrolls under it. */}
+      <div className="sticky -top-4 z-10 -mx-4 -mt-4 bg-background px-4 pt-4 pb-3">
+        <SegmentedControl
+          size="sm"
+          label={t("workflows.run.filter")}
+          value={filter}
+          onValueChange={(value) =>
+            onFilterChange(value === "failed" || value === "running" ? value : "all")
+          }
+        >
+          {counts.failed > 0 ? (
+            <SegmentedControlItem value="failed" count={counts.failed} exactCount>
+              {t("workflows.run.filterFailed")}
+            </SegmentedControlItem>
+          ) : null}
+          {counts.running > 0 ? (
+            <SegmentedControlItem value="running" count={counts.running} exactCount>
+              {t("workflows.run.filterRunning")}
+            </SegmentedControlItem>
+          ) : null}
+          <SegmentedControlItem value="all" count={counts.total} exactCount>
+            {t("workflows.run.filterAll")}
           </SegmentedControlItem>
-        ) : null}
-        {counts.running > 0 ? (
-          <SegmentedControlItem value="running" count={counts.running} exactCount>
-            {t("workflows.run.filterRunning")}
-          </SegmentedControlItem>
-        ) : null}
-        <SegmentedControlItem value="all" count={counts.total} exactCount>
-          {t("workflows.run.filterAll")}
-        </SegmentedControlItem>
-      </SegmentedControl>
+        </SegmentedControl>
+      </div>
       {read.failed ? (
         <LoadError onRetry={read.retry}>{t("workflows.run.entriesFailed")}</LoadError>
       ) : entries === undefined ? (
@@ -188,7 +191,8 @@ function LoopEntryRow({ entry, loop }: { entry: LoopEntry; loop: WorkflowStepVie
       size="compact"
       title={name}
       description={reason}
-      descriptionWraps
+      // The panel is a narrow column in every window: the reason is read whole.
+      descriptionWraps="always"
       chips={<RunStateBadge status={entry.status} />}
       expandable={failure !== undefined}
     >

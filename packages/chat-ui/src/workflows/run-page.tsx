@@ -292,6 +292,13 @@ export function WorkflowRunPageView({
               showFailure={
                 run.failure !== undefined && (run.status === "limit_reached" || !failedStepHeld)
               }
+              // The canvas draws the published definition. A run keeps the revision it started
+              // on, so where the two differ the page says that the steps are not the run's own.
+              earlierRevision={
+                run.revisionId !== undefined &&
+                workflow?.revisionId !== undefined &&
+                run.revisionId !== workflow.revisionId
+              }
             />
           )}
           <div className="relative min-h-0 flex-1">
@@ -314,11 +321,13 @@ export function WorkflowRunPageView({
 function RunNotices({
   run,
   silentFor,
-  showFailure
+  showFailure,
+  earlierRevision
 }: {
   run: NonNullable<WorkflowRunRead["run"]>;
   silentFor: number | undefined;
   showFailure: boolean;
+  earlierRevision: boolean;
 }) {
   const { locale, t } = useTranslation();
   const line =
@@ -330,7 +339,12 @@ function RunNotices({
         : run.status === "cancelled" && run.finishedAt !== undefined
           ? t("workflows.run.cancelledLine", { time: formatTime(run.finishedAt, locale) })
           : undefined;
-  if (silentFor === undefined && line === undefined && !(showFailure && run.failure)) {
+  if (
+    silentFor === undefined &&
+    line === undefined &&
+    !earlierRevision &&
+    !(showFailure && run.failure)
+  ) {
     return null;
   }
   return (
@@ -348,6 +362,11 @@ function RunNotices({
           {line}
         </p>
       )}
+      {earlierRevision ? (
+        <Banner tone="info" layout="line" data-run-revision="">
+          {t("workflows.run.earlierRevision")}
+        </Banner>
+      ) : null}
       {showFailure && run.failure ? <FailureBanner failure={run.failure} /> : null}
     </div>
   );

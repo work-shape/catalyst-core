@@ -331,18 +331,32 @@ contain breaking changes; a patch version does not.
 - **Workflows, the pages on the canvas:** a Workflow opens as a drawing of its steps, left to
   right on a wide page and top to bottom on a phone, fitted to the page when it opens. A loop
   and a parallel part are frames around their steps, a condition is a step with one exit per
-  path, and a step that starts another Workflow opens that Workflow in place, with a trail back.
-  A press on a step opens one panel beside the drawing (a sheet on a phone) that says what the
-  step does. The page of a run draws the same graph with how far each step is: a loop shows its
-  counts and its bar however many entries it has, a failed step says why and its panel opens by
-  itself, and the entries of a loop are listed in the loop's panel, failed ones first, a page at
-  a time. A Workflow has two tabs, "Workflow" and "Runs". The drawing can be read with the
-  keyboard and cannot be rearranged. **Not in this release:** the instance runs no Workflow yet,
-  so on an instance the list of runs says so and no start is offered; the pages are shown over
-  sample Workflows and runs at `/ui-library/workflows`, behind the right that opens the UI
-  library. `condition` and `parallel` are drawn and run by no engine.
+  path, and a step that starts another Workflow opens that Workflow at an address of its own
+  (`/w/<workspace>/workflows/<workflow>/open/<child>`): the browser's way back leads one level
+  up, a trail names the way, and the head, the start and the runs are those of the Workflow
+  shown. A press on a step opens one panel beside the drawing (a sheet on a phone) that says
+  what the step does. The page of a run draws the same graph with how far each step is: a loop
+  shows its counts and its bar however many entries it has, with the failed in the failure
+  colour; a failed step says why and its panel opens by itself, and what an ended run did not
+  reach is dimmed. A step's panel shows what the step returned: a list of records as a table of
+  its first rows, anything else as text. The entries of a loop are listed in the loop's panel,
+  failed ones first, a page at a time, under a filter that stays in view. The run page draws the
+  published definition and says so when the run started on an earlier one. A Workflow has two
+  tabs, "Workflow" and "Runs". The drawing can be read with the keyboard and cannot be
+  rearranged. **Not in this release:** the instance runs no Workflow yet, so on an instance the
+  list of runs says so and no start is offered; the pages are shown over sample Workflows and
+  runs at `/ui-library/workflows`, behind the right that opens the UI library. `condition` and
+  `parallel` are drawn and run by no engine. A step run carries the start of its output and no
+  count, so a table of a long output names no total; and an instance cannot yet tell an earlier
+  definition, because the read of a Workflow answers its revision's number and a run names the
+  revision's id.
 - **UI library:** `Breadcrumb`, the way into a nested place with the current one marked, and
   `IconTile`, the square an icon stands in on a node of a graph and in the head of its panel.
+  On the flow canvas a group names its failed share in the failure colour (`failedLabel`),
+  folding a group leaves it where it stood, a graph that runs top to bottom and is wide enough
+  to be small either way opens whole, and on a narrow canvas the canvas library's mark stands
+  in the corner on the canvas' ground. `ListRow` takes `descriptionWraps="always"` for a list in
+  a narrow column.
 - **Pages, plain HTML:** App Kit version `1.2.0`, with two new files, `page.css` and `theme.js`.
   A plain HTML Page that names it comes out with the look of the platform: the build links
   `page.css` and `theme.js` first into every HTML file of a Page with an `entry`, also one whose

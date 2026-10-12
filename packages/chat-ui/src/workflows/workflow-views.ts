@@ -66,6 +66,8 @@ export interface WorkflowStepView {
   workflow?: string;
   /** On a `condition` or `parallel` step: its paths, in their order. */
   branches?: readonly WorkflowBranchView[];
+  /** On a loop: the id of the step whose result holds its entries. */
+  itemsFrom?: string;
   /** On a loop: what one entry is called, where the definition says it. */
   itemName?: string;
   /** On a loop: the steps it runs for each entry, in their order. */
@@ -82,6 +84,8 @@ export interface WorkflowView {
   name: string;
   description?: string;
   published: boolean;
+  /** The id of the revision that is published, which is the one the page draws. */
+  revisionId?: string;
   steps: readonly WorkflowStepView[];
   /** A person may start it, as far as its definition says. */
   startsByHand: boolean;
@@ -142,6 +146,8 @@ export interface WorkflowRunView {
   finishedAt?: string;
   failure?: WorkflowFailure;
   output?: WorkflowOutputPreview;
+  /** The id of the revision of the definition the run started on. */
+  revisionId?: string;
   /** The run whose step started this one, where it is a child run. */
   parent?: { runId: string; workflowId: string };
 }

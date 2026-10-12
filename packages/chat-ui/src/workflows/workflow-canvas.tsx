@@ -80,7 +80,18 @@ export function WorkflowCanvas({
     }
     const block =
       place.repeated && place.blockId !== undefined ? frame.get(place.blockId) : undefined;
+    // A loop that takes the step's result runs once for each entry of it, so the loop's total
+    // is the size of what the step passed on. The step run itself carries no count.
+    const taker = place.repeated
+      ? undefined
+      : [...placed.values()].find(
+          (other) => other.step.itemsFrom === id && frame.get(other.step.id)?.loop !== undefined
+        );
+    const passed = taker === undefined ? undefined : frame.get(taker.step.id)?.loop?.total;
     return {
+      ...(taker === undefined || passed === undefined
+        ? {}
+        : { passesOn: { count: passed, step: taker.step.name } }),
       stepRun: place.repeated ? undefined : frame.get(id),
       counts: block?.bodyCounts?.[id],
       countsEnded: block?.finishedAt !== undefined,

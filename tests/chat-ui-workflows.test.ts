@@ -265,7 +265,6 @@ describe("the page of a Workflow", () => {
       rights: input.rights ?? READER,
       runsAvailable: input.runsAvailable ?? true,
       onOpenChild: noop,
-      onLeaveChildren: noop,
       onOpenRoute: noop,
       onStart: noop
     });
@@ -327,7 +326,6 @@ describe("the page of a Workflow", () => {
         rights: READER,
         runsAvailable: true,
         onOpenChild: noop,
-        onLeaveChildren: noop,
         onOpenRoute: noop,
         onStart: noop
       })
@@ -348,7 +346,7 @@ describe("the page of a Workflow", () => {
     expect(markup.includes(t("tryAgain"))).toBe(problem === "failed");
   });
 
-  it("names the way to a Workflow a step opened, with a way back to each before it", () => {
+  it("shows a Workflow a step opened as its own page, with a link back to each before it", () => {
     const child = toWorkflow({
       name: "send-reminders",
       publishedRevision: 1,
@@ -357,22 +355,32 @@ describe("the page of a Workflow", () => {
     const markup = render(
       createElement(WorkflowPageView, {
         workspaceId: "cw_1",
-        workflowId: "notify-clients",
-        read: { workflow, problem: undefined, retry: noop },
-        way: [{ id: "send-reminders", stepName: "Send reminders" }],
-        child: { workflow: child, problem: undefined, retry: noop },
+        workflowId: "send-reminders",
+        read: { workflow: child, problem: undefined, retry: noop },
+        trail: [
+          {
+            id: "notify-clients",
+            name: "Notify clients",
+            route: {
+              kind: "workflow",
+              collaborationWorkspaceId: "cw_1",
+              workflow: "notify-clients"
+            }
+          }
+        ],
         rights: READER,
         runsAvailable: true,
         onOpenChild: noop,
-        onLeaveChildren: noop,
         onOpenRoute: noop,
         onStart: noop
       })
     );
     expect(markup).toContain('data-slot="breadcrumb"');
     expect(markup).toMatch(/aria-current="page"[^>]*>Send reminders</u);
-    // The page stays the page of the Workflow it was opened for.
-    expect(markup).toContain(">Notify clients</h1>");
+    expect(markup).toContain('href="/w/cw_1/workflows/notify-clients"');
+    // The head, its start and its runs are those of the Workflow that is shown.
+    expect(markup).toContain(">Send reminders</h1>");
+    expect(markup).toContain('href="/w/cw_1/workflows/send-reminders/runs"');
   });
 
   it("asks once before the start and answers a refusal in the dialog", () => {

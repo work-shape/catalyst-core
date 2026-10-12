@@ -111,13 +111,15 @@ function statusOfCounts(counts: WorkflowLoopCounts, ended: boolean): FlowStatus 
 export function countsLine(
   counts: WorkflowLoopCounts,
   { t, locale }: CanvasText,
-  ended = false
+  ended = false,
+  /** Leaves the failed out, where they stand beside the line in a colour of their own. */
+  withFailed = true
 ): string {
   const number = (value: number) => value.toLocaleString(locale);
   const left = ended ? 0 : Math.max(0, counts.total - counts.done - counts.failed - counts.running);
   return [
     counts.done > 0 ? t("workflows.run.countDone", { count: number(counts.done) }) : undefined,
-    counts.failed > 0
+    withFailed && counts.failed > 0
       ? t("workflows.run.countFailed", { count: number(counts.failed) })
       : undefined,
     counts.running > 0
@@ -294,7 +296,11 @@ export function workflowGraph(
     }
     const stepRun = place.repeated ? undefined : stepRuns.get(step.id);
     if (stepRun === undefined) {
-      return {};
+      // Of a run that has ended, a step without a step run was not reached. A step of a loop
+      // has one per entry and none of its own, so its place says nothing here.
+      return run.run.ended && !place.repeated
+        ? { status: "skipped", footer: t("workflows.canvas.notReached") }
+        : {};
     }
     const status = statusOf(stepRun);
     const took = duration(stepRun);
@@ -343,7 +349,9 @@ export function workflowGraph(
   };
 
   const one = (step: WorkflowStepView, place: Place): Ends => {
-    const summary = stepSummary(step, text);
+    // In a run the start says who started it, so how else it could start is left out.
+    const summary =
+      run !== undefined && step.kind === "trigger" ? undefined : stepSummary(step, text);
     const described = summary === undefined ? {} : { summary };
     const state = ran(step, place);
     const stepRun = place.repeated || place.skipped ? undefined : stepRuns.get(step.id);
@@ -356,7 +364,7 @@ export function workflowGraph(
       const note =
         counts === undefined
           ? undefined
-          : [took, countsLine(counts, text, stepRun !== undefined && stepRunEnded(stepRun))]
+          : [took, countsLine(counts, text, stepRun !== undefined && stepRunEnded(stepRun), false)]
               .filter((part) => part)
               .join(" · ");
       groups.push({
@@ -372,6 +380,13 @@ export function workflowGraph(
                 done: through.toLocaleString(locale),
                 total: counts.total.toLocaleString(locale)
               }),
+              ...(counts.failed > 0
+                ? {
+                    failedLabel: t("workflows.run.countFailed", {
+                      count: counts.failed.toLocaleString(locale)
+                    })
+                  }
+                : {}),
               ...(note ? { note } : {}),
               action: {
                 label:
@@ -389,7 +404,8 @@ export function workflowGraph(
         // repeats is one of many, so its counts say nothing of the whole.
         counts: place.repeated ? undefined : stepRun?.bodyCounts,
         repeated: place.repeated || step.kind === "loop",
-        skipped: place.skipped,
+        // A block an ended run did not reach: nor did it reach what the block holds.
+        skipped: place.skipped || (stepRun === undefined && state.status === "skipped"),
         ended: place.ended || (stepRun !== undefined && stepRunEnded(stepRun))
       };
       if (step.kind === "loop") {

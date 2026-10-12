@@ -1,11 +1,12 @@
-import { useState } from "react";
 import { Breadcrumb } from "@vivd-catalyst/ui";
 import { useTranslation, type TranslationKey } from "../i18n";
+import { workspaceRoutePath, type WorkspaceRoute } from "../routes";
 import { useStartRun } from "./start-run";
 import { WorkflowCanvas } from "./workflow-canvas";
 import {
   useRunsAvailable,
   useWorkflow,
+  useWorkflowNames,
   type WorkflowRead,
   type WorkflowReadProblem
 } from "./workflow-data";
@@ -21,44 +22,59 @@ const PROBLEM_SENTENCES: Readonly<Record<WorkflowReadProblem, TranslationKey>> =
   failed: "workflows.failed"
 };
 
-/** A Workflow a step of the one above it starts, as the reader opened it. */
-interface OpenedChild {
+/** A Workflow on the way to the one that is shown: the one a step of it started from. */
+export interface WorkflowTrailEntry {
   id: string;
-  /** The name of the step that starts it, until its own name arrived. */
-  stepName: string;
+  /** Its name, once its record arrived. */
+  name: string | undefined;
+  route: WorkspaceRoute;
 }
 
-/** One Workflow on its canvas, with the start by hand. */
-export function WorkflowPage({ workflow }: { workflow: string }) {
+/**
+ * One Workflow on its canvas, with the start by hand. `opened` is the way from the Workflow
+ * of the address into the ones its steps start; the last of them is the one shown, and the
+ * head, the start and the runs are that Workflow's.
+ */
+export function WorkflowPage({ workflow, opened }: { workflow: string; opened?: string }) {
   const host = useWorkflowsHost();
   const workspaceId = host?.workspace?.id;
-  const read = useWorkflow(workspaceId, workflow);
-  // The way from the Workflow into the ones its steps start, one level per "Open".
-  const [way, setWay] = useState<readonly OpenedChild[]>([]);
-  const child = useWorkflow(workspaceId, way.at(-1)?.id);
+  const chain = (opened ?? "").split("/").filter((id) => id !== "");
+  const shownId = chain.at(-1) ?? workflow;
+  const before = chain.length === 0 ? [] : [workflow, ...chain.slice(0, -1)];
+  const read = useWorkflow(workspaceId, shownId);
+  const names = useWorkflowNames(workspaceId, before);
   const runsAvailable = useRunsAvailable();
-  const start = useStartRun({ workflow, name: read.workflow?.name });
+  const start = useStartRun({ workflow: shownId, name: read.workflow?.name });
 
   if (!host || workspaceId === undefined) {
     return null;
   }
+  const routeAt = (depth: number): WorkspaceRoute => ({
+    kind: "workflow",
+    collaborationWorkspaceId: workspaceId,
+    workflow,
+    ...(depth === 0 ? {} : { opened: chain.slice(0, depth).join("/") })
+  });
   return (
     <>
       <WorkflowPageView
         workspaceId={workspaceId}
-        workflowId={workflow}
+        workflowId={shownId}
         read={read}
-        way={way}
-        child={way.length === 0 ? undefined : child}
+        trail={before.map((id, depth) => ({ id, name: names[depth], route: routeAt(depth) }))}
         rights={host.rights}
         runsAvailable={runsAvailable}
         onOpenChild={(step) => {
-          const id = step.workflow;
-          if (id !== undefined) {
-            setWay((opened) => [...opened, { id, stepName: step.name }]);
+          if (step.workflow !== undefined) {
+            // An address of its own: the browser's way back leads one level up.
+            host.showRoute({
+              kind: "workflow",
+              collaborationWorkspaceId: workspaceId,
+              workflow,
+              opened: [...chain, step.workflow].join("/")
+            });
           }
         }}
-        onLeaveChildren={(depth) => setWay((opened) => opened.slice(0, depth))}
         onOpenRoute={host.showRoute}
         onStart={start.open}
       />
@@ -72,36 +88,30 @@ export function WorkflowPageView({
   workspaceId,
   workflowId,
   read,
-  way = [],
-  child,
+  trail = [],
   rights,
   runsAvailable,
   onOpenChild,
-  onLeaveChildren,
   onOpenRoute,
   onStart
 }: {
   workspaceId: string;
+  /** The Workflow that is shown. */
   workflowId: string;
   read: Pick<WorkflowRead, "workflow" | "problem" | "retry">;
-  /** The Workflows opened from a step, outermost first. The last one is on the canvas. */
-  way?: readonly OpenedChild[];
-  /** The read of the last of them. */
-  child?: Pick<WorkflowRead, "workflow" | "problem" | "retry">;
+  /** The Workflows the reader came through, outermost first. Empty on a Workflow's own page. */
+  trail?: readonly WorkflowTrailEntry[];
   rights: WorkflowRights;
   /** The instance runs Workflows: there is a start and a list of runs. */
   runsAvailable: boolean;
   onOpenChild(step: WorkflowStepView): void;
-  /** Goes back to the Workflow at this depth of the way: 0 is the Workflow of the page. */
-  onLeaveChildren(depth: number): void;
   onOpenRoute: OpenRoute;
   onStart(): void;
 }) {
   const { t } = useTranslation();
   const workflow = read.workflow;
   const canStart = runsAvailable && workflow !== undefined && startOffered(workflow, rights);
-  const shown = child ?? read;
-  const opened = way.at(-1);
+  const shown = read;
   return (
     <WorkflowsFrame label={workflow?.name ?? t("workflows.title")} testId="workflow-page" fill>
       <WorkflowHead
@@ -114,22 +124,18 @@ export function WorkflowPageView({
         onStart={onStart}
         onOpenRoute={onOpenRoute}
       />
-      {opened === undefined ? null : (
+      {trail.length === 0 ? null : (
         <div className="shrink-0 border-b px-(--layout-gutter) py-2">
           <Breadcrumb
             label={t("workflows.canvas.way")}
             items={[
-              {
-                id: workflowId,
-                label: workflow?.name ?? t("workflows.title"),
-                onSelect: () => onLeaveChildren(0)
-              },
-              ...way.map((entry, index) => ({
-                id: `${String(index)}:${entry.id}`,
-                label:
-                  entry === opened ? (child?.workflow?.name ?? entry.stepName) : entry.stepName,
-                onSelect: () => onLeaveChildren(index + 1)
-              }))
+              ...trail.map((entry, depth) => ({
+                id: `${String(depth)}:${entry.id}`,
+                label: entry.name ?? t("workflows.title"),
+                href: workspaceRoutePath(entry.route),
+                onSelect: () => onOpenRoute(entry.route)
+              })),
+              { id: `shown:${workflowId}`, label: workflow?.name ?? t("workflows.title") }
             ]}
           />
         </div>
@@ -146,7 +152,7 @@ export function WorkflowPageView({
         ) : (
           <WorkflowCanvas
             // Another Workflow is another graph: it opens fitted, with no step chosen.
-            key={opened === undefined ? workflowId : `${String(way.length)}:${opened.id}`}
+            key={workflowId}
             workflow={shown.workflow}
             onOpenChild={onOpenChild}
           />

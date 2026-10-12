@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { LocaleCode } from "@vivd-catalyst/api-client";
 import { UiRoot, type UiRootProps } from "@vivd-catalyst/ui";
 import { TranslationProvider } from "../../i18n";
@@ -14,7 +14,8 @@ import { createSampleSource } from "./sample-source";
 // the same right. The instance runs no Workflow until the engine's slice is in; this page is
 // where the screens are looked at, photographed and tested in a browser until then. The
 // address says what to open: `?at=<workflow>`, `?at=<workflow>/runs`,
-// `?at=<workflow>/runs/<run>`, with `lang=de` and `theme=dark`.
+// `?at=<workflow>/runs/<run>`, `?at=<workflow>/open/<child>`, with `lang=de`. Light and dark
+// are the reader's own, as everywhere in the interface.
 
 const WORKSPACE = { id: "samples", name: "Samples" };
 
@@ -23,6 +24,14 @@ function routeAt(at: string | null): WorkflowsRoute {
   const collaborationWorkspaceId = WORKSPACE.id;
   if (workflow === undefined) {
     return { kind: "workflows", collaborationWorkspaceId };
+  }
+  if (runs === "open") {
+    return {
+      kind: "workflow",
+      collaborationWorkspaceId,
+      workflow,
+      opened: (at ?? "").split("/").slice(2).join("/")
+    };
   }
   if (runs !== "runs") {
     return { kind: "workflow", collaborationWorkspaceId, workflow };
@@ -37,7 +46,7 @@ function address(route: WorkflowsRoute): string {
     case "workflows":
       return "";
     case "workflow":
-      return route.workflow;
+      return route.opened ? `${route.workflow}/open/${route.opened}` : route.workflow;
     case "workflow-runs":
       return `${route.workflow}/runs`;
     case "workflow-run":
@@ -47,7 +56,7 @@ function address(route: WorkflowsRoute): string {
 
 export function WorkflowSamples({
   theme,
-  mode: givenMode,
+  mode,
   locale: givenLocale
 }: {
   theme?: UiRootProps["theme"];
@@ -57,9 +66,13 @@ export function WorkflowSamples({
   const asked = useMemo(() => new URLSearchParams(window.location.search), []);
   const lang = asked.get("lang");
   const locale: LocaleCode = lang === "de" || lang === "en" ? lang : givenLocale;
-  const shade = asked.get("theme");
-  const mode = shade === "dark" || shade === "light" ? shade : givenMode;
   const [route, setRoute] = useState<WorkflowsRoute>(() => routeAt(asked.get("at")));
+  // The browser's way back and forward lead through the addresses the page has shown.
+  useEffect(() => {
+    const read = () => setRoute(routeAt(new URLSearchParams(window.location.search).get("at")));
+    window.addEventListener("popstate", read);
+    return () => window.removeEventListener("popstate", read);
+  }, []);
   const source = useMemo(() => createSampleSource(locale), [locale]);
   const host = useMemo<WorkflowsHost>(
     () => ({

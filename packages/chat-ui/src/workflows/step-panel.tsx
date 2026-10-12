@@ -2,17 +2,27 @@ import type { ReactNode } from "react";
 import {
   Button,
   CodeBlock,
+  Disclosure,
+  DisclosureContent,
+  DisclosureTrigger,
   IconTile,
   KeyValue,
   KeyValueList,
   RegistryIcon,
   SidePanel,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
   type FlowGraphGroup,
   type FlowGraphNode
 } from "@vivd-catalyst/ui";
 import { formatMoment } from "../control-plane/locale-format";
 import { useTranslation } from "../i18n";
 import { FailureBanner } from "./failure-banner";
+import { stepOutputRows } from "./step-output";
 import { countsLine } from "./workflow-canvas-model";
 import type {
   WorkflowLoopCounts,
@@ -37,6 +47,8 @@ export interface StepPanelRun {
   counts: WorkflowLoopCounts | undefined;
   /** The loop those counts are of has ended: what they leave open will not run. */
   countsEnded?: boolean;
+  /** The loop that runs once for each entry of what the step returned, and how many those are. */
+  passesOn?: { count: number; step: string };
   now: Date;
 }
 
@@ -60,16 +72,72 @@ function prettyJson(text: string): string {
   }
 }
 
-function OutputPreview({ output }: { output: WorkflowOutputPreview }) {
+/** What a step returned, as text: the start of it, set out in lines. */
+function OutputText({ output, label }: { output: WorkflowOutputPreview; label: string }) {
   const { t } = useTranslation();
   return (
     <CodeBlock
-      label={t("workflows.run.output")}
+      label={label}
       code={prettyJson(output.text)}
       lineNumbers={false}
       maxLines={OUTPUT_PREVIEW_LINES}
       footer={output.truncated ? t("workflows.run.shortened") : undefined}
     />
+  );
+}
+
+/**
+ * What a step returned. A list of records is a table of its first rows, with the text behind a
+ * fold; anything else is the text. A step run carries the start of its output and no count, so
+ * the number of rows is said only where the whole list arrived.
+ */
+function OutputPreview({ output }: { output: WorkflowOutputPreview }) {
+  const { locale, t } = useTranslation();
+  const table = stepOutputRows(output);
+  if (table === undefined) {
+    return <OutputText output={output} label={t("workflows.run.output")} />;
+  }
+  const shown = table.rows.length.toLocaleString(locale);
+  return (
+    <section data-step-output="" className="grid min-w-0 gap-2">
+      <h3 className="text-caption font-medium text-muted-foreground">
+        {t("workflows.run.output")}
+      </h3>
+      <Table density="compact" stickyHeader>
+        <TableHeader>
+          <TableRow>
+            {table.columns.map((column) => (
+              <TableHead key={column}>{column}</TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {table.rows.map((row, index) => (
+            // The rows of an output have no id of their own; their order does not change.
+            <TableRow key={index}>
+              {row.map((value, column) => (
+                <TableCell key={table.columns[column]} truncate={24}>
+                  {value}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <p className="text-caption text-muted-foreground">
+        {table.total === undefined
+          ? t("workflows.run.rowsFirst", { shown })
+          : table.total > table.rows.length
+            ? t("workflows.run.rowsOf", { shown, total: table.total.toLocaleString(locale) })
+            : t("workflows.run.rowsAll", { shown })}
+      </p>
+      <Disclosure>
+        <DisclosureTrigger>{t("workflows.technicalDetails")}</DisclosureTrigger>
+        <DisclosureContent>
+          <OutputText output={output} label={t("workflows.run.outputText")} />
+        </DisclosureContent>
+      </Disclosure>
+    </section>
   );
 }
 
@@ -302,6 +370,14 @@ function StepRunDetails({
             )}
           >
             {source}
+          </KeyValue>
+        )}
+        {run.passesOn === undefined ? null : (
+          <KeyValue label={t("workflows.panel.passesOn")}>
+            {t("workflows.panel.passesOnTo", {
+              count: run.passesOn.count.toLocaleString(locale),
+              step: run.passesOn.step
+            })}
           </KeyValue>
         )}
         {stepRun.attempt > 1 ? (
