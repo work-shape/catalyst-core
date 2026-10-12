@@ -24,7 +24,7 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
   route.operation(apiOperations["assets.list"], {
     // The list decides the right per asset. A caller without one receives an empty page.
     authorize: () => ({ allowed: true }),
-    execute: (input, context) => workflow.list(context, input, context.paging)
+    execute: (input, context) => workflow.reads.list(context, input, context.paging)
   });
 
   route.operation(apiOperations["assets.sync"], {
@@ -63,11 +63,11 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
 
   route.operation(apiOperations["assets.get"], {
     authorize: ({ files, ...input }, { access }) =>
-      workflow.authorizeGet(access, { ...input, files: files === "true" }),
+      workflow.reads.authorizeGet(access, { ...input, files: files === "true" }),
     resource: assetResource,
     policyTargets: (input) => workflow.policyTargets(input),
     execute: ({ files, ...input }, context) =>
-      workflow.get(context, { ...input, files: files === "true" })
+      workflow.reads.get(context, { ...input, files: files === "true" })
   });
 
   route.operation(apiOperations["assets.put"], {
@@ -119,10 +119,10 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
   route.operation(apiOperations["assets.revisions.list"], {
     // The history holds every draft, so it asks what a read of the draft asks.
     authorize: (input, { access }) =>
-      workflow.authorizeGet(access, { ...input, revision: "draft" }),
+      workflow.reads.authorizeGet(access, { ...input, revision: "draft" }),
     resource: assetResource,
     policyTargets: (input) => workflow.policyTargets(input),
-    execute: (input, context) => workflow.listRevisions(context, input, context.paging)
+    execute: (input, context) => workflow.reads.listRevisions(context, input, context.paging)
   });
 
   route.operation(apiOperations["assets.revert"], {

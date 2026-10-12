@@ -1,31 +1,20 @@
 import {
   AppError,
-  INSTANCE_ASSET_SCOPE,
-  asCollaborationWorkspaceId,
-  asUserId,
   assetScopesEqual,
   auditActorFromIdentity,
   findNamespaceOfAssetName,
-  getSubjectUserId,
   isAppError,
-  isAuthenticatedServicePrincipal,
-  liveRevisionId,
   type AuthenticatedIdentity,
   type ActorAccess,
-  type AgentAvailability,
-  type AssetScope,
   type ConfigAssetMutation,
-  type ConfigAssetRecord,
   type ConfigAssetStore,
   type FileSet,
   type JsonObject,
-  type Namespace,
   type OperationAuthorization,
   type PolicyTarget,
-  type StorePage
 } from "@vivd-catalyst/core";
 import { z } from "zod";
-import { AssetDraftWorkflow, showsPublishedView, summarizeAsset } from "./asset-draft-workflow";
+import { AssetDraftWorkflow } from "./asset-draft-workflow";
 import type { AssetFileInput } from "./asset-files";
 import { readDefinitionName, type WorkflowAssetKind } from "./asset-kinds/shared";
 import {
@@ -83,11 +72,9 @@ import {
   type AssetAddress,
   type AssetTarget
 } from "./asset-target";
+import { AssetReadWorkflow, scopeOf } from "./asset-read-workflow";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
 import type { ChatServerOptions } from "./types";
-
-/** How many assets a list reads where its caller names no page. */
-const DEFAULT_ASSET_LIST_LIMIT = 51;
 
 type MutationBatch = Omit<
   Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0],
@@ -108,9 +95,15 @@ export class AssetWorkflow {
   private readonly options: ChatServerOptions;
   /** The writes of a kind with a draft or with files. */
   readonly drafts: AssetDraftWorkflow;
+  /** The list, the asset, one revision of it and its history. */
+  readonly reads: AssetReadWorkflow;
 
   constructor(options: ChatServerOptions) {
     this.options = options;
+    this.reads = new AssetReadWorkflow(options, {
+      target: (address) => this.target(address),
+      kind: (kind) => this.kind(kind)
+    });
     this.drafts = new AssetDraftWorkflow(options, {
       target: (address) => this.target(address),
       upsert: (call, target, config, write) => this.upsert(call, target, config, write),
@@ -185,7 +178,7 @@ export class AssetWorkflow {
       address.name === undefined
         ? undefined
         : findNamespaceOfAssetName(
-            await this.namespaces(scopeOf(address.workspaceId)),
+            await this.reads.namespaces(scopeOf(address.workspaceId)),
             address.name
           );
     return [
@@ -200,130 +193,6 @@ export class AssetWorkflow {
   /** What the policy is asked about for a batch: every kind and Namespace its items name. */
   syncPolicyTargets(input: AssetSyncInput): Promise<PolicyTarget[]> {
     return assetSyncPolicyTargets(this.options, input);
-  }
-
-  /**
-   * One page of the assets of a kind in one scope, each one the caller may read. The right is
-   * decided per asset by the one resolver, so a list never shows what `assets.get` refuses.
-   */
-  async list(
-    call: AssetCall,
-    input: { kind: string; prefix?: string; text?: string; workspaceId?: string },
-    page: StorePage | undefined
-  ) {
-    const kind = this.kind(input.kind);
-    const scope = scopeOf(input.workspaceId);
-    const [after] = page?.after ?? [];
-    // Whoever reads the asset is shown all of it; a holder of the use right its published view.
-    const reads = (resource: AssetTarget["resource"]) =>
-      call.access.authorize(kind.actions.read, resource).allowed;
-    const [namespaces, defaultName, records] = await Promise.all([
-      this.namespaces(scope),
-      this.defaultName(kind, scope),
-      this.options.configAssets.store.listConfigAssetPage({
-        clientInstanceId: this.options.clientInstanceId,
-        kind: kind.kind,
-        scope,
-        namePrefix: input.prefix,
-        nameContains: input.text,
-        afterName: typeof after === "string" ? after : undefined,
-        limit: page?.limit ?? DEFAULT_ASSET_LIST_LIMIT,
-        readable: (asset) => {
-          const resource = accessResource(asset.kind, asset.name, asset.scope, asset.id);
-          return (
-            reads(resource) ||
-            showsPublishedView(kind, call.access, resource, asset.published === true)
-          );
-        }
-      })
-    ]);
-    return records.map((record) => {
-      const namespace = findNamespaceOfAssetName(namespaces, record.name);
-      if (!reads(accessResource(record.kind, record.name, record.scope, record.id))) {
-        return this.drafts.publishedSummary(kind, record, namespace?.prefix);
-      }
-      return {
-        id: record.id,
-        kind: record.kind,
-        ...summarizeAsset(kind, record.name, record.config),
-        scope: record.scope,
-        ...(namespace ? { namespace: namespace.prefix } : {}),
-        revision: record.revision,
-        ...pointersOf(kind, record),
-        ...(record.name === defaultName ? { isDefault: true as const } : {}),
-        updatedAt: record.updatedAt
-      };
-    });
-  }
-
-  /** The right a read of the revision the call names asks. */
-  async authorizeGet(
-    access: ActorAccess,
-    input: AssetAddress & { revision?: string; files?: boolean }
-  ): Promise<OperationAuthorization> {
-    const target = await this.target(input);
-    return decide(access, this.drafts.readAction(access, target, input).action, target.resource);
-  }
-
-  async get(call: AssetCall, address: AssetAddress & { revision?: string; files?: boolean }) {
-    const target = await this.target(address);
-    const read = this.drafts.readAction(call.access, target, address);
-    call.access.require(read.action, target.resource);
-    const asset = requireActive(target);
-    // Whoever may not read the draft is answered the published revision and nothing of it.
-    const publishedOnly = read.publishedView;
-    if (publishedOnly) address = { ...address, revision: "published" };
-    const [namespaces, defaultName, availability, content] = await Promise.all([
-      this.namespaces(target.scope),
-      this.defaultName(target.kind, target.scope),
-      this.availability(call, target.kind, asset.name),
-      this.drafts.revisionContent(target, asset, address)
-    ]);
-    const namespace = findNamespaceOfAssetName(namespaces, asset.name);
-    return {
-      id: asset.id,
-      kind: asset.kind,
-      name: asset.name,
-      scope: asset.scope,
-      ...(namespace ? { namespace: namespace.prefix } : {}),
-      revision: publishedOnly ? (content.contentRevision ?? asset.revision) : asset.revision,
-      ...(publishedOnly
-        ? { publishedRevision: content.contentRevision }
-        : pointersOf(target.kind, asset)),
-      ...content,
-      ...(asset.name === defaultName ? { isDefault: true as const } : {}),
-      ...(availability ? { availability } : {}),
-      updatedAt: asset.updatedAt
-    };
-  }
-
-  /** One page of the history, newest first. It stays readable after its asset is deleted. */
-  async listRevisions(call: AssetCall, address: AssetAddress, page: StorePage | undefined) {
-    const target = await this.target(address);
-    // The history holds every draft: it is read with the right the draft is read with.
-    call.access.require(
-      this.drafts.readAction(call.access, target, { revision: "draft" }).action,
-      target.resource
-    );
-    if (!target.asset) {
-      throw notFound(target);
-    }
-    const revisions = await this.options.configAssets.store.listConfigAssetRevisions({
-      clientInstanceId: this.options.clientInstanceId,
-      kind: target.kind.kind,
-      name: target.name,
-      page,
-      newestFirst: true
-    });
-    return revisions.map((revision) => ({
-      revision: revision.revision,
-      operation: revision.operation,
-      config: revision.config,
-      actor: revision.actor,
-      origin: revision.origin,
-      globalVersion: revision.globalVersion,
-      createdAt: revision.createdAt
-    }));
   }
 
   /**
@@ -672,73 +541,6 @@ export class AssetWorkflow {
     return this.options.configAssets.kinds.require(kind);
   }
 
-  /** A Namespace is a prefix among the instance's own assets: a workspace's have none. */
-  private async namespaces(scope: AssetScope): Promise<Namespace[]> {
-    return scope.kind === "instance"
-      ? this.options.stores.access.listNamespaceRecords({
-          clientInstanceId: this.options.clientInstanceId
-        })
-      : [];
-  }
-
-  /**
-   * The name of the instance's default of a kind, read once per call. Only a kind that holds
-   * the default has one, and only among the instance's own assets.
-   */
-  private async defaultName(
-    kind: WorkflowAssetKind,
-    scope: AssetScope
-  ): Promise<string | undefined> {
-    if (!kind.holdsInstanceDefault || scope.kind !== "instance") {
-      return undefined;
-    }
-    const state = await this.options.configAssets.store.getConfigAssetState({
-      clientInstanceId: this.options.clientInstanceId
-    });
-    return state.defaultAgentName;
-  }
-
-  /**
-   * The workspaces one asset is offered in, where its kind is offered per workspace, as far as
-   * the caller sees them. Whoever holds the kind's write right on the whole instance sets the
-   * availability and lists every Shared Workspace for it, so reads them all. Anyone else reads
-   * the workspaces they are a member of, and a service principal is a member of none.
-   */
-  private async availability(
-    call: AssetCall,
-    kind: WorkflowAssetKind,
-    name: string
-  ): Promise<AgentAvailability | undefined> {
-    if (!kind.hasWorkspaceAvailability) {
-      return undefined;
-    }
-    const stored = await this.options.configAssets.store.listAgentAvailability({
-      clientInstanceId: this.options.clientInstanceId,
-      agentName: name
-    });
-    const availability = stored.get(name);
-    if (
-      !availability ||
-      availability.collaborationWorkspaceIds.length === 0 ||
-      call.access.authorize(kind.actions.write).allowed
-    ) {
-      return availability;
-    }
-    const memberOf = isAuthenticatedServicePrincipal(call.actor)
-      ? []
-      : await this.options.stores.workspaces.listWorkspacesForUser({
-          clientInstanceId: this.options.clientInstanceId,
-          userId: asUserId(getSubjectUserId(call.actor))
-        });
-    const visible = new Set<string>(memberOf.map((workspace) => workspace.id));
-    return {
-      ...availability,
-      collaborationWorkspaceIds: availability.collaborationWorkspaceIds.filter((id) =>
-        visible.has(id)
-      )
-    };
-  }
-
   private async target(address: AssetAddress): Promise<AssetTarget> {
     const kind = this.kind(address.kind);
     const scope = scopeOf(address.workspaceId);
@@ -764,24 +566,6 @@ export class AssetWorkflow {
       address
     };
   }
-}
-
-/** The two pointers of an asset of a kind with a published revision, as revision numbers. */
-function pointersOf(kind: WorkflowAssetKind, asset: ConfigAssetRecord) {
-  if (kind.lifecycle !== "draft_published") {
-    return {};
-  }
-  const published = liveRevisionId(asset, kind) === undefined ? undefined : asset.publishedRevision;
-  return {
-    draftRevision: asset.revision,
-    ...(published === undefined ? {} : { publishedRevision: published })
-  };
-}
-
-function scopeOf(workspaceId: string | undefined): AssetScope {
-  return workspaceId === undefined
-    ? INSTANCE_ASSET_SCOPE
-    : { kind: "workspace", workspaceId: asCollaborationWorkspaceId(workspaceId) };
 }
 
 /** What the kind refuses a write of the stored asset for, whatever the write says. */
