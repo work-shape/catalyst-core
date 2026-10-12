@@ -196,6 +196,22 @@ describe("a module that is off", () => {
     expect(messages.statusCode).toBe(200);
   });
 
+  // Fails without `apps.actions.list` in the Apps module: the route answered an admin 200 with
+  // the published Apps while the module was off. With Apps on it answers in
+  // tests/app-actions-list.test.ts.
+  it("answers the list of App actions with module_off while Apps are off, to an admin too", async () => {
+    const { instance } = await startInstance({ resources: true, documents: true });
+
+    for (const query of [{}, { app: "orders" }]) {
+      const refused = await instance.call("apps.actions.list", { query });
+      expect(refused.statusCode, refused.body).toBe(404);
+      expect(refused.json<ErrorBody>().error.details).toEqual({
+        reason: "module_off",
+        module: "apps"
+      });
+    }
+  });
+
   it("serves the same operation while the module is on", async () => {
     const { instance } = await startInstance({ resources: true, documents: true });
     const created = await instance.call("conversations.create", { payload: { title: "Module" } });

@@ -26,6 +26,7 @@ import {
   SecretNotResolvedError,
   type HttpRuntime,
   type JobWorker,
+  type OperationDefinition,
   type PlatformStores
 } from "@vivd-catalyst/core";
 import { createStaticConfigAssetSource } from "./static-config-asset-source";
@@ -492,6 +493,18 @@ export function getTestJobs(instance: TestInstance, jobOptions?: ChatServerJobOp
     });
   }
   return state.jobs;
+}
+
+/**
+ * The operations the routes of the instance registered, as its call path holds them: each with
+ * the module its registration names. The server, and with it the call path, is built on the
+ * first request, so one is made here.
+ */
+export async function getTestOperations(instance: TestInstance): Promise<OperationDefinition[]> {
+  await instance.call("health.get");
+  const calls = metadata.get(instance)?.serverOptions?.operationCalls;
+  if (!calls) throw new Error("This fixture has no API process that registers operations");
+  return (await calls.registry.list()).operations;
 }
 
 /**

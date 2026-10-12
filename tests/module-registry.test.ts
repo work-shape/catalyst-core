@@ -24,7 +24,7 @@ import {
   type ModuleSnapshot
 } from "@vivd-catalyst/core";
 import { createTestConfig } from "./support/fixtures";
-import { createTestInstance } from "./support/test-instance";
+import { createTestInstance, getTestOperations } from "./support/test-instance";
 
 const platformRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -124,6 +124,28 @@ describe("the module registry", () => {
         expect(operationIds, `${module.name}: ${operation}`).toContain(operation);
       }
     }
+  });
+
+  // What turns an operation off with its module is the module's list, which the route helper
+  // asks by the operation's id. The `module` a registration names is read by nothing else, so
+  // a route that names a module and is missing from the list answers while the module is off.
+  // Fails without `apps.actions.list` in the Apps module: it named `apps` and no list held it.
+  it("lists every operation a route binds to a module among the operations of that module", async () => {
+    const bound = (await getTestOperations(await createTestInstance())).filter(
+      (operation) => operation.module !== undefined
+    );
+    // The routes of Apps, of Connections and of changing assets name their module.
+    expect(new Set(bound.map((operation) => operation.module))).toEqual(
+      new Set(["apps", "connections", "assetManagement"])
+    );
+
+    const unlisted = bound.filter((operation) => {
+      const module = platformModules.find((candidate) => candidate.name === operation.module);
+      return ![...(module?.operations ?? []), ...(module?.selfCheckedOperations ?? [])].includes(
+        operation.name
+      );
+    });
+    expect(unlisted.map((operation) => `${operation.module}: ${operation.name}`)).toEqual([]);
   });
 });
 

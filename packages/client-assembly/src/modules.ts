@@ -68,6 +68,7 @@ const appsModule = defineModule({
     "app_content.files.get",
     "app_kit.files.get",
     "apps.create_from_page",
+    "apps.actions.list",
     "apps.preview",
     "apps.sessions.context",
     "apps.sessions.call_action",
