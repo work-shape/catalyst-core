@@ -434,8 +434,20 @@ id from config_assets where status = 'deleted')`.
   **`catalyst config push --force` no longer exists** and is refused with the conflict
   procedure: pull the assets the conflict names, re-apply the edits, push. A working copy that
   never pulled pushes every asset as a creation; `pull` records the delete of an asset it sees
-  gone, and the next push may create it again. Remove `.catalyst-state.json` of an instance whose database was reset. In Build
-  the conflict notice names who saved first and when and offers the history; the demo's
+  gone, and the next push may create it again. A pulled asset is recorded with the id of the asset on the instance, a push names it
+  (`expectedAssetId`), and a working copy that belongs to another database or to an asset that
+  was replaced is refused for that asset with `409` `asset_replaced` and the pull that repairs
+  it; a `.catalyst-state.json` of an earlier CLI needs one `catalyst config pull` first. One
+  put item of a batch holds at most 2 MiB (`ASSET_SYNC_ITEM_MAX_BYTES`), and each applied item
+  answers its `id`. A write is refused for a missing right first, then for the missing
+  revision, then for the stale one; a caller who may not read an asset is told its name alone
+  for a delete, for a name another owner holds and for a read-only asset at another revision.
+  A missing `agent_models.manage` is answered as every missing right, `Missing the right
+  'agent_models.manage'`, without the names of the settings. `assets.discard_draft` without a
+  revision answers `428`. A committed write is answered as made when its audit row cannot be
+  written, and the failure is logged. In Build
+  the conflict notice names who saved first and when, says that loading the newer version
+  replaces the text, and offers the history; on a phone it rests at the end of the page; the demo's
   `pnpm config:push` pushes without `--force`. **Upgrade CLI and server together.**
 - **Access wording:** in English a row of the Access page is a "right", as it already is in
   German: "New right", "Create right" and the tab "Rights". The column of the place is "Where"
