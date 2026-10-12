@@ -178,16 +178,19 @@ A concurrent index build runs outside a transaction. When it fails, the migratio
 
 ### Data Stores on the database server
 
-With the module `dataStores` on, each Data Store has a database of its own on this server and two roles, named `catalyst_ds_...`. The platform takes from those roles every way to the platform database and to each other's databases. Two things it leaves to you and reports on each store's record:
+With the module `dataStores` on, each Data Store has a database of its own on this server and two roles, named `catalyst_ds_...`. The platform takes from those roles every way to the platform database and to each other's databases. Three things it leaves to you. Every job of a store looks for them and names them on the store's record, and a name goes once its cause is closed:
 
-- `server_databases_open`: a store role can connect to `postgres` or `template1`, where it reads the catalog and nothing else. The platform changes no grant of those two databases, because the server may hold more than this instance. On a server that is this instance's alone, run `REVOKE CONNECT ON DATABASE postgres, template1 FROM PUBLIC` as their owner; the condition is gone at the next provisioning. On a shared server add the line below to `pg_hba.conf`, above the lines that admit the platform, and reload Postgres. Postgres shows that file to no ordinary role, so the condition stays.
-- `sessions_open`: the platform's database role is no superuser, so it cannot take `pg_stat_activity`, `pg_cancel_backend` and `pg_terminate_backend` from the roles of a store. A query of a store can then see the sessions of that store and end one.
+- `server_databases_open`: a store role can connect to another database of the server, such as `postgres` or `template1`, where it reads the catalog and nothing else. The platform changes no grant of a database it does not own, because the server may hold more than this instance. On a server that is this instance's alone, run `REVOKE CONNECT ON DATABASE <name> FROM PUBLIC` for each such database as its owner. On a shared server add the line below to `pg_hba.conf`, above the lines that admit the platform, and reload Postgres. Postgres shows that file to no ordinary role, so the condition stays.
+- `sessions_open`: the platform's database role is no superuser, so it cannot take the functions that list and end sessions from the roles of a store. A query of a store can then see the sessions of the server and end another query of that store.
+- `temp_files_unbounded`: the platform's database role is no superuser, so it cannot set `temp_file_limit` on the roles of a store. A statement of a store that sorts or joins without end fills the disk with temporary files until its timeout.
 
 ```text
 host postgres,template1 /^catalyst_ds_ all reject
 ```
 
 A role of a store may change its own password. The platform sets it again before it connects as that role, so keep the Postgres port closed to everyone but the platform: whoever reaches it in between logs in with what the role last set.
+
+A store at its size limit takes no further rows. What a refused insert wrote is given back by a `VACUUM` the platform runs as the owner of the store's database; the autovacuum of the server does the rest.
 
 ## Health And Readiness
 

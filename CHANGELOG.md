@@ -123,15 +123,20 @@ contain breaking changes; a patch version does not.
     and call that connects as a role of a store, both roles are looked at and set again where
     they differ. **Keep the Postgres port closed to tenants: a role may change its own
     password between two checks.** What provisioning finds open and leaves to an operator is
-    named on the store's record: `server_databases_open` (a store role can connect to
-    `postgres` or `template1`; revoke `CONNECT` from `PUBLIC` there, or add
-    `host postgres,template1 /^catalyst_ds_ all reject` to `pg_hba.conf`) and `sessions_open`
-    (the platform's role is no superuser, so a query of a store can end another one).
+    named on the store's record and asked anew at every job: `server_databases_open` (a
+    store role can connect to another database of the server; revoke `CONNECT` from `PUBLIC`
+    there, or add `host postgres,template1 /^catalyst_ds_ all reject` to `pg_hba.conf`),
+    `sessions_open` and `temp_files_unbounded` (the platform's role is no superuser, so it
+    can neither take the session functions from a store nor set `temp_file_limit` on its
+    roles). The roles of a store carry `work_mem` and, set by a superuser, `temp_file_limit`.
   - **Size limit:** a store is measured when it is provisioned and after every migration.
-    Every insert reads the size of the store's database before it writes and after, and is
-    rolled back where it passed the limit, so no row that is kept lies beyond it. `insert` with
-    `onConflict: skip` refuses a row (`nullable_key`) that no unique index of the table binds:
-    one whose key is empty in every unique index, or left to a default.
+    Every insert reads the size of the store's database before it writes and after, on a
+    connection of the platform's own, and is rolled back where it passed the limit, so no row
+    that is kept lies beyond it; what it wrote is given back with a `VACUUM`. A migration that
+    would leave the store over its limit is refused the same way. `insert` with
+    `onConflict: skip` goes by a unique key of all rows that is not deferrable and whose
+    columns the call gives: a call without one is refused (`skip_without_key`,
+    `skip_deferrable_key`), and so is a row whose key is empty (`nullable_key`).
   - **Refusals:** a migration that names the schema `catalyst`, which the platform keeps for
     itself in every store, is refused when it is written. A publish whose `scope` is not the
     owner of the store answers `scope_mismatch`. A publish that changes or removes an applied
