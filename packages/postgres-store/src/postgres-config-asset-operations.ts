@@ -546,6 +546,13 @@ export async function applyConfigAssetMutations(
     }
     const deletedIds = all.filter((asset) => asset.deleted && asset.stored).map(({ id }) => id);
     if (deletedIds.length > 0) {
+      // A deleted asset has no published revision. Whoever writes the name again makes a
+      // draft, and the revision that is served is chosen anew by a publish, which asks who
+      // may make it live. Without this a write brought the earlier published revision back.
+      await tx
+        .update(configAssets)
+        .set({ publishedRevisionId: null })
+        .where(inArray(configAssets.id, deletedIds));
       await tx
         .delete(configAssetAvailability)
         .where(inArray(configAssetAvailability.assetId, deletedIds));

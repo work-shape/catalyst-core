@@ -6,6 +6,8 @@ import {
   WORKFLOW_DATASET_KEY,
   WORKFLOW_DATASET_TYPE,
   WORKFLOW_ERROR_CODES,
+  WORKFLOW_LIST_OPERATION,
+  WORKFLOW_LIST_STEP_RUNS_OPERATION,
   WORKFLOW_ON_FAILURE_NOTIFY,
   WORKFLOW_RUN_KEY_MAX_LENGTH,
   WORKFLOW_RUN_KEY_SEPARATOR,
@@ -19,7 +21,17 @@ import {
   WORKFLOW_START_KEY_INPUT,
   WORKFLOW_STEP_SLOTS_SETTING,
   WORKFLOW_TRIGGER_KINDS,
+  asUserId,
   createPlatformId,
+  workflowInputValueSchema,
+  workflowLastRunSchema,
+  workflowStepRunFilterSchema,
+  type WorkflowInputValue,
+  type WorkflowLastRun,
+  type WorkflowRunRecordView,
+  type WorkflowStepRunCall,
+  type WorkflowStepRunFilter,
+  type WorkflowStepRunPlacement,
   dataStoreLoadInputSchema,
   dataStoreLoadResultSchema,
   dataStoreOperationName,
@@ -298,6 +310,80 @@ describe("what the contract reserves for datasets, child runs and run keys", () 
   });
 });
 
+describe("one field of a step's input", () => {
+  // Fails with a type of two open objects: `{ value, ref }` was a valid field, and which of
+  // the two a step received was the engine's guess.
+  it("is a literal or a reference, and never both", () => {
+    expect(workflowInputValueSchema.parse({ value: ["a", 1, null] })).toEqual({
+      value: ["a", 1, null]
+    });
+    const reference = { ref: { step: "start", path: "input.month" } };
+    expect(workflowInputValueSchema.parse(reference)).toEqual(reference);
+    for (const refused of [
+      { value: 1, ...reference },
+      {},
+      { ref: { step: "", path: "" } },
+      { ref: { step: "start" } },
+      { value: 1, note: "x" }
+    ]) {
+      expect(workflowInputValueSchema.safeParse(refused).success, JSON.stringify(refused)).toBe(
+        false
+      );
+    }
+    expectTypeOf<{
+      value: 1;
+      ref: { step: string; path: string };
+    }>().not.toExtend<WorkflowInputValue>();
+  });
+});
+
+describe("what the run view reads of a run and its step runs", () => {
+  // Fails without these: the screens had no shared name for where a step run stands in the
+  // tree of its run, so the list of a loop's items could not be asked for.
+  it("places a step run in its block, names what an operation step called and filters the list", () => {
+    const placed: WorkflowStepRunPlacement = {
+      containerStepRunId: stepRunId,
+      branch: "then",
+      iteration: { index: 411, label: "10843" }
+    };
+    const called: WorkflowStepRunCall = { effect: "reading", source: "accounting" };
+    const run: WorkflowRunRecordView = {
+      definitionRevisionId: "cfgr_1",
+      cancelledBy: asUserId("user-1"),
+      cancelledAt: "2026-10-12T10:00:00.000Z"
+    };
+    expect([placed.branch, called.source, run.definitionRevisionId]).toEqual([
+      "then",
+      "accounting",
+      "cfgr_1"
+    ]);
+
+    expect(WORKFLOW_LIST_OPERATION).toBe("workflows.list");
+    expect(WORKFLOW_LIST_STEP_RUNS_OPERATION).toBe("workflows.list_step_runs");
+    const filter: WorkflowStepRunFilter = workflowStepRunFilterSchema.parse({
+      containerStepRunId: stepRunId,
+      status: "failed",
+      iteration: 3
+    });
+    expect(filter).toEqual({ containerStepRunId: stepRunId, status: "failed", iteration: 3 });
+    expect(workflowStepRunFilterSchema.parse({})).toEqual({});
+    for (const refused of [{ status: "broken" }, { iteration: -1 }, { stepId: "check" }]) {
+      expect(workflowStepRunFilterSchema.safeParse(refused).success, JSON.stringify(refused)).toBe(
+        false
+      );
+    }
+
+    const lastRun: WorkflowLastRun = workflowLastRunSchema.parse({
+      id: runId,
+      status: "done",
+      startedAt: "2026-10-01T04:00:00.000Z",
+      endedAt: "2026-10-01T04:12:00.000Z"
+    });
+    expect(lastRun.status).toBe("done");
+    expect(workflowLastRunSchema.safeParse({ id: runId, status: "finished" }).success).toBe(false);
+  });
+});
+
 describe("the load of a dataset into a Data Store", () => {
   // Fails without `load`: 20,000 rows of a run had no way into a table but one insert per row.
   it("reads a load of a dataset into a table, its key and what it answers", () => {
@@ -330,7 +416,10 @@ describe("the load of a dataset into a Data Store", () => {
       // Replace by key: without `key`, or by a column outside it, the load is refused.
       { table: "findings", dataset, replace: { by: ["client"] } },
       { table: "findings", dataset, key: ["client", "line"], replace: { by: ["month"] } },
-      { table: "findings", dataset, truncate: true }
+      { table: "findings", dataset, truncate: true },
+      // The dataset is the reference a step record holds, and nothing else.
+      { table: "findings", dataset: "ds_1" },
+      { table: "findings", dataset: { $dataset: "ds_1", rows: 3, bytes: 300 } }
     ]) {
       expect(dataStoreLoadInputSchema.safeParse(refused).success, JSON.stringify(refused)).toBe(
         false

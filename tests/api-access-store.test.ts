@@ -158,6 +158,16 @@ function runApiAccessStoreSuite(
       expect(first.name).toBe("catalyst-cli");
       expect(second.name).toMatch(/^catalyst-cli-[0-9a-f]{6}$/u);
 
+      // Fails without the retry: creates side by side all found the slug free, one took it
+      // and the others were refused, though no caller had asked for a name.
+      const beside = await Promise.all(
+        Array.from({ length: 6 }, () =>
+          store.apiAccess.createServicePrincipal({ clientInstanceId, displayLabel: "Nightly" })
+        )
+      );
+      expect(new Set(beside.map((principal) => principal.name)).size).toBe(6);
+      expect(beside.filter((principal) => principal.name === "nightly")).toHaveLength(1);
+
       // The same name on another instance is another principal.
       const elsewhere = await store.apiAccess.createServicePrincipal({
         clientInstanceId: createClientInstanceId(),

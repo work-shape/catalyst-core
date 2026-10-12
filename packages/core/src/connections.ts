@@ -94,10 +94,11 @@ export interface ConnectionOperationConfig {
   schemaFingerprint?: string;
   /**
    * How the outside system pages this reading operation. A Workflow step that names
-   * `paginate` takes it. Reserved: the slice that brings paging reads it.
+   * `paginate` takes it. Reserved: the schema of a definition refuses it with
+   * `not_supported_yet` until the slice that brings paging reads it.
    */
   paging?: OperationPaging;
-  /** The limits of calls toward the outside system. Reserved like `paging`. */
+  /** The limits of calls toward the outside system. Reserved and refused like `paging`. */
   limits?: OperationLimits;
 }
 

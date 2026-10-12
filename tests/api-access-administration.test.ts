@@ -69,6 +69,14 @@ describe("API Access administration", () => {
         }
       })
     );
+    // Fails with a schema that strips what it does not know: a rename was answered 200 and
+    // changed nothing, so its caller believed the principal had the new name.
+    const renamed = await fixture.server.call("service_principals.update", {
+      params: { servicePrincipalId: created.principal.id },
+      headers: { authorization: "Bearer superadmin" },
+      payload: { name: "renamed", displayLabel: "Renamed" }
+    });
+    expect(renamed.statusCode, renamed.body).toBe(422);
     // The name is the principal's for good: an update has no field for it.
     expect(updated.principal).toMatchObject({
       name: "release",

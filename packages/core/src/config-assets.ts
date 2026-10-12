@@ -298,6 +298,12 @@ export interface ConfigAssetStore {
     name: string;
     revision: number;
     /**
+     * The id of the revision the caller read and checked. The pointer moves only to that
+     * revision: a name that was removed and created again in between has another revision of
+     * the same number, and that is refused with `CONFLICT` and the reason `revision_changed`.
+     */
+    revisionId: string;
+    /**
      * For a kind whose revisions hold files: refuses, with the reason `revision_files_removed`
      * and in the same transaction, a revision without a built file set this asset owns.
      */

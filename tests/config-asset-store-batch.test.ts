@@ -53,11 +53,29 @@ describe("one batch of the asset store", () => {
     const created = await write(null, "one");
     expect(created.revisions).toEqual({ "skill:guide": 1 });
     expect(created.assetIds).toEqual({ "skill:guide": expect.stringMatching(/^cfga_/u) });
-    await assets.publishConfigAssetRevision({
+    const first = await assets.getConfigAssetRevision({
       clientInstanceId,
       kind: "skill",
       name: "guide",
       revision: 1
+    });
+    // Fails without the id in the publish: the pointer moved to whatever revision had the
+    // number, also one of a name that was removed and created again after the check.
+    await expect(
+      assets.publishConfigAssetRevision({
+        clientInstanceId,
+        kind: "skill",
+        name: "guide",
+        revision: 1,
+        revisionId: "cfgr_another"
+      })
+    ).rejects.toMatchObject({ code: "CONFLICT", details: { reason: "revision_changed" } });
+    await assets.publishConfigAssetRevision({
+      clientInstanceId,
+      kind: "skill",
+      name: "guide",
+      revision: 1,
+      revisionId: first?.id ?? ""
     });
     expect((await write(1, "two")).revisions).toEqual({ "skill:guide": 2 });
     await assets.discardConfigAssetDraft({

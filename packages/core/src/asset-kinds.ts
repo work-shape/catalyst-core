@@ -298,6 +298,19 @@ export function createAssetKindRegistry<Kind extends RegisteredAssetKind>(
         `Asset kind plural '${kind.plural}' is registered more than once`
       );
     }
+    // A kind that checks who makes a revision live needs one moment at which a revision goes
+    // live: a publish. A kind without a draft goes live with every put, file write and sync,
+    // which ask nothing, so its check would hold for a revert alone.
+    if (
+      "authorizeLive" in kind &&
+      kind.authorizeLive !== undefined &&
+      kind.lifecycle !== "draft_published"
+    ) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `Asset kind '${kind.kind}' checks who makes a revision live and has no published revision: only a kind with the lifecycle 'draft_published' may set 'authorizeLive'`
+      );
+    }
     byKind.set(kind.kind, kind);
     plurals.add(kind.plural);
   }

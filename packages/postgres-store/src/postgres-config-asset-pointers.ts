@@ -89,6 +89,13 @@ export async function publishConfigAssetRevision(
         { reason: "revision_unknown" }
       );
     }
+    if (target.id !== input.revisionId) {
+      throw new AppError(
+        "CONFLICT",
+        `Revision ${input.revision} of ${input.kind} '${input.name}' is no longer the revision that was read: the name was removed and created again`,
+        { reason: "revision_changed", revision: input.revision }
+      );
+    }
     if (
       input.requireFiles &&
       !(await hasBuiltFiles(

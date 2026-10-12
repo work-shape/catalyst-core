@@ -118,6 +118,32 @@ describe("asset kind registry", () => {
     );
   });
 
+  // Fails without the refusal: a kind without a draft goes live with every put and sync,
+  // which ask nothing, so its check of who makes a revision live held for a revert alone.
+  it("refuses a kind that checks who makes a revision live and has no published revision", () => {
+    const authorizeLive = () => undefined;
+    expect(() => createAssetKindRegistry([{ ...widgetKind, authorizeLive }])).toThrow(
+      "Asset kind 'widget' checks who makes a revision live and has no published revision"
+    );
+    const drafted = defineAssetKind({
+      kind: "gizmo",
+      plural: "gizmos",
+      lifecycle: "draft_published",
+      schema: z.object({ name: z.string() }),
+      nameRule: { pattern: /^.+$/u, description: "Gizmo name is invalid" },
+      actions: {
+        read: "gizmo.read",
+        write: "gizmo.write",
+        delete: "gizmo.delete",
+        publish: "gizmo.publish"
+      },
+      summarize: (gizmo) => ({ name: gizmo.name, title: gizmo.name })
+    });
+    expect(
+      createAssetKindRegistry([{ ...drafted, authorizeLive }]).require("gizmo").lifecycle
+    ).toBe("draft_published");
+  });
+
   it("refuses a kind or a plural that is registered twice, and an unknown kind", () => {
     expect(() => createAssetKindRegistry([agentKind, skillKind, agentKind])).toThrow(
       "Asset kind 'agent' is registered more than once"

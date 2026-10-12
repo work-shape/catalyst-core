@@ -1,7 +1,8 @@
 import { z } from "zod";
 import type { AssetKindActions } from "./asset-kinds";
-import type { WorkflowRunId, WorkflowStepRunId } from "./ids";
+import type { UserId, WorkflowRunId, WorkflowStepRunId } from "./ids";
 import type { JsonObject, JsonValue } from "./json";
+import type { OperationEffect } from "./operations";
 import type { PlatformAction } from "./permissions";
 
 // The names and shapes of a Workflow that more than one package reads: the asset kind, the
@@ -165,8 +166,18 @@ export interface WorkflowReference {
   path: string;
 }
 
-/** One field of a step's input: a literal, or a reference. A mapping holds no expression. */
-export type WorkflowInputValue = { value: JsonValue } | { ref: WorkflowReference };
+/**
+ * One field of a step's input: a literal, or a reference, and never both. A mapping holds no
+ * expression.
+ */
+export type WorkflowInputValue =
+  { value: JsonValue; ref?: never } | { ref: WorkflowReference; value?: never };
+
+/** One field of a mapping as a definition's schema reads it: exactly one of the two keys. */
+export const workflowInputValueSchema = z.union([
+  z.strictObject({ value: z.json() }),
+  z.strictObject({ ref: z.strictObject({ step: z.string().min(1), path: z.string() }) })
+]);
 
 /** The input of a step, by the field names of its input schema. */
 export type WorkflowInputMapping = Readonly<Record<string, WorkflowInputValue>>;
@@ -560,6 +571,62 @@ export interface WorkflowRunIdentity {
 export interface WorkflowStepRunLink {
   linkedRunId?: WorkflowRunId;
 }
+
+/**
+ * Where a step run stands in the tree of its run. The run view and the canvas read the tree
+ * from these three. Types for the screens; the engine slices fill them.
+ */
+export interface WorkflowStepRunPlacement {
+  /** The step run of the block that holds the step: a loop, and later a condition or parallel. */
+  containerStepRunId?: WorkflowStepRunId;
+  /** The branch of that block the step stands in: `then`, `else` or the id of a branch. */
+  branch?: string;
+  /** Which item of a loop the step run belongs to. */
+  iteration?: WorkflowStepRunIteration;
+}
+
+/** On the step run of an operation step: what the operation does and what it belongs to. */
+export interface WorkflowStepRunCall {
+  effect?: OperationEffect;
+  /** The name of the Connection, Data Store, Knowledge Base or App of the operation. */
+  source?: string;
+}
+
+/** What a run page needs of a run beside its status. Types; the engine slices fill them. */
+export interface WorkflowRunRecordView {
+  /** The revision of the definition the run started on and keeps when it is resumed. */
+  definitionRevisionId: string;
+  /** Who cancelled the run, and when, as an ISO time. Missing on a run nobody cancelled. */
+  cancelledBy?: UserId;
+  cancelledAt?: string;
+}
+
+/** The latest run of a Workflow, on its entry in `workflows.list`. */
+export const workflowLastRunSchema = z.object({
+  id: z.string().min(1),
+  status: z.enum(WORKFLOW_RUN_STATUSES),
+  startedAt: z.string().optional(),
+  endedAt: z.string().optional()
+});
+
+export type WorkflowLastRun = z.infer<typeof workflowLastRunSchema>;
+
+/** The operations of the run view whose shapes the screens and the engine share. */
+export const WORKFLOW_LIST_OPERATION = "workflows.list";
+export const WORKFLOW_LIST_STEP_RUNS_OPERATION = "workflows.list_step_runs";
+
+/**
+ * The filters of `workflows.list_step_runs`: the step runs of one block, of one status and of
+ * one item of a loop. A loop over 600 items is read as its step runs by `containerStepRunId`
+ * and `status`.
+ */
+export const workflowStepRunFilterSchema = z.strictObject({
+  containerStepRunId: z.string().min(1).optional(),
+  status: z.enum(WORKFLOW_STEP_RUN_STATUSES).optional(),
+  iteration: z.number().int().min(0).optional()
+});
+
+export type WorkflowStepRunFilter = z.infer<typeof workflowStepRunFilterSchema>;
 
 /** The deepest a child run stands below its root: a root, its children and their children. */
 export const WORKFLOW_RUN_MAX_DEPTH = 2;

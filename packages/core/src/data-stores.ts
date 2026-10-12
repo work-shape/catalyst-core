@@ -1,3 +1,4 @@
+import { workflowDatasetReferenceSchema } from "./workflows";
 import { z } from "zod";
 import type { AssetKindActions } from "./asset-kinds";
 import type { JsonObject } from "./json";
@@ -144,7 +145,7 @@ export const dataStoreLoadInputSchema = z
   .strictObject({
     table: z.string().min(1),
     /** The reference of the dataset as the step data holds it. */
-    dataset: z.unknown(),
+    dataset: workflowDatasetReferenceSchema,
     /** Row field to column. By name where left out. */
     columns: z.record(z.string(), z.string()).optional(),
     /** The columns that tell two rows apart. */

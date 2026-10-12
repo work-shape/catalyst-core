@@ -120,6 +120,56 @@ describe("making a revision live that names a service principal", () => {
     expectStatus(await t.publish(t.root.id, "offers", first), 200);
   });
 
+  // Fails without the delete clearing the published revision: the row kept it, so the write
+  // that restores the name made the earlier revision live again, and nobody was asked.
+  it("leaves a deleted Workflow that is written again a draft, until someone who may publishes it", async () => {
+    const revision = await write(t.admin.id, "booking-check");
+    expectStatus(await t.publish(t.root.id, "offers", revision), 200);
+    expect(await published()).toBeDefined();
+
+    expectStatus(
+      await t.call(t.admin.id, "assets.delete", {
+        params: { kind: "app", name: "offers" },
+        payload: { workspaceId: t.workspaceId, expectedRevision: revision }
+      }),
+      200
+    );
+    expect(await published()).toBeUndefined();
+
+    // A holder of the write right restores the name. It is a draft and nothing is served.
+    const restored = await write(t.admin.id, "payroll");
+    expect(await published()).toBeUndefined();
+    expect((await refused(t.admin.id, restored)).details).toEqual({
+      action: "api_access.manage",
+      reason: "no_grant"
+    });
+    expect(await published()).toBeUndefined();
+    expectStatus(await t.publish(t.root.id, "offers", restored), 200);
+    expect(await published()).toBeDefined();
+  });
+
+  // Fails without the check of the status: a revision went live whose runs could act as
+  // nobody, or as a principal an administrator had switched off.
+  it("refuses a principal that is disabled, with the name", async () => {
+    const principal = await t.stores.apiAccess.createServicePrincipal({
+      clientInstanceId,
+      name: "retired",
+      displayLabel: "Retired"
+    });
+    await t.stores.apiAccess.updateServicePrincipal({
+      clientInstanceId,
+      servicePrincipalId: principal.id,
+      status: "disabled"
+    });
+    const revision = await write(t.admin.id, "retired");
+    const response = await t.publish(t.root.id, "offers", revision);
+    expectStatus(response, 422);
+    expect(errorSchema.parse(response.json()).error.details).toEqual({
+      reason: "run_as_disabled",
+      runAs: "retired"
+    });
+  });
+
   it("refuses a name no principal of the instance has, with the name", async () => {
     const revision = await write(t.admin.id, "nobody");
     const response = await t.publish(t.root.id, "offers", revision);

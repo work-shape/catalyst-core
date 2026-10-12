@@ -70,14 +70,16 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
    * whatever the kind's publish right says: the revision lends something its writer could not
    * give, such as the grants of the service principal a Workflow runs as. It is asked of the
    * revision that becomes live and of who makes it so: on a publish, of the newest revision
-   * and of an earlier one alike, and on a revert of a kind without a draft. Who wrote the
-   * revision is not asked.
+   * and of an earlier one alike. Who wrote the revision is not asked. Only a kind with the
+   * lifecycle `draft_published` may set it, and the registry refuses any other: there a
+   * revision goes live by a publish and by nothing else, and a delete takes the published
+   * revision away, so a deleted asset that is written again is a draft.
    */
   authorizeLive?(input: {
     actor: AuthenticatedIdentity;
     access: ActorAccess;
     name: string;
-    /** The revision that becomes live, or the one a revert restores. */
+    /** The revision that becomes live. */
     revision: number;
     /** The config of that revision. */
     config: unknown;

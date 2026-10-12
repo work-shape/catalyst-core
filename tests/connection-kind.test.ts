@@ -46,9 +46,9 @@ function issuesOf(config: unknown) {
 }
 
 describe("the definition of a Connection", () => {
-  // Fails without `paging` on the entry: the schema is strict, so a definition that says how
-  // the outside system pages was refused as an unknown field.
-  it("reads how a reading operation pages and refuses paging on a changing one", () => {
+  // Fails while `paging` and `limits` are stored and read by nothing: an operator would
+  // believe a limit that no call keeps.
+  it("refuses paging and limits on an operation until the call path holds them", () => {
     const base = {
       name: "accounting",
       displayName: "Accounting",
@@ -59,29 +59,35 @@ describe("the definition of a Connection", () => {
     };
     const paging = { by: "page", param: "page", sizeParam: "page_size", size: 1000 };
     const limits = { concurrency: 2, perPeriod: { calls: 60, seconds: 60 } };
-    const parsed = connectionConfigSchema.parse({
-      ...base,
-      operations: [
-        { name: "list_postings", effect: "reading", exposure: ["workflow"], paging, limits }
-      ]
-    });
-    expect(parsed.operations[0]?.paging).toEqual(paging);
-    expect(parsed.operations[0]?.limits).toEqual(limits);
     expect(
       issuesOf({
         ...base,
-        operations: [{ name: "list_postings", effect: "reading", limits: { perMinute: 60 } }]
+        operations: [{ name: "list_postings", effect: "reading", paging, limits }]
       })
-    ).not.toEqual([]);
-    expect(
-      issuesOf({
-        ...base,
-        operations: [{ name: "list_postings", effect: "reading", paging: { by: "page" } }]
-      }).map((issue) => issue.path.split(".").slice(0, 3).join("."))
-    ).toContain("operations.0.paging");
-    expect(
-      issuesOf({ ...base, operations: [{ name: "book", effect: "changing", paging }] })
-    ).toEqual([{ path: "operations.0.paging", message: "Only a reading operation can be paged" }]);
+    ).toEqual([
+      {
+        path: "operations.0.paging",
+        message: "'paging' on an operation of a Connection is not supported yet (not_supported_yet)"
+      },
+      {
+        path: "operations.0.limits",
+        message: "'limits' on an operation of a Connection is not supported yet (not_supported_yet)"
+      }
+    ]);
+    // Release config is read by its own schema and refuses the same.
+    expect(() =>
+      parseClientInstanceConfig({
+        ...createTestConfig(),
+        modules: { assetManagement: { enabled: true }, connections: { enabled: true } },
+        connections: {
+          accounting: {
+            connectorType: "mcp",
+            authScheme: "none",
+            operations: [{ name: "list_postings", effect: "reading", limits }]
+          }
+        }
+      })
+    ).toThrow(/not_supported_yet/u);
   });
 
   it("reads a definition and fills what it leaves out", () => {

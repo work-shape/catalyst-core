@@ -10,6 +10,7 @@ import {
   CONNECTION_SECRET_HANDLE_PATTERN,
   CONNECTOR_TYPE_PATTERN,
   EGRESS_PROTOCOLS,
+  WORKFLOW_ERROR_CODES,
   operationLimitsSchema,
   operationPagingSchema,
   secretRef,
@@ -169,6 +170,27 @@ export const connectionNameSchema = z
   .max(CONNECTION_NAME_MAX_LENGTH)
   .regex(CONNECTION_NAME_PATTERN, { message: CONNECTION_NAME_RULE });
 
+/**
+ * `paging` and `limits` of an operation are read so that their shape is fixed, and nothing
+ * calls by them yet. A definition that names one is refused until the call path holds them:
+ * stored and ignored, a limit would be believed and not kept.
+ */
+function refuseReservedFields(
+  operation: { paging?: unknown; limits?: unknown },
+  context: z.RefinementCtx,
+  path: (string | number)[]
+): void {
+  for (const field of ["paging", "limits"] as const) {
+    if (operation[field] !== undefined) {
+      context.addIssue({
+        code: "custom",
+        path: [...path, field],
+        message: `'${field}' on an operation of a Connection is not supported yet (${WORKFLOW_ERROR_CODES.notSupported})`
+      });
+    }
+  }
+}
+
 const connectionOperationSchema = z
   .object({
     name: z
@@ -252,13 +274,7 @@ export const connectionConfigSchema: z.ZodType<ConnectionConfig, unknown> = z
           message: "Only a changing operation can carry the policy 'approval'"
         });
       }
-      if (operation.paging !== undefined && operation.effect !== "reading") {
-        context.addIssue({
-          code: "custom",
-          path: ["operations", index, "paging"],
-          message: "Only a reading operation can be paged"
-        });
-      }
+      refuseReservedFields(operation, context, ["operations", index]);
     }
   });
 
@@ -276,7 +292,10 @@ const releaseConnectionOperationSchema = z
     /** How many calls toward the outside system run at once and start per period. */
     limits: operationLimitsSchema.optional()
   })
-  .strict();
+  .strict()
+  .superRefine((operation, context) => {
+    refuseReservedFields(operation, context, []);
+  });
 
 /**
  * One Connection of release config, `connections.<name>`. The start-up seed makes it an asset

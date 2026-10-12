@@ -245,8 +245,9 @@ export const createServicePrincipalRequestSchema = z.object({
   permissions: z.array(servicePrincipalPermissionSchema).optional()
 });
 
+/** Strict: `name` is set when the principal is created, and a change of it is refused. */
 export const updateServicePrincipalRequestSchema = z
-  .object({
+  .strictObject({
     displayLabel: z.string().trim().min(1).optional(),
     description: z.string().trim().min(1).nullable().optional(),
     status: servicePrincipalStatusSchema.optional(),

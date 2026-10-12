@@ -55,6 +55,14 @@ export async function requireWorkflowRunAs(
       { reason: "run_as_unknown", runAs: input.runAs }
     );
   }
+  // A run never acts as a disabled principal, so no revision that names one goes live.
+  if (principal.status !== "active") {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `The Workflow '${input.workflow}' acts as the service principal '${input.runAs}', which is disabled`,
+      { reason: "run_as_disabled", runAs: input.runAs }
+    );
+  }
   return principal;
 }
 

@@ -57,8 +57,33 @@ export async function createServicePrincipal(
       `'${input.name}' is no name of a service principal: lowercase letters, digits and '-', at most 63 characters`
     );
   }
-  const name = input.name ?? (await freeNameFor(db, input));
   const now = new Date();
+  // A name the caller gave is tried once. A derived one is tried again with another suffix
+  // when a create beside this one took it between the look and the insert.
+  for (let attempt = 0; ; attempt += 1) {
+    const name = input.name ?? (await freeNameFor(db, input, attempt > 0));
+    const row = await insertServicePrincipal(db, input, name, now);
+    if (row) {
+      return mapServicePrincipal(row);
+    }
+    if (input.name !== undefined || attempt >= DERIVED_NAME_ATTEMPTS) {
+      throw new AppError(
+        "CONFLICT",
+        `A service principal named '${name}' exists on this instance`,
+        { reason: "name_taken", name }
+      );
+    }
+  }
+}
+
+const DERIVED_NAME_ATTEMPTS = 5;
+
+async function insertServicePrincipal(
+  db: PostgresConnection,
+  input: CreateServicePrincipalInput,
+  name: string,
+  now: Date
+) {
   const [row] = await db
     .insert(servicePrincipals)
     .values({
@@ -77,25 +102,22 @@ export async function createServicePrincipal(
     })
     .onConflictDoNothing({ target: [servicePrincipals.clientInstanceId, servicePrincipals.name] })
     .returning();
-  if (!row) {
-    throw new AppError("CONFLICT", `A service principal named '${name}' exists on this instance`, {
-      reason: "name_taken",
-      name
-    });
-  }
-  return mapServicePrincipal(row);
+  return row;
 }
 
 /** The label as a slug, or that slug with a short random suffix where a principal has it. */
 async function freeNameFor(
   db: PostgresConnection,
-  input: Pick<CreateServicePrincipalInput, "clientInstanceId" | "displayLabel">
+  input: Pick<CreateServicePrincipalInput, "clientInstanceId" | "displayLabel">,
+  suffixed: boolean
 ): Promise<string> {
   const base = servicePrincipalNameFromLabel(input.displayLabel);
-  const taken = await findServicePrincipalByName(db, {
-    clientInstanceId: input.clientInstanceId,
-    name: base
-  });
+  const taken =
+    suffixed ||
+    (await findServicePrincipalByName(db, {
+      clientInstanceId: input.clientInstanceId,
+      name: base
+    })) !== undefined;
   return taken ? `${base}-${randomBytes(3).toString("hex")}` : base;
 }
 
