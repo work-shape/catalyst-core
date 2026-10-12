@@ -58,10 +58,10 @@ describe("Table", () => {
   it("stands in a bounded box that scrolls both ways when the head row stays", () => {
     const markup = table({ stickyHeader: true });
 
-    expect(classesOf(markup, "div")).toEqual(
-      expect.arrayContaining(["max-h-128", "overflow-auto", "border", "bg-card"])
+    // The frame holds the border and stands outside what scrolls, so the fade leaves it whole.
+    expect(markup).toMatch(
+      /^<div data-slot="table-frame" class="w-full overflow-hidden rounded-md border bg-card"><div data-slot="table-box" class="w-full max-h-128 overflow-auto"><table/u
     );
-    expect(classesOf(markup, "div")).not.toContain("overflow-x-auto");
     expect(markup).toContain('data-sticky-header=""');
     // The head cell is opaque, so no row shows through it.
     expect(classesOf(markup, "th")).toEqual(

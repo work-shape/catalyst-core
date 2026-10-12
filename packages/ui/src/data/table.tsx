@@ -31,16 +31,13 @@ export const Table = forwardRef<HTMLTableElement, TableProps>(function Table(
   ref
 ) {
   const fade = useScrollEdgeFade<HTMLDivElement>([], "x");
-  return (
+  const box = (
     <div
       ref={fade.ref}
       onScroll={fade.onScroll}
       style={fade.style}
       data-slot="table-box"
-      className={cn(
-        "w-full",
-        stickyHeader ? "max-h-128 overflow-auto rounded-md border bg-card" : "overflow-x-auto"
-      )}
+      className={cn("w-full", stickyHeader ? "max-h-128 overflow-auto" : "overflow-x-auto")}
     >
       <table
         ref={ref}
@@ -50,6 +47,14 @@ export const Table = forwardRef<HTMLTableElement, TableProps>(function Table(
         {...props}
       />
     </div>
+  );
+  // The frame stands outside what scrolls, so the edge fade leaves its border whole.
+  return stickyHeader ? (
+    <div data-slot="table-frame" className="w-full overflow-hidden rounded-md border bg-card">
+      {box}
+    </div>
+  ) : (
+    box
   );
 });
 
