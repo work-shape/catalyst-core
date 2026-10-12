@@ -7,8 +7,9 @@ const SIZE_PATTERN = /^[1-9]\d{0,5}(?:MB|GB)$/u;
  * What an operator sets for the Data Stores of an instance, which share the Postgres server of
  * the platform database. `sizeLimit` is the most one store may hold: a store's manifest may
  * name less and never more, and at the limit rows are no longer added. Every insert reads the
- * size first, so a store passes the limit by at most what the inserts running at one moment
- * add, which stays under 256 MiB. `poolMaxConnections`
+ * size of the database before it writes and after, and is rolled back where it passed the
+ * limit: no row that is kept lies beyond it, and the files exceed it only by what the inserts
+ * of one moment wrote, under 256 MiB for rows alone. `poolMaxConnections`
  * is the most connections the platform holds to one store at once; it stays below the
  * connection limit of the store's role, which is 10.
  */

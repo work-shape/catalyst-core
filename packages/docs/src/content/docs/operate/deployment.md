@@ -178,11 +178,16 @@ A concurrent index build runs outside a transaction. When it fails, the migratio
 
 ### Data Stores on the database server
 
-With the module `dataStores` on, each Data Store has a database of its own on this server and two roles, named `catalyst_ds_...`. The platform takes from those roles every way to the platform database and to each other's databases. It changes no grant of `postgres` and `template1`, because the server may hold more than this instance. Without a rule of your own a store role can connect to those two databases, where it reads the catalog and nothing else. To close that, add this line to `pg_hba.conf` above the lines that admit the platform, and reload Postgres:
+With the module `dataStores` on, each Data Store has a database of its own on this server and two roles, named `catalyst_ds_...`. The platform takes from those roles every way to the platform database and to each other's databases. Two things it leaves to you and reports on each store's record:
+
+- `server_databases_open`: a store role can connect to `postgres` or `template1`, where it reads the catalog and nothing else. The platform changes no grant of those two databases, because the server may hold more than this instance. On a server that is this instance's alone, run `REVOKE CONNECT ON DATABASE postgres, template1 FROM PUBLIC` as their owner; the condition is gone at the next provisioning. On a shared server add the line below to `pg_hba.conf`, above the lines that admit the platform, and reload Postgres. Postgres shows that file to no ordinary role, so the condition stays.
+- `sessions_open`: the platform's database role is no superuser, so it cannot take `pg_stat_activity`, `pg_cancel_backend` and `pg_terminate_backend` from the roles of a store. A query of a store can then see the sessions of that store and end one.
 
 ```text
 host postgres,template1 /^catalyst_ds_ all reject
 ```
+
+A role of a store may change its own password. The platform sets it again before it connects as that role, so keep the Postgres port closed to everyone but the platform: whoever reaches it in between logs in with what the role last set.
 
 ## Health And Readiness
 

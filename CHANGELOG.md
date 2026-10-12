@@ -119,14 +119,19 @@ contain breaking changes; a patch version does not.
     is applied: where the key of the store's own record cannot be read (`ledger_key_lost`) or
     that record falls short of the platform's (`ledger_mismatch`), no migration is run. On a
     server whose platform role is a superuser, provisioning also takes `pg_stat_activity`,
-    `pg_terminate_backend` and `pg_cancel_backend` from the store's roles. No grant of
-    `postgres` or `template1` is changed: **a store role can connect to those two databases
-    unless `pg_hba.conf` holds `host postgres,template1 /^catalyst_ds_ all reject`.**
-  - **Size limit:** a store is measured when it is provisioned and after every migration, and
-    every insert reads the size of the store in its own transaction, so a store passes its
-    limit by at most what the inserts running at one moment add, under 256 MiB. `insert` with
+    `pg_terminate_backend` and `pg_cancel_backend` from the store's roles. Before every job
+    and call that connects as a role of a store, both roles are looked at and set again where
+    they differ. **Keep the Postgres port closed to tenants: a role may change its own
+    password between two checks.** What provisioning finds open and leaves to an operator is
+    named on the store's record: `server_databases_open` (a store role can connect to
+    `postgres` or `template1`; revoke `CONNECT` from `PUBLIC` there, or add
+    `host postgres,template1 /^catalyst_ds_ all reject` to `pg_hba.conf`) and `sessions_open`
+    (the platform's role is no superuser, so a query of a store can end another one).
+  - **Size limit:** a store is measured when it is provisioned and after every migration.
+    Every insert reads the size of the store's database before it writes and after, and is
+    rolled back where it passed the limit, so no row that is kept lies beyond it. `insert` with
     `onConflict: skip` refuses a row (`nullable_key`) that no unique index of the table binds:
-    one that is empty in a column of every unique index, or leaves it to a default.
+    one whose key is empty in every unique index, or left to a default.
   - **Refusals:** a migration that names the schema `catalyst`, which the platform keeps for
     itself in every store, is refused when it is written. A publish whose `scope` is not the
     owner of the store answers `scope_mismatch`. A publish that changes or removes an applied

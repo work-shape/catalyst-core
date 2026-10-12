@@ -983,7 +983,7 @@ dataStores:
   poolMaxConnections: 5
 ```
 
-- `sizeLimit` is the most one store may hold, as a whole number of `MB` or `GB`. A store's own `sizeLimit` in `store.yaml` names less and never more. At the limit no rows are added and reading keeps working. Every insert reads the size first, so a store passes the limit by at most what the inserts running at one moment add, under 256 MiB. Default `5GB`.
+- `sizeLimit` is the most one store may hold, as a whole number of `MB` or `GB`. A store's own `sizeLimit` in `store.yaml` names less and never more. At the limit no rows are added and reading keeps working. Every insert reads the size of the database before it writes and after, and is rolled back where it passed the limit: no row that is kept lies beyond it, and the files exceed it only by what the inserts of one moment wrote, under 256 MiB for rows alone. Default `5GB`.
 - `poolMaxConnections` is the most connections one process holds to one store at once, between 1 and 10. Default 5.
 
 ## Config Is Not A Secret Store
