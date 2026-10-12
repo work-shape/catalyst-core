@@ -450,8 +450,9 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
           sleeping = true;
           noteIdle();
           await new Promise<void>((resolve) => {
+            // This timer holds the process: between two passes the pool may have no open
+            // connection, and a started worker runs until it is stopped.
             const timer = setTimeout(resolve, POLL_INTERVAL_MS);
-            timer.unref();
             wake = () => {
               // Not idle from here on: the pass this asks for has yet to run.
               sleeping = false;

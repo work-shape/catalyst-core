@@ -198,7 +198,6 @@ async function executeClaimedRun(
       () => stop("idle", "Agent run stored no event within the idle limit"),
       AGENT_RUN_IDLE_LIMIT_MS
     );
-    idleTimer.unref();
   };
   restartIdleTimer();
 

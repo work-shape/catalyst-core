@@ -1430,6 +1430,12 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- **Workers no longer end on their own:** a job worker with nothing to do ended with exit code
+  13 when the driver closed its last database connection at the end of the connection's
+  lifetime, 30 to 60 minutes after the start. The sleep between two polls did not hold the
+  process. Every process that only runs a job worker was affected: the artifact preview worker,
+  the workspace command worker and the Agent Run worker. Compose started each one again.
+
 - An open tool call in the work history shows an output that is only an error as wrapped text, so the whole sentence is readable: what happened, whether trying again helps and who can act. It was one line of JSON in a code box, cut at the right edge. The id of a tool call is no longer written into the page.
 
 - **Demo:** the rate card of the reference client has a price for GPT-5.6 Sol, Terra and Luna.

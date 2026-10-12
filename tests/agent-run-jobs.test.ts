@@ -1,6 +1,4 @@
-import { spawn, type ChildProcess } from "node:child_process";
-import { once } from "node:events";
-import { fileURLToPath } from "node:url";
+import type { ChildProcess } from "node:child_process";
 import { createLocalAgentRunExecutor } from "@vivd-catalyst/agent-runtime";
 import {
   AGENT_RUN_LEASE_MS,
@@ -24,6 +22,7 @@ import { required, waitUntil } from "./support/assertions";
 import { useJobExecutorHarness } from "./support/job-executor-harness";
 import { withTestModelGateway } from "./support/model-gateway";
 import { usePostgresSuite } from "./support/postgres-suite";
+import { killTestProcess, startTestProcess } from "./support/test-process";
 import { createStaticConfigAssetSource } from "./support/static-config-asset-source";
 
 describe("agent runs as claimed jobs", () => {
@@ -33,7 +32,7 @@ describe("agent runs as claimed jobs", () => {
   const processes: ChildProcess[] = [];
 
   afterEach(async () => {
-    for (const child of processes.splice(0)) await kill(child);
+    for (const child of processes.splice(0)) await killTestProcess(child);
   });
 
   it("executes a run once when two workers compete for it", async () => {
@@ -158,7 +157,7 @@ describe("agent runs as claimed jobs", () => {
       "the worker process stored a piece of the reply",
       60_000
     );
-    await kill(child);
+    await killTestProcess(child);
 
     // Until the lease time is over nobody can tell the worker is gone: the run stays in
     // progress and its conversation takes no message.
@@ -471,7 +470,7 @@ describe("agent runs as claimed jobs", () => {
       "the worker process stored a piece of the reply",
       60_000
     );
-    await kill(child);
+    await killTestProcess(child);
     // No worker comes back. The only job worker left is the one of a process that executes
     // no runs.
     const api = fixture.upkeepWorker();
@@ -608,22 +607,11 @@ describe("agent runs as claimed jobs", () => {
 
   /** An Agent Run worker in a process of its own, which the test can kill. */
   function startWorkerProcess(fixture: Fixture): ChildProcess {
-    const child = spawn(
-      process.execPath,
-      [
-        "--conditions=development",
-        "--import",
-        "tsx",
-        fileURLToPath(new URL("./support/agent-run-worker-process.ts", import.meta.url))
-      ],
+    const child = startTestProcess(
+      new URL("./support/agent-run-worker-process.ts", import.meta.url),
       {
-        // The TypeScript loader is a development dependency of this package, and Node
-        // resolves `--import` from the working directory. The loader reads the package paths
-        // of the tests from their TypeScript project.
-        cwd: fileURLToPath(new URL("../packages/api-contract/", import.meta.url)),
         env: {
           ...process.env,
-          TSX_TSCONFIG_PATH: fileURLToPath(new URL("../tsconfig.tests.json", import.meta.url)),
           AGENT_RUN_TEST_DATABASE_URL: db.databaseUrl,
           AGENT_RUN_TEST_CLIENT_INSTANCE_ID: fixture.clientInstanceId
         },
@@ -634,14 +622,6 @@ describe("agent runs as claimed jobs", () => {
     return child;
   }
 });
-
-/** Ends the process as a crash or the kernel does: at once, with no chance to clean up. */
-async function kill(child: ChildProcess): Promise<void> {
-  if (child.exitCode !== null || child.signalCode !== null) return;
-  const exited = once(child, "exit");
-  child.kill("SIGKILL");
-  await exited;
-}
 
 function leaseOf(job: AgentRunJobRecord): AgentRunJobLease {
   return { jobId: job.id, leaseToken: required(job.lease_token) };
