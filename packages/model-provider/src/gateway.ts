@@ -153,7 +153,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
       {
         type: "model_provider.error",
         providerId: target.provider.id,
-        model: target.model,
+        ...modelNameOf(target),
         kind: error.kind,
         retryable: error.retryable,
         status: error.status,
@@ -319,7 +319,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
           {
             type: "model_usage.record_failed",
             providerId: target.provider.id,
-            model: target.model,
+            ...modelNameOf(target),
             error: settleError
           },
           "Usage of a model call that did not complete could not be recorded"
@@ -506,6 +506,15 @@ function requestCharacters(call: ModelCall, sizeOf: (text: string) => number): n
   return characters;
 }
 
+/**
+ * How a log line names the model of a call: by its binding where the call named one. A
+ * provider's model id can hold what belongs in no log, such as a cloud account id; it stays in
+ * the usage ledger, where it joins a call to the provider's bill.
+ */
+function modelNameOf(target: ResolvedModelTarget): { bindingId: string } | { model: string } {
+  return target.bindingId === undefined ? { model: target.model } : { bindingId: target.bindingId };
+}
+
 /** Refuses a call that asks the model for something its adapter does not declare. */
 function assertWithinCapabilities(
   call: ModelCall,
@@ -546,7 +555,11 @@ function assertWithinCapabilities(
   if (missing.length > 0) {
     throw new AppError(
       "VALIDATION_FAILED",
-      `Model '${target.model}' of provider '${target.provider.id}' does not support: ${missing.join(", ")}`
+      `${
+        target.bindingId === undefined
+          ? `Model '${target.model}'`
+          : `Model binding '${target.bindingId}'`
+      } of provider '${target.provider.id}' does not support: ${missing.join(", ")}`
     );
   }
 }

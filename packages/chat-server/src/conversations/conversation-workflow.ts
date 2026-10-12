@@ -238,6 +238,11 @@ export class ConversationWorkflow {
 
     const modelSelection = getModelSelectionForConversationTitles(this.options.config);
     const binding = modelBindingRefOf(modelSelection);
+    // The audit names the binding where one is configured: a provider's model id can hold a
+    // cloud account id, which belongs in the usage ledger alone.
+    const modelName: Record<string, string> = modelSelection.binding
+      ? { modelBindingId: modelSelection.binding.id }
+      : { model: modelSelection.model };
 
     try {
       const completion = await this.options.modelGateway.complete({
@@ -288,7 +293,7 @@ export class ConversationWorkflow {
         correlationId: input.correlationId,
         metadata: {
           providerId: modelSelection.provider.id,
-          model: modelSelection.model,
+          ...modelName,
           previousTitleLength: conversation.title.length,
           generatedTitleLength: title.length
         }
@@ -306,7 +311,7 @@ export class ConversationWorkflow {
         correlationId: input.correlationId,
         metadata: {
           providerId: modelSelection.provider.id,
-          model: modelSelection.model,
+          ...modelName,
           ...toAuditErrorMetadata(error)
         }
       });

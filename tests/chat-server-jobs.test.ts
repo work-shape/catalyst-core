@@ -198,7 +198,10 @@ describe("the jobs of the API process", () => {
 describe("the title job and a rename by the user", () => {
   const titleInstance = asClientInstanceId("title-rename-test");
 
-  async function titledConversation(renameDuringGeneration: string | undefined) {
+  async function titledConversation(
+    renameDuringGeneration: string | undefined,
+    titleBinding?: { id: string; providerId: string; model: string }
+  ) {
     const store = (await createTestInstance()).stores;
     const conversation = await store.createConversationForTesting({
       clientInstanceId: titleInstance,
@@ -216,6 +219,9 @@ describe("the title job and a rename by the user", () => {
     const options = createRetentionOptions({
       clientInstanceId: titleInstance,
       store,
+      ...(titleBinding
+        ? { modelBindings: [titleBinding], conversationTitleBindingId: titleBinding.id }
+        : {}),
       modelProvider: {
         // The job has read the conversation and has not written the title yet.
         async complete() {
@@ -267,6 +273,21 @@ describe("the title job and a rename by the user", () => {
     const result = await titledConversation(undefined);
     expect(result.title).toBe("Release Notes Summary");
     expect(result.generatedEvents).toHaveLength(1);
+  });
+
+  it("names the model of a title in the audit by its binding, and by its id without one", async () => {
+    // A provider's model id can hold a cloud account id: the audit shows the binding instead.
+    const model = "arn:aws:bedrock:eu-central-1:000000000000:application-inference-profile/p";
+    const bound = await titledConversation(undefined, { id: "titles", providerId: "local", model });
+    expect(bound.generatedEvents.map((event) => event.metadata)).toEqual([
+      expect.objectContaining({ providerId: "local", modelBindingId: "titles" })
+    ]);
+    expect(JSON.stringify(bound.generatedEvents)).not.toContain("arn:aws");
+
+    const unbound = await titledConversation(undefined);
+    expect(unbound.generatedEvents.map((event) => event.metadata)).toContainEqual(
+      expect.objectContaining({ providerId: "local", model: "local" })
+    );
   });
 
   it("keeps a title the user wrote between the job's read and its write", async () => {

@@ -62,6 +62,8 @@ export function createRetentionOptions(input: {
   /** The model entries of the instance. Left out, there is one local model without a region. */
   models?: Record<string, Record<string, string>>;
   modelBindings?: Array<{ id: string; providerId: string; model?: string }>;
+  /** The binding that writes conversation titles. Left out, the first model entry does. */
+  conversationTitleBindingId?: string;
 }): ChatServerOptions {
   const { store } = input;
   const config = parseClientInstanceConfig({
@@ -86,6 +88,9 @@ export function createRetentionOptions(input: {
       models: input.models ?? { local: { provider: "deterministic", model: "local" } }
     },
     ...(input.modelBindings ? { modelBindings: input.modelBindings } : {}),
+    ...(input.conversationTitleBindingId
+      ? { conversationTitles: { modelBindingId: input.conversationTitleBindingId } }
+      : {}),
     ...(input.modelCallsPerDay
       ? { usage: { safeguards: { modelCallsPerDay: input.modelCallsPerDay } } }
       : {}),

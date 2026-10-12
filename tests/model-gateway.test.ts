@@ -112,6 +112,43 @@ describe("model gateway", () => {
     }
   );
 
+  it("names a call's model by its binding in a refusal and a log line, and by its id without one", async () => {
+    const f = fixture(
+      {
+        async complete() {
+          throw new ModelProviderError({
+            kind: "invalid_request",
+            status: 403,
+            message: "Model provider request failed"
+          });
+        }
+      },
+      { structuredOutput: false }
+    );
+    const output = { jsonSchema: { type: "object" } };
+
+    await expect(
+      f.gateway.complete(call({ binding: { bindingId: "fast" }, output }))
+    ).rejects.toThrow(
+      "Model binding 'fast' of provider 'main' does not support: structured output"
+    );
+    await expect(
+      f.gateway.complete(call({ binding: { providerId: "main" }, output }))
+    ).rejects.toThrow("Model 'entry-model' of provider 'main' does not support: structured output");
+    await f.gateway.complete(call({ binding: { bindingId: "fast" } })).catch(() => undefined);
+    await f.gateway.complete(call({ binding: { providerId: "main" } })).catch(() => undefined);
+
+    const [bound, unbound] = f.warnings;
+    expect(bound).toMatchObject({ type: "model_provider.error", bindingId: "fast" });
+    expect(bound).not.toHaveProperty("model");
+    expect(unbound).toMatchObject({ type: "model_provider.error", model: "entry-model" });
+    // The usage ledger keeps the model id: it is what joins a call to the provider's bill.
+    expect(f.governance.recorded.map((event) => event.model)).toEqual([
+      "bound-model",
+      "entry-model"
+    ]);
+  });
+
   it("refuses a streamed call to an adapter that does not stream", async () => {
     const f = fixture({ complete: async () => completion("never") }, { streaming: false });
 
