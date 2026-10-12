@@ -330,7 +330,9 @@ async function createConfigApiKey() {
 }
 
 function startUiServer() {
-  return spawnManaged(localBin("vite"), ["--host", e2eHost, "--port", e2eUiPort], {
+  // No test edits a source file, so the suite's server watches none; see the config it names.
+  const args = ["--config", "vite.e2e.config.ts", "--host", e2eHost, "--port", e2eUiPort];
+  return spawnManaged(localBin("vite"), args, {
     cwd: resolve(repoRoot, "clients/demo"),
     label: "chat ui",
     env: {
