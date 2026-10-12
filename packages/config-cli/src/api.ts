@@ -50,7 +50,7 @@ export interface ConfigApiOptions {
 
 export async function createConfigApi(options: ConfigApiOptions) {
   const baseUrl = options.baseUrl.replace(/\/+$/u, "");
-  const fetchImpl = options.fetchImpl ?? fetch;
+  const fetchImpl = withoutRedirects(options.fetchImpl ?? fetch);
   assertSafeApiKeyExchangeUrl(baseUrl);
   const accessToken = await exchangeApiKey(fetchImpl, baseUrl, options.apiKey);
   const client = createApiClient({
@@ -206,6 +206,15 @@ function assertSafeApiKeyExchangeUrl(url: string): void {
   );
 }
 
+/**
+ * No request of this tool follows a redirect. The key and the access token are headers of a
+ * request, and a followed redirect would send them to an address the caller never named.
+ * The redirect comes back as the answer and is reported.
+ */
+function withoutRedirects(fetchImpl: typeof fetch): typeof fetch {
+  return (input, init) => fetchImpl(input, { ...init, redirect: "manual" });
+}
+
 function isLoopbackHostname(hostname: string): boolean {
   return (
     hostname === "localhost" ||
@@ -238,6 +247,11 @@ function toConfigApiError(error: unknown): unknown {
   }
   if (error.status === 0) {
     return error.payload;
+  }
+  if (error.status >= 300 && error.status < 400) {
+    return new Error(
+      `The instance answered with a redirect (HTTP ${error.status}). This tool follows none, so that the key reaches only the address it was given. Use the address the instance is served at.`
+    );
   }
   if (error.payload instanceof SyntaxError || typeof error.payload === "string") {
     return new Error(`Catalyst API returned invalid JSON (HTTP ${error.status})`);

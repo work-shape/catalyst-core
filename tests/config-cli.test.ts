@@ -8,6 +8,7 @@ import { testOperations } from "./support/operations";
 import { retiredReleasePaths } from "./support/retired-api-paths";
 
 import { createHash } from "node:crypto";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -2150,6 +2151,40 @@ describe("config CLI API transport", () => {
     expect(String(failure)).not.toContain(responseBody);
   });
 
+  it("follows no redirect, so the key reaches neither another host nor another path", async () => {
+    const apiKey = "cat_redirect_secret_that_must_stay_home";
+    const elsewhere = await listen((_request, response) => {
+      response.writeHead(200, { "content-type": "application/json" }).end("{}");
+    });
+    const sameHost: string[] = [];
+    const instance = await listen((request, response) => {
+      sameHost.push(request.url ?? "");
+      const target =
+        request.headers["x-test-target"] === "same-host"
+          ? "/moved"
+          : `${elsewhere.url}/api/v1/auth/access-token`;
+      response.writeHead(307, { location: target }).end();
+    });
+
+    const toAnotherHost = await createConfigApi({ baseUrl: instance.url, apiKey }).catch(
+      (error: unknown) => error
+    );
+    const toAnotherPath = await createConfigApi({
+      baseUrl: instance.url,
+      apiKey,
+      fetchImpl: (input, init) =>
+        fetch(input, { ...init, headers: { ...headersOf(init), "x-test-target": "same-host" } })
+    }).catch((error: unknown) => error);
+
+    for (const failure of [toAnotherHost, toAnotherPath]) {
+      expect(failure).toMatchObject({ name: "ApiKeyExchangeError" });
+      expect(String(failure)).toContain("answered with a redirect (HTTP 307)");
+      expect(String(failure)).not.toContain(apiKey);
+    }
+    expect(elsewhere.requests).toEqual([]);
+    expect(sameHost).toEqual(["/api/v1/auth/access-token", "/api/v1/auth/access-token"]);
+  });
+
   it("rejects unsupported API-key URL schemes before fetching", async () => {
     let fetchCount = 0;
 
@@ -2197,6 +2232,38 @@ describe("config CLI help", () => {
     expect(output.join("")).toContain("catalyst-local-key");
   });
 });
+
+const httpServers: Server[] = [];
+
+afterEach(async () => {
+  await Promise.all(
+    httpServers
+      .splice(0)
+      .map((server) => new Promise((done) => server.close(() => done(undefined))))
+  );
+});
+
+/** A real HTTP server on this machine, so that a redirect is one the runtime would follow. */
+async function listen(
+  handler: (request: IncomingMessage, response: ServerResponse) => void
+): Promise<{ url: string; requests: string[] }> {
+  const requests: string[] = [];
+  const server = createServer((request, response) => {
+    requests.push(`${request.method} ${request.url} ${request.headers.authorization ?? ""}`);
+    handler(request, response);
+  });
+  httpServers.push(server);
+  await new Promise<void>((ready) => server.listen(0, "127.0.0.1", ready));
+  const address = server.address();
+  if (address === null || typeof address === "string") {
+    throw new Error("The test server has no port");
+  }
+  return { url: `http://127.0.0.1:${address.port}`, requests };
+}
+
+function headersOf(init: RequestInit | undefined): Record<string, string> {
+  return Object.fromEntries(new Headers(init?.headers).entries());
+}
 
 async function createTemporaryDirectory(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "catalyst-config-cli-"));
