@@ -256,15 +256,15 @@ Three things hold this.
 
 What a view with private rows keeps:
 
-| Kept | With |
-| --- | --- |
-| Text, headings, paragraphs, sections, `pre`, `blockquote`, `details` | `class`, `id`, `style`, `title`, `lang`, `dir`, `role`, `hidden`, `aria-*`, `data-*` |
-| Lists and tables | also `colspan`, `rowspan`, `headers`, `scope`, `span`, `start`, `value` |
-| Inline formatting, `time`, `meter`, `progress` | their value attributes |
-| `a` | its text, never an address |
-| `img` | `alt`, `width`, `height`, and `src` only when it is a `data:` address of type `image/png`, `image/jpeg`, `image/gif` or `image/webp` |
-| `style` blocks and `style` attributes | only without `url(` other than `url(#id)`, `@import`, `image-set(`, `image(`, `src(` or a backslash |
-| Inline `svg` with shapes, `text`, gradients and clip paths | geometry and paint attributes, no `href` |
+| Kept                                                                 | With                                                                                                                                 |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Text, headings, paragraphs, sections, `pre`, `blockquote`, `details` | `class`, `id`, `style`, `title`, `lang`, `dir`, `role`, `hidden`, `aria-*`, `data-*`                                                 |
+| Lists and tables                                                     | also `colspan`, `rowspan`, `headers`, `scope`, `span`, `start`, `value`                                                              |
+| Inline formatting, `time`, `meter`, `progress`                       | their value attributes                                                                                                               |
+| `a`                                                                  | its text, never an address                                                                                                           |
+| `img`                                                                | `alt`, `width`, `height`, and `src` only when it is a `data:` address of type `image/png`, `image/jpeg`, `image/gif` or `image/webp` |
+| `style` blocks and `style` attributes                                | only without `url(` other than `url(#id)`, `@import`, `image-set(`, `image(`, `src(` or a backslash                                  |
+| Inline `svg` with shapes, `text`, gradients and clip paths           | geometry and paint attributes, no `href`                                                                                             |
 
 Everything else is left out with what is inside it: `script`, `link`, `meta`, `base`, `area`, `form` and its controls, `iframe`, `object`, `embed`, `canvas`, `video`, `audio`, SVG `a`, `image`, `use` and `foreignObject`, every event handler attribute, `href`, `ping`, `target`, `srcset` and `srcdoc`.
 
@@ -941,13 +941,13 @@ Nothing returns a stored secret: no operation, route, CLI command, export, log l
 
 `egress.allow` is the list of outside targets a Connection may reach. It is empty unless set, and an empty list refuses every target.
 
-| Key | Meaning |
-| --- | --- |
-| `protocol` | `https`, `http` or `postgres`. |
-| `host` | One exact host name or one literal address. No wildcard, no suffix match. |
-| `port` | The one port. A default port is written out. |
-| `network` | `public`, the default, or `private`. |
-| `cidrs` | With `private`: the address ranges the host may resolve into. |
+| Key        | Meaning                                                                   |
+| ---------- | ------------------------------------------------------------------------- |
+| `protocol` | `https`, `http` or `postgres`.                                            |
+| `host`     | One exact host name or one literal address. No wildcard, no suffix match. |
+| `port`     | The one port. A default port is written out.                              |
+| `network`  | `public`, the default, or `private`.                                      |
+| `cidrs`    | With `private`: the address ranges the host may resolve into.             |
 
 Every connection a Connection opens is checked against this list before a credential is resolved, whatever its connector type:
 
@@ -972,6 +972,19 @@ egress:
 ```
 
 A refusal answers `egress_denied` with the host and the port, and nothing else of the address. A target outside the list is refused before its name is looked up. A host that is on the list and whose name gives no address, as with a stopped service or a resolver that is down, is refused as well and nothing is contacted, but it is not `egress_denied`: a call answers `connection_unavailable` and says that the host did not resolve, and a test of the Connection answers `unavailable`. A checked answer is used for 30 seconds, so a call within that time makes no DNS lookup, and a page load makes none at all. A refusal that came from the resolver (a timeout, a failed lookup, no answer) is held for 5 seconds. The list is read at start: a change needs a restart.
+
+## Data Stores
+
+With the module `dataStores` on, each Data Store gets a Postgres database of its own on the server of the platform database. The module needs a key under `secretStore.keys`, where the passwords of the store roles are kept, and a platform database role that has `CREATEDB` and `CREATEROLE` and owns the platform database.
+
+```yaml
+dataStores:
+  sizeLimit: 5GB
+  poolMaxConnections: 5
+```
+
+- `sizeLimit` is the most one store may hold, as a whole number of `MB` or `GB`. A store's own `sizeLimit` in `store.yaml` names less and never more. At the limit no rows are added and reading keeps working. Default `5GB`.
+- `poolMaxConnections` is the most connections one process holds to one store at once, between 1 and 10. Default 5.
 
 ## Config Is Not A Secret Store
 

@@ -31,6 +31,7 @@ import {
   releaseConnectionsConfigSchema,
   secretStoreConfigSchema
 } from "./connection-schema";
+import { dataStoresConfigSchema } from "./data-store-schema";
 import { infrastructureConfigSchema } from "./infrastructure";
 import { localizationConfigSchema, localizedStringSchema } from "./localization";
 
@@ -814,6 +815,8 @@ export const clientInstanceConfigSchema = z.object({
   connections: releaseConnectionsConfigSchema,
   /** The keys Connection secrets are encrypted with. Needed once `connections` names one. */
   secretStore: secretStoreConfigSchema,
+  /** The limits of the instance's Data Stores. Read with the module `dataStores` on. */
+  dataStores: dataStoresConfigSchema,
   /** The outside targets Connections may reach. Empty refuses all of them. */
   egress: egressConfigSchema,
   ui: uiConfigSchema,
