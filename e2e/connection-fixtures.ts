@@ -1,0 +1,94 @@
+import { randomUUID } from "node:crypto";
+import postgres from "postgres";
+import { FIXTURE_SECRET_HANDLE } from "../tests/chat-ui-connection-fixtures";
+
+// Connections of the suite's Connector type `test`, planted in the store as the release seed
+// writes them. The type contacts nothing. A test that plants one takes the `releaseConnections`
+// fixture: an API process that starts meanwhile deletes Connections no release config names.
+
+const host = process.env.E2E_HOST ?? "127.0.0.1";
+const databaseUrl = `postgres://agent_chat:agent_chat@${host}:${process.env.E2E_POSTGRES_PORT ?? "55433"}/agent_chat`;
+const clientInstanceId = "demo-e2e";
+
+async function withSql<Result>(run: (sql: postgres.Sql) => Promise<Result>): Promise<Result> {
+  const sql = postgres(databaseUrl, { max: 1 });
+  try {
+    return await run(sql);
+  } finally {
+    await sql.end();
+  }
+}
+
+/** The one address the suite's release config lets a Connection reach. Nothing listens there. */
+export const ALLOWED_URL = "https://127.0.0.1:8443/";
+
+export interface PlantedConnection {
+  id: string;
+  name: string;
+  displayName: string;
+  url: string;
+  authScheme: "none" | "bearer";
+}
+
+/** Writes one Connection as the store holds it: the asset and its first revision. */
+export async function plantConnection(connection: PlantedConnection): Promise<void> {
+  const revisionId = `cfgr_${randomUUID()}`;
+  const config = {
+    name: connection.name,
+    displayName: connection.displayName,
+    description: "A fixture of the browser suite. It reaches nothing.",
+    connectorType: "test",
+    ownerPrincipalId: "system",
+    settings: { url: connection.url },
+    authScheme: connection.authScheme,
+    credentialMode: "shared",
+    // A reference to a credential in the Secret Store. It is no credential, and no secret is
+    // stored under it here.
+    ...(connection.authScheme === "bearer" ? { secretHandle: FIXTURE_SECRET_HANDLE } : {}),
+    operations: [
+      { name: "echo", effect: "reading", exposure: ["agent"], enabled: true },
+      // Accepted with another description than the type has now: it waits for a review.
+      {
+        name: "record",
+        effect: "changing",
+        exposure: [],
+        enabled: true,
+        schemaFingerprint: "sha256:accepted-before-the-type-changed"
+      },
+      // The type offers no such operation.
+      { name: "removed", effect: "reading", exposure: ["workflow"], enabled: true },
+      { name: "echo_off", effect: "reading", exposure: ["agent"], enabled: false }
+    ],
+    enabled: true,
+    origin: "release"
+  };
+  await withSql((sql) =>
+    sql.begin(async (tx) => {
+      const [state] = await tx<{ version: string }[]>`
+        update config_asset_state set version = version + 1, updated_at = now()
+        where client_instance_id = ${clientInstanceId}
+        returning version`;
+      if (!state) {
+        throw new Error("The instance has no config asset state");
+      }
+      await tx`
+        insert into config_assets
+          (id, client_instance_id, kind, name, scope_kind, status, active_revision_id,
+           created_at, updated_at)
+        values
+          (${connection.id}, ${clientInstanceId}, 'connection', ${connection.name}, 'instance',
+           'active', ${revisionId}, now(), now())`;
+      await tx`
+        insert into config_asset_revisions
+          (id, client_instance_id, asset_id, revision, operation, config, global_version,
+           created_at)
+        values
+          (${revisionId}, ${clientInstanceId}, ${connection.id}, 1, 'create',
+           ${tx.json(config)}, ${state.version}, now())`;
+    })
+  );
+}
+
+export async function removeConnection(assetId: string): Promise<void> {
+  await withSql((sql) => sql`delete from config_assets where id = ${assetId}`);
+}

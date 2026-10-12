@@ -2,13 +2,14 @@ import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
-import postgres from "postgres";
 import type { ConnectionDetail } from "@vivd-catalyst/api-client";
+import { connectionDetail, recordedStates } from "../tests/chat-ui-connection-fixtures";
 import {
-  connectionDetail,
-  FIXTURE_SECRET_HANDLE,
-  recordedStates
-} from "../tests/chat-ui-connection-fixtures";
+  ALLOWED_URL,
+  plantConnection,
+  removeConnection,
+  type PlantedConnection
+} from "./connection-fixtures";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
@@ -23,97 +24,12 @@ import { expect, test } from "./test";
 
 const host = process.env.E2E_HOST ?? "127.0.0.1";
 const apiBaseUrl = process.env.E2E_API_URL ?? `http://${host}:4210`;
-const databaseUrl = `postgres://agent_chat:agent_chat@${host}:${process.env.E2E_POSTGRES_PORT ?? "55433"}/agent_chat`;
-const clientInstanceId = "demo-e2e";
 const admin = { email: "e2e-admin@example.test", password: "e2e-admin-password" };
 /** Set to a directory to keep pictures of every state of the page. */
 const shotsDir = process.env.E2E_SHOTS_DIR;
 
 const widths = { 1280: 800, 1024: 768, 390: 844 } as const;
 type Width = keyof typeof widths;
-
-async function withSql<Result>(run: (sql: postgres.Sql) => Promise<Result>): Promise<Result> {
-  const sql = postgres(databaseUrl, { max: 1 });
-  try {
-    return await run(sql);
-  } finally {
-    await sql.end();
-  }
-}
-
-/** The one address the suite's release config lets a Connection reach. Nothing listens there. */
-const ALLOWED_URL = "https://127.0.0.1:8443/";
-
-interface PlantedConnection {
-  id: string;
-  name: string;
-  displayName: string;
-  url: string;
-  authScheme: "none" | "bearer";
-}
-
-/** Writes one Connection as the store holds it: the asset and its first revision. */
-async function plantConnection(connection: PlantedConnection): Promise<void> {
-  const revisionId = `cfgr_${randomUUID()}`;
-  const config = {
-    name: connection.name,
-    displayName: connection.displayName,
-    description: "A fixture of the browser suite. It reaches nothing.",
-    connectorType: "test",
-    ownerPrincipalId: "system",
-    settings: { url: connection.url },
-    authScheme: connection.authScheme,
-    credentialMode: "shared",
-    // A reference to a credential in the Secret Store. It is no credential, and no secret is
-    // stored under it here.
-    ...(connection.authScheme === "bearer" ? { secretHandle: FIXTURE_SECRET_HANDLE } : {}),
-    operations: [
-      { name: "echo", effect: "reading", exposure: ["agent"], enabled: true },
-      // Accepted with another description than the type has now: it waits for a review.
-      {
-        name: "record",
-        effect: "changing",
-        exposure: [],
-        enabled: true,
-        schemaFingerprint: "sha256:accepted-before-the-type-changed"
-      },
-      // The type offers no such operation.
-      { name: "removed", effect: "reading", exposure: ["workflow"], enabled: true },
-      { name: "echo_off", effect: "reading", exposure: ["agent"], enabled: false }
-    ],
-    enabled: true,
-    origin: "release"
-  };
-  await withSql((sql) =>
-    sql.begin(async (tx) => {
-      const [state] = await tx<{ version: string }[]>`
-        update config_asset_state set version = version + 1, updated_at = now()
-        where client_instance_id = ${clientInstanceId}
-        returning version`;
-      if (!state) {
-        throw new Error("The instance has no config asset state");
-      }
-      await tx`
-        insert into config_assets
-          (id, client_instance_id, kind, name, scope_kind, status, active_revision_id,
-           created_at, updated_at)
-        values
-          (${connection.id}, ${clientInstanceId}, 'connection', ${connection.name}, 'instance',
-           'active', ${revisionId}, now(), now())`;
-      await tx`
-        insert into config_asset_revisions
-          (id, client_instance_id, asset_id, revision, operation, config, global_version,
-           created_at)
-        values
-          (${revisionId}, ${clientInstanceId}, ${connection.id}, 1, 'create',
-           ${tx.json(config)}, ${state.version}, now())`;
-    })
-  );
-}
-
-async function removeConnection(assetId: string): Promise<void> {
-  await withSql((sql) => sql`delete from config_assets where id = ${assetId}`);
-}
 
 /** What stands in for an answer of the instance: a state, or the code of a refusal. */
 type Refusal = "FORBIDDEN" | "INTERNAL";
