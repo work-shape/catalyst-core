@@ -212,6 +212,26 @@ describe("navigation, page structure and data components", () => {
     expect(markup).toMatch(/role="radio"[^>]*>Rights<span[^>]*>0<\/span><\/button>/u);
   });
 
+  it("shows a segment's whole count where the number is the fact the segment states", () => {
+    const markup = render(
+      createElement(
+        SegmentedControl,
+        { label: "Entries", value: "all" },
+        createElement(
+          SegmentedControlItem,
+          { value: "failed", count: 3, exactCount: true },
+          "Failed"
+        ),
+        createElement(SegmentedControlItem, { value: "all", count: 20000, exactCount: true }, "All")
+      )
+    );
+
+    expect(markup).toMatch(/role="radio"[^>]*>Failed<span[^>]*tabular-nums[^>]*>3<\/span>/u);
+    expect(markup).toMatch(/role="radio"[^>]*>All<span[^>]*tabular-nums[^>]*>20000<\/span>/u);
+    expect(markup).not.toContain("99+");
+    expect(render(createElement(CountBadge, { count: 600, exact: true }))).toContain(">600<");
+  });
+
   it("renders a navigation item as a 32 px button or as the caller's link", () => {
     const button = render(createElement(NavItem, { selected: true, count: 120 }, "Inbox"));
     expect(button).toMatch(/<button[^>]*class="[^"]*\bh-8\b[^"]*bg-state-selected font-medium/u);
