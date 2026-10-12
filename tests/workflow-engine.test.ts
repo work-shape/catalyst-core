@@ -3,19 +3,27 @@ import { createPlatformId, type JsonValue, type OperationOrigin } from "@vivd-ca
 import { clientInstanceId } from "./support/access-instance";
 import {
   hangingAt,
+  publishedDefinitions,
   runSchema,
-  stepRunsSchema,
   workflowFixture,
   type WorkflowFixture
 } from "./support/workflow-instance";
+import {
+  CLIENTS,
+  NOTE,
+  failingFor,
+  notifyClients,
+  readyWorkflows,
+  start,
+  stepRunsOf,
+  writesOf
+} from "./support/workflow-runs";
 
 // A published Workflow started by hand and run to its end on the job executor. Every test
 // goes through the API for the start, the cancel and the reads, and through a job worker for
 // the steps. The Workflow is the fixture folder `notify-clients`: it reads a list from the
-// Connection `crm` and makes one changing call per item of it.
-
-const NOTE = "Quarterly figures are ready";
-const CLIENTS = [{ id: "client-anna" }, { id: "client-bert" }, { id: "client-cleo" }];
+// Connection `crm` and makes one changing call per item of it. What a run does with its
+// loops, its blocks and its revision is in `workflow-run-blocks.test.ts`.
 
 let open: WorkflowFixture | undefined;
 afterEach(async () => {
@@ -23,34 +31,10 @@ afterEach(async () => {
   open = undefined;
 });
 
-/** An instance whose Connection answers three clients and whose principal may use it. */
-async function ready(options: Parameters<typeof workflowFixture>[0] = {}) {
-  const t = await workflowFixture(options);
-  open = t;
-  await t.seedCrm();
-  t.setBehaviour((operation, input) =>
-    Promise.resolve<JsonValue>(operation === "echo" ? { clients: CLIENTS } : { received: input })
-  );
-  t.state.centralSettings = [{ operation: "connection.crm.write", value: "allow" }];
-  await t.allow({ kind: "service_principal", id: t.principal.id }, "connection.use");
-  return t;
-}
-
-async function start(t: WorkflowFixture, userId = t.root.id, workflow = "notify-clients") {
-  const response = await t.expectOk(userId, "workflows.start", {
-    params: { workflow },
-    payload: { input: { note: NOTE } }
-  });
-  return runSchema.parse(response.json());
-}
-
-async function stepRunsOf(t: WorkflowFixture, runId: string) {
-  const response = await t.expectOk(t.root.id, "workflows.list_step_runs", { params: { runId } });
-  return stepRunsSchema.parse(response.json()).items;
-}
-
-const writesOf = (t: WorkflowFixture) =>
-  t.executed.filter((call) => call.operation === "write").map((call) => call.input);
+const ready = (options: Parameters<typeof workflowFixture>[0] = {}) =>
+  readyWorkflows((fixture) => {
+    open = fixture;
+  }, options);
 
 describe("a Workflow Run from the manual start to its end", () => {
   it("runs each step once, the steps of a loop once per item, and ends with its result", async () => {
@@ -59,7 +43,7 @@ describe("a Workflow Run from the manual start to its end", () => {
     expect(started).toMatchObject({
       workflow: "notify-clients",
       status: "queued",
-      principal: { id: t.principal.id, displayLabel: "workflow-runner" },
+      principal: { id: t.principal.id, name: "workflow-runner", displayLabel: "workflow-runner" },
       startedBy: { kind: "user", id: t.root.id }
     });
 
@@ -67,9 +51,9 @@ describe("a Workflow Run from the manual start to its end", () => {
     expect(run.status).toBe("done");
     expect(run.error).toBeUndefined();
     expect(run.stepRunCount).toBe(7);
-    expect(JSON.parse(run.outputPreview?.text ?? "null")).toEqual({
-      sent: CLIENTS.map((client) => ({ received: { client: client.id, note: NOTE } }))
-    });
+    // A loop returns its counts and never what an item returned.
+    expect(JSON.parse(run.outputPreview?.text ?? "null")).toEqual({ sent: 3, failed: 0 });
+    expect(run.cancelledAt).toBeUndefined();
 
     const stepRuns = await stepRunsOf(t, run.id);
     expect(stepRuns.map((stepRun) => [stepRun.key, stepRun.status, stepRun.attempt])).toEqual([
@@ -91,55 +75,72 @@ describe("a Workflow Run from the manual start to its end", () => {
     expect(
       stepRuns.flatMap((stepRun) => (stepRun.loop ? [[stepRun.key, stepRun.loop]] : []))
     ).toEqual([["each_client", { total: 3, done: 3, failed: 0, running: 0 }]]);
+    // The tree of the run: an item's step run names the step run of its loop, and the loop's
+    // step run counts the step runs of each step directly inside it.
+    const loop = stepRuns.find((stepRun) => stepRun.key === "each_client");
+    expect(stepRuns.map((stepRun) => stepRun.containerStepRunId)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      loop?.id,
+      loop?.id,
+      loop?.id,
+      undefined
+    ]);
+    expect(loop?.bodyCounts).toEqual({ send: { total: 3, done: 3, failed: 0, running: 0 } });
+    expect(stepRuns.filter((stepRun) => stepRun.bodyCounts)).toHaveLength(1);
+    // No block with branches runs, so no step run stands in one.
+    expect(stepRuns.every((stepRun) => stepRun.branch === undefined)).toBe(true);
+    // An operation step says what its operation does and which Connection it belongs to.
+    expect(stepRuns.map((stepRun) => [stepRun.stepId, stepRun.effect, stepRun.source])).toEqual([
+      ["start", undefined, undefined],
+      ["clients", "reading", "crm"],
+      ["each_client", undefined, undefined],
+      ["send", "changing", "crm"],
+      ["send", "changing", "crm"],
+      ["send", "changing", "crm"],
+      ["result", undefined, undefined]
+    ]);
   });
 
-  it("makes every call as the run's principal, from the origin of its step run and with the step run's id as the key of a changing call", async () => {
+  it("hands the trigger's output on: the input, the start and the kind of trigger", async () => {
     const t = await ready();
-    const run = await t.finish((await start(t, t.root.id)).id);
-    const stepRuns = await stepRunsOf(t, run.id);
-    const calls = (await t.runs()).filter((call) => call.origin.kind === "workflow");
-
-    expect(calls).toHaveLength(4);
-    for (const call of calls) {
-      expect(call.actor).toMatchObject({ kind: "service_principal", id: t.principal.id });
-      expect(call.status).toBe("done");
-      const stepRun = stepRuns.find((candidate) => candidate.operationRunId === call.id);
-      expect(call.origin).toEqual({
-        kind: "workflow",
-        workflowRunId: run.id,
-        stepRunId: stepRun?.id
-      });
-      // The key the contract gives the changing call of a step run.
-      expect(call.idempotencyKey).toBe(
-        call.effect === "changing" ? `workflow_step:${stepRun?.id}` : undefined
-      );
-    }
-    const keys = calls.flatMap((call) => (call.idempotencyKey ? [call.idempotencyKey] : []));
-    expect(new Set(keys).size).toBe(3);
+    const run = await t.finish((await start(t)).id);
+    const [trigger] = await stepRunsOf(t, run.id);
+    expect(JSON.parse(trigger?.outputPreview?.text ?? "null")).toEqual({
+      input: { note: NOTE },
+      startedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/u),
+      trigger: "manual",
+      scheduledFor: null
+    });
   });
 
-  it("keeps no input and shows of an output only a cut preview", async () => {
-    const t = await ready();
-    t.setBehaviour((operation) =>
-      Promise.resolve<JsonValue>(
-        operation === "echo" ? { clients: [CLIENTS[0] ?? null] } : { text: "x".repeat(900) }
-      )
-    );
+  it("filters the step runs by their block, their status and their item", async () => {
+    const definitions = publishedDefinitions();
+    definitions.publish(notifyClients({ onItemFailure: "continue" }));
+    const t = await ready({ definitions: definitions.source });
+    t.setBehaviour(failingFor(["client-bert"]));
     const run = await t.finish((await start(t)).id);
     expect(run.status).toBe("done");
-    const read = await t.expectOk(t.root.id, "workflows.get_run", { params: { runId: run.id } });
-    expect(read.body).not.toContain(NOTE);
-    expect(read.json()).not.toHaveProperty("input");
-    expect(read.json()).not.toHaveProperty("definition");
 
-    t.setBehaviour((operation) =>
-      Promise.resolve<JsonValue>(
-        operation === "echo" ? { clients: CLIENTS } : { text: "x".repeat(900) }
+    const all = await stepRunsOf(t, run.id);
+    const loop = all.find((stepRun) => stepRun.key === "each_client");
+    const inLoop = await stepRunsOf(t, run.id, { containerStepRunId: loop?.id });
+    expect(inLoop.map((stepRun) => stepRun.key)).toEqual([
+      "each_client[0].send",
+      "each_client[1].send",
+      "each_client[2].send"
+    ]);
+    expect(
+      (await stepRunsOf(t, run.id, { containerStepRunId: loop?.id, status: "failed" })).map(
+        (stepRun) => [stepRun.key, stepRun.iteration]
       )
-    );
-    const long = await t.finish((await start(t)).id);
-    expect(long.outputPreview?.truncated).toBe(true);
-    expect(long.outputPreview?.text).toHaveLength(2_000);
+    ).toEqual([["each_client[1].send", { index: 1, label: "client-bert" }]]);
+    expect((await stepRunsOf(t, run.id, { iteration: 2 })).map((stepRun) => stepRun.key)).toEqual([
+      "each_client[2].send"
+    ]);
+    expect(await stepRunsOf(t, run.id, { status: "done" })).toHaveLength(6);
+    expect(await stepRunsOf(t, run.id, { containerStepRunId: "wfs_none" })).toEqual([]);
   });
 });
 
@@ -195,9 +196,10 @@ describe("a Workflow Run across a worker that dies", () => {
     );
     expect(changing).toHaveLength(3);
     expect(new Set(changing.map((call) => call.idempotencyKey)).size).toBe(3);
-    expect(JSON.parse(run.outputPreview?.text ?? "null")).toEqual({
-      sent: CLIENTS.map((client) => ({ received: { client: client.id, note: NOTE } }))
-    });
+    expect(JSON.parse(run.outputPreview?.text ?? "null")).toEqual({ sent: 3, failed: 0 });
+    // No item has two step runs: the one the worker died in was taken up again as it was.
+    const items = stepRuns.filter((stepRun) => stepRun.iteration !== undefined);
+    expect(items.map((stepRun) => stepRun.iteration?.index)).toEqual([0, 1, 2]);
   });
 
   it("resumes a step the worker died before, and repeats no step that had ended", async () => {
@@ -464,10 +466,12 @@ describe("starting a Workflow that cannot run", () => {
       t.root.id,
       "workflows.start",
       { params: { workflow: "with-code-step" }, payload: {} },
-      { status: 409, code: "CONFLICT" }
+      { status: 422, code: "VALIDATION_FAILED" }
     );
-    expect(invalid.details).toMatchObject({ reason: "definition_invalid" });
-    expect(JSON.stringify(invalid.details)).toContain("code");
+    expect(invalid.details).toMatchObject({
+      reason: "not_supported_yet",
+      issues: [{ code: "not_supported_yet", path: "steps[1].type" }]
+    });
     await t.expectRefused(
       t.root.id,
       "workflows.start",
@@ -509,7 +513,7 @@ describe("the audit of a Workflow Run", () => {
     expect(startedEvent?.actor).toMatchObject({ userId: t.root.id });
     expect(startedEvent?.metadata).toEqual({
       workflow: "notify-clients",
-      revision: expect.any(String),
+      definitionRevisionId: expect.any(String),
       trigger: "manual",
       mode: "live",
       principalId: t.principal.id
@@ -517,7 +521,7 @@ describe("the audit of a Workflow Run", () => {
     expect(endedEvent?.actor).toMatchObject({ principalKind: "service" });
     expect(endedEvent?.metadata).toEqual({
       workflow: "notify-clients",
-      revision: expect.any(String),
+      definitionRevisionId: expect.any(String),
       status: "done",
       stepRunCount: 7
     });
@@ -549,6 +553,7 @@ describe("an instance with the module workflows off", () => {
       { params: { workflow: "notify-clients" } },
       off
     );
+    await t.expectRefused(t.root.id, "workflows.list", {}, off);
     for (const operation of [
       "workflows.get_run",
       "workflows.list_step_runs",

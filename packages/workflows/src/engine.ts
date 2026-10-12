@@ -1,7 +1,10 @@
 import { compileJsonSchema } from "@vivd-catalyst/connections";
 import {
   AppError,
+  WORKFLOW_DATASET_KEY,
+  WORKFLOW_ERROR_CODES,
   WORKFLOW_RUN_JOB_KINDS,
+  asUserId,
   auditActorFromIdentity,
   createPlatformId,
   defineJobHandler,
@@ -9,7 +12,7 @@ import {
   isAuthenticatedServicePrincipal,
   isWorkflowRunEnded,
   subjectDedupeKey,
-  type AuditActor,
+  workflowDatasetReferenceSchema,
   type AuthenticatedIdentity,
   type ClientInstanceId,
   type JobControl,
@@ -18,23 +21,24 @@ import {
   type PlatformStores,
   type RegisteredJobHandler,
   type StorePage,
+  type WorkflowLastRun,
+  type WorkflowLoopOutput,
   type WorkflowRun,
   type WorkflowRunError,
   type WorkflowRunView,
   type WorkflowStep,
   type WorkflowStepRun,
-  type WorkflowStepRunId,
+  type WorkflowStepRunCall,
+  type WorkflowStepRunFilter,
+  type WorkflowStepRunPlacement,
   type WorkflowStepRunRef,
-  type WorkflowStepRunView
+  type WorkflowStepRunView,
+  type WorkflowTriggerOutput
 } from "@vivd-catalyst/core";
 import { z } from "zod";
-import {
-  indexWorkflowSteps,
-  workflowManifestFingerprint,
-  type WorkflowStepIndex
-} from "./definition";
-import type { WorkflowDefinitionSource } from "./definition-source";
-import { jsonBytes, jsonObjectSchema } from "./json";
+import { indexWorkflowSteps, type WorkflowStepIndex } from "./definition";
+import type { WorkflowDefinitionSource, WorkflowDefinitionSummary } from "./definition-source";
+import { holdsBrokenDatasetReference, jsonBytes, jsonObjectSchema } from "./json";
 import {
   WORKFLOW_RUN_LIMITS,
   WORKFLOW_STEP_JOB_BACKOFF_BASE_MS,
@@ -50,13 +54,19 @@ import {
   type WorkflowOperationCalls
 } from "./operation-step";
 import { itemLabelOf, resolveInput, resolveReference } from "./references";
-import { workflowRunActor, workflowRunPrincipal } from "./run-identity";
+import { principalActor, workflowRunActor, workflowRunPrincipal } from "./run-identity";
+import { withEveryBodyStep } from "./run-view";
 import { WorkflowStepFailure } from "./step-failure";
 
 // The engine of Workflow Runs. A run is a row, each step it reaches is a step run, and each
 // step run is executed by one job of the shared executor. A step ends in the transaction
 // that creates the step run after it and that step run's job, so a run is always either
 // ended or has exactly the work queued that carries it on, whichever process dies when.
+//
+// What a run is taken up again from is its step runs: one exists per run and path of a step,
+// so a worker that starts after another died executes the step run that was open and starts
+// nothing that has a step run. The run keeps the definition it started on, and nothing waits
+// in a process: the wait before another attempt and the run's own deadline are stored times.
 
 /** The job that executes one step run. Its payload names the step run and nothing else. */
 export const workflowStepJobKind = defineJobKind({
@@ -104,34 +114,33 @@ export interface WorkflowEngine {
   }): Promise<WorkflowRunView | undefined>;
   readRun(runId: string): Promise<WorkflowRunView | undefined>;
   listRuns(input: { workflow: string; page?: StorePage }): Promise<WorkflowRunView[]>;
-  listStepRuns(input: { runId: string; page?: StorePage }): Promise<WorkflowStepRunView[]>;
+  /** The step runs of a run: all of them, or those of one block, status or item of a loop. */
+  listStepRuns(input: {
+    runId: string;
+    filter?: WorkflowStepRunFilter;
+    page?: StorePage;
+  }): Promise<WorkflowStepRunView[]>;
+  /** The Workflows with a published definition, each with its latest run where it has one. */
+  listWorkflows(): Promise<(WorkflowDefinitionSummary & { lastRun?: WorkflowLastRun })[]>;
   /** What the job worker of the process serves for the engine. */
   jobHandlers: readonly RegisteredJobHandler[];
 }
 
 /** How the attempt of a step went, before anything of it is written. */
 type StepEnd =
-  | { kind: "done"; output: JsonValue; operationRunId?: OperationRunId }
-  | { kind: "failed"; error: WorkflowRunError; operationRunId?: OperationRunId }
+  | { kind: "done"; output: JsonValue; operationRunId?: OperationRunId; call?: WorkflowStepRunCall }
+  | {
+      kind: "failed";
+      error: WorkflowRunError;
+      operationRunId?: OperationRunId;
+      call?: WorkflowStepRunCall;
+    }
   /** A loop read its list. Its items are run by step runs of their own. */
   | { kind: "loop"; items: JsonValue[] };
 
-/** Where a new step run stands in its run. */
-interface StepPlace {
+/** Where a new step run stands in its run: its path, and its place in the tree of the run. */
+interface StepPlace extends WorkflowStepRunPlacement {
   key: string;
-  parentStepRunId?: WorkflowStepRunId;
-  iteration?: number;
-  iterationLabel?: string;
-}
-
-function principalActor(run: WorkflowRun): AuditActor {
-  return {
-    displayLabel: run.principal.displayLabel,
-    roles: [],
-    principalKind: "service",
-    principalId: run.principal.id,
-    principalDisplayLabel: run.principal.displayLabel
-  };
 }
 
 export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEngine {
@@ -144,6 +153,12 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       throw new WorkflowStepFailure(
         "step_data_too_large",
         `${what} is larger than ${limits.stepDataMaxBytes} bytes`
+      );
+    }
+    if (holdsBrokenDatasetReference(value)) {
+      throw new WorkflowStepFailure(
+        "dataset_reference_invalid",
+        `${what} holds '${WORKFLOW_DATASET_KEY}' on a value that is no reference to a dataset`
       );
     }
   }
@@ -160,6 +175,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       status: "done" | "failed" | "cancelled" | "limit_reached";
       output?: JsonValue;
       error?: WorkflowRunError;
+      cancelledBy?: WorkflowRun["cancelledBy"];
     }
   ): Promise<boolean> {
     const finishedAt = now().toISOString();
@@ -202,7 +218,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       correlationId: run.correlationId,
       metadata: {
         workflow: run.workflow,
-        revision: run.revision,
+        definitionRevisionId: run.definitionRevisionId,
         status: end.status,
         stepRunCount: run.stepRunCount,
         ...(end.error ? { errorCode: end.error.code } : {})
@@ -210,26 +226,38 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     });
   }
 
-  /** Fails a run at one step run, with the loops around that step run. */
-  async function failRun(
+  /**
+   * What a step run that failed does to its run. A loop around it that continues past a failed
+   * item goes on with its next item, and the run with it. Any other loop fails with its item,
+   * and so does what is around that loop, up to the run.
+   */
+  async function failStep(
     tx: PlatformStores,
     run: WorkflowRun,
+    index: WorkflowStepIndex,
     stepRun: WorkflowStepRun,
     error: WorkflowRunError
   ): Promise<void> {
-    const finishedAt = now().toISOString();
-    let around = stepRun.parentStepRunId;
-    while (around !== undefined) {
-      const loopRun = await tx.workflowRuns.getStepRun({ clientInstanceId, id: around });
+    let failed = stepRun;
+    while (failed.containerStepRunId !== undefined) {
+      const loopRun = await tx.workflowRuns.getStepRun({
+        clientInstanceId,
+        id: failed.containerStepRunId
+      });
       if (!loopRun) break;
+      const loop = index.get(loopRun.stepId)?.step;
+      if (loop?.type === "loop" && loop.onItemFailure === "continue") {
+        await nextItem(tx, run, index, loopRun, (failed.iteration?.index ?? 0) + 1);
+        return;
+      }
       await tx.workflowRuns.endStepRun({
         clientInstanceId,
         id: loopRun.id,
         status: "failed",
-        finishedAt,
+        finishedAt: now().toISOString(),
         error: { code: "loop_step_failed", message: "A step of the loop failed" }
       });
-      around = loopRun.parentStepRunId;
+      failed = loopRun;
     }
     await finishRun(tx, run, {
       status: "failed",
@@ -257,6 +285,8 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       });
       return;
     }
+    // A step run is created between two steps, and so between two items of a loop. `claim`
+    // starts none of a run that was cancelled or is past its time.
     const stepRun = await tx.workflowRuns.createStepRun({
       id: createPlatformId<"WorkflowStepRunId">("wfs"),
       clientInstanceId,
@@ -300,10 +330,43 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         : undefined;
     return {
       key: `${loopRun.key}[${iteration}].${first.id}`,
-      parentStepRunId: loopRun.id,
-      iteration,
-      ...(label === undefined ? {} : { iterationLabel: label })
+      containerStepRunId: loopRun.id,
+      iteration: { index: iteration, ...(label === undefined ? {} : { label }) }
     };
+  }
+
+  /**
+   * Starts one item of a loop, or ends the loop after its last one. The loop's output is its
+   * counts as they then stand, the failed items it continued past among them, and never a
+   * result of an item.
+   */
+  async function nextItem(
+    tx: PlatformStores,
+    run: WorkflowRun,
+    index: WorkflowStepIndex,
+    loopRun: WorkflowStepRun,
+    iteration: number
+  ): Promise<void> {
+    const loopRef: WorkflowStepRunRef = { clientInstanceId, id: loopRun.id };
+    const loop = index.get(loopRun.stepId)?.step;
+    const first = loop?.type === "loop" ? loop.steps[0] : undefined;
+    if (first && iteration < ((await tx.workflowRuns.countLoopItems(loopRef)) ?? 0)) {
+      await beginStep(tx, run, first, await itemPlace(tx, index, loopRun, first, iteration));
+      return;
+    }
+    const counts = await tx.workflowRuns.readLoopCounts(loopRef);
+    const output: WorkflowLoopOutput = {
+      total: counts?.total ?? 0,
+      done: counts?.done ?? 0,
+      failed: counts?.failed ?? 0
+    };
+    await tx.workflowRuns.endStepRun({
+      ...loopRef,
+      status: "done",
+      finishedAt: now().toISOString(),
+      output: { ...output }
+    });
+    await advance(tx, run, index, loopRun);
   }
 
   /** Starts what follows a step run that ended as `done`. */
@@ -317,55 +380,25 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     if (!place) return;
     const next = place.sequence.steps[place.position + 1];
     if (next) {
-      // The next step of the same sequence stands beside this one: same loop, same item.
+      // The next step of the same list stands beside this one: same block, same item.
       const prefix = stepRun.key.slice(0, stepRun.key.length - stepRun.stepId.length);
+      const { containerStepRunId, branch, iteration } = stepRun;
       await beginStep(tx, run, next, {
         key: `${prefix}${next.id}`,
-        ...(stepRun.parentStepRunId === undefined
-          ? {}
-          : {
-              parentStepRunId: stepRun.parentStepRunId,
-              iteration: stepRun.iteration ?? 0,
-              ...(stepRun.iterationLabel === undefined
-                ? {}
-                : { iterationLabel: stepRun.iterationLabel })
-            })
+        ...(containerStepRunId === undefined ? {} : { containerStepRunId }),
+        ...(branch === undefined ? {} : { branch }),
+        ...(iteration === undefined ? {} : { iteration })
       });
       return;
     }
-    if (stepRun.parentStepRunId === undefined) return;
+    if (stepRun.containerStepRunId === undefined) return;
     // The last step of one item ended: the next item, or the end of the loop.
-    const loopRef: WorkflowStepRunRef = { clientInstanceId, id: stepRun.parentStepRunId };
-    const loopRun = await tx.workflowRuns.getStepRun(loopRef);
-    const first = place.sequence.steps[0];
-    if (!loopRun || !first) return;
-    const iteration = (stepRun.iteration ?? 0) + 1;
-    if (iteration < ((await tx.workflowRuns.countLoopItems(loopRef)) ?? 0)) {
-      await beginStep(tx, run, first, await itemPlace(tx, index, loopRun, first, iteration));
-      return;
-    }
-    const results = { ...loopRef, stepId: stepRun.stepId };
-    if ((await tx.workflowRuns.measureLoopResults(results)) > limits.stepDataMaxBytes) {
-      const error = {
-        code: "step_data_too_large",
-        message: `The results of the loop are larger than ${limits.stepDataMaxBytes} bytes`
-      };
-      await tx.workflowRuns.endStepRun({
-        ...loopRef,
-        status: "failed",
-        finishedAt: now().toISOString(),
-        error
-      });
-      await failRun(tx, run, loopRun, error);
-      return;
-    }
-    await tx.workflowRuns.endStepRun({
-      ...loopRef,
-      status: "done",
-      finishedAt: now().toISOString(),
-      output: await tx.workflowRuns.listLoopResults(results)
+    const loopRun = await tx.workflowRuns.getStepRun({
+      clientInstanceId,
+      id: stepRun.containerStepRunId
     });
-    await advance(tx, run, index, loopRun);
+    if (!loopRun) return;
+    await nextItem(tx, run, index, loopRun, (stepRun.iteration?.index ?? 0) + 1);
   }
 
   /**
@@ -408,7 +441,8 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         attempt: control.attempt,
         startedAt: finishedAt
       });
-      return { run, stepRun };
+      // The first step of a run starts it: the trigger step hands that moment on.
+      return { run: { ...run, startedAt: run.startedAt ?? finishedAt }, stepRun };
     });
   }
 
@@ -425,7 +459,14 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       switch (step?.type) {
         case "trigger": {
           const input = await stores.workflowRuns.readRunInput({ clientInstanceId, id: run.id });
-          return { kind: "done", output: input ?? {} };
+          const output: WorkflowTriggerOutput = {
+            input: input ?? {},
+            startedAt: run.startedAt ?? run.createdAt,
+            trigger: run.trigger,
+            // Only a tick of a schedule has a scheduled time, and no run is started by one yet.
+            scheduledFor: null
+          };
+          return { kind: "done", output: { ...output } };
         }
         case "operation": {
           const input = await resolveInput(scope, step.input);
@@ -446,16 +487,23 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
             actor,
             signal
           });
+          const { output, ...trace } = result;
           try {
-            withinStepData(result.output, "The output of the step");
+            withinStepData(output, "The output of the step");
           } catch (error) {
             if (!(error instanceof WorkflowStepFailure)) throw error;
-            throw new OperationStepFailure(error.code, error.message, result.operationRunId);
+            throw new OperationStepFailure(error.code, error.message, trace);
           }
           return { kind: "done", ...result };
         }
         case "loop": {
           const items = await resolveReference(scope, step.items);
+          if (workflowDatasetReferenceSchema.safeParse(items).success) {
+            throw new WorkflowStepFailure(
+              WORKFLOW_ERROR_CODES.notSupported,
+              `This engine does not run a loop over a dataset yet (${WORKFLOW_ERROR_CODES.notSupported})`
+            );
+          }
           if (!Array.isArray(items)) {
             throw new WorkflowStepFailure("loop_items_not_a_list", "A loop runs over a list");
           }
@@ -484,19 +532,19 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           return { kind: "done", output };
         }
         default:
+          // A reserved block, a step type of a later release, or a step the run's definition
+          // does not hold: the step fails with the contract's refusal, and so does its run.
           throw new WorkflowStepFailure(
-            "step_type_not_executed",
-            `This release does not execute the step '${stepRun.stepId}'`
+            WORKFLOW_ERROR_CODES.notSupported,
+            `This engine does not run the step '${stepRun.stepId}' of the type '${stepRun.stepType}' yet (${WORKFLOW_ERROR_CODES.notSupported})`
           );
       }
     } catch (error) {
       if (!(error instanceof WorkflowStepFailure)) throw error;
-      const operationRunId =
-        error instanceof OperationStepFailure ? error.operationRunId : undefined;
       return {
         kind: "failed",
         error: error.toRunError(),
-        ...(operationRunId ? { operationRunId } : {})
+        ...(error instanceof OperationStepFailure ? error.trace : {})
       };
     }
   }
@@ -519,7 +567,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     if (end.kind === "failed") {
       const { kind: _kind, ...failure } = end;
       await tx.workflowRuns.endStepRun({ ...ref, status: "failed", finishedAt, ...failure });
-      if (live) await failRun(tx, run, stepRun, end.error);
+      if (live) await failStep(tx, run, index, stepRun, end.error);
       return;
     }
     if (end.kind === "loop") {
@@ -527,15 +575,9 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         await tx.workflowRuns.endStepRun({ ...ref, status: "cancelled", finishedAt });
         return;
       }
-      const loop = index.get(stepRun.stepId)?.step;
-      const inner = loop?.type === "loop" ? firstStepOf(index, loop.steps) : undefined;
-      if (end.items.length === 0 || !inner) {
-        await tx.workflowRuns.endStepRun({ ...ref, status: "done", finishedAt, output: [] });
-        await advance(tx, run, index, stepRun);
-        return;
-      }
+      // From here the step runs of its items carry the loop on. A loop without an item ends.
       await tx.workflowRuns.markLoopWaiting({ ...ref, items: end.items });
-      await beginStep(tx, run, inner, await itemPlace(tx, index, stepRun, inner, 0));
+      await nextItem(tx, run, index, stepRun, 0);
       return;
     }
     const { kind: _kind, ...done } = end;
@@ -578,7 +620,9 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         finishedAt: now().toISOString(),
         error
       });
-      if (!isWorkflowRunEnded(run.status)) await failRun(tx, run, stepRun, error);
+      if (!isWorkflowRunEnded(run.status)) {
+        await failStep(tx, run, indexWorkflowSteps(run.definition), stepRun, error);
+      }
     }
   });
 
@@ -586,11 +630,12 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     jobHandlers: [stepHandler],
 
     async start(input) {
-      const manifest = await definitions.read(input.workflow);
-      if (!manifest) {
+      const published = await definitions.read(input.workflow);
+      if (!published) {
         throw new AppError("NOT_FOUND", `There is no Workflow '${input.workflow}'`);
       }
-      const trigger = firstStepOf(indexWorkflowSteps(manifest), manifest.steps);
+      const { manifest } = published;
+      const [trigger] = manifest.steps;
       if (trigger?.type !== "trigger" || !trigger.triggers.some(({ kind }) => kind === "manual")) {
         throw new AppError("CONFLICT", `The Workflow '${manifest.id}' is not started by hand`, {
           reason: "no_manual_trigger"
@@ -623,7 +668,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       if (!principal) {
         throw new AppError(
           "CONFLICT",
-          `The instance has no single active service principal named '${manifest.runAs}', which the Workflow '${manifest.id}' runs as`,
+          `The instance has no active service principal named '${manifest.runAs}', which the Workflow '${manifest.id}' runs as`,
           { reason: "principal_inactive" }
         );
       }
@@ -635,7 +680,8 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           id,
           clientInstanceId,
           workflow: manifest.id,
-          revision: workflowManifestFingerprint(manifest),
+          // The run keeps this revision to its end, whatever is published after it started.
+          definitionRevisionId: published.revisionId,
           mode: "live",
           trigger: "manual",
           definition: manifest,
@@ -661,7 +707,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           correlationId: run.correlationId,
           metadata: {
             workflow: run.workflow,
-            revision: run.revision,
+            definitionRevisionId: run.definitionRevisionId,
             trigger: run.trigger,
             mode: run.mode,
             principalId: run.principal.id
@@ -679,7 +725,15 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         if (!known) return false;
         const run = await tx.workflowRuns.lockRun({ clientInstanceId, id: known.id });
         if (!run) return false;
-        if (!(await endRun(tx, run, { status: "cancelled" }))) return true;
+        const { cancelledBy } = input;
+        const ended = await endRun(tx, run, {
+          status: "cancelled",
+          // The contract names a person here. A service principal that cancels is in the audit.
+          ...(isAuthenticatedServicePrincipal(cancelledBy)
+            ? {}
+            : { cancelledBy: asUserId(cancelledBy.id) })
+        });
+        if (!ended) return true;
         await tx.audit.appendAuditEvent({
           clientInstanceId,
           type: "workflow_run.cancelled",
@@ -689,7 +743,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           correlationId: input.correlationId,
           metadata: {
             workflow: run.workflow,
-            revision: run.revision,
+            definitionRevisionId: run.definitionRevisionId,
             stepRunCount: run.stepRunCount
           }
         });
@@ -704,23 +758,33 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     listRuns: ({ workflow, page }) =>
       stores.workflowRuns.listRuns({ clientInstanceId, workflow, ...(page ? { page } : {}) }),
 
-    async listStepRuns({ runId, page }) {
+    async listStepRuns({ runId, filter, page }) {
       const run = await stores.workflowRuns.readRun({ clientInstanceId, id: runId });
       if (!run) return [];
-      return stores.workflowRuns.listStepRuns({
+      const stepRuns = await stores.workflowRuns.listStepRuns({
         clientInstanceId,
         runId: run.id,
+        ...(filter ? { filter } : {}),
         ...(page ? { page } : {})
+      });
+      if (!stepRuns.some((stepRun) => stepRun.bodyCounts)) return stepRuns;
+      const definition = await stores.workflowRuns.readRunDefinition({
+        clientInstanceId,
+        id: run.id
+      });
+      return definition ? withEveryBodyStep(stepRuns, definition) : stepRuns;
+    },
+
+    async listWorkflows() {
+      const summaries = await definitions.list();
+      const last = await stores.workflowRuns.listLastRuns({
+        clientInstanceId,
+        workflows: summaries.map((summary) => summary.id)
+      });
+      return summaries.map((summary) => {
+        const lastRun = last.get(summary.id);
+        return { ...summary, ...(lastRun ? { lastRun } : {}) };
       });
     }
   };
-}
-
-/** The first step of one sequence in the order it runs, which its wires may set. */
-function firstStepOf(
-  index: WorkflowStepIndex,
-  written: readonly WorkflowStep[]
-): WorkflowStep | undefined {
-  const [any] = written;
-  return any ? index.get(any.id)?.sequence.steps[0] : undefined;
 }

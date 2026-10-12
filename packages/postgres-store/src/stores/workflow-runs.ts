@@ -8,7 +8,9 @@ export function createPostgresWorkflowRunsStore(db: PostgresConnection): Workflo
     lockRun: (ref) => operations.lockWorkflowRun(db, ref),
     readRun: (input) => operations.readWorkflowRun(db, input),
     listRuns: (input) => operations.listWorkflowRuns(db, input),
+    listLastRuns: (input) => operations.listLastWorkflowRuns(db, input),
     readRunInput: (ref) => operations.readWorkflowRunInput(db, ref),
+    readRunDefinition: (input) => operations.readWorkflowRunDefinition(db, input),
     markRunRunning: (ref) => operations.markWorkflowRunRunning(db, ref),
     endRun: (ref) => operations.endWorkflowRun(db, ref),
     createStepRun: (stepRun) => operations.createWorkflowStepRun(db, stepRun),
@@ -21,8 +23,7 @@ export function createPostgresWorkflowRunsStore(db: PostgresConnection): Workflo
     findStepOutput: (input) => operations.findWorkflowStepOutput(db, input),
     countLoopItems: (ref) => operations.countWorkflowLoopItems(db, ref),
     readLoopItem: (ref) => operations.readWorkflowLoopItem(db, ref),
-    measureLoopResults: (ref) => operations.measureWorkflowLoopResults(db, ref),
-    listLoopResults: (ref) => operations.listWorkflowLoopResults(db, ref)
+    readLoopCounts: (ref) => operations.readWorkflowLoopCounts(db, ref)
   };
 }
 

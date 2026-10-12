@@ -1,16 +1,22 @@
+import type { ServicePrincipalRecord } from "./api-access";
 import type { ClientInstanceId, OperationRunId, WorkflowRunId, WorkflowStepRunId } from "./ids";
 import type { JsonObject, JsonValue } from "./json";
-import type { WorkflowRunPrincipal } from "./identity";
 import type { OperationRunActor } from "./operation-runs";
 import type { StorePage } from "./paging";
 import type { ISODateString } from "./time";
+import type { WorkflowBlockStepRunView } from "./workflow-blocks";
 import type {
+  WorkflowLastRun,
   WorkflowLoopCounts,
   WorkflowManifest,
   WorkflowRunMode,
+  WorkflowRunRecordView,
   WorkflowRunStatus,
+  WorkflowStep,
+  WorkflowStepRunCall,
+  WorkflowStepRunFilter,
+  WorkflowStepRunPlacement,
   WorkflowStepRunStatus,
-  WorkflowStepType,
   WorkflowTriggerKind
 } from "./workflows";
 
@@ -41,24 +47,27 @@ export interface WorkflowRunError {
   stepRunId?: WorkflowStepRunId;
 }
 
-/** A run without the values it carries, as the engine holds it while it works. */
-export interface WorkflowRun {
+/**
+ * A run without the values it carries, as the engine holds it while it works. Of
+ * `WorkflowRunRecordView` it has the revision it started on, and who cancelled it and when:
+ * `cancelledBy` is there where a person did, and `cancelledAt` whoever did.
+ */
+export interface WorkflowRun extends WorkflowRunRecordView {
   id: WorkflowRunId;
   clientInstanceId: ClientInstanceId;
   /** The id of the Workflow. */
   workflow: string;
-  /** The fingerprint of the definition the run executes. */
-  revision: string;
   mode: WorkflowRunMode;
   trigger: WorkflowTriggerKind;
   status: WorkflowRunStatus;
   /** The definition as it stood when the run started. A run never reads a newer one. */
   definition: WorkflowManifest;
   /**
-   * The service principal the run acts as: the id every step reads the principal by, and the
-   * label it had when the run started. The actor of a step's call is the whole principal.
+   * The service principal the run acts as: the name its definition gives under `runAs`, which
+   * every step reads the principal by, and the id and label it had when the run started. The
+   * actor of a step's call is the whole principal, as it is stored when the step runs.
    */
-  principal: Pick<WorkflowRunPrincipal, "id" | "displayLabel">;
+  principal: Pick<ServicePrincipalRecord, "id" | "name" | "displayLabel">;
   /** Who started the run. Its rights opened the start and nothing a step does. */
   startedBy: OperationRunActor;
   /** The Operation Run of the call that started the run. */
@@ -79,7 +88,7 @@ export type NewWorkflowRun = Pick<
   | "id"
   | "clientInstanceId"
   | "workflow"
-  | "revision"
+  | "definitionRevisionId"
   | "mode"
   | "trigger"
   | "definition"
@@ -105,25 +114,27 @@ export type WorkflowRunView = Omit<WorkflowRun, "definition"> & {
   outputPreview?: WorkflowOutputPreview;
 };
 
-/** A step run without the values it carries. */
-export interface WorkflowStepRun {
+/**
+ * A step run without the values it carries. Where it stands in the tree of its run is
+ * `WorkflowStepRunPlacement`: the step run of the loop around it and the item of that loop.
+ * `branch` is there once an engine runs a block that has branches. On the step run of an
+ * operation step, `effect` and `source` say what was called, once the operation is known.
+ */
+export interface WorkflowStepRun extends WorkflowStepRunPlacement, WorkflowStepRunCall {
   id: WorkflowStepRunId;
   clientInstanceId: ClientInstanceId;
   runId: WorkflowRunId;
   /** The id of the step in the definition. */
   stepId: string;
-  stepType: WorkflowStepType;
+  /** The type the definition gives the step, a reserved one included. */
+  stepType: WorkflowStep["type"];
   /**
-   * The step's place in the run: its id, and inside a loop the loop's key, the number of the
-   * item and the id, as in `each_client[3].bookings`. One step run exists per key of a run.
+   * The path of the step in the run: its id, and inside a loop the loop's path, the number of
+   * the item and the id, as in `each_client[3].bookings`. One step run exists per path of a
+   * run. It is what a run is taken up again by: a path that has a step run is never started
+   * a second time, whichever worker asks.
    */
   key: string;
-  /** The step run of the loop this one is an iteration step of. */
-  parentStepRunId?: WorkflowStepRunId;
-  /** Which item of that loop, from 0. */
-  iteration?: number;
-  /** What the loop's `itemLabel` field holds for that item, for a person to tell it by. */
-  iterationLabel?: string;
   status: WorkflowStepRunStatus;
   /** The number of the job attempt that last executed the step, from 1. */
   attempt: number;
@@ -142,18 +153,22 @@ export type NewWorkflowStepRun = Pick<
   | "stepId"
   | "stepType"
   | "key"
-  | "parentStepRunId"
+  | "containerStepRunId"
+  | "branch"
   | "iteration"
-  | "iterationLabel"
   | "createdAt"
 >;
 
-/** A step run as a read shows it: its output as a preview, and of a loop how far it is. */
-export type WorkflowStepRunView = WorkflowStepRun & {
-  outputPreview?: WorkflowOutputPreview;
-  /** On the step run of a loop step alone. */
-  loop?: WorkflowLoopCounts;
-};
+/**
+ * A step run as a read shows it: its output as a preview, and of a loop how far its items are
+ * (`loop`) and how the step runs of each step directly inside it stand (`bodyCounts`).
+ */
+export type WorkflowStepRunView = WorkflowStepRun &
+  WorkflowBlockStepRunView & {
+    outputPreview?: WorkflowOutputPreview;
+    /** On the step run of a loop step alone. */
+    loop?: WorkflowLoopCounts;
+  };
 
 /** Names one run of one instance. */
 export interface WorkflowRunRef {
@@ -174,6 +189,8 @@ export interface WorkflowStepRunEnd {
   output?: JsonValue;
   operationRunId?: OperationRunId;
   error?: WorkflowRunError;
+  /** What the operation of the step does and what it belongs to, where it was resolved. */
+  call?: WorkflowStepRunCall;
 }
 
 export interface WorkflowRunsStore {
@@ -195,8 +212,21 @@ export interface WorkflowRunsStore {
     workflow: string;
     page?: StorePage;
   }): Promise<WorkflowRunView[]>;
+  /**
+   * The latest run of each of the named Workflows, by creation time and id. A Workflow that
+   * never ran has no entry.
+   */
+  listLastRuns(input: {
+    clientInstanceId: ClientInstanceId;
+    workflows: readonly string[];
+  }): Promise<Map<string, WorkflowLastRun>>;
   /** The run's input, as the trigger step hands it on. */
   readRunInput(ref: WorkflowRunRef): Promise<JsonObject | undefined>;
+  /** The definition a run was started on. `id` is whatever a caller named. */
+  readRunDefinition(input: {
+    clientInstanceId: ClientInstanceId;
+    id: string;
+  }): Promise<WorkflowManifest | undefined>;
   /** Moves a `queued` run to `running`. A run in another status is left as it is. */
   markRunRunning(ref: WorkflowRunRef & { startedAt: ISODateString }): Promise<void>;
   /** Ends a run that has not ended. Answers whether this call ended it. */
@@ -206,6 +236,8 @@ export interface WorkflowRunsStore {
       finishedAt: ISODateString;
       output?: JsonValue;
       error?: WorkflowRunError;
+      /** On a cancel: the person who cancelled. The moment is `finishedAt`. */
+      cancelledBy?: WorkflowRunRecordView["cancelledBy"];
     }
   ): Promise<boolean>;
   /** Writes a step run as `queued` and counts it on its run. */
@@ -224,21 +256,25 @@ export interface WorkflowRunsStore {
   markLoopWaiting(ref: WorkflowStepRunRef & { items: readonly JsonValue[] }): Promise<void>;
   /** The step runs of a run that have not ended. */
   listOpenStepRuns(ref: WorkflowRunRef): Promise<WorkflowStepRun[]>;
-  /** The step runs of one run in the order they were created. */
+  /**
+   * The step runs of one run in the order they were created: all of them, or those of one
+   * block, of one status and of one item of a loop.
+   */
   listStepRuns(input: {
     clientInstanceId: ClientInstanceId;
     runId: WorkflowRunId;
+    filter?: WorkflowStepRunFilter;
     page?: StorePage;
   }): Promise<WorkflowStepRunView[]>;
   /**
    * The output of the step run of `stepId` that ended as `done` in one place of the run: at
-   * the top where `parentStepRunId` is missing, otherwise in that iteration of that loop.
+   * the top where `containerStepRunId` is missing, otherwise in that item of that loop.
    */
   findStepOutput(input: {
     clientInstanceId: ClientInstanceId;
     runId: WorkflowRunId;
     stepId: string;
-    parentStepRunId?: WorkflowStepRunId;
+    containerStepRunId?: WorkflowStepRunId;
     iteration?: number;
   }): Promise<{ value: JsonValue } | undefined>;
   /** How many items the list of a loop step run holds, once the loop resolved it. */
@@ -247,8 +283,10 @@ export interface WorkflowRunsStore {
   readLoopItem(
     ref: WorkflowStepRunRef & { index: number }
   ): Promise<{ value: JsonValue } | undefined>;
-  /** How many bytes the outputs of the step runs of `stepId` in a loop hold together, as JSON. */
-  measureLoopResults(ref: WorkflowStepRunRef & { stepId: string }): Promise<number>;
-  /** The outputs of the step runs of `stepId` in a loop, in the order of its items. */
-  listLoopResults(ref: WorkflowStepRunRef & { stepId: string }): Promise<JsonValue[]>;
+  /**
+   * How far the items of a loop step run are, as they stand now. An item is failed when one of
+   * its step runs is, running while one of them has not ended, and done when all of them ended
+   * as done.
+   */
+  readLoopCounts(ref: WorkflowStepRunRef): Promise<WorkflowLoopCounts | undefined>;
 }

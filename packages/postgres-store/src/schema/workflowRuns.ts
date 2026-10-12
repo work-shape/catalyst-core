@@ -15,23 +15,25 @@ import type {
   ClientInstanceId,
   JsonObject,
   JsonValue,
+  OperationEffect,
   OperationRunActor,
   OperationRunId,
   ServicePrincipalId,
+  UserId,
   WorkflowManifest,
   WorkflowRunError,
   WorkflowRunId,
   WorkflowRunMode,
   WorkflowRunStatus,
+  WorkflowStep,
   WorkflowStepRunId,
   WorkflowStepRunStatus,
-  WorkflowStepType,
   WorkflowTriggerKind
 } from "@vivd-catalyst/core";
 
 /**
- * One row per run of a Workflow. It keeps the definition it executes, so a run that a worker
- * picks up again after a restart never reads a newer one.
+ * One row per run of a Workflow. It keeps the definition it executes and the id of that
+ * revision, so a run that a worker picks up again after a restart never reads a newer one.
  */
 export const workflowRuns = pgTable(
   "workflow_runs",
@@ -39,7 +41,7 @@ export const workflowRuns = pgTable(
     id: text("id").$type<WorkflowRunId>().primaryKey(),
     clientInstanceId: text("client_instance_id").$type<ClientInstanceId>().notNull(),
     workflow: text("workflow").notNull(),
-    revision: text("revision").notNull(),
+    definitionRevisionId: text("definition_revision_id").notNull(),
     mode: text("mode").$type<WorkflowRunMode>().notNull(),
     trigger: text("trigger").$type<WorkflowTriggerKind>().notNull(),
     status: text("status").$type<WorkflowRunStatus>().notNull(),
@@ -50,6 +52,8 @@ export const workflowRuns = pgTable(
     // A code of the engine and a sentence that may be shown. Never a value of the run.
     error: jsonb("error").$type<WorkflowRunError>(),
     principalId: text("principal_id").$type<ServicePrincipalId>().notNull(),
+    // The name the definition gives under `runAs`. A step reads the principal by it.
+    principalName: text("principal_name").notNull(),
     principalLabel: text("principal_label").notNull(),
     // Minimized: kind, id and label of who started the run.
     startedBy: jsonb("started_by").$type<OperationRunActor>().notNull(),
@@ -59,7 +63,10 @@ export const workflowRuns = pgTable(
     correlationId: text("correlation_id").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     startedAt: timestamp("started_at", { withTimezone: true }),
-    finishedAt: timestamp("finished_at", { withTimezone: true })
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    // Set by a cancel that ended the run: the person, where a person cancelled, and the moment.
+    cancelledBy: text("cancelled_by").$type<UserId>(),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true })
   },
   (table) => [
     check("workflow_runs_mode_check", sql`${table.mode} in ('live', 'test')`),
@@ -80,7 +87,11 @@ export const workflowRuns = pgTable(
   ]
 );
 
-/** One row per step a run reached, and inside a loop one per step and item. */
+/**
+ * One row per step a run reached, and inside a loop one per step and item. It is what a run is
+ * taken up again from: a row exists once per run and path (`key`), so a worker that starts
+ * after another died finds what ended and starts nothing of it again.
+ */
 export const workflowStepRuns = pgTable(
   "workflow_step_runs",
   {
@@ -88,9 +99,11 @@ export const workflowStepRuns = pgTable(
     clientInstanceId: text("client_instance_id").$type<ClientInstanceId>().notNull(),
     runId: text("run_id").$type<WorkflowRunId>().notNull(),
     stepId: text("step_id").notNull(),
-    stepType: text("step_type").$type<WorkflowStepType>().notNull(),
+    stepType: text("step_type").$type<WorkflowStep["type"]>().notNull(),
     key: text("key").notNull(),
-    parentStepRunId: text("parent_step_run_id").$type<WorkflowStepRunId>(),
+    // The step run of the block that holds the step, and the branch of that block.
+    containerStepRunId: text("container_step_run_id").$type<WorkflowStepRunId>(),
+    branch: text("branch"),
     iteration: integer("iteration"),
     // What the loop's `itemLabel` field holds for the item, cut by the engine.
     iterationLabel: text("iteration_label"),
@@ -101,6 +114,9 @@ export const workflowStepRuns = pgTable(
     // The step's output, wrapped so that an output of `null` is kept.
     output: jsonb("output").$type<{ value: JsonValue }>(),
     operationRunId: text("operation_run_id").$type<OperationRunId>(),
+    // Of an operation step: what its operation does and the name of what it belongs to.
+    effect: text("effect").$type<OperationEffect>(),
+    source: text("source"),
     error: jsonb("error").$type<WorkflowRunError>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     startedAt: timestamp("started_at", { withTimezone: true }),
@@ -113,7 +129,7 @@ export const workflowStepRuns = pgTable(
     ),
     check(
       "workflow_step_runs_iteration_check",
-      sql`(${table.parentStepRunId} is null) = (${table.iteration} is null)`
+      sql`${table.iteration} is null or ${table.containerStepRunId} is not null`
     ),
     foreignKey({
       name: "workflow_step_runs_run_fk",
@@ -124,9 +140,10 @@ export const workflowStepRuns = pgTable(
     uniqueIndex("workflow_step_runs_key_idx").on(table.runId, table.key),
     // The step runs of a run in the order they were created.
     index("workflow_step_runs_list_idx").on(table.runId, table.createdAt, table.id),
-    // The results of a loop, by item, and the step an inner step refers to.
-    index("workflow_step_runs_parent_idx")
-      .on(table.parentStepRunId, table.stepId, table.iteration)
-      .where(sql`${table.parentStepRunId} is not null`)
+    // The step runs of one block, by step and item: its counts, and the step an inner step
+    // refers to.
+    index("workflow_step_runs_container_idx")
+      .on(table.containerStepRunId, table.stepId, table.iteration)
+      .where(sql`${table.containerStepRunId} is not null`)
   ]
 );

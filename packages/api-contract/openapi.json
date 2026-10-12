@@ -9990,7 +9990,7 @@
                     "workflow": {
                       "type": "string"
                     },
-                    "revision": {
+                    "definitionRevisionId": {
                       "type": "string"
                     },
                     "mode": {
@@ -10004,7 +10004,8 @@
                       "type": "string",
                       "enum": [
                         "manual",
-                        "schedule"
+                        "schedule",
+                        "parent"
                       ]
                     },
                     "status": {
@@ -10025,12 +10026,16 @@
                         "id": {
                           "type": "string"
                         },
+                        "name": {
+                          "type": "string"
+                        },
                         "displayLabel": {
                           "type": "string"
                         }
                       },
                       "required": [
                         "id",
+                        "name",
                         "displayLabel"
                       ]
                     },
@@ -10110,12 +10115,18 @@
                     },
                     "finishedAt": {
                       "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "cancelledBy": {
+                      "type": "string"
+                    },
+                    "cancelledAt": {
+                      "$ref": "#/components/schemas/Timestamp"
                     }
                   },
                   "required": [
                     "id",
                     "workflow",
-                    "revision",
+                    "definitionRevisionId",
                     "mode",
                     "trigger",
                     "status",
@@ -10219,7 +10230,7 @@
                     "workflow": {
                       "type": "string"
                     },
-                    "revision": {
+                    "definitionRevisionId": {
                       "type": "string"
                     },
                     "mode": {
@@ -10233,7 +10244,8 @@
                       "type": "string",
                       "enum": [
                         "manual",
-                        "schedule"
+                        "schedule",
+                        "parent"
                       ]
                     },
                     "status": {
@@ -10254,12 +10266,16 @@
                         "id": {
                           "type": "string"
                         },
+                        "name": {
+                          "type": "string"
+                        },
                         "displayLabel": {
                           "type": "string"
                         }
                       },
                       "required": [
                         "id",
+                        "name",
                         "displayLabel"
                       ]
                     },
@@ -10339,12 +10355,18 @@
                     },
                     "finishedAt": {
                       "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "cancelledBy": {
+                      "type": "string"
+                    },
+                    "cancelledAt": {
+                      "$ref": "#/components/schemas/Timestamp"
                     }
                   },
                   "required": [
                     "id",
                     "workflow",
-                    "revision",
+                    "definitionRevisionId",
                     "mode",
                     "trigger",
                     "status",
@@ -10419,7 +10441,7 @@
     "/api/v1/workflow-runs/{runId}/steps": {
       "get": {
         "operationId": "workflows.list_step_runs",
-        "summary": "List the step runs of one Workflow Run in the order they were created",
+        "summary": "List the step runs of one Workflow Run in the order they were created: all, or those of one block, status or loop item",
         "tags": [
           "Workflows"
         ],
@@ -10468,6 +10490,41 @@
               "type": "string",
               "minLength": 1
             }
+          },
+          {
+            "name": "containerStepRunId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "queued",
+                "running",
+                "waiting",
+                "done",
+                "failed",
+                "cancelled"
+              ]
+            }
+          },
+          {
+            "name": "iteration",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
           }
         ],
         "responses": {
@@ -10501,13 +10558,19 @@
                               "code",
                               "output",
                               "agent",
-                              "notify"
+                              "notify",
+                              "workflow",
+                              "condition",
+                              "parallel"
                             ]
                           },
                           "key": {
                             "type": "string"
                           },
-                          "parentStepRunId": {
+                          "containerStepRunId": {
+                            "type": "string"
+                          },
+                          "branch": {
                             "type": "string"
                           },
                           "iteration": {
@@ -10556,6 +10619,53 @@
                               "failed",
                               "running"
                             ]
+                          },
+                          "bodyCounts": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "type": "object",
+                              "properties": {
+                                "total": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "done": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "failed": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "running": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "required": [
+                                "total",
+                                "done",
+                                "failed",
+                                "running"
+                              ]
+                            }
+                          },
+                          "effect": {
+                            "type": "string",
+                            "enum": [
+                              "reading",
+                              "changing"
+                            ]
+                          },
+                          "source": {
+                            "type": "string"
                           },
                           "status": {
                             "type": "string",
@@ -10674,6 +10784,126 @@
         "x-catalyst-rate-class": "read"
       }
     },
+    "/api/v1/workflows": {
+      "get": {
+        "operationId": "workflows.list",
+        "summary": "List the published Workflows the caller may read, each with its latest run",
+        "tags": [
+          "Workflows"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:read"
+            ]
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "lastRun": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "queued",
+                                  "running",
+                                  "waiting",
+                                  "done",
+                                  "failed",
+                                  "cancelled",
+                                  "limit_reached"
+                                ]
+                              },
+                              "startedAt": {
+                                "$ref": "#/components/schemas/Timestamp"
+                              },
+                              "endedAt": {
+                                "$ref": "#/components/schemas/Timestamp"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "status"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/workflows/{workflow}/runs": {
       "get": {
         "operationId": "workflows.list_runs",
@@ -10747,7 +10977,7 @@
                           "workflow": {
                             "type": "string"
                           },
-                          "revision": {
+                          "definitionRevisionId": {
                             "type": "string"
                           },
                           "mode": {
@@ -10761,7 +10991,8 @@
                             "type": "string",
                             "enum": [
                               "manual",
-                              "schedule"
+                              "schedule",
+                              "parent"
                             ]
                           },
                           "status": {
@@ -10782,12 +11013,16 @@
                               "id": {
                                 "type": "string"
                               },
+                              "name": {
+                                "type": "string"
+                              },
                               "displayLabel": {
                                 "type": "string"
                               }
                             },
                             "required": [
                               "id",
+                              "name",
                               "displayLabel"
                             ]
                           },
@@ -10867,12 +11102,18 @@
                           },
                           "finishedAt": {
                             "$ref": "#/components/schemas/Timestamp"
+                          },
+                          "cancelledBy": {
+                            "type": "string"
+                          },
+                          "cancelledAt": {
+                            "$ref": "#/components/schemas/Timestamp"
                           }
                         },
                         "required": [
                           "id",
                           "workflow",
-                          "revision",
+                          "definitionRevisionId",
                           "mode",
                           "trigger",
                           "status",
@@ -10999,7 +11240,7 @@
                     "workflow": {
                       "type": "string"
                     },
-                    "revision": {
+                    "definitionRevisionId": {
                       "type": "string"
                     },
                     "mode": {
@@ -11013,7 +11254,8 @@
                       "type": "string",
                       "enum": [
                         "manual",
-                        "schedule"
+                        "schedule",
+                        "parent"
                       ]
                     },
                     "status": {
@@ -11034,12 +11276,16 @@
                         "id": {
                           "type": "string"
                         },
+                        "name": {
+                          "type": "string"
+                        },
                         "displayLabel": {
                           "type": "string"
                         }
                       },
                       "required": [
                         "id",
+                        "name",
                         "displayLabel"
                       ]
                     },
@@ -11119,12 +11365,18 @@
                     },
                     "finishedAt": {
                       "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "cancelledBy": {
+                      "type": "string"
+                    },
+                    "cancelledAt": {
+                      "$ref": "#/components/schemas/Timestamp"
                     }
                   },
                   "required": [
                     "id",
                     "workflow",
-                    "revision",
+                    "definitionRevisionId",
                     "mode",
                     "trigger",
                     "status",

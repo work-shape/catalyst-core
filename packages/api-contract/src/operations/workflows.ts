@@ -2,7 +2,8 @@ import { z } from "zod";
 import { listQuerySchema, timestampSchema } from "../shared";
 import { defineRegisteredOperation, json, page } from "./define-operation";
 
-// The runs of a Workflow: the start by hand, the reads and the cancel. A read answers states,
+// The Workflows of an instance and their runs: the list, the start by hand, the reads and the
+// cancel. A read answers states,
 // times and errors, and of what a run or a step returned only a cut preview. It never answers
 // an input.
 
@@ -21,6 +22,7 @@ const runStatusSchema = z.enum([
   "limit_reached"
 ]);
 const stepRunStatusSchema = z.enum(["queued", "running", "waiting", "done", "failed", "cancelled"]);
+// The reserved blocks are among them: a step run of one says that the engine refused it.
 const stepTypeSchema = z.enum([
   "trigger",
   "operation",
@@ -28,8 +30,17 @@ const stepTypeSchema = z.enum([
   "code",
   "output",
   "agent",
-  "notify"
+  "notify",
+  "workflow",
+  "condition",
+  "parallel"
 ]);
+const countsSchema = z.object({
+  total: z.number().int().min(0),
+  done: z.number().int().min(0),
+  failed: z.number().int().min(0),
+  running: z.number().int().min(0)
+});
 
 const workflowRunErrorSchema = z.object({
   /** A code of the engine, or the code of the refusal or failure of the step's operation. */
@@ -49,13 +60,13 @@ const workflowOutputPreviewSchema = z.object({
 export const workflowRunSchema = z.object({
   id: z.string(),
   workflow: z.string(),
-  /** The fingerprint of the definition the run executes. */
-  revision: z.string(),
+  /** The revision of the definition the run started on and keeps to its end. */
+  definitionRevisionId: z.string(),
   mode: z.enum(["live", "test"]),
-  trigger: z.enum(["manual", "schedule"]),
+  trigger: z.enum(["manual", "schedule", "parent"]),
   status: runStatusSchema,
   /** The service principal the run acts as. Its rights are the rights of every step. */
-  principal: z.object({ id: z.string(), displayLabel: z.string() }),
+  principal: z.object({ id: z.string(), name: z.string(), displayLabel: z.string() }),
   startedBy: z.object({
     kind: z.enum(["user", "service_principal"]),
     id: z.string(),
@@ -70,7 +81,10 @@ export const workflowRunSchema = z.object({
   outputPreview: workflowOutputPreviewSchema.optional(),
   createdAt: timestampSchema,
   startedAt: timestampSchema.optional(),
-  finishedAt: timestampSchema.optional()
+  finishedAt: timestampSchema.optional(),
+  /** The person who cancelled the run. Missing where a service principal did, and on a run nobody cancelled. */
+  cancelledBy: z.string().optional(),
+  cancelledAt: timestampSchema.optional()
 });
 
 export const workflowStepRunSchema = z.object({
@@ -78,21 +92,21 @@ export const workflowStepRunSchema = z.object({
   runId: z.string(),
   stepId: z.string(),
   stepType: stepTypeSchema,
-  /** The step's place in the run, such as `each_client[3].bookings`. */
+  /** The step's path in the run, such as `each_client[3].bookings`. */
   key: z.string(),
-  /** The step run of the loop this one belongs to. */
-  parentStepRunId: z.string().optional(),
+  /** The step run of the block that holds the step: today a loop. */
+  containerStepRunId: z.string().optional(),
+  /** The branch of that block the step stands in. No block with branches runs yet. */
+  branch: z.string().optional(),
   /** Which item of that loop, from 0, and what the loop's `itemLabel` field holds for it. */
   iteration: z.object({ index: z.number().int().min(0), label: z.string().optional() }).optional(),
   /** On the step run of a loop: how many items it has and how far they are. */
-  loop: z
-    .object({
-      total: z.number().int().min(0),
-      done: z.number().int().min(0),
-      failed: z.number().int().min(0),
-      running: z.number().int().min(0)
-    })
-    .optional(),
+  loop: countsSchema.optional(),
+  /** On the step run of a loop: how the step runs of each step directly inside it stand, by step id. */
+  bodyCounts: z.record(z.string(), countsSchema).optional(),
+  /** On the step run of an operation step: what its operation does and what it belongs to. */
+  effect: z.enum(["reading", "changing"]).optional(),
+  source: z.string().optional(),
   status: stepRunStatusSchema,
   attempt: z.number().int().min(0),
   /** The Operation Run of the call an operation step made. */
@@ -109,6 +123,29 @@ export const startWorkflowRunRequestSchema = z.object({
   input: z.record(z.string(), z.unknown()).optional()
 });
 
+/** The filters of the step runs of a run: those of one block, one status, one item of a loop. */
+export const listWorkflowStepRunsQuerySchema = listQuerySchema.extend({
+  containerStepRunId: z.string().min(1).optional(),
+  status: stepRunStatusSchema.optional(),
+  iteration: z.coerce.number().int().min(0).optional()
+});
+
+export const workflowSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().optional(),
+  /** The latest run of the Workflow. Missing on one that never ran. */
+  lastRun: z
+    .object({
+      id: z.string(),
+      status: runStatusSchema,
+      startedAt: timestampSchema.optional(),
+      endedAt: timestampSchema.optional()
+    })
+    .optional()
+});
+
+export type WorkflowSummaryResource = z.infer<typeof workflowSummarySchema>;
 export type WorkflowRunResource = z.infer<typeof workflowRunSchema>;
 export type WorkflowStepRunResource = z.infer<typeof workflowStepRunSchema>;
 export type StartWorkflowRunRequest = z.infer<typeof startWorkflowRunRequestSchema>;
@@ -117,6 +154,20 @@ export type StartWorkflowRunRequest = z.infer<typeof startWorkflowRunRequestSche
 // Workflow's own (`workflow.use`, `workflow.read`, `workflow.write`) and is decided on the
 // Workflow the call or its run names.
 export const workflowOperations = {
+  "workflows.list": defineRegisteredOperation({
+    id: "workflows.list",
+    method: "GET",
+    path: "/api/v1/workflows",
+    summary: "List the published Workflows the caller may read, each with its latest run",
+    tag: "Workflows",
+    auth: "principal",
+    scope: "config_assets:read",
+    requires: [],
+    effect: "reading",
+    response: json(z.object({ items: z.array(workflowSummarySchema) })),
+    errors: [],
+    rateClass: "read"
+  }),
   "workflows.start": defineRegisteredOperation({
     id: "workflows.start",
     method: "POST",
@@ -165,13 +216,14 @@ export const workflowOperations = {
     id: "workflows.list_step_runs",
     method: "GET",
     path: "/api/v1/workflow-runs/:runId/steps",
-    summary: "List the step runs of one Workflow Run in the order they were created",
+    summary:
+      "List the step runs of one Workflow Run in the order they were created: all, or those of one block, status or loop item",
     tag: "Workflows",
     auth: "principal",
     scope: "config_assets:read",
     requires: [],
     effect: "reading",
-    query: listQuerySchema,
+    query: listWorkflowStepRunsQuerySchema,
     response: page(workflowStepRunSchema, ["createdAt", "id"], false),
     errors: ["NOT_FOUND"],
     rateClass: "read"

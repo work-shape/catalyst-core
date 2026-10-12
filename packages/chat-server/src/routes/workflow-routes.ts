@@ -61,6 +61,17 @@ function registerWorkflowRoutes(
     return run;
   }
 
+  route.operation(apiOperations["workflows.list"], {
+    // The list is of what the caller may read: the right is asked of each Workflow below.
+    authorize: () => ({ allowed: true }),
+    module: WORKFLOWS_MODULE,
+    execute: async (_input, { access }) => ({
+      items: (await required().listWorkflows()).filter(
+        (workflow) => decide(access, WORKFLOW_ACTIONS.read, workflowOf(workflow.id)).allowed
+      )
+    })
+  });
+
   route.operation(apiOperations["workflows.start"], {
     authorize: (input, { access }) =>
       decide(access, WORKFLOW_ACTIONS.use, workflowOf(input.workflow)),
@@ -111,8 +122,14 @@ function registerWorkflowRoutes(
     module: WORKFLOWS_MODULE,
     execute: async (input, context) => {
       const run = await runOf(input.runId);
+      const { containerStepRunId, status, iteration } = input;
       const stepRuns = await required().listStepRuns({
         runId: run.id,
+        filter: {
+          ...(containerStepRunId === undefined ? {} : { containerStepRunId }),
+          ...(status === undefined ? {} : { status }),
+          ...(iteration === undefined ? {} : { iteration })
+        },
         ...(context.paging ? { page: context.paging } : {})
       });
       return stepRuns.map(toStepRunResource);
@@ -151,25 +168,15 @@ function toRunResource(run: WorkflowRunView) {
   const { clientInstanceId: _instance, correlationId: _correlation, principal, ...resource } = run;
   return {
     ...resource,
-    principal: { id: principal.id, displayLabel: principal.displayLabel },
+    principal: { id: principal.id, name: principal.name, displayLabel: principal.displayLabel },
     startedBy: { kind: run.startedBy.kind, id: run.startedBy.id, label: run.startedBy.label }
   };
 }
 
-/** A step run as the API answers it: its place in a loop as one value. */
+/** A step run as the API answers it: without the instance it belongs to. */
 function toStepRunResource(stepRun: WorkflowStepRunView) {
-  const { clientInstanceId: _instance, iteration, iterationLabel, ...resource } = stepRun;
-  return {
-    ...resource,
-    ...(iteration === undefined
-      ? {}
-      : {
-          iteration: {
-            index: iteration,
-            ...(iterationLabel === undefined ? {} : { label: iterationLabel })
-          }
-        })
-  };
+  const { clientInstanceId: _instance, ...resource } = stepRun;
+  return resource;
 }
 
 /** What a call on a Workflow touches, as its run and its events name it. */

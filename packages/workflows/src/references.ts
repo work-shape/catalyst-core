@@ -72,26 +72,28 @@ export async function resolveReference(
   const { store, run } = scope;
   const { clientInstanceId } = run;
   let sequence = scope.index.get(scope.stepRun.stepId)?.sequence;
-  let parentStepRunId = scope.stepRun.parentStepRunId;
-  let iteration = scope.stepRun.iteration;
+  let containerStepRunId = scope.stepRun.containerStepRunId;
+  let iteration = scope.stepRun.iteration?.index;
   while (sequence) {
     if (sequence.steps.some((step) => step.id === reference.step)) {
       const output = await store.findStepOutput({
         clientInstanceId,
         runId: run.id,
         stepId: reference.step,
-        ...(parentStepRunId === undefined ? {} : { parentStepRunId, iteration: iteration ?? 0 })
+        ...(containerStepRunId === undefined
+          ? {}
+          : { containerStepRunId, iteration: iteration ?? 0 })
       });
       if (!output) throw unresolved(reference, "the step has no output");
       const field = fieldAt(output.value, reference.path);
       if (!field.found) throw unresolved(reference, "the output has no such field");
       return field.value;
     }
-    if (parentStepRunId === undefined) break;
+    if (containerStepRunId === undefined) break;
     if (sequence.loop === reference.step) {
       const item = await store.readLoopItem({
         clientInstanceId,
-        id: parentStepRunId,
+        id: containerStepRunId,
         index: iteration ?? 0
       });
       if (!item) throw unresolved(reference, "the loop has no such item");
@@ -99,10 +101,10 @@ export async function resolveReference(
       if (!field.found) throw unresolved(reference, "the item has no such field");
       return field.value;
     }
-    const loopRun = await store.getStepRun({ clientInstanceId, id: parentStepRunId });
+    const loopRun = await store.getStepRun({ clientInstanceId, id: containerStepRunId });
     sequence = sequence.parent;
-    parentStepRunId = loopRun?.parentStepRunId;
-    iteration = loopRun?.iteration;
+    containerStepRunId = loopRun?.containerStepRunId;
+    iteration = loopRun?.iteration?.index;
   }
   throw unresolved(reference, "no step of that id ran before this one");
 }
@@ -114,7 +116,7 @@ export async function resolveInput(
 ): Promise<JsonObject> {
   const input: JsonObject = {};
   for (const [field, source] of Object.entries(mapping)) {
-    input[field] = "ref" in source ? await resolveReference(scope, source.ref) : source.value;
+    input[field] = source.ref ? await resolveReference(scope, source.ref) : source.value;
   }
   return input;
 }

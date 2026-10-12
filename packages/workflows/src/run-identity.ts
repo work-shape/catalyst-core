@@ -1,5 +1,6 @@
 import type {
   ApiAccessStore,
+  AuditActor,
   ClientInstanceId,
   WorkflowManifest,
   WorkflowRun,
@@ -7,28 +8,27 @@ import type {
 } from "@vivd-catalyst/core";
 
 // Who a Workflow Run acts as. The one place of the engine that reads `runAs`: a definition
-// names its principal by a name, which is the same on every instance, and a run keeps the id
-// that name had when it started.
+// names its principal by its `name`, which is unique on the instance, never changes and is
+// the same on every instance the definition moves to.
 
-type Principals = Pick<ApiAccessStore, "getServicePrincipal" | "listServicePrincipals">;
+type Principals = Pick<ApiAccessStore, "findServicePrincipalByName">;
 
 /**
- * The service principal a definition names under `runAs`: the one active principal of the
- * instance with that label. A service principal has no other name than its label, and labels
- * are not unique, so a name that two active principals carry answers nothing: a run is
- * never started as a principal the definition does not single out.
+ * The service principal a definition names under `runAs`, where it is active. Publishing a
+ * revision refuses a principal that is disabled or missing; a principal disabled since then
+ * answers nothing here, and no run is started as it.
  */
 export async function workflowRunPrincipal(
   principals: Principals,
   clientInstanceId: ClientInstanceId,
   manifest: Pick<WorkflowManifest, "runAs">
 ): Promise<WorkflowRun["principal"] | undefined> {
-  const named = (await principals.listServicePrincipals({ clientInstanceId })).filter(
-    (record) => record.status === "active" && record.displayLabel === manifest.runAs
-  );
-  const [record] = named;
-  if (!record || named.length !== 1) return undefined;
-  return { id: record.id, displayLabel: record.displayLabel };
+  const record = await principals.findServicePrincipalByName({
+    clientInstanceId,
+    name: manifest.runAs
+  });
+  if (record?.status !== "active") return undefined;
+  return { id: record.id, name: record.name, displayLabel: record.displayLabel };
 }
 
 /**
@@ -41,11 +41,12 @@ export async function workflowRunActor(
   principals: Principals,
   run: Pick<WorkflowRun, "id" | "clientInstanceId" | "principal" | "correlationId">
 ): Promise<WorkflowRunPrincipal | undefined> {
-  const record = await principals.getServicePrincipal({
+  const record = await principals.findServicePrincipalByName({
     clientInstanceId: run.clientInstanceId,
-    servicePrincipalId: run.principal.id
+    name: run.principal.name
   });
-  if (!record || record.status !== "active") return undefined;
+  // A name is one principal's for good, so another id under it is not the run's principal.
+  if (record?.status !== "active" || record.id !== run.principal.id) return undefined;
   return {
     kind: "service",
     id: record.id,
@@ -54,9 +55,20 @@ export async function workflowRunActor(
     permissionRefs: record.permissionRefs,
     permissions: record.permissions,
     clientInstanceId: record.clientInstanceId,
-    authSource: "workflow-run",
+    authSource: "workflow_run",
     correlationId: run.correlationId,
     // A run holds its principal's own grants and nothing a credential's scope would add.
     scopes: []
+  };
+}
+
+/** The run's principal as the actor of what the engine itself writes to the audit. */
+export function principalActor(run: WorkflowRun): AuditActor {
+  return {
+    displayLabel: run.principal.displayLabel,
+    roles: [],
+    principalKind: "service",
+    principalId: run.principal.id,
+    principalDisplayLabel: run.principal.displayLabel
   };
 }

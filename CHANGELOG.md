@@ -24,20 +24,38 @@ contain breaking changes; a patch version does not.
   invocation logging decide the rest and are the operator's to set, see the configuration docs.
 - **Workflow Runs:** with the module `workflows` on, a Workflow is started by hand and runs to
   its end on the job executor. `POST /api/v1/workflows/{workflow}/runs` starts a run
-  (`workflow.use`), `GET` on the same path lists the runs of a Workflow, and
+  (`workflow.use`), `GET` on the same path lists the runs of a Workflow, `GET /api/v1/workflows`
+  lists the published Workflows the caller may read, each with its latest run as `lastRun`, and
   `GET /api/v1/workflow-runs/{runId}` and `.../steps` read a run and its step runs
   (`workflow.read`): status, times, error and a preview of at most 2,000 characters of a
   result, never an input. `POST /api/v1/workflow-runs/{runId}/cancel` ends a run for whoever
-  started it or holds `workflow.write`. A run acts as the service principal its definition
-  names under `runAs`, with that principal's grants and never the starter's. This release
-  executes the step types `trigger` (manual), `operation`, `loop` and `output`; an operation
-  step calls through the operation layer from the origin `workflow`, and a changing call
-  carries the id of its step run as its idempotency key, so a step a worker runs again changes
-  nothing twice. A run ends as `limit_reached` after 20,000 step runs or twelve hours. The
-  start, the cancel and the end are audited as `workflow_run.started`,
+  started it or holds `workflow.write`; no further step and no further item of a loop starts,
+  and the run says who cancelled it and when (`cancelledBy`, `cancelledAt`). A run acts as the
+  service principal its definition names under `runAs` by the principal's `name`, with that
+  principal's grants and never the starter's. `workflow.yaml` is an ordered list of steps with
+  nested blocks: a file with `wiring`, edges or positions is refused. This release executes
+  the step types `trigger` (manual), `operation`, `loop` and `output`. A definition is checked
+  with the contract's block check, and refused with the reason `block_depth` (more than 16
+  nested blocks), `reference_out_of_scope`, `duplicate_step_id` or `not_supported_yet`: the
+  last for the reserved blocks `condition` and `parallel` and for every field the file form
+  holds and this engine does not run (`dataset`, `paginate`, `collect`, a loop's `concurrency`
+  above 1, the step types `code`, `agent`, `notify` and `workflow`, the trigger `parent`,
+  `labels`, `onFailure`, `retention`, `types`). A loop returns how many of its items ended how
+  (`total`, `done`, `failed`) and never what an item returned. With `onItemFailure: continue`
+  the loop goes on past a failed item and ends as `done`, and so does its run; without it the
+  loop and the run fail at the first failed item. A run keeps the definition it started on
+  and the id of that revision (`definitionRevisionId`): what is published after its start
+  changes nothing of it. A step run says where it stands in the tree of its run
+  (`containerStepRunId`, `iteration`), an operation step what it called (`effect`, `source`),
+  and the step run of a loop how the step runs of each step directly inside it stand
+  (`bodyCounts`); `.../steps` filters by `containerStepRunId`, `status` and `iteration`. An
+  operation step calls through the operation layer from the origin `workflow`, and a changing
+  call carries the id of its step run as its idempotency key, so a step a worker runs again
+  changes nothing twice. A run ends as `limit_reached` after 20,000 step runs or twelve hours.
+  The start, the cancel and the end are audited as `workflow_run.started`,
   `workflow_run.cancelled` and `workflow_run.ended`, without a value of the run. An assembled
   instance knows no Workflow yet: definitions are stored with the asset kind that follows.
-  **Migration `0057_workflow_runs`** adds the tables `workflow_runs` and `workflow_step_runs`
+  **Migration `0060_workflow_runs`** adds the tables `workflow_runs` and `workflow_step_runs`
   and changes no existing table, so the previous release runs on the migrated database. A
   changing call from the origin `schedule` now needs an idempotency key, as one from `app` and
   `workflow` does; nothing in the platform makes such a call yet.

@@ -161,6 +161,7 @@ describe("a three-step Workflow against the sample MCP Connection", () => {
     });
     await stores.access.createGrant({
       clientInstanceId,
+      // AP-10: the grant is written to the store; its administration does not give it yet.
       holderKind: "service_principal",
       holderId: principal.id,
       action: "connection.use",

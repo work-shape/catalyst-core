@@ -2,6 +2,7 @@ import { WORKFLOW_RUN_JOB_KINDS, defineModule } from "@vivd-catalyst/core";
 
 /** The operations of the API that belong to the module. Each is off where the module is. */
 export const WORKFLOW_OPERATION_IDS = [
+  "workflows.list",
   "workflows.start",
   "workflows.get_run",
   "workflows.list_runs",
@@ -23,13 +24,17 @@ export {
   WORKFLOW_EXECUTED_STEP_TYPES,
   parseWorkflowManifest,
   readWorkflowManifest,
+  workflowManifestFingerprint,
   type WorkflowDefinitionIssue,
   type WorkflowDefinitionResult
 } from "./definition";
 export {
   createWorkflowFolderSource,
   noWorkflowDefinitions,
-  type WorkflowDefinitionSource
+  workflowDefinitionRefusal,
+  type WorkflowDefinitionRevision,
+  type WorkflowDefinitionSource,
+  type WorkflowDefinitionSummary
 } from "./definition-source";
 export {
   createWorkflowEngine,

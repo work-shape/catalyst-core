@@ -2,7 +2,9 @@ import type {
   AuthenticatedIdentity,
   OperationRunId,
   StorePage,
+  WorkflowLastRun,
   WorkflowRunView,
+  WorkflowStepRunFilter,
   WorkflowStepRunView
 } from "@vivd-catalyst/core";
 
@@ -27,5 +29,13 @@ export interface WorkflowRunsPort {
   }): Promise<WorkflowRunView | undefined>;
   readRun(runId: string): Promise<WorkflowRunView | undefined>;
   listRuns(input: { workflow: string; page?: StorePage }): Promise<WorkflowRunView[]>;
-  listStepRuns(input: { runId: string; page?: StorePage }): Promise<WorkflowStepRunView[]>;
+  listStepRuns(input: {
+    runId: string;
+    filter?: WorkflowStepRunFilter;
+    page?: StorePage;
+  }): Promise<WorkflowStepRunView[]>;
+  /** The Workflows with a published definition, each with its latest run where it has one. */
+  listWorkflows(): Promise<
+    { id: string; name: string; description?: string; lastRun?: WorkflowLastRun }[]
+  >;
 }

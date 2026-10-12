@@ -14,10 +14,15 @@ import type {
   Logger,
   ModuleSnapshot,
   RegisteredJobHandler,
-  ServicePrincipalRecord
+  ServicePrincipalRecord,
+  WorkflowManifest
 } from "@vivd-catalyst/core";
 import {
   createWorkflowFolderSource,
+  parseWorkflowManifest,
+  workflowDefinitionRefusal,
+  workflowManifestFingerprint,
+  type WorkflowDefinitionRevision,
   type WorkflowDefinitionSource
 } from "@vivd-catalyst/workflows";
 import { clientInstanceId, setupAccessInstance } from "./access-instance";
@@ -25,8 +30,9 @@ import { fixtureOn, operationOf, type ConnectionOperationsFixture } from "./conn
 
 // The instance behind the tests of the Workflow engine: the instance of the Connection
 // tests with the module `workflows` on, the engine on its call path, and definitions read
-// from the fixture folders. The assembly does not wire the engine yet, so this file does
-// what it will do: the engine's port goes to the server and its handlers to a job worker.
+// from the fixture folders or from what a test publishes. The engine is built here as the
+// seam of the module builds it, with the definitions of the test in place of none: its port
+// goes to the server and its handlers to a job worker.
 
 const silent: Logger = {
   debug() {},
@@ -43,13 +49,22 @@ export const runSchema = z.object({
   id: z.string(),
   workflow: z.string(),
   status: z.string(),
+  definitionRevisionId: z.string(),
   stepRunCount: z.number(),
-  principal: z.object({ id: z.string(), displayLabel: z.string() }),
+  principal: z.object({ id: z.string(), name: z.string(), displayLabel: z.string() }),
   startedBy: z.object({ kind: z.string(), id: z.string(), label: z.string() }),
   error: z
     .object({ code: z.string(), message: z.string(), stepRunId: z.string().optional() })
     .optional(),
-  outputPreview: z.object({ text: z.string(), truncated: z.boolean() }).optional()
+  outputPreview: z.object({ text: z.string(), truncated: z.boolean() }).optional(),
+  cancelledBy: z.string().optional(),
+  cancelledAt: z.string().optional()
+});
+const countsSchema = z.object({
+  total: z.number(),
+  done: z.number(),
+  failed: z.number(),
+  running: z.number()
 });
 export const stepRunsSchema = z.object({
   items: z.array(
@@ -59,10 +74,13 @@ export const stepRunsSchema = z.object({
       key: z.string(),
       status: z.string(),
       attempt: z.number(),
+      containerStepRunId: z.string().optional(),
+      branch: z.string().optional(),
       iteration: z.object({ index: z.number(), label: z.string().optional() }).optional(),
-      loop: z
-        .object({ total: z.number(), done: z.number(), failed: z.number(), running: z.number() })
-        .optional(),
+      loop: countsSchema.optional(),
+      bodyCounts: z.record(z.string(), countsSchema).optional(),
+      effect: z.string().optional(),
+      source: z.string().optional(),
       operationRunId: z.string().optional(),
       error: z.object({ code: z.string(), message: z.string() }).optional(),
       outputPreview: z.object({ text: z.string(), truncated: z.boolean() }).optional()
@@ -76,6 +94,34 @@ export const WORKFLOW_RUNNER = "workflow-runner";
 /** The definitions of the fixture folders. */
 export const fixtureDefinitions = (): WorkflowDefinitionSource =>
   createWorkflowFolderSource(WORKFLOW_FIXTURES);
+
+/**
+ * Definitions a test publishes and changes while it runs: what the asset kind of Workflows
+ * will be to the engine. `publish` checks a definition as a save and a publish do and refuses
+ * what they refuse; `hold` puts one in place unchecked, as a later release may have stored it.
+ */
+export function publishedDefinitions() {
+  const held = new Map<string, WorkflowDefinitionRevision>();
+  const source: WorkflowDefinitionSource = {
+    read: (id) => Promise.resolve(held.get(id)),
+    list: () =>
+      Promise.resolve([...held.values()].map(({ manifest: { id, name } }) => ({ id, name })))
+  };
+  return {
+    source,
+    /** Answers the id of the revision that is now the published one. */
+    publish(value: unknown): string {
+      const result = parseWorkflowManifest(value);
+      if (!result.ok) throw workflowDefinitionRefusal("unpublished", result.issues);
+      const revisionId = workflowManifestFingerprint(result.manifest);
+      held.set(result.manifest.id, { revisionId, manifest: result.manifest });
+      return revisionId;
+    },
+    hold(manifest: WorkflowManifest, revisionId: string): void {
+      held.set(manifest.id, { revisionId, manifest });
+    }
+  };
+}
 
 /**
  * A handler whose attempts hang in one of their transactions, as a worker does that dies
@@ -126,20 +172,36 @@ export function hangingAt(
 export interface WorkflowFixture extends ConnectionOperationsFixture {
   /** What the instance has of Workflows. No job handler where the module is off. */
   workflows: InstanceWorkflows;
-  /** The service principal the fixture Workflows run as. It holds no grant at first. */
+  /**
+   * The service principal the fixture Workflows run as. It holds no grant at first; a test
+   * gives it what its Workflow calls through `allow`.
+   */
   principal: ServicePrincipalRecord;
   /** A job worker that serves the engine's handlers, or the ones given in their place. */
   worker(handlers?: readonly RegisteredJobHandler[]): JobWorker;
-  /** Runs what is due until the run has ended. Returns the run as the root reads it. */
-  finish(runId: string, worker?: JobWorker): Promise<z.infer<typeof runSchema>>;
-  /** Lets a holder do an action on everything of the instance. */
+  /**
+   * Runs what is due until the run has ended. Returns the run as the root reads it. One pass
+   * executes one step of a run, so a long loop is given more passes than the 200 a run gets.
+   */
+  finish(runId: string, worker?: JobWorker, passes?: number): Promise<z.infer<typeof runSchema>>;
+  /**
+   * Lets a holder do an action on everything of the instance. The grant is written to the
+   * store as it is: the engine asks the real rights check, and the administration of grants
+   * does not yet let a service principal hold `connection.use` or `data_store.insert`
+   * (AP-10). Once it does, the principal of these tests gets its grants through it.
+   */
   allow(holder: { kind: "user" | "service_principal"; id: string }, action: string): Promise<void>;
   /** Stores the Connection `crm` with `echo` and `write` exposed to Workflows. */
   seedCrm(): Promise<string>;
 }
 
 export async function workflowFixture(
-  options: { moduleOn?: boolean; limits?: InstanceWorkflowsParts["limits"] } = {}
+  options: {
+    moduleOn?: boolean;
+    limits?: InstanceWorkflowsParts["limits"];
+    /** In place of the fixture folders. */
+    definitions?: WorkflowDefinitionSource;
+  } = {}
 ): Promise<WorkflowFixture> {
   let workflows: InstanceWorkflows | undefined;
   let modules: ModuleSnapshot | undefined;
@@ -160,7 +222,7 @@ export async function workflowFixture(
           clientInstanceId,
           stores,
           operationCalls: server.operationCalls,
-          definitions: fixtureDefinitions(),
+          definitions: options.definitions ?? fixtureDefinitions(),
           ...(options.limits ? { limits: options.limits } : {})
         });
         return server;
@@ -200,9 +262,9 @@ export async function workflowFixture(
     workflows: built,
     principal,
     worker,
-    async finish(runId, given) {
+    async finish(runId, given, passes = 200) {
       const jobs = given ?? (own ??= worker());
-      for (let pass = 0; pass < 200; pass++) {
+      for (let pass = 0; pass < passes; pass++) {
         await jobs.runDue();
         const response = await t.call(t.root.id, "workflows.get_run", { params: { runId } });
         const run = runSchema.parse(response.json());
