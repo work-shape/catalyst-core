@@ -71,6 +71,13 @@ describe("built-in platform tools", () => {
     expect(open.description).toContain("from any HTTPS host");
   });
 
+  it("tells the agent that a view is a small inline widget and a Page is the standalone one", () => {
+    const description = showViewTool.description;
+
+    expect(description).toMatch(/^Show a small HTML widget inline in your answer/u);
+    expect(description).toContain("save a Page with page.save instead");
+  });
+
   it("names no outside host and no runtime switch in the tool's source", async () => {
     const source = await readFile("packages/tool-execution/src/built-in-tools.ts", "utf8");
 

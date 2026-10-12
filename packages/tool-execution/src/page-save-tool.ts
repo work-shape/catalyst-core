@@ -69,6 +69,7 @@ export function createPageSaveTool(options: PageSaveToolOptions): AnyToolDefinit
     // A saved revision outlives the call and shows beside the conversation.
     effect: "changing",
     description: [
+      "A Page is the way to show a standalone HTML visualization, dashboard or tool beside the conversation: hard-coded data is fine for a quick one, and live data through actions is for when the person asks to keep it as an App.",
       "Save a folder of the execution workspace as a revision of a Page and build it. The Page then shows beside the conversation.",
       "The folder holds app.yaml (id, name, kit: an exact kit version, optional entry) and the Page's files.",
       "A React Page has its routes under src/routes/ (TanStack Router file routes, src/routes/__root.tsx and src/routes/index.tsx) and imports only its own files, react, react-dom, @tanstack/react-router and @work-shape/catalyst-app-kit; nothing is installed.",

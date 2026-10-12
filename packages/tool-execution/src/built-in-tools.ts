@@ -40,7 +40,7 @@ function createShowViewInputSchema() {
       .enum(["inline", "side_panel", "fullscreen"])
       .default("inline")
       .describe(
-        "How prominently the user interface should render the HTML. Use side_panel when the user should keep chatting while the view opens in the right preview panel."
+        "Where the widget renders. Keep inline, the default, so it sits inside your answer."
       ),
     title: z
       .string()
@@ -80,7 +80,7 @@ export function createShowViewTool(
     name: "show_view",
     effect: "reading",
     description: [
-      "Show model-authored HTML to the user as a visual view. Use this when a table, widget, chart, dashboard, or richer visual explanation would help.",
+      "Show a small HTML widget inline in your answer: a table, chart, or compact visual that belongs to this one reply. For a standalone visualization, dashboard, or tool, save a Page with page.save instead when you have that tool.",
       showViewLayoutGuidance,
       showViewColorGuidance,
       showViewIconGuidance,
