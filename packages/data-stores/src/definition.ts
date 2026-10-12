@@ -100,7 +100,7 @@ export type DataStoreMigration = DataStoreDefinition["migrations"][number];
  * to the database: it also closes a block of a function.
  */
 const TRANSACTION_STATEMENT =
-  /^(?:(?:commit|rollback|abort|savepoint|release)\b|begin(?:\s+(?:transaction|work|isolation|read|deferrable|not\s+deferrable)\b|$)|start\s+transaction\b|prepare\s+transaction\b)/iu;
+  /^(?:(?:commit|rollback|abort|savepoint|release)\b|begin(?:\s+(?:transaction|work|isolation\s+level|read\s+(?:only|write)|(?:not\s+)?deferrable)\b(?!\s*:=)|$)|start\s+transaction\b|prepare\s+transaction\b)/iu;
 /**
  * A statement that creates, changes or drops a role, or makes the session another one, by how
  * it starts. `create user mapping` is none of them.
@@ -110,15 +110,31 @@ const ROLE_STATEMENT =
 
 /**
  * Why the text of a migration is refused, as the end of a sentence that starts with its file.
- * A comment and a quoted value are no statement. The body of a dollar-quoted text is read as
- * SQL, because that is what a function and a `do` block hold. This is the refusal an author
+ * A comment and a quoted value are no statement; the body of a function and of a `do` block
+ * is. This is the refusal an author
  * reads early. A statement that is put together when it runs is not read here: the runner
  * holds a migration in its transaction and to its role whatever its text says.
  */
+/** A dollar-quoted text is run where it is the body of a block or of a function: after `do` or `as`. */
+const BODY_FOLLOWS = /\b(?:do|as)(?:\s+language\s+[A-Za-z_]+)?\s*$/iu;
+
+/**
+ * The text of a migration with what is no statement taken out: a comment, a quoted value, and
+ * a dollar-quoted value. A dollar-quoted text that is run, the body of a `do` block or of a
+ * function, stays, set off as statements of its own.
+ */
+function statementsOf(sql: string): string {
+  return sql.replace(
+    /--[^\n]*|\/\*[\s\S]*?\*\/|'(?:[^']|'')*'|(\$[A-Za-z_]*\$)([\s\S]*?)\1/gu,
+    (_match, mark: string | undefined, body: string | undefined, offset: number) =>
+      mark !== undefined && body !== undefined && BODY_FOLLOWS.test(sql.slice(0, offset))
+        ? ` ; ${statementsOf(body)} ; `
+        : " "
+  );
+}
+
 function migrationTextRefusals(sql: string): string[] {
-  const code = sql
-    .replace(/--[^\n]*|\/\*[\s\S]*?\*\/|'(?:[^']|'')*'/gu, " ")
-    .replace(/\$[A-Za-z_]*\$/gu, " ; ");
+  const code = statementsOf(sql);
   const refusals: string[] = [];
   let namesSchema = false;
   // Read at the start of a statement only: a column may be named `role` or `commit`, and a

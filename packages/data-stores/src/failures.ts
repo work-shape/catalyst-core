@@ -19,6 +19,9 @@ const SQLSTATE_SENTENCES: Readonly<Record<string, string>> = {
 };
 
 const SQLSTATE_CLASS_SENTENCES: Readonly<Record<string, string>> = {
+  // What a function or a trigger of the store raises itself, under whatever code it chose.
+  "28": "was refused by the store's own code",
+  P0: "was refused by the store's own code",
   "22": "holds a value that does not fit the type of its column",
   "23": "breaks a constraint of its table",
   "42": "is refused by the database as written"

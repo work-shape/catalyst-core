@@ -30,13 +30,21 @@ export interface DataStoreLocation {
 }
 
 /**
- * What provisioning found open on the server and could not close itself, for an operator to
- * settle. `server_databases_open`: the store's roles can connect to `postgres` or
- * `template1`, whose grants are the server's and not the platform's to change.
- * `sessions_open`: the platform's database role is no superuser, so a query of the store can
- * see the sessions of the store and end one. A store works with either.
+ * What the server leaves open around a store that the platform cannot close itself, for an
+ * operator to settle. It is asked anew at every job of the store. A store works with each.
+ *
+ * - `server_databases_open`: a role of the store can connect to another database of the
+ *   server, whose grants are the server's and not the platform's to change.
+ * - `sessions_open`: the platform's database role is no superuser, so a query of the store
+ *   can see the sessions of the server and end one of its own store.
+ * - `temp_files_unbounded`: the platform's database role is no superuser, so it cannot set
+ *   `temp_file_limit` on the roles of the store.
  */
-export const DATA_STORE_CONDITIONS = ["server_databases_open", "sessions_open"] as const;
+export const DATA_STORE_CONDITIONS = [
+  "server_databases_open",
+  "sessions_open",
+  "temp_files_unbounded"
+] as const;
 
 export type DataStoreCondition = (typeof DATA_STORE_CONDITIONS)[number];
 
@@ -65,7 +73,7 @@ export interface DataStoreRecord {
   sizeBytes?: number;
   sizeMeasuredAt?: ISODateString;
   failure?: DataStoreFailure;
-  /** What the last provisioning found open. Empty where nothing is. */
+  /** What the last job of the store found open on the server. Empty where nothing is. */
   conditions: DataStoreCondition[];
   createdAt: ISODateString;
   updatedAt: ISODateString;

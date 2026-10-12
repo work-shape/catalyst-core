@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { DataStoreRecord, JobControl, PlatformStores } from "@vivd-catalyst/core";
+import { readStoreConditions } from "./provisioning";
 import type { DataStoreRuntime } from "./runtime";
+import type { DataStoreServer } from "./server";
 
 /** The share of its size limit from which a store is reported in the log as nearly full. */
 const DATA_STORE_SIZE_WARNING_RATIO = 0.8;
@@ -12,6 +14,25 @@ const DATA_STORE_SIZE_WARNING_RATIO = 0.8;
 const DATA_STORE_MEASURE_MAX_STORES = 2_000;
 
 const sizeRow = z.object({ bytes: z.string().regex(/^\d+$/u) });
+
+/**
+ * The size of a store's database as the server answers it to the platform's own role, on a
+ * connection of the platform's own: nothing a store ran can have touched it. It counts the
+ * files as they are now, whatever a transaction that is still open has written into them.
+ */
+export async function storeSizeBytes(
+  server: DataStoreServer,
+  database: string,
+  signal: AbortSignal | undefined
+): Promise<number> {
+  const measured = await server.executor.query({
+    ...server.asPlatform(server.platformDatabase),
+    ...(signal ? { signal } : {}),
+    sql: "select pg_catalog.pg_database_size($1::pg_catalog.name)::pg_catalog.text as bytes",
+    parameters: [database]
+  });
+  return Number(sizeRow.parse(measured.rows[0]).bytes);
+}
 
 type Transact = <Result>(work: (stores: PlatformStores) => Promise<Result>) => Promise<Result>;
 
@@ -26,14 +47,8 @@ export async function recordStoreSize(
   record: Pick<DataStoreRecord, "id" | "location">,
   signal: AbortSignal | undefined
 ): Promise<DataStoreRecord | undefined> {
-  const { clientInstanceId, server } = runtime;
-  const measured = await server.executor.query({
-    ...server.asPlatform(server.platformDatabase),
-    ...(signal ? { signal } : {}),
-    sql: "select pg_catalog.pg_database_size($1::name)::text as bytes",
-    parameters: [record.location.database]
-  });
-  const sizeBytes = Number(sizeRow.parse(measured.rows[0]).bytes);
+  const { clientInstanceId } = runtime;
+  const sizeBytes = await storeSizeBytes(runtime.server, record.location.database, signal);
   return transaction(async (stores) => {
     const current = await stores.dataStores.getDataStore({
       clientInstanceId,
@@ -70,6 +85,19 @@ export async function measureDataStores(
   for (const record of records.slice(0, DATA_STORE_MEASURE_MAX_STORES)) {
     if (record.status === "provisioning") continue;
     control.signal.throwIfAborted();
+    // What the server leaves open is said as it is today, also where it was closed since.
+    await readStoreConditions(runtime.server, record, control.signal)
+      .then((conditions) =>
+        control.transaction(async (stores) => {
+          const current = await stores.dataStores.getDataStore({
+            clientInstanceId,
+            id: record.id,
+            lock: true
+          });
+          if (current) await stores.dataStores.putDataStore({ ...current, conditions });
+        })
+      )
+      .catch(() => undefined);
     const measured = await recordStoreSize(
       runtime,
       (work) => control.transaction(work),

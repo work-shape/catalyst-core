@@ -431,4 +431,52 @@ describe("the migrations of a Data Store", () => {
 
     expect(Date.now() - Date.parse(String(failed.sizeMeasuredAt))).toBeLessThan(60_000);
   });
+  it("refuses a migration that would leave the store over its size limit, and keeps nothing of it", async () => {
+    const world = await published("too_large");
+    const [size] = await db.sql<{ bytes: string }[]>`
+      select pg_database_size(${world.record.location.database}::name)::text as bytes`;
+    const limit = Number(size?.bytes) + 4 * 1024 ** 2;
+
+    await publish(world, [
+      manifest(),
+      init,
+      {
+        path: "migrations/0002_bulk.sql",
+        text: `create table bulk as
+          select (select string_agg(md5((n * 1000 + i)::text), '') from generate_series(1, 60) i) as filler
+          from generate_series(1, 8000) n;`
+      }
+    ]);
+    // A publish sets the limit from the manifest; this one is set before the job runs.
+    await db.sql`update data_stores set size_limit_bytes = ${limit} where id = ${world.id}`;
+
+    expect(await failureOf(world)).toMatchObject({
+      level: 1,
+      failure: { code: "data_store_size_limit" }
+    });
+    expect(await refusal(call(world, "query", { sql: "select * from bulk" }))).toMatchObject({
+      details: { sqlState: "42P01" }
+    });
+  });
+
+  it("finds its signed rows by an index, in a record a migration filled with rows of its own", async () => {
+    const world = await published("indexed");
+    const inStore = connect(world.record.location.database);
+
+    expect(
+      await inStore`
+        select indexdef from pg_indexes
+        where schemaname = 'catalyst' and tablename = 'migrations' and indexdef like '%(proof)%'`
+    ).toHaveLength(1);
+    await inStore`
+      insert into catalyst.migrations (number, name, sha256, proof)
+      select n, 'ghost', 'x', md5(n::text) from generate_series(1, 300000) n`;
+    await publish(world, [
+      manifest(),
+      init,
+      { path: "migrations/0002_notes.sql", text: "create table notes (id integer);" }
+    ]);
+
+    expect((await settle(world, world.id, 2)).failure).toBeUndefined();
+  });
 });

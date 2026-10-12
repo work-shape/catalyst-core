@@ -3,7 +3,8 @@ import { z } from "zod";
 import type { DataStoreAppliedMigration, DataStoreRecord } from "@vivd-catalyst/core";
 import type { DataStoreMigration } from "./definition";
 import { DATA_STORE_ROLE_LIMITS } from "./role-limits";
-import { ROLE_STATE, rolesAreUnchanged } from "./roles";
+import { ROLE_STATE, roleNames, rolesAreUnchanged } from "./roles";
+import { storeSizeBytes } from "./size";
 import type { DataStoreServer } from "./server";
 
 // How one migration reaches a store's database, and how the platform knows which ones did.
@@ -63,14 +64,21 @@ export async function readSignedMigrations(
 
 /** Why a migration was not applied although the database raised no error of its own. */
 export class DataStoreMigrationRefusal extends Error {
-  readonly code = "migration_changed_role";
+  readonly code: "migration_changed_role" | "data_store_size_limit";
   /** Whether the migration was applied all the same: its role changed only as it committed. */
   readonly applied: boolean;
+  /** The size the store's database had with the migration, where that is why it was refused. */
+  readonly sizeBytes?: number;
 
-  constructor(applied: boolean) {
-    super("migration_changed_role");
+  constructor(
+    code: DataStoreMigrationRefusal["code"],
+    detail: { applied?: true; sizeBytes?: number } = {}
+  ) {
+    super(code);
     this.name = "DataStoreMigrationRefusal";
-    this.applied = applied;
+    this.code = code;
+    this.applied = detail.applied ?? false;
+    if (detail.sizeBytes !== undefined) this.sizeBytes = detail.sizeBytes;
   }
 }
 
@@ -91,32 +99,41 @@ function heldInTransaction(sql: string): string {
 
 /**
  * Makes the platform's own statements of the transaction mean what the database means by
- * them: a migration may have put functions of its own ahead in the search path. Each of
- * those statements names its functions and tables with their schema as well.
+ * them: a migration may have put functions, types and operators of its own ahead in the
+ * search path, also in the schema of temporary objects, which is searched first unless it is
+ * named last. Each of those statements names what it uses with its schema as well.
  */
-const OWN_SEARCH_PATH = "select pg_catalog.set_config('search_path', 'pg_catalog', true)";
+const OWN_SEARCH_PATH =
+  "select pg_catalog.set_config('search_path'::pg_catalog.text, 'pg_catalog, pg_temp'::pg_catalog.text, true)";
 
 /**
  * Applies one migration as the migration role: the file's statements and the row that records
  * it, in one transaction. Either both are there afterwards or neither is, so a migration is
  * never applied twice and never recorded without its effect.
  *
- * A migration that changed the settings of a role of its store is rolled back and refused.
- * What it left to the end of the transaction, such as a deferred trigger, is made to happen
- * before that is looked at; and the roles are looked at once more after the commit, so a
- * change that still came through is this migration's and no later one's.
+ * Before the transaction ends, what the migration left to its end, such as a deferred trigger,
+ * is made to happen. Then two things are looked at, and the migration is rolled back and
+ * refused where one does not hold: the roles of the store carry what the platform gave them,
+ * and the store's database, which the migration made larger, is within its size limit. The
+ * size is read on a connection of the platform's own. The roles are looked at once more after
+ * the commit, so a change that still came through is this migration's and no later one's.
  */
 export async function applyMigration(
   server: DataStoreServer,
   record: StoreDatabase,
   migration: DataStoreMigration,
-  ledgerKey: string,
+  held: { ledgerKey: string; superuser: boolean; sizeLimitBytes: number },
   signal: AbortSignal
 ): Promise<void> {
-  const roles = [{ type: "text[]" as const, value: [record.roles.app, record.roles.migration] }];
+  const database = record.location.database;
+  const before = await storeSizeBytes(server, database, signal);
   // Whatever a change throws leaves it as a failure of the database, so the refusal is kept
   // here and raised once the change has rolled back.
   let refusal: DataStoreMigrationRefusal | undefined;
+  const refuse = (raised: DataStoreMigrationRefusal): never => {
+    refusal = raised;
+    throw raised;
+  };
   try {
     await server.executor.change(
       {
@@ -130,9 +147,13 @@ export async function applyMigration(
         await sql.script("set constraints all immediate");
         // A trigger that fired just now may have set the path again.
         await sql.run(OWN_SEARCH_PATH);
-        if (!rolesAreUnchanged(record, await sql.run(ROLE_STATE, roles))) {
-          refusal = new DataStoreMigrationRefusal(false);
-          throw refusal;
+        const roles = await sql.run(ROLE_STATE, roleNames(record));
+        if (!rolesAreUnchanged(record, held.superuser, roles)) {
+          refuse(new DataStoreMigrationRefusal("migration_changed_role"));
+        }
+        const sizeBytes = await storeSizeBytes(server, database, signal);
+        if (sizeBytes > held.sizeLimitBytes && sizeBytes > before) {
+          refuse(new DataStoreMigrationRefusal("data_store_size_limit", { sizeBytes }));
         }
         const applied = {
           number: migration.number,
@@ -140,12 +161,12 @@ export async function applyMigration(
           sha256: migration.sha256
         };
         await sql.run(
-          "insert into catalyst.migrations (number, name, sha256, proof) values ($1, $2, $3, $4)",
+          "insert into catalyst.migrations (number, name, sha256, proof) values ($1::pg_catalog.int4, $2::pg_catalog.text, $3::pg_catalog.text, $4::pg_catalog.text)",
           [
             { type: "integer", value: applied.number },
             applied.name,
             applied.sha256,
-            proofOf(ledgerKey, applied)
+            proofOf(held.ledgerKey, applied)
           ]
         );
       }
@@ -157,7 +178,9 @@ export async function applyMigration(
     ...server.asPlatform(server.platformDatabase),
     signal,
     sql: ROLE_STATE,
-    parameters: roles
+    parameters: roleNames(record)
   });
-  if (!rolesAreUnchanged(record, after.rows)) throw new DataStoreMigrationRefusal(true);
+  if (!rolesAreUnchanged(record, held.superuser, after.rows)) {
+    throw new DataStoreMigrationRefusal("migration_changed_role", { applied: true });
+  }
 }

@@ -114,7 +114,9 @@ describe("the roles of a Data Store", () => {
       "select pg_terminate_backend(pid) from pg_stat_activity",
       "select pg_cancel_backend(pg_backend_pid())",
       "select pid from pg_stat_get_activity(null)",
-      "select pid from pg_stat_activity"
+      "select pid from pg_stat_activity",
+      "select pg_stat_get_backend_activity(backend) from pg_stat_get_backend_idset() backend",
+      "select pg_stat_get_backend_pid(1)"
     ]) {
       expect(await refusal(call(world, "query", { sql })), sql).toMatchObject({
         message: `The query ${denied}`
@@ -143,22 +145,79 @@ describe("the roles of a Data Store", () => {
     }
   });
 
-  it("names on the store's record what an operator has to close on the server", async () => {
+  it("names on the store's record what the server leaves open, at every job, and clears what is closed", async () => {
     const world = await published("conditions");
-    const [open] = await db.sql<{ open: boolean }[]>`
-      select has_database_privilege(${world.record.roles.app}, 'postgres', 'CONNECT')
-        or has_database_privilege(${world.record.roles.app}, 'template1', 'CONNECT') as open`;
+    const { record } = world;
+    // Any database of the server but the store's own counts, not two names.
+    const [other] = await db.sql<{ open: boolean }[]>`
+      select coalesce(bool_or(has_database_privilege(${record.roles.app}, d.oid, 'CONNECT')), false) as open
+      from pg_database d where d.datname <> ${record.location.database} and d.datallowconn`;
+    const found = other?.open ? ["server_databases_open"] : [];
+    expect(record.conditions).toEqual(found);
 
-    // The grants of those two databases are the server's: reported, never changed.
-    expect(world.record.conditions).toEqual(open?.open ? ["server_databases_open"] : []);
+    // As if an operator had closed one thing and opened another since: the next job says so.
+    await db.sql`
+      update data_stores set conditions = '["sessions_open", "temp_files_unbounded"]'::jsonb
+      where id = ${world.id}`;
+    await publish(world, [
+      manifest(),
+      init,
+      { path: "migrations/0002_notes.sql", text: "create table notes (id integer);" }
+    ]);
+    expect((await settle(world, world.id, 2)).conditions).toEqual(found);
 
-    // A platform role that is no superuser cannot take the session functions from the store.
+    // A platform role that is no superuser can neither take the session functions from the
+    // store nor bound the temporary files of its roles.
     const { name, databaseUrl } = await platformRole();
     await db.sql.unsafe(`alter role "${name}" createdb createrole`);
     await db.sql.unsafe(`alter database "${platformDatabase()}" owner to "${name}"`);
     const plain = await setup("conditions_plain", {}, databaseUrl);
-    const record = await settle(plain, await publish(plain, [manifest(), init]), 1);
-    expect(record.conditions).toContain("sessions_open");
+    const plainRecord = await settle(plain, await publish(plain, [manifest(), init]), 1);
+    expect(plainRecord.conditions).toEqual([...found, "sessions_open", "temp_files_unbounded"]);
+  });
+
+  it("derives nothing from a password a role wrote, however it is made up", async () => {
+    const world = await published("verifier");
+    const { record } = world;
+    await call(world, "query", { sql: "select 1 as one" });
+    // A verifier of the right form that asks for four million rounds in place of 4,096.
+    // Postgres itself works such a verifier out once when it is set, which shows what
+    // working it out costs: the platform must not pay that on every call, in its one thread.
+    const costly = `SCRAM-SHA-256$4000000:${"A".repeat(22)}==$${"A".repeat(43)}=:${"A".repeat(43)}=`;
+    const setting = Date.now();
+    await db.sql.unsafe(`alter role "${record.roles.app}" password '${costly}'`);
+    const derivation = Date.now() - setting;
+
+    const started = Date.now();
+    await call(world, "query", { sql: "select 1 as one" });
+
+    expect(Date.now() - started).toBeLessThan(derivation / 2);
+    const [held] = await db.sql<{ verifier: string }[]>`
+      select rolpassword as verifier from pg_authid where rolname = ${record.roles.app}`;
+    // The role has the platform's password again, with the rounds the platform writes.
+    expect(held?.verifier).toMatch(/^SCRAM-SHA-256\$4096:/u);
+  });
+
+  it("takes an error a statement of the store raises for what it is, and runs the call once", async () => {
+    const refusing = {
+      path: "migrations/0002_refusing.sql",
+      text: `create sequence calls;
+        create function refuse() returns trigger language plpgsql as $f$
+          begin
+            perform nextval('calls');
+            raise exception 'no' using errcode = '28P01';
+          end $f$;
+        create trigger refuses after insert on findings for each row execute function refuse();`
+    };
+    const world = await published("raised", [manifest(), init, refusing]);
+
+    expect(
+      await refusal(call(world, "insert", { table: "findings", rows: [finding(1)] }))
+    ).toMatchObject({ details: { sqlState: "28P01" } });
+    // A sequence keeps what a transaction that was rolled back took from it.
+    expect(
+      await call(world, "query", { sql: "select last_value::integer as calls from calls" })
+    ).toMatchObject({ rows: [{ calls: 1 }] });
   });
 
   it("gives the roles back what a trigger of the store took, before the next call runs as one", async () => {

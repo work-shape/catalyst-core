@@ -29,8 +29,13 @@ import {
 } from "./definition";
 import { describeDatabaseFailure } from "./failures";
 import { DataStoreMigrationRefusal, applyMigration, readSignedMigrations } from "./migrating";
-import { DataStoreProvisioningError, provisionDataStore } from "./provisioning";
-import { assertStoreRoles } from "./roles";
+import {
+  DataStoreProvisioningError,
+  ensureStoreSchema,
+  provisionDataStore,
+  readStoreConditions
+} from "./provisioning";
+import { platformIsSuperuser, writeStoreRoles } from "./roles";
 import type { DataStoreRuntime } from "./runtime";
 import { measureDataStores, recordStoreSize } from "./size";
 
@@ -334,7 +339,8 @@ async function provision(
   let conditions: DataStoreCondition[];
   try {
     const secrets = await storeSecrets(runtime, control, storeId);
-    conditions = await provisionDataStore(runtime.server, record, secrets, control.signal);
+    await provisionDataStore(runtime.server, record, secrets, control.signal);
+    conditions = await readStoreConditions(runtime.server, record, control.signal);
   } catch (error) {
     return failAttempt(
       runtime,
@@ -428,9 +434,25 @@ async function migrate(
   }
   const known = definition.migrations.map(({ number, name, sha256 }) => ({ number, name, sha256 }));
   let signed;
+  let superuser: boolean;
   try {
-    // Both roles as the platform gave them, before anything connects as one.
-    await assertStoreRoles(runtime.server, record, secrets, control.signal);
+    // Both roles as the platform gave them, before anything connects as one, and what the
+    // platform keeps in the store as this release makes it.
+    await writeStoreRoles(runtime.server, record, secrets, control.signal);
+    await ensureStoreSchema(runtime.server, record, control.signal);
+    superuser = await platformIsSuperuser(runtime.server, control.signal);
+    // What the server leaves open is said as it is now, also where it was closed since.
+    const conditions = await readStoreConditions(runtime.server, record, control.signal);
+    await control.transaction(async (stores) => {
+      const current = await stores.dataStores.getDataStore({
+        clientInstanceId: runtime.clientInstanceId,
+        id: storeId,
+        lock: true
+      });
+      if (current && current.status !== "retired") {
+        await stores.dataStores.putDataStore({ ...current, conditions });
+      }
+    });
     signed = await readSignedMigrations(runtime.server, record, known, ledger, control.signal);
   } catch (error) {
     return unreachable(error, "Reading the level of the Data Store");
@@ -453,13 +475,32 @@ async function migrate(
     let failed: (DataStoreFailure & { retryable: boolean; sqlState?: string }) | undefined;
     let appliedNow = true;
     try {
-      await applyMigration(runtime.server, record, migration, ledger, control.signal);
+      await applyMigration(
+        runtime.server,
+        record,
+        migration,
+        // The limit as the record holds it now: a publish since the job began may have set it.
+        {
+          ledgerKey: ledger,
+          superuser,
+          sizeLimitBytes: (
+            (await runtime.stores.dataStores.getDataStore({
+              clientInstanceId: runtime.clientInstanceId,
+              id: storeId
+            })) ?? record
+          ).sizeLimitBytes
+        },
+        control.signal
+      );
     } catch (error) {
       if (error instanceof DataStoreMigrationRefusal) {
         appliedNow = error.applied;
         failed = {
           code: error.code,
-          message: `${file} changed the settings of a role of its store${error.applied ? " as its transaction ended. It is applied, and the roles were set back." : ". Nothing of it was applied."}`,
+          message:
+            error.code === "data_store_size_limit"
+              ? `${file} would leave the store at ${error.sizeBytes} bytes, over its size limit (sizeLimit). Nothing of it was applied.`
+              : `${file} changed the settings of a role of its store${error.applied ? " as its transaction ended. It is applied, and the roles were set back." : ". Nothing of it was applied."}`,
           retryable: false
         };
       } else {
@@ -471,7 +512,7 @@ async function migrate(
     // A role may change its own password, and nobody is shown that it did: whatever the
     // migration did, both roles are the platform's again before anything else connects.
     try {
-      await assertStoreRoles(runtime.server, record, secrets, control.signal);
+      await writeStoreRoles(runtime.server, record, secrets, control.signal);
     } catch (error) {
       const failure = describeDatabaseFailure(error, "Holding the roles of the Data Store");
       failed ??= { ...failure, code: "migration_failed", message: failure.sentence };

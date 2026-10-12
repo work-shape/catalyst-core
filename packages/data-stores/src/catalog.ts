@@ -105,8 +105,11 @@ export function catalogTarget(target: PostgresTarget): PostgresTarget {
   return { ...target, location: { ...target.location, schemas: ["pg_catalog"] } };
 }
 
-/** A column as `describe` answers it, and whether the database computes its value itself. */
-type CatalogColumn = DataStoreColumn & { generated: boolean };
+/**
+ * A column as `describe` answers it, and whether the database computes its value itself, with
+ * the expression it computes it by.
+ */
+type CatalogColumn = DataStoreColumn & { generated: boolean; generation?: string };
 
 export async function readTables(
   executor: PostgresExecutor,
@@ -141,7 +144,8 @@ export async function readTables(
       ...(row.column_default === null || row.generated ? {} : { default: row.column_default }),
       primaryKey: row.primary_key,
       ...(row.column_comment === null ? {} : { comment: row.column_comment }),
-      generated: row.generated
+      generated: row.generated,
+      ...(row.generated && row.column_default !== null ? { generation: row.column_default } : {})
     });
     tables.set(row.table_name, known);
   }
