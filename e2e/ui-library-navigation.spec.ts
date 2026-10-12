@@ -440,6 +440,7 @@ const gallerySections = [
   "Navigation",
   "Page structure",
   "Data",
+  "Canvas",
   "Status",
   "Feedback"
 ];

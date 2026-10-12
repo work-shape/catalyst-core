@@ -291,6 +291,7 @@ function groupLabel(group: GalleryGroupId, text: GalleryText): string {
     navigation: text.groupNavigation,
     structure: text.groupStructure,
     data: text.groupData,
+    flow: text.groupFlow,
     status: text.groupStatus,
     feedback: text.groupFeedback
   };

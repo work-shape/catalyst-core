@@ -20,6 +20,7 @@ export type GalleryGroupId =
   | "navigation"
   | "structure"
   | "data"
+  | "flow"
   | "status"
   | "feedback";
 

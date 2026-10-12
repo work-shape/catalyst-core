@@ -4,6 +4,9 @@
    container. */
 @import "tailwindcss";
 @import "tw-animate-css";
+/* What the canvas engine needs to place its panes, nodes and edges. It stands in the base layer,
+   so every utility of a library component wins over it. */
+@import "@xyflow/react/dist/base.css" layer(base);
 @import "./theme/defaults.css";
 
 @source "./**/*.{ts,tsx}";
@@ -174,6 +177,15 @@
   @keyframes loading-appear {
     from {
       opacity: 0;
+    }
+  }
+
+  /* The dashes of an edge that is being taken move one dash and one gap towards its target. */
+  --animate-flow-dash: flow-dash 0.6s linear infinite;
+
+  @keyframes flow-dash {
+    to {
+      stroke-dashoffset: -10;
     }
   }
 }

@@ -52,6 +52,7 @@ const sourceAlias = {
   "@vivd-catalyst/tool-execution": "packages/tool-execution/src/index.ts",
   "@vivd-catalyst/tool-sdk": "packages/tool-sdk/src/index.ts",
   "@vivd-catalyst/ui/chart-engine": "packages/ui/src/data/chart-engine.ts",
+  "@vivd-catalyst/ui/flow-layout": "packages/ui/src/flow/flow-layout.ts",
   "@vivd-catalyst/ui/gallery": "packages/ui/src/gallery/index.tsx",
   "@vivd-catalyst/ui/theme": "packages/ui/src/theme/index.ts",
   "@vivd-catalyst/ui": "packages/ui/src/index.ts",

@@ -1,4 +1,5 @@
 import { chartGalleryText, type ChartGalleryText } from "./text-chart";
+import { flowGalleryText, type FlowGalleryText } from "./text-flow";
 import { layoutGalleryText, type LayoutGalleryText } from "./text-layout";
 import { progressGalleryText, type ProgressGalleryText } from "./text-progress";
 import { sampleGalleryText, type SampleGalleryText } from "./text-samples";
@@ -13,7 +14,8 @@ export interface GalleryText
     SampleGalleryText,
     ChartGalleryText,
     ProgressGalleryText,
-    StepsGalleryText {
+    StepsGalleryText,
+    FlowGalleryText {
   title: string;
   mode: string;
   modeLight: string;
@@ -425,6 +427,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     ...chartGalleryText.en,
     ...progressGalleryText.en,
     ...stepsGalleryText.en,
+    ...flowGalleryText.en,
     countPending: "3 requests wait",
     today: "Today",
     yesterday: "Yesterday",
@@ -654,6 +657,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     ...chartGalleryText.de,
     ...progressGalleryText.de,
     ...stepsGalleryText.de,
+    ...flowGalleryText.de,
     countPending: "3 Anfragen warten",
     today: "Heute",
     yesterday: "Gestern",

@@ -2,6 +2,7 @@ import { actionsGallery } from "./actions";
 import { dataGallery } from "./data";
 import type { GalleryGroup } from "./entry";
 import { feedbackGallery } from "./feedback";
+import { flowGallery } from "./flow";
 import { formsGallery } from "./forms";
 import { foundationsGallery } from "./foundations";
 import { navigationGallery } from "./navigation";
@@ -18,6 +19,7 @@ export const galleryGroups: readonly GalleryGroup[] = [
   navigationGallery,
   structureGallery,
   dataGallery,
+  flowGallery,
   statusGallery,
   feedbackGallery
 ];

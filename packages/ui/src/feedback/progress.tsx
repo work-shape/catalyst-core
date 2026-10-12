@@ -2,7 +2,7 @@ import type { HTMLAttributes } from "react";
 import { cn } from "../cn";
 
 /** What the filled part says. `neutral` is an amount with no judgement in it. */
-export type ProgressTone = "neutral" | "success" | "warning" | "danger";
+export type ProgressTone = "neutral" | "info" | "success" | "warning" | "danger";
 /** `sm` is 4 px high, beside a line of text; `md` is 8 px, on a line of its own. */
 export type ProgressSize = "sm" | "md";
 
@@ -49,6 +49,7 @@ const progressSizes: Record<ProgressSize, string> = {
 // A filled part is the text colour or a state's own colour, never the accent.
 const progressTones: Record<ProgressTone, string> = {
   neutral: "bg-foreground",
+  info: "bg-info",
   success: "bg-success",
   warning: "bg-warning",
   danger: "bg-destructive"

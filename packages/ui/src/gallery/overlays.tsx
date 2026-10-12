@@ -44,6 +44,7 @@ import { Popover, PopoverContent, PopoverTrigger, type PopoverSize } from "../ov
 import { Avatar } from "../status/avatar";
 import { Badge } from "../status/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../overlays/tooltip";
+import { SidePanelSamples } from "./flow";
 import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
 
@@ -615,6 +616,11 @@ export const overlaysGallery: GalleryGroup = {
       name: "Drawer",
       components: ["Drawer"],
       render: (text) => <DrawerSamples text={text} />
+    },
+    {
+      name: "SidePanel",
+      components: ["SidePanel"],
+      render: (text) => <SidePanelSamples text={text} />
     },
     {
       name: "ConfirmDialog",

@@ -27,6 +27,17 @@ export interface UiLabels {
   stateFailed: string;
   stateCancelled: string;
   stateLimitReached: string;
+  /** A part of a graph that was not reached or lies on a path that was not taken. */
+  stateSkipped: string;
+  /** The controls of a `FlowCanvas`. */
+  flowZoomIn: string;
+  flowZoomOut: string;
+  flowFit: string;
+  flowTidy: string;
+  /** Names the small picture of the whole graph. */
+  flowMinimap: string;
+  /** In the box of a canvas whose engine could not be loaded. */
+  flowLoadFailed: string;
   /** Under a chart that drew only the first rows or series of its data. */
   chartTruncated: string;
   /** In the box of a chart whose engine could not be loaded. */
@@ -57,6 +68,13 @@ export const uiLabelsEn: UiLabels = {
   stateFailed: "Failed",
   stateCancelled: "Cancelled",
   stateLimitReached: "Limit reached",
+  stateSkipped: "Skipped",
+  flowZoomIn: "Zoom in",
+  flowZoomOut: "Zoom out",
+  flowFit: "Show everything",
+  flowTidy: "Tidy up",
+  flowMinimap: "Overview",
+  flowLoadFailed: "The canvas could not be loaded.",
   chartTruncated: "Only part of the data is shown.",
   chartLoadFailed: "The chart could not be loaded."
 };
@@ -85,6 +103,13 @@ export const uiLabelsDe: UiLabels = {
   stateFailed: "Fehlgeschlagen",
   stateCancelled: "Abgebrochen",
   stateLimitReached: "Limit erreicht",
+  stateSkipped: "Übersprungen",
+  flowZoomIn: "Vergrößern",
+  flowZoomOut: "Verkleinern",
+  flowFit: "Alles zeigen",
+  flowTidy: "Aufräumen",
+  flowMinimap: "Übersicht",
+  flowLoadFailed: "Die Ansicht konnte nicht geladen werden.",
   chartTruncated: "Nur ein Teil der Daten wird angezeigt.",
   chartLoadFailed: "Das Diagramm konnte nicht geladen werden."
 };

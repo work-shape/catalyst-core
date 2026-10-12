@@ -59,7 +59,10 @@ const LIBRARY_IMPORTS = new Set([
 ]);
 /** A package one library file wraps, so that no other file and no caller sees it. */
 const LIBRARY_ENGINE_IMPORTS: Readonly<Record<string, string>> = {
-  "packages/ui/src/data/chart-engine.ts": "echarts"
+  "packages/ui/src/data/chart-engine.ts": "echarts",
+  "packages/ui/src/flow/flow-engine.tsx": "@xyflow",
+  "packages/ui/src/flow/flow-engine-nodes.tsx": "@xyflow",
+  "packages/ui/src/flow/flow-layout.ts": "@dagrejs"
 };
 const STORAGE_NAMES = new Set([
   "localStorage",

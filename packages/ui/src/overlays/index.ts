@@ -52,6 +52,13 @@ export {
   type PopoverTriggerProps
 } from "./popover";
 export {
+  SidePanel,
+  type SidePanelMode,
+  type SidePanelPlacement,
+  type SidePanelProps,
+  type SidePanelTab
+} from "./side-panel";
+export {
   Tooltip,
   TooltipContent,
   TooltipTrigger,

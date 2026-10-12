@@ -519,6 +519,7 @@ describe("UI gallery", () => {
       "navigation",
       "structure",
       "data",
+      "flow",
       "status",
       "feedback"
     ]);
