@@ -31,7 +31,7 @@ export interface GalleryGroup {
 /** A labelled row of samples inside an entry. */
 export function Samples({ label, children }: { label?: string; children: ReactNode }) {
   return (
-    <div className="grid gap-2">
+    <div className="grid grid-cols-1 gap-2">
       {label === undefined ? null : (
         <span className="text-caption font-medium text-muted-foreground">{label}</span>
       )}

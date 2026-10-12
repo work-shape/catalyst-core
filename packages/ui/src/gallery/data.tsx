@@ -23,6 +23,7 @@ import { Samples, type GalleryGroup } from "./entry";
 import { EmptyState } from "../feedback/empty-state";
 import { Avatar } from "../status/avatar";
 import { chartGalleryEntry } from "./chart";
+import { stepsGalleryEntry } from "./steps";
 import type { GalleryText } from "./text";
 
 /** A file as an agent writes it: long enough to scroll, with a line wider than the box. */
@@ -88,7 +89,7 @@ function DataTable({ text }: { text: GalleryText }) {
             <TableCell truncate={24}>{text[row.rule]}</TableCell>
             <TableCell align="end">{amount.format(row.amount)}</TableCell>
             <TableCell truncate={18} title={row.details}>
-              <code className="font-mono text-code">{row.details}</code>
+              <code className="font-mono">{row.details}</code>
             </TableCell>
             <TableCell truncate={32}>{text.tableNoteValue}</TableCell>
           </TableRow>
@@ -483,6 +484,7 @@ export const dataGallery: GalleryGroup = {
         </div>
       )
     },
+    stepsGalleryEntry,
     chartGalleryEntry
   ]
 };

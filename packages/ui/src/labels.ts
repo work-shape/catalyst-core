@@ -19,6 +19,14 @@ export interface UiLabels {
   collapse: string;
   required: string;
   optional: string;
+  /** What the marker of a `Step` in this state says to someone who does not see it. */
+  stateQueued: string;
+  stateRunning: string;
+  stateWaiting: string;
+  stateDone: string;
+  stateFailed: string;
+  stateCancelled: string;
+  stateLimitReached: string;
   /** Under a chart that drew only the first rows or series of its data. */
   chartTruncated: string;
   /** In the box of a chart whose engine could not be loaded. */
@@ -42,6 +50,13 @@ export const uiLabelsEn: UiLabels = {
   collapse: "Collapse",
   required: "Required",
   optional: "Optional",
+  stateQueued: "Queued",
+  stateRunning: "Running",
+  stateWaiting: "Waiting",
+  stateDone: "Done",
+  stateFailed: "Failed",
+  stateCancelled: "Cancelled",
+  stateLimitReached: "Limit reached",
   chartTruncated: "Only part of the data is shown.",
   chartLoadFailed: "The chart could not be loaded."
 };
@@ -63,6 +78,13 @@ export const uiLabelsDe: UiLabels = {
   collapse: "Zuklappen",
   required: "Pflichtfeld",
   optional: "Optional",
+  stateQueued: "Wartet auf den Start",
+  stateRunning: "Läuft",
+  stateWaiting: "Wartet",
+  stateDone: "Fertig",
+  stateFailed: "Fehlgeschlagen",
+  stateCancelled: "Abgebrochen",
+  stateLimitReached: "Limit erreicht",
   chartTruncated: "Nur ein Teil der Daten wird angezeigt.",
   chartLoadFailed: "Das Diagramm konnte nicht geladen werden."
 };

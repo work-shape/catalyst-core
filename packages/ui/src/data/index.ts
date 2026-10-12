@@ -21,6 +21,14 @@ export {
 export { List, ListRow, type ListRowProps, type ListRowSize } from "./list-row";
 export { Pagination, type PaginationLabels, type PaginationProps } from "./pagination";
 export {
+  Step,
+  Steps,
+  type StepProps,
+  type StepsProps,
+  type StepState,
+  type StepTone
+} from "./steps";
+export {
   Table,
   TableBody,
   TableCell,
