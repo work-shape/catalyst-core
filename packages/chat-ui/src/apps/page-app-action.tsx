@@ -1,7 +1,8 @@
-import { useAppFromPage, type AppFromPage } from "./app-data";
+import { useState } from "react";
+import { useAppFromPage, type AppFromPage, type AppLinkCandidate } from "./app-data";
 import { useAppsHost, type AppsHost } from "./apps-host";
 import { SaveAsAppAction } from "./save-as-app-dialog";
-import { UpdateAppAction } from "./update-app-dialog";
+import { UpdateAppAction, UpdateAppDialog } from "./update-app-dialog";
 
 /** What the header of a Page offers about Apps. */
 export type PageAppChoice =
@@ -51,10 +52,36 @@ function PageAppActionOf({
 }: PageAppActionProps & { host: AppsHost }) {
   const read = useAppFromPage(conversationId, pageId, true);
   const choice = pageAppChoice(host, read);
-  if (choice.kind === "update") {
-    return <UpdateAppAction conversationId={conversationId} pageId={pageId} app={choice.app} />;
-  }
-  return choice.kind === "save" ? (
-    <SaveAsAppAction conversationId={conversationId} pageId={pageId} pageName={pageName} />
-  ) : null;
+  // The App the reader chose to put the Page into. Its dialog is held here: once the Page is
+  // that App's, the header changes from Save as app to Update app under it.
+  const [linking, setLinking] = useState<AppLinkCandidate>();
+  return (
+    <>
+      {choice.kind === "update" ? (
+        <UpdateAppAction
+          conversationId={conversationId}
+          pageId={pageId}
+          pageName={pageName}
+          app={choice.app}
+        />
+      ) : choice.kind === "save" ? (
+        <SaveAsAppAction
+          conversationId={conversationId}
+          pageId={pageId}
+          pageName={pageName}
+          onLink={setLinking}
+        />
+      ) : null}
+      {linking ? (
+        <UpdateAppDialog
+          conversationId={conversationId}
+          pageId={pageId}
+          pageName={pageName}
+          app={linking}
+          link={linking.page === "this" ? undefined : linking.page}
+          onClose={() => setLinking(undefined)}
+        />
+      ) : null}
+    </>
+  );
 }

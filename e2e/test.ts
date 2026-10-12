@@ -351,6 +351,15 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     ]
   },
   {
+    name: "save-as-app-under-a-taken-id",
+    reason:
+      "Chromium's own log line: the test saves a Page under the id of an App that exists, the " +
+      "save is answered with 409, and the test asserts that the dialog offers to update that App.",
+    matches: requestAnswered(409),
+    path: /^\/api\/v1\/apps$/u,
+    tests: ["a Page is put into an App that was saved before Apps remembered their Page"]
+  },
+  {
     name: "app-update-over-a-draft-that-moved",
     reason:
       "Chromium's own log line: the test writes the draft of an App with the API while the " +

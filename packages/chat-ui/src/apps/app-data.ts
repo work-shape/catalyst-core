@@ -154,6 +154,9 @@ export function useAppActions(app: string, enabled: boolean): AppActionsRead {
 /** The App a Page was saved as, where the reader may write it. */
 export type AppFromPage = NonNullable<AppFromPageResponse["app"]>;
 
+/** An App the reader may write and could put a Page into, with the Page it is updated from. */
+export type AppLinkCandidate = NonNullable<AppFromPageResponse["candidate"]>;
+
 /**
  * The App a Page was saved as, where the reader may write it: one request when the surface of
  * the Page opens, and one more after each write to an App. `settled` once the instance
@@ -249,7 +252,15 @@ export interface AppWrites {
     pageId: string;
     app: string;
     expectedRevision: number;
+    /** Also writes an App that is not this Page's, and makes it this Page's. */
+    link?: boolean;
   }): Promise<unknown>;
+  /** The App with this id, where the reader may write it and so put the Page into it. */
+  linkCandidate(input: {
+    conversationId: string;
+    pageId: string;
+    app: string;
+  }): Promise<AppLinkCandidate | undefined>;
   /** Makes the revision with this number the published one. */
   publish(app: string, revision: number): Promise<unknown>;
   /** Puts the draft back on the published revision. */
@@ -276,14 +287,23 @@ export function useAppWrites(workspaceId: string | undefined): AppWrites {
           })
         ).finally(changed);
       },
-      updateFromPage: ({ conversationId, pageId, app, expectedRevision }) => {
+      linkCandidate: async ({ conversationId, pageId, app }) =>
+        (await client.apps.get_from_page({ params: { conversationId, pageId }, query: { app } }))
+          .candidate ?? undefined,
+      updateFromPage: ({ conversationId, pageId, app, expectedRevision, link }) => {
         if (workspaceId === undefined) {
           return Promise.reject(new Error("An App belongs to a workspace"));
         }
         return made(
           client.apps.update_from_page({
             params: { app },
-            body: { conversationId, pageId, workspaceId, expectedRevision }
+            body: {
+              conversationId,
+              pageId,
+              workspaceId,
+              expectedRevision,
+              ...(link ? { link: true } : {})
+            }
           })
         ).finally(changed);
       },

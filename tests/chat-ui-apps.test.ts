@@ -646,13 +646,11 @@ describe("Save as app", () => {
       })
     );
 
-    // It says what to do next: another id for a new App, or the existing App out of the way.
     expect(markup).toContain(
-      "An app with this ID already exists. Choose another ID to save this page as a new app. To put this page into the existing app instead, delete that app under Apps and save again."
+      "An app with this ID already exists. Choose another ID to save this page as a new app."
     );
     expect(markup).toContain('aria-invalid="true"');
-    expect(de("apps.saveIdTaken")).toBe(
-      "Es gibt schon eine App mit dieser ID. Wähle eine andere ID, um die Page als neue App zu speichern. Soll die Page stattdessen in die vorhandene App, lösche diese App unter Apps und speichere erneut."
-    );
+    // Nothing is offered about an App the reader may not write.
+    expect(markup.match(/<button/gu)).toHaveLength(3);
   });
 });

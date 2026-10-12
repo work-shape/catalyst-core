@@ -4,6 +4,7 @@ import { createTranslationContext } from "@vivd-catalyst/chat-ui";
 import {
   NO_APP_RIGHTS,
   pageAppChoice,
+  SaveAsAppDialogView,
   UpdateAppAction,
   UpdateAppDialogView,
   type AppRights,
@@ -147,5 +148,123 @@ describe("Update app", () => {
     const done = dialog({ phase: "done" }, "de");
     expect(done).toContain("„Angebotsrechner“ ist aktualisiert");
     expect(done).toContain(">App öffnen</button>");
+  });
+});
+
+// Every test of this block fails without the way into an existing App: Save as app answered a
+// taken id with a sentence alone, and the dialog knew no App that is not the Page's yet.
+describe("a Page put into an App that has the id", () => {
+  const taken = {
+    name: "angebotsrechner",
+    title: "Angebotsrechner",
+    workspaceId: "cw_1",
+    draftRevision: 4,
+    page: "none" as const
+  };
+  const save = (onLink: (() => void) | undefined, locale: "en" | "de" = "en") =>
+    render(
+      createElement(SaveAsAppDialogView, {
+        workspaceName: "Nordlicht Beratung",
+        proposedName: "Angebotsrechner",
+        saving: false,
+        failure: {
+          field: "id",
+          message: (locale === "en" ? t : de)("apps.saveIdTakenWritable", { name: taken.title }),
+          taken
+        },
+        onClose() {},
+        onLink,
+        onSave() {}
+      }),
+      locale
+    );
+  const dialog = (
+    overrides: Partial<Parameters<typeof UpdateAppDialogView>[0]> = {},
+    locale: "en" | "de" = "en"
+  ) =>
+    render(
+      createElement(UpdateAppDialogView, {
+        name: "Angebotsrechner",
+        pageName: "Angebotsrechner",
+        phase: "idle",
+        link: "none",
+        changedElsewhere: false,
+        failure: undefined,
+        onClose() {},
+        onUpdate() {},
+        onOpen() {},
+        ...overrides
+      }),
+      locale
+    );
+
+  it("names the App that has the id and offers to update it from the Page", () => {
+    const markup = save(() => undefined);
+
+    expect(markup).toContain(
+      "The app “Angebotsrechner” already has this ID. Choose another ID to save a new app, or put this page into that app."
+    );
+    expect(markup).toContain(">Update “Angebotsrechner” from this page</button>");
+    // Without somebody to take the App over, the sentence stands alone.
+    expect(save(undefined)).not.toContain("from this page</button>");
+  });
+
+  it("says that the draft is replaced and that nothing published changes, before it writes", () => {
+    const markup = dialog();
+
+    expect(markup).toContain("Update “Angebotsrechner” from this page?");
+    expect(markup).toContain(
+      "The current draft of this app is replaced by this page as it is now. The published version does not change until someone publishes the draft."
+    );
+    expect(markup).toContain("From then on this page shows “Update app” for this app.");
+    expect(markup).toContain(">Replace draft</button>");
+    expect(markup).not.toContain(">Update draft</button>");
+    expect(markup).not.toContain("another conversation");
+  });
+
+  it("names that the App was last updated from another Page", () => {
+    expect(dialog({ link: "other_conversation" })).toContain(
+      "This app was last updated from a page in another conversation. That page will no longer show “Update app” for it."
+    );
+    expect(dialog({ link: "other_page" })).toContain(
+      "This app was last updated from another page of this conversation."
+    );
+  });
+
+  it("says that the draft moved while the question stood", () => {
+    expect(dialog({ changedElsewhere: true })).toContain(
+      "The draft of this app was changed just now. Replacing it also replaces that change."
+    );
+  });
+
+  it("confirms that the Page updates the App now, and that the App keeps its name where the Page has another", () => {
+    const same = dialog({ phase: "done" });
+    expect(same).toContain("“Angebotsrechner” is updated");
+    expect(same).toContain("This page now updates this app.");
+    expect(same).not.toContain("keeps its name");
+
+    const other = dialog({ phase: "done", pageName: "Angebotsrechner 2026" });
+    expect(other).toContain(
+      "The app keeps its name “Angebotsrechner”. The page is called “Angebotsrechner 2026”."
+    );
+    // An update of the Page's own App says the same about the name, and nothing about a link.
+    const own = dialog({ phase: "done", link: undefined, pageName: "Angebotsrechner 2026" });
+    expect(own).toContain("The app keeps its name “Angebotsrechner”.");
+    expect(own).not.toContain("This page now updates this app.");
+  });
+
+  it("is written in German as well", () => {
+    expect(save(() => undefined, "de")).toContain(
+      ">„Angebotsrechner“ aus dieser Page aktualisieren</button>"
+    );
+    const asked = dialog({ link: "other_conversation" }, "de");
+    expect(asked).toContain("„Angebotsrechner“ aus dieser Page aktualisieren?");
+    expect(asked).toContain(
+      "Die veröffentlichte Version ändert sich erst, wenn jemand den Entwurf veröffentlicht."
+    );
+    expect(asked).toContain("in einer anderen Unterhaltung");
+    expect(dialog({ phase: "done", pageName: "Rechner" }, "de")).toContain(
+      "Die App behält ihren Namen „Angebotsrechner“. Die Page heißt „Rechner“."
+    );
   });
 });

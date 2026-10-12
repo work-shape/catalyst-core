@@ -19,8 +19,10 @@ import { apiOrigin, uiOrigin } from "./view-fixtures";
 // A Page that was saved as an App takes its later revisions into that App: the header of the
 // Page offers Update app in place of Save as app, the update becomes the next draft revision
 // and publishes nothing, a draft that was written somewhere else is replaced only by a button
-// that says so, and a Page whose App was deleted offers Save as app again. Fails without
-// Update app: the header offers Save as app, and saving answers that the id is taken.
+// that says so, and a Page whose App was deleted offers Save as app again. The second walk is
+// the App from before Apps remembered their Page: Save as app under its id offers to update
+// it from the Page, and the Page is that App's from then on. Fails without Update app: the
+// header offers Save as app, and saving answers that the id is taken.
 
 /** Where the pictures of a run go. Without it the test takes none. */
 const shotsDir = process.env.E2E_SHOTS_DIR;
@@ -295,4 +297,160 @@ test("a Page saved as an App updates the draft of that App, and nothing that is 
   await openSurface();
   await expect(saveAsApp).toBeVisible();
   await expect(updateApp).toHaveCount(0);
+});
+
+test("a Page is put into an App that was saved before Apps remembered their Page", async ({
+  page
+}, testInfo) => {
+  const attempt = testInfo.repeatEachIndex * 10 + testInfo.retry;
+  const appName = attempt === 0 ? "Offer sheet" : `Offer sheet ${attempt}`;
+  const appId = attempt === 0 ? "offer-sheet" : `offer-sheet-${attempt}`;
+  test.setTimeout(shotsDir ? 600_000 : 300_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  page.setDefaultTimeout(30_000);
+  const signedIn = await page.request.post(`${apiOrigin}/api/auth/sign-in/email`, {
+    headers: { Origin: uiOrigin },
+    data: { ...admin, rememberMe: true }
+  });
+  expect(signedIn.ok()).toBe(true);
+  expect((await page.request.get(`${apiOrigin}/api/v1/me`)).ok()).toBe(true);
+  const created = await requestWithOrigin(page, "post", `${apiOrigin}/api/v1/workspaces`, {
+    data: { name: "Sheets team" }
+  });
+  expect(created.ok()).toBe(true);
+  const workspaceId = idSchema.parse(await created.json()).id;
+  const appPath = `/w/${workspaceId}/apps/${appId}`;
+  const assetUrl = `${apiOrigin}/api/v1/assets/app/${appId}`;
+  const asset = async () =>
+    assetSchema.parse(
+      await (await page.request.get(`${assetUrl}?workspaceId=${workspaceId}`)).json()
+    );
+
+  // The App as an earlier release left it: written and published, and no Page named by it.
+  const written = await requestWithOrigin(page, "put", assetUrl, {
+    data: {
+      workspaceId,
+      expectedRevision: null,
+      files: Object.entries({
+        ...pageSource(FIRST_HEADING),
+        "app.yaml": `id: ${appId}\nname: ${appName}\nkit: 1.0.0\n`
+      }).map(([path, text]) => ({ path, text }))
+    },
+    timeout: 90_000
+  });
+  expect(written.ok(), await written.text()).toBe(true);
+  const published = await requestWithOrigin(page, "post", `${assetUrl}/publish`, {
+    data: { workspaceId, revision: 1 }
+  });
+  expect(published.ok(), await published.text()).toBe(true);
+
+  // Changes were asked for in the conversation since: the Page stands at revision 3.
+  const surface = pageSurface(page);
+  const saveAsApp = surface.getByRole("button", { name: /^(?:Save as app|Als App speichern)$/u });
+  const updateApp = surface.getByRole("button", { name: /^(?:Update app|App aktualisieren)$/u });
+  const dialog = page.getByRole("dialog");
+  await page.goto(`/w/${workspaceId}`);
+  await writePageFiles(page, patchThatAdds(pageSource(FIRST_HEADING)));
+  await savePage(page);
+  await rewritePageFile(page, "src/routes/index.tsx", overviewRoute("Offer sheet, wider"));
+  await savePage(page);
+  await rewritePageFile(page, "src/routes/index.tsx", overviewRoute(THIRD_HEADING));
+  await savePage(page);
+  await expect(surface).toContainText("Revision 3");
+  await expect(saveAsApp).toBeVisible();
+  await expect(updateApp).toHaveCount(0);
+
+  // Saving under the App's id is refused, and the dialog offers the App itself.
+  const offer = dialog.getByRole("button", {
+    name: new RegExp(
+      `^(?:Update “${appName}” from this page|„${appName}“ aus dieser Page aktualisieren)$`,
+      "u"
+    )
+  });
+  const untilOffered = async () => {
+    await saveAsApp.click();
+    await dialog.getByRole("textbox", { name: /^Name/u }).fill(appName);
+    await expect(dialog.getByRole("textbox", { name: /^ID/u })).toHaveValue(appId);
+    await dialog.getByRole("button", { name: /^(?:Save|Speichern)$/u }).click();
+    await expect(offer).toBeVisible();
+  };
+  const reopened = async () => {
+    await page
+      .getByTestId("page-card")
+      .last()
+      .getByRole("button", { name: /^(?:Open|Öffnen)$/u })
+      .click();
+    await expect(builtPage(page).getByRole("heading")).toBeVisible();
+  };
+  await untilOffered();
+  await expect(dialog).toContainText(
+    `The app “${appName}” already has this ID. Choose another ID to save a new app, or put this page into that app.`
+  );
+  await shoot(page, "save-as-app-id-taken", ALL, async () => {
+    await reopened();
+    await untilOffered();
+  });
+
+  // The offer says what it replaces and what stays, before anything is written.
+  await offer.click();
+  const asked = page.getByRole("dialog", { name: `Update “${appName}” from this page?` });
+  const replace = asked.getByRole("button", { name: "Replace draft", exact: true });
+  await expect(asked).toContainText(
+    "The current draft of this app is replaced by this page as it is now. The published version does not change until someone publishes the draft."
+  );
+  await expect(asked).toContainText("From then on this page shows “Update app” for this app.");
+  expect(await asset()).toMatchObject({ draftRevision: 1, publishedRevision: 1 });
+  await shoot(page, "link-app-dialog", ALL, async () => {
+    await reopened();
+    await untilOffered();
+    await offer.click();
+    await expect(
+      dialog.getByRole("button", { name: /^(?:Replace draft|Entwurf ersetzen)$/u })
+    ).toBeInViewport();
+  });
+  // On a low window the footer is still reached.
+  await page.setViewportSize({ width: 1440, height: 640 });
+  await expect(replace).toBeInViewport();
+  await expect(asked.getByRole("button", { name: "Cancel", exact: true })).toBeInViewport();
+  if (shotsDir) {
+    await page.screenshot({
+      path: join(shotsDir, "link-app-dialog-light-en-1440x640.png"),
+      animations: "disabled"
+    });
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  await replace.click();
+  const done = page.getByRole("dialog", { name: `“${appName}” is updated` });
+  await expect(done).toContainText("This page now updates this app.");
+  await expect(done).toContainText(
+    `The app keeps its name “${appName}”. The page is called “Revenue”.`
+  );
+  if (shotsDir) {
+    await page.screenshot({
+      path: join(shotsDir, "link-app-done-light-en-1440.png"),
+      animations: "disabled"
+    });
+  }
+  // The header under the confirmation is the one of a Page with an App.
+  await expect(updateApp).toBeVisible();
+  await expect(saveAsApp).toHaveCount(0);
+  expect(await asset()).toMatchObject({ draftRevision: 2, publishedRevision: 1 });
+
+  // The new draft is the Page as it is; what is published is what it was, until it is published.
+  await done.getByRole("button", { name: "Open app", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${appPath}/edit$`, "u"));
+  const edit = page.getByTestId("app-edit");
+  await expect(edit).toContainText("Draft · revision 2");
+  await expect(appIn(page, "app-edit").getByRole("heading", { name: THIRD_HEADING })).toBeVisible();
+  await page.goto(appPath);
+  await expect(appIn(page, "app-view").getByRole("heading", { name: FIRST_HEADING })).toBeVisible();
+  await page.goto(`${appPath}/edit`);
+  await edit.getByRole("button", { name: "Publish", exact: true }).click();
+  const publishDialog = page.getByRole("dialog", { name: `Publish “${appName}”?` });
+  await publishDialog.getByRole("button", { name: "Publish", exact: true }).click();
+  await expect(publishDialog).toBeHidden();
+  expect(await asset()).toMatchObject({ draftRevision: 2, publishedRevision: 2 });
+  await page.goto(appPath);
+  await expect(appIn(page, "app-view").getByRole("heading", { name: THIRD_HEADING })).toBeVisible();
 });
