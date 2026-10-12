@@ -36,6 +36,11 @@ export interface AssetBaseline {
 export interface InstanceBaseline {
   lastPulledVersion: number;
   assets?: Record<string, AssetBaseline>;
+  /**
+   * Assets this working copy saw deleted on the instance, each with the revision of its
+   * delete. A push that creates one again names that revision.
+   */
+  deleted?: Record<string, number>;
   defaultAgentName?: string | null;
 }
 
@@ -158,6 +163,23 @@ export async function readStateFile(path: string): Promise<CatalystState> {
           throw new Error(`${path} has an invalid asset baseline for '${key}'`);
         }
         baseline.assets[key] = { revision: asset.revision, hash: asset.hash };
+      }
+    }
+    if (value.deleted !== undefined) {
+      if (!isRecord(value.deleted)) {
+        throw new Error(`${path} has invalid deleted-asset baselines for '${name}'`);
+      }
+      baseline.deleted = {};
+      for (const [key, revision] of Object.entries(value.deleted)) {
+        if (
+          !/^(agent|skill):.+$/u.test(key) ||
+          typeof revision !== "number" ||
+          !Number.isInteger(revision) ||
+          revision < 1
+        ) {
+          throw new Error(`${path} has an invalid deleted-asset baseline for '${key}'`);
+        }
+        baseline.deleted[key] = revision;
       }
     }
     if (value.defaultAgentName !== undefined) {

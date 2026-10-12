@@ -189,7 +189,8 @@ export function createSeedApi(client: ApiClient): SeedApi {
       (
         await client.assets.put({
           params: { kind, name: config.name },
-          body: { config, ...(expectedRevision === undefined ? {} : { expectedRevision }) }
+          // A write names the revision it was made against: none for an asset that is new.
+          body: { config, expectedRevision: expectedRevision ?? null }
         })
       ).status,
     async showAgentEverywhere(name) {
@@ -233,7 +234,7 @@ export function createSeedApi(client: ApiClient): SeedApi {
           body: {
             files,
             workspaceId,
-            ...(revision === undefined ? {} : { expectedRevision: revision })
+            expectedRevision: revision ?? null
           }
         })
       );

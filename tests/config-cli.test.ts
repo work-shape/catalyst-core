@@ -12,7 +12,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { AUTH_MOUNT_PATH } from "@vivd-catalyst/api-client";
-import { UNKNOWN_OPERATION_REASON } from "@vivd-catalyst/api-contract";
+import { ASSET_SYNC_BODY_MAX_BYTES, UNKNOWN_OPERATION_REASON } from "@vivd-catalyst/api-contract";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -58,6 +58,7 @@ import {
   writeStateFile,
   updateManifestDefaultAgent
 } from "../packages/config-cli/src/index";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 const servers: TestInstance[] = [];
 const temporaryDirectories: string[] = [];
@@ -394,7 +395,7 @@ describe("config CLI command flows", () => {
 
   it("prefers API-key exchange, then pulls, pushes, and reports a stale asset", async () => {
     const fixture = await createFixture();
-    await fixture.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
         {
@@ -495,9 +496,8 @@ skills:
       })
     ).toMatchObject({ config: { instructions: "Local instructions" } });
 
-    await fixture.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
-      baseVersion: 2,
       mutations: [
         {
           type: "upsert",
@@ -514,16 +514,29 @@ skills:
     );
     stderr.length = 0;
     expect(await runConfigCommand("push", commandOptions)).toBe(1);
-    expect(stderr.join("")).toContain("agent:assistant: revision 3, update");
+    expect(stderr.join("")).toContain("agent:assistant: revision 3, changed by");
     expect(stderr.join("")).toContain("catalyst config pull --only agent:assistant");
     expect(stderr.join("")).toContain("Commit or stash local edits in git first");
     expect(stderr.join("")).toContain("catalyst config diff");
-    expect(stderr.join("")).toContain("--force");
+    expect(stderr.join("")).not.toContain("--force");
+
+    // Fails without the change: --force pushed the local file over revision 3.
+    stderr.length = 0;
+    expect(await runConfigCommand("push", { ...commandOptions, force: true })).toBe(1);
+    expect(stderr.join("")).toContain("'catalyst config push --force' no longer exists");
+    expect(stderr.join("")).toContain("catalyst config pull --only <kind>:<name>");
+    expect(
+      await fixture.store.configAssets.getConfigAsset({
+        clientInstanceId: fixture.clientInstanceId,
+        kind: "agent",
+        name: "assistant"
+      })
+    ).toMatchObject({ revision: 3, config: { instructions: "New remote instructions" } });
   });
 
   it("rejects noncanonical pull globs before writing or deleting assets", async () => {
     const fixture = await createFixture();
-    await fixture.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
         {
@@ -605,7 +618,7 @@ skills:
     const mergeRequests: unknown[] = [];
     const { fetchImpl, fixture } = await instanceHolding(remote, mergeRequests);
     // A row of a kind no release carries, left by a module that is off.
-    await fixture.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
         { type: "upsert", kind: "connection", name: "crm", config: { name: "crm", title: "CRM" } }
@@ -639,7 +652,8 @@ skills:
           {
             type: "put",
             kind: "agent",
-            config: canonicalizeAgentConfig(agentConfig("New", { name: "new" }))
+            config: canonicalizeAgentConfig(agentConfig("New", { name: "new" })),
+            expectedRevision: null
           }
         ]
       }
@@ -719,7 +733,12 @@ skills:
             config: canonicalizeAgentConfig(agentConfig("Selected")),
             expectedRevision: 1
           },
-          { type: "put", kind: "skill", config: skillConfig("review", "Review") }
+          {
+            type: "put",
+            kind: "skill",
+            config: skillConfig("review", "Review"),
+            expectedRevision: null
+          }
         ]
       }
     ]);
@@ -749,10 +768,14 @@ skills:
       "utf8"
     );
     // The instance holds the agent under its old name, placed in chosen workspaces.
-    const { fetchImpl, fixture } = await instanceHolding({
+    const held = {
       defaultAgentName: "assistant",
       agents: [agentConfig("Default"), agentConfig("Tax", { name: "kai" })],
       skills: []
+    };
+    const { fetchImpl, fixture } = await instanceHolding(held);
+    await writeStateFile(resolve(directory, STATE_FILENAME), {
+      instances: { local: pulledBaseline(1, held) }
     });
     await fixture.store.configAssets.setAgentAvailability({
       clientInstanceId: fixture.clientInstanceId,
@@ -761,7 +784,7 @@ skills:
     });
     const push = async (...flags: string[]) => {
       const stdout: string[] = [];
-      const exitCode = await runCli(["config", "push", "--force", ...flags], {
+      const exitCode = await runCli(["config", "push", ...flags], {
         cwd: directory,
         env: { CATALYST_API_KEY: "cat_hidden" },
         stdout: (text) => stdout.push(text),
@@ -773,7 +796,7 @@ skills:
 
     // Deleting the old name and adding the new one in one push is a rename.
     const hidden = await push("--prune");
-    expect(hidden).toContain("Pushed 2 agents, 0 skills, version 3.");
+    expect(hidden).toContain("Pushed 1 agent, 0 skills, version 3.");
     expect(hidden).toContain(
       "Hidden in every workspace until an instance admin sets their availability:\n  agent:kai-tax\n"
     );
@@ -783,7 +806,14 @@ skills:
       agentName: "kai-tax",
       availability: { mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] }
     });
-    expect(await push()).not.toContain("Hidden in every workspace");
+    await writeFile(
+      resolve(directory, "agents", "kai-tax.agent.yaml"),
+      serializeAgentYaml(agentConfig("Tax, edited", { name: "kai-tax" })),
+      "utf8"
+    );
+    const placed = await push();
+    expect(placed).toContain("Pushed 1 agent, 0 skills, version 5.");
+    expect(placed).not.toContain("Hidden in every workspace");
   });
 
   it("rewrites only selected pull files without changing the recorded version", async () => {
@@ -829,7 +859,7 @@ skills:
     expect(stdout.join("")).toContain("selected asset baselines updated");
   });
 
-  it("migrates legacy state by refusing an unguarded push, and refuses an older server even with force", async () => {
+  it("migrates legacy state by refusing an unguarded push, and names the upgrade to an older server", async () => {
     const directory = await createTemporaryDirectory();
     await writeMinimalManifest(directory, "https://catalyst.test");
     await writeStateFile(resolve(directory, STATE_FILENAME), {
@@ -857,10 +887,12 @@ skills:
           });
     };
     errors.length = 0;
+    await writeStateFile(resolve(directory, STATE_FILENAME), {
+      instances: { local: pulledBaseline(8, { agents: [], skills: [] }) }
+    });
     expect(
       await runConfigCommand("push", {
         cwd: directory,
-        force: true,
         env: { CATALYST_API_KEY: "cat_old_server" },
         fetchImpl: olderServerFetch,
         stderr: (text) => errors.push(text)
@@ -894,21 +926,21 @@ skills:
     });
     // Both assets appeared on the instance since: the working copy pushes them as new.
     const { fetchImpl, fixture } = await instanceHolding({ agents: [], skills: [] });
-    await fixture.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
       actor: { displayLabel: "Reviewer", roles: ["admin"] },
       mutations: [
         { type: "upsert", kind: "skill", name: "review", config: skillConfig("review", "One") }
       ]
     });
-    await fixture.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
       actor: { displayLabel: "Reviewer", roles: ["admin"] },
       mutations: [
         { type: "upsert", kind: "skill", name: "review", config: skillConfig("review", "Two") }
       ]
     });
-    await fixture.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
       actor: { displayLabel: "Admin", roles: ["admin"] },
       mutations: [
@@ -929,10 +961,10 @@ skills:
     ).toBe(1);
     expect(errors.join("")).toContain("Push conflict; nothing was applied.");
     expect(errors.join("")).toMatch(
-      /- skill:review: revision 2, update by Reviewer at \d{4}-\d{2}-\d{2}T/u
+      /- skill:review: revision 2, changed by Reviewer at \d{4}-\d{2}-\d{2}T/u
     );
     expect(errors.join("")).toMatch(
-      /- agent:assistant: revision 1, create by Admin at \d{4}-\d{2}-\d{2}T/u
+      /- agent:assistant: revision 1, changed by Admin at \d{4}-\d{2}-\d{2}T/u
     );
     expect(errors.join("")).toContain(
       "catalyst config pull --dir 'working copy' --instance local --only agent:assistant --only skill:review"
@@ -952,7 +984,7 @@ skills:
     const fixture = await createFixture();
     const directory = await createTemporaryDirectory();
     await writeMinimalManifest(directory, "https://catalyst.test");
-    await fixture.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
         ...["local", "remote", "both"].map((name) => ({
@@ -981,7 +1013,7 @@ skills:
         "utf8"
       );
     }
-    await fixture.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
       actor: { displayLabel: "Skill reviewer", roles: ["admin"] },
       mutations: ["remote", "both"].map((name) => ({
@@ -998,7 +1030,7 @@ skills:
     expect(output.join("")).toContain("skill:both: conflict");
     expect(output.join("")).not.toContain("skills/remote/SKILL.md");
     expect(await runConfigCommand("push", options)).toBe(1);
-    expect(errors.join("")).toContain("skill:both: revision 2, update by Skill reviewer at");
+    expect(errors.join("")).toContain("skill:both: revision 2, changed by Skill reviewer at");
     expect(errors.join("")).toContain("catalyst config pull --only skill:both");
     expect(
       await fixture.store.configAssets.getConfigAsset({
@@ -1031,7 +1063,7 @@ skills:
     const fixture = await createFixture();
     const directory = await createTemporaryDirectory();
     await writeMinimalManifest(directory, "https://catalyst.test");
-    await fixture.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
         { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("Baseline") },
@@ -1078,7 +1110,7 @@ skills:
     const fixture = await createFixture();
     const directory = await createTemporaryDirectory();
     await writeMinimalManifest(directory, "https://catalyst.test");
-    await fixture.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
         ...["assistant", "other", "third"].map((name) => ({
@@ -1105,7 +1137,7 @@ skills:
       stderr: (text: string) => errors.push(text)
     };
     expect(await runConfigCommand("pull", options)).toBe(0);
-    await fixture.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
       mutations: [{ type: "setDefaultAgent", agentName: "other" }]
     });
@@ -1137,7 +1169,7 @@ skills:
     const fixture = await createFixture();
     const directory = await createTemporaryDirectory();
     await writeMinimalManifest(directory, "https://catalyst.test");
-    await fixture.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
         {
@@ -1164,13 +1196,13 @@ skills:
       serializeSkillMarkdown(skillConfig("review", "Local")),
       "utf8"
     );
-    await fixture.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
       actor: { displayLabel: "Remote editor", roles: ["admin"] },
       mutations: [{ type: "delete", kind: "skill", name: "review" }]
     });
     expect(await runConfigCommand("push", options)).toBe(1);
-    expect(errors.join("")).toContain("skill:review: revision 2, delete by Remote editor");
+    expect(errors.join("")).toContain("skill:review: deleted at revision 2 by Remote editor");
     expect(await runConfigCommand("pull", { ...options, only: ["skill:review"] })).toBe(0);
     await expect(
       readFile(resolve(directory, "skills", "review", "SKILL.md"), "utf8")
@@ -1178,13 +1210,33 @@ skills:
     const after = (await readStateFile(resolve(directory, STATE_FILENAME))).instances.local;
     expect(after?.assets?.["skill:review"]).toBeUndefined();
     expect(after?.assets?.["skill:other"]).toEqual(before?.assets?.["skill:other"]);
+    // The pull recorded the delete it saw, and a push that creates the asset again names it.
+    // Fails without the change: the push named no revision and overwrote the delete unseen.
+    expect(after?.deleted).toEqual({ "skill:review": 2 });
+    await mkdir(resolve(directory, "skills", "review"), { recursive: true });
+    await writeFile(
+      resolve(directory, "skills", "review", "SKILL.md"),
+      serializeSkillMarkdown(skillConfig("review", "Created again")),
+      "utf8"
+    );
+    expect(await runConfigCommand("push", options), errors.join("")).toBe(0);
+    expect(
+      await fixture.store.configAssets.getConfigAsset({
+        clientInstanceId: fixture.clientInstanceId,
+        kind: "skill",
+        name: "review"
+      })
+    ).toMatchObject({ status: "active", revision: 3 });
+    const recreated = (await readStateFile(resolve(directory, STATE_FILENAME))).instances.local;
+    expect(recreated?.assets?.["skill:review"]).toMatchObject({ revision: 3 });
+    expect(recreated?.deleted).toBeUndefined();
   });
 
-  it("guards prune deletions and refreshes force-written assets", async () => {
+  it("guards prune deletions and creates a pruned asset again against its delete", async () => {
     const fixture = await createFixture();
     const directory = await createTemporaryDirectory();
     await writeMinimalManifest(directory, "https://catalyst.test");
-    await fixture.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
         { type: "upsert", kind: "skill", name: "review", config: skillConfig("review", "Baseline") }
@@ -1199,14 +1251,25 @@ skills:
     };
     expect(await runConfigCommand("pull", options)).toBe(0);
     await rm(resolve(directory, "skills", "review"), { recursive: true });
-    await fixture.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
         { type: "upsert", kind: "skill", name: "review", config: skillConfig("review", "Remote") }
       ]
     });
+    // The asset changed since the pull: the prune names the pulled revision and is refused.
     expect(await runConfigCommand("push", { ...options, prune: true })).toBe(1);
-    expect(await runConfigCommand("push", { ...options, prune: true, force: true })).toBe(0);
+    expect(
+      await fixture.store.configAssets.getConfigAsset({
+        clientInstanceId: fixture.clientInstanceId,
+        kind: "skill",
+        name: "review"
+      })
+    ).toMatchObject({ status: "active", revision: 2 });
+    // Pulled, seen and removed again, the prune names the revision that is there.
+    expect(await runConfigCommand("pull", { ...options, only: ["skill:review"] })).toBe(0);
+    await rm(resolve(directory, "skills", "review"), { recursive: true });
+    expect(await runConfigCommand("push", { ...options, prune: true })).toBe(0);
     expect(
       await fixture.store.configAssets.getConfigAsset({
         clientInstanceId: fixture.clientInstanceId,
@@ -1219,13 +1282,16 @@ skills:
         "skill:review"
       ]
     ).toBeUndefined();
+    expect(
+      (await readStateFile(resolve(directory, STATE_FILENAME))).instances.local?.deleted
+    ).toEqual({ "skill:review": 3 });
     await mkdir(resolve(directory, "skills", "review"), { recursive: true });
     await writeFile(
       resolve(directory, "skills", "review", "SKILL.md"),
-      serializeSkillMarkdown(skillConfig("review", "Deliberate overwrite")),
+      serializeSkillMarkdown(skillConfig("review", "Created again")),
       "utf8"
     );
-    expect(await runConfigCommand("push", { ...options, force: true })).toBe(0);
+    expect(await runConfigCommand("push", options)).toBe(0);
     expect(
       (await readStateFile(resolve(directory, STATE_FILENAME))).instances.local?.assets?.[
         "skill:review"
@@ -1517,8 +1583,9 @@ describe("config CLI against an instance", () => {
       stderr: (text: string) => stdout.push(text)
     };
 
-    // A working copy that never pulled pushes with --force.
-    expect(await runConfigCommand("push", { ...options, force: true }), stdout.join("")).toBe(0);
+    // A working copy that pulled the empty instance pushes every asset as a creation.
+    await recordEmptyPull(directory);
+    expect(await runConfigCommand("push", options), stdout.join("")).toBe(0);
     expect(stdout.join("")).toContain("Pushed 3 agents, 2 skills, version 1.");
     // One call carries every asset and the default agent, and leaves one run of the CLI.
     expect(syncs).toHaveLength(1);
@@ -1640,20 +1707,22 @@ describe("config CLI against an instance", () => {
     const { fetchImpl, fixture } = await instanceHolding({ agents: [], skills: [] });
     const directory = await createTemporaryDirectory();
     await writeMinimalManifest(directory, "https://catalyst.test");
-    // Twelve skills of 100 KiB are over the megabyte one request holds.
-    for (let index = 0; index < 12; index += 1) {
+    // Three skills of a third of the limit and a little more are over what one push holds.
+    for (let index = 0; index < 3; index += 1) {
       const name = `guide-${index}`;
       await mkdir(resolve(directory, "skills", name), { recursive: true });
       await writeFile(
         resolve(directory, "skills", name, "SKILL.md"),
-        serializeSkillMarkdown(skillConfig(name, "x".repeat(100 * 1024))),
+        serializeSkillMarkdown(
+          skillConfig(name, "x".repeat(Math.ceil(ASSET_SYNC_BODY_MAX_BYTES / 3) + 1024))
+        ),
         "utf8"
       );
     }
+    await recordEmptyPull(directory);
     const errors: string[] = [];
     const options = {
       cwd: directory,
-      force: true,
       env: { CATALYST_API_KEY: "cat_large" },
       fetchImpl,
       stdout: () => {},
@@ -1669,62 +1738,11 @@ describe("config CLI against an instance", () => {
         clientInstanceId: fixture.clientInstanceId
       })
     ).toMatchObject({ version: 0 });
-    // A part of it fits.
+    // A part of it fits, and is over the megabyte any other request holds.
     expect(
-      await runConfigCommand("push", { ...options, only: ["skill:guide-0", "skill:guide-1"] })
+      await runConfigCommand("push", { ...options, only: ["skill:guide-0", "skill:guide-1"] }),
+      errors.join("")
     ).toBe(0);
-  });
-
-  it("refuses a forced push whose default agent changed after the CLI read it", async () => {
-    const syncs: unknown[] = [];
-    const { fetchImpl, fixture } = await instanceHolding(
-      { defaultAgentName: "assistant", agents: releasedAgents, skills: releasedSkills },
-      syncs
-    );
-    const directory = await createTemporaryDirectory();
-    await writeRelease(directory);
-    const storedDefault = async () =>
-      (
-        await fixture.store.configAssets.getConfigAssetState({
-          clientInstanceId: fixture.clientInstanceId
-        })
-      ).defaultAgentName;
-    // Someone makes another agent the default after the CLI listed the assets.
-    const changing: typeof fetch = async (input, init) => {
-      const request = input instanceof Request ? input : new Request(input, init);
-      if (
-        new URL(request.url).pathname === testOperations["assets.sync_check"].path &&
-        (await storedDefault()) === "assistant"
-      ) {
-        await fixture.store.configAssets.applyConfigAssetMutations({
-          clientInstanceId: fixture.clientInstanceId,
-          mutations: [{ type: "setDefaultAgent", agentName: "helper" }]
-        });
-      }
-      return fetchImpl(request);
-    };
-    const errors: string[] = [];
-    const options = {
-      cwd: directory,
-      force: true,
-      env: { CATALYST_API_KEY: "cat_force" },
-      stdout: () => {},
-      stderr: (text: string) => errors.push(text)
-    };
-
-    expect(await runConfigCommand("push", { ...options, fetchImpl: changing })).toBe(1);
-    expect(errors.join("")).toContain("default agent changed on the instance");
-    expect(syncs).toEqual([]);
-    expect(await storedDefault()).toBe("helper");
-
-    // Pushed again, the CLI reads the default as it is now and the local one wins.
-    expect(await runConfigCommand("push", { ...options, fetchImpl })).toBe(0);
-    expect(syncs).toHaveLength(1);
-    expect(syncs[0]).toMatchObject({
-      defaultAgentName: "assistant",
-      expectedDefaultAgentName: "helper"
-    });
-    expect(await storedDefault()).toBe("assistant");
   });
 
   it("names the upgrade where the instance has the sync and not its check, and sends nothing", async () => {
@@ -1745,6 +1763,7 @@ describe("config CLI against an instance", () => {
     };
     const directory = await createTemporaryDirectory();
     await writeRelease(directory);
+    await recordEmptyPull(directory);
     const errors: string[] = [];
     const options = {
       cwd: directory,
@@ -1756,7 +1775,7 @@ describe("config CLI against an instance", () => {
     const upgrade =
       "This instance is on an earlier release than this CLI: 'config push' and 'config validate' need the instance on the release of this CLI or later. Upgrade the instance, or use the CLI of its release.\n";
 
-    expect(await runConfigCommand("push", { ...options, force: true })).toBe(1);
+    expect(await runConfigCommand("push", options)).toBe(1);
     expect(errors.join("")).toBe(upgrade);
     errors.length = 0;
     expect(await runConfigCommand("validate", options)).toBe(1);
@@ -1788,7 +1807,7 @@ describe("config CLI against an instance", () => {
     };
     expect(await runConfigCommand("pull", options)).toBe(0);
     // Someone creates a skill on the instance, and the working copy changes an agent.
-    await fixture.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
         { type: "upsert", kind: "skill", name: "fresh", config: skillConfig("fresh", "New.") }
@@ -1811,6 +1830,64 @@ describe("config CLI against an instance", () => {
       });
     expect(await held("skill", "fresh")).toMatchObject({ status: "active", revision: 1 });
     expect(await held("agent", "assistant")).toMatchObject({ revision: 1 });
+  });
+
+  // Fails without the change: a working copy without a pull pushed with --force, over
+  // whatever the instance held.
+  it("pushes a working copy that never pulled as creations, and overwrites nothing", async () => {
+    const syncs: unknown[] = [];
+    const { fetchImpl, fixture } = await instanceHolding(
+      { agents: [], skills: [skillConfig("review", "Remote")] },
+      syncs
+    );
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    for (const name of ["review", "extra"]) {
+      await mkdir(resolve(directory, "skills", name), { recursive: true });
+      await writeFile(
+        resolve(directory, "skills", name, "SKILL.md"),
+        serializeSkillMarkdown(skillConfig(name, "Local")),
+        "utf8"
+      );
+    }
+    const errors: string[] = [];
+    const options = {
+      cwd: directory,
+      env: { CATALYST_API_KEY: "cat_never_pulled" },
+      fetchImpl,
+      stdout: () => {},
+      stderr: (text: string) => errors.push(text)
+    };
+    const held = (name: string) =>
+      fixture.store.configAssets.getConfigAsset({
+        clientInstanceId: fixture.clientInstanceId,
+        kind: "skill",
+        name
+      });
+
+    // The instance holds one of the two: the whole push is refused, the new skill with it.
+    expect(await runConfigCommand("push", options)).toBe(1);
+    expect(errors.join("")).toContain("- skill:review: revision 1, changed by");
+    expect(syncs).toEqual([]);
+    expect(await held("review")).toMatchObject({ revision: 1, config: { content: "# Remote" } });
+    expect(await held("extra")).toBeUndefined();
+
+    // Without the asset the instance holds, what is left is created.
+    await rm(resolve(directory, "skills", "review"), { recursive: true });
+    expect(await runConfigCommand("push", options), errors.join("")).toBe(0);
+    expect(syncs).toEqual([
+      {
+        items: [
+          {
+            type: "put",
+            kind: "skill",
+            config: skillConfig("extra", "Local"),
+            expectedRevision: null
+          }
+        ]
+      }
+    ]);
+    expect(await held("extra")).toMatchObject({ status: "active", revision: 1 });
   });
 
   it("pushes a first release to an empty instance after a pull, without --force", async () => {
@@ -1838,7 +1915,11 @@ describe("config CLI against an instance", () => {
       expectedDefaultAgentName: null
     });
     expect(syncs[0]).toHaveProperty("items.length", 5);
-    expect(JSON.stringify(syncs[0])).not.toContain("expectedRevision");
+    // Fails without the change: a creation named no revision at all.
+    expect(syncs[0]).toHaveProperty(
+      "items",
+      Array.from({ length: 5 }, () => expect.objectContaining({ expectedRevision: null }))
+    );
     expect(
       await fixture.store.configAssets.getConfigAssetState({
         clientInstanceId: fixture.clientInstanceId
@@ -2048,6 +2129,13 @@ function jsonResponse(status: number, payload: unknown): Response {
   });
 }
 
+/** The state a pull of an instance without assets leaves in the working copy. */
+async function recordEmptyPull(directory: string): Promise<void> {
+  await writeStateFile(resolve(directory, STATE_FILENAME), {
+    instances: { local: { lastPulledVersion: 0, assets: {}, defaultAgentName: null } }
+  });
+}
+
 function pulledBaseline(
   version: number,
   bundle: { defaultAgentName?: string; agents: unknown[]; skills: unknown[] }
@@ -2108,7 +2196,7 @@ async function instanceHolding(remote: HeldAssets, syncs: unknown[] = []) {
       : [{ type: "setDefaultAgent" as const, agentName: remote.defaultAgentName }])
   ];
   if (mutations.length > 0) {
-    await fixture.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
       mutations
     });

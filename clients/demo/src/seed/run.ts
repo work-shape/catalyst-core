@@ -13,7 +13,6 @@ import {
   createConfigApi,
   readManifest,
   readWorkingCopy,
-  runCli,
   writeApiKeyToEnvFile
 } from "@vivd-catalyst/config-cli";
 import { loadClientInstanceConfigFromFile } from "@vivd-catalyst/config-schema";
@@ -346,35 +345,54 @@ async function seedCliKey(
   return apiKey;
 }
 
-/** Pushes a working copy with the config CLI, the way `pnpm config:push` does. */
+/**
+ * Writes assets of a working copy in one batch with the key of the config CLI, as a push
+ * does. The seed owns these names: each asset is written against the revision the instance
+ * holds as this run reads it, the revision of its delete included, so the file replaces what
+ * was changed there. Only a write that arrives between that read and the batch refuses it.
+ * Without selectors the batch carries every asset and the default agent of the working copy.
+ */
 async function push(
   options: InstanceOptions,
   apiKey: string,
   workingDir: string,
-  selectors: string[] = []
+  selectors?: readonly string[]
 ): Promise<void> {
-  const output: string[] = [];
-  const code = await runCli(
-    [
-      "config",
-      "push",
-      "--force",
-      "--dir",
-      workingDir,
-      "--instance",
-      options.baseUrl,
-      ...selectors.flatMap((selector) => ["--only", selector])
-    ],
-    {
-      cwd: workingDir,
-      env: { [API_KEY_ENV_NAME]: apiKey },
-      fetchImpl: options.fetchImpl,
-      stdout: (text) => output.push(text),
-      stderr: (text) => output.push(text)
+  const local = await readWorkingCopy(workingDir, await readManifest(workingDir));
+  const api = await createConfigApi({
+    baseUrl: options.baseUrl,
+    apiKey,
+    fetchImpl: options.fetchImpl
+  });
+  const assets = [
+    ...local.agents.map((config) => ({ kind: "agent", name: config.name, config: { ...config } })),
+    ...local.skills.map((config) => ({ kind: "skill", name: config.name, config: { ...config } }))
+  ].filter((asset) => selectors?.includes(`${asset.kind}:${asset.name}`) ?? true);
+  const items = [];
+  for (const { kind, name, config } of assets) {
+    const held =
+      (await api.getAsset(kind, name)) ??
+      (await api.getLatestRevision(kind, name).catch(() => undefined));
+    items.push({ type: "put" as const, kind, config, expectedRevision: held?.revision ?? null });
+  }
+  try {
+    const outcome = await api.syncAssets({
+      items,
+      ...(selectors === undefined
+        ? {
+            defaultAgentName: local.defaultAgentName ?? null,
+            expectedDefaultAgentName: (await api.getOverview()).defaultAgentName ?? null
+          }
+        : {})
+    });
+    if (outcome.status === "pending_approval") {
+      throw new Error("the instance holds the push for an approval");
     }
-  );
-  if (code !== 0) {
-    throw new Error(`The config push of ${workingDir} failed:\n${output.join("")}`);
+  } catch (error) {
+    throw new Error(
+      `The config push of ${workingDir} failed:\n${error instanceof Error ? error.message : String(error)}`,
+      { cause: error }
+    );
   }
 }
 

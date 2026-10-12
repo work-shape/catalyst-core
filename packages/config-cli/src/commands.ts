@@ -201,6 +201,12 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
       overview.defaultAgentName
     );
   }
+  // A name the last pull knew, or this one asked for, that the instance no longer lists was
+  // deleted there. The revision of that delete is what a later push names to create it again.
+  const goneKeys =
+    selectors.length === 0
+      ? Object.keys(baseline?.assets ?? {}).filter((key) => !listing.has(key))
+      : absentSelectors.map((selector) => selector.key);
   await recordBaseline(
     workingDir,
     instance.key,
@@ -209,7 +215,7 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
     revisions,
     selectors.length === 0,
     selectors.length === 0 ? (overview.defaultAgentName ?? null) : undefined,
-    absentSelectors.map((selector) => selector.key)
+    await readTombstones(api, goneKeys)
   );
   writeOutput(
     options,
@@ -249,17 +255,31 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
     throw new Error("--prune cannot be combined with --only.");
   }
   const bundle = selectBundle(local, selectors, true);
+  if (options.force) {
+    throw new Error(FORCE_REFUSED_MESSAGE);
+  }
   const state = await readStateFile(resolve(workingDir, STATE_FILENAME));
-  const baseline = state.instances[instance.key];
-  if (!options.force && baseline?.assets === undefined) {
+  // A working copy that never pulled from the instance read nothing of it: every asset it
+  // pushes is a creation, made against no revision and no default agent, and the instance
+  // refuses it where it holds the name. State of an earlier CLI, pulled without revisions,
+  // says nothing a push could name.
+  const baseline: InstanceBaseline = state.instances[instance.key] ?? {
+    lastPulledVersion: 0,
+    assets: {},
+    defaultAgentName: null
+  };
+  if (baseline.assets === undefined) {
     throw new Error(
-      `No per-asset baseline is recorded for '${instance.key}'. Run 'catalyst config pull' first or use 'catalyst config push --force'.`
+      `No per-asset baseline is recorded for '${instance.key}'. Run 'catalyst config pull' first.`
     );
   }
+  const baselineAssets = baseline.assets;
   const api = await connectApi(instance.url, options);
+  // Read to its last page or not at all: a listing that fails stops the push, so a prune
+  // never takes an asset it could not list for one that is gone.
   const listing = await listRemoteAssets(api);
   const touched = assetEntries(bundle).filter(
-    (asset) => options.force || baseline?.assets?.[asset.key]?.hash !== assetHash(asset.contents)
+    (asset) => baselineAssets[asset.key]?.hash !== assetHash(asset.contents)
   );
   const touchedKeys = new Set(touched.map((asset) => asset.key));
   const localKeys = new Set(assetEntries(local).map((asset) => asset.key));
@@ -267,21 +287,19 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
     ? [...listing.values()].filter((asset) => !localKeys.has(asset.key))
     : [];
   const changesDefault =
-    selectors.length === 0 &&
-    (options.force || (bundle.defaultAgentName ?? null) !== baseline?.defaultAgentName);
-  if (changesDefault && !options.force && baseline?.defaultAgentName === undefined) {
+    selectors.length === 0 && (bundle.defaultAgentName ?? null) !== baseline.defaultAgentName;
+  if (changesDefault && baseline.defaultAgentName === undefined) {
     throw new Error(
       "No default-agent baseline is recorded. Run 'catalyst config pull' before changing the default agent."
     );
   }
   /**
-   * The revision an item is made against. A push names the revision of the last pull, so a
-   * change on the instance since then refuses it. With --force it names the revision the
-   * instance holds now: the local file wins over whatever is there, and only a write that
-   * arrives between this read and the push still refuses it.
+   * The revision an item is made against: the one of the last pull, so a change on the
+   * instance since then refuses the push. For an asset this working copy saw deleted it is
+   * the revision of that delete, and for one it never saw it is none: a creation.
    */
   const baseRevision = (key: string): number | undefined =>
-    options.force ? listing.get(key)?.revision : baseline?.assets?.[key]?.revision;
+    baselineAssets[key]?.revision ?? baseline.deleted?.[key];
   const selectedRemote = selectors.length
     ? new Map(selectors.flatMap((selector) => listing.get(selector.key) ?? []).map(byKey))
     : listing;
@@ -298,12 +316,11 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
   }
   // An asset to delete that no pull of this working copy has seen was created since. The
   // instance is asked for nothing: a delete names the revision it was decided on.
-  const unseen = deleteAssets.filter((asset) => baseRevision(asset.key) === undefined);
+  const unseen = deleteAssets.filter((asset) => baselineAssets[asset.key] === undefined);
   if (unseen.length > 0) {
     writeError(
       options,
-      await formatPushConflict(
-        api,
+      formatPushConflict(
         unseen.map((asset) => ({ ...asset, currentRevision: asset.revision })),
         false,
         options
@@ -312,38 +329,31 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
     return 1;
   }
   const items: SyncBatch["items"] = [
-    ...touched.map((asset) => {
-      const expectedRevision = baseRevision(asset.key);
-      return {
-        type: "put" as const,
-        kind: asset.kind,
-        config: { ...asset.config },
-        ...(expectedRevision === undefined ? {} : { expectedRevision })
-      };
-    }),
-    ...deleteAssets.map((asset) => ({
-      type: "delete" as const,
+    ...touched.map((asset) => ({
+      type: "put" as const,
       kind: asset.kind,
-      name: asset.name,
-      expectedRevision: baseRevision(asset.key) ?? asset.revision
-    }))
+      config: { ...asset.config },
+      expectedRevision: baseRevision(asset.key) ?? null
+    })),
+    ...deleteAssets.flatMap((asset) => {
+      const expectedRevision = baselineAssets[asset.key]?.revision;
+      return expectedRevision === undefined
+        ? []
+        : [{ type: "delete" as const, kind: asset.kind, name: asset.name, expectedRevision }];
+    })
   ];
   if (items.length > ASSET_RELEASE_SYNC_MAX_ITEMS) {
     throw new Error(
       `This push changes ${items.length} assets, and one push holds at most ${ASSET_RELEASE_SYNC_MAX_ITEMS}. Push in parts with --only.`
     );
   }
-  // The default agent the push is made against, as the revisions are: the one of the last
-  // pull, or with --force the one the listing above shows.
-  const listedDefault = [...listing.values()].find((asset) => asset.isDefault)?.name ?? null;
+  // The default agent the push is made against, as the revisions are: the one of the last pull.
   const batch: SyncBatch = {
     items,
     ...(changesDefault
       ? {
           defaultAgentName: bundle.defaultAgentName ?? null,
-          expectedDefaultAgentName: options.force
-            ? listedDefault
-            : (baseline?.defaultAgentName ?? null)
+          expectedDefaultAgentName: baseline.defaultAgentName ?? null
         }
       : {})
   };
@@ -376,7 +386,13 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
       revisions,
       false,
       changesDefault ? (bundle.defaultAgentName ?? null) : undefined,
-      deleteAssets.map((asset) => asset.key)
+      Object.fromEntries(
+        result.items.flatMap((item) =>
+          item.status === "applied" && item.type === "delete"
+            ? [[`${item.kind}:${item.name}`, item.revision]]
+            : []
+        )
+      )
     );
     writeOutput(
       options,
@@ -400,7 +416,7 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
     if (refusal.conflicts.length > 0 || refusal.defaultAgentConflict) {
       writeError(
         options,
-        await formatPushConflict(api, refusal.conflicts, refusal.defaultAgentConflict, options)
+        formatPushConflict(refusal.conflicts, refusal.defaultAgentConflict, options)
       );
       return 1;
     }
@@ -491,19 +507,20 @@ export async function validateConfig(options: ConfigCommandOptions): Promise<num
   const bundle = await readWorkingCopy(workingDir, manifest);
   const api = await connectApi(instance.url, options);
   const listing = await listRemoteAssets(api);
+  const deleted = (await readStateFile(resolve(workingDir, STATE_FILENAME))).instances[instance.key]
+    ?.deleted;
   try {
     // The whole working copy, each asset against the revision the instance holds now: the
     // check says whether a push of everything would be accepted, whatever was pulled last.
+    // An asset the instance does not list is a creation, made against the delete this
+    // working copy saw of it where there was one.
     await checkSyncOnThisRelease(api, {
-      items: assetEntries(bundle).map((asset) => {
-        const revision = listing.get(asset.key)?.revision;
-        return {
-          type: "put" as const,
-          kind: asset.kind,
-          config: { ...asset.config },
-          ...(revision === undefined ? {} : { expectedRevision: revision })
-        };
-      }),
+      items: assetEntries(bundle).map((asset) => ({
+        type: "put" as const,
+        kind: asset.kind,
+        config: { ...asset.config },
+        expectedRevision: listing.get(asset.key)?.revision ?? deleted?.[asset.key] ?? null
+      })),
       ...(bundle.defaultAgentName === undefined
         ? {}
         : { defaultAgentName: bundle.defaultAgentName })
@@ -980,7 +997,8 @@ async function recordBaseline(
   revisions: Record<string, number> | undefined,
   fullPull: boolean,
   defaultAgentName?: string | null,
-  deletedKeys: string[] = []
+  /** The assets that are deleted on the instance, each with the revision of its delete. */
+  tombstones: Record<string, number | undefined> = {}
 ): Promise<void> {
   const path = resolve(workingDir, STATE_FILENAME);
   const state = await readStateFile(path);
@@ -997,8 +1015,18 @@ async function recordBaseline(
         baseline.assets[asset.key] = { revision, hash: assetHash(asset.contents) };
       }
     }
-    for (const key of deletedKeys) {
+    const deleted: Record<string, number> = fullPull ? {} : { ...previous?.deleted };
+    for (const key of Object.keys(baseline.assets)) {
+      delete deleted[key];
+    }
+    for (const [key, revision] of Object.entries(tombstones)) {
       delete baseline.assets[key];
+      if (revision !== undefined) deleted[key] = revision;
+    }
+    if (Object.keys(deleted).length > 0) {
+      baseline.deleted = deleted;
+    } else {
+      delete baseline.deleted;
     }
   } else if (fullPull) {
     delete baseline.assets;
@@ -1009,11 +1037,41 @@ async function recordBaseline(
   await writeStateFile(path, { instances: { ...state.instances, [instanceKey]: baseline } });
 }
 
+/** What `push --force` answers. The flag is gone: a push never overwrites what it did not read. */
+const FORCE_REFUSED_MESSAGE =
+  "'catalyst config push --force' no longer exists: a push names the revision each asset was pulled at and never overwrites a change it did not read. Where a push reports a conflict, commit or stash local edits, run 'catalyst config pull --only <kind>:<name>' for the assets it names, review with 'catalyst config diff', re-apply the edits and push again.";
+
+/**
+ * One asset a push was made against another revision of, as the instance told it. A key that
+ * may not read the asset is told its name only.
+ */
 interface AssetConflict {
   kind: string;
   name: string;
   /** The revision the instance holds, or null where it holds no such asset. */
-  currentRevision: number | null;
+  currentRevision?: number | null;
+  /** The instance holds the delete of the asset as its latest revision. */
+  deleted?: boolean;
+  changedBy?: string;
+  changedAt?: string;
+}
+
+/**
+ * The revision of the delete of each named asset, where the key may read its history. A push
+ * that creates the asset again names it.
+ */
+async function readTombstones(
+  api: ConfigApi,
+  keys: readonly string[]
+): Promise<Record<string, number | undefined>> {
+  const revisions = await mapConcurrently(keys, async (key) => {
+    const separator = key.indexOf(":");
+    const latest = await api
+      .getLatestRevision(key.slice(0, separator), key.slice(separator + 1))
+      .catch(() => undefined);
+    return latest?.operation === "delete" ? latest.revision : undefined;
+  });
+  return Object.fromEntries(keys.map((key, index) => [key, revisions[index]]));
 }
 
 /** A batch the instance did not apply, as the command reports it. */
@@ -1047,14 +1105,18 @@ function readRefusedBatch(error: ConfigApiError): RefusedBatch | undefined {
     message: error.message,
     validation: error.status === 422,
     defaultAgentConflict,
-    conflicts: refused.flatMap(({ item, refusal }) =>
-      refusal.code === "CONFLICT" && typeof item.name === "string"
+    conflicts: (Array.isArray(details.conflicts) ? details.conflicts : []).flatMap((conflict) =>
+      isRecord(conflict) && typeof conflict.kind === "string" && typeof conflict.name === "string"
         ? [
             {
-              kind: String(item.kind),
-              name: item.name,
-              currentRevision:
-                typeof refusal.currentRevision === "number" ? refusal.currentRevision : null
+              kind: conflict.kind,
+              name: conflict.name,
+              ...(typeof conflict.currentRevision === "number" || conflict.currentRevision === null
+                ? { currentRevision: conflict.currentRevision }
+                : {}),
+              ...(conflict.deleted === true ? { deleted: true } : {}),
+              ...(typeof conflict.changedBy === "string" ? { changedBy: conflict.changedBy } : {}),
+              ...(typeof conflict.changedAt === "string" ? { changedAt: conflict.changedAt } : {})
             }
           ]
         : []
@@ -1108,12 +1170,11 @@ function formatRefusal(title: string, refusal: RefusedBatch): string {
   return `${title}:\n${refusal.lines.map((line) => `- ${line}`).join("\n")}`;
 }
 
-async function formatPushConflict(
-  api: ConfigApi,
+function formatPushConflict(
   conflicts: readonly AssetConflict[],
   defaultAgentConflict: boolean,
   options: ConfigCommandOptions
-): Promise<string> {
+): string {
   const selectors = conflicts.map((asset) => `${asset.kind}:${asset.name}`);
   const argumentsList = [
     "catalyst config pull",
@@ -1124,17 +1185,9 @@ async function formatPushConflict(
       ? []
       : selectors.flatMap((selector) => ["--only", shellQuote(selector)]))
   ];
-  // Who changed each asset is its latest revision, a delete included. A key that may not
-  // read it reports the conflict without the name.
-  const latest = await mapConcurrently(conflicts, (asset) =>
-    api.getLatestRevision(asset.kind, asset.name).catch(() => undefined)
-  );
   return [
     "Push conflict; nothing was applied.",
-    ...conflicts.map((asset, index) => {
-      const revision = latest[index];
-      return `- ${asset.kind}:${asset.name}: revision ${String(revision?.revision ?? asset.currentRevision ?? "absent")}, ${revision?.operation ?? "unknown operation"} by ${revision?.actor?.displayLabel ?? "unknown actor"} at ${revision?.createdAt ?? "unknown time"}`;
-    }),
+    ...conflicts.map((asset) => `- ${asset.kind}:${asset.name}: ${describeConflict(asset)}`),
     ...(defaultAgentConflict
       ? ["- default agent changed on the instance; a full pull is required."]
       : []),
@@ -1142,8 +1195,22 @@ async function formatPushConflict(
       ? "Commit or stash local edits in git first: a full pull overwrites the local working copy."
       : "Commit or stash local edits in git first: pull overwrites the local files for these assets.",
     argumentsList.join(" "),
-    "Review with 'catalyst config diff', re-apply local edits, and push again. Use --force only for a deliberate overwrite."
+    "Review with 'catalyst config diff', re-apply local edits, and push again."
   ].join("\n");
+}
+
+/** What the instance holds of one conflicting asset, in the words of what the key may read. */
+function describeConflict(asset: AssetConflict): string {
+  if (asset.currentRevision === undefined) {
+    return "changed on the instance since the last pull";
+  }
+  if (asset.currentRevision === null) {
+    return "not on the instance";
+  }
+  const by = `by ${asset.changedBy ?? "unknown actor"} at ${asset.changedAt ?? "unknown time"}`;
+  return asset.deleted
+    ? `deleted at revision ${asset.currentRevision} ${by}; the pull records that delete, and the next push may create the asset again`
+    : `revision ${asset.currentRevision}, changed ${by}`;
 }
 
 function shellQuote(value: string): string {
