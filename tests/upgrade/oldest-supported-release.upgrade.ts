@@ -90,6 +90,7 @@ describe(`upgrade from the oldest supported release (${release})`, () => {
       roles: { app: "catalyst_ds_fixture_app", migration: "catalyst_ds_fixture_migration" },
       level: 0,
       migrations: [],
+      conditions: [],
       targetRevision: 1,
       sizeLimitBytes: 5 * 1024 ** 3,
       createdAt: "2026-10-12T00:00:00.000Z",

@@ -97,6 +97,14 @@ const columnRow = z.object({
   primary_key: z.boolean()
 });
 
+/**
+ * The target for a statement of the platform's own that reads the catalog: every name in it
+ * means what the database means by it, whatever a migration put into `public`.
+ */
+export function catalogTarget(target: PostgresTarget): PostgresTarget {
+  return { ...target, location: { ...target.location, schemas: ["pg_catalog"] } };
+}
+
 /** A column as `describe` answers it, and whether the database computes its value itself. */
 type CatalogColumn = DataStoreColumn & { generated: boolean };
 
@@ -106,7 +114,7 @@ export async function readTables(
   table?: string
 ): Promise<(Omit<DataStoreTable, "columns"> & { columns: CatalogColumn[] })[]> {
   const read = await executor.query({
-    ...target,
+    ...catalogTarget(target),
     sql: TABLES,
     parameters: [{ type: "text", value: table ?? null }]
   });

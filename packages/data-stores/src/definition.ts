@@ -101,9 +101,12 @@ export type DataStoreMigration = DataStoreDefinition["migrations"][number];
  */
 const TRANSACTION_STATEMENT =
   /^(?:(?:commit|rollback|abort|savepoint|release)\b|begin(?:\s+(?:transaction|work|isolation|read|deferrable|not\s+deferrable)\b|$)|start\s+transaction\b|prepare\s+transaction\b)/iu;
-/** A statement that creates, changes or drops a role, or makes the session another one. */
+/**
+ * A statement that creates, changes or drops a role, or makes the session another one, by how
+ * it starts. `create user mapping` is none of them.
+ */
 const ROLE_STATEMENT =
-  /\b(?:(?:create|alter|drop)\s+(?:role|user|group)\b|(?:set|reset)\s+(?:(?:local|session)\s+)?(?:role|session\s+authorization)\b)/iu;
+  /^(?:(?:create|alter|drop)\s+(?:role|group|user(?!\s+mapping))\b|(?:set|reset)\s+(?:(?:local|session)\s+)?(?:role|session\s+authorization)\b)/iu;
 
 /**
  * Why the text of a migration is refused, as the end of a sentence that starts with its file.
@@ -118,9 +121,10 @@ function migrationTextRefusals(sql: string): string[] {
     .replace(/\$[A-Za-z_]*\$/gu, " ; ");
   const refusals: string[] = [];
   let namesSchema = false;
-  const endsTransaction = code
-    .split(";")
-    .some((statement) => TRANSACTION_STATEMENT.test(statement.trim()));
+  // Read at the start of a statement only: a column may be named `role` or `commit`, and a
+  // table may be dropped `on commit`.
+  const statements = code.split(";").map((statement) => statement.trim());
+  const endsTransaction = statements.some((statement) => TRANSACTION_STATEMENT.test(statement));
   for (const [, quoted, bare] of code.matchAll(/"((?:[^"]|"")*)"|([A-Za-z_][A-Za-z0-9_$]*)/gu)) {
     const word = bare?.toLowerCase();
     namesSchema ||= quoted === DATA_STORE_RESERVED_SCHEMA || word === DATA_STORE_RESERVED_SCHEMA;
@@ -135,7 +139,7 @@ function migrationTextRefusals(sql: string): string[] {
       "holds transaction control. A migration runs in one transaction, which the platform opens and ends: take 'begin', 'commit', 'rollback' and 'savepoint' out of it."
     );
   }
-  if (ROLE_STATEMENT.test(code.replace(/"(?:[^"]|"")*"/gu, " "))) {
+  if (statements.some((statement) => ROLE_STATEMENT.test(statement))) {
     refusals.push(
       "creates, changes or takes a role. A migration runs as the migration role of its store and leaves every role as it is."
     );

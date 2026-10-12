@@ -29,6 +29,17 @@ export interface DataStoreLocation {
   database: string;
 }
 
+/**
+ * What provisioning found open on the server and could not close itself, for an operator to
+ * settle. `server_databases_open`: the store's roles can connect to `postgres` or
+ * `template1`, whose grants are the server's and not the platform's to change.
+ * `sessions_open`: the platform's database role is no superuser, so a query of the store can
+ * see the sessions of the store and end one. A store works with either.
+ */
+export const DATA_STORE_CONDITIONS = ["server_databases_open", "sessions_open"] as const;
+
+export type DataStoreCondition = (typeof DATA_STORE_CONDITIONS)[number];
+
 /** Why the last attempt to provision or to migrate ended. A code and a sentence, never a row value. */
 export interface DataStoreFailure {
   code: string;
@@ -54,6 +65,8 @@ export interface DataStoreRecord {
   sizeBytes?: number;
   sizeMeasuredAt?: ISODateString;
   failure?: DataStoreFailure;
+  /** What the last provisioning found open. Empty where nothing is. */
+  conditions: DataStoreCondition[];
   createdAt: ISODateString;
   updatedAt: ISODateString;
   retiredAt?: ISODateString;

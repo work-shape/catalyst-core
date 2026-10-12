@@ -12,6 +12,7 @@ import {
 import type {
   ClientInstanceId,
   DataStoreAppliedMigration,
+  DataStoreCondition,
   DataStoreStatus
 } from "@vivd-catalyst/core";
 
@@ -41,6 +42,7 @@ export const dataStores = pgTable(
     sizeMeasuredAt: timestamp("size_measured_at", { withTimezone: true }),
     failureCode: text("failure_code"),
     failureMessage: text("failure_message"),
+    conditions: jsonb("conditions").$type<DataStoreCondition[]>().notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
     retiredAt: timestamp("retired_at", { withTimezone: true })

@@ -11,6 +11,7 @@ import {
   defineSchedule,
   scheduledJobPayloadSchema,
   subjectDedupeKey,
+  type DataStoreCondition,
   type DataStoreFailure,
   type DataStoreRecord,
   type Job,
@@ -28,7 +29,8 @@ import {
 } from "./definition";
 import { describeDatabaseFailure } from "./failures";
 import { DataStoreMigrationRefusal, applyMigration, readSignedMigrations } from "./migrating";
-import { DataStoreProvisioningError, assertStoreRoles, provisionDataStore } from "./provisioning";
+import { DataStoreProvisioningError, provisionDataStore } from "./provisioning";
+import { assertStoreRoles } from "./roles";
 import type { DataStoreRuntime } from "./runtime";
 import { measureDataStores, recordStoreSize } from "./size";
 
@@ -164,6 +166,7 @@ export async function publishDataStore(
       roles: { app: names.app, migration: names.migration },
       level: 0,
       migrations: [],
+      conditions: [],
       createdAt: now
     }),
     targetRevision: input.revision,
@@ -328,9 +331,10 @@ async function provision(
   const { storeId } = job.payload;
   const record = await claimStore(runtime, control, storeId);
   if (!record || record.status !== "provisioning") return;
+  let conditions: DataStoreCondition[];
   try {
     const secrets = await storeSecrets(runtime, control, storeId);
-    await provisionDataStore(runtime.server, record, secrets, control.signal);
+    conditions = await provisionDataStore(runtime.server, record, secrets, control.signal);
   } catch (error) {
     return failAttempt(
       runtime,
@@ -341,18 +345,24 @@ async function provision(
     );
   }
   const ready = await writeOutcome(runtime, control, storeId, async (current, stores) => {
-    const next: DataStoreRecord = { ...current, status: "ready" };
+    const next: DataStoreRecord = { ...current, status: "ready", conditions };
     await enqueueStoreJob(stores, next);
     return next;
   });
   if (ready) {
+    if (ready.conditions.length > 0) {
+      runtime.logger.warn(
+        { storeId: ready.id, name: ready.name, conditions: ready.conditions },
+        "A Data Store is provisioned, and the server leaves open what an operator has to close"
+      );
+    }
     await measureNow(runtime, control, ready);
     await runtime.auditRecorder.record({
       type: "data_store.provisioned",
       status: "success",
       subject: ready.id,
       correlationId: job.correlationId,
-      metadata: { name: ready.name }
+      metadata: { name: ready.name, conditions: ready.conditions }
     });
   }
 }
@@ -466,6 +476,8 @@ async function migrate(
       const failure = describeDatabaseFailure(error, "Holding the roles of the Data Store");
       failed ??= { ...failure, code: "migration_failed", message: failure.sentence };
     }
+    // The database is another size now, whether the migration stayed or not.
+    await measureNow(runtime, control, record);
     if (appliedNow) {
       applied.push({ number: migration.number, name: migration.name, sha256: migration.sha256 });
       const mirrored = [...applied];
@@ -482,7 +494,6 @@ async function migrate(
     return next;
   });
   if (done && pending.length > 0) {
-    await measureNow(runtime, control, done);
     await runtime.auditRecorder.record({
       type: "data_store.migrated",
       status: "success",

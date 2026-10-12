@@ -1,9 +1,7 @@
-import { createHash, createHmac, pbkdf2Sync, randomBytes } from "node:crypto";
-import type { PostgresChangeStatements } from "@vivd-catalyst/postgres-connector";
 import { z } from "zod";
-import type { DataStoreRecord } from "@vivd-catalyst/core";
+import type { DataStoreCondition, DataStoreRecord } from "@vivd-catalyst/core";
 import type { DataStoreRole } from "./credentials";
-import { DATA_STORE_ROLE_LIMITS, roleSettings } from "./role-limits";
+import { ensureRole, platformIsSuperuser } from "./roles";
 import { quoteIdentifier, type DataStoreServer } from "./server";
 
 // The one place a store's database, its roles and their grants are made. Every statement is
@@ -11,8 +9,6 @@ import { quoteIdentifier, type DataStoreServer } from "./server";
 
 /** How long making the roles, the database or its grants may take before the attempt fails. */
 const DATA_STORE_PROVISION_STEP_TIMEOUT_MS = 120_000;
-
-const SCRAM_ITERATIONS = 4_096;
 
 /**
  * In the database of one store: nobody but a superuser lists sessions or ends one. The
@@ -25,6 +21,17 @@ const HIDE_OTHER_SESSIONS = `
   revoke select on pg_catalog.pg_stat_activity from public;
 `;
 
+/** Whether a role of the store may connect to the platform's database, and to the server's own two. */
+const REACH = `
+  select pg_catalog.has_database_privilege($1, $2, 'CONNECT') as platform,
+    coalesce((
+      select pg_catalog.bool_or(pg_catalog.has_database_privilege($1, d.oid, 'CONNECT'))
+      from pg_catalog.pg_database d where d.datname in ('postgres', 'template1')
+    ), false) as server
+`;
+
+const reachRow = z.object({ platform: z.boolean(), server: z.boolean() });
+
 /** Why provisioning stopped at something an operator settles. The code is the failure of the store. */
 export class DataStoreProvisioningError extends Error {
   readonly code: "platform_database_open";
@@ -34,80 +41,6 @@ export class DataStoreProvisioningError extends Error {
     this.name = "DataStoreProvisioningError";
     this.code = code;
   }
-}
-
-/**
- * What Postgres stores of a password. The password itself is in no statement, so it reaches
- * no server log. RFC 5802, as `pg_authid.rolpassword` holds it.
- */
-function scramVerifier(password: string): string {
-  const salt = randomBytes(16);
-  const salted = pbkdf2Sync(password.normalize("NFKC"), salt, SCRAM_ITERATIONS, 32, "sha256");
-  const clientKey = createHmac("sha256", salted).update("Client Key").digest();
-  const storedKey = createHash("sha256").update(clientKey).digest("base64");
-  const serverKey = createHmac("sha256", salted).update("Server Key").digest("base64");
-  return `SCRAM-SHA-256$${SCRAM_ITERATIONS}:${salt.toString("base64")}$${storedKey}:${serverKey}`;
-}
-
-async function ensureRole(
-  sql: PostgresChangeStatements,
-  name: string,
-  role: DataStoreRole,
-  password: string
-): Promise<void> {
-  const quoted = quoteIdentifier(name);
-  const limits = DATA_STORE_ROLE_LIMITS[role];
-  const [existing] = await sql.run("select 1 from pg_catalog.pg_roles where rolname = $1", [name]);
-  if (!existing) {
-    await sql.script(
-      `create role ${quoted} login nosuperuser nocreatedb nocreaterole noinherit noreplication nobypassrls`
-    );
-  }
-  // The verifier is base64 and digits between fixed marks: it holds no quote.
-  await sql.script(
-    `alter role ${quoted} connection limit ${limits.connectionLimit} password '${scramVerifier(password)}'`
-  );
-  // Exactly the settings of the role: whatever else it carried goes, also what it carried for
-  // one database, whichever database that is.
-  await sql.script(`alter role ${quoted} reset all`);
-  const elsewhere = await sql.run(
-    `select d.datname as name from pg_catalog.pg_db_role_setting s
-       join pg_catalog.pg_roles r on r.oid = s.setrole
-       join pg_catalog.pg_database d on d.oid = s.setdatabase
-       where r.rolname = $1`,
-    [name]
-  );
-  for (const other of z.array(z.object({ name: z.string() })).parse(elsewhere)) {
-    await sql.script(`alter role ${quoted} in database ${quoteIdentifier(other.name)} reset all`);
-  }
-  for (const setting of roleSettings(role)) {
-    await sql.script(`alter role ${quoted} set ${setting.replace("=", " = ")}`);
-  }
-}
-
-/**
- * Holds the two roles of a store to what the platform gave them: its password, its connection
- * limit and its settings. A role may change its own password and settings, and Postgres shows
- * nobody whether a password changed, so this is said again after every migration.
- */
-export async function assertStoreRoles(
-  server: DataStoreServer,
-  record: Pick<DataStoreRecord, "roles">,
-  passwords: Record<DataStoreRole, string>,
-  signal: AbortSignal
-): Promise<void> {
-  await server.executor.change(
-    {
-      ...server.asPlatform(server.platformDatabase),
-      timeoutMs: DATA_STORE_PROVISION_STEP_TIMEOUT_MS,
-      signal,
-      transaction: false
-    },
-    async (sql) => {
-      await ensureRole(sql, record.roles.app, "app", passwords.app);
-      await ensureRole(sql, record.roles.migration, "migration", passwords.migration);
-    }
-  );
 }
 
 /**
@@ -124,21 +57,22 @@ export async function assertStoreRoles(
  *   read nor change it; what it creates in `public` the app role reads and writes;
  * - where the platform's role is a superuser, no role of the store lists or ends a session.
  *
- * No grant of another database of the server is changed: the server may be shared.
+ * No grant of another database of the server is changed: the server may be shared. What it
+ * leaves open for an operator to close is answered by name, for the store's record.
  */
 export async function provisionDataStore(
   server: DataStoreServer,
   record: Pick<DataStoreRecord, "id" | "location" | "roles">,
   passwords: Record<DataStoreRole, string>,
   signal: AbortSignal
-): Promise<void> {
+): Promise<DataStoreCondition[]> {
   const database = quoteIdentifier(record.location.database);
   const app = quoteIdentifier(record.roles.app);
   const migration = quoteIdentifier(record.roles.migration);
   const platformDatabase = quoteIdentifier(server.platformDatabase);
   const step = { timeoutMs: DATA_STORE_PROVISION_STEP_TIMEOUT_MS, signal };
 
-  const closedToStoreRoles = await server.executor.change(
+  const reach = await server.executor.change(
     // `create database` runs in no transaction.
     { ...server.asPlatform(server.platformDatabase), ...step, transaction: false },
     async (sql) => {
@@ -155,32 +89,30 @@ export async function provisionDataStore(
          grant connect on database ${database} to ${app}, ${migration};
          revoke connect on database ${platformDatabase} from public;`
       );
-      const [reach] = await sql.run(
-        "select pg_catalog.has_database_privilege($1, $2, 'CONNECT') as open",
-        [record.roles.app, server.platformDatabase]
-      );
-      return reach?.open === false;
+      // What the store's roles reach beside their own database. The platform's database is
+      // the platform's to close and was closed above. `postgres` and `template1` are the
+      // server's: their grants are looked at and never changed here.
+      const [reached] = await sql.run(REACH, [record.roles.app, server.platformDatabase]);
+      return reachRow.parse(reached);
     }
   );
   // Raised here and not inside the change: whatever a change throws leaves it as a failure
   // of the database.
-  if (!closedToStoreRoles) {
+  if (reach.platform) {
     throw new DataStoreProvisioningError(
       "platform_database_open",
       "The roles of a Data Store could connect to the platform database: the platform's database role does not own that database, so it cannot take CONNECT from PUBLIC. Make it the owner, or run REVOKE CONNECT ON DATABASE ... FROM PUBLIC as its owner."
     );
   }
 
+  const superuser = await platformIsSuperuser(server, signal);
   await server.executor.change(
     { ...server.asPlatform(record.location.database), ...step },
     async (sql) => {
       // Only a superuser may take a function or a view of the catalog from PUBLIC. Where the
       // platform's role is none, a session of the store can still see and end another one of
       // the same store, which runs as the same role.
-      const [platform] = await sql.run(
-        "select rolsuper as superuser from pg_catalog.pg_roles where rolname = current_user"
-      );
-      if (platform?.superuser === true) await sql.script(HIDE_OTHER_SESSIONS);
+      if (superuser) await sql.script(HIDE_OTHER_SESSIONS);
       await sql.script(
         `revoke all on schema public from public;
          grant usage, create on schema public to ${migration};
@@ -209,4 +141,8 @@ export async function provisionDataStore(
          grant usage, select on sequences to ${app};`
     )
   );
+  return [
+    ...(reach.server ? (["server_databases_open"] as const) : []),
+    ...(superuser ? [] : (["sessions_open"] as const))
+  ];
 }

@@ -100,7 +100,7 @@ contain breaking changes; a patch version does not.
   needs `data_store.insert`. `load` is reserved and answers `not_supported_yet`. Release
   config `dataStores.sizeLimit` (default `5GB`) is the most one store may hold and
   `dataStores.poolMaxConnections` (default 5) the connections one process holds to one store.
-  Migration `0060_data_stores` adds the table `data_stores`, the platform's record of each
+  Migration `0062_data_stores` adds the table `data_stores`, the platform's record of each
   store; a store's own database is made at runtime and is no platform migration. With the
   module off nothing of it exists.
   - **New privileges of the platform's database role:** `CREATEDB` and `CREATEROLE`, and

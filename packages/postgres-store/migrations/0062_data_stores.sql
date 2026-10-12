@@ -16,6 +16,7 @@ CREATE TABLE "data_stores" (
 	"size_measured_at" timestamp with time zone,
 	"failure_code" text,
 	"failure_message" text,
+	"conditions" jsonb NOT NULL,
 	"created_at" timestamp with time zone NOT NULL,
 	"updated_at" timestamp with time zone NOT NULL,
 	"retired_at" timestamp with time zone,

@@ -143,6 +143,78 @@ describe("the roles of a Data Store", () => {
     }
   });
 
+  it("names on the store's record what an operator has to close on the server", async () => {
+    const world = await published("conditions");
+    const [open] = await db.sql<{ open: boolean }[]>`
+      select has_database_privilege(${world.record.roles.app}, 'postgres', 'CONNECT')
+        or has_database_privilege(${world.record.roles.app}, 'template1', 'CONNECT') as open`;
+
+    // The grants of those two databases are the server's: reported, never changed.
+    expect(world.record.conditions).toEqual(open?.open ? ["server_databases_open"] : []);
+
+    // A platform role that is no superuser cannot take the session functions from the store.
+    const { name, databaseUrl } = await platformRole();
+    await db.sql.unsafe(`alter role "${name}" createdb createrole`);
+    await db.sql.unsafe(`alter database "${platformDatabase()}" owner to "${name}"`);
+    const plain = await setup("conditions_plain", {}, databaseUrl);
+    const record = await settle(plain, await publish(plain, [manifest(), init]), 1);
+    expect(record.conditions).toContain("sessions_open");
+  });
+
+  it("gives the roles back what a trigger of the store took, before the next call runs as one", async () => {
+    const hijack = {
+      path: "migrations/0002_hijack.sql",
+      text: `create function hijack() returns trigger language plpgsql as $f$
+          begin
+            execute 'alter ro' || 'le current_user password ' || quote_literal('set-by-a-trigger');
+            execute 'alter ro' || 'le current_user set statement_timeout = 0';
+            return new;
+          end $f$;
+        create trigger hijacks after insert on findings for each row execute function hijack();`
+    };
+    const world = await published("trigger", [manifest(), init, hijack]);
+    const { record } = world;
+    const settingsOf = async () =>
+      (
+        await db.sql<{ rolconfig: string[] }[]>`
+          select rolconfig from pg_roles where rolname = ${record.roles.app}`
+      )[0]?.rolconfig;
+    const before = await settingsOf();
+    const stolen = () =>
+      sqlState(
+        connect(record.location.database, {
+          name: record.roles.app,
+          password: "set-by-a-trigger"
+        })`select 1`
+      );
+
+    // The insert runs the trigger as the app role, which may change its own password.
+    await call(world, "insert", { table: "findings", rows: [finding(1)] });
+    await call(world, "query", { sql: "select 1 as one" });
+
+    expect(await settingsOf()).toEqual(before);
+    expect(await stolen()).toBe("28P01");
+  });
+
+  it("sets a password again when Postgres refuses the one the platform holds, and runs the call", async () => {
+    // A platform role that is no superuser is shown no password, so it learns of a changed
+    // one only when a new connection is refused.
+    const { name, databaseUrl } = await platformRole();
+    await db.sql.unsafe(`alter role "${name}" createdb createrole`);
+    await db.sql.unsafe(`alter database "${platformDatabase()}" owner to "${name}"`);
+    const world = await setup("refused_password", {}, databaseUrl);
+    const record = await settle(world, await publish(world, [manifest(), init]), 1);
+    await call(world, "query", { sql: "select 1 as one" });
+
+    await takeOver(record.roles.app);
+    await db.sql`
+      select pg_terminate_backend(pid) from pg_stat_activity where usename = ${record.roles.app}`;
+
+    expect(await call(world, "query", { sql: "select 1 as one" })).toMatchObject({
+      rows: [{ one: 1 }]
+    });
+  });
+
   it("lets the migration role change the schema and keeps it out of the platform database", async () => {
     const world = await published("migration_role");
     const { record } = world;

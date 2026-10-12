@@ -231,10 +231,15 @@ describe("the migrations of a Data Store", () => {
     const world = await published("flood");
     const flood: StoreFile = {
       path: "migrations/0002_flood.sql",
-      // More rows than any bound on a read, each sorting before the platform's own.
-      text: hidden(
-        "insert into catalyst.migrations (number, name, sha256, proof) select 0, 'ghost', 'x', 'y' from generate_series(1, 6000)"
-      )
+      // More rows than any bound on a read, each sorting before the platform's own, some
+      // under a number no migration has. The name of the table is put together as it runs.
+      text: [0, -1]
+        .map((number) =>
+          hidden(
+            `insert into catalyst.migrations (number, name, sha256, proof) select ${number}, 'ghost', 'x', 'y' from generate_series(1, 6000)`
+          )
+        )
+        .join("\n")
     };
 
     await publish(world, [manifest(), init, flood]);
@@ -375,5 +380,55 @@ describe("the migrations of a Data Store", () => {
       message:
         "'migrations/0002_far.sql' asks for something the database does not support (SQLSTATE 0A000)."
     });
+  });
+  it("looks at the roles with the database's own functions, whatever a migration put in their place", async () => {
+    const world = await published("shadowed");
+
+    await publish(world, [
+      manifest(),
+      init,
+      {
+        path: "migrations/0002_shadow.sql",
+        // A count of its own that finds nothing, ahead of the database's in the search path.
+        text: `create function public.nothing(bigint) returns bigint language sql as 'select 0::bigint';
+          create aggregate public.count(*) (sfunc = public.nothing, stype = bigint, initcond = '0');
+          set search_path = public, pg_catalog;
+          ${hidden("alter role current_user in database postgres set work_mem = '1MB'")}`
+      }
+    ]);
+
+    expect(await failureOf(world)).toMatchObject({
+      level: 1,
+      failure: { code: "migration_changed_role" }
+    });
+  });
+
+  it("applies a migration whose text holds the mark the platform wraps a migration in", async () => {
+    const world = await published("own_mark");
+
+    await publish(world, [
+      manifest(),
+      init,
+      {
+        path: "migrations/0002_mark.sql",
+        text: "do $catalyst_migration$ begin perform 1; end $catalyst_migration$;\ncreate table marked (note text default '$catalyst_migration$');"
+      }
+    ]);
+
+    expect((await settle(world, world.id, 2)).failure).toBeUndefined();
+  });
+
+  it("measures the store after a migration that failed, too", async () => {
+    const world = await published("measured_failure");
+    await db.sql`update data_stores set size_measured_at = now() - interval '1 hour' where id = ${world.id}`;
+
+    await publish(world, [
+      manifest(),
+      init,
+      { path: "migrations/0002_fails.sql", text: "create table wide (id integer); select 1/0;" }
+    ]);
+    const failed = await failureOf(world);
+
+    expect(Date.now() - Date.parse(String(failed.sizeMeasuredAt))).toBeLessThan(60_000);
   });
 });

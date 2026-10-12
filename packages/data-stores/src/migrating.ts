@@ -1,8 +1,9 @@
-import { createHmac } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import { z } from "zod";
 import type { DataStoreAppliedMigration, DataStoreRecord } from "@vivd-catalyst/core";
 import type { DataStoreMigration } from "./definition";
-import { DATA_STORE_ROLE_LIMITS, roleSettings } from "./role-limits";
+import { DATA_STORE_ROLE_LIMITS } from "./role-limits";
+import { ROLE_STATE, rolesAreUnchanged } from "./roles";
 import type { DataStoreServer } from "./server";
 
 // How one migration reaches a store's database, and how the platform knows which ones did.
@@ -49,9 +50,10 @@ export async function readSignedMigrations(
       z
         .array(z.object({ proof: z.string() }))
         .parse(
-          await sql.run("select distinct proof from catalyst.migrations where proof = any ($1)", [
-            { type: "text[]", value: [...proofs.keys()] }
-          ])
+          await sql.run(
+            "select distinct proof from catalyst.migrations where proof operator(pg_catalog.=) any ($1)",
+            [{ type: "text[]", value: [...proofs.keys()] }]
+          )
         )
   );
   return rows
@@ -78,43 +80,21 @@ export class DataStoreMigrationRefusal extends Error {
  * while the file runs: nothing of a migration stays unless all of it does.
  */
 function heldInTransaction(sql: string): string {
-  return `do $catalyst_migration$ begin execute '${sql.replaceAll("'", "''")}'; end $catalyst_migration$`;
+  // A mark of this run alone, which the text therefore cannot hold: with a fixed one, a
+  // migration that wrote the mark would end the block where it stands.
+  let mark: string;
+  do {
+    mark = `$catalyst_${randomBytes(12).toString("hex")}$`;
+  } while (sql.includes(mark));
+  return `do ${mark} begin execute '${sql.replaceAll("'", "''")}'; end ${mark}`;
 }
 
-/** The settings and the connection limit of the store's roles, as this transaction sees them. */
-const ROLE_STATE = `
-  select r.rolname as name, r.rolconnlimit as connection_limit,
-    coalesce(pg_catalog.array_to_string(r.rolconfig, ','), '') as settings,
-    (select count(*) from pg_catalog.pg_db_role_setting s
-      where s.setrole = r.oid and s.setdatabase <> 0)::integer as per_database
-  from pg_catalog.pg_roles r where r.rolname = any ($1)
-  order by r.rolname
-`;
-
-const roleState = z.array(
-  z.object({
-    name: z.string(),
-    connection_limit: z.number(),
-    settings: z.string(),
-    per_database: z.number()
-  })
-);
-
-/** Whether the roles of a store carry exactly what the platform gave them. */
-function rolesAreUnchanged(record: StoreDatabase, rows: unknown): boolean {
-  return JSON.stringify(roleState.parse(rows)) === JSON.stringify(expectedRoleState(record));
-}
-
-function expectedRoleState(record: StoreDatabase) {
-  return (["app", "migration"] as const)
-    .map((role) => ({
-      name: record.roles[role],
-      connection_limit: DATA_STORE_ROLE_LIMITS[role].connectionLimit,
-      settings: roleSettings(role).join(","),
-      per_database: 0
-    }))
-    .sort((left, right) => (left.name < right.name ? -1 : 1));
-}
+/**
+ * Makes the platform's own statements of the transaction mean what the database means by
+ * them: a migration may have put functions of its own ahead in the search path. Each of
+ * those statements names its functions and tables with their schema as well.
+ */
+const OWN_SEARCH_PATH = "select pg_catalog.set_config('search_path', 'pg_catalog', true)";
 
 /**
  * Applies one migration as the migration role: the file's statements and the row that records
@@ -146,7 +126,10 @@ export async function applyMigration(
       },
       async (sql) => {
         await sql.script(heldInTransaction(migration.sql));
+        await sql.run(OWN_SEARCH_PATH);
         await sql.script("set constraints all immediate");
+        // A trigger that fired just now may have set the path again.
+        await sql.run(OWN_SEARCH_PATH);
         if (!rolesAreUnchanged(record, await sql.run(ROLE_STATE, roles))) {
           refusal = new DataStoreMigrationRefusal(false);
           throw refusal;

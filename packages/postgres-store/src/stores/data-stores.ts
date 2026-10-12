@@ -22,6 +22,7 @@ function mapRecord(row: Row): DataStoreRecord {
     ...(row.failureCode === null || row.failureMessage === null
       ? {}
       : { failure: { code: row.failureCode, message: row.failureMessage } }),
+    conditions: row.conditions,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     ...(row.retiredAt ? { retiredAt: row.retiredAt.toISOString() } : {})
@@ -47,6 +48,7 @@ function rowOf(record: DataStoreRecord): Row {
     sizeMeasuredAt: record.sizeMeasuredAt ? new Date(record.sizeMeasuredAt) : null,
     failureCode: record.failure?.code ?? null,
     failureMessage: record.failure?.message ?? null,
+    conditions: record.conditions,
     createdAt: new Date(record.createdAt),
     updatedAt: new Date(record.updatedAt),
     retiredAt: record.retiredAt ? new Date(record.retiredAt) : null
