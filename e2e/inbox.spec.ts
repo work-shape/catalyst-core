@@ -1,4 +1,11 @@
-import { apiBaseUrl, reviewer, shoot, shotsDir, signIn } from "./inbox-fixtures";
+import {
+  apiBaseUrl,
+  expectInboxFrameStill,
+  reviewer,
+  shoot,
+  shotsDir,
+  signIn
+} from "./inbox-fixtures";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 import type { Response } from "@playwright/test";
 import { expect, test } from "./test";
@@ -695,5 +702,76 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
       });
     }
     await requestWithOrigin(page, "delete", `${namespacesUrl}/${HELD_NAMESPACE}`);
+  }
+});
+
+// Fails without the one frame: the reading side stood only beside a list with rows, so the
+// tabs moved sideways from an empty tab to a full one, and the header's band covered the title.
+test("the title and the tabs stand still from a tab with rows to an empty one", async ({
+  page,
+  browser,
+  baseURL,
+  pageErrors
+}) => {
+  const frameSummary = "Add a checklist for reviewing parking receipts.";
+  await signIn(page, member);
+  await page.getByPlaceholder("Message").fill(
+    `/tool propose_skill_change ${JSON.stringify({
+      ...proposal,
+      skillName: "inbox_e2e_parking",
+      summary: frameSummary,
+      operations: [
+        {
+          ...proposal.operations[0],
+          name: "inbox_e2e_parking",
+          title: "Parking receipt checklist"
+        }
+      ]
+    })}`
+  );
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(page.getByTestId("approval-request-card")).toContainText("Awaiting approval");
+
+  const reviewerContext = await browser.newContext({
+    baseURL,
+    viewport: { width: 1440, height: 900 }
+  });
+  await pageErrors.watch(reviewerContext);
+  const reviewerPage = await reviewerContext.newPage();
+  await signIn(reviewerPage, reviewer);
+  // The reviewer's own list is empty here, whatever another test let the reviewer ask for.
+  await reviewerPage.route(
+    (url) =>
+      url.origin === new URL(apiBaseUrl).origin &&
+      url.pathname === "/api/v1/approval-requests/mine",
+    (route) => route.fulfill({ json: { items: [] } })
+  );
+  let requestId: string | null = null;
+  try {
+    await reviewerPage.goto("/inbox");
+    const inbox = reviewerPage.getByRole("region", { name: "Inbox", exact: true });
+    const row = inbox.getByTestId("inbox-row").filter({ hasText: frameSummary });
+    await expect(row).toHaveCount(1);
+    requestId = await row.getAttribute("data-item-id");
+
+    // Wide: the reading side stands beside every tab, and no band lies over the title.
+    await expect(inbox.getByText("Select a request to read it.")).toBeVisible();
+    await expectInboxFrameStill(inbox, row);
+    await expect(reviewerPage.locator("header[data-beside-surface]")).toHaveCount(0);
+
+    // A phone has the list alone, in the same place on every tab.
+    await reviewerPage.setViewportSize({ width: 390, height: 844 });
+    await expect(inbox.getByText("Select a request to read it.")).toHaveCount(0);
+    await expectInboxFrameStill(inbox, row);
+  } finally {
+    if (requestId) {
+      await requestWithOrigin(
+        reviewerPage,
+        "post",
+        `${apiBaseUrl}/api/v1/approval-requests/${requestId}/decide`,
+        { data: { decision: "reject" } }
+      );
+    }
+    await reviewerContext.close();
   }
 });

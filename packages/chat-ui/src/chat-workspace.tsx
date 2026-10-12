@@ -367,7 +367,8 @@ function ChatWorkspaceContent({
               agentDisplay={agentChipDisplayFor(model.config.config.ui)}
               // An App takes the whole main area: the surface of the conversation it was opened
               // from stands beside nothing there, so the header is no band over the App's head.
-              surfaceBesideWidth={appsRoute ? 0 : surfaceBesideWidth}
+              // The Inbox has a page title where the band would stand: the band would cover it.
+              surfaceBesideWidth={appsRoute || inboxRoute ? 0 : surfaceBesideWidth}
               covered={chatCovered}
               selectedAgentName={model.config.activeAgentName}
               // Only a conversation has an agent to choose: not the Inbox, Apps, Build or Settings.

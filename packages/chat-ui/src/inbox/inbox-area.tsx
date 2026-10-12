@@ -229,7 +229,7 @@ export function InboxAreaView({
         <div
           ref={titleRef}
           // Below `md` the button that opens the sidebar floats over the page, which starts below it.
-          className="chat-scrollbar min-h-0 min-w-0 overflow-x-hidden overflow-y-auto [container-type:size] max-md:[--layout-page-inset:var(--layout-header)]"
+          className="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto [container-type:size] max-md:[--layout-page-inset:var(--layout-header)]"
         >
           <Page>
             <PageHeader title={t("nav.inbox")} />
@@ -266,14 +266,13 @@ export function InboxAreaView({
       <SurfaceSlot
         source={{ surface, close: onCloseItem }}
         under={{ label: t("inbox.showList"), icon: <ListIcon aria-hidden="true" /> }}
-        idle={
-          hasRows
-            ? {
-                kind: "inbox_item",
-                content: <EmptyState>{t("inbox.emptyItem")}</EmptyState>
-              }
-            : undefined
-        }
+        // The reading side keeps its place whether the list has rows or not, so the title and
+        // the tabs stand still from one tab to the next. It invites to choose only where there
+        // is something to choose.
+        idle={{
+          kind: "inbox_item",
+          content: hasRows ? <EmptyState>{t("inbox.emptyItem")}</EmptyState> : null
+        }}
         onBesideWidthChange={onBesideWidthChange}
         onCoveringChange={onCoveringChange}
       />

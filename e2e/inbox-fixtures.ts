@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect } from "./test";
 
@@ -68,4 +68,39 @@ export async function signIn(page: Page, user: { email: string; password: string
       .getByRole("navigation", { name: "Main navigation" })
       .getByRole("button", { name: "Search", exact: true })
   ).toBeVisible();
+}
+
+/**
+ * Goes from the list in front, which holds `row`, to the reader's own empty list, to the
+ * decided one and back, and holds the title and the tab row to the place they started at.
+ * A tab is read once its list stands: rows, or the sentence of an empty list.
+ */
+export async function expectInboxFrameStill(inbox: Locator, row: Locator): Promise<void> {
+  const title = inbox.getByRole("heading", { name: "Inbox", exact: true });
+  const tabList = inbox.getByRole("tablist");
+  const places = async () => ({
+    title: await title.boundingBox(),
+    tabs: await tabList.boundingBox()
+  });
+  const openTab = async (name: RegExp) => {
+    await inbox.getByRole("tab", { name }).click();
+    await expect(inbox.getByRole("tab", { name })).toHaveAttribute("aria-selected", "true");
+    await expect(inbox.getByRole("tabpanel").getByRole("status")).toHaveCount(0);
+    await expect(
+      inbox.getByTestId("inbox-row").or(inbox.getByTestId("inbox-empty")).first()
+    ).toBeVisible();
+  };
+  await expect(title).toBeVisible();
+  await expect(row).toBeVisible();
+  const start = await places();
+  expect(start.title).not.toBeNull();
+  expect(start.tabs).not.toBeNull();
+  await openTab(/^My requests/u);
+  await expect(inbox.getByTestId("inbox-empty")).toContainText("You have not requested anything");
+  await expect.poll(places).toEqual(start);
+  await openTab(/^Decided/u);
+  await expect.poll(places).toEqual(start);
+  await openTab(/^To decide/u);
+  await expect(row).toBeVisible();
+  await expect.poll(places).toEqual(start);
 }
