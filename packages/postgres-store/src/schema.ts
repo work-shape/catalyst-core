@@ -9,6 +9,7 @@ export * from "./schema/structuredData";
 export * from "./schema/audit";
 export * from "./schema/usage";
 export * from "./schema/configAssets";
+export * from "./schema/assetRepos";
 export * from "./schema/approvals";
 export * from "./schema/jobs";
 export * from "./schema/operationRuns";
@@ -37,6 +38,7 @@ import { structuredDataResources } from "./schema/structuredData";
 import { auditEvents } from "./schema/audit";
 import { modelUsageEvents } from "./schema/usage";
 import { configAssetState, configAssets, configAssetRevisions } from "./schema/configAssets";
+import { assetCheckouts, assetRepoBundles } from "./schema/assetRepos";
 import { approvalRequests } from "./schema/approvals";
 import { platformJobs } from "./schema/jobs";
 import { operationRuns } from "./schema/operationRuns";
@@ -72,6 +74,8 @@ export const schema = {
   configAssetState,
   configAssets,
   configAssetRevisions,
+  assetRepoBundles,
+  assetCheckouts,
   platformJobs,
   operationRuns,
   permissionGrants,

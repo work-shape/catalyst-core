@@ -24,6 +24,7 @@ import {
   publishConfigAssetRevision as publishPostgresConfigAssetRevision,
   removeConfigAsset as removePostgresConfigAsset
 } from "../postgres-config-asset-pointers";
+import { getAssetCheckout, listAssetRepoBundles } from "../postgres-asset-repo-operations";
 import type { PostgresConnection } from "../postgres-database";
 export function createPostgresConfigAssetsStore(db: PostgresConnection): ConfigAssetStore {
   return {
@@ -63,6 +64,8 @@ export function createPostgresConfigAssetsStore(db: PostgresConnection): ConfigA
     publishConfigAssetRevision: (input) => publishPostgresConfigAssetRevision(db, input),
     discardConfigAssetDraft: (input) => discardPostgresConfigAssetDraft(db, input),
     removeConfigAsset: (input) => removePostgresConfigAsset(db, input),
+    listAssetRepoBundles: (input) => listAssetRepoBundles(db, input),
+    getAssetCheckout: (input) => getAssetCheckout(db, input),
     async listAgentAvailability(
       input: Parameters<ConfigAssetStore["listAgentAvailability"]>[0]
     ): ReturnType<ConfigAssetStore["listAgentAvailability"]> {

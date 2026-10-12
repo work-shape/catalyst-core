@@ -15,6 +15,7 @@ import {
   type ConfigAssetState,
   type ConfigAssetStore
 } from "@vivd-catalyst/core";
+import { insertRepoWrites, lockedRepoWrites, repoColumns } from "./postgres-asset-repo-operations";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import {
   mapAssetScope,
@@ -333,6 +334,9 @@ export async function applyConfigAssetMutations(
         }
       ])
     );
+    // A write that adds a commit names the commit it stands on. That is compared first: the
+    // second of two saves from the same base is told that the draft moved.
+    const repoWrites = lockedRepoWrites(input.mutations, rows);
     assertConfigAssetBases(input, mapConfigAssetState(state), current);
     await input.validate?.({
       state: mapConfigAssetState(state),
@@ -417,7 +421,7 @@ export async function applyConfigAssetMutations(
       asset: WrittenAsset,
       revision: Pick<
         typeof configAssetRevisions.$inferInsert,
-        "operation" | "config" | "fileSetId"
+        "operation" | "config" | "fileSetId" | "commit" | "tree"
       >,
       status: ConfigAssetRecord["status"]
     ) => {
@@ -495,7 +499,7 @@ export async function applyConfigAssetMutations(
         appendRevision(
           key,
           created,
-          { operation: mutation.operation ?? "create", ...written },
+          { operation: mutation.operation ?? "create", ...written, ...repoColumns(mutation) },
           "active"
         );
         newAssets.push({
@@ -516,7 +520,11 @@ export async function applyConfigAssetMutations(
       appendRevision(
         key,
         asset,
-        { operation: mutation.operation ?? (recreated ? "create" : "update"), ...written },
+        {
+          operation: mutation.operation ?? (recreated ? "create" : "update"),
+          ...written,
+          ...repoColumns(mutation)
+        },
         "active"
       );
       asset.created ||= recreated;
@@ -530,6 +538,9 @@ export async function applyConfigAssetMutations(
     for (const chunk of chunksOf(newRevisions)) {
       await tx.insert(configAssetRevisions).values(chunk);
     }
+    // The bundle row and the revision that names its commit are one write: neither is there
+    // without the other.
+    await insertRepoWrites(tx, input.clientInstanceId, now, repoWrites, { revisions, assetIds });
     // A row that is new in this batch was inserted as its first mutation left it.
     for (const chunk of chunksOf(writtenRows.filter((asset) => asset.stored || asset.newest > 1))) {
       await tx.execute(sql`

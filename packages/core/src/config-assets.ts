@@ -3,7 +3,7 @@ import type { StorePage } from "./paging";
 import type { AuditActor } from "./audit";
 import type { AgentConfig, SkillConfig } from "./config";
 import type { CollaborationWorkspaceKind } from "./collaboration-workspace";
-import type { ClientInstanceId, CollaborationWorkspaceId } from "./ids";
+import type { ClientInstanceId, CollaborationWorkspaceId, ConversationId } from "./ids";
 import type { JsonObject } from "./json";
 import type { FileSetId } from "./pages";
 
@@ -83,6 +83,9 @@ export interface ConfigAssetRecord {
   config: JsonObject | null;
   /** The file set of the active revision, for a kind whose revisions hold files. */
   fileSetId?: FileSetId;
+  /** The commit and tree of the active revision, for an asset whose content is a repository. */
+  commit?: string;
+  tree?: string;
   /**
    * The published pointer of a `draft_published` kind, with the number and the file set of
    * the revision it names. Absent before the first publish and on every `active` kind, where
@@ -106,10 +109,63 @@ export interface ConfigAssetRevisionRecord {
   config: JsonObject | null;
   /** The immutable file set of the revision, for a kind whose revisions hold files. */
   fileSetId?: FileSetId;
+  /** The commit the revision names and its tree, for an asset whose content is a repository. */
+  commit?: string;
+  tree?: string;
   actor: AuditActor | null;
   origin?: { kind: "approval_request"; requestId: string; summary: string };
   globalVersion: number;
   createdAt: string;
+}
+
+/**
+ * One bundle of the repository of an asset, as the ledger names it. The rows of an asset, in
+ * the order of `sequence`, are what its repository is: the object store is never listed to
+ * find that out, so an object no row names is never read.
+ */
+export interface AssetRepoBundle {
+  assetId: string;
+  sequence: number;
+  /** Where the bytes are, in the `files` store. Written once and never overwritten. */
+  objectKey: string;
+  /** A full bundle stands on nothing; an incremental one on `prerequisiteCommit`. */
+  kind: "full" | "incremental";
+  tipCommit: string;
+  prerequisiteCommit?: string;
+  bytes: number;
+  sha256: string;
+  /** Set once a later full bundle holds what this one does. */
+  supersededAt?: string;
+  createdAt: string;
+}
+
+/** The folder of a conversation that holds the files of an asset's repository at one commit. */
+export interface AssetCheckout {
+  conversationId: ConversationId;
+  folder: string;
+  assetId: string;
+  baseCommit: string;
+  baseRevision: number;
+}
+
+/**
+ * What a write of an asset whose content is a repository adds to the ledger, in the
+ * transaction that writes the revision: the commit and tree the revision names and the row of
+ * the bundle that holds the commit. The bundle is in the object store before the write.
+ */
+export interface AssetRepoWrite {
+  commit: string;
+  tree: string;
+  /**
+   * The commit the new one stands on, which must still be the draft's: a write whose base is
+   * not the draft's commit any more is refused with `CONFLICT` and the reason `draft_moved`,
+   * and nothing is written. `null` for the first commit of a repository.
+   */
+  baseCommit: string | null;
+  /** The bundle that holds `commit`. It is full when `baseCommit` is `null`. */
+  bundle: { objectKey: string; kind: AssetRepoBundle["kind"]; bytes: number; sha256: string };
+  /** The folder that holds the files of `commit` after the write. */
+  checkout?: { conversationId: ConversationId; folder: string };
 }
 
 export interface ConfigAssetState {
@@ -136,6 +192,8 @@ export type ConfigAssetMutation =
       draft?: true;
       /** The file set of the revision, stored before the write, for a `files` kind. */
       fileSetId?: FileSetId;
+      /** The commit of the revision and its bundle, for an asset whose content is a repository. */
+      repository?: AssetRepoWrite;
       /**
        * The id a new asset gets, where its caller stored something under it before the write.
        * An asset that exists keeps its id, and a write that names another one is refused.
@@ -348,6 +406,21 @@ export interface ConfigAssetStore {
     assetId: string;
     expectedRevision: number;
   }): Promise<{ assetId: string; fileSetCount: number }>;
+  /**
+   * The bundles that make the repository of an asset, in the order they apply. A superseded
+   * bundle is left out unless asked for: its object stays until its retention ends.
+   */
+  listAssetRepoBundles(input: {
+    clientInstanceId: ClientInstanceId;
+    assetId: string;
+    includeSuperseded?: true;
+  }): Promise<AssetRepoBundle[]>;
+  /** The checkout a folder of a conversation is, where it is one. */
+  getAssetCheckout(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    folder: string;
+  }): Promise<AssetCheckout | undefined>;
   /** Availability of every active agent that has a record, keyed by agent name. */
   listAgentAvailability(input: {
     clientInstanceId: ClientInstanceId;

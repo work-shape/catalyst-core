@@ -662,6 +662,7 @@ export function mapConfigAsset(
     revision: revision.revision,
     config: revision.config,
     ...(revision.fileSetId ? { fileSetId: revision.fileSetId } : {}),
+    ...(revision.commit && revision.tree ? { commit: revision.commit, tree: revision.tree } : {}),
     ...(row.publishedRevisionId ? { publishedRevisionId: row.publishedRevisionId } : {}),
     ...(published
       ? {
@@ -689,6 +690,7 @@ export function mapConfigAssetRevision(
     operation: row.operation,
     config: row.config,
     ...(row.fileSetId ? { fileSetId: row.fileSetId } : {}),
+    ...(row.commit && row.tree ? { commit: row.commit, tree: row.tree } : {}),
     actor: row.actor,
     origin: row.origin ?? undefined,
     globalVersion: row.globalVersion,

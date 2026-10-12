@@ -99,6 +99,10 @@ export const configAssetRevisions = pgTable(
     // The immutable file set of the revision, for a kind whose revisions hold files. No
     // foreign key: whoever removes an asset removes its file sets in the same transaction.
     fileSetId: text("file_set_id").$type<FileSetId>(),
+    // The commit the revision names and its tree, for an asset whose content is a repository.
+    // Empty for every other.
+    commit: text("commit"),
+    tree: text("tree"),
     actor: jsonb("actor").$type<AuditActor>(),
     origin: jsonb("origin").$type<ConfigAssetRevisionRecord["origin"]>(),
     globalVersion: bigint("global_version", { mode: "number" }).notNull(),
