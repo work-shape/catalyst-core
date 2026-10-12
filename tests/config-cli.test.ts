@@ -12,7 +12,11 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { AUTH_MOUNT_PATH } from "@vivd-catalyst/api-client";
-import { ASSET_SYNC_BODY_MAX_BYTES, UNKNOWN_OPERATION_REASON } from "@vivd-catalyst/api-contract";
+import {
+  ASSET_SYNC_BODY_MAX_BYTES,
+  ASSET_SYNC_ITEM_MAX_BYTES,
+  UNKNOWN_OPERATION_REASON
+} from "@vivd-catalyst/api-contract";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -647,7 +651,8 @@ skills:
             type: "put",
             kind: "agent",
             config: canonicalizeAgentConfig(agentConfig("Local update")),
-            expectedRevision: 1
+            expectedRevision: 1,
+            expectedAssetId: "cfga_held_agent_assistant"
           },
           {
             type: "put",
@@ -676,7 +681,15 @@ skills:
     expect(pruneStdout.join("")).toContain("Assets to delete:\n- agent:remote-only");
     expect(mergeRequests).toHaveLength(2);
     expect(mergeRequests[1]).toEqual({
-      items: [{ type: "delete", kind: "agent", name: "remote-only", expectedRevision: 1 }]
+      items: [
+        {
+          type: "delete",
+          kind: "agent",
+          name: "remote-only",
+          expectedAssetId: "cfga_held_agent_remote-only",
+          expectedRevision: 1
+        }
+      ]
     });
     expect(pruneStdout.join("")).not.toContain("crm");
     expect(
@@ -731,7 +744,8 @@ skills:
             type: "put",
             kind: "agent",
             config: canonicalizeAgentConfig(agentConfig("Selected")),
-            expectedRevision: 1
+            expectedRevision: 1,
+            expectedAssetId: "cfga_held_agent_assistant"
           },
           {
             type: "put",
@@ -852,7 +866,13 @@ skills:
       instances: {
         local: {
           lastPulledVersion: 5,
-          assets: { "agent:assistant": { revision: 1, hash: expect.any(String) } }
+          assets: {
+            "agent:assistant": {
+              id: "cfga_held_agent_assistant",
+              revision: 1,
+              hash: expect.any(String)
+            }
+          }
         }
       }
     });
@@ -1212,7 +1232,7 @@ skills:
     expect(after?.assets?.["skill:other"]).toEqual(before?.assets?.["skill:other"]);
     // The pull recorded the delete it saw, and a push that creates the asset again names it.
     // Fails without the change: the push named no revision and overwrote the delete unseen.
-    expect(after?.deleted).toEqual({ "skill:review": 2 });
+    expect(after?.deleted).toEqual({ "skill:review": { id: expect.any(String), revision: 2 } });
     await mkdir(resolve(directory, "skills", "review"), { recursive: true });
     await writeFile(
       resolve(directory, "skills", "review", "SKILL.md"),
@@ -1284,7 +1304,7 @@ skills:
     ).toBeUndefined();
     expect(
       (await readStateFile(resolve(directory, STATE_FILENAME))).instances.local?.deleted
-    ).toEqual({ "skill:review": 3 });
+    ).toEqual({ "skill:review": { id: expect.any(String), revision: 3 } });
     await mkdir(resolve(directory, "skills", "review"), { recursive: true });
     await writeFile(
       resolve(directory, "skills", "review", "SKILL.md"),
@@ -1707,15 +1727,15 @@ describe("config CLI against an instance", () => {
     const { fetchImpl, fixture } = await instanceHolding({ agents: [], skills: [] });
     const directory = await createTemporaryDirectory();
     await writeMinimalManifest(directory, "https://catalyst.test");
-    // Three skills of a third of the limit and a little more are over what one push holds.
-    for (let index = 0; index < 3; index += 1) {
+    // Skills just under what one item holds, one more of them than one push holds.
+    const perItem = ASSET_SYNC_ITEM_MAX_BYTES - 64 * 1024;
+    const count = Math.ceil(ASSET_SYNC_BODY_MAX_BYTES / perItem) + 1;
+    for (let index = 0; index < count; index += 1) {
       const name = `guide-${index}`;
       await mkdir(resolve(directory, "skills", name), { recursive: true });
       await writeFile(
         resolve(directory, "skills", name, "SKILL.md"),
-        serializeSkillMarkdown(
-          skillConfig(name, "x".repeat(Math.ceil(ASSET_SYNC_BODY_MAX_BYTES / 3) + 1024))
-        ),
+        serializeSkillMarkdown(skillConfig(name, "x".repeat(perItem))),
         "utf8"
       );
     }
@@ -1830,6 +1850,146 @@ describe("config CLI against an instance", () => {
       });
     expect(await held("skill", "fresh")).toMatchObject({ status: "active", revision: 1 });
     expect(await held("agent", "assistant")).toMatchObject({ revision: 1 });
+  });
+
+  // Fails without the change: the baseline held revision numbers alone, so against a database
+  // that was replaced the push was accepted wherever the numbers happened to agree, and wrote
+  // over or pruned what an admin had made there. A pull kept the stale file for the same reason.
+  it("refuses a push and a prune against another database at the same revisions, and a pull repairs the working copy", async () => {
+    const held = (content: string) => ({
+      agents: [],
+      skills: [
+        skillConfig("review", content),
+        skillConfig("keep", content),
+        skillConfig("same", content)
+      ]
+    });
+    const syncs: unknown[] = [];
+    const { fetchImpl, fixture } = await instanceHolding(held("First database"), syncs);
+    const second = { fetchImpl, fixture };
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    const errors: string[] = [];
+    const options = {
+      cwd: directory,
+      env: { CATALYST_API_KEY: "cat_reset" },
+      stdout: () => {},
+      stderr: (text: string) => errors.push(text)
+    };
+    expect(await runConfigCommand("pull", { ...options, fetchImpl })).toBe(0);
+
+    // The database is replaced: the same names, each at revision 1 again, with other content
+    // and as other assets.
+    const { configAssets } = fixture.store;
+    for (const config of held("An admin's text").skills) {
+      await configAssets.removeConfigAsset({
+        clientInstanceId: fixture.clientInstanceId,
+        kind: "skill",
+        name: config.name,
+        expectedRevision: 1
+      });
+      await applyAtCurrentRevisions(configAssets, {
+        clientInstanceId: fixture.clientInstanceId,
+        mutations: [
+          {
+            type: "upsert",
+            kind: "skill",
+            name: config.name,
+            assetId: `cfga_second_skill_${config.name}`,
+            config
+          }
+        ]
+      });
+    }
+    const stored = (name: string) =>
+      configAssets.getConfigAsset({
+        clientInstanceId: fixture.clientInstanceId,
+        kind: "skill",
+        name
+      });
+    const reviewPath = resolve(directory, "skills", "review", "SKILL.md");
+    await writeFile(reviewPath, serializeSkillMarkdown(skillConfig("review", "Local")), "utf8");
+
+    expect(await runConfigCommand("push", { ...options, fetchImpl: second.fetchImpl })).toBe(1);
+    expect(errors.join("")).toContain(
+      "- skill:review: the instance holds another asset under this name than the one this working copy pulled. The working copy was pulled from another database, or the asset was replaced there"
+    );
+    expect(errors.join("")).toContain("catalyst config pull --only skill:review");
+    expect(await stored("review")).toMatchObject({
+      revision: 1,
+      config: { content: "# An admin's text" }
+    });
+
+    // A prune of an asset the working copy dropped would delete the admin's asset.
+    errors.length = 0;
+    await rm(resolve(directory, "skills", "keep"), { recursive: true });
+    expect(
+      await runConfigCommand("push", { ...options, prune: true, fetchImpl: second.fetchImpl })
+    ).toBe(1);
+    expect(errors.join("")).toContain("- skill:keep: the instance holds another asset");
+    expect(await stored("keep")).toMatchObject({ status: "active", revision: 1 });
+    expect(syncs).toEqual([]);
+
+    // The pull reads again what is at the same number under another id: the file of `same`
+    // was not touched and its revision matches, and it is still not what this database holds.
+    expect(await runConfigCommand("pull", { ...options, fetchImpl: second.fetchImpl })).toBe(0);
+    const samePath = resolve(directory, "skills", "same", "SKILL.md");
+    expect(await readFile(samePath, "utf8")).toContain("An admin's text");
+    expect(
+      (await readStateFile(resolve(directory, STATE_FILENAME))).instances.local?.assets?.[
+        "skill:same"
+      ]
+    ).toMatchObject({ id: "cfga_second_skill_same", revision: 1 });
+
+    // From the repaired baseline a push is one against what this database holds.
+    await writeFile(reviewPath, serializeSkillMarkdown(skillConfig("review", "Local")), "utf8");
+    expect(
+      await runConfigCommand("push", { ...options, fetchImpl: second.fetchImpl }),
+      errors.join("")
+    ).toBe(0);
+    expect(await stored("review")).toMatchObject({ revision: 2, config: { content: "# Local" } });
+  });
+
+  // Fails without the change: a baseline without the asset's id was pushed against as it was.
+  it("refuses to push against a baseline of an earlier CLI that names no asset id", async () => {
+    const syncs: unknown[] = [];
+    const { fetchImpl } = await instanceHolding(
+      { agents: [], skills: [skillConfig("review", "Remote")] },
+      syncs
+    );
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    await mkdir(resolve(directory, "skills", "review"), { recursive: true });
+    await writeFile(
+      resolve(directory, "skills", "review", "SKILL.md"),
+      serializeSkillMarkdown(skillConfig("review", "Local")),
+      "utf8"
+    );
+    await writeStateFile(resolve(directory, STATE_FILENAME), {
+      instances: {
+        local: {
+          lastPulledVersion: 1,
+          defaultAgentName: null,
+          assets: { "skill:review": { revision: 1, hash: "0".repeat(64) } }
+        }
+      }
+    });
+    const errors: string[] = [];
+
+    expect(
+      await runConfigCommand("push", {
+        cwd: directory,
+        env: { CATALYST_API_KEY: "cat_unbound" },
+        fetchImpl,
+        stdout: () => {},
+        stderr: (text: string) => errors.push(text)
+      })
+    ).toBe(1);
+    expect(errors.join("")).toContain(
+      "- skill:review: the baseline was written by an earlier CLI and does not say which asset its revision counts"
+    );
+    expect(errors.join("")).toContain("catalyst config pull --only skill:review");
+    expect(syncs).toEqual([]);
   });
 
   // Fails without the change: a working copy without a pull pushed with --force, over
@@ -2159,10 +2319,19 @@ function pulledBaseline(
     assets: Object.fromEntries(
       contents.map((asset) => [
         asset.key,
-        { revision: 1, hash: createHash("sha256").update(asset.contents).digest("hex") }
+        {
+          id: heldAssetId(asset.key),
+          revision: 1,
+          hash: createHash("sha256").update(asset.contents).digest("hex")
+        }
       ])
     )
   };
+}
+
+/** The id `instanceHolding` gives an asset, so a baseline written by hand names the same one. */
+function heldAssetId(key: string): string {
+  return `cfga_held_${key.replace(":", "_")}`;
 }
 
 interface HeldAssets {
@@ -2176,19 +2345,26 @@ interface HeldAssets {
  * The fetch signs in with the instance's key whatever key the command names, and records
  * the body of every `assets.sync` the CLI sends.
  */
-async function instanceHolding(remote: HeldAssets, syncs: unknown[] = []) {
+async function instanceHolding(
+  remote: HeldAssets,
+  syncs: unknown[] = [],
+  /** The id each asset gets. Another one makes the instance another database's. */
+  idOf: (key: string) => string = heldAssetId
+) {
   const fixture = await createFixture();
   const mutations = [
     ...remote.agents.map((config) => ({
       type: "upsert" as const,
       kind: "agent",
       name: config.name,
+      assetId: idOf(`agent:${config.name}`),
       config
     })),
     ...remote.skills.map((config) => ({
       type: "upsert" as const,
       kind: "skill",
       name: config.name,
+      assetId: idOf(`skill:${config.name}`),
       config
     })),
     ...(remote.defaultAgentName === undefined

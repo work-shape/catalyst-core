@@ -36,6 +36,7 @@ import {
   skillAssetPath,
   updateManifestDefaultAgent,
   writeStateFile,
+  type DeletedAssetBaseline,
   type InstanceBaseline,
   type WorkingCopyBundle
 } from "./working-copy";
@@ -138,6 +139,9 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
     if (
       base &&
       mine &&
+      // The same asset, not only the same number: after a database was replaced another
+      // asset of the name can be at the revision the last pull recorded.
+      base.id === remote.id &&
       base.revision === remote.revision &&
       assetHash(mine.contents) === base.hash
     ) {
@@ -148,7 +152,9 @@ export async function pullConfig(options: ConfigCommandOptions): Promise<number>
   });
   const present = pulled.flatMap((asset) => (asset ? [asset] : []));
   const selected = bundleOf(present);
-  const revisions = Object.fromEntries(present.map((asset) => [asset.key, asset.revision]));
+  const revisions = Object.fromEntries(
+    present.map((asset) => [asset.key, { id: asset.id, revision: asset.revision }])
+  );
   const selectedKeys = new Set(present.map((asset) => asset.key));
   const absentSelectors = selectors.filter((selector) => !selectedKeys.has(selector.key));
   const agents = selected.agents.sort(byName);
@@ -298,8 +304,8 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
    * instance since then refuses the push. For an asset this working copy saw deleted it is
    * the revision of that delete, and for one it never saw it is none: a creation.
    */
-  const baseRevision = (key: string): number | undefined =>
-    baselineAssets[key]?.revision ?? baseline.deleted?.[key];
+  const baseOf = (key: string): { id?: string; revision: number } | undefined =>
+    baselineAssets[key] ?? baseline.deleted?.[key];
   const selectedRemote = selectors.length
     ? new Map(selectors.flatMap((selector) => listing.get(selector.key) ?? []).map(byKey))
     : listing;
@@ -328,18 +334,48 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
     );
     return 1;
   }
+  // A revision counts one asset. Where the instance holds another asset under the name than
+  // the one that was pulled, or the baseline does not say which asset it was, the number says
+  // nothing: the push is refused here, and the instance refuses it again under its own lock.
+  const written = [...touched, ...deleteAssets];
+  const foreign: AssetConflict[] = written.flatMap((asset): AssetConflict[] => {
+    const base = baseOf(asset.key);
+    if (base === undefined) return [];
+    const address = { kind: asset.kind, name: asset.name };
+    if (base.id === undefined) return [{ ...address, baseline: "unbound" }];
+    const remote = listing.get(asset.key);
+    return remote !== undefined && remote.id !== base.id
+      ? [{ ...address, baseline: "replaced" }]
+      : [];
+  });
+  if (foreign.length > 0) {
+    writeError(options, formatPushConflict(foreign, false, options));
+    return 1;
+  }
   const items: SyncBatch["items"] = [
-    ...touched.map((asset) => ({
-      type: "put" as const,
-      kind: asset.kind,
-      config: { ...asset.config },
-      expectedRevision: baseRevision(asset.key) ?? null
-    })),
+    ...touched.map((asset) => {
+      const base = baseOf(asset.key);
+      return {
+        type: "put" as const,
+        kind: asset.kind,
+        config: { ...asset.config },
+        expectedRevision: base?.revision ?? null,
+        ...(base?.id === undefined ? {} : { expectedAssetId: base.id })
+      };
+    }),
     ...deleteAssets.flatMap((asset) => {
-      const expectedRevision = baselineAssets[asset.key]?.revision;
-      return expectedRevision === undefined
+      const base = baselineAssets[asset.key];
+      return base === undefined
         ? []
-        : [{ type: "delete" as const, kind: asset.kind, name: asset.name, expectedRevision }];
+        : [
+            {
+              type: "delete" as const,
+              kind: asset.kind,
+              name: asset.name,
+              expectedRevision: base.revision,
+              ...(base.id === undefined ? {} : { expectedAssetId: base.id })
+            }
+          ];
     })
   ];
   if (items.length > ASSET_RELEASE_SYNC_MAX_ITEMS) {
@@ -373,7 +409,7 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
     const revisions = Object.fromEntries(
       result.items.flatMap((item) =>
         item.status === "applied" && item.type === "put"
-          ? [[`${item.kind}:${item.name}`, item.revision]]
+          ? [[`${item.kind}:${item.name}`, { id: item.id, revision: item.revision }]]
           : []
       )
     );
@@ -389,7 +425,7 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
       Object.fromEntries(
         result.items.flatMap((item) =>
           item.status === "applied" && item.type === "delete"
-            ? [[`${item.kind}:${item.name}`, item.revision]]
+            ? [[`${item.kind}:${item.name}`, { id: item.id, revision: item.revision }]]
             : []
         )
       )
@@ -461,7 +497,10 @@ export async function diffConfig(options: ConfigCommandOptions): Promise<number>
     const localChanged = localAsset
       ? assetHash(localAsset.contents) !== base?.hash
       : base !== undefined;
-    const remoteChanged = (remoteAsset?.revision ?? null) !== (base?.revision ?? null);
+    const remoteChanged =
+      (remoteAsset?.revision ?? null) !== (base?.revision ?? null) ||
+      // Another asset under the name, whatever its number.
+      (remoteAsset !== undefined && base !== undefined && remoteAsset.id !== base.id);
     if (!localChanged && !remoteChanged) {
       continue;
     }
@@ -519,7 +558,7 @@ export async function validateConfig(options: ConfigCommandOptions): Promise<num
         type: "put" as const,
         kind: asset.kind,
         config: { ...asset.config },
-        expectedRevision: listing.get(asset.key)?.revision ?? deleted?.[asset.key] ?? null
+        expectedRevision: listing.get(asset.key)?.revision ?? deleted?.[asset.key]?.revision ?? null
       })),
       ...(bundle.defaultAgentName === undefined
         ? {}
@@ -640,6 +679,8 @@ interface RemoteAsset {
   key: string;
   kind: AssetKindName;
   name: string;
+  /** The id of the asset: what its revisions count. */
+  id: string;
   revision: number;
   /** The listing marks the instance's default agent. */
   isDefault?: true;
@@ -657,6 +698,7 @@ async function listRemoteAssets(api: ConfigApi): Promise<Map<string, RemoteAsset
         key,
         kind,
         name: asset.name,
+        id: asset.id,
         revision: asset.revision,
         ...(asset.isDefault ? { isDefault: true as const } : {})
       });
@@ -673,13 +715,16 @@ async function fetchRemoteAsset(
   const asset = await api.getAsset(kind, name);
   return (
     asset &&
-    readDefinition({ key: `${kind}:${name}`, kind, name, revision: asset.revision }, asset.config)
+    readDefinition(
+      { key: `${kind}:${name}`, kind, name, id: asset.id, revision: asset.revision },
+      asset.config
+    )
   );
 }
 
 /** A definition read with the schema of its kind, at the place and revision it was found. */
 function readDefinition(remote: RemoteAsset, config: unknown): FetchedAsset {
-  const place = { key: remote.key, name: remote.name, revision: remote.revision };
+  const place = { key: remote.key, name: remote.name, id: remote.id, revision: remote.revision };
   return remote.kind === "agent"
     ? { ...place, kind: "agent", config: agentConfigSchema.parse(config) }
     : { ...place, kind: "skill", config: skillConfigSchema.parse(config) };
@@ -917,7 +962,7 @@ async function createPushPlan(
       return false;
     }
     const base = baseline?.assets?.[asset.key];
-    if (base?.revision === remoteAsset.revision) {
+    if (base?.revision === remoteAsset.revision && base.id === remoteAsset.id) {
       return base.hash !== assetHash(asset.contents);
     }
     const fetched = await fetchRemoteAsset(api, remoteAsset.kind, remoteAsset.name);
@@ -994,11 +1039,12 @@ async function recordBaseline(
   instanceKey: string,
   version: number,
   bundle: WorkingCopyBundle,
-  revisions: Record<string, number> | undefined,
+  /** The asset each written or pulled definition is, and the revision it is at. */
+  revisions: Record<string, { id: string; revision: number }> | undefined,
   fullPull: boolean,
   defaultAgentName?: string | null,
   /** The assets that are deleted on the instance, each with the revision of its delete. */
-  tombstones: Record<string, number | undefined> = {}
+  tombstones: Record<string, DeletedAssetBaseline | undefined> = {}
 ): Promise<void> {
   const path = resolve(workingDir, STATE_FILENAME);
   const state = await readStateFile(path);
@@ -1010,12 +1056,12 @@ async function recordBaseline(
   if (revisions !== undefined) {
     baseline.assets = fullPull ? {} : { ...previous?.assets };
     for (const asset of assetEntries(bundle)) {
-      const revision = revisions[asset.key];
-      if (revision !== undefined) {
-        baseline.assets[asset.key] = { revision, hash: assetHash(asset.contents) };
+      const written = revisions[asset.key];
+      if (written !== undefined) {
+        baseline.assets[asset.key] = { ...written, hash: assetHash(asset.contents) };
       }
     }
-    const deleted: Record<string, number> = fullPull ? {} : { ...previous?.deleted };
+    const deleted: Record<string, DeletedAssetBaseline> = fullPull ? {} : { ...previous?.deleted };
     for (const key of Object.keys(baseline.assets)) {
       delete deleted[key];
     }
@@ -1048,6 +1094,12 @@ const FORCE_REFUSED_MESSAGE =
 interface AssetConflict {
   kind: string;
   name: string;
+  /**
+   * The baseline says nothing a push could name for the asset: `replaced` where the instance
+   * holds another asset under the name than the one that was pulled, `unbound` where an
+   * earlier CLI recorded the revision without the asset it counts.
+   */
+  baseline?: "replaced" | "unbound";
   /** The revision the instance holds, or null where it holds no such asset. */
   currentRevision?: number | null;
   /** The instance holds the delete of the asset as its latest revision. */
@@ -1063,13 +1115,15 @@ interface AssetConflict {
 async function readTombstones(
   api: ConfigApi,
   keys: readonly string[]
-): Promise<Record<string, number | undefined>> {
+): Promise<Record<string, DeletedAssetBaseline | undefined>> {
   const revisions = await mapConcurrently(keys, async (key) => {
     const separator = key.indexOf(":");
     const latest = await api
       .getLatestRevision(key.slice(0, separator), key.slice(separator + 1))
       .catch(() => undefined);
-    return latest?.operation === "delete" ? latest.revision : undefined;
+    return latest?.operation === "delete"
+      ? { id: latest.assetId, revision: latest.revision }
+      : undefined;
   });
   return Object.fromEntries(keys.map((key, index) => [key, revisions[index]]));
 }
@@ -1201,6 +1255,12 @@ function formatPushConflict(
 
 /** What the instance holds of one conflicting asset, in the words of what the key may read. */
 function describeConflict(asset: AssetConflict): string {
+  if (asset.baseline === "replaced") {
+    return "the instance holds another asset under this name than the one this working copy pulled. The working copy was pulled from another database, or the asset was replaced there";
+  }
+  if (asset.baseline === "unbound") {
+    return "the baseline was written by an earlier CLI and does not say which asset its revision counts, so it cannot be pushed against";
+  }
   if (asset.currentRevision === undefined) {
     return "changed on the instance since the last pull";
   }

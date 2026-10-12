@@ -29,8 +29,20 @@ export interface ResolvedInstance {
 }
 
 export interface AssetBaseline {
+  /**
+   * The id of the asset the revision counts. A revision number alone does not say which
+   * asset it belongs to: in a database that was replaced or restored, another asset of the
+   * same name can be at the same number. An entry of an earlier CLI has none.
+   */
+  id?: string;
   revision: number;
   hash: string;
+}
+
+/** The delete of an asset as a pull or a push saw it. */
+export interface DeletedAssetBaseline {
+  id?: string;
+  revision: number;
 }
 
 export interface InstanceBaseline {
@@ -40,7 +52,7 @@ export interface InstanceBaseline {
    * Assets this working copy saw deleted on the instance, each with the revision of its
    * delete. A push that creates one again names that revision.
    */
-  deleted?: Record<string, number>;
+  deleted?: Record<string, DeletedAssetBaseline>;
   defaultAgentName?: string | null;
 }
 
@@ -158,11 +170,16 @@ export async function readStateFile(path: string): Promise<CatalystState> {
           !Number.isInteger(asset.revision) ||
           asset.revision < 1 ||
           typeof asset.hash !== "string" ||
-          !/^[a-f0-9]{64}$/u.test(asset.hash)
+          !/^[a-f0-9]{64}$/u.test(asset.hash) ||
+          (asset.id !== undefined && typeof asset.id !== "string")
         ) {
           throw new Error(`${path} has an invalid asset baseline for '${key}'`);
         }
-        baseline.assets[key] = { revision: asset.revision, hash: asset.hash };
+        baseline.assets[key] = {
+          ...(asset.id === undefined ? {} : { id: asset.id }),
+          revision: asset.revision,
+          hash: asset.hash
+        };
       }
     }
     if (value.deleted !== undefined) {
@@ -170,16 +187,23 @@ export async function readStateFile(path: string): Promise<CatalystState> {
         throw new Error(`${path} has invalid deleted-asset baselines for '${name}'`);
       }
       baseline.deleted = {};
-      for (const [key, revision] of Object.entries(value.deleted)) {
+      for (const [key, entry] of Object.entries(value.deleted)) {
+        // A number alone is the entry of an earlier CLI, which kept no id.
+        const deleted = typeof entry === "number" ? { revision: entry } : entry;
         if (
           !/^(agent|skill):.+$/u.test(key) ||
-          typeof revision !== "number" ||
-          !Number.isInteger(revision) ||
-          revision < 1
+          !isRecord(deleted) ||
+          typeof deleted.revision !== "number" ||
+          !Number.isInteger(deleted.revision) ||
+          deleted.revision < 1 ||
+          (deleted.id !== undefined && typeof deleted.id !== "string")
         ) {
           throw new Error(`${path} has an invalid deleted-asset baseline for '${key}'`);
         }
-        baseline.deleted[key] = revision;
+        baseline.deleted[key] = {
+          ...(deleted.id === undefined ? {} : { id: deleted.id }),
+          revision: deleted.revision
+        };
       }
     }
     if (value.defaultAgentName !== undefined) {
