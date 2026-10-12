@@ -120,6 +120,9 @@ export interface SeedAppFile {
 }
 
 const APP_KIND = "app";
+/** The module and the asset kind Connections come with. */
+export const CONNECTIONS_MODULE = "connections";
+export const CONNECTION_KIND = "connection";
 
 /** `SeedApi` over the product's client, whose every call is one operation of the catalog. */
 export function createSeedApi(client: ApiClient): SeedApi {
@@ -248,4 +251,17 @@ export function createSeedApi(client: ApiClient): SeedApi {
       );
     }
   };
+}
+
+/** Whether the instance holds a Connection, which an App's actions may call. */
+export async function hasConnection(
+  api: SeedApi,
+  modules: InstanceModule[],
+  connection: string
+): Promise<boolean> {
+  const module = modules.find((candidate) => candidate.name === CONNECTIONS_MODULE);
+  if (module?.enabled !== true || !module.kinds.includes(CONNECTION_KIND)) {
+    return false;
+  }
+  return (await api.getAsset(CONNECTION_KIND, connection)) !== undefined;
 }

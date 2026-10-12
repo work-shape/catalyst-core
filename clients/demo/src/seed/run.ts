@@ -21,7 +21,14 @@ import {
   resolveOptionalSecret,
   type SecretResolver
 } from "@vivd-catalyst/core";
-import { createSeedApi, type SeedApi, type SeedAppFile } from "./api";
+import {
+  CONNECTIONS_MODULE,
+  CONNECTION_KIND,
+  createSeedApi,
+  hasConnection,
+  type SeedApi,
+  type SeedAppFile
+} from "./api";
 import {
   assertLocalDevelopmentHost,
   assertLoopbackAddress,
@@ -608,10 +615,6 @@ async function seedHeldCalls(
   });
 }
 
-/** The module and the asset kind Connections come with. */
-const CONNECTIONS_MODULE = "connections";
-const CONNECTION_KIND = "connection";
-
 /**
  * The Connection itself comes from release config: the instance creates it at start and stores
  * its secret, and the seed creates neither. Where it is there, the seed gives the people of
@@ -791,17 +794,4 @@ async function seedApps(
         }
       : {})
   });
-}
-
-/** Whether the instance holds the Connection an App's actions call. */
-async function hasConnection(
-  api: SeedApi,
-  modules: Awaited<ReturnType<SeedApi["listModules"]>>,
-  connection: string
-): Promise<boolean> {
-  const module = modules.find((candidate) => candidate.name === CONNECTIONS_MODULE);
-  if (module?.enabled !== true || !module.kinds.includes(CONNECTION_KIND)) {
-    return false;
-  }
-  return (await api.getAsset(CONNECTION_KIND, connection)) !== undefined;
 }
