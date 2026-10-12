@@ -40,7 +40,7 @@ async function startInstance(appsEnabled = true) {
   });
   return createTestInstanceWith(() => ({
     config,
-    modules: resolveInstanceModules(config).snapshot,
+    modules: resolveInstanceModules(config, []).snapshot,
     pages: {
       objects: new MemoryObjectStorage(),
       contentKey: deriveAppContentKey("content-secret-".repeat(4))

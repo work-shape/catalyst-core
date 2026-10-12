@@ -38,7 +38,7 @@ A client assembly runs execution workspaces when all of these are in place:
 - `executionWorkspaces.enabled: true` in release config
 - `infrastructure.objectStorage.workspaces`: a `filesystem` root that the API and the workers share
 - `infrastructure.sandbox`: `docker` with a runner image, or `local`
-- a worker process beside the API, started with `runClientInstanceWorkspaceCommandWorker` from `@vivd-catalyst/client-assembly`
+- a worker process beside the API, started with `runWorkspaceCommandWorker()` of the instance's `defineClientInstance` object
 - the workspace tools enabled under `tools` and named in the `toolNames` of the agents that use them
 
 Startup stops when execution workspaces are enabled without the object storage or the sandbox. [Release Config](/configure/release-config/#infrastructure) describes both settings, and [Execution Workspace Operations](/operate/execution-workspaces/) the roles in a deployment.

@@ -376,7 +376,7 @@ describe("the retention line above the composer", () => {
     createSafeConfigView(
       testConfig,
       { version: 0, agents: [], skills: [] },
-      resolveInstanceModules(testConfig).snapshot
+      resolveInstanceModules(testConfig, []).snapshot
     )
   );
   const retention: Retention = {

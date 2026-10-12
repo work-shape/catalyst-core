@@ -18,7 +18,8 @@ describe("removed workspace switch", () => {
 
     expect(config.ui).not.toHaveProperty("collaborationWorkspaces");
     expect(
-      createSafeConfigView(config, emptyAssets(), resolveInstanceModules(config).snapshot).features
+      createSafeConfigView(config, emptyAssets(), resolveInstanceModules(config, []).snapshot)
+        .features
     ).not.toHaveProperty("collaborationWorkspaces");
   });
 

@@ -27,7 +27,12 @@ import {
   WORKSPACE_STORE_PATH
 } from "./infrastructure";
 import { createJobWorker } from "./job-worker";
-import { assertCommandWorkerServesModuleJobKinds, resolveInstanceModules } from "./modules";
+import type { ClientInstanceCapability } from "./capabilities";
+import {
+  assertCommandWorkerServesModuleJobKinds,
+  endResolveOnlyRun,
+  resolveInstanceModules
+} from "./modules";
 import { createInstancePageBuildJobs } from "./pages";
 import { createPlatformStore } from "./store";
 
@@ -35,6 +40,8 @@ export interface CreateClientInstanceWorkspaceCommandWorkerInput {
   config?: ClientInstanceConfig;
   configPath?: string;
   env?: ClientInstanceEnv;
+  /** The capabilities of this build, the same ones every process of the instance is given. */
+  capabilities: readonly ClientInstanceCapability[];
   /** Replaces the configured secret provider. For tests. */
   secrets?: SecretResolver;
 }
@@ -51,7 +58,7 @@ export interface ClientInstanceWorkspaceCommandWorker {
 }
 
 export async function createClientInstanceWorkspaceCommandWorker(
-  input: CreateClientInstanceWorkspaceCommandWorkerInput = {}
+  input: CreateClientInstanceWorkspaceCommandWorkerInput
 ): Promise<ClientInstanceWorkspaceCommandWorker> {
   const logger = createLogger();
   const env = readClientInstanceEnv(input.env);
@@ -59,11 +66,12 @@ export async function createClientInstanceWorkspaceCommandWorker(
     input.config ?? (await loadWorkspaceWorkerConfig(input.configPath, env)),
     env
   );
+  const modules = resolveInstanceModules(config, input.capabilities).snapshot;
+  endResolveOnlyRun(env);
   if (!config.executionWorkspaces.enabled) {
     throw new AppError("VALIDATION_FAILED", "Execution workspaces are disabled in release config");
   }
 
-  const modules = resolveInstanceModules(config).snapshot;
   const infrastructure = await createInstanceInfrastructure({
     config,
     env,
@@ -184,7 +192,7 @@ export function applyWorkspaceRunnerImageEnvOverride(
 }
 
 export async function runClientInstanceWorkspaceCommandWorker(
-  input: CreateClientInstanceWorkspaceCommandWorkerInput = {}
+  input: CreateClientInstanceWorkspaceCommandWorkerInput
 ): Promise<void> {
   const service = await createClientInstanceWorkspaceCommandWorker(input);
   let stopping = false;

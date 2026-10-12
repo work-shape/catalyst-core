@@ -84,7 +84,16 @@ export type TestServerOptions = Omit<
     modelProvider?: ScriptedModelProvider;
   };
 
-type TestAppInput = CreateClientInstanceAppInput & { seedAssets?: boolean; fixtureFile?: string };
+/** A test instance is assembled without capabilities unless the test names some. */
+type CapabilitiesOptional<Input extends { capabilities: unknown }> = Omit<Input, "capabilities"> &
+  Partial<Pick<Input, "capabilities">>;
+type TestAppInput = CapabilitiesOptional<CreateClientInstanceAppInput> & {
+  seedAssets?: boolean;
+  fixtureFile?: string;
+};
+type TestExecutionInput = CapabilitiesOptional<
+  Parameters<typeof createClientInstanceExecutionAssembly>[0]
+>;
 type TestPostgresOptions = {
   logger?: Parameters<typeof createPostgresStores>[0]["logger"];
   applicationName?: string;
@@ -138,9 +147,7 @@ afterEach(async () => {
     );
 });
 
-export function createTestInstance(input: {
-  execution: Parameters<typeof createClientInstanceExecutionAssembly>[0];
-}): Promise<TestInstance>;
+export function createTestInstance(input: { execution: TestExecutionInput }): Promise<TestInstance>;
 export function createTestInstance(): Promise<TestInstance<TestStore>>;
 export function createTestInstance(input: {
   postgres: TestPostgresOptions;
@@ -150,7 +157,7 @@ export function createTestInstance(input: TestAppInput): Promise<TestInstance>;
 export function createTestInstance(
   input?:
     | TestAppInput
-    | { execution: Parameters<typeof createClientInstanceExecutionAssembly>[0] }
+    | { execution: TestExecutionInput }
     | { postgres: TestPostgresOptions }
     | { server: TestServerOptions }
 ): Promise<TestInstance> {
@@ -264,13 +271,14 @@ async function createDefaultInstance(
 async function createConfiguredInstance(
   input:
     | TestAppInput
-    | { execution: Parameters<typeof createClientInstanceExecutionAssembly>[0] }
+    | { execution: TestExecutionInput }
     | { postgres: TestPostgresOptions }
     | { server: TestServerOptions }
 ): Promise<TestInstance> {
   if ("execution" in input) {
     const assembly = await createClientInstanceExecutionAssembly({
       ...input.execution,
+      capabilities: input.execution.capabilities ?? [],
       env: {
         ...input.execution.env,
         DATABASE_URL: await fileTestDatabaseUrl()
@@ -318,6 +326,7 @@ async function createConfiguredInstance(
   }
   const app = await createClientInstanceApp({
     ...input,
+    capabilities: input.capabilities ?? [],
     env: {
       ...input.env,
       DATABASE_URL: await fileTestDatabaseUrl(input.fixtureFile)
@@ -382,7 +391,7 @@ export function completeServerOptions(
       modelProvider,
       usageGovernance: options.usageGovernance
     }),
-    modules: options.modules ?? resolveInstanceModules(options.config).snapshot,
+    modules: options.modules ?? resolveInstanceModules(options.config, []).snapshot,
     stores: options.stores,
     configAssets: {
       store: configAssets.store,
@@ -718,6 +727,7 @@ export async function createTestInstanceOnSecrets(
   const resolved = new Set<string>();
   const app = await createClientInstanceApp({
     ...input,
+    capabilities: input.capabilities ?? [],
     env: {},
     secrets: {
       async resolve(name) {
@@ -750,6 +760,6 @@ export async function createTestInstanceOnSecrets(
 export async function rejectStartupWithoutDatabase(
   input: Pick<CreateClientInstanceAppInput, "config" | "tools">
 ): Promise<void> {
-  const app = await createClientInstanceApp({ ...input, env: {} });
+  const app = await createClientInstanceApp({ ...input, capabilities: [], env: {} });
   await app.close();
 }

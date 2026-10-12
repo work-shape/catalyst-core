@@ -307,7 +307,11 @@ describe("the snapshot in a running instance", () => {
     const config = await loadClientInstanceConfigFromFile(
       join(platformRoot, "clients/demo/config/app.yaml")
     );
-    const safe = createSafeConfigView(config, emptyAssets, resolveInstanceModules(config).snapshot);
+    const safe = createSafeConfigView(
+      config,
+      emptyAssets,
+      resolveInstanceModules(config, []).snapshot
+    );
 
     expect(safe.modules).toEqual({
       documents: { enabled: false },
@@ -393,7 +397,8 @@ describe("the snapshot in a running instance", () => {
           modules: { documents: { enabled: true } }
         }),
         env: {},
-        tools: []
+        tools: [],
+        capabilities: []
       })
     ).rejects.toThrow(/Module 'documents' is enabled but this build ships no code for it/u);
   });

@@ -749,6 +749,7 @@ describe("the apps module and the workspace command worker", () => {
   it("assembles the platform's workspace command worker with the module on", async () => {
     const worker = await createClientInstanceWorkspaceCommandWorker({
       config: workerConfig({ files: true }),
+      capabilities: [],
       env: { DATABASE_URL: await fileTestDatabaseUrl() }
     });
     await worker.close();
@@ -758,6 +759,7 @@ describe("the apps module and the workspace command worker", () => {
     await expect(
       createClientInstanceWorkspaceCommandWorker({
         config: workerConfig({ files: false }),
+        capabilities: [],
         env: { DATABASE_URL: await fileTestDatabaseUrl() }
       })
     ).rejects.toThrow(

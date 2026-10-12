@@ -13,8 +13,8 @@ describe("administration config", () => {
     expect(resolveModuleSwitches(config).assetManagement).toEqual({ enabled: false });
     expect(config.administration.agentConfiguration.editableAgentFields).toEqual([]);
     expect(
-      createSafeConfigView(config, emptyAssets(), resolveInstanceModules(config).snapshot).features
-        .configAssets
+      createSafeConfigView(config, emptyAssets(), resolveInstanceModules(config, []).snapshot)
+        .features.configAssets
     ).toEqual({
       enabled: false,
       editableAgentFields: [],
@@ -41,8 +41,8 @@ describe("administration config", () => {
 
     expect(resolveModuleSwitches(config).assetManagement).toEqual({ enabled: true });
     expect(
-      createSafeConfigView(config, emptyAssets(), resolveInstanceModules(config).snapshot).features
-        .configAssets
+      createSafeConfigView(config, emptyAssets(), resolveInstanceModules(config, []).snapshot)
+        .features.configAssets
     ).toEqual({
       enabled: true,
       editableAgentFields: ["modelBindingId", "reasoningEffort"],

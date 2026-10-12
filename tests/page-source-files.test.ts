@@ -32,7 +32,7 @@ async function startInstance(appsEnabled = true) {
   };
   const instance = await createTestInstanceWith(() => ({
     config,
-    modules: resolveInstanceModules(config).snapshot,
+    modules: resolveInstanceModules(config, []).snapshot,
     pages
   }));
   return {

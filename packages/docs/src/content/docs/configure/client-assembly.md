@@ -57,6 +57,19 @@ import client from "./client";
 await client.listen();
 ```
 
+Every process of the instance starts from the same client object, so each one is assembled
+from the same tools, Connector types and capabilities. A worker entry point is one call:
+
+```ts
+import client from "./client";
+
+await client.runWorkspaceCommandWorker();
+```
+
+`runAgentRunWorker()` and `runArtifactPreviewWorker()` start the other two workers. A process
+that is assembled without a capability stops when the release config turns a module of that
+capability on.
+
 The frontend entry calls `renderStandaloneChatApp` from `@vivd-catalyst/chat-ui/shell`. Its `toolActivityLabels` option names a tool in the activity line, and its `labelOverrides` option takes `resourcesCustomerData: { en, de }` to word the heading of the structured data in the resources, which reads "Data" without it.
 
 Exact APIs may evolve while the platform is still early. The boundary should remain the same: platform packages provide reusable behavior, and the client assembly app provides source-controlled customer choices.

@@ -44,7 +44,7 @@ const railConfig: SafeConfig = safeConfigSchema.parse(
   createSafeConfigView(
     testConfig,
     { version: 0, agents: [], skills: [] },
-    resolveInstanceModules(testConfig).snapshot
+    resolveInstanceModules(testConfig, []).snapshot
   )
 );
 

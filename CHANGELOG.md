@@ -420,6 +420,28 @@ id from config_assets where status = 'deleted')`.
 
 ### Changed
 
+- **Every process of an instance is assembled from one build (breaking for a client
+  assembly):** `defineClientInstance` gains `runWorkspaceCommandWorker()` and
+  `runArtifactPreviewWorker()`, which hand the worker the capabilities of the build as
+  `listen()` and `runAgentRunWorker()` do. `capabilities` is now required on
+  `resolveInstanceModules`, `createClientInstanceApp`, `createClientInstanceAgentRunWorker`,
+  `createClientInstanceWorkspaceCommandWorker`, `createClientInstanceArtifactPreviewWorker` and
+  the `runClientInstance…` functions of the two workers, so an entry point that leaves them out
+  no longer compiles. **A deployment changes `src/workspace-command-worker.ts` and
+  `src/artifact-preview-worker.ts` to `client.runWorkspaceCommandWorker()` and
+  `client.runArtifactPreviewWorker()` in the commit that pins this release.** The artifact
+  preview worker now resolves the modules too, so it stops like every other process with
+  `Module '<name>' is enabled but this build ships no code for it` when the config turns on a
+  module its build lacks. Until now the workspace command worker was assembled without
+  capabilities and stopped with that message on every instance with a capability module on.
+  No migration and no data change: rolling back is rolling back the image.
+- **Release gate:** `catalyst-deploy check` starts every built process entry point once per
+  release config with `CATALYST_RESOLVE_ONLY=1`. The process loads the config, resolves its
+  modules and ends with code 0 before it opens a store. This replaces the schema validation of
+  the configs, which the run of `dist/server.js` includes, and fails the gate for a process that
+  would stop on the host at module resolution. Nothing but the gate sets the variable: a
+  process started with it does no work.
+
 - **Asset writes name the revision of each asset (breaking):** `expectedRevision` is required
   on `assets.put`, `assets.delete`, `assets.revert` and on every item of `assets.sync` and
   `assets.sync_check`: a number for an asset that exists, `null` on a put for one that never

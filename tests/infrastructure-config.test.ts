@@ -423,7 +423,7 @@ describe("infrastructure section", () => {
           ],
           skills: []
         },
-        resolveInstanceModules(parsed).snapshot
+        resolveInstanceModules(parsed, []).snapshot
       )
     );
     expect(view).toContain('"region":"eu"');

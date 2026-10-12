@@ -1,3 +1,3 @@
-import { runClientInstanceArtifactPreviewWorker } from "@vivd-catalyst/client-assembly";
+import client from "./client";
 
-await runClientInstanceArtifactPreviewWorker();
+await client.runArtifactPreviewWorker();

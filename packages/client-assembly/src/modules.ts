@@ -9,6 +9,7 @@ import {
 } from "@vivd-catalyst/core";
 import { resolveModuleSwitches, type ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { ClientInstanceCapability } from "./capabilities";
+import type { ClientInstanceEnv } from "./env";
 
 /** The Resources panel of a conversation and the list it reads. */
 const resourcesModule = defineModule({
@@ -103,17 +104,31 @@ export interface InstanceModules {
 /**
  * Assembles the registry of this build and resolves the instance's switches against it. An
  * invalid combination stops the process here, before a store or a service is created. Every
- * reader takes the snapshot from here.
+ * reader takes the snapshot from here. `capabilities` has no default: a process that is
+ * assembled without the capabilities of its build stops on the first module one of them owns.
  */
 export function resolveInstanceModules(
   config: ClientInstanceConfig,
-  capabilities: readonly ClientInstanceCapability[] = []
+  capabilities: readonly ClientInstanceCapability[]
 ): InstanceModules {
   const registry = createModuleRegistry([
     ...platformModules,
     ...capabilities.flatMap((capability) => capability.modules ?? [])
   ]);
   return { registry, snapshot: registry.snapshot(resolveModuleSwitches(config)) };
+}
+
+/**
+ * Ends a resolve-only run. The release gate starts every built process entry point of a
+ * deployment with `CATALYST_RESOLVE_ONLY=1` once per release config. The process loads its
+ * config and resolves its modules as it always does, then ends here with code 0, before it
+ * opens a store or a provider. Each process of the instance calls this right after
+ * `resolveInstanceModules`. Nothing but the gate sets the variable.
+ */
+export function endResolveOnlyRun(env: ClientInstanceEnv): void {
+  if (env.CATALYST_RESOLVE_ONLY === "1") {
+    process.exit(0);
+  }
 }
 
 /**

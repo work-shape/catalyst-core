@@ -157,6 +157,42 @@ SH
   assert_contains "$scratch/failure-output" "release refs must be full commit SHAs"
 }
 
+# The entry points here are stand-ins that record how they were started. What a real process
+# does on a resolve-only run is held by tests/resolve-only-run.test.ts.
+test_resolve_entry_points() {
+  local deployment="$scratch/resolve/deployment.fixture" runs="$scratch/resolve/runs"
+  local record='import { appendFileSync } from "node:fs";
+import { basename } from "node:path";
+const config = basename(process.env.CLIENT_CONFIG_PATH);
+appendFileSync(process.env.RUNS, `${basename(process.argv[1])} ${config} ${process.env.CATALYST_RESOLVE_ONLY}\n`);'
+  mkdir -p "$deployment/config" "$deployment/dist"
+  printf 'modules: {}\n' > "$deployment/config/app.base.yaml"
+  printf 'extends: ./app.base.yaml\n' > "$deployment/config/app.staging.yaml"
+  printf 'extends: "./app.base.yaml"\n' > "$deployment/config/app.production.yaml"
+  printf '%s\n' "$record" > "$deployment/dist/server.js"
+  printf '%s\n' "$record" > "$deployment/dist/migrate.js"
+  printf '%s\nif (config === "app.production.yaml") { console.error("Module is enabled but this build ships no code for it"); process.exit(1); }\n' \
+    "$record" > "$deployment/dist/workspace-command-worker.js"
+
+  expect_failure env RUNS="$runs" node "$kit_dir/lib/resolve-entry-points.mjs" "$deployment"
+  assert_contains "$scratch/failure-output" "Module is enabled but this build ships no code for it"
+  assert_contains "$scratch/failure-output" \
+    "check-release: workspace-command-worker.js with app.production.yaml: stopped"
+  assert_contains "$scratch/failure-output" "resolved server.js with app.production.yaml"
+  # Every process entry point once per config a release starts from, and nothing else in dist/.
+  [[ "$(LC_ALL=C sort "$runs")" == "server.js app.production.yaml 1
+server.js app.staging.yaml 1
+workspace-command-worker.js app.production.yaml 1
+workspace-command-worker.js app.staging.yaml 1" ]] || fail "unexpected resolve-only runs: $(cat "$runs")"
+
+  rm "$deployment/config/app.production.yaml"
+  RUNS="$runs" node "$kit_dir/lib/resolve-entry-points.mjs" "$deployment" >/dev/null
+
+  rm "$deployment/dist/server.js" "$deployment/dist/workspace-command-worker.js"
+  expect_failure env RUNS="$runs" node "$kit_dir/lib/resolve-entry-points.mjs" "$deployment"
+  assert_contains "$scratch/failure-output" "No built process entry point found under dist/"
+}
+
 test_compose_watch_preflight() {
   local root="$scratch/compose-fixture"
   local fake_bin="$root/fake-bin"
@@ -830,6 +866,7 @@ test_shell_files() {
 test_shell_files
 test_prepare_build_workspace
 test_update_release
+test_resolve_entry_points
 test_compose_watch_preflight
 test_ensure_compose_dev_images
 test_compose_helpers

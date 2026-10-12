@@ -54,7 +54,7 @@ async function arrange() {
   };
   const instance = await createTestInstanceWith((stores) => ({
     config,
-    modules: resolveInstanceModules(config).snapshot,
+    modules: resolveInstanceModules(config, []).snapshot,
     pages,
     allowedOrigins: ["https://ui.example.test"],
     authAdapter: {

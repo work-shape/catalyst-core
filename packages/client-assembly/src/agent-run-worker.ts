@@ -24,7 +24,8 @@ export interface CreateClientInstanceAgentRunWorkerInput {
   tools: ToolAssemblyDefinition[];
   /** The Connector types of this build, the same ones the API process is given. */
   connectorTypes?: ConnectorTypeDefinition[];
-  capabilities?: ClientInstanceCapability[];
+  /** The capabilities of this build, the same ones the API process is given. */
+  capabilities: readonly ClientInstanceCapability[];
   structuredDataPublicationReviewer?: StructuredDataPublicationReviewer;
 }
 

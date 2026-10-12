@@ -111,7 +111,7 @@ describe("user-selectable model config", () => {
         ],
         skills: []
       },
-      resolveInstanceModules(config).snapshot,
+      resolveInstanceModules(config, []).snapshot,
       { reasoningEffortsOfBinding: adapterEfforts(config) }
     );
 
@@ -249,7 +249,7 @@ describe("user-selectable model config", () => {
         ],
         skills: []
       },
-      resolveInstanceModules(config).snapshot,
+      resolveInstanceModules(config, []).snapshot,
       { requestedLocale: "de", reasoningEffortsOfBinding: adapterEfforts(config) }
     );
 

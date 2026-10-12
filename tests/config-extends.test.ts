@@ -157,7 +157,7 @@ describe("config file extends", () => {
           agents: [],
           skills: []
         },
-        resolveInstanceModules(config).snapshot
+        resolveInstanceModules(config, []).snapshot
       ).ui;
       const branding = createClientBranding(config);
       expect(branding.showAgentName).toBe(showAgentName);

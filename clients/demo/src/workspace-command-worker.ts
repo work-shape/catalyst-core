@@ -1,3 +1,3 @@
-import { runClientInstanceWorkspaceCommandWorker } from "@vivd-catalyst/client-assembly";
+import client from "./client";
 
-await runClientInstanceWorkspaceCommandWorker();
+await client.runWorkspaceCommandWorker();

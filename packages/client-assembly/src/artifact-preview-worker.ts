@@ -16,6 +16,7 @@ import {
   LibreOfficeArtifactPreviewRenderer
 } from "@vivd-catalyst/tool-execution";
 import type { ArtifactPreviewSourceReader } from "@vivd-catalyst/tool-execution";
+import type { ClientInstanceCapability } from "./capabilities";
 import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 import {
   createInstanceInfrastructure,
@@ -23,12 +24,15 @@ import {
   WORKSPACE_STORE_PATH
 } from "./infrastructure";
 import { createJobWorker } from "./job-worker";
+import { endResolveOnlyRun, resolveInstanceModules } from "./modules";
 import { createPlatformStore } from "./store";
 
 export interface CreateClientInstanceArtifactPreviewWorkerInput {
   config?: ClientInstanceConfig;
   configPath?: string;
   env?: ClientInstanceEnv;
+  /** The capabilities of this build, the same ones every process of the instance is given. */
+  capabilities: readonly ClientInstanceCapability[];
   /** Replaces the configured secret provider. For tests. */
   secrets?: SecretResolver;
   sourceReaderFactory?: ArtifactPreviewSourceReaderFactory;
@@ -54,11 +58,15 @@ export interface ClientInstanceArtifactPreviewWorker {
 }
 
 export async function createClientInstanceArtifactPreviewWorker(
-  input: CreateClientInstanceArtifactPreviewWorkerInput = {}
+  input: CreateClientInstanceArtifactPreviewWorkerInput
 ): Promise<ClientInstanceArtifactPreviewWorker> {
   const logger = createLogger();
   const env = readClientInstanceEnv(input.env);
   const config = input.config ?? (await loadArtifactPreviewWorkerConfig(input.configPath, env));
+  // This worker reads no module switch. It resolves them so that a config this build cannot
+  // run stops every process of the instance, and with the same message.
+  resolveInstanceModules(config, input.capabilities);
+  endResolveOnlyRun(env);
   const infrastructure = await createInstanceInfrastructure({
     config,
     env,
@@ -146,7 +154,7 @@ export async function createClientInstanceArtifactPreviewWorker(
 }
 
 export async function runClientInstanceArtifactPreviewWorker(
-  input: CreateClientInstanceArtifactPreviewWorkerInput = {}
+  input: CreateClientInstanceArtifactPreviewWorkerInput
 ): Promise<void> {
   const service = await createClientInstanceArtifactPreviewWorker(input);
   let stopping = false;

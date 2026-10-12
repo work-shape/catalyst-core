@@ -487,10 +487,12 @@ describe("the module connections", () => {
       .kinds.map((kind) => kind.kind);
 
   it("is off unless release config turns it on", () => {
-    expect(resolveInstanceModules(configWith(undefined)).snapshot.isEnabled("connections")).toBe(
-      false
+    expect(
+      resolveInstanceModules(configWith(undefined), []).snapshot.isEnabled("connections")
+    ).toBe(false);
+    expect(resolveInstanceModules(configWith(true), []).snapshot.isEnabled("connections")).toBe(
+      true
     );
-    expect(resolveInstanceModules(configWith(true)).snapshot.isEnabled("connections")).toBe(true);
   });
 
   it("registers the kind on an assembled instance while it is on", async () => {

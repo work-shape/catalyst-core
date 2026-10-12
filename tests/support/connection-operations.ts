@@ -336,7 +336,7 @@ export async function fixtureOn<Instance extends AccessInstance>(
         authorizer,
         config,
         logger,
-        modules: resolveInstanceModules(config).snapshot,
+        modules: resolveInstanceModules(config, []).snapshot,
         operations,
         approvalRequests,
         agentToolNames: (agentName) => state.agentTools.get(agentName) ?? []

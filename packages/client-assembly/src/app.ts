@@ -79,7 +79,7 @@ import { createInfrastructureWorkflow } from "./infrastructure";
 import { createInProcessAgentRunWorker, type AgentRunWorkerPlacement } from "./agent-run-jobs";
 import { createInstancePageSave, createInstancePages } from "./pages";
 import { createJobWorker } from "./job-worker";
-import { resolveInstanceModules } from "./modules";
+import { endResolveOnlyRun, resolveInstanceModules } from "./modules";
 import { createRuntimeFailureReporter } from "./runtime-error-logging";
 import { createPlatformStore } from "./store";
 import { createToolDefinitions } from "./tools";
@@ -97,7 +97,8 @@ export interface CreateClientInstanceAppInput {
   tools: ToolAssemblyDefinition[];
   /** The Connector types of this build. A Connection of another type stops startup. */
   connectorTypes?: ConnectorTypeDefinition[];
-  capabilities?: ClientInstanceCapability[];
+  /** The capabilities of this build, the same ones every process of the instance is given. */
+  capabilities: readonly ClientInstanceCapability[];
   structuredDataPublicationReviewer?: StructuredDataPublicationReviewer;
   approvalRequestHandlers?: ApprovalRequestHandlerRegistry;
   /** What the calls of operations run with beyond the instance's own defaults. For tests. */
@@ -248,8 +249,9 @@ export async function createClientInstanceExecutionAssembly(
   const env = readClientInstanceEnv(input.env);
   const config = input.config ?? (await loadConfig(input.configPath));
   const clientInstanceId = getClientInstanceId(config);
-  const capabilities = input.capabilities ?? [];
+  const { capabilities } = input;
   const modules = resolveInstanceModules(config, capabilities).snapshot;
+  endResolveOnlyRun(env);
   // The resolver comes first: the store, the sign-in code and every provider take from it.
   const infrastructure = await createInstanceInfrastructure({
     config,

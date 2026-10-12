@@ -19,14 +19,14 @@ describe("agent presentation config", () => {
     const safeConfig = createSafeConfigView(
       config,
       assets,
-      resolveInstanceModules(config).snapshot,
+      resolveInstanceModules(config, []).snapshot,
       { requestedLocale: "de" }
     );
 
     expect(safeConfig.agents[0]?.description).toBe("Hilfe bei Unterlagen.");
     expect(safeConfig.agents[0]?.welcomeSubtitle).toBe("Welcome!");
     expect(
-      createSafeConfigView(config, createAssets({}), resolveInstanceModules(config).snapshot)
+      createSafeConfigView(config, createAssets({}), resolveInstanceModules(config, []).snapshot)
         .agents[0]?.description
     ).toBeUndefined();
   });
@@ -41,7 +41,7 @@ describe("agent presentation config", () => {
     const safeConfig = createSafeConfigView(
       config,
       assets,
-      resolveInstanceModules(config).snapshot,
+      resolveInstanceModules(config, []).snapshot,
       { requestedLocale: "en" }
     );
 
@@ -68,7 +68,7 @@ describe("agent presentation config", () => {
     const safeConfig = createSafeConfigView(
       config,
       assets,
-      resolveInstanceModules(config).snapshot,
+      resolveInstanceModules(config, []).snapshot,
       { requestedLocale: "de" }
     );
 

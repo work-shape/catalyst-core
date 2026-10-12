@@ -109,7 +109,7 @@ describe("the Platform Store's address", () => {
       const connections = required(
         await createInstanceConnections({
           config,
-          modules: resolveInstanceModules(config).snapshot,
+          modules: resolveInstanceModules(config, []).snapshot,
           clientInstanceId: asClientInstanceId(config.clientInstance.id),
           secrets: { resolve: () => Promise.resolve(databaseUrl) },
           stores: (await createTestInstance({ postgres: {} })).stores,

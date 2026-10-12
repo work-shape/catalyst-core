@@ -60,6 +60,15 @@ image by digest, `deploy.yml` requires a successful staging deployment, the bake
 image keys of a manifest, and the worker wiring under `verify/` holds. A deployment adds its own
 assertions in an executable `deploy/scripts/check-release-policy.sh`, which runs last.
 
+The release gate also starts every built process entry point of the deployment once per
+release config (`lib/resolve-entry-points.mjs`): `dist/server.js`, `dist/agent-run-worker.js`,
+`dist/workspace-command-worker.js` and `dist/artifact-preview-worker.js`, each one that exists.
+It sets `CATALYST_RESOLVE_ONLY=1`, with which a process loads the config, resolves its modules
+against the build it was assembled from and ends with code 0 before it opens a store. A config
+the schema refuses fails there, and so does a process that would stop on the host because a
+module is on that its build ships no code for. An entry point must start its process through
+`defineClientInstance` for this; one that does not is reported after two minutes.
+
 ## Still owned by the deployment repo
 
 `docker-compose.prod.yml`, `deploy/Caddyfile`, `deploy/docker-bake.hcl`, the GitHub workflows and

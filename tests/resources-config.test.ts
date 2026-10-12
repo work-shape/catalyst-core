@@ -12,8 +12,8 @@ describe("resources config", () => {
 
     expect(resolveModuleSwitches(config).resources).toEqual({ enabled: true });
     expect(
-      createSafeConfigView(config, emptyAssets(), resolveInstanceModules(config).snapshot).features
-        .resources.enabled
+      createSafeConfigView(config, emptyAssets(), resolveInstanceModules(config, []).snapshot)
+        .features.resources.enabled
     ).toBe(true);
   });
 
@@ -22,8 +22,8 @@ describe("resources config", () => {
 
     expect(resolveModuleSwitches(config).resources).toEqual({ enabled: false });
     expect(
-      createSafeConfigView(config, emptyAssets(), resolveInstanceModules(config).snapshot).features
-        .resources.enabled
+      createSafeConfigView(config, emptyAssets(), resolveInstanceModules(config, []).snapshot)
+        .features.resources.enabled
     ).toBe(false);
   });
 });

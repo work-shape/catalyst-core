@@ -43,7 +43,7 @@ async function servedDocsUrl(root: string, file: string): Promise<string | undef
   const view = createSafeConfigView(
     config,
     { version: 1, defaultAgentName: "none", agents: [], skills: [] },
-    resolveInstanceModules(config).snapshot
+    resolveInstanceModules(config, []).snapshot
   );
   // The interface reads the answer through the contract, which drops a key it does not name.
   const branding = clientBrandingSchema.parse(createClientBranding(config));

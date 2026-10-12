@@ -128,7 +128,7 @@ describe("views config", () => {
 
     expect(config.views.allowedScriptSrc).toEqual([]);
     expect(
-      createSafeConfigView(config, emptyAssets(), resolveInstanceModules(config).snapshot).views
+      createSafeConfigView(config, emptyAssets(), resolveInstanceModules(config, []).snapshot).views
     ).toEqual({ allowedScriptSrc: [] });
   });
 
@@ -141,7 +141,7 @@ describe("views config", () => {
 
     expect(config.views.allowedScriptSrc).toEqual(["https://cdn.jsdelivr.net", "https:"]);
     expect(
-      createSafeConfigView(config, emptyAssets(), resolveInstanceModules(config).snapshot).views
+      createSafeConfigView(config, emptyAssets(), resolveInstanceModules(config, []).snapshot).views
         .allowedScriptSrc
     ).toEqual(["https://cdn.jsdelivr.net", "https:"]);
   });

@@ -107,7 +107,7 @@ async function startInstance(appsEnabled = true) {
   const limit = { reached: false };
   const instance = await createTestInstanceWith(() => ({
     config,
-    modules: resolveInstanceModules(config).snapshot,
+    modules: resolveInstanceModules(config, []).snapshot,
     pages,
     logger,
     rateLimiter: {

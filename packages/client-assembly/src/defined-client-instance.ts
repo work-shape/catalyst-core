@@ -26,6 +26,20 @@ import {
   type SeedStandaloneAuthResult
 } from "./seed-auth";
 import { migrateClientInstanceDatabase } from "./migrate";
+import {
+  runClientInstanceWorkspaceCommandWorker,
+  type CreateClientInstanceWorkspaceCommandWorkerInput
+} from "./workspace-command-worker";
+import {
+  runClientInstanceArtifactPreviewWorker,
+  type CreateClientInstanceArtifactPreviewWorkerInput
+} from "./artifact-preview-worker";
+
+/** What a caller still gives a process of this instance: the build and the config path are its own. */
+type OfThisBuild<Input> = Omit<
+  Input,
+  "configPath" | "tools" | "connectorTypes" | "capabilities"
+> & { configPath?: string };
 
 export interface DefineClientInstanceInput {
   rootDir: string | URL;
@@ -50,11 +64,7 @@ export interface DefinedClientInstance {
   readonly workspaceRoot: string;
   loadEnvironment(input?: { env?: ClientInstanceEnv }): ClientInstanceEnv;
   resolveConfigPath(input?: { env?: ClientInstanceEnv; configPath?: string }): string;
-  createApp(
-    input?: Omit<CreateClientInstanceAppInput, "configPath" | "tools" | "connectorTypes"> & {
-      configPath?: string;
-    }
-  ): Promise<ClientInstanceApp>;
+  createApp(input?: OfThisBuild<CreateClientInstanceAppInput>): Promise<ClientInstanceApp>;
   listen(input?: {
     env?: ClientInstanceEnv;
     host?: string;
@@ -65,20 +75,16 @@ export interface DefinedClientInstance {
     operations?: CreateClientInstanceAppInput["operations"];
   }): Promise<ClientInstanceApp>;
   createAgentRunWorker(
-    input?: Omit<
-      CreateClientInstanceAgentRunWorkerInput,
-      "configPath" | "tools" | "connectorTypes" | "capabilities"
-    > & {
-      configPath?: string;
-    }
+    input?: OfThisBuild<CreateClientInstanceAgentRunWorkerInput>
   ): Promise<ClientInstanceAgentRunWorker>;
-  runAgentRunWorker(
-    input?: Omit<
-      CreateClientInstanceAgentRunWorkerInput,
-      "configPath" | "tools" | "connectorTypes" | "capabilities"
-    > & {
-      configPath?: string;
-    }
+  runAgentRunWorker(input?: OfThisBuild<CreateClientInstanceAgentRunWorkerInput>): Promise<void>;
+  /** Runs the workspace command worker of this build until the process is told to stop. */
+  runWorkspaceCommandWorker(
+    input?: OfThisBuild<CreateClientInstanceWorkspaceCommandWorkerInput>
+  ): Promise<void>;
+  /** Runs the artifact preview worker of this build until the process is told to stop. */
+  runArtifactPreviewWorker(
+    input?: OfThisBuild<CreateClientInstanceArtifactPreviewWorkerInput>
   ): Promise<void>;
   seedStandaloneAuth(
     input?: Omit<SeedStandaloneAuthInput, "configPath"> & {
@@ -132,9 +138,7 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
   }
 
   async function createApp(
-    appInput: Omit<CreateClientInstanceAppInput, "configPath" | "tools" | "connectorTypes"> & {
-      configPath?: string;
-    } = {}
+    appInput: OfThisBuild<CreateClientInstanceAppInput> = {}
   ): Promise<ClientInstanceApp> {
     const env = loadEnvironment({ env: appInput.env });
     return createClientInstanceApp({
@@ -153,17 +157,23 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
     });
   }
 
-  function resolveAgentWorkerInput(
-    workerInput: Omit<
-      CreateClientInstanceAgentRunWorkerInput,
-      "configPath" | "tools" | "connectorTypes" | "capabilities"
-    > & { configPath?: string } = {}
-  ): CreateClientInstanceAgentRunWorkerInput {
-    const env = loadEnvironment({ env: workerInput.env });
+  /** The environment and the config path every process of this instance starts from. */
+  function located<Input extends { env?: ClientInstanceEnv; configPath?: string }>(
+    processInput: Input
+  ): Input & { env: ClientInstanceEnv; configPath: string } {
+    const env = loadEnvironment({ env: processInput.env });
     return {
-      ...workerInput,
+      ...processInput,
       env,
-      configPath: resolveConfigPath({ env, configPath: workerInput.configPath }),
+      configPath: resolveConfigPath({ env, configPath: processInput.configPath })
+    };
+  }
+
+  function resolveAgentWorkerInput(
+    workerInput: OfThisBuild<CreateClientInstanceAgentRunWorkerInput>
+  ): CreateClientInstanceAgentRunWorkerInput {
+    return {
+      ...located(workerInput),
       ...build,
       structuredDataPublicationReviewer:
         workerInput.structuredDataPublicationReviewer ?? input.structuredDataPublicationReviewer
@@ -181,6 +191,18 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
     },
     runAgentRunWorker(workerInput = {}) {
       return runClientInstanceAgentRunWorker(resolveAgentWorkerInput(workerInput));
+    },
+    runWorkspaceCommandWorker(workerInput = {}) {
+      return runClientInstanceWorkspaceCommandWorker({
+        ...located(workerInput),
+        capabilities: build.capabilities
+      });
+    },
+    runArtifactPreviewWorker(workerInput = {}) {
+      return runClientInstanceArtifactPreviewWorker({
+        ...located(workerInput),
+        capabilities: build.capabilities
+      });
     },
     async listen(listenInput = {}) {
       const app = await createApp({

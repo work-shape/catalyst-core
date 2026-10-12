@@ -218,30 +218,8 @@ done
 first_ui_asset="$(find "$deployment_root/dist/client/assets" -type f -size +0c -print -quit)"
 [[ -n "$first_ui_asset" ]] || fail "missing built UI assets"
 
-log_step "Validate release configs"
-DEPLOYMENT_ROOT="$deployment_root" run_pnpm --dir "$platform_root" \
-  --filter @vivd-catalyst/config-schema exec node --input-type=module <<'NODE'
-import { readdir, readFile } from "node:fs/promises";
-import { basename, join, resolve } from "node:path";
-import { loadClientInstanceConfigFromFile } from "@vivd-catalyst/config-schema";
-
-const configDir = join(process.env.DEPLOYMENT_ROOT, "config");
-const candidates = (await readdir(configDir))
-  .filter((name) => /^app(?:\..+)?\.yaml$/u.test(name))
-  .sort();
-const extended = new Set();
-for (const name of candidates) {
-  const contents = await readFile(join(configDir, name), "utf8");
-  const match = contents.match(/^\s*extends:\s*["']?([^"'#\s]+)["']?/mu);
-  if (match) extended.add(basename(resolve(configDir, match[1])));
-}
-const entrypoints = candidates.filter((name) => !extended.has(name));
-if (entrypoints.length === 0) throw new Error("No release config entrypoints found");
-for (const name of entrypoints) {
-  const config = await loadClientInstanceConfigFromFile(join(configDir, name));
-  console.log(`validated ${name} (${config.clientInstance.environment})`);
-}
-NODE
+log_step "Resolve every built entry point with every release config"
+node "$script_dir/resolve-entry-points.mjs" "$deployment_root"
 
 if [[ -f "$deployment_root/docker-compose.prod.yml" ]]; then
   command -v docker >/dev/null 2>&1 || fail "docker CLI is required"

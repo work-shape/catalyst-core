@@ -3,6 +3,7 @@ interface NamedClientInstanceEnv {
   HOST?: string | undefined;
   PORT?: string | undefined;
   CLIENT_CONFIG_PATH?: string | undefined;
+  CATALYST_RESOLVE_ONLY?: string | undefined;
   BETTER_AUTH_URL?: string | undefined;
   CHAT_UI_ORIGIN?: string | undefined;
   AGENT_RUN_WORKER_ID?: string | undefined;
