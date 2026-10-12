@@ -1,4 +1,12 @@
-export { Card, CardContent, CardHeader, CardTitle, type CardPadding, type CardProps } from "./card";
+export {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  type CardPadding,
+  type CardProps
+} from "./card";
 export {
   Disclosure,
   DisclosureContent,

@@ -13,7 +13,14 @@ import { IconButton } from "../actions/icon-button";
 import { EmptyState } from "../feedback/empty-state";
 import { Input } from "../forms/input";
 import { Badge } from "../status/badge";
-import { Card, CardContent, CardHeader, CardTitle, type CardPadding } from "../structure/card";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  type CardPadding
+} from "../structure/card";
 import {
   Disclosure,
   DisclosureContent,
@@ -279,7 +286,7 @@ export const structureGallery: GalleryGroup = {
     },
     {
       name: "Card",
-      components: ["Card", "CardHeader", "CardTitle", "CardContent"],
+      components: ["Card", "CardHeader", "CardTitle", "CardContent", "CardFooter"],
       render: (text) => (
         <div className="grid gap-4 sm:grid-cols-2">
           {cardPaddings.map((padding) => (
@@ -290,6 +297,20 @@ export const structureGallery: GalleryGroup = {
               <CardContent>
                 <p className="text-body text-muted-foreground">{text.cardBody}</p>
               </CardContent>
+            </Card>
+          ))}
+          {/* Side by side the cards are equally tall, and their actions share the lower edge. */}
+          {[text.cardBody, text.cardBodyLong].map((body) => (
+            <Card key={body} padding="md" className="flex flex-col">
+              <CardHeader>
+                <CardTitle>{text.cardTitle}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-body text-muted-foreground">{body}</p>
+              </CardContent>
+              <CardFooter>
+                <Button size="sm">{text.cardAction}</Button>
+              </CardFooter>
             </Card>
           ))}
         </div>

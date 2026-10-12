@@ -55,3 +55,22 @@ export const CardContent = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElem
     );
   }
 );
+
+/**
+ * The card's actions, under its content: the main one first. In a card laid out as a column it
+ * rests on the lower edge, so the actions of cards that stand side by side share a line.
+ */
+export const CardFooter = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
+  function CardFooter({ className, ...props }, ref) {
+    return (
+      <div
+        ref={ref}
+        className={cn(
+          "mt-auto flex flex-wrap items-center gap-2 p-6 pt-0 group-data-[padding=md]/card:p-4 group-data-[padding=md]/card:pt-0",
+          className
+        )}
+        {...props}
+      />
+    );
+  }
+);

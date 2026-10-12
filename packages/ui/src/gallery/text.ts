@@ -192,6 +192,8 @@ export interface GalleryText
   hoverCardBody: string;
   cardTitle: string;
   cardBody: string;
+  cardBodyLong: string;
+  cardAction: string;
   tableName: string;
   tableState: string;
   tableUpdated: string;
@@ -417,6 +419,9 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     hoverCardBody: "About a third of the context window is in use.",
     cardTitle: "Support assistant",
     cardBody: "Answers questions from the product handbook.",
+    cardBodyLong:
+      "Answers questions from the product handbook, looks up orders and drafts the reply to the customer.",
+    cardAction: "Start chat",
     tableName: "Name",
     tableState: "State",
     tableUpdated: "Updated",
@@ -648,6 +653,9 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     hoverCardBody: "Etwa ein Drittel des Kontextfensters ist belegt.",
     cardTitle: "Support-Assistent",
     cardBody: "Beantwortet Fragen aus dem Produkthandbuch.",
+    cardBodyLong:
+      "Beantwortet Fragen aus dem Produkthandbuch, schlägt Bestellungen nach und entwirft die Antwort an den Kunden.",
+    cardAction: "Chat starten",
     tableName: "Name",
     tableState: "Status",
     tableUpdated: "Geändert",
