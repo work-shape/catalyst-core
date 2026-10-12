@@ -1510,27 +1510,32 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 - **A command no worker takes fails after 30 seconds:** `workspace.exec` waited without a limit
   for a worker to claim its command; with the workspace command worker down the run stood
   still until the idle limit of 30 minutes ended it. The tool call now fails when its command
-  has been due for 30 seconds, no command of the instance is running and none was claimed or
-  ended in the last 30 seconds: the rule a Page save already had, now `noWorkerTakesJobs` in
-  `@vivd-catalyst/core`. The agent reads that code execution is unavailable and the run goes
-  on. A command behind a busy worker waits as before. Jobs nobody claimed no longer outlive
-  what queued them: a cancelled command and the queued commands of a run that ended (completed,
-  failed, cancelled, lost or never started) end their job as `cancelled` with the error class
-  `WITHDRAWN`. A worker
-  that claims a job whose command was cancelled ends it as `cancelled`, not `succeeded`. A run
-  ended by the idle limit says what it waited on: the codes `AGENT_RUN_COMMAND_NOT_TAKEN` and
-  `AGENT_RUN_TOOL_SILENT` carry the new optional `tool` of a run error, the name of the tool
-  only, and the conversation shows it; `AGENT_RUN_IDLE` replaces
-  `AGENT_RUN_RUNTIME_INTERRUPTED` for a run that stood still on no tool.
+  has been due for 30 seconds and the workers of the kind reported nothing for 30 seconds. The
+  agent reads that code execution is unavailable and the run goes on. A command behind a
+  worker that reports waits as before, and a job a dead worker left `running` holds nobody
+  up. A kind that never reported, served by a worker of the previous release during a deploy,
+  is judged by its queue: no job under a live lease and none claimed or ended in 30 seconds.
+  A Page save uses the same rule, now `noWorkerTakesJobs` in `@vivd-catalyst/core`. Jobs
+  nobody claimed no longer outlive what queued them: a cancelled command and the queued
+  commands of a run that ended (completed, failed, cancelled, lost or never started) end
+  their job as `cancelled` with the error class `WITHDRAWN`. A worker that claims a job whose
+  command was cancelled ends it as `cancelled`, not `succeeded`. A run ended by the idle limit
+  says what it waited on: the codes `AGENT_RUN_COMMAND_NOT_TAKEN` and `AGENT_RUN_TOOL_SILENT`
+  carry the new optional `tool` of a run error, the name of the tool only, and the
+  conversation says that code could not be run or which tool did not answer;
+  `AGENT_RUN_IDLE` replaces `AGENT_RUN_RUNTIME_INTERRUPTED` for a run that stood still on no
+  tool.
 - **The Infrastructure page no longer shows a sandbox check nobody runs as "ok":** every job
   worker reports the kinds it claims every 10 seconds into the new table `job_worker_reports`
-  (migration `0057_job_worker_reports`). The sandbox shows as failed with the new error class
+  (migration `0057_job_worker_reports`), one row per kind; a row nobody renewed for a day is
+  removed with the ended jobs. The sandbox shows as failed with the new error class
   `no_report` and the time of the last report when the workers of its check were silent for 30
-  seconds, or when its last result is older than two check intervals (10 minutes).
-  `GET /instance/infrastructure` gains `codeExecution` with `available` and `since`. **Deploy
-  order:** run the migration before the workers start, as always; a worker of the previous
-  release writes no report and its result is judged by its age alone, so the page stays
-  correct while the workers are replaced. On a rollback the table stays and is not read.
+  seconds, also before their first result, or when its last result is older than two check
+  intervals (10 minutes). `GET /instance/infrastructure` gains `codeExecution` with
+  `available` and `since`. **Deploy order:** run the migration before the workers start, as
+  always; a worker of the previous release writes no report and its result is judged by its
+  age alone, so the page stays correct while the workers are replaced. On a rollback the
+  table stays and is not read.
 - **Workers no longer end on their own:** a job worker with nothing to do ended with exit code
   13 when the driver closed its last database connection at the end of the connection's
   lifetime, 30 to 60 minutes after the start. The sleep between two polls did not hold the

@@ -1186,8 +1186,7 @@ export function terminalRunNotice(
   }
   if (error.category !== "runtime_interrupted") return error.message;
   if (error.code === RUN_NOT_STARTED_CODE) return t("runNotStarted");
-  if (error.tool !== undefined && error.code === RUN_COMMAND_NOT_TAKEN_CODE)
-    return t("runCommandNotTaken", { tool: error.tool });
+  if (error.code === RUN_COMMAND_NOT_TAKEN_CODE) return t("runCommandNotTaken");
   if (error.tool !== undefined && error.code === RUN_TOOL_SILENT_CODE)
     return t("runToolSilent", { tool: error.tool });
   return t("runInterrupted");

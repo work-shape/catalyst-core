@@ -19,21 +19,15 @@ export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "dead" |
 export const JOB_WITHDRAWN_ERROR_CODE = "WITHDRAWN";
 
 /**
- * How long a job may be due before its caller asks whether any worker takes its kind, and the
- * window in which a worker must have shown itself: by running a job of the kind now, or by
- * having claimed or ended one within this time. A worker that is alive claims a due job at its
- * next poll, a second later, when one of its slots is free, so this only has to cover a worker
- * that restarts. A caller that waits for such a job is told that no worker takes it.
+ * How long a job may be due before its caller asks whether any worker takes its kind. A worker
+ * that is alive claims a due job at its next poll, a second later, when one of its slots is
+ * free, so this only has to cover a worker that restarts. A caller that waits for such a job
+ * is told that no worker takes it. Where the workers of a kind never reported, it is also the
+ * window in which one must have claimed or ended a job to count as there.
  */
 export const JOB_UNCLAIMED_MS = 30 * 1000;
 /** How often a caller that still waits asks the queue whether a worker takes its job's kind. */
 export const JOB_WORKER_CHECK_INTERVAL_MS = 5 * 1000;
-/**
- * How many of the newest jobs of a kind that a worker took are read for the time a worker last
- * claimed or ended one. Jobs are taken in the order they were queued, so the last ones taken
- * are among the newest.
- */
-const JOB_WORKER_SIGNS_READ = 20;
 /** How often a job worker reports that it serves its kinds. One statement per report. */
 export const JOB_WORKER_REPORT_INTERVAL_MS = 10 * 1000;
 /**
@@ -231,6 +225,18 @@ export interface JobKindSummary {
   waitingSince?: ISODateString;
 }
 
+/** What the queue shows of one kind and its workers, read in one statement. */
+export interface JobKindActivity {
+  /** Since when the longest waiting queued job has been due. Missing when none is due. */
+  waitingSince?: ISODateString;
+  /** Whether a job runs under a lease that is not over. A job a dead worker left does not count. */
+  running: boolean;
+  /** When a worker last claimed or ended a job. */
+  takenAt?: ISODateString;
+  /** The last report of the workers of the kind. Missing when none ever reported. */
+  report?: JobWorkerReport;
+}
+
 /** The last report of the workers that serve a kind. */
 export interface JobWorkerReport {
   kind: string;
@@ -272,9 +278,15 @@ export interface JobsStore {
     clientInstanceId: ClientInstanceId;
     kind: string;
   }): Promise<JobWorkerReport | undefined>;
+  /** What a caller that waits for a job of `kind` needs to tell whether a worker takes it. */
+  readKindActivity(input: {
+    clientInstanceId: ClientInstanceId;
+    kind: string;
+  }): Promise<JobKindActivity>;
   /**
    * Removes ended jobs: succeeded and cancelled ones 7 days after they ended, failed and dead
    * ones 30 days after. A dead job whose subject is still marked for deletion is kept.
+   * The report of a kind whose workers have been gone for a day goes with them.
    */
   pruneEndedJobs(input: { clientInstanceId: ClientInstanceId }): Promise<PruneEndedJobsResult>;
   /** Per kind, the jobs that are queued, running, failed and dead. Kinds with none are left out. */
@@ -334,38 +346,27 @@ export const scheduledJobPayloadSchema: JobPayloadSchema<ScheduledJobPayload> = 
   }
 };
 
-/** The states a job has only after a worker claimed it. */
-const JOB_STATUSES_A_WORKER_SET = ["running", "succeeded", "failed", "dead"] as const;
-
 /**
- * Whether no worker takes the jobs of `kind`: one has been due for `unclaimedMs`, none is
- * running, and none was claimed or ended within `unclaimedMs` either. One look at the queue
- * between two jobs of a busy worker finds none running, so the jobs that ended count too: a
- * caller queued behind a busy worker keeps waiting.
+ * Whether no worker takes the jobs of `kind` while one has been due for `unclaimedMs`. The
+ * workers say so themselves: a kind whose last report is older than `JOB_WORKER_SILENT_MS` has
+ * none, whatever its queue shows, and a kind that reports is waited for, however long its
+ * workers are busy. A kind that never reported is served by a worker of the release before:
+ * it has none when no job runs under a live lease and none was claimed or ended within
+ * `unclaimedMs`. A job a dead worker left `running` is not a sign of a worker.
  */
 export async function noWorkerTakesJobs(
-  jobs: Pick<JobsStore, "summarizeByKind" | "listOverview">,
+  jobs: Pick<JobsStore, "readKindActivity">,
   input: { clientInstanceId: ClientInstanceId; kind: JobKind; unclaimedMs?: number }
 ): Promise<boolean> {
-  const { clientInstanceId } = input;
   const unclaimedMs = input.unclaimedMs ?? JOB_UNCLAIMED_MS;
-  const kinds = await jobs.summarizeByKind({ clientInstanceId });
-  const ofKind = kinds.find((summary) => summary.kind === input.kind.kind);
-  if (
-    ofKind === undefined ||
-    ofKind.running > 0 ||
-    ofKind.waitingSince === undefined ||
-    Date.now() - Date.parse(ofKind.waitingSince) < unclaimedMs
-  ) {
-    return false;
-  }
-  const taken = await jobs.listOverview({
-    clientInstanceId,
-    filters: { kind: input.kind.kind, statuses: JOB_STATUSES_A_WORKER_SET },
-    page: { limit: JOB_WORKER_SIGNS_READ }
+  const activity = await jobs.readKindActivity({
+    clientInstanceId: input.clientInstanceId,
+    kind: input.kind.kind
   });
-  const since = Date.now() - unclaimedMs;
-  return !taken.some((job) =>
-    [job.startedAt, job.finishedAt].some((at) => at !== undefined && Date.parse(at) >= since)
-  );
+  const now = Date.now();
+  if (activity.waitingSince === undefined || now - Date.parse(activity.waitingSince) < unclaimedMs)
+    return false;
+  if (activity.report) return now - Date.parse(activity.report.seenAt) > JOB_WORKER_SILENT_MS;
+  if (activity.running) return false;
+  return activity.takenAt === undefined || now - Date.parse(activity.takenAt) > unclaimedMs;
 }

@@ -6,7 +6,7 @@ import {
   useAgentRunJobFixture,
   type AgentRunJobFixture as Fixture
 } from "./support/agent-run-job-fixture";
-import { required } from "./support/assertions";
+import { deferred, required } from "./support/assertions";
 import {
   advanceFakeClockUntilSettled,
   settleOnFakeClock,
@@ -157,6 +157,63 @@ describe("an agent run that stores no event for the idle limit", () => {
       message:
         "Agent run stored no event within the idle limit while it waited for the tool web.fetch"
     });
+  });
+
+  it("does not stop a run that stores an event while the watchdog reads the queue", async () => {
+    const fixture = await createFixture("resumed");
+    const run = await fixture.accept();
+    const reading = deferred<void>();
+    const read = deferred<boolean>();
+    const stores = {
+      ...db.store,
+      executionWorkspaces: {
+        ...db.store.executionWorkspaces,
+        hasUnclaimedWorkspaceCommand() {
+          reading.resolve();
+          return read.promise;
+        }
+      }
+    };
+    useFakeClockBesidePostgres();
+    try {
+      const pass = fixture.worker({ stores }).runDue();
+      const execution = await settleOnFakeClock(fixture.executor.next());
+      const toolCallId = asToolCallId("toolcall_slow");
+      execution.emit((base) => ({
+        type: "tool_call_started",
+        ...base,
+        toolCallId,
+        toolName: "web.fetch",
+        input: {}
+      }));
+      await settleOnFakeClock(execution.consumed());
+      await vi.advanceTimersByTimeAsync(AGENT_RUN_IDLE_LIMIT_MS - 1_700);
+      await advanceFakeClockUntilSettled(reading.promise, 250);
+
+      // The tool answers and the reply goes on, 1.3 seconds into the watchdog's read.
+      await vi.advanceTimersByTimeAsync(1_300);
+      execution.emit((base) => ({
+        type: "tool_call_completed",
+        ...base,
+        toolCallId,
+        toolName: "web.fetch",
+        result: { status: "success", output: {} },
+        modelOutput: "{}"
+      }));
+      execution.delta("Here it is.");
+      await settleOnFakeClock(execution.consumed());
+      read.resolve(false);
+      await vi.advanceTimersByTimeAsync(2_300);
+
+      expect(await settleOnFakeClock(fixture.run(run))).toMatchObject({ status: "running" });
+      await settleOnFakeClock(execution.assistantMessage("Here it is."));
+      execution.complete();
+      await advanceFakeClockUntilSettled(pass, 250);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(await fixture.run(run)).toMatchObject({ status: "completed" });
   });
 
   it("names no tool when none was open", async () => {

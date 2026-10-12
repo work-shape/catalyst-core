@@ -30,6 +30,7 @@ import {
   listWorkspaceFiles as listPostgresWorkspaceFiles,
   markExecutionWorkspaceDeleted as markPostgresExecutionWorkspaceDeleted,
   renewClaimedWorkspaceCommandLease as renewClaimedPostgresWorkspaceCommandLease,
+  giveUpUnclaimedWorkspaceCommand as giveUpUnclaimedPostgresWorkspaceCommand,
   hasUnclaimedWorkspaceCommand as hasPostgresUnclaimedWorkspaceCommand,
   requestWorkspaceCommandCancellation as requestPostgresWorkspaceCommandCancellation,
   upsertWorkspaceFile as upsertPostgresWorkspaceFile
@@ -130,6 +131,7 @@ export function createPostgresExecutionWorkspacesStore(
       return requestPostgresWorkspaceCommandCancellation(db, input);
     },
     hasUnclaimedWorkspaceCommand: (input) => hasPostgresUnclaimedWorkspaceCommand(db, input),
+    giveUpUnclaimedWorkspaceCommand: (input) => giveUpUnclaimedPostgresWorkspaceCommand(db, input),
     async cancelClaimedWorkspaceCommand(
       input: Parameters<WorkspaceCommandStore["cancelClaimedWorkspaceCommand"]>[0]
     ): Promise<WorkspaceCommand> {

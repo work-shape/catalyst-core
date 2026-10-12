@@ -514,6 +514,23 @@ describe("a workspace command no worker takes", () => {
   const harness = useJobExecutorHarness(db);
   const { createFixture, commandJobs } = useWorkspaceCommandJobFixture(db, harness);
 
+  /**
+   * Moves the fake clock by `ms` in steps the waiting client can follow: it sleeps half a
+   * second between two reads, and each read is a real round trip that one move would outrun.
+   */
+  async function passInSteps(ms: number, handle: { command: WorkspaceCommand }): Promise<void> {
+    const until = Date.now() + ms;
+    while (Date.now() < until) {
+      await vi.advanceTimersByTimeAsync(250);
+      await settleOnFakeClock(
+        db.store.executionWorkspaces.getWorkspaceCommand({
+          clientInstanceId: handle.command.clientInstanceId,
+          commandId: handle.command.id
+        })
+      );
+    }
+  }
+
   /** The client as the API builds it: its own poll interval and the limits of the product. */
   const productClient = () =>
     createWorkspaceCommandClient({ stores: db.store, now: () => new Date().toISOString() });
@@ -538,9 +555,11 @@ describe("a workspace command no worker takes", () => {
       reason: WORKSPACE_COMMAND_NO_WORKER_MESSAGE,
       command: { status: "cancelled", cancellationReason: "No worker took the workspace command" }
     });
+    // The agent passes it on to a person: an administrator is named, the worker is not.
     expect(WORKSPACE_COMMAND_NO_WORKER_MESSAGE).toMatch(
-      /^Code execution is unavailable right now/u
+      /^Code execution is unavailable right now.* an administrator has to look into it/u
     );
+    expect(WORKSPACE_COMMAND_NO_WORKER_MESSAGE).not.toMatch(/worker/iu);
     // Not before the limit, and long before the idle limit of a run would have ended the run.
     expect(waited).toBeGreaterThanOrEqual(JOB_UNCLAIMED_MS);
     expect(waited).toBeLessThan(AGENT_RUN_IDLE_LIMIT_MS);
@@ -588,7 +607,7 @@ describe("a workspace command no worker takes", () => {
     const pass = fixture.worker().runDue();
     const execution = await settleOnFakeClock(fixture.executor.next());
     // Past the limit and past the next look at the queue, while the command still runs.
-    await vi.advanceTimersByTimeAsync(700 + JOB_WORKER_CHECK_INTERVAL_MS + 1_300);
+    await passInSteps(700 + JOB_WORKER_CHECK_INTERVAL_MS + 1_300, handle);
     await settleOnFakeClock(fixture.command(handle.command));
     expect(result).toBeUndefined();
 
@@ -604,6 +623,144 @@ describe("a workspace command no worker takes", () => {
     expect(await settleOnFakeClock(commandJobs(fixture))).toMatchObject([
       { status: "succeeded", attempts: 1 }
     ]);
+  });
+
+  /** As if the process of the worker had been killed: its leases run out and it reports nothing. */
+  async function killWorker(fixture: { clientInstanceId: string }, reports: "silent" | "none") {
+    await db.sql`
+      update platform_jobs set lease_expires_at = now() - interval '1 second'
+      where client_instance_id = ${fixture.clientInstanceId} and status = 'running'`;
+    if (reports === "none") {
+      await db.sql`
+        delete from job_worker_reports where client_instance_id = ${fixture.clientInstanceId}`;
+    } else {
+      await db.sql`
+        update job_worker_reports
+        set seen_at = seen_at - interval '47 seconds'
+        where client_instance_id = ${fixture.clientInstanceId}`;
+    }
+  }
+
+  // The incident: the worker died while a command ran. Its job stays `running` until a worker
+  // buries it, and no worker comes.
+  it.each([
+    { reports: "silent" as const, name: "its last report is 47 seconds old" },
+    {
+      reports: "none" as const,
+      name: "it was a worker of the release before, which reports nothing"
+    }
+  ])(
+    "is given up within the limit when the worker died while another command ran: $name",
+    async ({ reports }) => {
+      const fixture = await createFixture(`died_${reports}`);
+      await fixture.enqueue("sleep 600");
+      const pass = fixture.worker().runDue();
+      const left = await fixture.executor.next();
+      await killWorker(fixture, reports);
+      const other = await fixture.secondWorkspace();
+      const client = productClient();
+      useFakeClockBesidePostgres();
+      const handle = await settleOnFakeClock(
+        client.enqueue({ kind: "execution_workspace", id: other.id }, fixture.request("ls"))
+      );
+      const queuedAt = Date.now();
+
+      const result = await advanceFakeClockUntilSettled(client.await(handle, {}), 250);
+
+      expect(result).toMatchObject({ status: "no_worker", command: { status: "cancelled" } });
+      expect(Date.now() - queuedAt).toBeGreaterThanOrEqual(JOB_UNCLAIMED_MS);
+      expect(Date.now() - queuedAt).toBeLessThan(2 * JOB_UNCLAIMED_MS);
+      vi.useRealTimers();
+      left.complete(successResult());
+      await pass.catch(() => undefined);
+    }
+  );
+
+  it("waits for a worker that reports, however long it claims nothing", async () => {
+    const fixture = await createFixture("reporting");
+    // A worker of the kind is up and reports through the whole wait.
+    await fixture.worker().runDue();
+    await db.sql`
+      update job_worker_reports set seen_at = now() + interval '10 minutes'
+      where client_instance_id = ${fixture.clientInstanceId}`;
+    const client = productClient();
+    const stopped = new AbortController();
+    useFakeClockBesidePostgres();
+    const handle = await settleOnFakeClock(
+      client.enqueue(
+        { kind: "execution_workspace", id: fixture.workspace.id },
+        fixture.request("ls")
+      )
+    );
+    let ended = false;
+    const waiting = client.await(handle, { signal: stopped.signal }).finally(() => {
+      ended = true;
+    });
+
+    // Past the limit and four more looks at the queue.
+    await passInSteps(JOB_UNCLAIMED_MS + 4 * JOB_WORKER_CHECK_INTERVAL_MS + 1_300, handle);
+    expect(await settleOnFakeClock(fixture.command(handle.command))).toMatchObject({
+      status: "queued"
+    });
+    expect(ended).toBe(false);
+
+    stopped.abort();
+    await advanceFakeClockUntilSettled(waiting, 250);
+  });
+
+  it("goes on waiting for a command that a worker claims in the moment it is given up", async () => {
+    const fixture = await createFixture("claimed_at_give_up");
+    let pass: Promise<void> | undefined;
+    // The queue is read, it shows no worker, and before the client acts on it a worker claims.
+    const jobs: typeof db.store.jobs = {
+      ...db.store.jobs,
+      async readKindActivity(input) {
+        const read = await db.store.jobs.readKindActivity(input);
+        if (!pass) {
+          pass = fixture.worker().runDue();
+          await fixture.executor.next();
+        }
+        return read;
+      }
+    };
+    const client = createWorkspaceCommandClient({
+      stores: { ...db.store, jobs },
+      now: () => new Date().toISOString()
+    });
+    useFakeClockBesidePostgres();
+    const handle = await settleOnFakeClock(
+      client.enqueue(
+        { kind: "execution_workspace", id: fixture.workspace.id },
+        fixture.request("ls")
+      )
+    );
+    let result: Awaited<ReturnType<typeof client.await>> | undefined;
+    const waiting = client.await(handle, {}).then((ended) => {
+      result = ended;
+    });
+
+    await vi.advanceTimersByTimeAsync(JOB_UNCLAIMED_MS - 700);
+    for (let step = 0; step < 40 && fixture.executor.calls.length === 0; step += 1) {
+      await vi.advanceTimersByTimeAsync(250);
+      await settleOnFakeClock(fixture.command(handle.command));
+    }
+    const execution = required(fixture.executor.calls[0]);
+    // Two more looks at the row: the client has acted on what it read.
+    await vi.advanceTimersByTimeAsync(1_300);
+    expect(await settleOnFakeClock(fixture.command(handle.command))).toMatchObject({
+      status: "running"
+    });
+    expect(result).toBeUndefined();
+    expect(execution.signal?.aborted).toBe(false);
+
+    execution.complete(successResult({ stdoutPreview: "listed" }));
+    await settleOnFakeClock(required(pass));
+    await advanceFakeClockUntilSettled(waiting, 250);
+
+    expect(result).toMatchObject({
+      status: "settled",
+      command: { status: "completed", output: { stdoutPreview: "listed" } }
+    });
   });
 
   it("ends the job of a cancelled command as cancelled when a worker claims it late, and runs nothing", async () => {

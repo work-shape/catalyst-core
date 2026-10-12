@@ -34,6 +34,7 @@ import {
   createPlatformId
 } from "@vivd-catalyst/core";
 import { withdrawQueuedJobs } from "./jobs/store";
+import { platformJobs } from "./schema/jobs";
 import { requireActiveConversationLock } from "./postgres-conversation-operations";
 import type { PostgresConnection } from "./postgres-database";
 import { mapExecutionWorkspace, mapWorkspaceCommand, mapWorkspaceFile } from "./rows";
@@ -634,6 +635,49 @@ export async function requestWorkspaceCommandCancellation(
       throw new AppError("NOT_FOUND", "Workspace command is not available");
     }
     throw new AppError("CONFLICT", "Workspace command is already terminal");
+  });
+}
+
+export async function giveUpUnclaimedWorkspaceCommand(
+  db: PostgresConnection,
+  input: RequestWorkspaceCommandCancellationInput
+): Promise<WorkspaceCommand | undefined> {
+  return db.transaction(async (tx) => {
+    // A worker claims the job before it claims the command. With the job locked while it is
+    // queued, no worker starts the command between this decision and its commit.
+    const jobs = await tx
+      .select({ status: platformJobs.status })
+      .from(platformJobs)
+      .where(
+        and(
+          eq(platformJobs.clientInstanceId, input.clientInstanceId),
+          eq(platformJobs.kind, WORKSPACE_COMMAND_JOB_KIND),
+          eq(platformJobs.dedupeKey, subjectDedupeKey(WORKSPACE_COMMAND_JOB_KIND, input.commandId)),
+          inArray(platformJobs.status, ["queued", "running"])
+        )
+      )
+      .for("update");
+    if (jobs.some((job) => job.status === "running")) return undefined;
+    const [row] = await tx
+      .update(workspaceCommands)
+      .set({
+        status: "cancelled",
+        cancellationReason: input.reason ?? null,
+        cancellationRequestedAt: new Date(input.requestedAt),
+        completedAt: new Date(input.requestedAt),
+        updatedAt: new Date(input.requestedAt)
+      })
+      .where(
+        and(
+          eq(workspaceCommands.clientInstanceId, input.clientInstanceId),
+          eq(workspaceCommands.id, input.commandId),
+          eq(workspaceCommands.status, "queued")
+        )
+      )
+      .returning();
+    if (!row) return undefined;
+    await withdrawCommandJobs(tx, input.clientInstanceId, [row.id]);
+    return mapWorkspaceCommand(row);
   });
 }
 

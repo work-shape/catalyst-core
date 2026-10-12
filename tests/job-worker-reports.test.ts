@@ -4,7 +4,7 @@ import {
   JobWithdrawnError,
   defineJobHandler
 } from "@vivd-catalyst/core";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { required } from "./support/assertions";
 import { kindOf, useJobExecutorHarness } from "./support/job-executor-harness";
 import { usePostgresSuite } from "./support/postgres-suite";
@@ -53,6 +53,53 @@ describe("job workers report the kinds they claim", () => {
     await worker(db.store, clientInstanceId, handlers()).runDue();
     const third = required(await report(served.kind));
     expect(third.aliveSince).toBe(third.seenAt);
+  });
+
+  it("reports once in ten seconds, however often the worker asks for work", async () => {
+    const clientInstanceId = db.clientInstance("interval");
+    const kind = kindOf("test.interval");
+    const serving = worker(db.store, clientInstanceId, [
+      defineJobHandler({ kind, slots: 1, async run() {} })
+    ]);
+    const seenAt = async () => {
+      const [row] = await db.sql<{ seen_at: string }[]>`
+        select seen_at::text from job_worker_reports where client_instance_id = ${clientInstanceId}`;
+      return required(row).seen_at;
+    };
+    vi.useFakeTimers({ toFake: ["Date"] });
+    await serving.runDue();
+    const first = await seenAt();
+
+    // 7.3 seconds later, within the interval: the pass writes nothing.
+    vi.setSystemTime(Date.now() + 7_300);
+    await serving.runDue();
+    expect(await seenAt()).toBe(first);
+
+    // 11.2 seconds after the report, past the interval.
+    vi.setSystemTime(Date.now() + 3_900);
+    await serving.runDue();
+    expect(await seenAt()).not.toBe(first);
+    expect(11_200).toBeGreaterThan(JOB_WORKER_REPORT_INTERVAL_MS);
+  });
+
+  it("removes the report of a kind whose workers have been gone for a day", async () => {
+    const clientInstanceId = db.clientInstance("pruned");
+    const gone = kindOf("test.gone");
+    const resting = kindOf("test.resting");
+    await worker(db.store, clientInstanceId, [
+      defineJobHandler({ kind: gone, slots: 1, async run() {} }),
+      defineJobHandler({ kind: resting, slots: 1, async run() {} })
+    ]).runDue();
+    await db.sql`
+      update job_worker_reports
+      set seen_at = now() - case kind when ${gone.kind} then interval '25 hours' else interval '23 hours' end
+      where client_instance_id = ${clientInstanceId}`;
+
+    await db.store.jobs.pruneEndedJobs({ clientInstanceId });
+
+    const left = await db.sql<{ kind: string }[]>`
+      select kind from job_worker_reports where client_instance_id = ${clientInstanceId}`;
+    expect(left).toEqual([{ kind: resting.kind }]);
   });
 
   it("ends a job whose handler finds its subject withdrawn as cancelled, without another attempt", async () => {

@@ -11,6 +11,7 @@ import {
   type JobId,
   type JobKind,
   type JobSchedule,
+  type JobKindActivity,
   type JobWorkerReport,
   type JobsStore,
   type JsonObject,
@@ -32,6 +33,7 @@ export interface JobLease {
 
 const COMPLETED_JOB_RETENTION_DAYS = 7;
 const FAILED_JOB_RETENTION_DAYS = 30;
+const WORKER_REPORT_RETENTION_DAYS = 1;
 /** Failed onExhausted handlers and unreadable payloads are buried in batches of this size. */
 const EXHAUSTED_BATCH_SIZE = 20;
 
@@ -88,6 +90,7 @@ export function createPostgresJobsStore(db: PostgresConnection, enqueued: () => 
         );
     },
     readWorkerReport: (input) => readJobWorkerReport(db, input),
+    readKindActivity: (input) => readJobKindActivity(db, input),
     pruneEndedJobs: (input) => pruneEndedJobs(db, input),
     summarizeByKind: (input) => summarizeJobsByKind(db, input),
     listOverview: (input) => listJobOverview(db, input),
@@ -258,6 +261,42 @@ async function readJobWorkerReport(
     : undefined;
 }
 
+/** One read of the queue of a kind, on the clock of the database, and the kind's report. */
+async function readJobKindActivity(
+  db: PostgresConnection,
+  input: { clientInstanceId: ClientInstanceId; kind: string }
+): Promise<JobKindActivity> {
+  const taken = sql`${platformJobs.status} in ('running', 'succeeded', 'failed', 'dead')`;
+  const [[row], report] = await Promise.all([
+    db
+      .select({
+        waitingSince: sql<Date | null>`min(${platformJobs.runAfter}) filter (
+          where ${platformJobs.status} = 'queued' and ${platformJobs.runAfter} <= now()
+        )`.mapWith(platformJobs.runAfter),
+        running: sql<boolean>`coalesce(bool_or(
+          ${platformJobs.status} = 'running' and ${platformJobs.leaseExpiresAt} > now()
+        ), false)`,
+        takenAt: sql<Date | null>`max(
+          greatest(${platformJobs.startedAt}, ${platformJobs.finishedAt})
+        ) filter (where ${taken})`.mapWith(platformJobs.runAfter)
+      })
+      .from(platformJobs)
+      .where(
+        and(
+          eq(platformJobs.clientInstanceId, input.clientInstanceId),
+          eq(platformJobs.kind, input.kind)
+        )
+      ),
+    readJobWorkerReport(db, input)
+  ]);
+  return {
+    ...(row?.waitingSince ? { waitingSince: row.waitingSince.toISOString() } : {}),
+    running: row?.running ?? false,
+    ...(row?.takenAt ? { takenAt: row.takenAt.toISOString() } : {}),
+    ...(report ? { report } : {})
+  };
+}
+
 /**
  * A dead job whose subject is a user or a Shared Workspace that is still marked for deletion
  * is the record of an erasure that stopped. It is kept, whatever its age, until the subject
@@ -296,6 +335,19 @@ async function pruneEndedJobs(
       );
   const completed = await endedBefore(["succeeded", "cancelled"], COMPLETED_JOB_RETENTION_DAYS);
   const failed = await endedBefore(["failed", "dead"], FAILED_JOB_RETENTION_DAYS);
+  // One row per kind: it grows with the kinds of the product, not with time. The kinds of a
+  // release that is gone would stay for good, so a report nobody renewed for a day is removed.
+  await db
+    .delete(jobWorkerReports)
+    .where(
+      and(
+        eq(jobWorkerReports.clientInstanceId, input.clientInstanceId),
+        lt(
+          jobWorkerReports.seenAt,
+          sql`now() - make_interval(days => ${WORKER_REPORT_RETENTION_DAYS})`
+        )
+      )
+    );
   return { completedCount: completed.count, failedCount: failed.count };
 }
 

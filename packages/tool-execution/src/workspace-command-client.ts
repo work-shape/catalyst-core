@@ -19,7 +19,7 @@ const NO_WORKER_REASON = "No worker took the workspace command";
  * commands. The agent reads it and tells the person; the run goes on.
  */
 export const WORKSPACE_COMMAND_NO_WORKER_MESSAGE =
-  "Code execution is unavailable right now: no worker is taking commands on this instance, so the command was not run. Tell the person that code execution is unavailable at the moment and that an operator has to start the workspace command worker. Do not repeat the command in this reply.";
+  "Code execution is unavailable right now, so the command was not run. Tell the person that code execution is unavailable at the moment and that an administrator has to look into it. Do not repeat the command in this reply.";
 
 /** A command to queue. The client sets its workspace id and the time it was queued. */
 export type WorkspaceCommandRequest = Omit<
@@ -202,11 +202,20 @@ export function createWorkspaceCommandClient(
             kind: runWorkspaceCommandJob
           });
           if (noWorker) {
-            const given = await cancelWaitingCommand(command, NO_WORKER_REASON, "cancelled");
-            // A worker that claimed the command in this very moment is told to end it.
-            return given.status === "cancelled" && given.command.status === "cancelled"
-              ? { ...given, status: "no_worker", reason: WORKSPACE_COMMAND_NO_WORKER_MESSAGE }
-              : given;
+            // Decided under the lock of the job. A worker that claimed the command in this
+            // very moment runs it, and this call goes on waiting for its result.
+            const given = await store.giveUpUnclaimedWorkspaceCommand({
+              clientInstanceId: command.clientInstanceId,
+              commandId: command.id,
+              reason: NO_WORKER_REASON,
+              requestedAt: now()
+            });
+            if (given)
+              return {
+                status: "no_worker",
+                reason: WORKSPACE_COMMAND_NO_WORKER_MESSAGE,
+                command: given
+              };
           }
         }
       }

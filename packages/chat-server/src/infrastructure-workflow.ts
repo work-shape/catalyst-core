@@ -257,6 +257,9 @@ function checkOf(
   now: number
 ): InfrastructureCheck {
   if (!outcome) {
+    // A worker that reported and went silent before its first result is gone, not yet to come.
+    if (!entry.check && report && now - Date.parse(report.seenAt) > JOB_WORKER_SILENT_MS)
+      return { status: "failed", checkedAt: report.seenAt, errorClass: "no_report" };
     // A provider another process holds has an outcome once that process published one.
     return { status: entry.check ? "pending" : "not_checked" };
   }
@@ -300,11 +303,11 @@ function codeExecutionOf(sandbox: {
   check: InfrastructureCheck;
 }): NonNullable<Infrastructure["codeExecution"]> {
   const { outcome, report, check } = sandbox;
-  if (!outcome || (check.status !== "ok" && check.status !== "failed")) {
-    return { available: false };
-  }
   if (check.status === "failed" && check.errorClass === "no_report") {
     return { available: false, since: check.checkedAt };
+  }
+  if (!outcome || (check.status !== "ok" && check.status !== "failed")) {
+    return { available: false };
   }
   const since = outcome.since ?? outcome.checkedAt;
   // The sandbox answered before the worker that is up now came: code runs since that worker.

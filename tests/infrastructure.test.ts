@@ -1,261 +1,41 @@
-import { randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { z } from "zod";
-import { apiErrorResponseSchema, infrastructureSchema } from "@vivd-catalyst/api-contract";
+import { describe, expect, it, vi } from "vitest";
+import { apiErrorResponseSchema } from "@vivd-catalyst/api-contract";
 import {
   INFRASTRUCTURE_CHECK_NOW_MIN_INTERVAL_MS,
-  InfrastructureWorkflow,
   type InfrastructureEntry
 } from "@vivd-catalyst/chat-server";
 import {
-  createInstanceInfrastructure,
   createJobWorker,
   createSandbox,
-  createSandboxCheckJobs,
-  declaredSecretNames,
-  infrastructureOverview
+  createSandboxCheckJobs
 } from "@vivd-catalyst/client-assembly";
-import { getClientInstanceId, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { getClientInstanceId } from "@vivd-catalyst/config-schema";
 import {
-  defineProvider,
-  JOB_WORKER_SILENT_MS,
   legacyPermissionFor,
   PROVIDER_CHECK_TIMEOUT_MS,
   runProviderCheck,
-  type Logger,
   type SecretResolver
 } from "@vivd-catalyst/core";
 import { MailjetTransport } from "@vivd-catalyst/mail";
-import type { ModelAdapterFactory } from "@vivd-catalyst/model-provider";
 import { createFakeSecrets } from "./support/fixtures";
-import { asCaller, createCallerAuthAdapter } from "./support/route-callers";
-import { createTestInstanceWith, getTestJobs } from "./support/test-instance";
-import { eventually, required } from "./support/assertions";
-import { withTestSql } from "./support/test-sql";
+import { asCaller } from "./support/route-callers";
+import { getTestJobs } from "./support/test-instance";
+import { eventually } from "./support/assertions";
+import {
+  MARKER,
+  administrator,
+  member,
+  secretValues,
+  throwingModelProvider,
+  recordingLogger,
+  createServer,
+  stubProviders,
+  read,
+  byId
+} from "./support/infrastructure-world";
 
 // Instance > Infrastructure over HTTP: what an operator reads of the providers, that a check
 // always ends, and that neither a secret nor a provider's own words leave the instance.
-
-const MARKER = "secret-marker-5d1e9c";
-const administrator = asCaller({
-  id: "usr_admin",
-  roles: ["admin"],
-  permissions: [legacyPermissionFor("users.manage")]
-});
-const member = asCaller({ id: "usr_member", roles: ["user"] });
-
-/**
- * Every secret of the instance carries the marker. `SUMMER_2024` stands where a name belongs,
- * reads as one and resolves to nothing: a password typed into the field of a reference.
- */
-const secretValues = {
-  DATABASE_URL: `postgres://catalyst:${MARKER}@database.example.test:5432/catalyst`,
-  MODEL_KEY: `${MARKER}-model-key`,
-  MODEL_ORGANIZATION: `${MARKER}-organization`,
-  MAIL_KEY: `${MARKER}-mail-key`,
-  MAIL_SECRET: `${MARKER}-mail-secret`,
-  STORE_ACCESS_KEY: `${MARKER}-access-key`,
-  STORE_SECRET_KEY: `${MARKER}-secret-key`
-};
-
-/** A provider whose check throws what a vendor's client throws: text with the credential. */
-const throwingModelProvider = defineProvider({
-  port: "models",
-  type: "throwing",
-  configSchema: z.object({}),
-  external: false,
-  create: (): ModelAdapterFactory => () => {
-    throw new Error("This provider is never called for a model");
-  },
-  check() {
-    throw new Error(`401 from https://vendor.example.test: the key ${MARKER} is not valid`);
-  },
-  describe: () => ({})
-});
-
-/** A provider whose description holds what no page may show: an address with its signature. */
-const oddlyDescribedModelProvider = defineProvider({
-  port: "models",
-  type: "oddly-described",
-  configSchema: z.object({}),
-  external: false,
-  create: (): ModelAdapterFactory => () => {
-    throw new Error("This provider is never called for a model");
-  },
-  check: async () => ({ ok: true }),
-  describe: () => ({
-    endpointHost: `https://user:${MARKER}@signed.example.test/path?X-Amz-Signature=${MARKER}`,
-    bucket: `internal/path/${MARKER}`
-  })
-});
-
-function recordingLogger(): { logger: Logger; lines: unknown[] } {
-  const lines: unknown[] = [];
-  const record = (level: string) => (input: unknown, message?: string) => {
-    lines.push({ level, input, message });
-  };
-  const logger: Logger = {
-    debug: record("debug"),
-    info: record("info"),
-    warn: record("warn"),
-    error: record("error"),
-    child: () => logger
-  };
-  return { logger, lines };
-}
-
-const roots: string[] = [];
-
-afterEach(async () => {
-  vi.useRealTimers();
-  vi.unstubAllGlobals();
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
-
-/** An API on a full `infrastructure` section, with every provider's secrets in a fake resolver. */
-async function createServer(
-  options: {
-    extraEntries?: InfrastructureEntry[];
-    /** Replaces the resolver in which every secret of the instance is set. */
-    secrets?: SecretResolver;
-    /** The instance of another server of this file: both then are API processes of it. */
-    instanceId?: string;
-  } = {}
-) {
-  const root = await mkdtemp(join(tmpdir(), "infrastructure-test-"));
-  roots.push(root);
-  const config = parseClientInstanceConfig({
-    version: 1,
-    clientInstance: {
-      // Every test file has one database: an instance of its own keeps a test's results and
-      // its minute of "Check now" apart from the others'.
-      id: options.instanceId ?? `infrastructure-test-${randomUUID()}`,
-      displayName: "Infrastructure Test",
-      environment: "staging"
-    },
-    auth: { standalone: { enabled: true } },
-    infrastructure: {
-      models: {
-        main: {
-          provider: "openai-compatible",
-          region: "eu",
-          model: "test-model",
-          // A credential pasted into the address: only the host of it is ever shown.
-          baseUrl: `https://user:${MARKER}@models.example.test/v1`,
-          credentialSecret: "MODEL_KEY",
-          organizationSecret: "MODEL_ORGANIZATION"
-        },
-        unset: {
-          provider: "openai-compatible",
-          region: "global",
-          model: "test-model",
-          baseUrl: "https://other-models.example.test/v1",
-          credentialSecret: "SUMMER_2024"
-        },
-        throws: { provider: "throwing", model: "test-model" },
-        odd: { provider: "oddly-described", model: "test-model" }
-      },
-      mail: {
-        provider: "mailjet",
-        region: "eu",
-        apiKeySecret: "MAIL_KEY",
-        apiSecretSecret: "MAIL_SECRET",
-        appUrl: "https://chat.example.test",
-        sender: { fromAddress: "noreply@example.test" }
-      },
-      objectStorage: {
-        files: {
-          provider: "s3",
-          region: "eu",
-          // Nothing listens here: the connection is refused at once.
-          endpoint: "http://127.0.0.1:9",
-          bucket: "documents-eu",
-          bucketRegion: "eu-central-1",
-          accessKeySecret: "STORE_ACCESS_KEY",
-          secretKeySecret: "STORE_SECRET_KEY"
-        },
-        workspaces: { provider: "filesystem", root }
-      },
-      sandbox: { provider: "local" }
-    }
-  });
-  const { logger, lines } = recordingLogger();
-  const secrets = options.secrets ?? createFakeSecrets(secretValues);
-  const infrastructure = await createInstanceInfrastructure({
-    config,
-    env: {},
-    logger,
-    secrets,
-    providers: [throwingModelProvider, oddlyDescribedModelProvider]
-  });
-  let now = new Date("2026-10-10T08:00:00.000Z");
-  let workflow: InfrastructureWorkflow | undefined;
-  let overview: InfrastructureEntry[] = [];
-  const server = await createTestInstanceWith((stores) => {
-    overview = infrastructureOverview({ config, infrastructure, stores });
-    workflow = new InfrastructureWorkflow({
-      entries: [...overview, ...(options.extraEntries ?? [])],
-      declaredSecretNames: declaredSecretNames(config, infrastructure.registry),
-      secrets,
-      store: stores.infrastructureChecks,
-      jobs: stores.jobs,
-      clientInstanceId: getClientInstanceId(config),
-      logger,
-      now: () => now
-    });
-    return { authAdapter: createCallerAuthAdapter(), infrastructure: workflow };
-  });
-  return {
-    server,
-    config,
-    infrastructure,
-    instanceId: config.clientInstance.id,
-    /** The entry of the release config with this id, once the API process has started. */
-    entry(id: string): InfrastructureEntry {
-      const found = overview.find((entry) => entry.id === id);
-      if (!found) throw new Error(`No entry ${id}`);
-      return found;
-    },
-    /** What the scheduled job calls. */
-    runChecks(): Promise<void> {
-      if (!workflow) throw new Error("The API process has not started");
-      return workflow.runChecks();
-    },
-    lines,
-    root,
-    advance(ms: number) {
-      now = new Date(now.getTime() + ms);
-    },
-    setNow(to: Date) {
-      now = to;
-    }
-  };
-}
-
-/** The model endpoint refuses the key and says why; Mailjet's client fails with its header. */
-function stubProviders(): { requests: { url: string; headers: Record<string, string> }[] } {
-  const requests: { url: string; headers: Record<string, string> }[] = [];
-  vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
-    const url = input instanceof Request ? input.url : String(input);
-    const headers = Object.fromEntries(new Headers(init?.headers));
-    requests.push({ url, headers });
-    if (url.includes("models.example.test")) {
-      return new Response(
-        JSON.stringify({ error: { message: `Incorrect API key provided: ${MARKER}-model-key` } }),
-        { status: 401 }
-      );
-    }
-    throw new TypeError(`fetch failed with authorization ${headers.authorization ?? ""}`);
-  });
-  return { requests };
-}
-
-const read = (response: { json(): unknown }) => infrastructureSchema.parse(response.json());
-const byId = (infrastructure: z.infer<typeof infrastructureSchema>) =>
-  Object.fromEntries(infrastructure.items.map((item) => [item.id, item]));
 
 describe("Instance > Infrastructure: what an operator reads", () => {
   it("lists every provider and the database, unchecked until the first run", async () => {
@@ -600,110 +380,6 @@ describe("Instance > Infrastructure: several processes of one instance", () => {
     expect(after.database?.check).toEqual(before.database?.check);
     expect(after["models.main"]?.check).toEqual(before["models.main"]?.check);
     expect(JSON.stringify(lines)).not.toContain(MARKER);
-  });
-
-  it("shows the sandbox as failed, with the time of its last result, once two checks were missed", async () => {
-    stubProviders();
-    const { server, config, infrastructure, advance } = await createServer();
-    const worker = createJobWorker({
-      stores: server.stores,
-      clientInstanceId: getClientInstanceId(config),
-      logger: recordingLogger().logger,
-      ...createSandboxCheckJobs({
-        config,
-        infrastructure,
-        sandbox: await createSandbox(config, infrastructure),
-        stores: server.stores,
-        now: () => new Date("2026-10-10T08:03:00.000Z")
-      })
-    });
-    await worker.runDue();
-    await worker.stop();
-    const get = async () =>
-      read(await server.call("instance.infrastructure.get", {}, administrator));
-
-    // 08:12:41, nine minutes and 41 seconds after the result: one check may still be late.
-    advance(12 * 60_000 + 41_000);
-    const late = await get();
-    expect(byId(late).sandbox?.check).toEqual({
-      status: "ok",
-      checkedAt: "2026-10-10T08:03:00.000Z"
-    });
-    expect(late.codeExecution).toMatchObject({ available: true });
-
-    // 08:13:19: two intervals of five minutes have passed without a result.
-    advance(38_000);
-    const stale = await get();
-    expect(byId(stale).sandbox?.check).toEqual({
-      status: "failed",
-      checkedAt: "2026-10-10T08:03:00.000Z",
-      errorClass: "no_report"
-    });
-    expect(stale.codeExecution).toEqual({ available: false, since: "2026-10-10T08:03:00.000Z" });
-  });
-
-  it("shows the sandbox as failed when its worker went silent, and as answering again when a worker is back", async () => {
-    stubProviders();
-    const { server, config, infrastructure, setNow } = await createServer();
-    const clientInstanceId = getClientInstanceId(config);
-    const startWorker = async (checkedAt: Date) =>
-      createJobWorker({
-        stores: server.stores,
-        clientInstanceId,
-        logger: recordingLogger().logger,
-        ...createSandboxCheckJobs({
-          config,
-          infrastructure,
-          sandbox: await createSandbox(config, infrastructure),
-          stores: server.stores,
-          now: () => checkedAt
-        })
-      });
-    const get = async () =>
-      read(await server.call("instance.infrastructure.get", {}, administrator));
-    // The workers report on the clock of the database, so this test reads on the real clock.
-    const now = new Date();
-    const checkedAt = new Date(now.getTime() - 47_000);
-    setNow(now);
-    const first = await startWorker(checkedAt);
-    await first.runDue();
-    await first.stop();
-    const running = await get();
-    expect(byId(running).sandbox?.check).toEqual({
-      status: "ok",
-      checkedAt: checkedAt.toISOString()
-    });
-    expect(running.codeExecution).toMatchObject({ available: true });
-
-    // 47 seconds pass in which no worker of the kind reports: more than three missed reports.
-    const [silent] = await withTestSql(
-      (sql) => sql<{ seen_at: Date }[]>`
-        update job_worker_reports
-        set seen_at = seen_at - interval '47 seconds',
-            alive_since = alive_since - interval '47 seconds'
-        where client_instance_id = ${clientInstanceId}
-        returning seen_at`
-    );
-    const silentSince = required(silent).seen_at.toISOString();
-    const stopped = await get();
-    expect(byId(stopped).sandbox?.check).toEqual({
-      status: "failed",
-      checkedAt: silentSince,
-      errorClass: "no_report"
-    });
-    expect(stopped.codeExecution).toEqual({ available: false, since: silentSince });
-
-    // A worker is back and checks the sandbox as it starts.
-    const second = await startWorker(now);
-    await second.runDue();
-    await second.stop();
-    const back = await get();
-    expect(byId(back).sandbox?.check).toEqual({ status: "ok", checkedAt: now.toISOString() });
-    expect(back.codeExecution?.available).toBe(true);
-    // Code runs since the worker that is up now came, not since the result of the one before.
-    expect(Date.parse(required(back.codeExecution?.since))).toBeGreaterThan(
-      Date.parse(silentSince) + JOB_WORKER_SILENT_MS
-    );
   });
 });
 

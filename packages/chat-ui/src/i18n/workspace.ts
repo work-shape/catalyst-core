@@ -12,7 +12,7 @@ export const workspace = defineTranslations({
     noConversations: "No conversations yet.",
     openSidebar: "Open sidebar",
     runCommandNotTaken:
-      "The reply was stopped: it waited for the tool {tool}, and no worker took its command. Code execution is unavailable right now.",
+      "The reply was stopped because code could not be run. Code execution is unavailable right now. Try again later or ask an administrator.",
     runInterrupted: "The reply was interrupted. Please send your message again.",
     runModelNotPriced:
       "This model cannot be used at the moment. Choose another model or ask an administrator.",
@@ -48,7 +48,7 @@ export const workspace = defineTranslations({
     noConversations: "Noch keine Unterhaltungen.",
     openSidebar: "Seitenleiste öffnen",
     runCommandNotTaken:
-      "Die Antwort wurde gestoppt: Sie hat auf das Werkzeug {tool} gewartet, und kein Worker hat dessen Befehl übernommen. Code kann gerade nicht ausgeführt werden.",
+      "Die Antwort wurde gestoppt, weil Code gerade nicht ausgeführt werden kann. Versuche es später erneut oder wende dich an einen Administrator.",
     runInterrupted: "Die Antwort wurde unterbrochen. Bitte sende deine Nachricht erneut.",
     runModelNotPriced:
       "Dieses Modell kann gerade nicht verwendet werden. Wähle ein anderes Modell oder wende dich an einen Administrator.",

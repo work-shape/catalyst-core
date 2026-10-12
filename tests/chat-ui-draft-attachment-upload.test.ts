@@ -180,10 +180,10 @@ describe("the notice of a run that ended as failed or cancelled", () => {
     const silent = { ...interrupted, code: "AGENT_RUN_TOOL_SILENT", tool: "web.fetch" };
 
     expect(terminalRunNotice(notTaken, en)).toBe(
-      "The reply was stopped: it waited for the tool workspace.exec, and no worker took its command. Code execution is unavailable right now."
+      "The reply was stopped because code could not be run. Code execution is unavailable right now. Try again later or ask an administrator."
     );
     expect(terminalRunNotice(notTaken, de)).toBe(
-      "Die Antwort wurde gestoppt: Sie hat auf das Werkzeug workspace.exec gewartet, und kein Worker hat dessen Befehl übernommen. Code kann gerade nicht ausgeführt werden."
+      "Die Antwort wurde gestoppt, weil Code gerade nicht ausgeführt werden kann. Versuche es später erneut oder wende dich an einen Administrator."
     );
     expect(terminalRunNotice(silent, en)).toBe(
       "The reply was stopped: it waited for the tool web.fetch, which did not answer in time. Please send your message again."
@@ -191,6 +191,9 @@ describe("the notice of a run that ended as failed or cancelled", () => {
     expect(terminalRunNotice(silent, de)).toBe(
       "Die Antwort wurde gestoppt: Sie hat auf das Werkzeug web.fetch gewartet, das nicht rechtzeitig geantwortet hat. Bitte sende deine Nachricht erneut."
     );
+    // What a person reads names no worker: that is the operator's word.
+    for (const error of [notTaken, silent])
+      for (const t of [en, de]) expect(terminalRunNotice(error, t)).not.toMatch(/worker/iu);
     // A run that stood still on no tool reads as before.
     expect(terminalRunNotice({ ...interrupted, code: "AGENT_RUN_IDLE" }, en)).toBe(
       "The reply was interrupted. Please send your message again."

@@ -371,6 +371,14 @@ export interface WorkspaceCommandStore {
   requestWorkspaceCommandCancellation(
     input: RequestWorkspaceCommandCancellationInput
   ): Promise<WorkspaceCommand>;
+  /**
+   * Gives up a command that no worker claimed, under the lock of its job: the command becomes
+   * `cancelled` and its job is withdrawn. Resolves to nothing, and changes nothing, when a
+   * worker holds the job or the command is not queued any more: its caller goes on waiting.
+   */
+  giveUpUnclaimedWorkspaceCommand(
+    input: RequestWorkspaceCommandCancellationInput
+  ): Promise<WorkspaceCommand | undefined>;
   /** Whether a command of the run is still queued: no worker has claimed it. */
   hasUnclaimedWorkspaceCommand(input: {
     clientInstanceId: ClientInstanceId;

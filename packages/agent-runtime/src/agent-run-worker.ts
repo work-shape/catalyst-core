@@ -41,6 +41,8 @@ import type { AgentRunSignal } from "./store-backed-agent-runtime";
 // never answers cannot hold its conversation closed. Every stored event starts the time anew.
 // The failure names what the run waited on; the person reads that the reply stood still.
 export const AGENT_RUN_IDLE_LIMIT_MS = 30 * 60 * 1000;
+// How long the watchdog reads the queue for the cause of a run that stood still.
+const IDLE_CAUSE_READ_MS = 5 * 1000;
 // The most events a run holds back behind its last assistant message. The runtime emits two
 // events after that message, so what is held beyond them is what the run produced faster than
 // it was stored. Above the limit the held message and events are stored at once and the run
@@ -200,10 +202,18 @@ async function executeClaimedRun(
   const idleWait = async (): Promise<AgentRunError> => {
     const [tool] = openToolCalls.values();
     if (tool === undefined) return agentRunIdleError({});
-    const commandUnclaimed = await options.stores.executionWorkspaces
-      .hasUnclaimedWorkspaceCommand({ clientInstanceId: run.clientInstanceId, agentRunId: run.id })
-      // A queue that cannot be read leaves the cause unnamed. The tool is named all the same.
-      .catch(() => false);
+    // A queue that cannot be read, or not in time, leaves the cause unnamed. The tool is named
+    // all the same, and the stop does not wait for a database that does not answer.
+    const commandUnclaimed = await withinOr(
+      options.stores.executionWorkspaces
+        .hasUnclaimedWorkspaceCommand({
+          clientInstanceId: run.clientInstanceId,
+          agentRunId: run.id
+        })
+        .catch(() => false),
+      IDLE_CAUSE_READ_MS,
+      false
+    );
     return agentRunIdleError({ tool, commandUnclaimed });
   };
   /**
@@ -211,17 +221,24 @@ async function executeClaimedRun(
    * stopping the run cancels the command a tool waits for, and with it the sign of its cause.
    */
   const stopAsIdle = (): void => {
-    idleWait().then(
-      (error) => {
-        idleError = error;
-        stop("idle", error.message);
-      },
-      () => stop("idle", agentRunIdleError({}).message)
-    );
+    // The read takes time. An event stored meanwhile, or the end of the run, starts a new
+    // watch, and what this one found is about a run that no longer stands still.
+    const watch = idleWatch;
+    const stopIfStill = (error: AgentRunError) => {
+      if (watch !== idleWatch) return;
+      idleError = error;
+      stop("idle", error.message);
+    };
+    idleWait().then(stopIfStill, () => stopIfStill(agentRunIdleError({})));
   };
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
-  const restartIdleTimer = () => {
+  let idleWatch = 0;
+  const endIdleWatch = () => {
+    idleWatch += 1;
     clearTimeout(idleTimer);
+  };
+  const restartIdleTimer = () => {
+    endIdleWatch();
     idleTimer = setTimeout(stopAsIdle, AGENT_RUN_IDLE_LIMIT_MS);
     // A watchdog, not work: a stopped process does not wait up to the limit for a run whose
     // executor never returns.
@@ -428,7 +445,7 @@ async function executeClaimedRun(
       await closeRun(workerFailure(error));
     }
   } finally {
-    clearTimeout(idleTimer);
+    endIdleWatch();
     control.signal.removeEventListener("abort", onJobAborted);
     controller.abort("Agent run execution ended");
   }
@@ -668,4 +685,19 @@ function isTerminalEvent(event: AgentRuntimeEvent): boolean {
   return (
     event.type === "run_completed" || event.type === "run_cancelled" || event.type === "run_failed"
   );
+}
+
+/** The value of `work`, or `otherwise` when it takes longer than `ms`. */
+function withinOr<Value>(work: Promise<Value>, ms: number, otherwise: Value): Promise<Value> {
+  return new Promise<Value>((resolve) => {
+    const timer = setTimeout(() => resolve(otherwise), ms);
+    timer.unref();
+    work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      () => resolve(otherwise)
+    );
+  });
 }
