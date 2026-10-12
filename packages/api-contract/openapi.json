@@ -18094,8 +18094,10 @@
       "ModelUsageTier": {
         "type": "string",
         "enum": [
+          "very_low",
           "low",
           "moderate",
+          "elevated",
           "high",
           "very_high"
         ]

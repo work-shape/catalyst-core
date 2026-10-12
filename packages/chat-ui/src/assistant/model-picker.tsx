@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
-import { cn } from "@vivd-catalyst/ui";
+import { cn, LevelMeter } from "@vivd-catalyst/ui";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
 import { modelDisplayLabel } from "../model-label";
 import { useTranslation, type TranslationKey } from "../i18n";
@@ -8,10 +8,20 @@ import { EuResidencyBadge, ModelVendorIcon, modelVendorLabel } from "./model-ven
 
 type UsageTier = NonNullable<AgentSelectableModel["usageTier"]>;
 
-const usageTiers: UsageTier[] = ["low", "moderate", "high", "very_high"];
+/** The usage tiers from least to most, as the meter on the model card counts them. */
+const usageTiers: readonly UsageTier[] = [
+  "very_low",
+  "low",
+  "moderate",
+  "elevated",
+  "high",
+  "very_high"
+];
 const usageTierLabels: Record<UsageTier, TranslationKey> = {
+  very_low: "modelUsageTierVeryLow",
   low: "modelUsageTierLow",
   moderate: "modelUsageTierModerate",
+  elevated: "modelUsageTierElevated",
   high: "modelUsageTierHigh",
   very_high: "modelUsageTierVeryHigh"
 };
@@ -403,10 +413,16 @@ function ReasoningEffortSlider({
   );
 }
 
-function ModelCard({ model, className }: { model: AgentSelectableModel; className?: string }) {
+/** What the picker shows for the model under the pointer: its maker, description, usage and region. */
+export function ModelCard({
+  model,
+  className
+}: {
+  model: AgentSelectableModel;
+  className?: string;
+}) {
   const { t } = useTranslation();
   const vendorLabel = modelVendorLabel(model);
-  const level = model.usageTier ? usageTiers.indexOf(model.usageTier) : -1;
 
   return (
     <div
@@ -428,23 +444,13 @@ function ModelCard({ model, className }: { model: AgentSelectableModel; classNam
         <p className="text-xs leading-5 text-muted-foreground">{model.description}</p>
       ) : null}
       {model.usageTier ? (
-        <div className="grid gap-1.5">
-          <div className="flex items-baseline justify-between gap-2 text-xs">
-            <span className="text-muted-foreground">{t("modelPickerUsage")}</span>
-            <span className="font-medium">{t(usageTierLabels[model.usageTier])}</span>
-          </div>
-          <div className="grid grid-cols-4 gap-0.5">
-            {usageTiers.map((step, index) => (
-              <span
-                key={step}
-                className={cn(
-                  "h-1 rounded-full",
-                  index <= level ? "bg-muted-foreground" : "bg-muted-foreground/25"
-                )}
-              />
-            ))}
-          </div>
-        </div>
+        <LevelMeter
+          label={t("modelPickerUsage")}
+          level={usageTiers.indexOf(model.usageTier) + 1}
+          steps={usageTiers.length}
+          valueLabel={t(usageTierLabels[model.usageTier])}
+          scale="spectrum"
+        />
       ) : null}
       {model.region === "eu" || model.region === "global" ? (
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">

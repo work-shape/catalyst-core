@@ -1,6 +1,7 @@
 import { chartGalleryText, type ChartGalleryText } from "./text-chart";
 import { flowGalleryText, type FlowGalleryText } from "./text-flow";
 import { layoutGalleryText, type LayoutGalleryText } from "./text-layout";
+import { levelMeterGalleryText, type LevelMeterGalleryText } from "./text-level-meter";
 import { progressGalleryText, type ProgressGalleryText } from "./text-progress";
 import { sampleGalleryText, type SampleGalleryText } from "./text-samples";
 import { stepsGalleryText, type StepsGalleryText } from "./text-steps";
@@ -14,6 +15,7 @@ export interface GalleryText
     SampleGalleryText,
     ChartGalleryText,
     ProgressGalleryText,
+    LevelMeterGalleryText,
     StepsGalleryText,
     FlowGalleryText {
   title: string;
@@ -426,6 +428,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     ...sampleGalleryText.en,
     ...chartGalleryText.en,
     ...progressGalleryText.en,
+    ...levelMeterGalleryText.en,
     ...stepsGalleryText.en,
     ...flowGalleryText.en,
     countPending: "3 requests wait",
@@ -656,6 +659,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     ...sampleGalleryText.de,
     ...chartGalleryText.de,
     ...progressGalleryText.de,
+    ...levelMeterGalleryText.de,
     ...stepsGalleryText.de,
     ...flowGalleryText.de,
     countPending: "3 Anfragen warten",

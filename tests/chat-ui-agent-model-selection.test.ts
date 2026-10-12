@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ModelPicker } from "../packages/chat-ui/src/assistant/model-picker";
+import { ModelCard, ModelPicker } from "../packages/chat-ui/src/assistant/model-picker";
 import { TranslationProvider } from "./chat-ui-render-harness";
 import {
   agentModelSelection,
@@ -196,5 +196,39 @@ describe("composer model picker", () => {
 
     expect(markup).toContain(">GPT-5.6 Terra<");
     expect(markup).not.toContain(">Low<");
+  });
+});
+
+describe("model card usage consumption", () => {
+  const tiers = ["very_low", "low", "moderate", "elevated", "high", "very_high"] as const;
+  const card = (usageTier: (typeof tiers)[number] | undefined, locale: "en" | "de") =>
+    renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { children: null, locale },
+        createElement(ModelCard, { model: { ...own, ...(usageTier ? { usageTier } : {}) } })
+      )
+    );
+  const meter = (markup: string) => /<div role="meter"[^>]*>/u.exec(markup)?.[0] ?? "";
+
+  it.each([
+    ["en", "Usage consumption", ["Very low", "Low", "Moderate", "Elevated", "High", "Very high"]],
+    ["de", "Verbrauch", ["Sehr niedrig", "Niedrig", "Mittel", "Erhöht", "Hoch", "Sehr hoch"]]
+  ] as const)("names the six tiers in %s, each one step above the last", (locale, label, words) => {
+    tiers.forEach((tier, index) => {
+      const markup = card(tier, locale);
+
+      expect(meter(markup)).toContain(`aria-label="${label}"`);
+      expect(meter(markup)).toContain('aria-valuemax="6"');
+      expect(meter(markup)).toContain(`aria-valuenow="${index + 1}"`);
+      expect(meter(markup)).toContain(`aria-valuetext="${words[index]}"`);
+      // The word is on the card too, not only in the meter's description.
+      expect(markup).toContain(`>${words[index]}</span>`);
+      expect(markup.match(/data-filled=""/gu)).toHaveLength(index + 1);
+    });
+  });
+
+  it("shows no meter for a model without a tier", () => {
+    expect(card(undefined, "en")).not.toContain('role="meter"');
   });
 });

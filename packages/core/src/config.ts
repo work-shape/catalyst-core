@@ -90,19 +90,28 @@ export interface ModelBindingConfig {
   userSelectableReasoningEfforts?: ReasoningEffortConfig[];
 }
 
-export const MODEL_USAGE_TIERS = ["low", "moderate", "high", "very_high"] as const;
+export const MODEL_USAGE_TIERS = [
+  "very_low",
+  "low",
+  "moderate",
+  "elevated",
+  "high",
+  "very_high"
+] as const;
 export type ModelUsageTier = (typeof MODEL_USAGE_TIERS)[number];
 
 /**
- * Upper bounds of the first three usage tiers, as a blended price per million tokens in the
- * rate card's currency. The scale is fixed so adding or removing a model never moves another
- * model into a different tier.
+ * Upper bounds of the first five usage tiers, as a blended price per million tokens in the
+ * rate card's currency. The scale is logarithmic: each tier ends at twice the price of the one
+ * before. It is fixed and the same for every instance, so adding or removing a model never
+ * moves another model into a different tier.
  */
-const MODEL_USAGE_TIER_BOUNDS = [1, 5, 15] as const;
+export const MODEL_USAGE_TIER_BOUNDS = [1.25, 2.5, 5, 10, 20] as const;
 
 /**
  * How much of a usage limit a model consumes relative to others, from its rate card prices.
- * Runs read roughly three input tokens per output token, so the blend weights them 3:1.
+ * Runs read roughly three input tokens per output token, so the blend weights them 3:1. A price
+ * on a bound belongs to the tier above it.
  */
 export function modelUsageTierFromRates(
   rates: Pick<

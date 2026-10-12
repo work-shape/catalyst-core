@@ -458,6 +458,15 @@ id from config_assets where status = 'deleted')`.
 
 ### Changed
 
+- **Chat:** the usage consumption on a model card has six steps in place of four: `very_low`,
+  `low`, `moderate`, `elevated`, `high` and `very_high`, and its filled steps take a colour that
+  goes from cool to warm with the level. The tier still comes from the model's Customer Rate
+  Card entry (three parts uncached input to one part output per million tokens), on bounds
+  that double: below 1.25 `very_low`, below 2.5 `low`, below 5 `moderate`, below 10 `elevated`,
+  below 20 `high`, from 20 `very_high`. **Operators:** the tier shown for a model can change
+  with this release, for example from `low` to `very_low`; the four earlier values of a
+  binding's `usageTier` stay valid and keep their words. The UI library has `LevelMeter` and
+  the tokens `--level-1` to `--level-6` and `--level-tone-1` to `--level-tone-6` for it.
 - **Every process of an instance is assembled from one build (breaking for a client
   assembly):** `defineClientInstance` gains `runWorkspaceCommandWorker()` and
   `runArtifactPreviewWorker()`, which hand the worker the capabilities of the build as

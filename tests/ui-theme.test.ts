@@ -208,6 +208,47 @@ describe("UI theme contrast", () => {
   );
 });
 
+describe("UI theme level colours", () => {
+  const scales = { spectrum: "--level-", tone: "--level-tone-" } as const;
+  const levels = [1, 2, 3, 4, 5, 6] as const;
+
+  it.each(modes)(
+    "keeps every level colour of the %s default theme at 3:1 on page, sidebar and raised surface",
+    (mode) => {
+      const tokens = createThemeTokens(schemaInputs[mode], mode);
+      const ratios: Record<string, number> = {};
+      for (const surfaceToken of ["--background", "--sidebar", "--popover"] as const) {
+        const surface = flatten(parseColor(tokens[surfaceToken]), undefined);
+        for (const prefix of Object.values(scales)) {
+          for (const level of levels) {
+            const name: ThemeTokenName = `${prefix}${level}`;
+            ratios[`${name} on ${surfaceToken}`] = contrastRatio(requireHex(tokens[name]), surface);
+          }
+        }
+      }
+
+      expect(Object.keys(ratios)).toHaveLength(36);
+      expect(Object.entries(ratios).filter(([, ratio]) => ratio < 3)).toEqual([]);
+    }
+  );
+
+  it.each(modes)("ends the %s scales on a warm colour that is not the danger red", (mode) => {
+    const tokens = createThemeTokens(schemaInputs[mode], mode);
+    for (const prefix of Object.values(scales)) {
+      const top = requireHex(tokens[`${prefix}6`]);
+      // Warm: red over green over blue. A high level is not an error, so not the danger red.
+      expect(top.r > top.g && top.g > top.b).toBe(true);
+      expect(tokens[`${prefix}6`]).not.toBe(tokens["--destructive"]);
+    }
+    // The single hue deepens: each level stands out more from the page than the one before.
+    const page = flatten(parseColor(tokens["--background"]), undefined);
+    const tone = levels.map((level) =>
+      contrastRatio(requireHex(tokens[`--level-tone-${level}`]), page)
+    );
+    expect(tone).toEqual([...tone].sort((first, second) => first - second));
+  });
+});
+
 interface Rgba extends RgbColor {
   a: number;
 }

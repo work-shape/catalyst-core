@@ -5,6 +5,7 @@ import {
   parseClientInstanceConfig,
   type ClientInstanceConfig
 } from "@vivd-catalyst/config-schema";
+import { MODEL_USAGE_TIER_BOUNDS, modelUsageTierFromRates } from "@vivd-catalyst/core";
 import { builtInModelCapabilities } from "./support/model-gateway";
 
 /** The efforts the adapters declare, as the config route reads them from the gateway. */
@@ -278,7 +279,8 @@ describe("user-selectable model config", () => {
         bindingId: "luna",
         model: "gpt-5.6-luna",
         region: "eu",
-        usageTier: "low",
+        // (3 × 0.2 + 1.6) / 4 = 0.55 per million tokens.
+        usageTier: "very_low",
         // The effort the agent sets for this model, among the efforts offered by default.
         reasoningEffort: "medium",
         selectableReasoningEfforts: ["low", "medium", "high", "xhigh", "max"]
@@ -304,6 +306,39 @@ describe("user-selectable model config", () => {
         ...defaultChoice
       }
     ]);
+  });
+
+  it("derives one of six usage tiers from the blended price, on bounds that double", () => {
+    // Input and output at the same price blend to that price.
+    const tierAt = (price: number) =>
+      modelUsageTierFromRates({
+        uncachedInputPricePerMillionTokens: price,
+        outputPricePerMillionTokens: price
+      });
+
+    expect(MODEL_USAGE_TIER_BOUNDS).toEqual([1.25, 2.5, 5, 10, 20]);
+    // A price on a bound belongs to the tier above it.
+    expect([0, 1.24, 1.25, 2.49, 2.5, 4.99, 5, 9.99, 10, 19.99, 20, 400].map(tierAt)).toEqual([
+      "very_low",
+      "very_low",
+      "low",
+      "low",
+      "moderate",
+      "moderate",
+      "elevated",
+      "elevated",
+      "high",
+      "high",
+      "very_high",
+      "very_high"
+    ]);
+    // Three parts input to one part output: (3 × 2 + 14) / 4 = 5.
+    expect(
+      modelUsageTierFromRates({
+        uncachedInputPricePerMillionTokens: 2,
+        outputPricePerMillionTokens: 14
+      })
+    ).toBe("elevated");
   });
 
   it("rejects provider compaction for chat completions", () => {

@@ -20,7 +20,14 @@ export const userModelPreferenceSchema = z.object({
   modelBindingId: z.string().min(1).optional(),
   reasoningEfforts: z.record(z.string().min(1), reasoningEffortSchema)
 });
-export const modelUsageTierSchema = z.enum(["low", "moderate", "high", "very_high"]);
+export const modelUsageTierSchema = z.enum([
+  "very_low",
+  "low",
+  "moderate",
+  "elevated",
+  "high",
+  "very_high"
+]);
 /** Where a model's provider processes data. Absent for a provider inside the instance. */
 export const modelRegionSchema = z.enum(["eu", "global"]);
 

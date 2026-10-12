@@ -503,11 +503,15 @@ modelBindings:
 - `vendor` names who makes the model, for its logo: `openai`, `anthropic`, `mistral` or
   `google`. Without it the picker reads the vendor from the model id, and shows a neutral icon
   when it cannot tell.
-- `usageTier` (`low`, `moderate`, `high`, `very_high`) overrides the usage consumption shown
-  for the model. Without it the tier comes from the model's Customer Rate Card entry: three
-  parts uncached input price to one part output price per million tokens, below 1 is `low`,
-  below 5 `moderate`, below 15 `high`, anything above `very_high`. The bounds are fixed, so
-  adding a model never moves another one. A model without a rate card entry shows no tier.
+- `usageTier` (`very_low`, `low`, `moderate`, `elevated`, `high`, `very_high`) overrides the
+  usage consumption shown for the model. Without it the tier comes from the model's Customer
+  Rate Card entry: three parts uncached input price to one part output price per million
+  tokens, in the rate card's currency. Each tier ends at twice the price of the one before:
+  below 1.25 is `very_low`, below 2.5 `low`, below 5 `moderate`, below 10 `elevated`, below 20
+  `high`, anything from 20 `very_high`. The bounds are fixed and the same for every instance,
+  so adding a model never moves another one. Set `usageTier` where the price misleads, for
+  example for a model that writes many more output tokens for the same work. A model without
+  a rate card entry shows no tier.
 
 The EU mark is shown for models whose provider entry states `region: eu`.
 

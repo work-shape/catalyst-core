@@ -28,6 +28,7 @@ export {
   type StepState,
   type StepTone
 } from "./steps";
+export { LevelMeter, type LevelMeterProps, type LevelMeterScale } from "./level-meter";
 export {
   Table,
   TableBody,

@@ -88,6 +88,18 @@ export const THEME_TOKEN_NAMES = [
   "--chart-3",
   "--chart-4",
   "--chart-5",
+  "--level-1",
+  "--level-2",
+  "--level-3",
+  "--level-4",
+  "--level-5",
+  "--level-6",
+  "--level-tone-1",
+  "--level-tone-2",
+  "--level-tone-3",
+  "--level-tone-4",
+  "--level-tone-5",
+  "--level-tone-6",
   "--border",
   "--input",
   "--input-strong",
@@ -109,12 +121,21 @@ export const THEME_TOKEN_NAMES = [
 export type ThemeTokenName = (typeof THEME_TOKEN_NAMES)[number];
 export type ThemeTokens = Record<ThemeTokenName, string>;
 
+type LevelColors = readonly [string, string, string, string, string, string];
+
 interface ModeConstants {
   destructive: string;
   success: string;
   warning: string;
   info: string;
   charts: readonly [string, string, string, string, string];
+  /**
+   * Six levels from low to high, from a cool blue to a warm orange. Each holds 3:1 against the
+   * page, the sidebar and a raised surface of the base theme. The last is not the destructive red.
+   */
+  levels: LevelColors;
+  /** The same six levels in one hue that deepens: darker in light mode, brighter in dark mode. */
+  levelTones: LevelColors;
   shadowControl: string;
   shadowRaised: string;
   shadowOverlay: string;
@@ -128,6 +149,8 @@ const MODE_CONSTANTS: Record<ThemeMode, ModeConstants> = {
     warning: "#b45309",
     info: "#0369a1",
     charts: ["#0f766e", "#b45309", "#0369a1", "#7c3aed", "#be185d"],
+    levels: ["#3082b5", "#118c8c", "#318f5a", "#8b8318", "#ae720a", "#b24b0a"],
+    levelTones: ["#9e805e", "#a27646", "#a1692b", "#9d580c", "#8e4804", "#7b3600"],
     shadowControl: "inset 0 1px 0 rgb(255 255 255 / 0.4), 0 1px 2px rgb(0 0 0 / 0.05)",
     shadowRaised: "0 1px 2px rgb(0 0 0 / 0.04), 0 2px 12px rgb(0 0 0 / 0.06)",
     shadowOverlay: "0 1px 3px rgb(0 0 0 / 0.06), 0 8px 24px rgb(0 0 0 / 0.10)",
@@ -139,6 +162,8 @@ const MODE_CONSTANTS: Record<ThemeMode, ModeConstants> = {
     warning: "#fbbf24",
     info: "#38bdf8",
     charts: ["#2dd4bf", "#fbbf24", "#38bdf8", "#a78bfa", "#f472b6"],
+    levels: ["#6bbaf0", "#4fcdcd", "#72d699", "#d5cc55", "#f5ae4b", "#f47f46"],
+    levelTones: ["#887054", "#a37e53", "#c08d50", "#db9d48", "#f4af41", "#fec764"],
     shadowControl: "inset 0 1px 0 rgb(255 255 255 / 0.07), 0 1px 2px rgb(0 0 0 / 0.3)",
     shadowRaised: "0 1px 2px rgb(0 0 0 / 0.4)",
     shadowOverlay: "0 8px 24px rgb(0 0 0 / 0.5)",
@@ -212,6 +237,18 @@ export function createThemeTokens(inputs: ThemeInputs, mode: ThemeMode): ThemeTo
     "--chart-3": constants.charts[2],
     "--chart-4": constants.charts[3],
     "--chart-5": constants.charts[4],
+    "--level-1": constants.levels[0],
+    "--level-2": constants.levels[1],
+    "--level-3": constants.levels[2],
+    "--level-4": constants.levels[3],
+    "--level-5": constants.levels[4],
+    "--level-6": constants.levels[5],
+    "--level-tone-1": constants.levelTones[0],
+    "--level-tone-2": constants.levelTones[1],
+    "--level-tone-3": constants.levelTones[2],
+    "--level-tone-4": constants.levelTones[3],
+    "--level-tone-5": constants.levelTones[4],
+    "--level-tone-6": constants.levelTones[5],
     "--border": borderColor,
     "--input": mix(textColor, 12, borderColor),
     "--input-strong": over(mutedTextColor, 70),

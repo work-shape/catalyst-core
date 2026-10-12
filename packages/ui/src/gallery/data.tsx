@@ -23,6 +23,7 @@ import { Samples, type GalleryGroup } from "./entry";
 import { EmptyState } from "../feedback/empty-state";
 import { Avatar } from "../status/avatar";
 import { chartGalleryEntry } from "./chart";
+import { levelMeterGalleryEntry } from "./level-meter";
 import { stepsGalleryEntry } from "./steps";
 import type { GalleryText } from "./text";
 
@@ -513,6 +514,7 @@ export const dataGallery: GalleryGroup = {
       )
     },
     stepsGalleryEntry,
+    levelMeterGalleryEntry,
     chartGalleryEntry
   ]
 };
