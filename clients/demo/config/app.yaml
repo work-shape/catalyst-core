@@ -120,6 +120,12 @@ modelBindings:
   - id: primary
     providerId: openai
     model: gpt-5.5
+  - id: gpt61Sol
+    providerId: openai
+    model: gpt-6.1-sol
+    description:
+      en: The newest model for complex analysis and multi-step work.
+      de: Das neueste Modell für komplexe Analysen und mehrstufige Aufgaben.
   - id: gpt56Sol
     providerId: openai
     model: gpt-5.6-sol
@@ -174,7 +180,7 @@ usage:
       # Every model a binding above names needs a price here: under a spend budget a call to a
       # model without one is refused. The amounts are OpenAI's standard list prices in USD for
       # requests up to 272,000 input tokens (https://developers.openai.com/api/docs/pricing,
-      # read 2026-10-11), taken as they are. GPT-5.6 Sol is listed at its promotional price,
+      # read 2026-10-11; GPT-6.1 Sol read 2026-10-12), taken as they are. GPT-5.6 Sol is listed at its promotional price,
       # which OpenAI promises until at least 2026-11-21; before it was 5 / 0.5 / 30.
       models:
         - providerId: openai
@@ -182,6 +188,11 @@ usage:
           uncachedInputPricePerMillionTokens: 5
           cachedInputPricePerMillionTokens: 0.5
           outputPricePerMillionTokens: 30
+        - providerId: openai
+          model: gpt-6.1-sol
+          uncachedInputPricePerMillionTokens: 2
+          cachedInputPricePerMillionTokens: 0.1
+          outputPricePerMillionTokens: 10
         - providerId: openai
           model: gpt-5.6-sol
           uncachedInputPricePerMillionTokens: 4

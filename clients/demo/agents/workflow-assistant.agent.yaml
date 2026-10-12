@@ -11,6 +11,7 @@ welcomeMessage:
 modelBindingId: primary
 reasoningEffort: high
 userSelectableModelBindingIds:
+  - gpt61Sol
   - gpt56Sol
   - gpt56Terra
   - gpt56Luna
