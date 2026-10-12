@@ -432,6 +432,68 @@ test("the sub-rail navigates routes, scrolls to anchors and follows the scroll",
   await expect.poll(() => selectedLabel(anchorSelect)).toBe("Overview");
 });
 
+const gallerySections = [
+  "Foundations",
+  "Actions",
+  "Forms",
+  "Overlays",
+  "Navigation",
+  "Page structure",
+  "Data",
+  "Status",
+  "Feedback"
+];
+
+test("no section of the gallery scrolls sideways at 390 px, and a wide table says where it goes on", async ({
+  page
+}) => {
+  await openGallery(page, "Data");
+  for (const section of gallerySections) {
+    // The section rail is a row of buttons only in a wide window.
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await openSection(page, section);
+    await page.setViewportSize({ width: 390, height: 800 });
+    await expect.poll(() => widerThanItsBox(page), section).toEqual([]);
+  }
+
+  // A table wider than its box scrolls inside the box and shades the side that hides columns.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openSection(page, "Data");
+  await page.setViewportSize({ width: 390, height: 800 });
+  const table = page.locator('[data-gallery-sample="table-data"]');
+  const box = table.locator("xpath=..");
+  const frame = box.locator("xpath=..");
+  await box.scrollIntoViewIfNeeded();
+  await expect(frame.locator('[data-slot="table-edge-shade"][data-side="end"]')).toBeVisible();
+  await expect(frame.locator('[data-slot="table-edge-shade"][data-side="start"]')).toHaveCount(0);
+  await box.evaluate((element) => element.scrollTo({ left: 60 }));
+  await expect(frame.locator('[data-slot="table-edge-shade"][data-side="start"]')).toBeVisible();
+
+  // A cut cell holds its whole value, and shows it to the keyboard and to a press.
+  const cut = table.locator("tbody tr").first().locator('[data-slot="table-cell-value"]').last();
+  const whole = "Found in the monthly check and not yet looked at by anyone in the team.";
+  await expect(cut).toHaveText(whole);
+  await cut.focus();
+  await expect(page.getByRole("tooltip", { name: whole })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
+  await cut.click();
+  await expect(page.getByRole("tooltip", { name: whole })).toBeVisible();
+});
+
+/** The section and every box around it that is wider inside than it shows, by tag and class. */
+function widerThanItsBox(page: Page): Promise<string[]> {
+  return page.locator("[data-gallery-section]").evaluate((section) => {
+    const wider: string[] = [];
+    for (let box: Element | null = section; box; box = box.parentElement) {
+      if (box.scrollWidth > box.clientWidth + 1) {
+        wider.push(`${box.tagName.toLowerCase()}.${box.className}`);
+      }
+    }
+    return wider;
+  });
+}
+
 async function openGallery(page: Page, section: string): Promise<Locator> {
   const response = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
     data: { email: adminUser.email, password: adminUser.password, rememberMe: true }
