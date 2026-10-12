@@ -168,7 +168,7 @@ describe("the preview of a held asset save", () => {
     // Named as absent: the test's caller otherwise fills in the revision the asset is at.
     const collision = await hold("assets.put", "skill", "kai-leave", {
       config: skill("kai-leave", changed),
-      expectedRevision: undefined
+      expectedRevision: null
     });
     const orphaned = await hold("assets.put", "skill", "kai-faq", {
       config: skill("kai-faq", changed),

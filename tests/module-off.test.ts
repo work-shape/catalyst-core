@@ -142,13 +142,8 @@ async function push(instance: Instance, agents: JsonObject[], skills: JsonObject
         .items.map((asset) => [asset.name, asset.revision])
     );
     for (const config of configs) {
-      const expectedRevision = revisions.get(String(config.name));
-      items.push({
-        type: "put",
-        kind,
-        config,
-        ...(expectedRevision === undefined ? {} : { expectedRevision })
-      });
+      const expectedRevision = revisions.get(String(config.name)) ?? null;
+      items.push({ type: "put", kind, config, expectedRevision });
     }
   }
   return instance.call("assets.sync", { payload: { items, defaultAgentName: "test_agent" } });

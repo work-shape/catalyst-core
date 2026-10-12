@@ -28,7 +28,8 @@ const inputSchema = z.object({
   kind: z.string().min(1),
   name: z.string().min(1),
   config: z.record(z.string(), z.unknown()),
-  expectedRevision: z.number().optional(),
+  // `null` creates the asset. A call that was held before the revision was required has none.
+  expectedRevision: z.number().nullable().optional(),
   workspaceId: z.string().min(1).optional()
 });
 
@@ -119,7 +120,7 @@ export function createHeldAssetPreviewer(options: HeldAssetPreviewOptions): Held
       ...(namespace ? { namespace } : {})
     };
     if (!viewer || viewer.inList) {
-      return { ...named, isNew: expectedRevision === undefined };
+      return { ...named, isNew: (expectedRevision ?? null) === null };
     }
 
     // The right is asked before anything is told of the stored asset, with the resource
@@ -133,7 +134,7 @@ export function createHeldAssetPreviewer(options: HeldAssetPreviewOptions): Held
     // A reader without the right is told what the call asks for and nothing of what is stored:
     // not its text and not whether it exists.
     const stored = mayRead && inScope?.status === "active" ? inScope : undefined;
-    const isNew = mayRead ? stored === undefined : expectedRevision === undefined;
+    const isNew = mayRead ? stored === undefined : (expectedRevision ?? null) === null;
     const next = kind.kind === SKILL_KIND ? skillConfigSchema.safeParse(config) : undefined;
     if (!next?.success) return { ...named, isNew };
     const preview: HeldAssetPreview = { ...named, isNew, description: next.data.description };

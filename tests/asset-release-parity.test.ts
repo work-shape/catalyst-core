@@ -20,6 +20,7 @@ import {
   syncAs,
   syncAsService
 } from "./support/asset-release";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 // What a release through `assets.sync` does that no other write does, as the release path it
 // replaced did: where its agents start, what it refuses, how it names the default agent, what
@@ -81,7 +82,7 @@ describe("where the agents of a release start", () => {
 
     const created = await asService(t, "assets.put", {
       ...address("by-key"),
-      payload: { config: agent("by-key") }
+      payload: { config: agent("by-key"), expectedRevision: null }
     });
     expect(created.statusCode, created.body).toBe(200);
     expect(await availabilityOf(t, "by-key")).toMatchObject({ mode: "all" });
@@ -248,7 +249,7 @@ describe("the default agent of a release", () => {
 describe("a delete in a release", () => {
   it("of an asset that is not there is reported and refuses nothing, for the release holder only", async () => {
     const t = await setup();
-    await t.stores.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(t.stores.configAssets, {
       clientInstanceId,
       mutations: [{ type: "delete", kind: "agent", name: "rel-old" }]
     });

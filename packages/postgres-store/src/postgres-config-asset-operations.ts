@@ -270,32 +270,27 @@ export async function applyConfigAssetMutations(
       string,
       { status: "active" | "deleted"; revision: ConfigAssetRevisionRecord }
     >();
-    if (input.baseRevisions !== undefined) {
-      for (const mutation of input.mutations) {
-        if (mutation.type === "setDefaultAgent") {
-          continue;
-        }
-        const [row] = await tx
-          .select({ asset: configAssets, revision: configAssetRevisions })
-          .from(configAssets)
-          .innerJoin(
-            configAssetRevisions,
-            eq(configAssetRevisions.id, configAssets.activeRevisionId)
+    for (const mutation of input.mutations) {
+      if (mutation.type === "setDefaultAgent") {
+        continue;
+      }
+      const [row] = await tx
+        .select({ asset: configAssets, revision: configAssetRevisions })
+        .from(configAssets)
+        .innerJoin(configAssetRevisions, eq(configAssetRevisions.id, configAssets.activeRevisionId))
+        .where(
+          and(
+            eq(configAssets.clientInstanceId, input.clientInstanceId),
+            eq(configAssets.kind, mutation.kind),
+            eq(configAssets.name, mutation.name)
           )
-          .where(
-            and(
-              eq(configAssets.clientInstanceId, input.clientInstanceId),
-              eq(configAssets.kind, mutation.kind),
-              eq(configAssets.name, mutation.name)
-            )
-          )
-          .limit(1);
-        if (row) {
-          current.set(`${mutation.kind}:${mutation.name}`, {
-            status: row.asset.status,
-            revision: mapConfigAssetRevision(row.revision)
-          });
-        }
+        )
+        .limit(1);
+      if (row) {
+        current.set(`${mutation.kind}:${mutation.name}`, {
+          status: row.asset.status,
+          revision: mapConfigAssetRevision(row.revision)
+        });
       }
     }
     assertConfigAssetBases(input, mapConfigAssetState(state), current);

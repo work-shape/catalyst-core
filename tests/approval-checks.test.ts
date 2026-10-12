@@ -36,6 +36,7 @@ import { createModelVisibleToolOutput } from "../packages/agent-runtime/src/mode
 import { createConfigAssetSource } from "../packages/client-assembly/src/config-asset-source";
 import { createTestConfig } from "./support/fixtures";
 import { eventually } from "./support/assertions";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 const clientInstanceId = asClientInstanceId("test-client");
 const user: AuthenticatedUser = {
@@ -457,7 +458,7 @@ async function skillFixture() {
     skillNames: [skill.name],
     initialPrompts: []
   };
-  await f.store.configAssets.applyConfigAssetMutations({
+  await applyAtCurrentRevisions(f.store.configAssets, {
     clientInstanceId,
     mutations: [
       { type: "upsert", kind: "skill", name: skill.name, config: skill },

@@ -21,11 +21,11 @@ import { fileTestDatabaseUrl } from "./support/test-database";
 const stored = (t: AppInstance, name: string) =>
   t.stores.configAssets.getConfigAsset({ clientInstanceId, kind: "app", name });
 const refusalOf = (response: { json(): unknown }) => errorSchema.parse(response.json()).error;
-/** A write without the revision the harness would add: the call that creates. */
+/** The call that creates: it names no revision to replace. */
 const create = (t: AppInstance, name: string, marker: string) =>
   t.instance.call("assets.put", {
     params: { kind: "app", name },
-    payload: { files: appFiles(marker), workspaceId: t.workspaceId },
+    payload: { files: appFiles(marker), workspaceId: t.workspaceId, expectedRevision: null },
     headers: { "x-test-user": t.admin.id }
   });
 const preview = async (t: AppInstance, app: string, mode: "draft" | "published") =>
@@ -96,7 +96,7 @@ describe("a write of an App that fails after its revision was committed", () => 
       headers: { "x-test-user": t.admin.id }
     });
 
-    expectStatus(response, 409);
+    expectStatus(response, 412);
     expect(t.objectKeys(asset?.id ?? "")).toEqual(before);
   });
 });
@@ -191,7 +191,8 @@ describe("a write of an App that a policy holds for an approval", () => {
           ...appFiles("large"),
           { path: "data.txt", text: "x".repeat(HELD_OPERATION_INPUT_MAX_BYTES) }
         ],
-        workspaceId: t.workspaceId
+        workspaceId: t.workspaceId,
+        expectedRevision: null
       },
       headers: { "x-test-user": t.admin.id }
     });

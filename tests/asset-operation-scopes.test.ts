@@ -12,6 +12,7 @@ import {
 } from "./support/access-instance";
 import { setupNamespaceHolder as setupNamespace } from "./support/asset-operations";
 import { withTestSql } from "./support/test-sql";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 // What an asset call may reach when a workspace owns assets beside the instance, and what a
 // definition is checked for before it is written.
@@ -33,7 +34,7 @@ async function seedWorkspaceSkill(
   name: string
 ) {
   const scope: AssetScope = { kind: "workspace", workspaceId };
-  await t.stores.configAssets.applyConfigAssetMutations({
+  await applyAtCurrentRevisions(t.stores.configAssets, {
     clientInstanceId,
     mutations: [{ type: "upsert", kind: "skill", name, config: skill(name, "Owned."), scope }]
   });
@@ -273,8 +274,18 @@ describe("the validation of a set of assets", () => {
     const response = await t.instance.call("assets.sync_check", {
       payload: {
         items: [
-          ...bundle.agents.map((config) => ({ type: "put", kind: "agent", config })),
-          ...bundle.skills.map((config) => ({ type: "put", kind: "skill", config }))
+          ...bundle.agents.map((config) => ({
+            type: "put",
+            kind: "agent",
+            config,
+            expectedRevision: null
+          })),
+          ...bundle.skills.map((config) => ({
+            type: "put",
+            kind: "skill",
+            config,
+            expectedRevision: null
+          }))
         ],
         defaultAgentName: bundle.defaultAgentName
       },

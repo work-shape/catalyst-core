@@ -5,9 +5,9 @@ import {
   getSubjectUserId,
   isAppError,
   isAuthenticatedServicePrincipal,
-  type FileSet,
+  type FileSet
 } from "@vivd-catalyst/core";
-import { conflict, type AssetCall } from "./asset-access";
+import type { AssetCall } from "./asset-access";
 import {
   buildAssetFileSet,
   copyFileSetToAsset,
@@ -15,9 +15,10 @@ import {
   removeUnnamedAssetFileSet,
   removeAssetObjects,
   sourceFileEntries,
-  type AssetFileInput,
+  type AssetFileInput
 } from "./asset-files";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
+import { revisionConflictOf } from "./asset-revision";
 import { validateAssetSet, withDefinition, withoutDefinition } from "./asset-set";
 import {
   recordAssetEvent,
@@ -66,14 +67,14 @@ export class AssetDraftWorkflow {
 
   /**
    * The write of a kind whose revisions hold files: the whole source set is built, its file
-   * set stored for the asset, and the revision that names it becomes the draft. Without an
-   * expected revision the call creates the asset. A set that does not build, a build that did
+   * set stored for the asset, and the revision that names it becomes the draft. `null` as the
+   * expected revision creates the asset. A set that does not build, a build that did
    * not end in time and a refused revision each leave no revision and no file set.
    */
   async putFiles(
     call: AssetCall,
     target: AssetTarget,
-    input: { files?: readonly AssetFileInput[]; config?: unknown; expectedRevision?: number }
+    input: { files?: readonly AssetFileInput[]; config?: unknown; expectedRevision: number | null }
   ) {
     const { kind, name } = target;
     const configOf = kind.configOfFiles;
@@ -86,11 +87,11 @@ export class AssetDraftWorkflow {
     }
     await this.requireOwner(target);
     const current = target.asset?.status === "active" ? target.asset : undefined;
-    if (input.expectedRevision === undefined) {
+    if (input.expectedRevision === null) {
       requireFreeName(target);
     }
     requireOwnScope(target);
-    requireExpectedRevision(target, input.expectedRevision ?? null);
+    await requireExpectedRevision(this.options, call, target, input.expectedRevision);
     const files = decodeAssetFiles(input.files);
     // A new asset's id is made here: its files are stored under it before its row exists.
     const assetId = target.asset?.id ?? createPlatformId("cfga");
@@ -111,7 +112,7 @@ export class AssetDraftWorkflow {
         manifest: fileSet.manifest,
         ...(current ? { current: current.config ?? undefined } : {})
       }),
-      expectedRevision: input.expectedRevision ?? null
+      expectedRevision: input.expectedRevision
     });
   }
 
@@ -260,7 +261,7 @@ export class AssetDraftWorkflow {
     await this.host.authorizeEditing(call, "put");
     const asset = requireActive(target);
     if (asset.revision !== input.expectedRevision) {
-      throw conflict(kind.kind, name, asset.revision);
+      throw await revisionConflictOf(this.options, call.access, target);
     }
     let discarded: { revision: number };
     try {
@@ -272,7 +273,7 @@ export class AssetDraftWorkflow {
       });
     } catch (error) {
       throw isAppError(error) && error.code === "CONFLICT"
-        ? conflict(kind.kind, name, (await this.host.target(input)).asset?.revision ?? null)
+        ? await revisionConflictOf(this.options, call.access, await this.host.target(input))
         : error;
     }
     await recordAssetEvent(call, "config_asset.draft_discarded", {
@@ -304,10 +305,10 @@ export class AssetDraftWorkflow {
       });
     } catch (error) {
       throw isAppError(error) && error.code === "CONFLICT"
-        ? conflict(
-            kind.kind,
-            name,
-            (await this.host.target(target.address)).asset?.revision ?? null
+        ? await revisionConflictOf(
+            this.options,
+            call.access,
+            await this.host.target(target.address)
           )
         : error;
     }
@@ -352,4 +353,3 @@ function publishAction(kind: WorkflowAssetKind): string {
   }
   return publish;
 }
-

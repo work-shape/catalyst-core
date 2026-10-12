@@ -15,6 +15,7 @@ import {
   parseClientInstanceConfig,
   type UsageSafeguardsConfig
 } from "@vivd-catalyst/config-schema";
+import { applyAtCurrentRevisions } from "./asset-revisions";
 
 type LocalizedTestString =
   | string
@@ -198,7 +199,7 @@ export async function seedTestAssets(
 ): Promise<void> {
   const assets = testAssetsByConfig.get(app.config);
   if (!assets) return;
-  await app.store.configAssets.applyConfigAssetMutations({
+  await applyAtCurrentRevisions(app.store.configAssets, {
     clientInstanceId: asClientInstanceId(app.config.clientInstance.id),
     mutations: [
       { type: "upsert", kind: "agent", name: assets.defaultAgentName, config: assets.agent },

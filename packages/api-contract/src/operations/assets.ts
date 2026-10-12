@@ -56,7 +56,7 @@ export const assetOperations = {
     effect: "changing",
     body: syncAssetsRequestSchema,
     response: json(syncAssetsResponseSchema),
-    errors: ["CONFLICT"],
+    errors: ["CONFLICT", "REVISION_CONFLICT", "PRECONDITION_REQUIRED"],
     rateClass: "write"
   }),
   "assets.sync_check": defineRegisteredOperation({
@@ -71,7 +71,7 @@ export const assetOperations = {
     effect: "reading",
     body: syncAssetsRequestSchema,
     response: json(checkAssetSyncResponseSchema),
-    errors: ["CONFLICT"],
+    errors: ["CONFLICT", "REVISION_CONFLICT", "PRECONDITION_REQUIRED"],
     rateClass: "read"
   }),
   // Valid for a kind that keeps an instance default. The right is the kind's write right on
@@ -138,7 +138,7 @@ export const assetOperations = {
     effect: "changing",
     body: putAssetRequestSchema,
     response: json(assetWriteResponseSchema),
-    errors: ["CONFLICT", "TIMEOUT"],
+    errors: ["CONFLICT", "REVISION_CONFLICT", "PRECONDITION_REQUIRED", "TIMEOUT"],
     rateClass: "write"
   }),
   // The right is `<kind>.publish`, and the credential scope is one of its own: a key that
@@ -170,7 +170,7 @@ export const assetOperations = {
     effect: "changing",
     body: discardAssetDraftRequestSchema,
     response: json(assetPointersResponseSchema),
-    errors: ["NOT_FOUND", "CONFLICT"],
+    errors: ["NOT_FOUND", "REVISION_CONFLICT"],
     rateClass: "write"
   }),
   "assets.delete": defineRegisteredOperation({
@@ -185,7 +185,7 @@ export const assetOperations = {
     effect: "changing",
     body: deleteAssetRequestSchema,
     response: json(assetWriteResponseSchema),
-    errors: ["NOT_FOUND", "CONFLICT"],
+    errors: ["NOT_FOUND", "REVISION_CONFLICT", "PRECONDITION_REQUIRED"],
     rateClass: "write"
   }),
   // Valid for a kind that is offered per workspace. The right is decided as for the default.
@@ -231,7 +231,7 @@ export const assetOperations = {
     effect: "changing",
     body: revertAssetRequestSchema,
     response: json(assetWriteResponseSchema),
-    errors: ["NOT_FOUND", "CONFLICT"],
+    errors: ["NOT_FOUND", "REVISION_CONFLICT", "PRECONDITION_REQUIRED"],
     rateClass: "write"
   })
 } as const;

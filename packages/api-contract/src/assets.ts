@@ -5,6 +5,9 @@ import { timestampSchema } from "./shared";
 /** How many puts and deletes one `assets.sync` call may carry. */
 export const ASSET_SYNC_MAX_ITEMS = 200;
 
+/** How many bytes the body of one `assets.sync` or `assets.sync_check` call may hold. */
+export const ASSET_SYNC_BODY_MAX_BYTES = 20 * 1024 * 1024;
+
 /**
  * How many items a release may hold: a batch of a holder of the release right, which is applied
  * in one transaction so that a release lands whole or not at all. Each item costs a handful of
@@ -28,6 +31,20 @@ export const assetScopeSchema = z.discriminatedUnion("kind", [
 ]);
 
 const revisionNumberSchema = z.number().int().positive();
+
+/**
+ * The revision a write was made against. Every write of an asset names one: the server
+ * refuses a write without it with `PRECONDITION_REQUIRED` and never takes it as leave to
+ * overwrite. The field is optional here only so that this refusal names the asset.
+ */
+const expectedRevisionSchema = revisionNumberSchema.optional();
+
+/**
+ * The revision a put was made against, or `null` for a name that was never stored. An asset
+ * that was deleted keeps its last revision: creating it again names that revision, which a
+ * `REVISION_CONFLICT` tells whoever may read the asset.
+ */
+const expectedRevisionOrNewSchema = revisionNumberSchema.nullable().optional();
 
 const NUL = "\u0000";
 const NUL_REFUSAL = "A name must not contain a NUL byte";
@@ -197,11 +214,8 @@ export const putAssetRequestSchema = z
      * refused.
      */
     files: z.array(assetFileInputSchema).min(1).max(FILE_SET_MAX_FILES).optional(),
-    /**
-     * The revision the caller last read. Left out, the call creates the asset and is refused
-     * when the name exists.
-     */
-    expectedRevision: revisionNumberSchema.optional(),
+    /** The revision the caller last read, or `null` to create the asset. Required. */
+    expectedRevision: expectedRevisionOrNewSchema,
     workspaceId: workspaceIdSchema
   })
   .refine((value) => (value.config === undefined) !== (value.files === undefined), {
@@ -246,16 +260,16 @@ export const assetPointersResponseSchema = z.object({
 });
 
 export const deleteAssetRequestSchema = z.object({
-  /** The revision the caller last read. A delete is never made blind. */
-  expectedRevision: revisionNumberSchema,
+  /** The revision the caller last read. A delete is never made blind. Required. */
+  expectedRevision: expectedRevisionSchema,
   workspaceId: workspaceIdSchema
 });
 
 export const revertAssetRequestSchema = z.object({
   /** The revision whose content becomes the asset's content again. */
   revision: revisionNumberSchema,
-  /** The revision the asset is at now, a deleted asset's last one included. */
-  expectedRevision: revisionNumberSchema,
+  /** The revision the asset is at now, a deleted asset's last one included. Required. */
+  expectedRevision: expectedRevisionSchema,
   workspaceId: workspaceIdSchema
 });
 
@@ -309,14 +323,15 @@ export const assetSyncItemSchema = z.discriminatedUnion("type", [
     type: z.literal("put"),
     kind: z.string().min(1),
     config: assetDefinitionSchema,
-    /** The revision the caller last read. Left out, the item creates the asset. */
-    expectedRevision: revisionNumberSchema.optional()
+    /** The revision the caller last read, or `null` to create the asset. Required. */
+    expectedRevision: expectedRevisionOrNewSchema
   }),
   z.object({
     type: z.literal("delete"),
     kind: z.string().min(1),
     name: nameText(z.string().min(1)),
-    expectedRevision: revisionNumberSchema
+    /** The revision the caller last read. Required. */
+    expectedRevision: expectedRevisionSchema
   })
 ]);
 
@@ -388,9 +403,39 @@ export const assetSyncRefusedItemSchema = z.object({
       code: z.string(),
       message: z.string(),
       action: z.string().optional(),
+      /** Told to a caller who may read the asset, as in `details.conflicts`. */
       currentRevision: revisionNumberSchema.nullable().optional()
     })
     .optional()
+});
+
+/**
+ * One asset in `details.conflicts` of a `REVISION_CONFLICT`: a write named another revision
+ * than the asset is at. The kind and the name are the ones the caller sent. The rest is told
+ * only to a caller who may read the asset's history.
+ */
+export const assetRevisionConflictSchema = z.object({
+  kind: z.string(),
+  name: z.string(),
+  /** The revision the name is at, or `null` where it was never stored. */
+  currentRevision: revisionNumberSchema.nullable().optional(),
+  /** The current revision is the delete of the asset. Creating it again names that revision. */
+  deleted: z.literal(true).optional(),
+  /** The display label of whoever wrote the current revision. */
+  changedBy: z.string().optional(),
+  changedAt: timestampSchema.optional()
+});
+
+/** `details` of a `REVISION_CONFLICT`. A refused batch carries `items` beside it. */
+export const assetRevisionConflictDetailsSchema = z.object({
+  reason: z.literal("revision_conflict"),
+  conflicts: z.array(assetRevisionConflictSchema).min(1)
+});
+
+/** `details` of a `PRECONDITION_REQUIRED`: the assets the call names no revision for. */
+export const assetPreconditionRequiredDetailsSchema = z.object({
+  reason: z.literal("precondition_required"),
+  assets: z.array(z.object({ kind: z.string(), name: z.string() })).min(1)
 });
 
 export type AssetScope = z.infer<typeof assetScopeSchema>;
@@ -398,3 +443,4 @@ export type AssetSummary = z.infer<typeof assetSummarySchema>;
 export type Asset = z.infer<typeof assetSchema>;
 export type AssetSyncItem = z.infer<typeof assetSyncItemSchema>;
 export type AssetSyncRefusedItem = z.infer<typeof assetSyncRefusedItemSchema>;
+export type AssetRevisionConflict = z.infer<typeof assetRevisionConflictSchema>;

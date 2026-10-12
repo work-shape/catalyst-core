@@ -216,8 +216,14 @@ export interface ConfigAssetStore {
   }): Promise<ConfigAssetRevisionRecord | undefined>;
   applyConfigAssetMutations(input: {
     clientInstanceId: ClientInstanceId;
-    baseVersion?: number;
-    baseRevisions?: Record<string, number | null>;
+    /**
+     * The revision each asset the batch writes was read at, keyed `<kind>:<name>`. Every
+     * upsert and delete needs its entry: a batch without one is refused, never written blind.
+     * `null` expects that the name was never used. A deleted asset keeps its last revision, the
+     * tombstone, and is created again only by a write that names it. A delete alone may name
+     * `null` for an asset that is not there, deleted or never created, and writes nothing.
+     */
+    baseRevisions: Record<string, number | null>;
     baseDefaultAgentName?: string | null;
     actor?: AuditActor;
     origin?: ConfigAssetRevisionRecord["origin"];

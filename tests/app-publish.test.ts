@@ -387,7 +387,7 @@ describe("an App with a draft and a published revision", () => {
     const key = `put-${randomUUID()}`;
     const put = {
       params: { kind: "app", name: "ledger" },
-      payload: { files: appFiles(marker), workspaceId: t.workspaceId },
+      payload: { files: appFiles(marker), workspaceId: t.workspaceId, expectedRevision: null },
       headers: { "idempotency-key": key }
     };
 

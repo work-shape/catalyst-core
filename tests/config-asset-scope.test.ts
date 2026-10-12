@@ -11,6 +11,7 @@ import {
 import { createStaticConfigAssetSource } from "./support/static-config-asset-source";
 import { createTestAssetKinds } from "./support/test-instance";
 import { withTestSql } from "./support/test-sql";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 // Who owns an asset. Every asset is owned by the instance until the first kind a workspace can
 // own: the columns and the indexes exist, the write path refuses the scope.
@@ -78,6 +79,7 @@ describe("scope on a config asset", () => {
       },
       {
         clientInstanceId,
+        baseRevisions: { "agent:team-agent": null },
         mutations: [
           {
             type: "upsert",
@@ -105,7 +107,7 @@ describe("scope on a config asset", () => {
     const workspaceId = await createWorkspace(t);
     const otherWorkspaceId = await createWorkspace(t, "Another");
     const write = (mutation: ConfigAssetMutation) =>
-      t.stores.configAssets.applyConfigAssetMutations({ clientInstanceId, mutations: [mutation] });
+      applyAtCurrentRevisions(t.stores.configAssets, { clientInstanceId, mutations: [mutation] });
     const upsert = (scope?: AssetScope) =>
       write({
         type: "upsert",
@@ -143,7 +145,7 @@ describe("scope on a config asset", () => {
   it("holds scope_id null exactly for instance scope, and a name once per kind", async () => {
     const t = await setup();
     const workspaceId = await createWorkspace(t);
-    await t.stores.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(t.stores.configAssets, {
       clientInstanceId,
       mutations: [{ type: "upsert", kind: "skill", name: "research", config: skill("research") }]
     });
@@ -178,7 +180,7 @@ describe("scope on a config asset", () => {
   it("lists the assets of a name prefix as a range of the prefix index", async () => {
     const t = await setup();
     const names = ["kai-tax", "kai-intake", "kai_tax", "kaiser", "lena-notes"];
-    await t.stores.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(t.stores.configAssets, {
       clientInstanceId,
       mutations: names.map((name) => ({
         type: "upsert" as const,

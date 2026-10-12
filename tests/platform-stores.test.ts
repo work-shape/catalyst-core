@@ -6,6 +6,7 @@ import {
   type PlatformStores
 } from "@vivd-catalyst/core";
 import { usePostgresSuite } from "./support/postgres-suite";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 // A real database is required: skipping would leave transaction semantics unverified.
 describe("named Postgres stores", () => {
@@ -247,7 +248,7 @@ async function writeEveryDomain(stores: PlatformStores, clientInstanceId: Client
     correlationId: "transaction"
   });
   await stores.apiAccess.createServicePrincipal({ ...scope, displayLabel: "transaction" });
-  await stores.configAssets.applyConfigAssetMutations({
+  await applyAtCurrentRevisions(stores.configAssets, {
     ...scope,
     mutations: [
       {

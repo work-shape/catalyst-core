@@ -38,6 +38,7 @@ import { createConfigAssetSource } from "../packages/client-assembly/src/config-
 import { findConfigAssetAgentValidationIssues } from "../packages/client-assembly/src/assembly-validation";
 import { createSystemInstructions } from "../packages/agent-runtime/src/system-instructions";
 import { createTestConfig } from "./support/fixtures";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 const clientInstanceId = asClientInstanceId("test-client");
 const requester: AuthenticatedUser = {
@@ -95,7 +96,7 @@ async function fixture() {
     toolNames: ["read_skill", "propose_skill_change"],
     skillNames: [skill.name]
   });
-  await store.configAssets.applyConfigAssetMutations({
+  await applyAtCurrentRevisions(store.configAssets, {
     clientInstanceId,
     mutations: [
       { type: "upsert", kind: "agent", name: agent.name, config: json(agent) },
@@ -302,7 +303,7 @@ describe("skill change approval workflow", () => {
   it("supersedes a stale proposal and keeps its original preview readable", async () => {
     const f = await fixture();
     const request = await f.propose();
-    await f.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(f.store.configAssets, {
       clientInstanceId,
       mutations: [
         {
@@ -337,7 +338,7 @@ describe("skill change approval workflow", () => {
     const detached = await f.propose();
     const orphaned = await f.propose();
     const orphanedCreation = await f.propose(creation, "new_skill");
-    await f.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(f.store.configAssets, {
       clientInstanceId,
       mutations: [
         {
@@ -349,7 +350,7 @@ describe("skill change approval workflow", () => {
       ]
     });
     expect(await f.approve(detached.id)).toMatchObject({ status: "superseded" });
-    await f.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(f.store.configAssets, {
       clientInstanceId,
       mutations: [
         { type: "delete", kind: "agent", name: f.agent.name },
@@ -370,7 +371,7 @@ describe("skill change approval workflow", () => {
       summary: request.summary
     };
     const applied = await f.handler.apply(request.payload, reviewer, handlerContext);
-    await f.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(f.store.configAssets, {
       clientInstanceId,
       mutations: [
         {
@@ -463,7 +464,7 @@ describe("skill change approval workflow", () => {
     const request = await f.propose();
     const snapshot = await f.source.getSnapshot();
     vi.spyOn(f.source, "getSnapshot").mockImplementationOnce(async () => {
-      const updated = await f.store.configAssets.applyConfigAssetMutations({
+      const updated = await applyAtCurrentRevisions(f.store.configAssets, {
         clientInstanceId,
         mutations: [
           {
@@ -483,7 +484,7 @@ describe("skill change approval workflow", () => {
         requestId: request.id,
         summary: request.summary
       })
-    ).rejects.toMatchObject({ code: "CONFLICT" });
+    ).rejects.toMatchObject({ code: "REVISION_CONFLICT" });
     expect((await f.revisions()).at(-1)?.config?.content).toBe("Concurrent work");
     expect(await f.revisions()).toHaveLength(2);
   });
@@ -492,7 +493,7 @@ describe("skill change approval workflow", () => {
     const f = await fixture();
     const request = await f.propose();
     await f.approve(request.id);
-    await f.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(f.store.configAssets, {
       clientInstanceId,
       mutations: [
         {
@@ -517,7 +518,7 @@ describe("skill change approval workflow", () => {
     const f = await fixture();
     const request = await f.propose(creation, "new_skill");
     await f.approve(request.id);
-    await f.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(f.store.configAssets, {
       clientInstanceId,
       mutations: [
         {

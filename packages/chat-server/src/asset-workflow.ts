@@ -11,9 +11,8 @@ import {
   type FileSet,
   type JsonObject,
   type OperationAuthorization,
-  type PolicyTarget,
+  type PolicyTarget
 } from "@vivd-catalyst/core";
-import { z } from "zod";
 import { AssetDraftWorkflow } from "./asset-draft-workflow";
 import type { AssetFileInput } from "./asset-files";
 import { readDefinitionName, type WorkflowAssetKind } from "./asset-kinds/shared";
@@ -30,7 +29,6 @@ import {
 } from "./asset-set";
 import {
   accessResource,
-  conflict,
   decide,
   deleteDecision,
   errorIssues,
@@ -73,6 +71,7 @@ import {
   type AssetTarget
 } from "./asset-target";
 import { AssetReadWorkflow, scopeOf } from "./asset-read-workflow";
+import { requirePrecondition, revisionConflictOf } from "./asset-revision";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
 import type { ChatServerOptions } from "./types";
 
@@ -80,12 +79,6 @@ type MutationBatch = Omit<
   Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0],
   "clientInstanceId" | "actor"
 >;
-const conflictDetailsSchema = z.object({
-  conflicts: z
-    .array(z.object({ kind: z.string(), name: z.string(), currentRevision: z.number().nullable() }))
-    .min(1)
-});
-
 /**
  * One asset of any registered kind, read and written through the operation layer. Every call
  * addresses one scope and stays in it: a right on the instance's own assets, a Namespace
@@ -144,6 +137,26 @@ export class AssetWorkflow {
     return deleteDecision(access, await this.target(address));
   }
 
+  /**
+   * The right of a write that names the revision it was made against, and after it the
+   * precondition itself. A caller without the right learns nothing else, and a write that
+   * names no revision reaches neither the policy nor a guardrail.
+   */
+  async authorizeRevisionWrite(
+    access: ActorAccess,
+    input: AssetAddress & { expectedRevision?: number | null },
+    right: "write" | "delete"
+  ): Promise<OperationAuthorization> {
+    const decision =
+      right === "delete"
+        ? await this.authorizeDelete(access, input)
+        : await this.authorizeWrite(access, input);
+    if (decision.allowed) {
+      requirePrecondition(input, input.expectedRevision);
+    }
+    return decision;
+  }
+
   /** A definition that names no asset is checked as the kind's right on the whole scope. */
   authorizeValidate(
     access: ActorAccess,
@@ -196,24 +209,27 @@ export class AssetWorkflow {
   }
 
   /**
-   * Creates the asset, or replaces it at the revision the caller read. Without an expected
-   * revision the call is a create and is refused where the name is taken.
+   * Creates the asset, or replaces it at the revision the caller read. `null` as the expected
+   * revision creates it and is refused where the name is taken or was deleted: a deleted
+   * asset is created again by naming the revision of its delete. A call that names no
+   * revision is refused.
    */
   async put(
     call: AssetCall,
     input: AssetAddress & {
       config?: Record<string, unknown>;
       files?: readonly AssetFileInput[];
-      expectedRevision?: number;
+      expectedRevision?: number | null;
     }
   ) {
     const target = await this.target(input);
     const { kind } = target;
     call.access.require(kind.actions.write, target.resource);
+    const expectedRevision = requirePrecondition(input, input.expectedRevision);
     await this.authorizeEditing(call, "put");
     assertStoredWritable(target);
     if (kind.representation === "files") {
-      return this.drafts.putFiles(call, target, input);
+      return this.drafts.putFiles(call, target, { ...input, expectedRevision });
     }
     if (input.config === undefined || input.files !== undefined) {
       throw new AppError(
@@ -224,9 +240,9 @@ export class AssetWorkflow {
     }
     requireMatchingConfigName(input.config, input.name);
     requireOwnScope(target);
-    requireExpectedRevision(target, input.expectedRevision ?? null);
+    await requireExpectedRevision(this.options, call, target, expectedRevision);
     return this.upsert(call, target, input.config, {
-      expectedRevision: input.expectedRevision ?? null,
+      expectedRevision,
       audit: "config_asset.updated"
     });
   }
@@ -234,10 +250,11 @@ export class AssetWorkflow {
   /** Makes an earlier revision the content again, as a new revision. A deleted asset returns. */
   async revert(
     call: AssetCall,
-    input: AssetAddress & { revision: number; expectedRevision: number }
+    input: AssetAddress & { revision: number; expectedRevision?: number }
   ) {
     const target = await this.target(input);
     call.access.require(target.kind.actions.write, target.resource);
+    const expectedRevision = requirePrecondition(input, input.expectedRevision);
     await this.authorizeEditing(call, "revert");
     if (target.kind.lifecycle === "draft_published") {
       throw new AppError(
@@ -251,8 +268,8 @@ export class AssetWorkflow {
     if (!target.asset) {
       throw notFound(target);
     }
-    if (target.asset.revision !== input.expectedRevision) {
-      throw conflict(target.kind.kind, target.name, target.asset.revision);
+    if (target.asset.revision !== expectedRevision) {
+      throw await revisionConflictOf(this.options, call.access, target);
     }
     const restored = await this.options.configAssets.store.getConfigAssetRevision({
       clientInstanceId: this.options.clientInstanceId,
@@ -268,28 +285,29 @@ export class AssetWorkflow {
     }
     requireMatchingConfigName(restored.config, target.name);
     return this.upsert(call, target, restored.config, {
-      expectedRevision: input.expectedRevision,
+      expectedRevision,
       operation: "revert",
       audit: "config_asset.reverted"
     });
   }
 
-  async delete(call: AssetCall, input: AssetAddress & { expectedRevision: number }) {
+  async delete(call: AssetCall, input: AssetAddress & { expectedRevision?: number }) {
     const target = await this.target(input);
     const { kind, name } = target;
     const right = deleteDecision(call.access, target);
     if (!right.allowed) {
       call.access.require(right.action, target.resource);
     }
+    const expectedRevision = requirePrecondition(input, input.expectedRevision);
     await this.authorizeEditing(call, "delete");
     assertStoredWritable(target);
     assertDeleteWithinLimits(call.access, "delete", kind);
     const asset = requireActive(target);
-    if (asset.revision !== input.expectedRevision) {
-      throw conflict(kind.kind, name, asset.revision);
+    if (asset.revision !== expectedRevision) {
+      throw await revisionConflictOf(this.options, call.access, target);
     }
     if (kind.representation === "files") {
-      return this.drafts.remove(call, target, input.expectedRevision);
+      return this.drafts.remove(call, target, expectedRevision);
     }
     const stored = await loadStoredAssets(this.options);
     const clearsDefault = clearsLastDefault(stored.set, kind, name);
@@ -301,8 +319,8 @@ export class AssetWorkflow {
     };
     this.requireTellableChange(call, target, stored, deleted);
     validateAssetSet(this.options.configAssets.kinds.kinds, deleted(stored.set), stored.set);
-    const result = await this.apply(call, {
-      baseRevisions: { [assetKey(kind.kind, name)]: input.expectedRevision },
+    const result = await this.apply(call, target, {
+      baseRevisions: { [assetKey(kind.kind, name)]: expectedRevision },
       ...(clearsDefault ? { baseDefaultAgentName: name } : {}),
       mutations: [
         { type: "delete", kind: kind.kind, name, scope: target.scope },
@@ -310,7 +328,7 @@ export class AssetWorkflow {
       ]
     });
     // The store appends exactly one revision to the one the batch was checked against.
-    const revision = input.expectedRevision + 1;
+    const revision = expectedRevision + 1;
     await this.record(call, "config_asset.deleted", {
       kind: kind.kind,
       name,
@@ -459,7 +477,7 @@ export class AssetWorkflow {
     if (setsDefault) {
       mutations.push({ type: "setDefaultAgent", agentName: name });
     }
-    const result = await this.apply(call, {
+    const result = await this.apply(call, target, {
       baseRevisions: { [assetKey(kind.kind, name)]: write.expectedRevision },
       // The default is set for the first asset only, so the instance has none before.
       ...(setsDefault ? { baseDefaultAgentName: null } : {}),
@@ -513,8 +531,15 @@ export class AssetWorkflow {
     return authorizeInteractiveWrite(this.options, call.actor, call, call.audit, releaseSync);
   }
 
-  /** Applies a batch. The store checks the expected revisions once more under its lock. */
-  private async apply(call: AssetCall, batch: MutationBatch): Promise<{ version: number }> {
+  /**
+   * Applies the write of one asset. The store checks the expected revision once more under
+   * its lock, and a write that got in between is answered as every stale write is.
+   */
+  private async apply(
+    call: AssetCall,
+    target: AssetTarget,
+    batch: MutationBatch
+  ): Promise<{ version: number }> {
     try {
       return await applyValidatedConfigAssetMutations(this.options, {
         clientInstanceId: this.options.clientInstanceId,
@@ -522,12 +547,9 @@ export class AssetWorkflow {
         ...batch
       });
     } catch (error) {
-      const stale =
-        isAppError(error) && error.code === "CONFLICT"
-          ? conflictDetailsSchema.safeParse(error.details)
-          : undefined;
-      const [first] = stale?.success ? stale.data.conflicts : [];
-      throw first ? conflict(first.kind, first.name, first.currentRevision) : error;
+      if (!isAppError(error) || error.code !== "REVISION_CONFLICT") throw error;
+      const now = await this.target(target.address);
+      throw await revisionConflictOf(this.options, call.access, now);
     }
   }
 

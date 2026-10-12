@@ -1,4 +1,4 @@
-import { apiOperations } from "@vivd-catalyst/api-contract";
+import { ASSET_SYNC_BODY_MAX_BYTES, apiOperations } from "@vivd-catalyst/api-contract";
 import { asCollaborationWorkspaceId, type OperationResource } from "@vivd-catalyst/core";
 import { ASSET_PUT_BODY_LIMIT_BYTES } from "../asset-files";
 import { readDefinitionName } from "../asset-kinds/shared";
@@ -34,6 +34,7 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     changeClass: "reversible",
     // No module: a release is pushed through this operation also where changing assets in
     // the interface is off. The workflow asks the switch of everyone but the release holder.
+    bodyLimitBytes: ASSET_SYNC_BODY_MAX_BYTES,
     execute: (input, context) => workflow.sync(context, input)
   });
 
@@ -41,6 +42,7 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     // Decided as for the sync itself: a batch its caller may not make is not checked either.
     authorize: (input, { actor, access }) => workflow.authorizeSync(actor, access, input),
     policyTargets: (input) => workflow.syncPolicyTargets(input),
+    bodyLimitBytes: ASSET_SYNC_BODY_MAX_BYTES,
     execute: (input, context) => workflow.checkSync(context, input)
   });
 
@@ -71,7 +73,7 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
   });
 
   route.operation(apiOperations["assets.put"], {
-    authorize: (input, { access }) => workflow.authorizeWrite(access, input),
+    authorize: (input, { access }) => workflow.authorizeRevisionWrite(access, input, "write"),
     resource: assetResource,
     policyTargets: (input) => workflow.policyTargets(input),
     changeClass: "reversible",
@@ -99,7 +101,7 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
   });
 
   route.operation(apiOperations["assets.delete"], {
-    authorize: (input, { access }) => workflow.authorizeDelete(access, input),
+    authorize: (input, { access }) => workflow.authorizeRevisionWrite(access, input, "delete"),
     resource: assetResource,
     policyTargets: (input) => workflow.policyTargets(input),
     changeClass: "reversible",
@@ -126,7 +128,7 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
   });
 
   route.operation(apiOperations["assets.revert"], {
-    authorize: (input, { access }) => workflow.authorizeWrite(access, input),
+    authorize: (input, { access }) => workflow.authorizeRevisionWrite(access, input, "write"),
     resource: assetResource,
     policyTargets: (input) => workflow.policyTargets(input),
     changeClass: "reversible",

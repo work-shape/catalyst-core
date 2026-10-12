@@ -7,7 +7,6 @@ import {
   type ActorAccess,
   type AuthenticatedIdentity,
   type ConfigAssetMutation,
-  type ConfigAssetRecord,
   type PolicyTarget
 } from "@vivd-catalyst/core";
 import { z } from "zod";
@@ -47,13 +46,22 @@ import {
   requireReleaseSync,
   toJsonObject
 } from "./asset-write-rules";
-import { REFUSAL_ORDER, refusalOf, toRefusal, type ItemRefusal } from "./asset-sync-refusals";
+import { currentRevisionOf } from "./asset-revision";
+import {
+  isReady,
+  refusalOf,
+  refuseStale,
+  refusedBatch,
+  staleBatch,
+  toRefusal,
+  type AssetSyncItem,
+  type ItemRefusal,
+  type PlannedItem,
+  type ReadyItem,
+  type StaleItem
+} from "./asset-sync-refusals";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
 import type { ChatServerOptions } from "./types";
-
-type AssetSyncItem =
-  | { type: "put"; kind: string; config: Record<string, unknown>; expectedRevision?: number }
-  | { type: "delete"; kind: string; name: string; expectedRevision: number };
 
 export interface AssetSyncInput {
   /**
@@ -68,24 +76,17 @@ export interface AssetSyncInput {
   expectedDefaultAgentName?: string | null;
 }
 
-interface PlannedItem {
-  index: number;
-  item: AssetSyncItem;
-  name?: string;
-  kind?: WorkflowAssetKind;
-  /** The instance's own row of the name, a deleted one included. */
-  asset?: ConfigAssetRecord;
-  /** A delete of a release whose asset is not there: nothing is written for it. */
-  absent?: boolean;
-  refusal?: ItemRefusal;
-}
-
-/** An item that passed the checks of its own input: its kind is registered and it has a name. */
-type ReadyItem = PlannedItem & { name: string; kind: WorkflowAssetKind };
-
+/** What the store says of each asset a batch was stale for, under its lock. */
 const conflictsSchema = z.object({
   conflicts: z.array(
-    z.object({ kind: z.string(), name: z.string(), currentRevision: z.number().nullable() })
+    z.object({
+      kind: z.string(),
+      name: z.string(),
+      currentRevision: z.number().nullable(),
+      deleted: z.boolean().optional(),
+      actorLabel: z.string().nullable().optional(),
+      timestamp: z.string().nullable().optional()
+    })
   )
 });
 
@@ -93,7 +94,13 @@ const conflictsSchema = z.object({
  * Applies puts and deletes, all of them or none: in one Namespace where the batch names one,
  * anywhere among the instance's own assets where it names none. Every item is checked as the
  * single operation would check it: the right on its asset, the revision it was made against,
- * the definition and the instance's rules. The first kind of check that refuses any item stops
+ * the definition and the instance's rules. An asset the batch does not name is neither read
+ * for its revision nor written, so a change of it never refuses the batch.
+ *
+ * A kind with a draft and a published revision has its draft moved by a put and nothing else:
+ * the published revision stays, and so does the version of the set the runtime reads. A kind
+ * whose revisions hold files, such as the App, is refused as an item: its files are built per
+ * write, which no batch is. The first kind of check that refuses any item stops
  * the batch, and the error names every item with what it was refused for. An item outside a
  * named prefix is refused before anything is read. What a holder of the release right is
  * exempt from in this call is listed at `isReleaseSync`.
@@ -169,40 +176,35 @@ async function checkBatch(
   } else {
     requireInteractiveEditingOn(options, releaseSync);
   }
+  const stale: ReadyItem[] = [];
   for (const entry of ready()) {
-    const current = entry.asset?.status === "active" ? entry.asset.revision : null;
+    const active = entry.asset?.status === "active";
     if (entry.asset?.status === "active") {
       const stored = entry.asset.config;
       entry.refusal = refusalOf(() => entry.kind.assertStoredWritable?.({ current: stored }));
       if (entry.refusal) continue;
     }
     if (entry.item.type === "delete") {
-      if (releaseSync && current === null) {
+      if (releaseSync && !active) {
         // A release says what the instance holds. An asset that is gone already is as it says.
         entry.absent = true;
         continue;
       }
       entry.refusal =
         refusalOf(() => assertDeleteWithinLimits(call.access, "sync", entry.kind)) ??
-        (current === null
-          ? {
+        (active
+          ? undefined
+          : {
               code: "NOT_FOUND",
               message: `Config ${entry.kind.kind} '${entry.name}' was not found`
-            }
-          : undefined);
+            });
     }
-    const expected = entry.item.expectedRevision ?? null;
-    if (!entry.refusal && current !== expected) {
-      entry.refusal = {
-        code: "CONFLICT",
-        message:
-          current === null
-            ? `Config ${entry.kind.kind} '${entry.name}' does not exist`
-            : `Config ${entry.kind.kind} '${entry.name}' is at revision ${current}`,
-        currentRevision: current
-      };
+    // A deleted asset keeps its revision: a put creates it again only by naming that one.
+    if (!entry.refusal && currentRevisionOf(entry.asset) !== entry.item.expectedRevision) {
+      stale.push(entry);
     }
   }
+  await refuseStale(options, call.access, stale);
   stopIfRefused();
 
   const stored = await loadStoredAssets(options);
@@ -324,6 +326,7 @@ async function applyBatch(options: ChatServerOptions, call: AssetCall, checked: 
     clientInstanceId: options.clientInstanceId,
     actor: auditActorFromIdentity(call.actor),
     baseRevisions: Object.fromEntries(
+      // Every item named a revision: the batch was refused before the policy otherwise.
       [...byKey].map(([key, entry]) => [
         key,
         entry.absent ? null : (entry.item.expectedRevision ?? null)
@@ -332,24 +335,35 @@ async function applyBatch(options: ChatServerOptions, call: AssetCall, checked: 
     ...(defaultChange ? { baseDefaultAgentName: storedDefault } : {}),
     ...releaseInitialAvailability(call.access, "sync"),
     mutations
-  }).catch((error: unknown) => {
-    // Another write got between the check above and the store's lock.
-    const stale =
-      isAppError(error) && error.code === "CONFLICT"
+  }).catch(async (error: unknown) => {
+    // Another write got between the check above and the store's lock. Nothing was written.
+    const found =
+      isAppError(error) && error.code === "REVISION_CONFLICT"
         ? conflictsSchema.safeParse(error.details)
         : undefined;
-    if (!stale?.success) throw error;
-    for (const conflict of stale.data.conflicts) {
+    if (!found?.success) throw error;
+    const stale: StaleItem[] = [];
+    for (const conflict of found.data.conflicts) {
       const entry = byKey.get(assetKey(conflict.kind, conflict.name));
-      if (entry) {
-        entry.refusal = {
-          code: "CONFLICT",
-          message: `Config ${conflict.kind} '${conflict.name}' changed meanwhile`,
-          currentRevision: conflict.currentRevision
-        };
-      }
+      if (!entry) continue;
+      stale.push({
+        entry,
+        ...(conflict.currentRevision === null
+          ? {}
+          : {
+              asset: {
+                revision: conflict.currentRevision,
+                status: conflict.deleted ? ("deleted" as const) : ("active" as const)
+              }
+            }),
+        change: {
+          ...(conflict.actorLabel ? { changedBy: conflict.actorLabel } : {}),
+          ...(conflict.timestamp ? { changedAt: conflict.timestamp } : {})
+        }
+      });
     }
-    throw planned.some((entry) => entry.refusal) ? refusedBatch(planned) : error;
+    if (stale.length === 0) throw error;
+    throw await staleBatch(options, call.access, planned, stale);
   });
 
   // The recorder of the Operation Run: each row names the run that wrote it.
@@ -474,6 +488,19 @@ async function authorizeItems(
       };
     } else if (own) {
       entry.asset = own;
+    }
+  }
+  if (planned.some((entry) => entry.refusal)) {
+    throw refusedBatch(planned);
+  }
+  // Asked once the caller holds the right on every item, and before the policy and the
+  // guardrails: a batch that names no revision for an asset is never taken as an overwrite.
+  for (const entry of planned.filter(isReady)) {
+    if (entry.item.expectedRevision === undefined) {
+      entry.refusal = {
+        code: "PRECONDITION_REQUIRED",
+        message: `'expectedRevision' is missing: send the revision that was read${entry.item.type === "put" ? ", or null to create the asset" : ""}`
+      };
     }
   }
   if (planned.some((entry) => entry.refusal)) {
@@ -618,10 +645,6 @@ export async function assetSyncPolicyTargets(
   return [...targets.values()];
 }
 
-function isReady(entry: PlannedItem): entry is ReadyItem {
-  return entry.kind !== undefined && entry.name !== undefined && entry.refusal === undefined;
-}
-
 /** What each item is by its own input: a registered kind, a name, inside a named prefix, once. */
 function planItems(options: ChatServerOptions, input: AssetSyncInput): PlannedItem[] {
   const seen = new Set<string>();
@@ -738,32 +761,4 @@ function writeIssues(check: () => AssetSetIssue[]): AssetSetIssue[] {
     }
     throw error;
   }
-}
-
-/**
- * The error of a batch that was not applied. `details.items` names every item: `refused` with
- * the reason for one that stopped the batch, `not_applied` for one that would have been
- * written. `details.issues` holds what the set as a whole was refused for.
- */
-function refusedBatch(planned: readonly PlannedItem[], issues: readonly AssetSetIssue[] = []) {
-  const refused = planned.flatMap((entry) => (entry.refusal ? [entry.refusal] : []));
-  const code = REFUSAL_ORDER.find((candidate) => refused.some((entry) => entry.code === candidate));
-  return new AppError(
-    code ?? "VALIDATION_FAILED",
-    refused.length > 0
-      ? `The batch was not applied: ${refused.length} of ${planned.length} items were refused`
-      : "The batch was not applied: the assets it would leave are invalid",
-    {
-      reason: "sync_refused",
-      items: planned.map((entry) => ({
-        index: entry.index,
-        type: entry.item.type,
-        kind: entry.item.kind,
-        ...(entry.name === undefined ? {} : { name: entry.name }),
-        status: entry.refusal ? "refused" : "not_applied",
-        ...(entry.refusal ? { error: { ...entry.refusal } } : {})
-      })),
-      ...(issues.length > 0 ? { issues: issues.map(({ message }) => ({ message })) } : {})
-    }
-  );
 }

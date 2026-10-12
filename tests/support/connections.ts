@@ -12,6 +12,7 @@ import {
   type AccessInstance,
   type AccessInstanceOptions
 } from "./access-instance";
+import { applyAtCurrentRevisions } from "./asset-revisions";
 
 // What the tests of the Connection kind share: a Connector type that reaches nothing, a
 // definition, and an instance with the module on and the kind registered.
@@ -89,7 +90,7 @@ export async function setupConnectionInstance(
     ]
   });
   const seed = async (name: string, overrides: Record<string, JsonValue | undefined> = {}) => {
-    await t.stores.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(t.stores.configAssets, {
       clientInstanceId,
       mutations: [{ type: "upsert", kind: "connection", name, config: connection(name, overrides) }]
     });

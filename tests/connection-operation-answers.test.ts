@@ -17,6 +17,7 @@ import {
   findLeak,
   generateTestSecret
 } from "./support/test-connector";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 // What leaves a call of a Connection's operation and the Connection's routes: the result of
 // the Connector type once it is bounded, searched for the credential and validated, a reason
@@ -166,7 +167,7 @@ describe("the Connection routes", () => {
         operationOf("write", { effect: "changing", enabled: false })
       ]
     });
-    await t.stores.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(t.stores.configAssets, {
       clientInstanceId,
       mutations: [
         {

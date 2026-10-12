@@ -28,6 +28,7 @@ import {
 } from "./support/test-connector";
 import { createTestInstance, type TestPostgresStore } from "./support/test-instance";
 import { withTestSql } from "./support/test-sql";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 // The Secret Store over real rows. Each test fails without the store: there is no table, no
 // encryption and no resolver before it.
@@ -88,7 +89,7 @@ describe("the Secret Store", () => {
     stores = (await createTestInstance({ postgres: {} })).stores;
     key = generateSecretStoreKey();
     keyring = await keyringOf([["k1", key]]);
-    await stores.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(stores.configAssets, {
       clientInstanceId,
       mutations: ["first", "second"].map((name) => ({
         type: "upsert" as const,

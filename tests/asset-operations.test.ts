@@ -252,9 +252,11 @@ describe("the instance default and the availability of an asset", () => {
 });
 
 describe("assets.put, assets.delete and assets.revert", () => {
-  it("creates without a revision, replaces at the one read, and answers a stale one with the current", async () => {
+  // Fails without the change: a put without a revision created, a conflict answered 409
+  // without who and when, and `null` brought a deleted asset back.
+  it("names the revision it was made against: null creates, a missing one is refused, a stale one is told the current", async () => {
     const t = await setupNamespace();
-    const put = (userId: string, instructions: string, expectedRevision?: number) =>
+    const put = (userId: string, instructions: string, expectedRevision?: number | null) =>
       t.call(userId, "assets.put", {
         params: { kind: "agent", name: "kai-intake" },
         payload: {
@@ -264,18 +266,41 @@ describe("assets.put, assets.delete and assets.revert", () => {
         }
       });
 
-    const created = await put(t.kai.id, "First.");
+    // No revision named: refused, naming the asset, and nothing is written.
+    const blind = await put(t.kai.id, "Blind.");
+    expect(blind.statusCode).toBe(428);
+    expect(errorSchema.parse(blind.json()).error).toMatchObject({
+      code: "PRECONDITION_REQUIRED",
+      details: {
+        reason: "precondition_required",
+        assets: [{ kind: "agent", name: "kai-intake" }]
+      }
+    });
+    expect(await t.stored("agent", "kai-intake")).toBeUndefined();
+
+    const created = await put(t.kai.id, "First.", null);
     expect(created.statusCode).toBe(200);
     expect(writeSchema.parse(created.json())).toEqual({ version: 2, revision: 1, warnings: [] });
     const replaced = await put(t.kai.id, "Second.", 1);
     expect(writeSchema.parse(replaced.json())).toEqual({ version: 3, revision: 2, warnings: [] });
 
     // Stale: made against revision 1 while the asset is at 2. And a create of a taken name.
-    for (const stale of [await put(t.admin.id, "Stale.", 1), await put(t.kai.id, "Again.")]) {
-      expect(stale.statusCode).toBe(409);
+    for (const stale of [await put(t.admin.id, "Stale.", 1), await put(t.kai.id, "Again.", null)]) {
+      expect(stale.statusCode).toBe(412);
       expect(errorSchema.parse(stale.json()).error).toMatchObject({
-        code: "CONFLICT",
-        details: { kind: "agent", name: "kai-intake", currentRevision: 2 }
+        code: "REVISION_CONFLICT",
+        details: {
+          reason: "revision_conflict",
+          conflicts: [
+            {
+              kind: "agent",
+              name: "kai-intake",
+              currentRevision: 2,
+              changedBy: "Kai",
+              changedAt: expect.any(String)
+            }
+          ]
+        }
       });
     }
     // A replace of an asset that does not exist is told so.
@@ -284,8 +309,8 @@ describe("assets.put, assets.delete and assets.revert", () => {
       payload: { config: agent("kai-none"), expectedRevision: 4 }
     });
     expect(errorSchema.parse(missing.json()).error).toMatchObject({
-      code: "CONFLICT",
-      details: { currentRevision: null }
+      code: "REVISION_CONFLICT",
+      details: { conflicts: [{ kind: "agent", name: "kai-none", currentRevision: null }] }
     });
     expect(await t.stored("agent", "kai-intake")).toMatchObject({
       revision: 2,
@@ -322,8 +347,8 @@ describe("assets.put, assets.delete and assets.revert", () => {
       payload: { revision: 1, expectedRevision: 1 }
     });
     expect(errorSchema.parse(staleRevert.json()).error).toMatchObject({
-      code: "CONFLICT",
-      details: { currentRevision: 2 }
+      code: "REVISION_CONFLICT",
+      details: { conflicts: [{ currentRevision: 2 }] }
     });
     const reverted = await t.expectOk(t.kai.id, "assets.revert", {
       ...address,
@@ -340,21 +365,44 @@ describe("assets.put, assets.delete and assets.revert", () => {
       payload: { expectedRevision: 2 }
     });
     expect(errorSchema.parse(staleDelete.json()).error).toMatchObject({
-      code: "CONFLICT",
-      details: { currentRevision: 3 }
+      code: "REVISION_CONFLICT",
+      details: { conflicts: [{ currentRevision: 3 }] }
     });
+    for (const operation of ["assets.delete", "assets.revert"] as const) {
+      const blind = await t.call(t.kai.id, operation, {
+        ...address,
+        payload: { revision: 1, expectedRevision: undefined }
+      });
+      expect(blind.statusCode, operation).toBe(428);
+    }
     const deleted = await t.expectOk(t.kai.id, "assets.delete", {
       ...address,
       payload: { expectedRevision: 3 }
     });
     expect(writeSchema.parse(deleted.json())).toMatchObject({ revision: 4, warnings: [] });
-    expect(await t.stored("agent", "kai-intake")).toMatchObject({ status: "deleted", revision: 4 });
     await t.expectRefused(t.kai.id, "assets.get", address, { status: 404, code: "NOT_FOUND" });
+
+    // The deleted asset keeps its revision. Creating the name again names it.
+    const revival = (expectedRevision: number | null) =>
+      t.call(t.kai.id, "assets.put", {
+        ...address,
+        payload: { config: agent("kai-intake", { instructions: "Again." }), expectedRevision }
+      });
+    const unreviewed = await revival(null);
+    expect(unreviewed.statusCode).toBe(412);
+    expect(errorSchema.parse(unreviewed.json()).error.details).toMatchObject({
+      conflicts: [{ kind: "agent", name: "kai-intake", currentRevision: 4, deleted: true }]
+    });
+    expect(await t.stored("agent", "kai-intake")).toMatchObject({ status: "deleted", revision: 4 });
+    expect((await revival(4)).statusCode).toBe(200);
+    await t.expectOk(t.kai.id, "assets.delete", { ...address, payload: { expectedRevision: 5 } });
 
     const history = z
       .object({ items: z.array(z.object({ revision: z.number(), operation: z.string() })) })
       .parse((await t.expectOk(t.kai.id, "assets.revisions.list", address)).json());
     expect(history.items.map((item) => [item.revision, item.operation])).toEqual([
+      [6, "delete"],
+      [5, "create"],
       [4, "delete"],
       [3, "revert"],
       [2, "update"],
@@ -370,7 +418,9 @@ describe("assets.put, assets.delete and assets.revert", () => {
       ["config_asset.updated", 1],
       ["config_asset.updated", 2],
       ["config_asset.reverted", 3],
-      ["config_asset.deleted", 4]
+      ["config_asset.deleted", 4],
+      ["config_asset.updated", 5],
+      ["config_asset.deleted", 6]
     ]);
     // Each row names the run that wrote it.
     expect(written.every((event) => typeof event.metadata?.operationRunId === "string")).toBe(true);
@@ -446,13 +496,13 @@ describe("assets.sync", () => {
       putItem("agent", "kai-intake"),
       putItem("skill", "kai-guide", 7)
     ]);
-    expect(stale.statusCode).toBe(409);
+    expect(stale.statusCode).toBe(412);
     expect(syncRefusalSchema.parse(errorSchema.parse(stale.json()).error.details).items).toEqual([
       { index: 0, type: "put", kind: "agent", name: "kai-intake", status: "not_applied" },
       expect.objectContaining({
         index: 1,
         status: "refused",
-        error: expect.objectContaining({ code: "CONFLICT", currentRevision: 1 })
+        error: expect.objectContaining({ code: "REVISION_CONFLICT", currentRevision: 1 })
       })
     ]);
     // So does an item whose definition is invalid.
@@ -597,7 +647,7 @@ describe("the Operation Run of an asset call", () => {
       actor: t.kai.id,
       effect: "changing",
       status: "failed",
-      error: "CONFLICT"
+      error: "REVISION_CONFLICT"
     });
     expect(
       await runOf(t.kai.id, "assets.sync", {

@@ -17,6 +17,7 @@ import { clientInstanceId } from "./support/access-instance";
 import { connection } from "./support/connections";
 import { captureProcessOutput, dumpDatabaseText, findLeak } from "./support/test-connector";
 import { DEFAULT_LIMITS, URL_OF_HOST, fixture, operationOf } from "./support/connection-operations";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 // What a call of a Connection's operation guards against inside `execute`, called the way
 // `runOperation` calls it once the right and the policy are decided.
@@ -143,8 +144,10 @@ describe("the order inside a call", () => {
     await vi.waitFor(() => expect(slots.waiting(connectionRow?.assetId ?? "")).toBe(1), {
       timeout: 10_000
     });
-    await t.stores.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(t.stores.configAssets, {
       clientInstanceId,
+      // Named here: looking the revision up would be one more read of the Connection.
+      baseRevisions: { "connection:crm": 1 },
       mutations: [
         {
           type: "upsert",
@@ -231,8 +234,10 @@ describe("the order inside a call", () => {
     vi.spyOn(slots, "acquire").mockImplementation(async (...taken) => {
       const slot = await acquire(...taken);
       expect(slot.waited).toBe(false);
-      await t.stores.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(t.stores.configAssets, {
         clientInstanceId,
+        // Named here: looking the revision up would be one more read of the Connection.
+        baseRevisions: { "connection:crm": 1 },
         mutations: [
           {
             type: "upsert",

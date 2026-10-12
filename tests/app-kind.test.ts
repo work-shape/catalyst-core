@@ -19,40 +19,12 @@ import {
   type PersistedAccess
 } from "@vivd-catalyst/core";
 import { clientInstanceId } from "./support/access-instance";
-import { setupAppInstance, type AppInstance } from "./support/app-instance";
+import { appFiles, setupAppInstance, type AppInstance } from "./support/app-instance";
+import { createNoticeKind, noticeSchema } from "./support/notice-kind";
 
 // The two things a kind says about its revisions: which one is live, and what one holds. The
 // kind `app` is the first that has a draft beside the published revision and files beside the
 // config; a made-up kind proves the published pointer belongs to the registry, not to Apps.
-
-const noticeSchema = z.strictObject({ name: z.string(), text: z.string() });
-
-/** A kind with a draft and a published revision and nothing else of an App: no files. */
-function createNoticeKind(): WorkflowAssetKind {
-  return {
-    ...defineAssetKind({
-      kind: "notice",
-      plural: "notices",
-      schema: noticeSchema,
-      nameRule: { pattern: /^[a-z][a-z0-9-]*$/u, maxLength: 40, description: "lowercase" },
-      actions: {
-        read: "app.read",
-        write: "app.write",
-        delete: "app.delete",
-        publish: "app.publish"
-      },
-      lifecycle: "draft_published",
-      validate: () => [],
-      summarize: (notice) => ({ name: notice.name, title: notice.text })
-    }),
-    holdsInstanceDefault: false,
-    hasWorkspaceAvailability: false,
-    prepareInteractiveUpsert: ({ next }) => next,
-    missingUpsertRight: () => undefined,
-    assertInteractiveUpsertAllowed: () => undefined,
-    assertInteractiveDeleteAllowed: () => undefined
-  };
-}
 
 const pointersSchema = z.looseObject({
   revision: z.number(),
@@ -407,7 +379,7 @@ describe("a kind with a draft and a published revision on an instance", () => {
       t.admin.id,
       "assets.discard_draft",
       { params: { kind: "notice", name: "fresh" }, payload: { expectedRevision: 4 } },
-      { status: 409, code: "CONFLICT" }
+      { status: 412, code: "REVISION_CONFLICT" }
     );
   });
 
@@ -432,6 +404,66 @@ describe("a kind with a draft and a published revision on an instance", () => {
       { status: 422, code: "VALIDATION_FAILED" }
     );
     expect(active.details).toMatchObject({ reason: "no_draft" });
+  });
+
+  const syncAs = (userId: string, items: unknown[]) =>
+    t.call(userId, "assets.sync", { payload: { namespace: "kai-", items } });
+  const batchNotice = (text: string, expectedRevision: number | null) => ({
+    type: "put",
+    kind: "notice",
+    config: { name: "kai-banner", text },
+    expectedRevision
+  });
+  const storedBanner = async () =>
+    t.stores.configAssets.getConfigAsset({ clientInstanceId, kind: "notice", name: "kai-banner" });
+
+  // The draft moved in a batch before the change too. What fails without it is the last line:
+  // a stale item was a 409 then.
+  it("moves the draft in a batch and leaves the published revision and the version of the set", async () => {
+    await t.createNamespace("kai-");
+    const created = await syncAs(t.admin.id, [batchNotice("one", null)]);
+    expect(created.statusCode, created.body).toBe(200);
+    await t.expectOk(t.admin.id, "assets.publish", {
+      params: { kind: "notice", name: "kai-banner" },
+      payload: { revision: 1 }
+    });
+    const published = (await storedBanner())?.publishedRevisionId;
+    const { version } = await t.stores.configAssets.getConfigAssetState({ clientInstanceId });
+
+    const moved = await syncAs(t.admin.id, [batchNotice("two", 1)]);
+
+    expect(moved.statusCode, moved.body).toBe(200);
+    expect(await storedBanner()).toMatchObject({
+      revision: 2,
+      config: { text: "two" },
+      publishedRevisionId: published
+    });
+    expect(published).toBeDefined();
+    expect(await t.stores.configAssets.getConfigAssetState({ clientInstanceId })).toMatchObject({
+      version
+    });
+    // The draft is what a batch is made against, like every other write of the kind.
+    expect((await syncAs(t.admin.id, [batchNotice("stale", 1)])).statusCode).toBe(412);
+  });
+
+  it("refuses an App as an item: its files are written one App at a time", async () => {
+    const created = await t.putApp(t.admin.id, "batched", appFiles("one"));
+    expect(created.statusCode, created.body).toBe(200);
+
+    const refused = await syncAs(t.admin.id, [
+      {
+        type: "put",
+        kind: "app",
+        config: { name: "batched", title: "Batched", manifest: {} },
+        expectedRevision: 1
+      }
+    ]);
+
+    expect(refused.statusCode).toBe(422);
+    expect(refused.body).toContain("assets.put");
+    expect(
+      await t.stores.configAssets.getConfigAsset({ clientInstanceId, kind: "app", name: "batched" })
+    ).toMatchObject({ revision: 1 });
   });
 
   it("shows a member's right to open the workspace's Apps with its source", async () => {

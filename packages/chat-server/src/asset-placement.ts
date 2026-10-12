@@ -92,6 +92,8 @@ export async function setAssetDefault(
   const result = await applyValidatedConfigAssetMutations(options, {
     clientInstanceId: options.clientInstanceId,
     actor: auditActorFromIdentity(call.actor),
+    // No asset gets a revision here, so there is none to name.
+    baseRevisions: {},
     mutations: [{ type: "setDefaultAgent", agentName: name }]
   });
   await recordPlacement(call, "config_asset.default_agent_set", {

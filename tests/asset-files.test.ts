@@ -28,10 +28,11 @@ const fileSetOf = async (t: AppInstance, assetId: string, fileSetId: string) => 
   return t.stores.pages.getAssetFileSet({ clientInstanceId, assetId, fileSetId });
 };
 /** A write without the revision the harness would add: the call that creates. */
+/** A write that creates: it names no revision the App is at. */
 const create = (t: AppInstance, name: string, payload: Record<string, unknown>) =>
   t.instance.call("assets.put", {
     params: { kind: "app", name },
-    payload,
+    payload: { expectedRevision: null, ...payload },
     headers: { "x-test-user": t.admin.id }
   });
 

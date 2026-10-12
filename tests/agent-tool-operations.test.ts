@@ -13,6 +13,7 @@ import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, getTestConfig, getTestJobs } from "./support/test-instance";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 // A chat run on an assembled instance whose agent calls tools: each call is a call of the
 // operation the tool is registered as, so it leaves an Operation Run, and what the person
@@ -326,7 +327,7 @@ describe("an agent's tool calls in a chat run", () => {
       payload: { decision: "approve" }
     });
     // The tool is taken off the agent's list before the call runs.
-    await f.app.stores.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(f.app.stores.configAssets, {
       clientInstanceId: f.clientInstanceId,
       mutations: [
         {
@@ -381,7 +382,7 @@ describe("an agent's tool calls in a chat run", () => {
     expect(approved.json()).toMatchObject({ status: "approved" });
     // An admin withdraws the agent from this workspace before the call runs. The default
     // agent stays available everywhere, so another agent becomes the default first.
-    await f.app.stores.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(f.app.stores.configAssets, {
       clientInstanceId: f.clientInstanceId,
       mutations: [
         {

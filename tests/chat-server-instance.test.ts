@@ -10,6 +10,7 @@ import { asClientInstanceId } from "@vivd-catalyst/core";
 import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
 import { createTestConfig } from "./support/fixtures";
 import { injectStartConversationRun, drainRunEvents } from "./support/chat-server-run-harness";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 describe("client instance app vertical slice", () => {
   it("boots and exposes safe config with zero stored assets", async () => {
@@ -543,7 +544,7 @@ describe("client instance app vertical slice", () => {
     try {
       const clientInstanceId = asClientInstanceId(getTestConfig(app).clientInstance.id);
       const names = ["personal", "restricted"];
-      await app.stores.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(app.stores.configAssets, {
         clientInstanceId,
         mutations: names.map((name) => ({
           type: "upsert" as const,

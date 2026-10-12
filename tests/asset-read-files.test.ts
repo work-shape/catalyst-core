@@ -62,10 +62,9 @@ describe("reading the source files of one revision of an App", () => {
     return readSchema.parse(response.json());
   };
   const create = async (name: string, marker: string) => {
-    const response = await t.instance.call("assets.put", {
+    const response = await t.call(t.admin.id, "assets.put", {
       params: { kind: "app", name },
-      payload: { files: filesOf(marker), workspaceId: t.workspaceId },
-      headers: { "x-test-user": t.admin.id }
+      payload: { files: filesOf(marker), workspaceId: t.workspaceId }
     });
     expectStatus(response, 200);
     return fileWriteSchema.parse(response.json());

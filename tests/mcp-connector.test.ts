@@ -51,6 +51,7 @@ import {
   generateTestSecret
 } from "./support/test-connector";
 import { createTestInstance, type TestPostgresStore } from "./support/test-instance";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 // The Connector type `mcp` against an MCP server in this process, through the real egress
 // checker (with a resolver of the test), the real Secret Store over real rows and
@@ -101,7 +102,7 @@ describe("the Connector type mcp", () => {
     const key = setup.key ?? generateTestSecret();
     const authScheme = setup.authScheme ?? "bearer";
     const handle = authScheme === "none" ? undefined : createConnectionSecretHandle();
-    await stores.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(stores.configAssets, {
       clientInstanceId,
       mutations: [
         {

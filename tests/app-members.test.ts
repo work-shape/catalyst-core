@@ -32,10 +32,9 @@ describe("the Apps a member of the workspace is shown", () => {
 
   const put = async (name: string, marker: string, title: string) =>
     expectStatus(
-      await t.instance.call("assets.put", {
+      await t.call(t.admin.id, "assets.put", {
         params: { kind: "app", name },
-        payload: { files: appFiles(marker, { name: title }), workspaceId: t.workspaceId },
-        headers: { "x-test-user": t.admin.id }
+        payload: { files: appFiles(marker, { name: title }), workspaceId: t.workspaceId }
       }),
       200
     );

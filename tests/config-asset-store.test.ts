@@ -3,6 +3,7 @@ import type { PlatformStores } from "@vivd-catalyst/core";
 import { createTestInstance } from "./support/test-instance";
 import { afterAll, describe, expect, it } from "vitest";
 import { asClientInstanceId, createPlatformId } from "@vivd-catalyst/core";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 interface ConfigAssetStoreFixture extends Pick<
   PlatformStores,
@@ -43,9 +44,8 @@ function runConfigAssetStoreSuite(
         version: 0
       });
 
-      const result = await store.configAssets.applyConfigAssetMutations({
+      const result = await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
-        baseVersion: 0,
         mutations: [
           { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") },
           { type: "upsert", kind: "skill", name: "research", config: skillConfig("v1") }
@@ -68,7 +68,7 @@ function runConfigAssetStoreSuite(
 
     it("leaves unlisted assets active and increments once for a merge-style upsert", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [
           { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") },
@@ -76,9 +76,8 @@ function runConfigAssetStoreSuite(
         ]
       });
 
-      const result = await store.configAssets.applyConfigAssetMutations({
+      const result = await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
-        baseVersion: 1,
         mutations: [{ type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v2") }]
       });
 
@@ -91,106 +90,9 @@ function runConfigAssetStoreSuite(
       ]);
     });
 
-    it("rejects a stale base version without committing mutations", async () => {
-      const clientInstanceId = createClientInstanceId();
-      await store.configAssets.applyConfigAssetMutations({
-        clientInstanceId,
-        baseVersion: 0,
-        mutations: [{ type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") }]
-      });
-
-      await expect(
-        store.configAssets.applyConfigAssetMutations({
-          clientInstanceId,
-          baseVersion: 0,
-          mutations: [
-            { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v2") }
-          ]
-        })
-      ).rejects.toMatchObject({
-        code: "CONFLICT",
-        message: "Config version mismatch",
-        details: { currentVersion: 1, baseVersion: 0 }
-      });
-      await expect(store.configAssets.getConfigAssetState({ clientInstanceId })).resolves.toEqual({
-        version: 1
-      });
-      await expect(
-        store.configAssets.listConfigAssetRevisions({
-          clientInstanceId,
-          kind: "agent",
-          name: "assistant"
-        })
-      ).resolves.toHaveLength(1);
-    });
-
-    it.each(["update", "delete", "create"] as const)(
-      "rejects a remote %s atomically with revision provenance",
-      async (operation) => {
-        const clientInstanceId = createClientInstanceId();
-        if (operation !== "create") {
-          await store.configAssets.applyConfigAssetMutations({
-            clientInstanceId,
-            mutations: [
-              { type: "upsert", kind: "skill", name: "research", config: skillConfig("baseline") }
-            ]
-          });
-        }
-        await store.configAssets.applyConfigAssetMutations({
-          clientInstanceId,
-          actor: { displayLabel: "Remote editor", roles: ["admin"] },
-          mutations:
-            operation === "delete"
-              ? [{ type: "delete", kind: "skill", name: "research" }]
-              : [{ type: "upsert", kind: "skill", name: "research", config: skillConfig("remote") }]
-        });
-        const before = await store.configAssets.getConfigAssetState({ clientInstanceId });
-        await expect(
-          store.configAssets.applyConfigAssetMutations({
-            clientInstanceId,
-            baseRevisions: {
-              "skill:research": operation === "create" ? null : 1,
-              "skill:other": null
-            },
-            mutations: [
-              {
-                type: "upsert",
-                kind: "skill",
-                name: "other",
-                config: { name: "other", content: "new" }
-              },
-              { type: "upsert", kind: "skill", name: "research", config: skillConfig("local") }
-            ]
-          })
-        ).rejects.toMatchObject({
-          code: "CONFLICT",
-          details: {
-            conflicts: [
-              {
-                kind: "skill",
-                name: "research",
-                currentRevision: operation === "create" ? 1 : 2,
-                actorLabel: "Remote editor",
-                timestamp: expect.any(String),
-                operation
-              }
-            ]
-          }
-        });
-        expect(await store.configAssets.getConfigAssetState({ clientInstanceId })).toEqual(before);
-        expect(
-          await store.configAssets.getConfigAsset({
-            clientInstanceId,
-            kind: "skill",
-            name: "other"
-          })
-        ).toBeUndefined();
-      }
-    );
-
     it("lists every conflicting asset before applying any mutation", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [
           { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("remote") },
@@ -198,7 +100,7 @@ function runConfigAssetStoreSuite(
         ]
       });
       await expect(
-        store.configAssets.applyConfigAssetMutations({
+        applyAtCurrentRevisions(store.configAssets, {
           clientInstanceId,
           baseRevisions: { "agent:assistant": null, "skill:research": null },
           mutations: [
@@ -207,7 +109,7 @@ function runConfigAssetStoreSuite(
           ]
         })
       ).rejects.toMatchObject({
-        code: "CONFLICT",
+        code: "REVISION_CONFLICT",
         details: {
           conflicts: [
             { kind: "agent", name: "assistant", currentRevision: 1, operation: "create" },
@@ -222,7 +124,7 @@ function runConfigAssetStoreSuite(
 
     it("ignores untouched remote changes and guards explicit deletions", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [
           { type: "upsert", kind: "skill", name: "research", config: skillConfig("baseline") },
@@ -234,16 +136,15 @@ function runConfigAssetStoreSuite(
           }
         ]
       });
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [
           { type: "upsert", kind: "skill", name: "research", config: skillConfig("remote") }
         ]
       });
       await expect(
-        store.configAssets.applyConfigAssetMutations({
+        applyAtCurrentRevisions(store.configAssets, {
           clientInstanceId,
-          baseVersion: 0,
           baseRevisions: { "skill:other": 1 },
           mutations: [{ type: "delete", kind: "skill", name: "other" }]
         })
@@ -256,17 +157,17 @@ function runConfigAssetStoreSuite(
         })
       ).toMatchObject({ revision: 2, config: skillConfig("remote") });
       await expect(
-        store.configAssets.applyConfigAssetMutations({
+        applyAtCurrentRevisions(store.configAssets, {
           clientInstanceId,
           baseRevisions: { "skill:research": 1 },
           mutations: [{ type: "delete", kind: "skill", name: "research" }]
         })
-      ).rejects.toMatchObject({ code: "CONFLICT" });
+      ).rejects.toMatchObject({ code: "REVISION_CONFLICT" });
     });
 
     it("guards the default pointer only when changed and requires every touched baseline", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [
           { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("baseline") },
@@ -274,7 +175,7 @@ function runConfigAssetStoreSuite(
         ]
       });
       await expect(
-        store.configAssets.applyConfigAssetMutations({
+        applyAtCurrentRevisions(store.configAssets, {
           clientInstanceId,
           baseRevisions: {},
           baseDefaultAgentName: null,
@@ -285,16 +186,16 @@ function runConfigAssetStoreSuite(
         details: { defaultAgentConflict: { currentAgentName: "assistant" } }
       });
       await expect(
-        store.configAssets.applyConfigAssetMutations({
+        applyAtCurrentRevisions(store.configAssets, {
           clientInstanceId,
           baseRevisions: {},
           mutations: [
             { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("local") }
           ]
         })
-      ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+      ).rejects.toMatchObject({ code: "PRECONDITION_REQUIRED" });
       await expect(
-        store.configAssets.applyConfigAssetMutations({
+        applyAtCurrentRevisions(store.configAssets, {
           clientInstanceId,
           baseRevisions: { "agent:assistant": 1 },
           baseDefaultAgentName: null,
@@ -304,7 +205,7 @@ function runConfigAssetStoreSuite(
         })
       ).resolves.toEqual({ version: 2 });
       await expect(
-        store.configAssets.applyConfigAssetMutations({
+        applyAtCurrentRevisions(store.configAssets, {
           clientInstanceId,
           baseRevisions: {},
           baseDefaultAgentName: "assistant",
@@ -315,14 +216,14 @@ function runConfigAssetStoreSuite(
 
     it("numbers revisions independently per asset", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [
           { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") },
           { type: "upsert", kind: "skill", name: "research", config: skillConfig("v1") }
         ]
       });
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [{ type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v2") }]
       });
@@ -346,15 +247,15 @@ function runConfigAssetStoreSuite(
 
     it("writes one delete tombstone and treats repeated deletes as idempotent", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [{ type: "upsert", kind: "skill", name: "research", config: skillConfig("v1") }]
       });
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [{ type: "delete", kind: "skill", name: "research" }]
       });
-      const repeated = await store.configAssets.applyConfigAssetMutations({
+      const repeated = await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [{ type: "delete", kind: "skill", name: "research" }]
       });
@@ -377,15 +278,15 @@ function runConfigAssetStoreSuite(
 
     it("revives deleted assets with a create revision while preserving history", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [{ type: "upsert", kind: "skill", name: "research", config: skillConfig("v1") }]
       });
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [{ type: "delete", kind: "skill", name: "research" }]
       });
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [{ type: "upsert", kind: "skill", name: "research", config: skillConfig("v2") }]
       });
@@ -408,11 +309,11 @@ function runConfigAssetStoreSuite(
 
     it("records explicit revert operations and actors", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [{ type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") }]
       });
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         actor: {
           userId: "user-1",
@@ -445,9 +346,8 @@ function runConfigAssetStoreSuite(
 
     it("sets and clears the default agent and rolls back invalid references", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
-        baseVersion: 0,
         mutations: [
           { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") },
           { type: "setDefaultAgent", agentName: "assistant" }
@@ -459,9 +359,8 @@ function runConfigAssetStoreSuite(
       });
 
       await expect(
-        store.configAssets.applyConfigAssetMutations({
+        applyAtCurrentRevisions(store.configAssets, {
           clientInstanceId,
-          baseVersion: 1,
           mutations: [{ type: "setDefaultAgent", agentName: "missing" }]
         })
       ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
@@ -471,9 +370,8 @@ function runConfigAssetStoreSuite(
       });
 
       await expect(
-        store.configAssets.applyConfigAssetMutations({
+        applyAtCurrentRevisions(store.configAssets, {
           clientInstanceId,
-          baseVersion: 1,
           mutations: [{ type: "delete", kind: "agent", name: "assistant" }]
         })
       ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
@@ -481,9 +379,8 @@ function runConfigAssetStoreSuite(
         store.configAssets.getConfigAsset({ clientInstanceId, kind: "agent", name: "assistant" })
       ).resolves.toMatchObject({ status: "active", revision: 1 });
 
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
-        baseVersion: 1,
         mutations: [{ type: "setDefaultAgent", agentName: undefined }]
       });
       await expect(store.configAssets.getConfigAssetState({ clientInstanceId })).resolves.toEqual({
@@ -493,7 +390,7 @@ function runConfigAssetStoreSuite(
 
     it("lists only active assets with an optional kind filter", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [
           { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") },
@@ -501,7 +398,7 @@ function runConfigAssetStoreSuite(
           { type: "upsert", kind: "skill", name: "deleted", config: skillConfig("deleted") }
         ]
       });
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [{ type: "delete", kind: "skill", name: "deleted" }]
       });
@@ -520,7 +417,7 @@ function runConfigAssetStoreSuite(
 
     it("gives new agents an availability record and removes it with the agent", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [
           { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") },
@@ -536,7 +433,7 @@ function runConfigAssetStoreSuite(
         ["assistant", everywhere]
       ]);
 
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [{ type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v2") }]
       });
@@ -545,7 +442,7 @@ function runConfigAssetStoreSuite(
         agentName: "assistant",
         availability: { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }
       });
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [{ type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v3") }]
       });
@@ -554,7 +451,7 @@ function runConfigAssetStoreSuite(
         ["assistant", { mode: "selected", personalWorkspaces: true, collaborationWorkspaceIds: [] }]
       ]);
 
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [{ type: "delete", kind: "agent", name: "assistant" }]
       });
@@ -568,18 +465,18 @@ function runConfigAssetStoreSuite(
       ).rejects.toMatchObject({ code: "NOT_FOUND" });
 
       // A revived agent starts from the initial availability, not from its old record.
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [{ type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v4") }]
       });
       expect([...(await store.configAssets.listAgentAvailability({ clientInstanceId }))]).toEqual([
         ["assistant", everywhere]
       ]);
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [{ type: "delete", kind: "agent", name: "assistant" }]
       });
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         initialAgentAvailability: "selected",
         mutations: [
@@ -609,7 +506,7 @@ function runConfigAssetStoreSuite(
 
     it("starts agents hidden when the same batch deletes a selected agent", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [
           { type: "upsert", kind: "agent", name: "open", config: agentConfig("v1") },
@@ -623,7 +520,7 @@ function runConfigAssetStoreSuite(
       });
 
       // Replacing an unrestricted agent keeps the default.
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         initialAgentAvailability: "selected_when_replacing_selected",
         mutations: [
@@ -636,7 +533,7 @@ function runConfigAssetStoreSuite(
       ).toEqual({ mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] });
 
       // The rule applies regardless of mutation order and leaves existing agents alone.
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         initialAgentAvailability: "selected_when_replacing_selected",
         mutations: [
@@ -654,7 +551,7 @@ function runConfigAssetStoreSuite(
       expect(availability.get("open-renamed")?.mode).toBe("all");
 
       // Without the push rule, a batch that deletes a restricted agent still creates `all`.
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [
           { type: "delete", kind: "agent", name: "restricted-renamed" },
@@ -669,7 +566,7 @@ function runConfigAssetStoreSuite(
 
     it("keeps the default agent available everywhere", async () => {
       const clientInstanceId = createClientInstanceId();
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [
           { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") },
@@ -708,7 +605,7 @@ function runConfigAssetStoreSuite(
         store.configAssets.getConfigAssetState({ clientInstanceId })
       ).resolves.toMatchObject({ version: 2 });
       await expect(
-        store.configAssets.applyConfigAssetMutations({
+        applyAtCurrentRevisions(store.configAssets, {
           clientInstanceId,
           mutations: [{ type: "setDefaultAgent", agentName: "restricted" }]
         })
@@ -735,7 +632,7 @@ function runConfigAssetStoreSuite(
           })
         )
       );
-      await store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
         mutations: [{ type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v1") }]
       });

@@ -22,6 +22,7 @@ import {
   type TestServerOptions,
   type TestStore
 } from "./test-instance";
+import { applyAtCurrentRevisions } from "./asset-revisions";
 
 // The instance behind the grant and Namespace tests: four stored users, interactive agent
 // editing switched on, two tools and two model bindings.
@@ -267,7 +268,7 @@ export async function setupAccessInstance(
   const kai = await createUser("Kai", ["user"]);
   const lena = await createUser("Lena", ["user"]);
   // An existing default agent, so that no write below is the one that sets the default.
-  await stores.configAssets.applyConfigAssetMutations({
+  await applyAtCurrentRevisions(stores.configAssets, {
     clientInstanceId,
     mutations: [
       { type: "upsert", kind: "agent", name: "assistant", config: agent("assistant") },

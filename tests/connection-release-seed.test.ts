@@ -32,6 +32,7 @@ import {
 import { fileTestDatabaseUrl } from "./support/test-database";
 import { createTestInstance, getTestExecution } from "./support/test-instance";
 import { withTestSql } from "./support/test-sql";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 // The release seed on an assembled instance over real rows. Each test fails without the
 // seed: before it no start wrote a Connection, a secret row or a state row.
@@ -452,7 +453,7 @@ describe("the release seed of Connections", () => {
       secretHandle: undefined,
       authScheme: "none"
     });
-    await first.stores.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(first.stores.configAssets, {
       clientInstanceId,
       mutations: [{ type: "upsert", kind: "connection", name: "made-here", config: runtime }]
     });
@@ -488,8 +489,14 @@ describe("a seeded Connection is read-only on the instance", () => {
     const stored = assetSchema.parse((await instance.call("assets.get", address)).json());
     const changed = { ...stored.config, enabled: false };
     const calls = {
-      put: instance.call("assets.put", { ...address, payload: { config: changed } }),
-      same: instance.call("assets.put", { ...address, payload: { config: stored.config } }),
+      put: instance.call("assets.put", {
+        ...address,
+        payload: { config: changed, expectedRevision: 2 }
+      }),
+      same: instance.call("assets.put", {
+        ...address,
+        payload: { config: stored.config, expectedRevision: 2 }
+      }),
       delete: instance.call("assets.delete", { ...address, payload: { expectedRevision: 2 } }),
       revert: instance.call("assets.revert", {
         ...address,
@@ -522,7 +529,8 @@ describe("a seeded Connection is read-only on the instance", () => {
     const response = await instance.call("assets.put", {
       params: { kind: "connection", name: "made-here" },
       payload: {
-        config: connection("made-here", { connectorType: "test", origin: "runtime" })
+        config: connection("made-here", { connectorType: "test", origin: "runtime" }),
+        expectedRevision: null
       }
     });
     expect(errorSchema.parse(response.json()).error.details).toEqual({

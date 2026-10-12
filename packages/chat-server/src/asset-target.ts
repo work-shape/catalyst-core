@@ -6,9 +6,11 @@ import {
   type ConfigAssetRecord,
   type JsonObject
 } from "@vivd-catalyst/core";
-import { conflict, type AssetCall } from "./asset-access";
+import type { AssetCall } from "./asset-access";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
+import { currentRevisionOf, revisionConflictOf } from "./asset-revision";
 import { assertScopeCanOwn } from "./config-asset-writer";
+import type { ChatServerOptions } from "./types";
 
 // What the address of a call comes to, and what every write asks of it before it writes.
 
@@ -77,11 +79,19 @@ export function requireFreeName(target: AssetTarget): void {
   }
 }
 
-/** `null` expects no active asset of the name: the call creates it. */
-export function requireExpectedRevision(target: AssetTarget, expected: number | null): void {
-  const current = target.asset?.status === "active" ? target.asset.revision : null;
-  if (current !== expected) {
-    throw conflict(target.kind.kind, target.name, current);
+/**
+ * Refuses a write made against another revision than the name is at. `null` expects a name
+ * that was never stored: a deleted asset is created again only by a write that names the
+ * revision of its delete.
+ */
+export async function requireExpectedRevision(
+  options: Pick<ChatServerOptions, "clientInstanceId" | "configAssets">,
+  call: AssetCall,
+  target: AssetTarget,
+  expected: number | null
+): Promise<void> {
+  if (currentRevisionOf(target.asset) !== expected) {
+    throw await revisionConflictOf(options, call.access, target);
   }
 }
 

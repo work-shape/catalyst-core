@@ -147,7 +147,7 @@ export function createSkillChangeApprovalHandler(
     },
     async apply(payload, user, context) {
       const data = validatePayload(payload);
-      const snapshot = await loadMutationSnapshot();
+      const snapshot = await loadMutationSnapshot(data);
       // Before the scope check: an already committed write is recovered even if the agent or
       // its skill assignment changed since.
       const previous = await findProducedRevision(data.skillName, context.requestId);
@@ -166,7 +166,10 @@ export function createSkillChangeApprovalHandler(
       const mutations: ConfigAssetMutation[] = [
         { type: "upsert", kind: "skill", name: skill.name, config: toJsonObject(skill) }
       ];
+      // An approved request is the review a deleted name needs: it names the tombstone.
+      const baseRevisions = { [`skill:${skill.name}`]: snapshot.revisionOf("skill", skill.name) };
       if (data.operations[0]?.type === "create_skill" && agent) {
+        baseRevisions[`agent:${agent.name}`] = snapshot.revisionOf("agent", agent.name);
         mutations.push({
           type: "upsert",
           kind: "agent",
@@ -179,7 +182,7 @@ export function createSkillChangeApprovalHandler(
       }
       await applyValidatedConfigAssetMutations(options, {
         clientInstanceId: options.clientInstanceId,
-        baseVersion: snapshot.version,
+        baseRevisions,
         actor: auditActorFromUser(user),
         origin: revisionOrigin(context),
         mutations
@@ -196,7 +199,7 @@ export function createSkillChangeApprovalHandler(
       context: ApprovalRequestContext
     ) {
       const data = validatePayload(request.payload);
-      const snapshot = await loadMutationSnapshot();
+      const snapshot = await loadMutationSnapshot(data);
       const history = await listSkillRevisions(data.skillName);
       const applied = findRequestRevision(history, request.id);
       if (!applied) {
@@ -217,9 +220,14 @@ export function createSkillChangeApprovalHandler(
         );
       }
       const mutations: ConfigAssetMutation[] = [];
+      // The skill is at the revision this request produced, as checked above.
+      const baseRevisions = {
+        [`skill:${data.skillName}`]: snapshot.revisionOf("skill", data.skillName)
+      };
       if (data.operations[0]?.type === "create_skill") {
         const agent = snapshot.agents.find((candidate) => candidate.name === data.agentName);
         if (agent) {
+          baseRevisions[`agent:${agent.name}`] = snapshot.revisionOf("agent", agent.name);
           mutations.push({
             type: "upsert",
             kind: "agent",
@@ -247,7 +255,7 @@ export function createSkillChangeApprovalHandler(
       }
       await applyValidatedConfigAssetMutations(options, {
         clientInstanceId: options.clientInstanceId,
-        baseVersion: snapshot.version,
+        baseRevisions,
         actor: auditActorFromUser(user),
         origin: revisionOrigin(context),
         mutations
@@ -272,11 +280,28 @@ export function createSkillChangeApprovalHandler(
     return findRequestRevision(await listSkillRevisions(skillName), requestId);
   }
 
-  async function loadMutationSnapshot() {
-    // Read the CAS version before any snapshot data: a concurrent write must
-    // invalidate this mutation even if the source uses separate reads internally.
-    const state = await store.getConfigAssetState({ clientInstanceId: options.clientInstanceId });
-    return { ...(await options.configAssets.source.getSnapshot()), version: state.version };
+  /**
+   * The snapshot a change is made from, with the revision of the two assets it may write. The
+   * revisions are read before any snapshot data: a write that lands in between leaves the
+   * change with a base the store refuses, so it is never applied to content it did not read.
+   */
+  async function loadMutationSnapshot(names: { skillName: string; agentName: string }) {
+    const read = (kind: "skill" | "agent", name: string) =>
+      store.getConfigAsset({ clientInstanceId: options.clientInstanceId, kind, name });
+    const [skill, agent] = await Promise.all([
+      read("skill", names.skillName),
+      read("agent", names.agentName)
+    ]);
+    const revisions = new Map([
+      [`skill:${names.skillName}`, skill?.revision ?? null],
+      [`agent:${names.agentName}`, agent?.revision ?? null]
+    ]);
+    return {
+      ...(await options.configAssets.source.getSnapshot()),
+      /** The last revision of the asset, a deleted one's included, or `null` for none. */
+      revisionOf: (kind: "skill" | "agent", name: string) =>
+        revisions.get(`${kind}:${name}`) ?? null
+    };
   }
 }
 

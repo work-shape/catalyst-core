@@ -36,6 +36,7 @@ import {
   createTestAttachmentCapability,
   waitForReadyDraftAttachment
 } from "./support/chat-server-attachment-harness";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 describe("client instance app vertical slice", () => {
   it("leaves an accepted run queued with its job when workers of their own execute runs", async () => {
@@ -1146,7 +1147,7 @@ describe("agent availability per Collaboration Workspace", () => {
       expect(withDefault.json()).toMatchObject({ run: { agentName: "test_agent" } });
 
       // Without an instance default available here, the first available agent is used.
-      await app.stores.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(app.stores.configAssets, {
         clientInstanceId,
         mutations: [{ type: "setDefaultAgent", agentName: undefined }]
       });
@@ -1335,7 +1336,7 @@ async function createAvailabilityFixture(options: { assetManagement?: true } = {
   const setAvailability = (agentName: string, availability: AgentAvailability) =>
     app.stores.configAssets.setAgentAvailability({ clientInstanceId, agentName, availability });
   const names = ["shared_only", "personal_only", "hidden"];
-  await app.stores.configAssets.applyConfigAssetMutations({
+  await applyAtCurrentRevisions(app.stores.configAssets, {
     clientInstanceId,
     mutations: names.map((name) => ({
       type: "upsert" as const,

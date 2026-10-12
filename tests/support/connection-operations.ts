@@ -43,6 +43,7 @@ import { runOperation, type OperationOutcome } from "@vivd-catalyst/tool-executi
 import { clientInstanceId, setupAccessInstance, type AccessInstance } from "./access-instance";
 import { connection } from "./connections";
 import { generateSecretStoreKey, generateTestSecret } from "./test-connector";
+import { applyAtCurrentRevisions } from "./asset-revisions";
 
 // The instance behind the tests of a Connection's operations: real rows, the real call path,
 // the real Secret Store and egress checker, and Connector types that reach nothing and record
@@ -372,7 +373,7 @@ export async function fixture(
   const seed = async (name: string, overrides: Record<string, JsonValue | undefined> = {}) => {
     const handle = handles.get(name) ?? `secret_${randomUUID()}`;
     handles.set(name, handle);
-    await stores.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(stores.configAssets, {
       clientInstanceId,
       mutations: [
         {

@@ -222,6 +222,8 @@ export async function seedReleaseConnections(
     const before = new Map((await list()).map((asset) => [asset.name, asset]));
 
     const mutations: ConfigAssetMutation[] = [];
+    /** The revision each written Connection was read at, under the lock of the seed. */
+    const baseRevisions: Record<string, number | null> = {};
     const handles = new Map<string, string>();
     for (const name of names) {
       const entry = input.connections[name];
@@ -245,6 +247,16 @@ export async function seedReleaseConnections(
       const config = toJsonObject(definitionOf(name, entry, connectorTypes, handle));
       if (asset && sameJson(asset.config, config)) continue;
       mutations.push({ type: "upsert", kind: CONNECTION_ASSET_KIND, name, config });
+      // A name release config had once and dropped left a deleted row: the seed that brings
+      // the entry back continues its revisions.
+      const row =
+        asset ??
+        (await stores.configAssets.getConfigAsset({
+          clientInstanceId,
+          kind: CONNECTION_ASSET_KIND,
+          name
+        }));
+      baseRevisions[`${CONNECTION_ASSET_KIND}:${name}`] = row?.revision ?? null;
       (asset ? result.updated : result.created).push(name);
     }
     for (const asset of before.values()) {
@@ -256,12 +268,14 @@ export async function seedReleaseConnections(
         connectionAssetId: asset.id
       });
       mutations.push({ type: "delete", kind: CONNECTION_ASSET_KIND, name: asset.name });
+      baseRevisions[`${CONNECTION_ASSET_KIND}:${asset.name}`] = asset.revision;
       result.removed.push(asset.name);
     }
     if (mutations.length > 0) {
       await stores.configAssets.applyConfigAssetMutations({
         clientInstanceId,
         actor: SYSTEM_ACTOR,
+        baseRevisions,
         mutations
       });
     }

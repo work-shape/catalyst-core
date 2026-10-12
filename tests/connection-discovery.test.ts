@@ -23,6 +23,7 @@ import {
 import { listedOperation } from "./support/discovering-test-connector";
 import { dumpDatabaseText, findLeak } from "./support/test-connector";
 import { getTestJobs } from "./support/test-instance";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 // The discovery of a Connection on an assembled instance over real rows: the seed queues the
 // job, the job stores what the outside system lists, and the accepted list decides what an
@@ -356,7 +357,7 @@ describe("a Connection that changes while it is discovered", () => {
         name: "outside"
       })
     );
-    await instance.stores.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(instance.stores.configAssets, {
       clientInstanceId,
       mutations: [
         {
@@ -409,6 +410,7 @@ describe("a Connection that changes while it is discovered", () => {
           edit = instance.stores.configAssets
             .applyConfigAssetMutations({
               clientInstanceId,
+              baseRevisions: { "connection:outside": asset.revision },
               mutations: [
                 {
                   type: "upsert",

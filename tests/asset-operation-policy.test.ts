@@ -281,7 +281,7 @@ describe("an asset write that waits for another person", () => {
     });
     expect(request).toMatchObject({
       status: "approved",
-      applyResult: { execution: "failed", error: { code: "CONFLICT" } }
+      applyResult: { execution: "failed", error: { code: "REVISION_CONFLICT" } }
     });
     expect(await t.stored("agent", "kai-intake")).toMatchObject({ revision: 2 });
     expect(JSON.stringify(await t.stored("agent", "kai-intake"))).toContain("Newer.");

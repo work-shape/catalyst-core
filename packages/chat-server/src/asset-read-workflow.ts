@@ -401,7 +401,7 @@ export class AssetReadWorkflow {
 }
 
 /** The two pointers of an asset of a kind with a published revision, as revision numbers. */
-export function pointersOf(kind: WorkflowAssetKind, asset: ConfigAssetRecord) {
+function pointersOf(kind: WorkflowAssetKind, asset: ConfigAssetRecord) {
   if (kind.lifecycle !== "draft_published") {
     return {};
   }
@@ -433,7 +433,7 @@ function isPublished(kind: WorkflowAssetKind, asset: ConfigAssetRecord | undefin
  * through the use right nothing of an asset that has none. It is the right `mayOpenAssetFileSet` serves the files
  * of that revision for.
  */
-export function showsPublishedView(
+function showsPublishedView(
   kind: WorkflowAssetKind,
   access: ActorAccess,
   resource: AssetTarget["resource"],
@@ -449,7 +449,7 @@ export function showsPublishedView(
 }
 
 /** What a list shows of one asset. A stored definition its kind no longer reads shows its name. */
-export function summarizeAsset(kind: WorkflowAssetKind, name: string, config: unknown) {
+function summarizeAsset(kind: WorkflowAssetKind, name: string, config: unknown) {
   try {
     const { title, description, attributes } = kind.summarize(config);
     return {

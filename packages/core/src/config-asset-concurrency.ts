@@ -13,24 +13,17 @@ export function assertConfigAssetBases(
   state: ConfigAssetState,
   current: Map<string, { status: "active" | "deleted"; revision: ConfigAssetRevisionRecord }>
 ): void {
-  if (input.baseRevisions === undefined) {
-    if (input.baseVersion !== undefined && input.baseVersion !== state.version) {
-      throw new AppError("CONFLICT", "Config version mismatch", {
-        currentVersion: state.version,
-        baseVersion: input.baseVersion
-      });
-    }
-    return;
-  }
   const conflicts = [];
   const checkedKeys = new Set<string>();
   let defaultAgentConflict: { currentAgentName: string | null } | undefined;
   for (const mutation of input.mutations) {
     if (mutation.type === "setDefaultAgent") {
-      if (input.baseDefaultAgentName === undefined) {
-        throw new AppError("VALIDATION_FAILED", "Missing default-agent baseline");
-      }
-      if (input.baseDefaultAgentName !== (state.defaultAgentName ?? null)) {
+      // The default is no asset and has no revision. A caller that read it says so and is
+      // compared; one that sets it outright, as `assets.set_default` does, names none.
+      if (
+        input.baseDefaultAgentName !== undefined &&
+        input.baseDefaultAgentName !== (state.defaultAgentName ?? null)
+      ) {
         defaultAgentConflict = { currentAgentName: state.defaultAgentName ?? null };
       }
       continue;
@@ -42,18 +35,23 @@ export function assertConfigAssetBases(
     checkedKeys.add(key);
     const base = input.baseRevisions[key];
     if (base === undefined) {
-      throw new AppError("VALIDATION_FAILED", `Missing base revision for '${key}'`);
+      throw new AppError("PRECONDITION_REQUIRED", `Missing base revision for '${key}'`, {
+        reason: "precondition_required",
+        assets: [{ kind: mutation.kind, name: mutation.name }]
+      });
     }
     const asset = current.get(key);
+    // A tombstone is a revision like any other: a put that creates the name again names it.
     const matches =
       base === null
-        ? asset === undefined || asset.status === "deleted"
+        ? asset === undefined || (mutation.type === "delete" && asset.status === "deleted")
         : asset?.revision.revision === base;
     if (!matches) {
       conflicts.push({
         kind: mutation.kind,
         name: mutation.name,
         currentRevision: asset?.revision.revision ?? null,
+        deleted: asset?.status === "deleted",
         actorLabel: asset?.revision.actor?.displayLabel ?? null,
         timestamp: asset?.revision.createdAt ?? null,
         operation: asset?.revision.operation ?? null
@@ -61,7 +59,9 @@ export function assertConfigAssetBases(
     }
   }
   if (conflicts.length || defaultAgentConflict) {
-    throw new AppError("CONFLICT", "Config assets changed since the last pull", {
+    // A stale asset answers the revision conflict; a stale default alone is a plain conflict.
+    const code = conflicts.length > 0 ? "REVISION_CONFLICT" : "CONFLICT";
+    throw new AppError(code, "Config assets changed since they were read", {
       conflicts,
       ...(defaultAgentConflict ? { defaultAgentConflict } : {})
     });

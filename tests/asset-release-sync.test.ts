@@ -21,6 +21,7 @@ import {
   syncAsService,
   type Item
 } from "./support/asset-release";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 // A whole release through `assets.sync`: what a holder of the release right is exempt from in
 // that call, and that nobody else and no other operation is. The service principal of these
@@ -132,7 +133,7 @@ describe("a release through assets.sync", () => {
       [
         await t.call(t.releaser.id, "assets.put", {
           params: { kind: "agent", name: "rel-fresh" },
-          payload: { config: agent("rel-fresh"), expectedRevision: undefined }
+          payload: { config: agent("rel-fresh"), expectedRevision: null }
         }),
         limited("Interactive agent creation is disabled")
       ],
@@ -244,7 +245,7 @@ describe("a release through assets.sync", () => {
     const t = await setupNamespaceHolder();
     const defaultAgentName = async () =>
       (await t.stores.configAssets.getConfigAssetState({ clientInstanceId })).defaultAgentName;
-    await t.stores.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(t.stores.configAssets, {
       clientInstanceId,
       mutations: [
         { type: "setDefaultAgent", agentName: undefined },
@@ -400,6 +401,7 @@ describe("what a release is checked against", () => {
         raced = true;
         await apply({
           clientInstanceId,
+          baseRevisions: { "agent:rel-ghost": null },
           mutations: [
             { type: "upsert", kind: "agent", name: "rel-ghost", config: agent("rel-ghost") }
           ]
@@ -413,9 +415,9 @@ describe("what a release is checked against", () => {
     ]);
     store.applyConfigAssetMutations = apply;
 
-    expect(refused.statusCode, refused.body).toBe(409);
+    expect(refused.statusCode, refused.body).toBe(412);
     expect(refusedItems(refused).items).toEqual([
-      expect.objectContaining({ name: "rel-ghost", status: "refused", code: "CONFLICT" }),
+      expect.objectContaining({ name: "rel-ghost", status: "refused", code: "REVISION_CONFLICT" }),
       { name: "rel-guide", status: "not_applied" }
     ]);
     // The created asset stands, and nothing of the batch was written.
@@ -428,7 +430,7 @@ describe("assets of a kind no release carries", () => {
   it("are left alone by a release, also where their kind is not registered, and stop none", async () => {
     const t = await setup();
     // A row of a module that was switched off: the instance registers no kind for it.
-    await t.stores.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(t.stores.configAssets, {
       clientInstanceId,
       mutations: [
         {
@@ -495,7 +497,7 @@ describe("assets.sync_check", () => {
     // A batch the sync refuses is refused the same way, item by item.
     const stale = [putSkill("rel-guide", "Pushed.", 7), putAgent("rel-intake")];
     const refused = await check({ items: stale });
-    expect(refused.statusCode).toBe(409);
+    expect(refused.statusCode).toBe(412);
     expect(refusedItems(refused)).toEqual(refusedItems(await syncAsService(t, stale)));
     const invalid = await check({ items: [putAgent("rel-lost", naming("rel-none"))] });
     expect(invalid.statusCode).toBe(422);

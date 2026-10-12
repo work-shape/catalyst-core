@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { AssetScope } from "@vivd-catalyst/core";
 import { agent, clientInstanceId, errorSchema, skill } from "./support/access-instance";
 import { setupNamespaceHolder, type NamespaceHolderInstance } from "./support/asset-operations";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 // What a caller learns of assets it may not read from the answer to its own definition: a
 // reference to one reads as a reference to nothing, and so does a name another owner holds.
@@ -26,7 +27,7 @@ async function setup() {
     creatorUserId: t.admin.id
   });
   const scope: AssetScope = { kind: "workspace", workspaceId: workspace.id };
-  await t.stores.configAssets.applyConfigAssetMutations({
+  await applyAtCurrentRevisions(t.stores.configAssets, {
     clientInstanceId,
     mutations: [
       { type: "upsert", kind: "skill", name: "team-notes", config: skill("team-notes"), scope }

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { asAgentRunId, asConversationId, type ClientInstanceId } from "@vivd-catalyst/core";
 import { required } from "./support/assertions";
 import { usePostgresSuite } from "./support/postgres-suite";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 describe("named store keyset paging", () => {
   const suite = usePostgresSuite("list_paging");
@@ -162,7 +163,7 @@ describe("named store keyset paging", () => {
     const clientInstanceId = suite.clientInstance("assets");
     additionalCleanup.push(clientInstanceId);
     for (let index = 0; index < 3; index++) {
-      await suite.store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(suite.store.configAssets, {
         clientInstanceId,
         mutations: [
           { type: "upsert", kind: "agent", name: "test", config: { instructions: String(index) } }

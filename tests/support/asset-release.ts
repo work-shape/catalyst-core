@@ -11,6 +11,7 @@ import {
   type AccessInstance,
   type AccessInstanceOptions
 } from "./access-instance";
+import { applyAtCurrentRevisions } from "./asset-revisions";
 
 // What the tests of a release through `assets.sync` share: the service principal that holds
 // the release right, the items of a batch, and how a refused batch reads.
@@ -40,18 +41,17 @@ const refusalSchema = z.object({
 });
 
 export type Item = Record<string, unknown>;
-export const putAgent = (name: string, overrides: Item = {}, expectedRevision?: number): Item => ({
-  type: "put",
-  kind: "agent",
-  config: agent(name, overrides),
-  ...(expectedRevision === undefined ? {} : { expectedRevision })
-});
-export const putSkill = (name: string, content: string, expectedRevision?: number): Item => ({
-  type: "put",
-  kind: "skill",
-  config: skill(name, content),
-  ...(expectedRevision === undefined ? {} : { expectedRevision })
-});
+/** A put at the revision the test names. Without one it creates the asset. */
+export const putAgent = (
+  name: string,
+  overrides: Item = {},
+  expectedRevision: number | null = null
+): Item => ({ type: "put", kind: "agent", config: agent(name, overrides), expectedRevision });
+export const putSkill = (
+  name: string,
+  content: string,
+  expectedRevision: number | null = null
+): Item => ({ type: "put", kind: "skill", config: skill(name, content), expectedRevision });
 export const deleteAgent = (name: string, expectedRevision = 1): Item => ({
   type: "delete",
   kind: "agent",
@@ -77,7 +77,7 @@ export async function setupRelease(options: AccessInstanceOptions = {}): Promise
     roles: ["user", "admin"],
     permissions: ["config_assets.release"]
   });
-  await t.stores.configAssets.applyConfigAssetMutations({
+  await applyAtCurrentRevisions(t.stores.configAssets, {
     clientInstanceId,
     mutations: [
       { type: "upsert", kind: "agent", name: "rel-old", config: agent("rel-old") },

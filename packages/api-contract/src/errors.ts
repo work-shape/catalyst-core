@@ -6,6 +6,8 @@ export const appErrorCodeSchema = z.enum([
   "FORBIDDEN",
   "NOT_FOUND",
   "CONFLICT",
+  "REVISION_CONFLICT",
+  "PRECONDITION_REQUIRED",
   "TIMEOUT",
   "VALIDATION_FAILED",
   "RATE_LIMITED",
@@ -27,6 +29,10 @@ export const API_ERROR_MEANINGS: Record<z.infer<typeof appErrorCodeSchema>, stri
   NOT_FOUND:
     "The resource does not exist, is not visible to the caller, or the instance runs without this operation.",
   CONFLICT: "The request conflicts with the current state of the resource.",
+  REVISION_CONFLICT:
+    "An asset the call writes is at another revision than the one the call names, or the name it creates is taken or was deleted. Nothing was written. `details.conflicts` names each such asset, with its current revision and who changed it when for an asset the caller may read.",
+  PRECONDITION_REQUIRED:
+    "The call names no `expectedRevision` for an asset it writes. `details.assets` names each. Send the revision that was read, or `null` to create the asset.",
   TIMEOUT: "The instance did not finish the work in time.",
   VALIDATION_FAILED: "Path, query or body do not match the operation's schema.",
   RATE_LIMITED:

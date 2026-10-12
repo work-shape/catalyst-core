@@ -1,9 +1,9 @@
 import {
-  AppError,
   asCollaborationWorkspaceId,
   INSTANCE_ASSET_SCOPE,
   liveRevisionId,
   type AccessResource,
+  type AppError,
   type ActorAccess,
   type AssetScope,
   type AuditRecorder,
@@ -98,17 +98,6 @@ export function mayOpenAssetFileSet(
     asset.revisionIds.includes(live) &&
     kind.actions.use !== undefined &&
     access.authorize(kind.actions.use, resource).allowed
-  );
-}
-
-/** The refusal of a write that was made against another revision than the current one. */
-export function conflict(kind: string, name: string, currentRevision: number | null): AppError {
-  return new AppError(
-    "CONFLICT",
-    currentRevision === null
-      ? `Config ${kind} '${name}' does not exist`
-      : `Config ${kind} '${name}' is at revision ${currentRevision}`,
-    { kind, name, currentRevision }
   );
 }
 

@@ -27,6 +27,7 @@ import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import type { FakeModelProvider as ModelProvider } from "./support/model-gateway";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { findConfigAssetAgentValidationIssues } from "../packages/client-assembly/src/assembly-validation";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 const routesClientInstanceId = asClientInstanceId("config-routes-test");
 const servers: TestInstance[] = [];
@@ -223,14 +224,14 @@ describe("config asset admin routes", () => {
       const fixture = await createFixture();
       const token = await mintToken(fixture.server);
       if (operation !== "create") {
-        await fixture.store.configAssets.applyConfigAssetMutations({
+        await applyAtCurrentRevisions(fixture.store.configAssets, {
           clientInstanceId: fixture.clientInstanceId,
           mutations: [
             { type: "upsert", kind: "skill", name: "research", config: skillConfig("Baseline") }
           ]
         });
       }
-      await fixture.store.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(fixture.store.configAssets, {
         clientInstanceId: fixture.clientInstanceId,
         actor: { displayLabel: "Remote editor", roles: ["admin"] },
         mutations:
@@ -245,13 +246,13 @@ describe("config asset admin routes", () => {
               type: "put",
               kind: "skill",
               config: skillConfig("Local"),
-              ...(operation === "create" ? {} : { expectedRevision: 1 })
+              expectedRevision: operation === "create" ? null : 1
             },
             { type: "put", kind: "skill", config: { ...skillConfig("New"), name: "new" } }
           ]
         }
       });
-      expect(response.statusCode).toBe(409);
+      expect(response.statusCode).toBe(412);
       expect(response.json()).toMatchObject({
         error: {
           details: {
@@ -261,10 +262,10 @@ describe("config asset admin routes", () => {
                 kind: "skill",
                 name: "research",
                 status: "refused",
-                // A deleted asset has no current revision.
+                // A deleted asset keeps the revision of its delete.
                 error: {
-                  code: "CONFLICT",
-                  currentRevision: operation === "create" ? 1 : operation === "delete" ? null : 2
+                  code: "REVISION_CONFLICT",
+                  currentRevision: operation === "create" ? 1 : 2
                 }
               },
               { index: 1, kind: "skill", name: "new", status: "not_applied" }
@@ -285,7 +286,7 @@ describe("config asset admin routes", () => {
   it("leaves assets and the default agent a release does not name, and guards the default", async () => {
     const fixture = await createFixture();
     const token = await mintToken(fixture.server);
-    await fixture.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
         { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("Remote") },
@@ -325,10 +326,10 @@ describe("config asset admin routes", () => {
     ).toBeUndefined();
   });
 
-  it("returns 409 with the current revision for a put made against another one", async () => {
+  it("returns 412 with the current revision for a put made against another one", async () => {
     const fixture = await createFixture();
     const token = await mintToken(fixture.server);
-    const put = (instructions: string, expectedRevision?: number) =>
+    const put = (instructions: string, expectedRevision: number | null = null) =>
       fixture.server.call("assets.put", {
         params: { kind: "agent", name: "assistant" },
         payload: { config: agentConfig(instructions), expectedRevision },
@@ -339,11 +340,11 @@ describe("config asset admin routes", () => {
 
     // A put made against the revision before, and a create of a name that exists.
     for (const stale of [await put("Stale", 1), await put("Created again")]) {
-      expect(stale.statusCode).toBe(409);
+      expect(stale.statusCode).toBe(412);
       expect(stale.json()).toMatchObject({
         error: {
-          code: "CONFLICT",
-          details: { kind: "agent", name: "assistant", currentRevision: 2 }
+          code: "REVISION_CONFLICT",
+          details: { conflicts: [{ kind: "agent", name: "assistant", currentRevision: 2 }] }
         }
       });
     }
@@ -629,7 +630,7 @@ describe("config asset admin routes", () => {
       agentConfiguration: { enabled: true, editableAgentFields: [] }
     });
     // A JSON store may return object keys in another order than the client sends them.
-    await fixture.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
         {
@@ -762,7 +763,7 @@ describe("config asset admin routes", () => {
     );
 
     // A stored id that is no longer eligible does not block later edits of the agent.
-    await fixture.store.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
         {

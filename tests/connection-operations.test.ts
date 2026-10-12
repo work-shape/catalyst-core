@@ -25,6 +25,7 @@ import {
 } from "./support/connection-operations";
 import { connection } from "./support/connections";
 import { withTestSql } from "./support/test-sql";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 // A Connection's accepted operations as operations of the platform, on real rows: who may
 // call one, in which order a call goes, and what stops it before an outside system is
@@ -344,7 +345,7 @@ describe("a call of a Connection's operation", () => {
     await t.grant(t.kai.id, "connection.use", { assetId });
     // The revision the right and the policy were decided on is replaced before the call reads.
     t.state.beforeSecondRead = async () => {
-      await t.stores.configAssets.applyConfigAssetMutations({
+      await applyAtCurrentRevisions(t.stores.configAssets, {
         clientInstanceId,
         mutations: [
           {

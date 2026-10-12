@@ -21,6 +21,7 @@ import {
 } from "./support/connections";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, getTestConfig } from "./support/test-instance";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 // The Connection kind: what its definition may hold, that a secret has no place in it, that
 // no asset operation writes one before runtime authoring, and that the kind does not exist
@@ -513,7 +514,7 @@ describe("the module connections", () => {
 
   it("makes the kind absent while it is off, and keeps what the store holds", async () => {
     const on = await start(true);
-    await on.stores.configAssets.applyConfigAssetMutations({
+    await applyAtCurrentRevisions(on.stores.configAssets, {
       clientInstanceId: asClientInstanceId(getTestConfig(on).clientInstance.id),
       mutations: [
         {
