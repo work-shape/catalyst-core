@@ -8,6 +8,10 @@ export const build = defineTranslations({
     "build.chooseSkills": "Choose skills",
     "build.conflict":
       "Somebody saved this while you were editing. Your text is still here and nothing was overwritten.",
+    "build.conflictBy":
+      "{name} saved this on {time}, while you were editing. Your text is still here and nothing was overwritten.",
+    "build.conflictDeletedBy":
+      "{name} deleted this on {time}, while you were editing. Your text is still here, but it can no longer be saved.",
     "build.assetRefused": "You may not read this asset.",
     "build.conflictDeleted":
       "Somebody deleted this while you were editing. Your text is still here, but it can no longer be saved.",
@@ -32,7 +36,10 @@ export const build = defineTranslations({
     "build.loadNewerFailed":
       "The newer version could not be loaded. Your text is still here. Try again in a moment.",
     "build.loadNewerTitle": "Load the newer version?",
+    "build.nameDeleted":
+      "An asset with the id {name} was deleted, and the id stays with its history. Go back and choose another one.",
     "build.nameTaken": "The id {name} is taken. Go back and choose another one.",
+    "build.openHistory": "Open history",
     "build.namespaceAll": "All Namespaces",
     "build.namespaceFilter": "Namespace",
     "build.noAccess":
@@ -101,6 +108,10 @@ export const build = defineTranslations({
     "build.chooseSkills": "Skills auswählen",
     "build.conflict":
       "Jemand hat dies gespeichert, während Sie es bearbeitet haben. Ihr Text ist noch da und nichts wurde überschrieben.",
+    "build.conflictBy":
+      "{name} hat dies am {time} gespeichert, während Sie es bearbeitet haben. Ihr Text ist noch da und nichts wurde überschrieben.",
+    "build.conflictDeletedBy":
+      "{name} hat dies am {time} gelöscht, während Sie es bearbeitet haben. Ihr Text steht noch hier, lässt sich aber nicht mehr speichern.",
     "build.assetRefused": "Sie dürfen dieses Asset nicht lesen.",
     "build.conflictDeleted":
       "Jemand hat dies gelöscht, während Sie es bearbeitet haben. Ihr Text steht noch hier, lässt sich aber nicht mehr speichern.",
@@ -126,8 +137,11 @@ export const build = defineTranslations({
     "build.loadNewerFailed":
       "Die neuere Version konnte nicht geladen werden. Ihr Text steht noch hier. Versuchen Sie es gleich noch einmal.",
     "build.loadNewerTitle": "Neuere Version laden?",
+    "build.nameDeleted":
+      "Ein Asset mit der Kennung {name} wurde gelöscht, und die Kennung bleibt bei seinem Verlauf. Gehen Sie zurück und wählen Sie eine andere.",
     "build.nameTaken":
       "Die Kennung {name} ist vergeben. Gehen Sie zurück und wählen Sie eine andere.",
+    "build.openHistory": "Verlauf öffnen",
     "build.namespaceAll": "Alle Namespaces",
     "build.namespaceFilter": "Namespace",
     "build.noAccess":

@@ -90,8 +90,8 @@ interface BuildWrites {
     kind: string;
     name: string;
     config: Record<string, unknown>;
-    /** The revision the page loaded. Left out, the call creates the asset. */
-    expectedRevision: number | undefined;
+    /** The revision the page loaded, or `null` for an asset the call creates. */
+    expectedRevision: number | null;
   }): Promise<{ revision: number }>;
   delete(input: { kind: string; name: string; expectedRevision: number }): Promise<unknown>;
   revert(input: {

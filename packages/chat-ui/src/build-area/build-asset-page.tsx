@@ -28,6 +28,7 @@ import type {
 import type { BuildAssetRead, BuildAssetReload, BuildSource } from "./build-data";
 import { BuildHistory } from "./build-history";
 import type { VisibleBuildKind } from "./build-model";
+import { formatDateTime } from "../control-plane/locale-format";
 import { readBuildRefusal, type BuildWriteOutcome } from "./build-refusals";
 
 interface AssetPageProps {
@@ -68,18 +69,24 @@ export function NewAssetPage({
             kind: entry.kind,
             name: start.name,
             config,
-            expectedRevision: undefined
+            expectedRevision: null
           });
           onCreated(start.name);
           return { ok: true };
         } catch (error) {
           const outcome = readBuildRefusal(error, t);
-          // A create that meets a conflict found the id taken.
+          // A create that meets a conflict found the id taken, or held by a deleted asset.
           return !outcome.ok && outcome.conflict
             ? {
                 ok: false,
                 conflict: false,
-                refusals: [{ message: t("build.nameTaken", { name: start.name }) }]
+                refusals: [
+                  {
+                    message: t(outcome.deleted ? "build.nameDeleted" : "build.nameTaken", {
+                      name: start.name
+                    })
+                  }
+                ]
               }
             : outcome;
         }
@@ -231,12 +238,14 @@ function LoadedAssetPage({
   onRestored(revision: number | undefined): void;
   onDeleted(): void;
 }) {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const { entry, state } = kind;
   const [stored, setStored] = useState(loaded);
   // What stands between this page and the instance: somebody saved a newer revision, or
   // somebody deleted the asset. Either way the page keeps what was typed.
   const [conflict, setConflict] = useState<"saved" | "deleted">();
+  /** Who wrote the revision the conflict is with and when, where the instance said so. */
+  const [conflictBy, setConflictBy] = useState<{ name: string; time: string }>();
   const [reloadFailed, setReloadFailed] = useState(false);
   const [reloading, setReloading] = useState(false);
   const [loadAsked, setLoadAsked] = useState(false);
@@ -260,7 +269,12 @@ function LoadedAssetPage({
   const refusalOf = (error: unknown): BuildWriteOutcome => {
     const outcome = readBuildRefusal(error, t);
     if (!outcome.ok && outcome.conflict) {
-      setConflict((known) => known ?? "saved");
+      setConflict((known) => (outcome.deleted ? "deleted" : (known ?? "saved")));
+      setConflictBy(
+        outcome.changedBy !== undefined && outcome.changedAt !== undefined
+          ? { name: outcome.changedBy, time: formatDateTime(outcome.changedAt, locale) }
+          : undefined
+      );
       setReloadFailed(false);
       // A conflict does not say whether the asset was saved or deleted. The notice says
       // which, so the instance is asked.
@@ -354,7 +368,7 @@ function LoadedAssetPage({
                 </Button>
               }
             >
-              {t("build.conflictDeleted")}
+              {conflictBy ? t("build.conflictDeletedBy", conflictBy) : t("build.conflictDeleted")}
             </Banner>
           ) : conflict === "saved" ? (
             <>
@@ -362,12 +376,22 @@ function LoadedAssetPage({
                 tone="warning"
                 data-build-conflict="saved"
                 action={
-                  <Button variant="outline" size="sm" onClick={() => setLoadAsked(true)}>
-                    {t("build.loadNewer")}
-                  </Button>
+                  <>
+                    <Button variant="outline" size="sm" onClick={() => setLoadAsked(true)}>
+                      {t("build.loadNewer")}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      data-build-conflict-history=""
+                      onClick={() => setHistoryOpen(true)}
+                    >
+                      {t("build.openHistory")}
+                    </Button>
+                  </>
                 }
               >
-                {t("build.conflict")}
+                {conflictBy ? t("build.conflictBy", conflictBy) : t("build.conflict")}
               </Banner>
               {reloadFailed ? (
                 <FormNotice tone="error" data-build-reload-failed="">

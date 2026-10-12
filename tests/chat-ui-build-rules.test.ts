@@ -138,16 +138,53 @@ describe("Build rights", () => {
 describe("Build refusals", () => {
   const { t } = createTranslationContext("en");
   const refusal = (code: string, message: string, details?: Record<string, unknown>) =>
-    new ApiError(code === "CONFLICT" ? 409 : code === "FORBIDDEN" ? 403 : 400, message, {
+    new ApiError(code === "REVISION_CONFLICT" ? 412 : code === "FORBIDDEN" ? 403 : 400, message, {
       error: { code, message, ...(details ? { details } : {}) }
     });
 
   it("answers a write over a newer revision as a conflict, with no sentence of its own", () => {
-    const outcome = readBuildRefusal(refusal("CONFLICT", "Revision 3 is not the latest"), t);
+    const outcome = readBuildRefusal(
+      refusal("REVISION_CONFLICT", "Config agent 'tax' is not at the revision the call names", {
+        reason: "revision_conflict",
+        conflicts: [{ kind: "agent", name: "tax" }]
+      }),
+      t
+    );
 
     expect(outcome).toEqual({ ok: false, conflict: true });
     expect(refusalsOf(outcome, undefined)).toEqual([]);
     expect(refusalsOf(outcome, "tools")).toEqual([]);
+  });
+
+  // Fails without the change: a conflict told nobody who wrote the newer revision.
+  it("reads who wrote the revision a conflict is with, and whether it is the delete", () => {
+    const conflict = { kind: "agent", name: "tax", currentRevision: 4 };
+    const changed = { changedBy: "Kai Lehmann", changedAt: "2026-10-12T09:30:00.000Z" };
+
+    expect(
+      readBuildRefusal(
+        refusal("REVISION_CONFLICT", "Config agent 'tax' is at revision 4", {
+          conflicts: [{ ...conflict, ...changed }]
+        }),
+        t
+      )
+    ).toEqual({ ok: false, conflict: true, ...changed });
+    expect(
+      readBuildRefusal(
+        refusal("REVISION_CONFLICT", "Config agent 'tax' was deleted at revision 4", {
+          conflicts: [{ ...conflict, deleted: true, ...changed }]
+        }),
+        t
+      )
+    ).toEqual({ ok: false, conflict: true, deleted: true, ...changed });
+  });
+
+  it("shows any other conflict as the instance said it", () => {
+    expect(readBuildRefusal(refusal("CONFLICT", "The default agent changed"), t)).toEqual({
+      ok: false,
+      conflict: false,
+      refusals: [{ message: "The default agent changed" }]
+    });
   });
 
   it("puts a tool the Namespace does not allow at the tools", () => {
@@ -362,13 +399,15 @@ describe("asset writes", () => {
     ]);
   });
 
-  it("names no revision when it creates an asset", async () => {
+  it("names null for the revision when it creates an asset", async () => {
     const { writes, requests } = recordingWrites();
     const config = { name: "tax-assistant" };
 
-    const outcome = await writes.put({ ...address, config, expectedRevision: undefined });
+    const outcome = await writes.put({ ...address, config, expectedRevision: null });
 
-    expect(requests).toEqual([{ method: "PUT", asset: "agent/tax-assistant", body: { config } }]);
+    expect(requests).toEqual([
+      { method: "PUT", asset: "agent/tax-assistant", body: { config, expectedRevision: null } }
+    ]);
     expect(outcome).toMatchObject({ status: "done", output: { revision: 8 } });
   });
 });

@@ -46,7 +46,7 @@ export interface BannerProps extends Omit<HTMLAttributes<HTMLDivElement>, "title
   /** Takes the place of the tone's icon. `null` shows none. */
   icon?: ReactNode;
   title?: ReactNode;
-  /** One action that answers the message, usually a small Button. */
+  /** What answers the message: one small Button, or two where the second is the quieter. */
   action?: ReactNode;
   /** Shows a dismiss button. */
   onDismiss?(): void;
@@ -101,7 +101,7 @@ export function Banner({
       {action === undefined ? null : (
         <div
           className={cn(
-            "flex shrink-0 basis-full items-center sm:-my-1.5 sm:basis-auto",
+            "flex shrink-0 basis-full items-center gap-1 sm:-my-1.5 sm:basis-auto",
             // On its own line the action starts where the text does, after the icon.
             shownIcon === null ? undefined : line ? "pl-5 sm:pl-0" : "pl-6.5 sm:pl-0"
           )}

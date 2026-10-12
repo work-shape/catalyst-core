@@ -13,13 +13,13 @@ interface AssetAddress {
  */
 export function createAssetWrites(client: ApiClient) {
   return {
-    /** Without an expected revision the call creates the asset. */
+    /** With `null` for the expected revision the call creates the asset. */
     put: ({
       kind,
       name,
       config,
       expectedRevision
-    }: AssetAddress & { config: Record<string, unknown>; expectedRevision: number | undefined }) =>
+    }: AssetAddress & { config: Record<string, unknown>; expectedRevision: number | null }) =>
       client.assets.put({ params: { kind, name }, body: { config, expectedRevision } }),
     delete: ({ kind, name, expectedRevision }: AssetAddress & { expectedRevision: number }) =>
       client.assets.delete({ params: { kind, name }, body: { expectedRevision } }),

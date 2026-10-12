@@ -16,9 +16,20 @@ interface BuildRefusal {
 /** How a change went. */
 export type BuildWriteOutcome =
   | { ok: true }
-  /** Somebody saved the asset after this page loaded it. The page offers the newer version. */
-  | { ok: false; conflict: true }
+  /**
+   * Somebody saved or deleted the asset after this page loaded it. The page offers the newer
+   * version, and names who wrote it and when where the instance said so.
+   */
+  | ({ ok: false; conflict: true } & BuildConflict)
   | { ok: false; conflict: false; refusals: BuildRefusal[] };
+
+/** What the instance told of the revision a refused write met. */
+interface BuildConflict {
+  /** The newer revision is the delete of the asset. */
+  deleted?: true;
+  changedBy?: string;
+  changedAt?: string;
+}
 
 /** A write the instance accepted and did not make: somebody else has to approve it first. */
 export class PendingApprovalError extends Error {
@@ -64,6 +75,19 @@ function readRefusalDetails(error: unknown): RefusalDetails {
   };
 }
 
+/** The one asset a refused write of this page names, as far as the reader may know it. */
+function readConflict(error: unknown): BuildConflict {
+  const conflicts = field(field(field(field(error, "payload"), "error"), "details"), "conflicts");
+  const [conflict]: unknown[] = Array.isArray(conflicts) ? conflicts : [];
+  const changedBy = text(conflict, "changedBy");
+  const changedAt = text(conflict, "changedAt");
+  return {
+    ...(field(conflict, "deleted") === true ? { deleted: true as const } : {}),
+    ...(changedBy === undefined ? {} : { changedBy }),
+    ...(changedAt === undefined ? {} : { changedAt })
+  };
+}
+
 /**
  * What the instance said about a call it refused or could not serve. A call that never got an
  * answer has no such sentence: the page then says in the reader's language what did not work.
@@ -91,8 +115,8 @@ const FIELD_OF_CONFIG_KEY = new Map<string, BuildRefusalField>([
  * asset the reader may not read.
  */
 export function readBuildRefusal(error: unknown, t: Translate): BuildWriteOutcome {
-  if (apiErrorCode(error) === "CONFLICT") {
-    return { ok: false, conflict: true };
+  if (apiErrorCode(error) === "REVISION_CONFLICT") {
+    return { ok: false, conflict: true, ...readConflict(error) };
   }
   if (error instanceof PendingApprovalError) {
     return refused({ message: t("build.pendingApproval") });
