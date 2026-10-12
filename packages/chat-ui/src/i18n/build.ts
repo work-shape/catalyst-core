@@ -107,14 +107,14 @@ export const build = defineTranslations({
     "build.changesCount": "{count} Änderungen",
     "build.chooseSkills": "Skills auswählen",
     "build.conflict":
-      "Jemand hat dies gespeichert, während Sie es bearbeitet haben. Ihr Text ist noch da und nichts wurde überschrieben. Die neuere Version zu laden ersetzt Ihren Text. Kopieren Sie vorher, was Sie behalten wollen.",
+      "Jemand hat dies gespeichert, während du es bearbeitet hast. Dein Text ist noch da und nichts wurde überschrieben. Die neuere Version zu laden ersetzt deinen Text. Kopiere vorher, was du behalten willst.",
     "build.conflictBy":
-      "{name} hat dies am {time} gespeichert, während Sie es bearbeitet haben. Ihr Text ist noch da und nichts wurde überschrieben. Die neuere Version zu laden ersetzt Ihren Text. Kopieren Sie vorher, was Sie behalten wollen.",
+      "{name} hat dies am {time} gespeichert, während du es bearbeitet hast. Dein Text ist noch da und nichts wurde überschrieben. Die neuere Version zu laden ersetzt deinen Text. Kopiere vorher, was du behalten willst.",
     "build.conflictDeletedBy":
-      "{name} hat dies am {time} gelöscht, während Sie es bearbeitet haben. Ihr Text steht noch hier, lässt sich aber nicht mehr speichern.",
+      "{name} hat dies am {time} gelöscht, während du es bearbeitet hast. Dein Text steht noch hier, lässt sich aber nicht mehr speichern.",
     "build.assetRefused": "Sie dürfen dieses Asset nicht lesen.",
     "build.conflictDeleted":
-      "Jemand hat dies gelöscht, während Sie es bearbeitet haben. Ihr Text steht noch hier, lässt sich aber nicht mehr speichern.",
+      "Jemand hat dies gelöscht, während du es bearbeitet hast. Dein Text steht noch hier, lässt sich aber nicht mehr speichern.",
     "build.createContinue": "Weiter",
     "build.createId": "Kennung",
     "build.createIdHint":

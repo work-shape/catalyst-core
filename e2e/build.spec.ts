@@ -439,7 +439,7 @@ test("the notice of a newer version leaves the text in reach on a phone, in Germ
     await page.getByRole("button", { name: "Änderungen speichern", exact: true }).click();
     const conflict = page.locator("[data-build-conflict]");
     await expect(conflict).toContainText(
-      "Die neuere Version zu laden ersetzt Ihren Text. Kopieren Sie vorher, was Sie behalten wollen."
+      "Die neuere Version zu laden ersetzt deinen Text. Kopiere vorher, was du behalten willst."
     );
     await expect(conflict.getByRole("button", { name: "Neuere Version laden" })).toBeVisible();
     await expect(conflict.getByRole("button", { name: "Verlauf öffnen" })).toBeVisible();
