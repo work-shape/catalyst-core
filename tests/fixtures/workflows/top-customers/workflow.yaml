@@ -27,7 +27,7 @@ steps:
     operation: connection.sample.top_customers
     input:
       limit:
-        ref: { step: start, path: limit }
+        ref: { step: start, path: input.limit }
   - id: result
     name: Result
     type: output
@@ -35,6 +35,3 @@ steps:
       customers:
         # An MCP Connection answers the tool's own result under `structuredContent`.
         ref: { step: top, path: structuredContent.rows }
-wiring:
-  - { from: start, to: top }
-  - { from: top, to: result }

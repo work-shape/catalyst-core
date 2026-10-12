@@ -29,9 +29,6 @@ export const WORKFLOW_MANIFEST_MAX_BYTES = 256 * 1_024;
 /** How many steps a definition may hold, the steps of its loops among them. */
 export const WORKFLOW_DEFINITION_MAX_STEPS = 200;
 
-/** How deep loops may be nested in a definition. */
-export const WORKFLOW_LOOP_MAX_DEPTH = 4;
-
 /**
  * How many characters of an item's label a step run keeps. The label tells one iteration of a
  * loop from the next on a page, so a longer value is cut.

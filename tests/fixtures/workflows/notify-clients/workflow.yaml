@@ -13,8 +13,10 @@ outputs:
   type: object
   properties:
     sent:
-      type: array
-  required: [sent]
+      type: integer
+    failed:
+      type: integer
+  required: [sent, failed]
 steps:
   - id: start
     name: Start by hand
@@ -27,7 +29,7 @@ steps:
     operation: connection.crm.echo
     input:
       text:
-        ref: { step: start, path: note }
+        ref: { step: start, path: input.note }
   - id: each_client
     name: For each client
     type: loop
@@ -43,14 +45,13 @@ steps:
           client:
             ref: { step: each_client, path: id }
           note:
-            ref: { step: start, path: note }
+            ref: { step: start, path: input.note }
   - id: result
     name: Result
     type: output
     input:
+      # A loop returns how many of its items ended how, and never what an item returned.
       sent:
-        ref: { step: each_client, path: "" }
-wiring:
-  - { from: start, to: clients }
-  - { from: clients, to: each_client }
-  - { from: each_client, to: result }
+        ref: { step: each_client, path: done }
+      failed:
+        ref: { step: each_client, path: failed }

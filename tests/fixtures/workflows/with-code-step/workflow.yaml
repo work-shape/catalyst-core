@@ -20,6 +20,3 @@ steps:
     name: Result
     type: output
     input: {}
-wiring:
-  - { from: start, to: check }
-  - { from: check, to: result }

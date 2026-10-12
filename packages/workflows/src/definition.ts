@@ -1,7 +1,18 @@
 import { createHash } from "node:crypto";
 import {
+  WORKFLOW_DATASET_KEY,
+  WORKFLOW_ERROR_CODES,
   WORKFLOW_STEP_TYPES,
+  workflowBlockIssues,
+  workflowInputValueSchema,
+  workflowLoopOptionsSchema,
+  workflowOnFailureSchema,
+  workflowPaginateSchema,
+  workflowRetentionSchema,
+  workflowScheduleOptionsSchema,
+  workflowStepDatasetSchema,
   type JsonValue,
+  type WorkflowBlockIssue,
   type WorkflowManifest,
   type WorkflowStep,
   type WorkflowStepType
@@ -9,14 +20,11 @@ import {
 import { JSON_SCHEMA, YAMLException, load } from "js-yaml";
 import { z } from "zod";
 import { jsonObjectSchema, jsonValueSchema } from "./json";
-import {
-  WORKFLOW_DEFINITION_MAX_STEPS,
-  WORKFLOW_LOOP_MAX_DEPTH,
-  WORKFLOW_MANIFEST_MAX_BYTES
-} from "./limits";
+import { WORKFLOW_DEFINITION_MAX_STEPS, WORKFLOW_MANIFEST_MAX_BYTES } from "./limits";
 
 // `workflow.yaml` as a definition the engine runs: its shape, and what must hold between its
-// steps before a run is started from it. Nothing here reads a file or a store.
+// steps before a run is started from it. Nothing here reads a file or a store. Saving a
+// definition, publishing one and starting a run all ask `parseWorkflowManifest`.
 
 /** The step types this release executes. A definition that names another is not accepted. */
 export const WORKFLOW_EXECUTED_STEP_TYPES = [
@@ -26,10 +34,15 @@ export const WORKFLOW_EXECUTED_STEP_TYPES = [
   "output"
 ] as const satisfies readonly WorkflowStepType[];
 
-/** One thing that keeps a definition from being run: where it is, and a sentence to show. */
+/**
+ * One thing that keeps a definition from being run: where it is, and a sentence to show. An
+ * issue the contract names carries its code: what `workflowBlockIssues` refuses, and
+ * `not_supported_yet` for what the file form holds and this engine does not run.
+ */
 export interface WorkflowDefinitionIssue {
   path: string;
   message: string;
+  code?: WorkflowBlockIssue["code"];
 }
 
 export type WorkflowDefinitionResult =
@@ -41,15 +54,15 @@ const WORKFLOW_ID = /^[a-z][a-z0-9_-]{0,62}$/u;
 const STEP_ID = /^[a-z][a-z0-9_-]{0,62}$/u;
 
 const referenceSchema = z.strictObject({ step: z.string().min(1), path: z.string() });
-const inputMappingSchema = z.record(
-  z.string().min(1),
-  z.union([z.strictObject({ value: jsonValueSchema }), z.strictObject({ ref: referenceSchema })])
-);
+const inputMappingSchema = z.record(z.string().min(1), workflowInputValueSchema);
 const stepId = z.string().regex(STEP_ID, "A step id is lowercase letters, digits, '_' and '-'");
 
 /** What every step carries: its id, and what a person calls it and reads about it. */
 const named = { id: stepId, name: z.string().min(1), description: z.string().optional() };
+const declared = { inputSchema: jsonObjectSchema, outputSchema: jsonObjectSchema };
 
+// Every step the file form holds, the reserved blocks among them, so that a file written for
+// a later engine is read here and refused by name instead of as a file nobody understands.
 const stepSchema: z.ZodType<WorkflowStep> = z.lazy(() =>
   z.discriminatedUnion("type", [
     z.strictObject({
@@ -59,7 +72,12 @@ const stepSchema: z.ZodType<WorkflowStep> = z.lazy(() =>
         .array(
           z.discriminatedUnion("kind", [
             z.strictObject({ kind: z.literal("manual") }),
-            z.strictObject({ kind: z.literal("schedule"), cron: z.string().min(1) })
+            z.strictObject({
+              kind: z.literal("schedule"),
+              cron: z.string().min(1),
+              ...workflowScheduleOptionsSchema.shape
+            }),
+            z.strictObject({ kind: z.literal("parent") })
           ])
         )
         .min(1)
@@ -68,7 +86,16 @@ const stepSchema: z.ZodType<WorkflowStep> = z.lazy(() =>
       ...named,
       type: z.literal("operation"),
       operation: z.string().min(1),
-      input: inputMappingSchema
+      input: inputMappingSchema,
+      dataset: workflowStepDatasetSchema.optional(),
+      paginate: workflowPaginateSchema.optional()
+    }),
+    z.strictObject({
+      ...named,
+      type: z.literal("workflow"),
+      workflow: z.string().min(1),
+      input: inputMappingSchema,
+      key: z.array(workflowInputValueSchema).optional()
     }),
     z.strictObject({
       ...named,
@@ -76,12 +103,50 @@ const stepSchema: z.ZodType<WorkflowStep> = z.lazy(() =>
       items: referenceSchema,
       itemName: z.string().min(1).optional(),
       itemLabel: z.string().min(1).optional(),
+      ...workflowLoopOptionsSchema.shape,
       steps: z.array(stepSchema).min(1)
     }),
-    z.strictObject({ ...named, type: z.literal("output"), input: inputMappingSchema })
+    z.strictObject({
+      ...named,
+      ...declared,
+      type: z.literal("code"),
+      file: z.string().min(1),
+      input: inputMappingSchema
+    }),
+    z.strictObject({ ...named, type: z.literal("output"), input: inputMappingSchema }),
+    z.strictObject({
+      ...named,
+      ...declared,
+      type: z.literal("agent"),
+      instructions: z.string().min(1),
+      input: inputMappingSchema
+    }),
+    z.strictObject({
+      ...named,
+      type: z.literal("notify"),
+      channel: z.enum(["inbox", "mail"]),
+      input: inputMappingSchema
+    }),
+    z.strictObject({
+      ...named,
+      type: z.literal("condition"),
+      when: z.strictObject({ ref: referenceSchema, op: z.string().min(1), value: jsonValueSchema }),
+      then: z.array(stepSchema),
+      else: z.array(stepSchema).optional()
+    }),
+    z.strictObject({
+      ...named,
+      type: z.literal("parallel"),
+      branches: z.array(
+        z.strictObject({ id: stepId, name: z.string().min(1), steps: z.array(stepSchema) })
+      ),
+      concurrency: z.number().int().min(1).optional()
+    })
   ])
 );
 
+// Strict, so a file that carries a `wiring`, an edge or a position is refused: the steps run
+// in the order of the list and a block holds its own.
 const manifestSchema = z.strictObject({
   id: z.string().regex(WORKFLOW_ID, "A Workflow id is lowercase letters, digits, '_' and '-'"),
   name: z.string().min(1),
@@ -89,35 +154,67 @@ const manifestSchema = z.strictObject({
   runAs: z.string().min(1),
   inputs: jsonObjectSchema,
   outputs: jsonObjectSchema,
+  labels: inputMappingSchema.optional(),
+  onFailure: workflowOnFailureSchema.optional(),
+  retention: workflowRetentionSchema.optional(),
+  types: z.record(z.string().min(1), jsonObjectSchema).optional(),
   tools: z.array(z.string().min(1)).optional(),
-  steps: z.array(stepSchema).min(1),
-  wiring: z.array(z.strictObject({ from: z.string().min(1), to: z.string().min(1) }))
+  steps: z.array(stepSchema).min(1)
 });
 
-/** The steps of a definition that this release does not execute, wherever they are nested. */
-function unexecutedSteps(value: unknown, path: string): WorkflowDefinitionIssue[] {
-  const steps = z.array(z.looseObject({ type: z.string() })).safeParse(value);
-  if (!steps.success) return [];
-  return steps.data.flatMap((step, index) => {
-    const at = `${path}[${index}]`;
-    const known = WORKFLOW_STEP_TYPES.some((type) => type === step.type);
-    const executed = WORKFLOW_EXECUTED_STEP_TYPES.some((type) => type === step.type);
-    const own =
-      known && !executed
-        ? [
-            {
-              path: `${at}.type`,
-              message: `This release does not execute a step of the type '${step.type}'`
-            }
-          ]
-        : [];
-    return [...own, ...unexecutedSteps(step.steps, `${at}.steps`)];
-  });
+const notSupported = (path: string, what: string): WorkflowDefinitionIssue => ({
+  path,
+  code: WORKFLOW_ERROR_CODES.notSupported,
+  message: `This engine does not run ${what} yet (${WORKFLOW_ERROR_CODES.notSupported})`
+});
+
+/**
+ * What the file form holds and this engine does not run, each by the name of its field. The
+ * reserved blocks `condition` and `parallel` are not named here: `workflowBlockIssues` refuses
+ * them, and what they hold is not read.
+ */
+function unsupportedIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[] {
+  const issues: WorkflowDefinitionIssue[] = [];
+  for (const field of ["labels", "onFailure", "retention", "types"] as const) {
+    if (manifest[field] !== undefined) issues.push(notSupported(field, `'${field}'`));
+  }
+  const known: readonly string[] = WORKFLOW_STEP_TYPES;
+  const executed: readonly string[] = WORKFLOW_EXECUTED_STEP_TYPES;
+  const walk = (steps: readonly WorkflowStep[], path: string) => {
+    steps.forEach((step, position) => {
+      const at = `${path}[${position}]`;
+      if (known.includes(step.type) && !executed.includes(step.type)) {
+        issues.push(notSupported(`${at}.type`, `a step of the type '${step.type}'`));
+      }
+      if (step.type === "trigger") {
+        step.triggers.forEach((trigger, number) => {
+          if (trigger.kind === "parent") {
+            issues.push(notSupported(`${at}.triggers[${number}].kind`, "the trigger 'parent'"));
+          }
+        });
+      }
+      if (step.type === "operation") {
+        for (const field of ["dataset", "paginate"] as const) {
+          if (step[field] !== undefined) issues.push(notSupported(`${at}.${field}`, `'${field}'`));
+        }
+      }
+      if (step.type === "loop") {
+        if ((step.concurrency ?? 1) !== 1) {
+          issues.push(notSupported(`${at}.concurrency`, "a loop with 'concurrency' above 1"));
+        }
+        // `collect` returns a dataset, and this engine keeps none.
+        if (step.collect !== undefined) issues.push(notSupported(`${at}.collect`, "'collect'"));
+        walk(step.steps, `${at}.steps`);
+      }
+    });
+  };
+  walk(manifest.steps, "steps");
+  return issues;
 }
 
 /**
- * One sequence of a definition in the order it runs: the steps at the top, or the steps of
- * one loop. `loop` is the id of that loop, and `parent` the sequence the loop is a step of.
+ * One list of a definition in the order it runs: the steps at the top, or the steps of one
+ * loop. `loop` is the id of that loop, and `parent` the list the loop is a step of.
  */
 interface WorkflowSequence {
   loop?: string;
@@ -125,45 +222,17 @@ interface WorkflowSequence {
   steps: readonly WorkflowStep[];
 }
 
-/** Where each step of a definition is: its sequence and its place in it. */
+/** Where each step of a definition is: its list and its place in it. */
 export type WorkflowStepIndex = ReadonlyMap<
   string,
   { step: WorkflowStep; sequence: WorkflowSequence; position: number }
 >;
 
 /**
- * The order of one sequence. Without a wire between two of its steps it runs as written.
- * With wires, they must chain every step of the sequence once; the order is then the chain.
+ * The steps of a definition by their ids, each with the list it runs in. What a reserved
+ * block holds is not in it: the engine runs no step of one.
  */
-function orderOf(
-  steps: readonly WorkflowStep[],
-  wiring: WorkflowManifest["wiring"]
-): readonly WorkflowStep[] | undefined {
-  const byId = new Map(steps.map((step) => [step.id, step]));
-  const wires = wiring.filter((wire) => byId.has(wire.from) && byId.has(wire.to));
-  if (wires.length === 0) return steps;
-  const next = new Map(wires.map((wire) => [wire.from, wire.to]));
-  const targets = new Set(wires.map((wire) => wire.to));
-  if (wires.length !== steps.length - 1 || next.size !== wires.length) return undefined;
-  if (targets.size !== wires.length) return undefined;
-  const first = steps.filter((step) => !targets.has(step.id));
-  const start = first[0];
-  if (first.length !== 1 || !start) return undefined;
-  const ordered: WorkflowStep[] = [];
-  for (let step: WorkflowStep | undefined = start; step;) {
-    ordered.push(step);
-    if (ordered.length > steps.length) return undefined;
-    const following: string | undefined = next.get(step.id);
-    step = following === undefined ? undefined : byId.get(following);
-  }
-  return ordered.length === steps.length ? ordered : undefined;
-}
-
-/**
- * The steps of a checked definition by their ids, each with its sequence in running order.
- * A definition that passed `parseWorkflowManifest` always has one.
- */
-export function indexWorkflowSteps(manifest: WorkflowManifest): WorkflowStepIndex {
+export function indexWorkflowSteps(manifest: Pick<WorkflowManifest, "steps">): WorkflowStepIndex {
   const index = new Map<
     string,
     { step: WorkflowStep; sequence: WorkflowSequence; position: number }
@@ -172,9 +241,9 @@ export function indexWorkflowSteps(manifest: WorkflowManifest): WorkflowStepInde
     const sequence: WorkflowSequence = {
       ...(loop === undefined ? {} : { loop }),
       ...(parent === undefined ? {} : { parent }),
-      steps: orderOf(steps, manifest.wiring) ?? steps
+      steps
     };
-    sequence.steps.forEach((step, position) => {
+    steps.forEach((step, position) => {
       index.set(step.id, { step, sequence, position });
       if (step.type === "loop") visit(step.steps, step.id, sequence);
     });
@@ -183,121 +252,90 @@ export function indexWorkflowSteps(manifest: WorkflowManifest): WorkflowStepInde
   return index;
 }
 
-/** What must hold between the steps of a definition whose shape is right. */
+/** The schema's properties that are named like the key that marks a dataset in step data. */
+function datasetKeyIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[] {
+  const properties = z.object({ properties: z.record(z.string(), z.unknown()) });
+  return (["inputs", "outputs"] as const).flatMap((field) => {
+    const read = properties.safeParse(manifest[field]);
+    return read.success && Object.hasOwn(read.data.properties, WORKFLOW_DATASET_KEY)
+      ? [{ path: field, message: `No field of '${field}' is named '${WORKFLOW_DATASET_KEY}'` }]
+      : [];
+  });
+}
+
+/**
+ * What must hold between the steps of a definition beside what `workflowBlockIssues` checks:
+ * how many there are, where the trigger and the output stand, and that a reference names a
+ * step that exists.
+ */
 function structuralIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[] {
   const issues: WorkflowDefinitionIssue[] = [];
-  const seen = new Set<string>();
-  let count = 0;
-  const walk = (steps: readonly WorkflowStep[], path: string, depth: number) => {
-    if (orderOf(steps, manifest.wiring) === undefined) {
-      issues.push({
-        path: "wiring",
-        message: `The wires between the steps of '${path}' do not chain each of them once`
-      });
-    }
-    steps.forEach((step, position) => {
-      const at = `${path}[${position}]`;
-      count += 1;
-      if (seen.has(step.id)) {
-        issues.push({ path: `${at}.id`, message: `The step id '${step.id}' is used twice` });
-      }
-      seen.add(step.id);
-      if (depth > 0 && (step.type === "trigger" || step.type === "output")) {
-        issues.push({
-          path: at,
-          message: `A '${step.type}' step stands at the top, not in a loop`
-        });
-      }
-      if (step.type === "loop") {
-        if (depth >= WORKFLOW_LOOP_MAX_DEPTH) {
-          issues.push({
-            path: at,
-            message: `Loops are nested at most ${WORKFLOW_LOOP_MAX_DEPTH} deep`
-          });
-          return;
-        }
-        walk(step.steps, `${at}.steps`, depth + 1);
-      }
-    });
-  };
-  walk(manifest.steps, "steps", 0);
-  if (count > WORKFLOW_DEFINITION_MAX_STEPS) {
+  const index = indexWorkflowSteps(manifest);
+  if (index.size > WORKFLOW_DEFINITION_MAX_STEPS) {
     issues.push({
       path: "steps",
       message: `A definition holds at most ${WORKFLOW_DEFINITION_MAX_STEPS} steps`
     });
   }
-  if (issues.length > 0) return issues;
-
-  const top = orderOf(manifest.steps, manifest.wiring) ?? manifest.steps;
-  top.forEach((step, position) => {
-    const first = position === 0;
-    const last = position === top.length - 1;
-    if ((step.type === "trigger") !== first) {
+  manifest.steps.forEach((step, position) => {
+    if ((step.type === "trigger") !== (position === 0)) {
       issues.push({ path: "steps", message: "The one trigger step is the first step" });
     }
-    if ((step.type === "output") !== last) {
+    if ((step.type === "output") !== (position === manifest.steps.length - 1)) {
       issues.push({ path: "steps", message: "The one output step is the last step" });
     }
   });
-  const known = new Set(seen);
-  for (const wire of manifest.wiring) {
-    if (!known.has(wire.from) || !known.has(wire.to)) {
-      issues.push({ path: "wiring", message: `A wire names a step that does not exist` });
-      continue;
-    }
-    const index = indexWorkflowSteps(manifest);
-    if (index.get(wire.from)?.sequence !== index.get(wire.to)?.sequence) {
+  for (const [id, { step, sequence }] of index) {
+    if (sequence.loop !== undefined && (step.type === "trigger" || step.type === "output")) {
       issues.push({
-        path: "wiring",
-        message: `The wire from '${wire.from}' to '${wire.to}' leaves its sequence`
+        path: `steps.${id}`,
+        message: `A '${step.type}' step stands at the top, not in a loop`
       });
     }
-  }
-  if (issues.length > 0) return issues;
-
-  // A reference names a step that ended before the one that reads it, or a loop around it.
-  const index = indexWorkflowSteps(manifest);
-  for (const [id, { step, sequence, position }] of index) {
     const references =
       step.type === "loop"
         ? [step.items]
-        : step.type === "trigger"
-          ? []
-          : Object.values(step.input).flatMap((value) => ("ref" in value ? [value.ref] : []));
+        : "input" in step
+          ? Object.values(step.input).flatMap((value) => (value.ref ? [value.ref] : []))
+          : [];
     for (const reference of references) {
-      if (!isReachable(reference.step, sequence, position)) {
+      if (!index.has(reference.step)) {
         issues.push({
           path: `steps.${id}`,
-          message: `The step '${id}' refers to '${reference.step}', which has not run before it`
+          message: `The step '${id}' refers to '${reference.step}', and no step has that id`
         });
       }
     }
   }
-  return issues;
+  return [...issues, ...datasetKeyIssues(manifest)];
 }
 
-function isReachable(target: string, sequence: WorkflowSequence, position: number): boolean {
-  if (sequence.steps.slice(0, position).some((step) => step.id === target)) return true;
-  if (sequence.loop === undefined || sequence.parent === undefined) return false;
-  if (sequence.loop === target) return true;
-  const loopAt = sequence.parent.steps.findIndex((step) => step.id === sequence.loop);
-  return isReachable(target, sequence.parent, loopAt);
-}
-
-/** Checks a value read from `workflow.yaml`. Answers the definition, or every issue found. */
+/**
+ * Checks a value read from `workflow.yaml`. Answers the definition, or every issue found: of
+ * its shape first, then what the contract's block check refuses (`block_depth`,
+ * `reference_out_of_scope`, `duplicate_step_id`, `not_supported_yet`), then what this engine
+ * does not run and what else must hold between the steps.
+ */
 export function parseWorkflowManifest(value: unknown): WorkflowDefinitionResult {
-  const unexecuted = unexecutedSteps(z.looseObject({}).safeParse(value).data?.steps, "steps");
-  if (unexecuted.length > 0) return { ok: false, issues: unexecuted };
   const parsed = manifestSchema.safeParse(value);
   if (!parsed.success) {
     return {
       ok: false,
-      issues: parsed.error.issues.map((issue) => ({
-        path: issue.path.join("."),
-        message: issue.message
-      }))
+      issues: parsed.error.issues.map((issue) => {
+        const path = issue.path.join(".");
+        // A step type the file form does not hold is one no release runs yet.
+        return issue.code === "invalid_union" && issue.path.at(-1) === "type"
+          ? notSupported(path, "a step of this type")
+          : { path, message: issue.message };
+      })
     };
+  }
+  const blocks = workflowBlockIssues(parsed.data.steps).map(
+    ({ code, step, message }): WorkflowDefinitionIssue => ({ path: `steps.${step}`, code, message })
+  );
+  const unsupported = unsupportedIssues(parsed.data);
+  if (blocks.length > 0 || unsupported.length > 0) {
+    return { ok: false, issues: [...blocks, ...unsupported] };
   }
   const issues = structuralIssues(parsed.data);
   return issues.length > 0 ? { ok: false, issues } : { ok: true, manifest: parsed.data };
@@ -336,7 +374,7 @@ function canonical(value: JsonValue): JsonValue {
 
 /**
  * The fingerprint of a definition: the same for the same content, whatever the order of its
- * keys. A run keeps it as its revision until Workflows are stored as assets with revisions.
+ * keys. A source that stores no revisions names a revision by it.
  */
 export function workflowManifestFingerprint(manifest: WorkflowManifest): string {
   const content = canonical(jsonValueSchema.parse(manifest));
