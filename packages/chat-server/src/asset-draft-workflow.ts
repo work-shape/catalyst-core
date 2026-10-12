@@ -5,6 +5,7 @@ import {
   getSubjectUserId,
   isAppError,
   isAuthenticatedServicePrincipal,
+  type ConfigAssetStore,
   type FileSet
 } from "@vivd-catalyst/core";
 import type { AssetCall } from "./asset-access";
@@ -231,16 +232,28 @@ export class AssetDraftWorkflow {
       withDefinition(stored.set, kind.kind, name, config),
       without
     );
-    const published = await this.options.configAssets.store.publishConfigAssetRevision({
-      clientInstanceId: this.options.clientInstanceId,
-      kind: kind.kind,
-      name,
-      // The asset the right was checked on, and the revision that was checked above.
-      assetId: asset.id,
-      revision: input.revision,
-      revisionId: revision.id,
-      ...(kind.representation === "files" ? { requireFiles: true as const } : {})
-    });
+    const move = (store: Pick<ConfigAssetStore, "publishConfigAssetRevision">) =>
+      store.publishConfigAssetRevision({
+        clientInstanceId: this.options.clientInstanceId,
+        kind: kind.kind,
+        name,
+        // The asset the right was checked on, and the revision that was checked above.
+        assetId: asset.id,
+        revision: input.revision,
+        revisionId: revision.id,
+        // A kind that reads its files itself has no built files to serve.
+        ...(kind.representation === "files" && !kind.manifestOfFiles
+          ? { requireFiles: true as const }
+          : {})
+      });
+    const onPublish = kind.onPublish?.bind(kind);
+    const published = onPublish
+      ? await this.options.stores.transaction(async (stores) => {
+          const moved = await move(stores.configAssets);
+          await onPublish({ assetId: moved.assetId, revision: moved.revision, config, stores });
+          return moved;
+        })
+      : await move(this.options.configAssets.store);
     const metadata = {
       kind: kind.kind,
       name,
@@ -307,15 +320,24 @@ export class AssetDraftWorkflow {
     const state = await this.options.configAssets.store.getConfigAssetState({
       clientInstanceId: this.options.clientInstanceId
     });
-    let removed: { assetId: string; fileSetCount: number };
-    try {
-      removed = await this.options.configAssets.store.removeConfigAsset({
+    const remove = (store: Pick<ConfigAssetStore, "removeConfigAsset">) =>
+      store.removeConfigAsset({
         clientInstanceId: this.options.clientInstanceId,
         kind: kind.kind,
         name,
         assetId: requireActive(target).id,
         expectedRevision
       });
+    const onRemove = kind.onRemove?.bind(kind);
+    let removed: { assetId: string; fileSetCount: number };
+    try {
+      removed = onRemove
+        ? await this.options.stores.transaction(async (stores) => {
+            const gone = await remove(stores.configAssets);
+            await onRemove({ assetId: gone.assetId, stores });
+            return gone;
+          })
+        : await remove(this.options.configAssets.store);
     } catch (error) {
       throw isAppError(error) && error.code === "CONFLICT"
         ? await revisionConflictOf(

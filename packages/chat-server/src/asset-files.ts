@@ -27,6 +27,11 @@ import type { ChatServerOptions } from "./types";
 // The files of an asset whose revisions hold files: a write hands over the whole source set,
 // the build of Pages builds it, and the file set it leaves is immutable and owned by the
 // asset, below `assets/<assetId>/<fileSetId>/`. The revision that names it is the caller's.
+// A kind that reads its files itself (`manifestOfFiles`) has no build: its file set holds the
+// source files alone.
+
+/** What a file set that no kit built names as its kit version. */
+const UNBUILT_FILE_SET_KIT_VERSION = "none";
 
 /**
  * The body limit of a write that carries files: `ASSET_PUT_FILES_MAX_BYTES` as base64, and
@@ -155,6 +160,25 @@ export async function buildAssetFileSet(
   const owner = assetOwner(input.assetId);
   const fileSetId = createFileSetId();
   const prefix = fileSetObjectPrefix(owner, fileSetId);
+  const manifestOf = input.kind.manifestOfFiles?.bind(input.kind);
+  if (manifestOf) {
+    try {
+      return await storeAssetFileSet(options, {
+        assetId: input.assetId,
+        fileSetId,
+        kitVersion: UNBUILT_FILE_SET_KIT_VERSION,
+        manifest: manifestOf(input.files),
+        sourceFiles: input.files,
+        builtFiles: [],
+        writes: ["src"],
+        ...(input.requestedByUserId ? { createdByUserId: input.requestedByUserId } : {}),
+        ...(input.signal ? { signal: input.signal } : {})
+      });
+    } catch (error) {
+      await objects.deletePrefix(prefix).catch(() => undefined);
+      throw error;
+    }
+  }
   try {
     await writeFileSetObjects(
       objects,

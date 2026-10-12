@@ -4,6 +4,7 @@ import type {
   ConfigAssetKind,
   JsonObject,
   Namespace,
+  PlatformStores,
   RegisteredAssetKind
 } from "@vivd-catalyst/core";
 
@@ -96,6 +97,24 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
     /** The config of the draft the write replaces, where there is one. */
     current?: JsonObject;
   }): Record<string, unknown>;
+  /**
+   * Reads the source files of a write into the manifest of their file set, for a kind whose
+   * files are not built as a Page: nothing is bundled, and the set holds the source files
+   * alone. Throws `VALIDATION_FAILED` for files it refuses.
+   */
+  manifestOfFiles?(files: readonly { path: string; bytes: Uint8Array }[]): JsonObject;
+  /**
+   * What a publish does beside moving the published pointer, with `stores` bound to the
+   * transaction that moves it. A throw refuses the publish and leaves the pointer where it was.
+   */
+  onPublish?(input: {
+    assetId: string;
+    revision: number;
+    config: JsonObject;
+    stores: PlatformStores;
+  }): Promise<void>;
+  /** What a delete does beside removing the asset, in the transaction that removes it. */
+  onRemove?(input: { assetId: string; stores: PlatformStores }): Promise<void>;
 }
 
 export function readDefinitionField(definition: unknown, field: string): unknown {
