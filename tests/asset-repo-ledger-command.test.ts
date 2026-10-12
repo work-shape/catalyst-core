@@ -160,7 +160,7 @@ describe("the ledger of an asset's repository, with the command and an object st
   });
 
   it("continues from the published commit after the draft was discarded", async () => {
-    const { address, save, bundles, revisions, draft } = arrange("discard");
+    const { address, assetId, save, bundles, revisions, draft } = arrange("discard");
     const store = db.store.configAssets;
     const committed = async (
       files: Record<string, string>,
@@ -177,13 +177,14 @@ describe("the ledger of an asset's repository, with the command and an object st
       tree: first.tree,
       bundle: recorded(first.bundle)
     });
-    await store.publishConfigAssetRevision({ ...address, revision: 1 });
+    const revisionId = (await revisions()).find((revision) => revision.revision === 1)?.id ?? "";
+    await store.publishConfigAssetRevision({ ...address, assetId, revision: 1, revisionId });
     const second = await committed({ ...source, "a.txt": "a\n" }, [first.bundle], first.commit, 2);
     await save(store, { revision: 1, commit: first.commit }, second.commit, {
       tree: second.tree,
       bundle: recorded(second.bundle)
     });
-    await store.discardConfigAssetDraft({ ...address, expectedRevision: 2 });
+    await store.discardConfigAssetDraft({ ...address, assetId, expectedRevision: 2 });
     expect(await draft()).toMatchObject({ revision: 1, commit: first.commit });
 
     const third = await committed({ ...source, "b.txt": "b\n" }, [first.bundle], first.commit, 3);

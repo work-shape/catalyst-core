@@ -397,6 +397,7 @@ describe("the ledger of an asset's repository", () => {
       clientInstanceId,
       kind: "app",
       name: "rates",
+      assetId,
       expectedRevision: 2
     });
     expect(await read()).toBeUndefined();

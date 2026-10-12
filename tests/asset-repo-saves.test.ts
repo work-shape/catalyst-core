@@ -369,7 +369,7 @@ describe("a pending save of an asset's repository", () => {
     const first = await save(store, { revision: null, commit: null }, oid("a")).then(() => rows());
     const pending = await pend(store, { revision: 1, commit: oid("a") }, oid("b"));
     const keys = [first[0]?.object_key, pending.bundle.objectKey].sort();
-    await store.removeConfigAsset({ ...address, expectedRevision: 1 });
+    await store.removeConfigAsset({ ...address, assetId, expectedRevision: 1 });
     // The process that removed the asset is gone before it removed anything from the store.
     expect((await rows()).map((row) => row.state)).toEqual(["swept", "swept"]);
     // The save that was on its way cannot be finished, and its run is told that it is over.
