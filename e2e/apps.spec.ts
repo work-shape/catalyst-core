@@ -29,8 +29,6 @@ const member = { email: "e2e-apps-member@example.test", password: "e2e-apps-memb
 const builder = { email: "e2e-apps-builder@example.test", password: "e2e-apps-builder-password" };
 
 const WORKSPACE = "Sales team";
-const APP_NAME = "Revenue board";
-const APP_ID = "revenue-board";
 const PUBLISHED_HEADING = "Revenue overview";
 const DRAFT_HEADING = "Revenue forecast";
 
@@ -105,7 +103,12 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   browser,
   baseURL,
   pageErrors
-}) => {
+}, testInfo) => {
+  // An App's id is taken once for the whole instance, so a repeated or retried run on the same
+  // instance names its App after the attempt.
+  const attempt = testInfo.repeatEachIndex * 10 + testInfo.retry;
+  const appName = attempt === 0 ? "Revenue board" : `Revenue board ${attempt}`;
+  const appId = attempt === 0 ? "revenue-board" : `revenue-board-${attempt}`;
   test.setTimeout(shotsDir ? 600_000 : 240_000);
   await page.setViewportSize({ width: 1440, height: 900 });
   await signIn(page, admin);
@@ -144,7 +147,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
     expect(added.ok()).toBe(true);
   }
   const appsPath = `/w/${workspaceId}/apps`;
-  const appPath = `${appsPath}/${APP_ID}`;
+  const appPath = `${appsPath}/${appId}`;
 
   // The rail has the Apps row, and the workspace has no App yet.
   await page.goto(`/w/${workspaceId}`);
@@ -185,8 +188,8 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   });
   // A name and an id, and no field for a scope.
   await expect(saveDialog.getByRole("textbox")).toHaveCount(2);
-  await saveDialog.getByRole("textbox", { name: /^Name/u }).fill(APP_NAME);
-  await expect(saveDialog.getByRole("textbox", { name: /^ID/u })).toHaveValue(APP_ID);
+  await saveDialog.getByRole("textbox", { name: /^Name/u }).fill(appName);
+  await expect(saveDialog.getByRole("textbox", { name: /^ID/u })).toHaveValue(appId);
   await expect(saveDialog.getByRole("combobox")).toHaveCount(0);
   await saveDialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${appPath}/edit$`, "u"));
@@ -199,10 +202,10 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   // Publish asks once and names the revision the head shows.
   const publish = edit.getByRole("button", { name: "Publish", exact: true });
   await publish.click();
-  await expect(edit.getByRole("heading", { name: APP_NAME })).toBeVisible();
+  await expect(edit.getByRole("heading", { name: appName })).toBeVisible();
   // The header of the conversation the App was saved from is no band over the App's head.
   await expect(page.locator("header[data-beside-surface]")).toHaveCount(0);
-  const publishDialog = page.getByRole("dialog", { name: `Publish “${APP_NAME}”?` });
+  const publishDialog = page.getByRole("dialog", { name: `Publish “${appName}”?` });
   await expect(publishDialog).toContainText(
     "Everyone in Sales team gets revision 1 when they open the app."
   );
@@ -223,14 +226,14 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   // under its title, and the App opens from there.
   await memberPage.goto(appsPath);
   const memberArea = memberPage.getByTestId("apps-area");
-  await expect(memberArea).toContainText(APP_NAME);
+  await expect(memberArea).toContainText(appName);
   await expect(memberArea).toContainText("Published · revision 1");
-  await memberArea.getByText(APP_NAME, { exact: true }).click();
+  await memberArea.getByText(appName, { exact: true }).click();
   await expect(memberPage).toHaveURL(new RegExp(`${appPath}$`, "u"));
   const memberView = memberPage.getByTestId("app-view");
   const memberApp = appIn(memberPage, "app-view");
   await expect(memberApp.getByRole("heading", { name: PUBLISHED_HEADING })).toBeVisible();
-  await expect(memberView.getByRole("heading", { name: APP_NAME })).toBeVisible();
+  await expect(memberView.getByRole("heading", { name: appName })).toBeVisible();
   await expect(
     memberPage
       .getByRole("navigation", { name: "Main navigation" })
@@ -254,13 +257,13 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   );
 
   // A write moves the draft ahead of what is published.
-  const written = await requestWithOrigin(page, "put", `${apiOrigin}/api/v1/assets/app/${APP_ID}`, {
+  const written = await requestWithOrigin(page, "put", `${apiOrigin}/api/v1/assets/app/${appId}`, {
     data: {
       workspaceId,
       expectedRevision: 1,
       files: Object.entries({
         ...pageSource(PUBLISHED_HEADING),
-        "app.yaml": `id: ${APP_ID}\nname: ${APP_NAME}\nkit: 1.0.0\n`,
+        "app.yaml": `id: ${appId}\nname: ${appName}\nkit: 1.0.0\n`,
         "src/routes/index.tsx": overviewRoute(DRAFT_HEADING)
       }).map(([path, text]) => ({ path, text }))
     },
@@ -275,24 +278,24 @@ test("a Page is saved as an App, published, opened by a second member and deep l
     await expect(memberArea).toContainText(/(?:Published · revision|Veröffentlicht · Revision) 1/u);
   };
   await memberListReady();
-  await expect(memberArea).toContainText(APP_NAME);
+  await expect(memberArea).toContainText(appName);
   await expect(memberArea).not.toContainText("Unpublished changes");
-  await memberArea.getByRole("button", { name: `Actions for ${APP_NAME}` }).click();
+  await memberArea.getByRole("button", { name: `Actions for ${appName}` }).click();
   await expect(memberPage.getByRole("menuitem", { name: "Open" })).toBeVisible();
   await expect(memberPage.getByRole("menuitem", { name: "Edit" })).toHaveCount(0);
   await memberPage.keyboard.press("Escape");
   await shoot(memberPage, "apps-list-member", [["light", "en", 1440]], memberListReady);
-  await memberArea.getByText(APP_NAME, { exact: true }).click();
+  await memberArea.getByText(appName, { exact: true }).click();
   await expect(
     appIn(memberPage, "app-view").getByRole("heading", { name: PUBLISHED_HEADING })
   ).toBeVisible();
-  await expect(memberView.getByRole("heading", { name: APP_NAME })).toBeVisible();
+  await expect(memberView.getByRole("heading", { name: appName })).toBeVisible();
   await expect(memberView.getByRole("button", { name: "Edit" })).toHaveCount(0);
   await shoot(memberPage, "app-view-member", [["light", "en", 1440]], async () => {
     await expect(
       appIn(memberPage, "app-view").getByRole("heading", { name: PUBLISHED_HEADING })
     ).toBeVisible();
-    await expect(memberView.getByRole("heading", { name: APP_NAME })).toBeVisible();
+    await expect(memberView.getByRole("heading", { name: appName })).toBeVisible();
   });
   await memberContext.close();
   await page.reload();
@@ -324,9 +327,19 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await edit.getByRole("radio", { name: "Preview" }).click();
 
   // The revisions of the App, with the way to publish one of them.
-  await edit.getByRole("button", { name: "More actions" }).click();
-  await page.getByRole("menuitem", { name: "Revisions" }).click();
+  const openRevisions = async () => {
+    await edit.getByRole("button", { name: "More actions" }).click();
+    await page.getByRole("menuitem", { name: "Revisions" }).click();
+  };
   const revisions = page.getByRole("dialog", { name: "Revisions" });
+  // Escape closes the drawer at once, while the menu it was opened from is still closing and
+  // still listens for the key.
+  await openRevisions();
+  await expect(revisions).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(revisions).toBeHidden();
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await openRevisions();
   await expect(revisions).toContainText("Publish this revision");
   if (shotsDir) {
     await page.screenshot({
@@ -365,11 +378,11 @@ test("a Page is saved as an App, published, opened by a second member and deep l
 
   // The list shows the App with its state, and opens it.
   await page.goto(appsPath);
-  await expect(area).toContainText(APP_NAME);
+  await expect(area).toContainText(appName);
   await shoot(page, "apps-list", MAIN, async () => {
-    await expect(area).toContainText(APP_NAME);
+    await expect(area).toContainText(appName);
   });
-  await area.getByText(APP_NAME, { exact: true }).click();
+  await area.getByText(appName, { exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${appPath}$`, "u"));
   const viewReady = async () => {
     await expect(
@@ -399,7 +412,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await page.goto(`${appPath}/edit`);
   await draftReady();
   await discard.click();
-  const discardDialog = page.getByRole("dialog", { name: `Discard the draft of “${APP_NAME}”?` });
+  const discardDialog = page.getByRole("dialog", { name: `Discard the draft of “${appName}”?` });
   await expect(discardDialog).toContainText("published revision 1");
   await discardDialog.getByRole("button", { name: "Discard", exact: true }).click();
   await expect(discardDialog).toBeHidden();
