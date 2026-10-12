@@ -7,8 +7,6 @@ const en = {
   city: "City",
   shown: (rows: number, total: number) => `${rows} of ${total} customers`,
   empty: "The Connection answered no customer.",
-  forbidden: (right: string) =>
-    `You may not read these rows. You lack the right '${right}' on the Connection. An administrator can grant it.`,
   failed: "The customers could not be loaded.",
   segments: { retail: "Retail", hospitality: "Hospitality", office: "Office" }
 };
@@ -21,8 +19,6 @@ const de: typeof en = {
   city: "Ort",
   shown: (rows, total) => `${rows} von ${total} Kunden`,
   empty: "Die Verbindung hat keinen Kunden geliefert.",
-  forbidden: (right) =>
-    `Sie dürfen diese Zeilen nicht lesen. Ihnen fehlt das Recht '${right}' an der Verbindung. Ein Administrator kann es vergeben.`,
   failed: "Die Kunden konnten nicht geladen werden.",
   segments: { retail: "Einzelhandel", hospitality: "Gastgewerbe", office: "Büro" }
 };

@@ -26,7 +26,8 @@ const ROWS = 12;
 type Loaded =
   | { state: "loading" }
   | { state: "rows"; page: CustomerPage }
-  | { state: "forbidden"; right: string }
+  // A refusal of the platform. Its sentence is the platform's, in the viewer's language.
+  | { state: "refused"; message: string; retryable: boolean }
   | { state: "failed" };
 
 /** One call of the named action. It runs with the rights of whoever looks at the tile. */
@@ -36,8 +37,8 @@ async function loadCustomers(): Promise<Loaded> {
     const page = readCustomerPage(answer.result);
     return page ? { state: "rows", page } : { state: "failed" };
   } catch (error) {
-    return error instanceof AppCallError && error.code === "forbidden" && error.right
-      ? { state: "forbidden", right: error.right }
+    return error instanceof AppCallError && error.code === "forbidden"
+      ? { state: "refused", message: error.message, retryable: error.retryable }
       : { state: "failed" };
   }
 }
@@ -94,15 +95,16 @@ function Customers() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-4">
         <CardTitle>{texts.title}</CardTitle>
-        <Button variant="outline" size="sm" loading={loading} onClick={refresh}>
-          {texts.refresh}
-        </Button>
+        {/* No button where trying again cannot help: a missing right stays missing. */}
+        {loaded.state === "refused" && !loaded.retryable ? null : (
+          <Button variant="outline" size="sm" loading={loading} onClick={refresh}>
+            {texts.refresh}
+          </Button>
+        )}
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {loaded.state === "rows" ? <Rows page={loaded.page} texts={texts} /> : null}
-        {loaded.state === "forbidden" ? (
-          <Banner tone="warning">{texts.forbidden(loaded.right)}</Banner>
-        ) : null}
+        {loaded.state === "refused" ? <Banner tone="warning">{loaded.message}</Banner> : null}
         {loaded.state === "failed" ? <Banner tone="danger">{texts.failed}</Banner> : null}
       </CardContent>
     </Card>
