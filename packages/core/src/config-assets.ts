@@ -179,8 +179,12 @@ export type AssetRepoSaveBundle = Pick<
 export interface AssetRepoSave {
   assetId: string;
   operationRunId: OperationRunId;
-  /** `pending` until the transaction that writes the revision made the bundle part of the repository. */
-  state: "pending" | "live";
+  /**
+   * `pending` until the transaction that writes the revision made the bundle part of the
+   * repository. `swept` once the save was given up: it cannot be finished or tried again, and
+   * its object is removed.
+   */
+  state: "pending" | "live" | "swept";
   /**
    * The time the commit of the save carries, in whole seconds. It is set once, so every
    * attempt of the run builds the same commit from the same files.
@@ -207,9 +211,14 @@ export interface AssetRepoWrite {
   baseCommit: string | null;
   /**
    * The save whose pending bundle holds `commit`. The bundle is full when `baseCommit` is
-   * `null` and stands on `baseCommit` otherwise. A save the sweeper removed is refused.
+   * `null` and stands on `baseCommit` otherwise. A save the sweeper gave up is refused.
    */
   operationRunId: OperationRunId;
+  /**
+   * The object this attempt of the save put: its key, hash and size. The write is refused
+   * unless the pending row names exactly this object and the store holds it at this size.
+   */
+  bundle: Pick<AssetRepoSaveBundle, "objectKey" | "sha256" | "bytes">;
   /** The folder that holds the files of `commit` after the write. */
   checkout?: { conversationId: ConversationId; folder: string };
 }
@@ -377,6 +386,12 @@ export interface ConfigAssetStore {
     initialAgentAvailability?: InitialAgentAvailability;
     mutations: ConfigAssetMutation[];
     /**
+     * The size of an object of the `files` store, or nothing where there is none. A batch with
+     * a repository write needs it: the bundle of the write must be in the store before it
+     * becomes part of the repository.
+     */
+    repositoryObjectSize?(objectKey: string): Promise<number | undefined>;
+    /**
      * Asked under the lock of the write, once the base revisions hold and before anything is
      * written. What it throws refuses the batch. It is where a writer checks what the batch
      * would leave against the set no other write can change any more.
@@ -464,7 +479,11 @@ export interface ConfigAssetStore {
   /**
    * Starts a save, or finds the one the Operation Run started before. The first call writes a
    * pending row with the time of the save; every later call of the run answers that row, so a
-   * second attempt commits with the same time. The asset need not exist yet.
+   * second attempt commits with the same time. The asset need not exist yet. A save that is
+   * answered as `swept` is over: the run saves nothing more.
+   *
+   * The row is written at once, for itself. This, naming the bundle and sweeping are refused
+   * on the stores of a transaction, where a rollback would take the row and leave the object.
    */
   beginAssetRepoSave(input: {
     clientInstanceId: ClientInstanceId;
@@ -473,25 +492,31 @@ export interface ConfigAssetStore {
   }): Promise<AssetRepoSave>;
   /**
    * Names the bundle of a pending save, before its object is put, so no object is in the
-   * store that no row names. Naming the same bundle again changes nothing. A save that named
-   * another bundle before is refused with the reason `pending_bundle_differs` and that key,
-   * unless `replaces` is that key: its caller removed that object first. A save that is not
-   * pending any more is refused with the reason `save_not_pending`.
+   * store that no row names. A save names one bundle and keeps it: naming the same again, in
+   * every field, changes nothing, and anything else is refused with the reason
+   * `pending_bundle_differs` and the key that is named. An attempt that packed the commit
+   * differently puts nothing and ends there. A save that is not pending any more is refused
+   * with the reason `save_not_pending`.
    */
   nameAssetRepoSaveBundle(input: {
     clientInstanceId: ClientInstanceId;
     assetId: string;
     operationRunId: OperationRunId;
     bundle: AssetRepoSaveBundle;
-    replaces?: string;
   }): Promise<void>;
   /**
-   * Removes the saves that are still pending and older than `olderThan`, oldest first:
-   * `removeObject` is called for the object of each under the lock of its row, and the row
-   * goes once it returned. A save that is being finished is left alone, and one that is swept
-   * cannot be finished any more.
+   * Gives up the saves that are still pending and were begun before `olderThan`, and the rows
+   * of assets that are not there any more, and removes the objects of rows that were given up.
+   *
+   * It first makes those rows `swept` and commits that. Only then is `removeObject` called
+   * for the object of each swept row, so a row that can still become part of a repository
+   * always has its object, whatever fails afterwards. A swept row stays until it was swept
+   * before `olderThan`, and its object is removed on every pass until then: an upload that
+   * was still on its way when the row was swept is removed by a later pass. A removal that
+   * fails leaves its row for the next pass, and the first failure is thrown once every row
+   * was tried.
    */
-  sweepPendingAssetRepoSaves(input: {
+  sweepAssetRepoSaves(input: {
     olderThan: Date;
     limit: number;
     removeObject(object: {
@@ -499,7 +524,7 @@ export interface ConfigAssetStore {
       assetId: string;
       objectKey: string;
     }): Promise<void>;
-  }): Promise<{ removed: number }>;
+  }): Promise<{ swept: number; removed: number }>;
   /** The checkout a folder of a conversation is, where it is one. */
   getAssetCheckout(input: {
     clientInstanceId: ClientInstanceId;

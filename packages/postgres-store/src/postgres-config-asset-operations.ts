@@ -298,6 +298,7 @@ export async function applyConfigAssetMutations(
   db: PostgresConnection,
   input: Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0]
 ): ReturnType<ConfigAssetStore["applyConfigAssetMutations"]> {
+  await repo.assertRepoObjects(input);
   return db.transaction(async (tx) => {
     const now = new Date();
     await tx
@@ -337,6 +338,7 @@ export async function applyConfigAssetMutations(
     // A write that adds a commit names the commit it stands on. That is compared first: the
     // second of two saves from the same base is told that the draft moved.
     const repoWrites = repo.lockedRepoWrites(input.mutations, rows);
+    const kept = repo.tombstoneColumns(rows);
     assertConfigAssetBases(input, mapConfigAssetState(state), current);
     await input.validate?.({
       state: mapConfigAssetState(state),
@@ -469,7 +471,7 @@ export async function applyConfigAssetMutations(
         if (!asset || asset.status === "deleted") {
           continue;
         }
-        appendRevision(key, asset, { operation: "delete", config: null }, "deleted");
+        appendRevision(key, asset, { operation: "delete", config: null, ...kept(key) }, "deleted");
         asset.deleted = true;
         asset.created = false;
         continue;
@@ -764,7 +766,7 @@ export async function deleteWorkspaceOwnedAssets(
         inArray(fileSets.ownerId, removedIds)
       )
     );
-  await repo.deleteAssetRepoBundles(tx, removedIds);
+  await repo.sweepAssetRepoBundlesOf(tx, removedIds);
   if (!state) {
     return;
   }

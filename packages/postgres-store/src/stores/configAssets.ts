@@ -1,4 +1,5 @@
 import {
+  AppError,
   type ConfigAssetRecord,
   type ConfigAssetRevisionRecord,
   type ConfigAssetState,
@@ -28,11 +29,25 @@ import {
   beginAssetRepoSave,
   getAssetCheckout,
   listAssetRepoBundles,
-  nameAssetRepoSaveBundle,
-  sweepPendingAssetRepoSaves
+  nameAssetRepoSaveBundle
 } from "../postgres-asset-repo-operations";
+import { sweepAssetRepoSaves } from "../jobs/asset-repo-sweep";
 import type { PostgresConnection } from "../postgres-database";
-export function createPostgresConfigAssetsStore(db: PostgresConnection): ConfigAssetStore {
+export function createPostgresConfigAssetsStore(
+  db: PostgresConnection,
+  inTransaction = false
+): ConfigAssetStore {
+  // The row of a save says which object may be in the store, so it is written for itself and
+  // at once. Inside a transaction a rollback would take the row and leave the object.
+  const own = () => {
+    if (inTransaction) {
+      throw new AppError(
+        "INTERNAL",
+        "A save of a repository is begun, named and swept outside of a transaction"
+      );
+    }
+    return db;
+  };
   return {
     async getConfigAssetState(
       input: Parameters<ConfigAssetStore["getConfigAssetState"]>[0]
@@ -71,9 +86,9 @@ export function createPostgresConfigAssetsStore(db: PostgresConnection): ConfigA
     discardConfigAssetDraft: (input) => discardPostgresConfigAssetDraft(db, input),
     removeConfigAsset: (input) => removePostgresConfigAsset(db, input),
     listAssetRepoBundles: (input) => listAssetRepoBundles(db, input),
-    beginAssetRepoSave: (input) => beginAssetRepoSave(db, input),
-    nameAssetRepoSaveBundle: (input) => nameAssetRepoSaveBundle(db, input),
-    sweepPendingAssetRepoSaves: (input) => sweepPendingAssetRepoSaves(db, input),
+    beginAssetRepoSave: (input) => beginAssetRepoSave(own(), input),
+    nameAssetRepoSaveBundle: (input) => nameAssetRepoSaveBundle(own(), input),
+    sweepAssetRepoSaves: (input) => sweepAssetRepoSaves(own(), input),
     getAssetCheckout: (input) => getAssetCheckout(db, input),
     async listAgentAvailability(
       input: Parameters<ConfigAssetStore["listAgentAvailability"]>[0]

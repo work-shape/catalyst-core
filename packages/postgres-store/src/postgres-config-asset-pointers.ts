@@ -6,7 +6,7 @@ import {
   type ConfigAssetStore,
   type FileSetId
 } from "@vivd-catalyst/core";
-import { deleteAssetRepoBundles } from "./postgres-asset-repo-operations";
+import { sweepAssetRepoBundlesOf } from "./postgres-asset-repo-operations";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import type { ConfigAssetRow } from "./rows";
 import {
@@ -231,7 +231,7 @@ export async function removeConfigAsset(
           eq(permissionGrants.scopeId, asset.id)
         )
       );
-    await deleteAssetRepoBundles(tx, [asset.id]);
+    await sweepAssetRepoBundlesOf(tx, [asset.id]);
     // The revisions go with the row through their key.
     await tx.delete(configAssets).where(eq(configAssets.id, asset.id));
     return { assetId: asset.id, fileSetCount: removedFileSets.length };

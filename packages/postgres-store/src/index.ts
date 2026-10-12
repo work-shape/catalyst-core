@@ -90,7 +90,7 @@ function bindStores(
     workspaces: createPostgresWorkspacesStore(db),
     apiAccess: createPostgresApiAccessStore(db),
     access: createPostgresAccessStore(db),
-    configAssets: createPostgresConfigAssetsStore(db),
+    configAssets: createPostgresConfigAssetsStore(db, inTransaction),
     approvals: createPostgresApprovalsStore(db, transact),
     executionWorkspaces: createPostgresExecutionWorkspacesStore(db),
     structuredData: createPostgresStructuredDataStore(db),

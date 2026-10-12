@@ -1,25 +1,6 @@
-import { createHash } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-  ASSET_REPO_OUTPUT_DIRECTORY,
-  ASSET_REPO_REPOSITORY_DIRECTORY
-} from "@vivd-catalyst/asset-repo";
-import {
-  assetRepoBundleObjectKey,
-  createPlatformId,
-  isAppError,
-  readObjectBytes,
-  type AssetRepoSaveBundle,
-  type AssetRepoWrite,
-  type ConfigAssetStore,
-  type OperationRunId
-} from "@vivd-catalyst/core";
-import { commitFolder, materialise, testGit, type TestBundle } from "./support/asset-repo";
+import { describe, expect, it } from "vitest";
 import { createConversationCleanupFixture } from "./support/conversation-cleanup-fixture";
-import { MemoryObjectStorage } from "./support/memory-object-storage";
+import { arrangeAssetRepo, oid, refusalOf, runId, sha } from "./support/asset-repo-ledger";
 import { usePostgresSuite } from "./support/postgres-suite";
 
 // The ledger of an asset's repository, against a real Postgres. It says which bundles make the
@@ -29,148 +10,13 @@ import { usePostgresSuite } from "./support/postgres-suite";
 // made and which object it put, so a second attempt builds the same commit and the sweeper
 // finds what a save left behind.
 
-const oid = (seed: string) => seed.repeat(40).slice(0, 40);
-const sha = (seed: string) => seed.repeat(64).slice(0, 64);
-const runId = () => createPlatformId<"OperationRunId">("oprun");
-const FAR_FUTURE = new Date("2100-01-01T00:00:00Z");
-
-async function refusalOf(action: Promise<unknown>) {
-  try {
-    await action;
-  } catch (error) {
-    if (isAppError(error)) {
-      const details: unknown = error.details;
-      return {
-        code: error.code,
-        ...(typeof details === "object" && details !== null ? details : {})
-      };
-    }
-    throw error;
-  }
-  throw new Error("Expected a refusal");
-}
-
-interface Base {
-  revision: number | null;
-  commit: string | null;
-}
-
-/** What a test says of one save beyond its base and its commit. */
-interface SaveOptions {
-  run?: OperationRunId;
-  tree?: string;
-  /** What the save names of its bundle, where that is not what the commit and the base give. */
-  bundle?: Partial<AssetRepoSaveBundle>;
-  checkout?: AssetRepoWrite["checkout"];
-  validate?: () => Promise<void>;
-}
-
 describe("the ledger of an asset's repository", () => {
   const db = usePostgresSuite("asset_repo");
-
-  /** One asset on a client instance of its own, and the steps a save of it takes. */
-  function arrange(label: string, kind = "app", clientInstanceId = db.clientInstance(label)) {
-    const name = "rates";
-    const assetId = createPlatformId("cfga");
-    const address = { clientInstanceId, kind, name };
-    const bundleOf = (base: Base, commit: string, more: Partial<AssetRepoSaveBundle> = {}) => {
-      const named = {
-        kind: base.commit === null ? ("full" as const) : ("incremental" as const),
-        tipCommit: commit,
-        ...(base.commit === null ? {} : { prerequisiteCommit: base.commit }),
-        bytes: 100,
-        sha256: sha("5"),
-        ...more
-      };
-      return {
-        objectKey: assetRepoBundleObjectKey({ assetId, commit, sha256: named.sha256 }),
-        ...named
-      };
-    };
-    /** The first two steps of a save: the pending row, then the name of its bundle. */
-    const pend = async (
-      store: ConfigAssetStore,
-      base: Base,
-      commit: string,
-      more: SaveOptions = {}
-    ) => {
-      const operationRunId = more.run ?? runId();
-      const save = { clientInstanceId, assetId, operationRunId };
-      const begun = await store.beginAssetRepoSave(save);
-      const bundle = bundleOf(base, commit, more.bundle);
-      await store.nameAssetRepoSaveBundle({ ...save, bundle });
-      return { operationRunId, savedAt: begun.savedAt, bundle };
-    };
-    /** The last step: the transaction that makes `commit` the draft, as a save that read `base`. */
-    const settle = (
-      store: ConfigAssetStore,
-      base: Base,
-      commit: string,
-      operationRunId: OperationRunId,
-      more: SaveOptions = {}
-    ) =>
-      store.applyConfigAssetMutations({
-        clientInstanceId,
-        baseRevisions: { [`${kind}:${name}`]: base.revision },
-        ...(more.validate ? { validate: more.validate } : {}),
-        mutations: [
-          {
-            type: "upsert",
-            kind,
-            name,
-            config: { name },
-            draft: true,
-            assetId,
-            repository: {
-              commit,
-              tree: more.tree ?? oid("e"),
-              baseCommit: base.commit,
-              operationRunId,
-              ...(more.checkout ? { checkout: more.checkout } : {})
-            }
-          }
-        ]
-      });
-    /** A whole save. */
-    const save = async (
-      store: ConfigAssetStore,
-      base: Base,
-      commit: string,
-      more: SaveOptions = {}
-    ) => {
-      const { operationRunId } = await pend(store, base, commit, more);
-      return settle(store, base, commit, operationRunId, more);
-    };
-    const bundles = () => db.store.configAssets.listAssetRepoBundles({ clientInstanceId, assetId });
-    const revisions = () => db.store.configAssets.listConfigAssetRevisions(address);
-    const draft = () => db.store.configAssets.getConfigAsset(address);
-    /** Sweeps every pending save and answers the objects of this asset that were removed. */
-    const sweep = async (olderThan = FAR_FUTURE) => {
-      const removed: string[] = [];
-      await db.store.configAssets.sweepPendingAssetRepoSaves({
-        olderThan,
-        limit: 1000,
-        removeObject: (object) => {
-          if (object.assetId === assetId) removed.push(object.objectKey);
-          return Promise.resolve();
-        }
-      });
-      return removed;
-    };
-    return {
-      clientInstanceId,
-      assetId,
-      address,
-      bundleOf,
-      pend,
-      settle,
-      save,
-      bundles,
-      revisions,
-      draft,
-      sweep
-    };
-  }
+  const arrange = (
+    label: string,
+    kind?: string,
+    clientInstanceId?: ReturnType<typeof db.clientInstance>
+  ) => arrangeAssetRepo(db, label, kind, clientInstanceId);
 
   it("writes the first commit as revision 1 with one full bundle row", async () => {
     const { assetId, save, bundles, revisions, draft } = arrange("first");
@@ -325,9 +171,13 @@ describe("the ledger of an asset's repository", () => {
     const base = { revision: 1, commit: oid("c") };
     // A bundle that ends on another commit, and one that stands on another.
     const other = await pend(store, base, oid("d"));
-    expect(await refusalOf(settle(store, base, oid("f"), other.operationRunId))).toMatchObject({
-      code: "VALIDATION_FAILED"
-    });
+    expect(
+      await refusalOf(
+        settle(store, base, oid("f"), other.operationRunId, {
+          bundle: { objectKey: other.bundle.objectKey }
+        })
+      )
+    ).toMatchObject({ code: "VALIDATION_FAILED" });
     const elsewhere = await pend(store, { revision: 1, commit: oid("9") }, oid("1"));
     expect(await refusalOf(settle(store, base, oid("1"), elsewhere.operationRunId))).toMatchObject({
       code: "VALIDATION_FAILED"
@@ -354,157 +204,145 @@ describe("the ledger of an asset's repository", () => {
     }
   });
 
-  describe("a pending save", () => {
-    it("holds one time for every attempt of its Operation Run, in whole seconds", async () => {
-      const { clientInstanceId, assetId } = arrange("time");
-      const save = { clientInstanceId, assetId, operationRunId: runId() };
-      // Two attempts that start at once, on two connections: one row, one time.
-      const [left, right] = await Promise.all([
-        db.store.configAssets.beginAssetRepoSave(save),
-        db.secondStore.configAssets.beginAssetRepoSave(save)
-      ]);
-      expect(left).toEqual({
-        assetId,
-        operationRunId: save.operationRunId,
-        state: "pending",
-        savedAt: expect.any(String)
-      });
-      expect(right).toEqual(left);
-      expect(new Date(left.savedAt).getTime() % 1000).toBe(0);
-      await db.sql`update asset_repo_bundles set saved_at = '2026-10-12T08:00:00Z' where operation_run_id = ${save.operationRunId}`;
-      const later = await db.store.configAssets.beginAssetRepoSave(save);
-      expect(later.savedAt).toBe("2026-10-12T08:00:00.000Z");
-      // Another run of the same asset is another save with a time of its own.
-      const other = await db.store.configAssets.beginAssetRepoSave({
-        ...save,
-        operationRunId: runId()
-      });
-      expect(other.savedAt).not.toBe(later.savedAt);
-    });
-
-    it("answers the bundle it named to the next attempt, and takes another only in place of it", async () => {
-      const { clientInstanceId, assetId, bundleOf, pend } = arrange("named");
-      const store = db.store.configAssets;
-      const base = { revision: null, commit: null };
-      const { operationRunId, bundle } = await pend(store, base, oid("a"));
-      const save = { clientInstanceId, assetId, operationRunId };
-      expect(await store.beginAssetRepoSave(save)).toMatchObject({ state: "pending", bundle });
-      // The same bundle again changes nothing.
-      await store.nameAssetRepoSaveBundle({ ...save, bundle });
-      // Another pack of the same commit has another key. The object of the first would be
-      // left in the store with no row, so the save says that it removed it.
-      const repacked = bundleOf(base, oid("a"), { sha256: sha("6") });
+  it("refuses a batch that writes the asset of a commit a second time", async () => {
+    const { clientInstanceId, assetId, pend, save, bundles, revisions, draft } = arrange("mixed");
+    const store = db.store.configAssets;
+    await save(store, { revision: null, commit: null }, oid("a"));
+    const base = { revision: 1, commit: oid("a") };
+    const { operationRunId, bundle } = await pend(store, base, oid("b"));
+    const upsert = {
+      type: "upsert" as const,
+      kind: "app",
+      name: "rates",
+      config: { name: "rates" },
+      draft: true as const
+    };
+    const repository = {
+      commit: oid("b"),
+      tree: oid("e"),
+      baseCommit: oid("a"),
+      operationRunId,
+      bundle
+    };
+    for (const mutations of [
+      [{ ...upsert, assetId, repository }, upsert],
+      [upsert, { ...upsert, assetId, repository }],
+      [
+        { ...upsert, assetId, repository },
+        { type: "delete" as const, kind: "app", name: "rates" }
+      ]
+    ]) {
       expect(
-        await refusalOf(store.nameAssetRepoSaveBundle({ ...save, bundle: repacked }))
-      ).toMatchObject({
-        code: "CONFLICT",
-        reason: "pending_bundle_differs",
-        objectKey: bundle.objectKey
-      });
-      await store.nameAssetRepoSaveBundle({
-        ...save,
-        bundle: repacked,
-        replaces: bundle.objectKey
-      });
-      expect(await store.beginAssetRepoSave(save)).toMatchObject({ bundle: repacked });
-      // Two saves never name one object.
-      expect(
-        await refusalOf(pend(store, base, oid("a"), { bundle: { sha256: sha("6") } }))
-      ).toMatchObject({
-        code: "CONFLICT",
-        reason: "bundle_named_by_another_save"
-      });
-    });
+        await refusalOf(
+          store.applyConfigAssetMutations({
+            clientInstanceId,
+            baseRevisions: { "app:rates": 1 },
+            repositoryObjectSize: () => Promise.resolve(bundle.bytes),
+            mutations
+          })
+        )
+      ).toMatchObject({ code: "VALIDATION_FAILED" });
+    }
+    // The draft still names its commit, and the bundle is not part of the repository.
+    expect(await draft()).toMatchObject({ revision: 1, commit: oid("a") });
+    expect(await revisions()).toHaveLength(1);
+    expect(await bundles()).toHaveLength(1);
+  });
 
-    it("is not another instance's to read or to name", async () => {
-      const { assetId, pend } = arrange("mine");
-      const { operationRunId, bundle } = await pend(
-        db.store.configAssets,
-        { revision: null, commit: null },
-        oid("a")
-      );
-      const foreign = { clientInstanceId: db.clientInstance("theirs"), assetId, operationRunId };
-      expect(await refusalOf(db.store.configAssets.beginAssetRepoSave(foreign))).toMatchObject({
-        code: "CONFLICT"
-      });
-      expect(
-        await refusalOf(db.store.configAssets.nameAssetRepoSaveBundle({ ...foreign, bundle }))
-      ).toMatchObject({ code: "CONFLICT", reason: "save_not_pending" });
-    });
-
-    it("is removed by the sweeper once it is old, object first, and cannot be finished after", async () => {
-      const { pend, settle, save, bundles, revisions, sweep, clientInstanceId, assetId } =
-        arrange("sweep");
-      const store = db.store.configAssets;
-      await save(store, { revision: null, commit: null }, oid("a"));
-      const base = { revision: 1, commit: oid("a") };
-      const stale = await pend(store, base, oid("b"));
-      const unnamed = { clientInstanceId, assetId, operationRunId: runId() };
-      await store.beginAssetRepoSave(unnamed);
-      await db.sql`update asset_repo_bundles set saved_at = now() - interval '25 hours' where asset_id = ${assetId} and state = 'pending'`;
-      const young = await pend(store, base, oid("c"));
-      const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-      // An object that cannot be removed keeps its row, so it is tried again.
-      await expect(
-        store.sweepPendingAssetRepoSaves({
-          olderThan: dayAgo,
-          limit: 1000,
-          removeObject: (object) =>
-            object.assetId === assetId
-              ? Promise.reject(new Error("the store is away"))
-              : Promise.resolve()
+  // Fails where a write without a commit passes: the draft would be a revision that names no
+  // commit, and no save could stand on it any more.
+  it("refuses a write without a commit on an asset that has a repository, and the next save goes on", async () => {
+    const { clientInstanceId, save, draft, revisions } = arrange("plain");
+    const store = db.store.configAssets;
+    await save(store, { revision: null, commit: null }, oid("a"));
+    expect(
+      await refusalOf(
+        store.applyConfigAssetMutations({
+          clientInstanceId,
+          baseRevisions: { "app:rates": 1 },
+          mutations: [
+            {
+              type: "upsert",
+              kind: "app",
+              name: "rates",
+              config: { name: "rates", title: "renamed" },
+              draft: true
+            }
+          ]
         })
-      ).rejects.toThrow("the store is away");
-      const pending = () =>
-        db.sql`select 1 from asset_repo_bundles where asset_id = ${assetId} and state = 'pending'`;
-      expect(await pending()).toHaveLength(3);
+      )
+    ).toMatchObject({ code: "VALIDATION_FAILED", reason: "repository_write_without_commit" });
+    expect(await revisions()).toHaveLength(1);
+    await save(store, { revision: 1, commit: oid("a") }, oid("b"));
+    expect(await draft()).toMatchObject({ revision: 2, commit: oid("b") });
+  });
 
-      expect(await sweep(dayAgo)).toEqual([stale.bundle.objectKey]);
-      expect(await pending()).toHaveLength(1);
-      // Swept: the old save cannot become part of the repository any more.
-      expect(await refusalOf(settle(store, base, oid("b"), stale.operationRunId))).toMatchObject({
-        code: "CONFLICT",
-        reason: "save_not_pending"
-      });
-      expect(await revisions()).toHaveLength(1);
-      // The young save and the repository are untouched.
-      await settle(store, base, oid("c"), young.operationRunId);
-      expect((await bundles()).map((row) => row.tipCommit)).toEqual([oid("a"), oid("c")]);
-      expect(await sweep()).toEqual([]);
-      expect(await bundles()).toHaveLength(2);
+  // A deleted asset keeps its revisions, and so its history: the tombstone names the last
+  // commit, and the asset comes back on it.
+  it("brings a deleted asset back on the commit it was deleted at", async () => {
+    const { clientInstanceId, save, bundles, draft, rows } = arrange("softdelete");
+    const store = db.store.configAssets;
+    await save(store, { revision: null, commit: null }, oid("a"));
+    await save(store, { revision: 1, commit: oid("a") }, oid("b"));
+    await store.applyConfigAssetMutations({
+      clientInstanceId,
+      baseRevisions: { "app:rates": 2 },
+      mutations: [{ type: "delete", kind: "app", name: "rates" }]
     });
+    expect(await draft()).toMatchObject({ status: "deleted", revision: 3, commit: oid("b") });
+    expect((await rows()).map((row) => row.state)).toEqual(["live", "live"]);
+    // Neither a first commit nor a write without one starts it over.
+    expect(await refusalOf(save(store, { revision: 3, commit: null }, oid("d")))).toMatchObject({
+      code: "CONFLICT",
+      reason: "draft_moved",
+      draftCommit: oid("b")
+    });
+    expect(
+      await refusalOf(
+        store.applyConfigAssetMutations({
+          clientInstanceId,
+          baseRevisions: { "app:rates": 3 },
+          mutations: [
+            { type: "upsert", kind: "app", name: "rates", config: { name: "rates" }, draft: true }
+          ]
+        })
+      )
+    ).toMatchObject({ code: "VALIDATION_FAILED", reason: "repository_write_without_commit" });
+    await save(store, { revision: 3, commit: oid("b") }, oid("c"));
+    expect(await draft()).toMatchObject({ status: "active", revision: 4, commit: oid("c") });
+    expect((await bundles()).map((row) => [row.sequence, row.kind, row.tipCommit])).toEqual([
+      [1, "full", oid("a")],
+      [2, "incremental", oid("b")],
+      [3, "incremental", oid("c")]
+    ]);
+  });
 
-    // Fails without the lock of the row in the sweeper: the save would make a row live whose
-    // object the sweeper is removing.
-    it("is either swept or finished when both come at once, never both", async () => {
-      const { pend, settle, save, bundles, assetId } = arrange("sweep-race");
-      const store = db.store.configAssets;
-      await save(store, { revision: null, commit: null }, oid("a"));
-      const base = { revision: 1, commit: oid("a") };
-      const { operationRunId } = await pend(store, base, oid("b"));
-      let removed = 0;
-      let finishing: Promise<unknown> = Promise.resolve();
-      await db.secondStore.configAssets.sweepPendingAssetRepoSaves({
-        olderThan: FAR_FUTURE,
-        limit: 1000,
-        removeObject: async (object) => {
-          if (object.assetId !== assetId) return;
-          removed += 1;
-          // The save arrives while the object is being removed, and waits for the row.
-          finishing = settle(store, base, oid("b"), operationRunId).catch(
-            (error: unknown) => error
-          );
-          await new Promise((resolve) => setTimeout(resolve, 300));
-        }
-      });
-      expect(removed).toBe(1);
-      expect(await refusalOf(Promise.reject(await finishing))).toMatchObject({
-        code: "CONFLICT",
-        reason: "save_not_pending"
-      });
-      expect(await bundles()).toHaveLength(1);
+  it("holds the form of a bundle row by itself", async () => {
+    const { clientInstanceId, assetId, pend } = arrange("constraints");
+    await pend(db.store.configAssets, { revision: null, commit: null }, oid("a"));
+    await db.store.configAssets.beginAssetRepoSave({
+      clientInstanceId,
+      assetId,
+      operationRunId: runId()
     });
+    for (const set of [
+      "state = 'live'",
+      "state = 'live', sequence = 1",
+      "state = 'swept'",
+      "object_key = 'x'",
+      "tip_commit = 'not-a-commit'",
+      `tip_commit = '${oid("A")}'`,
+      "prerequisite_commit = 'nope', kind = 'incremental'",
+      "sha256 = 'nope'",
+      `sha256 = '${sha("a").slice(1)}'`,
+      "bytes = 0",
+      "bytes = -5"
+    ]) {
+      await expect(
+        db.sql.unsafe(`update asset_repo_bundles set ${set} where asset_id = '${assetId}'`),
+        set
+      ).rejects.toThrow(/check constraint/u);
+    }
   });
 
   it("keeps the commit of a revision empty for an asset without a repository", async () => {
@@ -563,202 +401,9 @@ describe("the ledger of an asset's repository", () => {
     });
     expect(await read()).toBeUndefined();
     expect(await store.listAssetRepoBundles({ clientInstanceId, assetId })).toEqual([]);
-    // The rows of the asset are gone, those of saves that did not finish among them.
-    expect(await db.sql`select 1 from asset_repo_bundles where asset_id = ${assetId}`).toEqual([]);
-  });
-
-  describe("with the command and an object store", () => {
-    let scratch: string;
-    beforeAll(async () => {
-      scratch = await mkdtemp(join(tmpdir(), "asset-repo-ledger-test-"));
-    });
-    afterAll(async () => {
-      await rm(scratch, { recursive: true, force: true });
-    });
-
-    const source = { "app.yaml": "id: rates\n", "src/rates.ts": "export const rate = 1;\n" };
-
-    /** The bundles the ledger names, read from the object store, as the worker reads them. */
-    async function ledgerBundles(
-      objects: MemoryObjectStorage,
-      rows: Awaited<ReturnType<ConfigAssetStore["listAssetRepoBundles"]>>
-    ): Promise<TestBundle[]> {
-      return Promise.all(
-        rows.map(async (row) => ({
-          file: `${row.sequence}.bundle`,
-          tip: row.tipCommit,
-          prerequisite: row.prerequisiteCommit ?? null,
-          bytes: Buffer.from(await readObjectBytes(objects, row.objectKey)),
-          // What the ledger recorded goes into the request, and the command compares it.
-          recorded: { sha256: row.sha256, bytes: row.bytes }
-        }))
-      );
-    }
-
-    /** What the ledger records of a bundle the command wrote. */
-    const recorded = (bundle: TestBundle) => ({
-      bytes: bundle.bytes.byteLength,
-      sha256: createHash("sha256").update(bundle.bytes).digest("hex")
-    });
-
-    // The order of a save: the pending row with its time, the commit, the name of the bundle,
-    // the object, then the transaction. A save may stop after any of them.
-    it("leaves the draft where it was when a save stops after its bundle is written, takes the repeated save as the same commit, and sweeps a save nobody repeats", async () => {
-      const { clientInstanceId, assetId, pend, settle, bundles, revisions, draft } =
-        arrange("crash");
-      const store = db.store.configAssets;
-      const objects = new MemoryObjectStorage();
-      const first = await commitFolder(scratch, { files: source });
-      if (first.result.status !== "committed" || !first.bundle) throw new Error("not committed");
-      const firstCommit = first.result.commit;
-      const firstBundle = first.bundle;
-      const nothing = { revision: null, commit: null };
-      const firstSave = await pend(store, nothing, firstCommit, { bundle: recorded(firstBundle) });
-      await objects.put(firstSave.bundle.objectKey, firstBundle.bytes);
-      await settle(store, nothing, firstCommit, firstSave.operationRunId, {
-        tree: first.result.tree
-      });
-      const base = { revision: 1, commit: firstCommit };
-
-      /** One attempt of the save of an Operation Run, up to and with the put of its object. */
-      const attempt = async (run: OperationRunId, files: Record<string, string>) => {
-        const begun = await store.beginAssetRepoSave({
-          clientInstanceId,
-          assetId,
-          operationRunId: run
-        });
-        const commit = await commitFolder(scratch, {
-          files,
-          bundles: await ledgerBundles(objects, await bundles()),
-          base: firstCommit,
-          // The time of the commit is the one the ledger holds for the run.
-          time: new Date(begun.savedAt).getTime() / 1000
-        });
-        if (commit.result.status !== "committed" || !commit.bundle)
-          throw new Error("not committed");
-        const named = await pend(store, base, commit.result.commit, {
-          run,
-          bundle: recorded(commit.bundle)
-        });
-        await objects.put(named.bundle.objectKey, commit.bundle.bytes);
-        return { ...commit.result, objectKey: named.bundle.objectKey };
-      };
-
-      const edited = { ...source, "src/rates.ts": "export const rate = 2;\n" };
-      const run = runId();
-      const stopped = await attempt(run, edited);
-      // The process stops here: no transaction.
-
-      expect(await draft()).toMatchObject({ revision: 1, commit: firstCommit });
-      expect(await revisions()).toHaveLength(1);
-      expect((await bundles()).map((row) => row.tipCommit)).toEqual([firstCommit]);
-      // A reader follows the ledger: the object of a pending save is not part of the repository.
-      const before = await materialise(scratch, {
-        bundles: await ledgerBundles(objects, await bundles()),
-        draft: firstCommit,
-        revisions: [{ number: 1, commit: firstCommit }]
-      });
-      expect(before.result).toMatchObject({ status: "materialised", commits: 1 });
-
-      // The second attempt is made later. It reads the time of the first from the ledger.
-      await new Promise((resolve) => setTimeout(resolve, 1100));
-      const repeated = await attempt(run, edited);
-      expect(repeated.commit).toBe(stopped.commit);
-      expect(repeated.objectKey).toBe(stopped.objectKey);
-      // Another run of the same save is another commit, as it has a time of its own.
-      const abandoned = await attempt(runId(), edited);
-      expect(abandoned.commit).not.toBe(stopped.commit);
-
-      await settle(store, base, repeated.commit, run, { tree: repeated.tree });
-      expect(await draft()).toMatchObject({ revision: 2, commit: repeated.commit });
-      const after = await materialise(scratch, {
-        bundles: await ledgerBundles(objects, await bundles()),
-        draft: repeated.commit,
-        revisions: (await revisions()).map((revision) => ({
-          number: revision.revision,
-          commit: revision.commit ?? ""
-        }))
-      });
-      expect(after.result).toMatchObject({ status: "materialised", commits: 2, revisions: 2 });
-
-      // The save nobody repeats left an object no revision names. The sweeper finds it by its
-      // pending row and removes it, and nothing else.
-      expect(objects.has(abandoned.objectKey)).toBe(true);
-      await store.sweepPendingAssetRepoSaves({
-        olderThan: FAR_FUTURE,
-        limit: 1000,
-        removeObject: (object) =>
-          object.assetId === assetId ? objects.delete(object.objectKey) : Promise.resolve()
-      });
-      expect(objects.keys().sort()).toEqual((await bundles()).map((row) => row.objectKey).sort());
-    });
-
-    it("continues from the published commit after the draft was discarded", async () => {
-      const { address, save, bundles, revisions, draft } = arrange("discard");
-      const store = db.store.configAssets;
-      const committed = async (
-        files: Record<string, string>,
-        from: TestBundle[],
-        base: string | null,
-        time: number
-      ) => {
-        const commit = await commitFolder(scratch, { files, bundles: from, base, time });
-        if (commit.result.status !== "committed" || !commit.bundle)
-          throw new Error("not committed");
-        return { ...commit.result, bundle: commit.bundle };
-      };
-      const first = await committed(source, [], null, 1);
-      await save(store, { revision: null, commit: null }, first.commit, {
-        tree: first.tree,
-        bundle: recorded(first.bundle)
-      });
-      await store.publishConfigAssetRevision({ ...address, revision: 1 });
-      const second = await committed(
-        { ...source, "a.txt": "a\n" },
-        [first.bundle],
-        first.commit,
-        2
-      );
-      await save(store, { revision: 1, commit: first.commit }, second.commit, {
-        tree: second.tree,
-        bundle: recorded(second.bundle)
-      });
-      await store.discardConfigAssetDraft({ ...address, expectedRevision: 2 });
-      expect(await draft()).toMatchObject({ revision: 1, commit: first.commit });
-
-      const third = await committed({ ...source, "b.txt": "b\n" }, [first.bundle], first.commit, 3);
-      await save(store, { revision: 1, commit: first.commit }, third.commit, {
-        tree: third.tree,
-        bundle: recorded(third.bundle)
-      });
-      expect(await draft()).toMatchObject({ revision: 3, commit: third.commit });
-      // Every bundle stands on the commit of a revision, so the three apply in ledger order,
-      // and the discarded revision stays reachable by its ref.
-      const rows = await bundles();
-      const bytes = new Map(
-        [first, second, third].map((commit) => [commit.commit, commit.bundle.bytes])
-      );
-      const { result, directory } = await materialise(scratch, {
-        bundles: rows.map((row) => ({
-          file: `${row.sequence}.bundle`,
-          tip: row.tipCommit,
-          prerequisite: row.prerequisiteCommit ?? null,
-          bytes: bytes.get(row.tipCommit) ?? Buffer.alloc(0)
-        })),
-        draft: third.commit,
-        revisions: (await revisions()).map((revision) => ({
-          number: revision.revision,
-          commit: revision.commit ?? ""
-        }))
-      });
-      expect(result).toMatchObject({ status: "materialised", commits: 3, revisions: 3 });
-      const repository = join(
-        directory,
-        ASSET_REPO_OUTPUT_DIRECTORY,
-        ASSET_REPO_REPOSITORY_DIRECTORY
-      );
-      expect(await testGit(repository, ["rev-parse", "refs/revisions/2"])).toBe(second.commit);
-      expect(await testGit(repository, ["rev-parse", "refs/heads/draft^"])).toBe(first.commit);
-    });
+    // No row of the asset can become part of a repository any more.
+    expect(
+      await db.sql`select 1 from asset_repo_bundles where asset_id = ${assetId} and state <> 'swept'`
+    ).toEqual([]);
   });
 });
