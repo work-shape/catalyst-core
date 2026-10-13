@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { z } from "zod";
 import type { JsonValue } from "@vivd-catalyst/core";
 import { parseWorkflowManifest } from "@vivd-catalyst/workflows";
 import {
@@ -205,4 +206,116 @@ describe("a loop with concurrency above 1", () => {
     expect(confirmed.sort()).toEqual(CLIENTS.map((client) => client.id));
     expect(run.stepRunCount).toBe(20);
   });
+});
+
+describe("a loop that stops inside a loop that continues", () => {
+  const ref = (step: string, path: string) => ({ ref: { step, path } });
+  /** For each client, for each part: send. Then one step after the parts of that client. */
+  const nested = (outer: Record<string, unknown>, inner: Record<string, unknown>) => {
+    const definition = notifyClients(outer);
+    const [trigger, clients, loop, result] = definition.steps;
+    return {
+      ...definition,
+      steps: [
+        trigger,
+        clients,
+        {
+          ...loop,
+          steps: [
+            {
+              id: "each_part",
+              name: "For each part",
+              type: "loop",
+              items: { step: "clients", path: "clients" },
+              itemLabel: "id",
+              ...inner,
+              steps: [
+                {
+                  id: "send",
+                  name: "Send",
+                  type: "operation",
+                  operation: "connection.crm.write",
+                  input: { client: ref("each_client", "id"), part: ref("each_part", "id") }
+                }
+              ]
+            },
+            {
+              id: "after",
+              name: "After the parts",
+              type: "operation",
+              operation: "connection.crm.write",
+              input: { after: ref("each_client", "id") }
+            }
+          ]
+        },
+        result
+      ]
+    };
+  };
+
+  it("starts no further part, runs nothing after the stopped loop, and goes on with the next client", async () => {
+    const definitions = publishedDefinitions();
+    definitions.publish(nested({ concurrency: 2, onItemFailure: "continue" }, { concurrency: 3 }));
+    const t = await readyWorkflows(
+      (fixture) => {
+        open = fixture;
+      },
+      { definitions: definitions.source }
+    );
+    // The part `client-1` of the client `client-0` fails; every other call answers.
+    t.setBehaviour((operation, input): Promise<JsonValue> => {
+      if (operation === "echo") return Promise.resolve({ clients: CLIENTS });
+      const text = JSON.stringify(input);
+      return text.includes('"client":"client-0"') && text.includes('"part":"client-1"')
+        ? Promise.reject(new Error("The outside system is down"))
+        : Promise.resolve({ received: input });
+    });
+    const run = await t.finish((await start(t)).id, undefined, 600);
+
+    // Each call by what it was for: `client/part`, or `after:client`.
+    const made = z.object({
+      client: z.string().optional(),
+      part: z.string().optional(),
+      after: z.string().optional()
+    });
+    const calls = writesOf(t).map((input) => {
+      const call = made.parse(input);
+      return call.after === undefined
+        ? `${call.client ?? ""}/${call.part ?? ""}`
+        : `after:${call.after}`;
+    });
+    const ofFirst = calls.filter((call) => call.startsWith("client-0/"));
+    // The three parts that were going with the failed one made their calls: no fourth part,
+    // and not the step after the parts.
+    expect(ofFirst.sort()).toEqual(["client-0/client-0", "client-0/client-1", "client-0/client-2"]);
+    expect(calls).not.toContain("after:client-0");
+    // Every other client ran whole: eight parts and the step after them, each once.
+    expect(calls).toHaveLength(3 + 7 * 9);
+    expect(new Set(calls).size).toBe(calls.length);
+
+    const stepRuns = await stepRunsOf(t, run.id);
+    const first = stepRuns
+      .filter((stepRun) => stepRun.key.startsWith("each_client[0]."))
+      .map((stepRun) => [stepRun.key, stepRun.status])
+      .sort();
+    // A part that had its step run and no call yet was withdrawn, not run.
+    expect(first.filter(([, status]) => status === "done" || status === "failed")).toEqual([
+      ["each_client[0].each_part", "failed"],
+      ["each_client[0].each_part[0].send", "done"],
+      ["each_client[0].each_part[1].send", "failed"],
+      ["each_client[0].each_part[2].send", "done"]
+    ]);
+    expect(first.every(([, status]) => status !== "queued" && status !== "running")).toBe(true);
+    expect(first.map(([key]) => key)).not.toContain("each_client[0].after");
+
+    // The outer loop counts that client as failed and the run ends done.
+    expect(run.status).toBe("done");
+    expect(JSON.parse(run.outputPreview?.text ?? "null")).toEqual({ sent: 7, failed: 1 });
+    expect(stepRuns.find((stepRun) => stepRun.key === "each_client")?.loop).toEqual({
+      total: 8,
+      done: 7,
+      failed: 1,
+      running: 0
+    });
+  }, 120_000);
 });

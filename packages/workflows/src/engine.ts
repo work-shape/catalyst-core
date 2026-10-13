@@ -7,11 +7,9 @@ import {
   createPlatformId,
   defineJobHandler,
   defineJobKind,
-  isAppError,
   isAuthenticatedServicePrincipal,
   isWorkflowRunEnded,
   subjectDedupeKey,
-  type AuditActor,
   type AuthenticatedIdentity,
   type ClientInstanceId,
   type JobControl,
@@ -50,15 +48,8 @@ import { principalActor } from "./run-identity";
 import { withEveryBodyStep } from "./run-view";
 import { createStartCheck, type PreparedStart } from "./run-start";
 import { createScheduleTrigger } from "./schedule-trigger";
+import { createScheduledStart, type RunOrigin } from "./scheduled-start";
 import { createStepExecutor, type StepEnd } from "./step-execution";
-
-const reasonSchema = z.object({ reason: z.string().min(1) });
-
-/** The reason a refused start names, for the record of a due time that started nothing. */
-function refusalReason(error: AppError): string {
-  const details = reasonSchema.safeParse(error.details);
-  return details.success ? details.data.reason : error.code;
-}
 
 // The engine of Workflow Runs. A run is a row, each step it reaches is a step run, and each
 // step run is executed by one job of the shared executor. A step ends in the transaction
@@ -131,6 +122,11 @@ export interface WorkflowEngine {
    * time. A process calls it when it starts, and whoever publishes a definition calls it then.
    */
   planSchedules(): Promise<{ workflow: string; dueAt: string }[]>;
+  /**
+   * The same for one Workflow: whoever publishes its definition, or takes it back, calls this.
+   * It answers the due time it queued, or nothing where the Workflow has no schedule.
+   */
+  planSchedule(workflow: string): Promise<{ workflow: string; dueAt: string } | undefined>;
   /** What the job worker of the process serves for the engine. */
   jobHandlers: readonly RegisteredJobHandler[];
 }
@@ -170,8 +166,24 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       ...end
     });
     if (!ended) return false;
+    await cancelWaiting(tx, run);
+    return true;
+  }
+
+  /**
+   * Cancels the step runs that wait for their turn, with their jobs: all of a run, or those
+   * inside one block, which a path that starts with the block's names. A step run that is
+   * running is left to its attempt, which records how its call went.
+   */
+  async function cancelWaiting(
+    tx: PlatformStores,
+    run: WorkflowRun,
+    block?: WorkflowStepRun
+  ): Promise<void> {
+    const finishedAt = now().toISOString();
     for (const open of await tx.workflowRuns.listOpenStepRuns({ clientInstanceId, id: run.id })) {
       if (open.status === "running") continue;
+      if (block && !open.key.startsWith(`${block.key}[`)) continue;
       await tx.workflowRuns.endStepRun({
         clientInstanceId,
         id: open.id,
@@ -183,7 +195,22 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         dedupeKey: subjectDedupeKey(workflowStepJobKind.kind, open.id)
       });
     }
-    return true;
+  }
+
+  /**
+   * Whether a block around a step run has ended: a loop that stopped at a failed item, or one
+   * that was cancelled with what is around it. What ends inside such a block is recorded and
+   * carries nothing on: no next step of its item, no next item, nothing after the block.
+   */
+  async function insideEndedBlock(tx: PlatformStores, stepRun: WorkflowStepRun): Promise<boolean> {
+    let around = stepRun.containerStepRunId;
+    while (around !== undefined) {
+      const block = await tx.workflowRuns.getStepRun({ clientInstanceId, id: around });
+      if (!block) return false;
+      if (block.status !== "waiting" && block.status !== "running") return true;
+      around = block.containerStepRunId;
+    }
+    return false;
   }
 
   /** Ends a run the engine ends itself, and writes that it ended. Never a value of the run. */
@@ -244,6 +271,9 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         finishedAt: now().toISOString(),
         error: { code: "loop_step_failed", message: "A step of the loop failed" }
       });
+      // The loop stopped: its items that wait never start. Those with a call in flight end
+      // and are recorded, and `settle` starts nothing after them.
+      await cancelWaiting(tx, run, loopRun);
       failed = loopRun;
     }
     await finishRun(tx, run, {
@@ -471,8 +501,9 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     const run = await tx.workflowRuns.lockRun({ clientInstanceId, id: found.runId });
     const stepRun = await tx.workflowRuns.getStepRun(ref);
     if (!run || stepRun?.status !== "running") return;
-    // A run that ended while the step worked keeps what the step did and starts nothing.
-    const live = !isWorkflowRunEnded(run.status);
+    // A run that ended while the step worked keeps what the step did and starts nothing, and
+    // so does a loop around the step that stopped while the step worked.
+    const live = !isWorkflowRunEnded(run.status) && !(await insideEndedBlock(tx, stepRun));
     const finishedAt = now().toISOString();
     if (end.kind === "failed") {
       const { kind: _kind, systemic, ...failure } = end;
@@ -564,8 +595,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
   async function openRun(
     tx: PlatformStores,
     prepared: PreparedStart,
-    started: Pick<WorkflowRun, "trigger" | "startedBy" | "correlationId"> &
-      Pick<Partial<WorkflowRun>, "operationRunId" | "scheduledFor"> & { actor: AuditActor }
+    started: RunOrigin
   ): Promise<WorkflowRun | undefined> {
     const { published, trigger, input, principal } = prepared;
     const { actor, ...origin } = started;
@@ -611,48 +641,13 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     definitions,
     timeZone: options.timeZone ?? "UTC",
     now,
-    async prepare(published) {
-      let prepared: PreparedStart;
-      try {
-        // A schedule gives a run no input: a Workflow that needs one is not started by it.
-        prepared = await prepareStart(published, {});
-      } catch (error) {
-        if (!isAppError(error)) throw error;
-        return { refused: refusalReason(error) };
-      }
-      const { principal, published: revision } = prepared;
-      return {
-        async start(tx, scheduledFor, correlationId) {
-          const due = scheduledFor.toISOString();
-          const state = await tx.workflowRuns.readScheduleState({
-            clientInstanceId,
-            workflow: revision.manifest.id,
-            scheduledFor: due
-          });
-          if (state.fired) return { outcome: "fired" };
-          // The run of an earlier due time is still open: this one is skipped, not queued.
-          if (state.open) return { outcome: "skipped", reason: "overlap" };
-          const run = await openRun(tx, prepared, {
-            trigger: "schedule",
-            scheduledFor: due,
-            // Nobody is present at a due time: the run is started as its own principal.
-            startedBy: {
-              kind: "service_principal",
-              id: principal.id,
-              label: principal.displayLabel
-            },
-            actor: principalActor({ principal }),
-            correlationId
-          });
-          return { outcome: run ? "started" : "fired" };
-        }
-      };
-    }
+    prepare: createScheduledStart({ clientInstanceId, prepareStart, openRun })
   });
 
   return {
     jobHandlers: [stepHandler, schedule.handler],
     planSchedules: schedule.plan,
+    planSchedule: schedule.planOne,
 
     async start(input) {
       const published = await definitions.read(input.workflow);
