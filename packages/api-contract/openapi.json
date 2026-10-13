@@ -11825,6 +11825,12 @@
                               ]
                             }
                           },
+                          "actions": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "lastRun": {
                             "type": "object",
                             "properties": {
@@ -11861,7 +11867,8 @@
                           "name",
                           "definitionRevisionId",
                           "runnable",
-                          "reasons"
+                          "reasons",
+                          "actions"
                         ]
                       }
                     }

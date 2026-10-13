@@ -3,6 +3,7 @@ import {
   AppError,
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
+  hasAuthScope,
   isAuthenticatedServicePrincipal,
   type AccessResource,
   type AuthenticatedIdentity,
@@ -17,6 +18,12 @@ import type { WorkflowRunsPort } from "../workflow-runs-port";
 
 /** The module these operations belong to. */
 const WORKFLOWS_MODULE = "workflows";
+
+/** The rights an entry of the list names, each with the scope of the calls it opens. */
+const LISTED_ACTIONS = [
+  { action: WORKFLOW_ACTIONS.read, scope: apiOperations["workflows.list_runs"].scope },
+  { action: WORKFLOW_ACTIONS.use, scope: apiOperations["workflows.start"].scope }
+] as const;
 
 /** What a right on one Workflow is decided on: its name and, where it is stored, its asset. */
 const workflowOf = (name: string, assetId?: string): AccessResource => ({
@@ -76,15 +83,18 @@ function registerWorkflowRoutes(
     authorize: () => ({ allowed: true }),
     module: WORKFLOWS_MODULE,
     // The published revision of an asset is shown to whoever reads it or uses it, as a read
-    // of the asset shows it. A Workflow that cannot be started is listed all the same.
-    execute: async (_input, { access }) => ({
-      items: (await required().listWorkflows())
-        .filter((workflow) =>
-          [WORKFLOW_ACTIONS.read, WORKFLOW_ACTIONS.use].some(
-            (action) => decide(access, action, workflowOf(workflow.id, workflow.assetId)).allowed
-          )
-        )
-        .map(({ assetId: _assetId, ...workflow }) => workflow)
+    // of the asset shows it. A Workflow that cannot be started is listed all the same. Each
+    // names what this caller may do with it, so a page offers a start only where one is let
+    // through: the right on this Workflow and a credential whose scope reaches the call.
+    execute: async (_input, { access, actor }) => ({
+      items: (await required().listWorkflows()).flatMap(({ assetId, ...workflow }) => {
+        const resource = workflowOf(workflow.id, assetId);
+        const actions = LISTED_ACTIONS.filter(
+          ({ action, scope }) =>
+            hasAuthScope(actor, scope) && decide(access, action, resource).allowed
+        ).map(({ action }) => action);
+        return actions.length > 0 ? [{ ...workflow, actions }] : [];
+      })
     })
   });
 

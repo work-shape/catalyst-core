@@ -26,6 +26,7 @@ const listSchema = z.object({
       reasons: z.array(
         z.strictObject({ code: z.string(), message: z.string(), path: z.string().optional() })
       ),
+      actions: z.array(z.string()),
       lastRun: z.object({ id: z.string(), status: z.string() }).loose().optional()
     })
   )
@@ -124,7 +125,8 @@ describe("a Workflow stored as an asset", () => {
         name: "Notify clients",
         definitionRevisionId: revisionId,
         runnable: true,
-        reasons: []
+        reasons: [],
+        actions: ["workflow.read", "workflow.use"]
       }
     ]);
 
@@ -377,7 +379,10 @@ describe("a Workflow stored as an asset", () => {
       scopeId: await t.assetId(WORKFLOW_ASSET_KIND, WORKFLOW),
       grantedBy: t.admin.id
     });
-    expect((await listed(t, t.kai.id)).map((workflow) => workflow.id)).toEqual([WORKFLOW]);
+    expect((await listed(t, t.kai.id)).map((workflow) => [workflow.id, workflow.actions])).toEqual([
+      [WORKFLOW, ["workflow.use"]]
+    ]);
+    expect((await listed(t))[0]?.actions).toEqual(["workflow.read", "workflow.use"]);
     const shown = assetSchema.parse(
       (await t.expectOk(t.kai.id, "assets.get", { params: address })).json()
     );
@@ -392,6 +397,28 @@ describe("a Workflow stored as an asset", () => {
       "workflows.list_runs",
       { params: { workflow: WORKFLOW } },
       t.forbidden("workflow.read", "no_grant")
+    );
+
+    // A reader is shown the Workflow and told a start is not hers: the entry names the read
+    // right alone, and the start is refused with the right it needs.
+    await t.stores.access.createGrant({
+      clientInstanceId,
+      holderKind: "user",
+      holderId: t.lena.id,
+      action: "workflow.read",
+      effect: "allow",
+      scopeKind: "asset",
+      scopeId: await t.assetId(WORKFLOW_ASSET_KIND, WORKFLOW),
+      grantedBy: t.admin.id
+    });
+    expect((await listed(t, t.lena.id)).map((workflow) => [workflow.id, workflow.actions])).toEqual(
+      [[WORKFLOW, ["workflow.read"]]]
+    );
+    await t.expectRefused(
+      t.lena.id,
+      "workflows.start",
+      { params: { workflow: WORKFLOW }, payload: { input: { note: NOTE } } },
+      t.forbidden("workflow.use", "no_grant")
     );
   });
 

@@ -166,6 +166,11 @@ export const workflowSummarySchema = z.object({
   runnable: z.boolean(),
   /** Why not. Empty exactly where `runnable` is true. */
   reasons: z.array(workflowStartIssueSchema),
+  /**
+   * What the caller may do with this Workflow, of `workflow.read` (its runs) and `workflow.use`
+   * (a start). Never empty: a Workflow the caller holds neither on is not listed.
+   */
+  actions: z.array(z.string()),
   /** The latest run of the Workflow. Missing on one that never ran. */
   lastRun: z
     .object({
