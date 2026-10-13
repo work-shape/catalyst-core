@@ -374,9 +374,7 @@ export async function createClientInstanceExecutionAssembly(
     kinds: createAssetKindRegistry([
       createAgentAssetKind({ config, validationRefs, validateAgents }),
       createSkillAssetKind({ config }),
-      ...(connections
-        ? [createConnectionAssetKind({ connectorTypes: connections.connectorTypes })]
-        : []),
+      ...(connections ? [createConnectionAssetKind(connections)] : []),
       ...(modules.isEnabled("apps") ? [createAppAssetKind()] : []),
       ...moduleAssembly.assetKinds
     ]),

@@ -30,6 +30,7 @@ import { agentModelSettingValue } from "./asset-kinds/agent";
 import {
   configValuesEqual,
   readDefinitionName,
+  type AssetWriteSurface,
   type WorkflowAssetKind
 } from "./asset-kinds/shared";
 import { accessResource, decide, deleteDecision } from "./asset-access";
@@ -165,9 +166,6 @@ export function findIssuesOfChange(
     findAssetSetIssues(kinds, change(stored)).issues.some((issue) => !toldKeys.has(key(issue)));
   return untold ? [...told, { message: UNREAD_ASSET_ISSUE }] : told;
 }
-
-/** The operation a write of an asset arrives through. */
-export type AssetWriteSurface = "put" | "delete" | "revert" | "sync";
 
 /** The module whose switch turns changing assets in the interface on and off. */
 const ASSET_MANAGEMENT_MODULE = "assetManagement";
@@ -402,10 +400,13 @@ export function assertUpsertWithinLimits(
   access: ActorAccess,
   surface: AssetWriteSurface,
   kind: WorkflowAssetKind,
-  input: Omit<Parameters<WorkflowAssetKind["assertInteractiveUpsertAllowed"]>[0], "access">
+  input: Omit<
+    Parameters<WorkflowAssetKind["assertInteractiveUpsertAllowed"]>[0],
+    "access" | "surface"
+  >
 ): void {
   if (!isReleaseSync(access, surface)) {
-    kind.assertInteractiveUpsertAllowed({ access, ...input });
+    kind.assertInteractiveUpsertAllowed({ access, surface, ...input });
   }
 }
 
@@ -416,7 +417,7 @@ export function assertDeleteWithinLimits(
   kind: WorkflowAssetKind
 ): void {
   if (!isReleaseSync(access, surface)) {
-    kind.assertInteractiveDeleteAllowed();
+    kind.assertInteractiveDeleteAllowed({ surface });
   }
 }
 

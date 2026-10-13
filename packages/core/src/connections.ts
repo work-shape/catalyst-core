@@ -188,6 +188,12 @@ export interface EgressGrant extends EgressTarget {
  */
 export interface EgressChecker {
   check(target: EgressTarget): Promise<EgressGrant>;
+  /**
+   * Whether the target passes the rules that need no address: the protocol, the operator's
+   * list and the Platform Store by name. A save of a Connection asks this, so a write never
+   * waits for DNS; every connection still passes `check` before it is opened.
+   */
+  admits(target: EgressTarget): boolean;
 }
 
 /** The reason and the code of a refused target. */
@@ -474,9 +480,16 @@ export function createConnectorTypeRegistry(
 export const CONNECTION_REFUSALS = {
   connectorTypeUnknown: "connector_type_unknown",
   credentialInSettings: "credential_in_settings",
-  runtimeAuthoringUnavailable: "connection_runtime_authoring_unavailable",
+  /** A Connection is written one at a time. A batch of the asset operations holds none yet. */
+  batchUnavailable: "connection_batch_unavailable",
   /** A Connection of release config is changed in release config and nowhere else. */
-  readOnlyOrigin: "read_only_origin"
+  readOnlyOrigin: "read_only_origin",
+  /** An agent carries a tool of the Connection, so it is not deleted. */
+  inUse: "connection_in_use",
+  /** The Connection's auth scheme sends no credential, so none is stored for it. */
+  takesNoSecret: "connection_takes_no_secret",
+  /** The instance names no key of the Secret Store, so no secret can be stored. */
+  secretStoreUnavailable: "secret_store_unavailable"
 } as const;
 
 /**

@@ -93,7 +93,13 @@ const appsModule = defineModule({
  */
 const connectionsModule = defineModule({
   name: "connections",
-  operations: ["connections.get", "connections.test", "connections.list_tools"],
+  operations: [
+    "connections.get",
+    "connections.test",
+    "connections.set_secret",
+    "connections.discover",
+    "connections.list_tools"
+  ],
   kinds: ["connection"],
   jobKinds: ["connection.discover"],
   ui: ["build.connections"]

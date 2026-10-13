@@ -6,11 +6,11 @@ import {
   BuildAssetKindsProvider,
   BuildFrame,
   BuildNavigationProvider,
-  ConnectionPage,
+  ConnectionEditor,
   resolveBuildRights,
   type BuildAsset,
+  type BuildAssetKind,
   type BuildAssetRead,
-  type BuildListedKind,
   type BuildSource,
   type ConnectionDetailRead,
   type ConnectionHoldersRead,
@@ -32,10 +32,10 @@ import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harn
 // Connection showed the list.
 
 const connectionKind = buildAssetKinds.find((kind) => kind.kind === "connection");
-if (!connectionKind || connectionKind.Editor !== undefined) {
-  throw new Error("The platform registry has no connection entry that only lists.");
+if (!connectionKind || connectionKind.Editor === undefined) {
+  throw new Error("The platform registry has no connection entry with an editor.");
 }
-const listedConnections: BuildListedKind = connectionKind;
+const editableConnections: BuildAssetKind = connectionKind;
 
 const noop = () => undefined;
 
@@ -47,6 +47,8 @@ interface PageInput {
   detailRead?: ConnectionDetailRead;
   run?: ConnectionTestRun;
   mayTest?: boolean;
+  /** Whether the reader may change the Connection. Yes unless it says no. */
+  canWrite?: boolean;
   /** Who was given the Connection. Without it the reader is not shown rights. */
   holders?: ConnectionHoldersRead;
   locale?: LocaleCode;
@@ -61,6 +63,8 @@ function renderPage(input: PageInput = {}): string {
       input.detailRead ?? { status: "ready", detail: connectionDetail(name, input.detail) },
     useTest: () => ({ run: input.run ?? { status: "idle" }, start: noop }),
     useHolders: () => input.holders ?? { status: "hidden" },
+    setSecret: async () => undefined,
+    discover: async () => undefined,
     principalHref: (principalId) => `/settings/instance/api-access?principal=${principalId}`
   };
   const context = platformContext();
@@ -69,7 +73,10 @@ function renderPage(input: PageInput = {}): string {
       { kind: "agent", canCreate: false, canDelete: false },
       { kind: "connection", canCreate: true, canDelete: true }
     ],
-    rights: resolveBuildRights({ permissions: ["config_assets.write"] }, context),
+    rights:
+      input.canWrite === false
+        ? { ...resolveBuildRights({ permissions: [] }, context), may: () => false }
+        : resolveBuildRights({ permissions: ["config_assets.write"] }, context),
     loading: false,
     error: undefined,
     reload: async () => undefined,
@@ -96,12 +103,9 @@ function renderPage(input: PageInput = {}): string {
       revisions: async () => ({ items: [] })
     }
   };
-  const viewed: BuildListedKind = {
-    ...listedConnections,
-    view: {
-      missingText: "connections.missing",
-      Page: (frame) => createElement(ConnectionPage, { ...frame, source: connections })
-    }
+  const viewed: BuildAssetKind = {
+    ...editableConnections,
+    Editor: (frame) => createElement(ConnectionEditor, { frame, source: connections })
   };
   const kinds = buildAssetKinds.map((kind) => (kind.kind === "connection" ? viewed : kind));
   return renderToStaticMarkup(
@@ -133,7 +137,7 @@ function healthOf(markup: string): string | undefined {
 }
 
 describe("Connection page", () => {
-  it("shows whom the Connection belongs to and that its operator sets it up, with nothing to edit", () => {
+  it("shows whom a release Connection belongs to and that its operator sets it up, with nothing to edit", () => {
     const markup = renderPage();
 
     expect(markup).toContain(">Sample business</h1>");
@@ -143,19 +147,21 @@ describe("Connection page", () => {
     expect(markup.match(/>sample-business<\/code>/gu)).toHaveLength(1);
     expect(markup).toContain(">Instance<");
     expect(markup).toContain(
-      "The operator of this instance sets up its connections. They cannot be changed here."
+      "This connection is defined in the release config. The operator changes it there; it cannot be changed here."
     );
     // Where it comes from is a sentence at the top of the page and no chip.
     expect(markup).not.toContain("Defined in release config");
     expect(markup).toContain("Enabled");
     expect(markup).toContain('aria-label="Back to Connections"');
-    // Nothing on the page writes: no field, no History, no menu, no save. The one select is the
-    // index of the sections on a narrow page.
-    for (const control of ["<input", "<textarea", ">History<", "More actions", "Save"]) {
+    // Nothing on the page writes: no field, no menu with Delete, no save. Its history is read,
+    // and a reader who may create one starts a copy of it.
+    for (const control of ["<input", "<textarea", "More actions", "Save", ">Edit<", ">Accept<"]) {
       expect(markup, control).not.toContain(control);
     }
+    expect(markup).toContain(">History<");
+    expect(markup).toContain(">Copy to edit<");
     expect(renderPage({ locale: "de" })).toContain(
-      "Der Betreiber dieser Instanz richtet ihre Verbindungen ein. Hier lassen sie sich nicht ändern."
+      "Diese Verbindung ist in der Release-Konfiguration festgelegt. Der Betreiber ändert sie dort; hier lässt sie sich nicht ändern."
     );
     expect(renderPage({ asset: connectionAsset("ledger", { origin: "runtime" }) })).not.toContain(
       "data-build-read-only"
@@ -580,6 +586,52 @@ describe("Connection page", () => {
     expect(markup).toContain("Nobody was given this Connection by itself.");
     expect(renderPage({ holders: { status: "ready", holders: [] }, locale: "de" })).toContain(
       "Wer sie verwenden darf"
+    );
+  });
+  it("lets a writer change a Connection made on the instance: settings, key and tools", () => {
+    const runtime = connectionAsset("ledger", { origin: "runtime" });
+    const detail: Partial<ConnectionDetail> = {
+      health: "needs_configuration",
+      secret: { state: "not_set" },
+      discovered: [
+        {
+          name: "list_invoices",
+          description: "Lists the invoices of one customer.",
+          proposedEffect: "reading",
+          fingerprint: "a".repeat(64)
+        }
+      ]
+    };
+    const markup = renderPage({ asset: runtime, detail });
+    expect(markup).not.toContain("data-build-read-only");
+    expect(markup).toContain(">Edit<");
+    expect(markup).toContain(">Enter the key<");
+    // The next step is the editor's, not the operator's.
+    expect(markup).toContain("Enter the key under Credential. Then test again.");
+    expect(markup).not.toContain("The operator supplies the credential");
+    // A discovered tool waits to be accepted, with its effect proposed and agents allowed.
+    expect(markup).toContain('data-connection-discovered="list_invoices"');
+    expect(markup).toContain('data-connection-accept="list_invoices"');
+    expect(markup).toContain("The server says this tool only reads.");
+    // An accepted operation can be taken off; the menu holds Delete.
+    expect(markup).toContain('data-connection-remove="revenue_by_month"');
+    expect(markup).toContain('aria-label="More actions"');
+    // Nothing of the key stands on the page, and no field is filled from one.
+    expect(markup).not.toContain('type="password"');
+    expect(markup).not.toContain(FIXTURE_SECRET_HANDLE);
+
+    // A reader who may not write sees the page without a control that changes it.
+    const reader = renderPage({ asset: runtime, detail, canWrite: false });
+    for (const control of [
+      ">Edit<",
+      ">Enter the key<",
+      "data-connection-accept",
+      "data-connection-remove"
+    ]) {
+      expect(reader, control).not.toContain(control);
+    }
+    expect(renderPage({ asset: runtime, detail, locale: "de" })).toContain(
+      "Gib den Schlüssel unter Zugangsdaten ein. Teste danach erneut."
     );
   });
 });

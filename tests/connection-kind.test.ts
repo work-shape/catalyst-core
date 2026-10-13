@@ -17,15 +17,18 @@ import {
   connection,
   fixtureConnectorType,
   fixtureConnectorTypes,
-  setupConnectionInstance
+  setupConnectionInstance,
+  type ConnectionInstance
 } from "./support/connections";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, getTestConfig } from "./support/test-instance";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 // The Connection kind: what its definition may hold, that a secret has no place in it, that
-// no asset operation writes one before runtime authoring, and that the kind does not exist
-// while its module is off.
+// the asset operations write a Connection made on the instance and never one of release
+// config, and that the kind does not exist while its module is off.
+
+type ConnectionInstanceStores = ConnectionInstance["stores"];
 
 /** A text that stands for a credential. No answer, row or issue below may repeat it. */
 const SECRET = "sk-live-9f8e7d6c5b4a";
@@ -359,68 +362,72 @@ describe("a Connection through the asset operations", () => {
     params: { kind: "connection", name },
     payload: { config: connection(name, overrides) }
   });
-  const authoringRefused = {
-    status: 422,
-    code: "VALIDATION_FAILED",
-    details: { reason: "connection_runtime_authoring_unavailable" }
-  };
+  const stored = async (t: { stores: ConnectionInstanceStores }, name: string) =>
+    (await t.stores.configAssets.getConfigAsset({ clientInstanceId, kind: "connection", name }))
+      ?.config;
 
-  it("refuses an administrator's put, and stores nothing", async () => {
+  it("creates a Connection of the instance: origin, owner and handle are the server's", async () => {
     const t = await setupConnectionInstance();
-    const refused = await t.expectRefused(
-      t.admin.id,
-      "assets.put",
-      put("outside"),
-      authoringRefused
-    );
-    expect(refused.message).toMatch(/^connection_runtime_authoring_unavailable: /u);
-    // A superadmin is refused the same: the refusal is no missing right.
-    await t.expectRefused(t.root.id, "assets.put", put("outside"), authoringRefused);
-    expect(
-      await t.stores.configAssets.getConfigAsset({
-        clientInstanceId,
-        kind: "connection",
-        name: "outside"
-      })
-    ).toBeUndefined();
+    // What the caller claims of origin, owner and handle is not what is stored.
+    await t.expectOk(t.admin.id, "assets.put", put("made-here", { ownerPrincipalId: "someone" }));
+    const created = await stored(t, "made-here");
+    expect(created).toMatchObject({
+      origin: "runtime",
+      ownerPrincipalId: t.admin.id,
+      credentialMode: "shared"
+    });
+    expect(created?.secretHandle).toMatch(/^secret_/u);
+    expect(created?.secretHandle).not.toBe(FIXTURE_SECRET_HANDLE);
+
+    // A later write keeps the owner and the handle, whoever writes and whatever is sent.
+    await t.expectOk(t.root.id, "assets.put", put("made-here", { enabled: false }));
+    const changed = await stored(t, "made-here");
+    expect(changed).toMatchObject({ enabled: false, ownerPrincipalId: t.admin.id });
+    expect(changed?.secretHandle).toBe(created?.secretHandle);
+
+    // Without a credential there is no handle.
+    await t.expectOk(t.admin.id, "assets.put", put("made-here", { authScheme: "none" }));
+    expect(await stored(t, "made-here")).not.toHaveProperty("secretHandle");
   });
 
-  it("refuses every write of a stored Connection: put, revert, delete and a batch", async () => {
+  it("refuses every write of a release Connection, and takes put, revert and delete of a runtime one", async () => {
     const t = await setupConnectionInstance();
-    // One that release config defines, and one as a later runtime flow will store it.
     await t.seed("outside");
     await t.seed("made-here", { origin: "runtime" });
     const readOnly = { status: 403, code: "FORBIDDEN", details: { reason: "read_only_origin" } };
-    for (const [name, refused] of [
-      ["outside", readOnly],
-      ["made-here", authoringRefused]
-    ] as const) {
-      const address = { params: { kind: "connection", name } };
-      const origin = name === "outside" ? "release" : "runtime";
-      // A put that changes it, and one that leaves it as it is stored.
-      await t.expectRefused(
-        t.admin.id,
-        "assets.put",
-        put(name, { origin, enabled: false }),
-        refused
-      );
-      await t.expectRefused(t.admin.id, "assets.put", put(name, { origin }), refused);
-      await t.expectRefused(
-        t.admin.id,
-        "assets.revert",
-        { ...address, payload: { revision: 1, expectedRevision: 1 } },
-        refused
-      );
-      await t.expectRefused(
-        t.admin.id,
-        "assets.delete",
-        { ...address, payload: { expectedRevision: 1 } },
-        refused
-      );
-      // A superadmin is refused the same: neither refusal is a missing right.
-      await t.expectRefused(t.root.id, "assets.put", put(name, { origin }), refused);
-    }
-    // A batch of a Namespace holder, and a release, which carries agents and skills only.
+    const address = (name: string) => ({ params: { kind: "connection", name } });
+    // A put that changes it, and one that leaves it as it is stored.
+    await t.expectRefused(t.admin.id, "assets.put", put("outside", { enabled: false }), readOnly);
+    await t.expectRefused(t.admin.id, "assets.put", put("outside"), readOnly);
+    await t.expectRefused(
+      t.admin.id,
+      "assets.revert",
+      { ...address("outside"), payload: { revision: 1, expectedRevision: 1 } },
+      readOnly
+    );
+    await t.expectRefused(
+      t.admin.id,
+      "assets.delete",
+      { ...address("outside"), payload: { expectedRevision: 1 } },
+      readOnly
+    );
+    // A superadmin is refused the same: the refusal is no missing right.
+    await t.expectRefused(t.root.id, "assets.put", put("outside"), readOnly);
+
+    await t.expectOk(t.admin.id, "assets.put", put("made-here", { enabled: false }));
+    await t.expectOk(t.admin.id, "assets.revert", {
+      ...address("made-here"),
+      payload: { revision: 1, expectedRevision: 2 }
+    });
+    expect(await stored(t, "made-here")).toMatchObject({ enabled: true, origin: "runtime" });
+    await t.expectOk(t.admin.id, "assets.delete", {
+      ...address("made-here"),
+      payload: { expectedRevision: 3 }
+    });
+    expect(await stored(t, "made-here")).toBeNull();
+
+    // A batch of a Namespace holder carries no Connection, and a release carries agents and
+    // skills only.
     await t.createNamespace("kai-");
     const batch = await t.call(t.admin.id, "assets.sync", {
       payload: {
@@ -429,22 +436,44 @@ describe("a Connection through the asset operations", () => {
       }
     });
     expect(batch.statusCode).toBeGreaterThanOrEqual(400);
-    expect(JSON.stringify(batch.json())).toContain("connection_runtime_authoring_unavailable");
+    expect(JSON.stringify(batch.json())).toContain("connection_batch_unavailable");
     const release = await t.instance.call("assets.sync", {
       headers: { "x-test-service": "release" },
       payload: { items: [{ type: "put", kind: "connection", config: connection("released") }] }
     });
     expect(release.statusCode).toBeGreaterThanOrEqual(400);
     expect(JSON.stringify(release.json())).toContain("is not part of a release");
+    expect(await stored(t, "kai-outside")).toBeUndefined();
+    expect(await stored(t, "released")).toBeUndefined();
+  });
 
-    const stored = await t.stores.configAssets.listActiveConfigAssets({
+  it("refuses the delete of a Connection an agent carries a tool of, and says how many", async () => {
+    const t = await setupConnectionInstance();
+    await t.seed("made-here", { origin: "runtime" });
+    await applyAtCurrentRevisions(t.stores.configAssets, {
       clientInstanceId,
-      kind: "connection"
+      mutations: [
+        {
+          type: "upsert",
+          kind: "agent",
+          name: "helper",
+          config: { ...agent("helper"), toolNames: ["connection.made-here.echo"] }
+        }
+      ]
     });
-    expect(stored.map((asset) => [asset.name, asset.revision]).sort()).toEqual([
-      ["made-here", 1],
-      ["outside", 1]
-    ]);
+    const refused = await t.expectRefused(
+      t.admin.id,
+      "assets.delete",
+      { params: { kind: "connection", name: "made-here" }, payload: { expectedRevision: 1 } },
+      {
+        status: 409,
+        code: "CONFLICT",
+        details: { reason: "connection_in_use", agentCount: 1 }
+      }
+    );
+    // The agent's name is not told: the caller may not read it.
+    expect(refused.message).not.toContain("helper");
+    expect(await stored(t, "made-here")).toMatchObject({ origin: "runtime" });
   });
 
   it("says in validate what a put would be refused for", async () => {
@@ -477,10 +506,8 @@ describe("a Connection through the asset operations", () => {
     expect((await validate({ authScheme: "oauth" })).issues).toMatchObject([
       { path: ["authScheme"] }
     ]);
-    // A definition nothing is wrong with is still no definition a put would take.
-    const sound = await validate({});
-    expect(sound.valid).toBe(false);
-    expect(sound.issues[0]?.message).toMatch(/^connection_runtime_authoring_unavailable: /u);
+    // A definition nothing is wrong with is one a put takes, whatever origin it claims.
+    expect(await validate({})).toEqual({ valid: true, issues: [] });
   });
 
   it("lists and reads a seeded Connection with its handle and no secret", async () => {

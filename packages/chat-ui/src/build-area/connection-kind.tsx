@@ -1,32 +1,44 @@
 import { Cable } from "lucide-react";
 import { Badge, Chip, ConnectionIcon } from "@vivd-catalyst/ui";
 import { connectionCategory } from "../connection-facts";
-import type { BuildAssetViewProps, BuildListedKind } from "./build-asset-kind";
-import { ConnectionPage } from "./connection-page";
-import { useConnectionSource } from "./connection-source";
+import type { BuildAsset, BuildAssetKind } from "./build-asset-kind";
+import { ConnectionAssetEditor } from "./connection-editor";
 import { CONNECTIONS_BUILD_PATH } from "./connection-tools";
 
-/** The Connection page on the instance's own answers. */
-function ConnectionAssetPage(frame: BuildAssetViewProps) {
-  return <ConnectionPage {...frame} source={useConnectionSource()} />;
+/**
+ * The name of a Connection that release config defines. Such a Connection is changed there
+ * alone, so its page is read-only and offers a copy, as a shipped asset's does.
+ */
+function releaseConnectionTitle(asset: Pick<BuildAsset, "config" | "name">): string | undefined {
+  const { origin, displayName } = asset.config;
+  if (origin !== "release") return undefined;
+  return typeof displayName === "string" && displayName !== "" ? displayName : asset.name;
 }
 
 /**
- * Connections in Build: a list, and a page that shows one Connection. A Connection is written
- * by the release so far, so the kind has no editor and no button that starts one. A row says what the instance tells of the
- * Connection without its definition: its icon, what it is for, its connector type, whom it
- * belongs to and whether it is on. Where it comes from is not a chip: every Connection comes from release config so far.
- * No row holds a setting or a reference to a credential.
+ * Connections in Build: a list, "New connection" with the form of a remote MCP server, and
+ * the page of one Connection. A row says what the instance tells of the Connection without
+ * its definition: its icon, what it is for, its connector type, whom it belongs to and
+ * whether it is on. No row holds a setting or a reference to a credential.
  */
-export const connectionKind: BuildListedKind = {
+export const connectionKind: BuildAssetKind = {
   kind: "connection",
   path: CONNECTIONS_BUILD_PATH,
   label: "connections.kind",
   description: "connections.description",
   searchLabel: "connections.search",
   emptyText: "connections.empty",
+  emptyReadOnlyText: "connections.emptyReadOnly",
+  newLabel: "connections.new",
+  titleLabel: "connections.titleLabel",
+  deleteTitle: "connections.deleteTitle",
+  deleteDescription: "connections.deleteDescription",
+  missingText: "connections.missing",
   icon: Cable,
-  view: { Page: ConnectionAssetPage, missingText: "connections.missing" },
+  shippedTitle: releaseConnectionTitle,
+  // A batch of the CLI holds no Connection yet.
+  withoutCli: true,
+  Editor: ConnectionAssetEditor,
   // A row shows the icon of the system behind the Connection, on its tile, and what the
   // Connection is for in words. Its id stands on its page.
   row: (asset) => {

@@ -1,5 +1,5 @@
 import { Bot, KeyRound } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   Avatar,
   Badge,
@@ -20,17 +20,20 @@ import {
   SkeletonList,
   type BadgeTone
 } from "@vivd-catalyst/ui";
-import type {
-  ConnectionDetail,
-  ConnectionOperationDetail,
-  ConnectionTestResult
-} from "@vivd-catalyst/api-client";
+import type { ConnectionDetail, ConnectionTestResult } from "@vivd-catalyst/api-client";
 import { formatDateTime } from "../control-plane/locale-format";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { agentKind } from "./agent-kind";
 import { AssetIdentifier, usePageShown } from "./asset-editor-shell";
-import type { BuildAssetViewProps } from "./build-asset-kind";
+import type { BuildAssetEditorProps, BuildAssetViewProps } from "./build-asset-kind";
 import { useBuildNavigation } from "./build-route";
+import {
+  ConnectionSecretEditor,
+  ConnectionSettingsEditor,
+  DiscoveredTools
+} from "./connection-editing";
+import { waitsForDiscovery, type DiscoveryWait } from "./connection-form-model";
+import { ConnectionOperations, EditableOperations } from "./connection-operations";
 import type {
   ConnectionHoldersRead,
   ConnectionSource,
@@ -51,7 +54,14 @@ type HealthView =
 
 const HEALTH_VIEWS: Record<
   HealthView,
-  { tone: BadgeTone; label: TranslationKey; text: TranslationKey; next?: TranslationKey }
+  {
+    tone: BadgeTone;
+    label: TranslationKey;
+    text: TranslationKey;
+    next?: TranslationKey;
+    /** The next step on a Connection made on the instance, where its editor takes it. */
+    nextRuntime?: TranslationKey;
+  }
 > = {
   testing: {
     tone: "info",
@@ -63,7 +73,8 @@ const HEALTH_VIEWS: Record<
     tone: "danger",
     label: "connections.healthUnauthorized",
     text: "connections.healthUnauthorizedText",
-    next: "connections.healthUnauthorizedNext"
+    next: "connections.healthUnauthorizedNext",
+    nextRuntime: "connections.healthUnauthorizedNextRuntime"
   },
   network_denied: {
     tone: "danger",
@@ -75,7 +86,8 @@ const HEALTH_VIEWS: Record<
     tone: "danger",
     label: "connections.healthUnavailable",
     text: "connections.healthUnavailableText",
-    next: "connections.healthUnavailableNext"
+    next: "connections.healthUnavailableNext",
+    nextRuntime: "connections.healthUnavailableNextRuntime"
   },
   failed: {
     tone: "danger",
@@ -87,13 +99,15 @@ const HEALTH_VIEWS: Record<
     tone: "warning",
     label: "connections.healthNotConfigured",
     text: "connections.healthNotConfiguredText",
-    next: "connections.healthNotConfiguredNext"
+    next: "connections.healthNotConfiguredNext",
+    nextRuntime: "connections.healthNotConfiguredNextRuntime"
   },
   secret_unreadable: {
     tone: "danger",
     label: "connections.healthSecretUnreadable",
     text: "connections.healthSecretUnreadableText",
-    next: "connections.healthSecretUnreadableNext"
+    next: "connections.healthSecretUnreadableNext",
+    nextRuntime: "connections.healthSecretUnreadableNextRuntime"
   },
   never_tested: {
     tone: "neutral",
@@ -161,39 +175,6 @@ function healthOf(detail: ConnectionDetail, run: ConnectionTestRun): HealthView 
     : tested;
 }
 
-const OPERATION_STATUS: Record<
-  ConnectionOperationDetail["status"],
-  { tone: BadgeTone; label: TranslationKey; text?: TranslationKey }
-> = {
-  ready: { tone: "success", label: "connections.statusReady" },
-  awaiting_discovery: {
-    tone: "neutral",
-    label: "connections.statusAwaitingDiscovery",
-    text: "connections.statusAwaitingDiscoveryText"
-  },
-  needs_review: {
-    tone: "warning",
-    label: "connections.statusNeedsReview",
-    text: "connections.statusNeedsReviewText"
-  },
-  unknown: {
-    tone: "danger",
-    label: "connections.statusUnknown",
-    text: "connections.statusUnknownText"
-  },
-  disabled: {
-    tone: "neutral",
-    label: "connections.statusDisabled",
-    text: "connections.statusDisabledText"
-  }
-};
-
-const EXPOSURE_LABELS: Record<ConnectionOperationDetail["exposure"][number], TranslationKey> = {
-  agent: "connections.exposureAgent",
-  bridge: "connections.exposureBridge",
-  workflow: "connections.exposureWorkflow"
-};
-
 /** A member of the definition that is a text, or nothing. */
 function textOf(config: Record<string, unknown>, key: string): string | undefined {
   const value = config[key];
@@ -209,26 +190,46 @@ function settingsOf(config: Record<string, unknown>): [string, unknown][] {
 }
 
 /**
- * The page of one Connection. It shows and changes nothing: the header with whom the
- * Connection belongs to, that it comes from the release config, its status with the test, its
- * settings, its operations and the agents that carry them. Of the credential it shows whether
- * it is there. It reads the named members of the definition only, so a reference to the
- * credential in the revision is never on the page.
+ * The page of one Connection: the header with whom the Connection belongs to, where it comes
+ * from, its status with the test, its settings, its operations and the agents that carry
+ * them. Of the credential it shows whether it is there. It reads the named members of the
+ * definition only, so a reference to the credential in the revision is never on the page.
+ *
+ * With `editing` the reader changes a Connection made on the instance here: its settings, its
+ * key and the tools it accepts. After each change the page waits a while for the discovery
+ * the instance starts, so the tools of the server show as they are read.
  */
 export function ConnectionPage({
   page,
   back,
   asset,
-  source
-}: BuildAssetViewProps & { source: ConnectionSource }) {
+  actions,
+  notice,
+  source,
+  editing
+}: BuildAssetViewProps & {
+  /** The frame's actions for the head: History, and Delete where the reader may delete. */
+  actions?: ReactNode;
+  /** What the frame says above the content, such as a conflict. */
+  notice?: ReactNode;
+  source: ConnectionSource;
+  editing?: BuildAssetEditorProps;
+}) {
   const { t } = useTranslation();
   usePageShown(page, "asset");
-  const read = source.useDetail(asset.name);
+  // A Connection made here and not yet read waits for its first discovery.
+  const [wait, setWait] = useState<DiscoveryWait | undefined>(() =>
+    editing ? { since: Date.now() } : undefined
+  );
+  const read = source.useDetail(asset.name, wait);
   const holders = source.useHolders(asset.id);
   const detail = read.status === "ready" ? read.detail : undefined;
+  const waiting =
+    wait !== undefined && detail !== undefined && waitsForDiscovery(wait, detail, Date.now());
+  const written = () => setWait({ since: Date.now(), discoveredAt: detail?.discoveredAt });
   const { config } = asset;
+  const runtime = config.origin !== "release";
   const title = textOf(config, "displayName") ?? asset.name;
-  const description = textOf(config, "description");
   const enabled = config.enabled !== false;
   const sections: {
     id: string;
@@ -263,8 +264,19 @@ export function ConnectionPage({
               name={asset.name}
               detail={read.detail}
               needsCredential={textOf(config, "authScheme") !== AUTH_SCHEME_NONE}
+              runtime={runtime}
               source={source}
               mayTest={source.mayTest(asset)}
+              credentialEditor={
+                editing ? (
+                  <ConnectionSecretEditor
+                    name={asset.name}
+                    secret={read.detail.secret}
+                    source={source}
+                    written={written}
+                  />
+                ) : undefined
+              }
             />
           )}
         </>
@@ -274,27 +286,15 @@ export function ConnectionPage({
       id: "settings",
       label: t("connections.settingsTitle"),
       description: t("connections.settingsDescription"),
-      body: (
-        <KeyValueList>
-          <KeyValue label={t("connections.connectorType")}>
-            <code className="font-mono text-code">{textOf(config, "connectorType")}</code>
-          </KeyValue>
-          <KeyValue label={t("connections.authScheme")}>
-            <code className="font-mono text-code">{textOf(config, "authScheme")}</code>
-          </KeyValue>
-          {description ? (
-            <KeyValue label={t("connections.descriptionLabel")} foldable>
-              {description}
-            </KeyValue>
-          ) : null}
-          {settingsOf(config).map(([key, value]) => (
-            <KeyValue key={key} label={<code className="font-mono">{key}</code>}>
-              <code className="font-mono text-code">
-                {typeof value === "string" ? value : JSON.stringify(value)}
-              </code>
-            </KeyValue>
-          ))}
-        </KeyValueList>
+      body: editing ? (
+        <ConnectionSettingsEditor
+          asset={asset}
+          frame={editing}
+          written={written}
+          view={<ConnectionSettings config={config} />}
+        />
+      ) : (
+        <ConnectionSettings config={config} />
       )
     },
     ...(read.status === "failed"
@@ -306,11 +306,41 @@ export function ConnectionPage({
             description: t("connections.operationsDescription"),
             count: detail?.operations.length,
             body: detail ? (
-              <ConnectionOperations operations={detail.operations} />
+              editing ? (
+                <EditableOperations
+                  asset={asset}
+                  frame={editing}
+                  operations={detail.operations}
+                  written={written}
+                />
+              ) : (
+                <ConnectionOperations operations={detail.operations} />
+              )
             ) : (
               <SkeletonList rows={3} />
             )
           },
+          ...(editing
+            ? [
+                {
+                  id: "discovered",
+                  label: t("connections.discoveredTitle"),
+                  description: t("connections.discoveredDescription"),
+                  count: detail?.discovered.length,
+                  body: (
+                    <DiscoveredTools
+                      name={asset.name}
+                      asset={asset}
+                      frame={editing}
+                      detail={detail}
+                      waiting={waiting}
+                      source={source}
+                      written={written}
+                    />
+                  )
+                }
+              ]
+            : []),
           {
             id: "agents",
             label: t("connections.agentsTitle"),
@@ -356,6 +386,7 @@ export function ConnectionPage({
               {t(enabled ? "connections.enabled" : "connections.disabled")}
             </Badge>
           }
+          secondaryActions={actions}
         />
       }
       outline={
@@ -368,9 +399,10 @@ export function ConnectionPage({
       {page.above}
       {/* The first line of the content starts where the outline does. */}
       <div className="grid min-w-0 content-start pt-5">
+        {notice ? <div className="mb-4 grid gap-2">{notice}</div> : null}
         {config.origin === "release" ? (
           <Banner layout="line" className="mb-4" data-build-read-only="">
-            {t("connections.description")}
+            {t("connections.releaseNotice")}
           </Banner>
         ) : null}
         {sections.map((section) => (
@@ -395,15 +427,21 @@ function ConnectionStatus({
   name,
   detail,
   needsCredential,
+  runtime,
   source,
-  mayTest
+  mayTest,
+  credentialEditor
 }: {
   name: string;
   detail: ConnectionDetail;
   /** The Connection's auth scheme sends a credential. With `none` there is none to set. */
   needsCredential: boolean;
+  /** Made on the instance: the next step is taken on this page, not by the operator. */
+  runtime: boolean;
   source: ConnectionSource;
   mayTest: boolean;
+  /** Where the reader enters the credential, for a reader who may. */
+  credentialEditor?: ReactNode;
 }) {
   const { locale, t } = useTranslation();
   const { run, start } = source.useTest(name);
@@ -428,7 +466,11 @@ function ConnectionStatus({
             {t(health.label)}
           </Badge>
           <p className="text-body">{t(health.text)}</p>
-          {health.next ? <p className="text-body">{t(health.next)}</p> : null}
+          {health.next ? (
+            <p className="text-body">
+              {t(runtime && health.nextRuntime ? health.nextRuntime : health.next)}
+            </p>
+          ) : null}
           {testedAt ? (
             <p className="text-caption text-muted-foreground">
               {t("connections.lastTested", { time: formatDateTime(testedAt, locale) })}
@@ -483,6 +525,7 @@ function ConnectionStatus({
                 <span className="text-caption text-muted-foreground">
                   {t("connections.credentialNeverShown")}
                 </span>
+                {credentialEditor}
               </>
             ) : (
               <>
@@ -506,83 +549,31 @@ function ConnectionStatus({
   );
 }
 
-/**
- * An operation as a person reads it: its name in sentence case, such as "List customers" for
- * `list_customers`. The outside system names operations; it gives them no title for people.
- */
-function operationTitle(name: string): string {
-  const words = name
-    .replace(/([a-z0-9])([A-Z])/gu, "$1 $2")
-    .replace(/[_.-]+/gu, " ")
-    .trim()
-    .toLowerCase();
-  return words === "" ? name : `${words.slice(0, 1).toUpperCase()}${words.slice(1)}`;
-}
-
-function ConnectionOperations({ operations }: { operations: ConnectionOperationDetail[] }) {
+/** What the definition says of how the Connection reaches its system. No setting is a credential. */
+function ConnectionSettings({ config }: { config: Record<string, unknown> }) {
   const { t } = useTranslation();
-  if (operations.length === 0) {
-    return <EmptyState layout="inline">{t("connections.operationsEmpty")}</EmptyState>;
-  }
+  const description = textOf(config, "description");
   return (
-    <List aria-label={t("connections.operationsTitle")}>
-      {operations.map((operation) => {
-        // An operation that is switched off is disabled, whatever the catalog says of it.
-        const status = OPERATION_STATUS[operation.enabled ? operation.status : "disabled"];
-        return (
-          <li
-            key={operation.name}
-            data-connection-operation={operation.name}
-            className="grid min-w-0 gap-1.5 border-b py-3 first:pt-0 last:border-b-0 last:pb-0"
-          >
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <span className="min-w-0 text-label break-words">
-                {operationTitle(operation.name)}
-              </span>
-              <Badge tone={operation.effect === "changing" ? "warning" : "neutral"}>
-                {t(
-                  operation.effect === "changing"
-                    ? "connections.effectChanging"
-                    : "connections.effectReading"
-                )}
-              </Badge>
-              <Badge tone={status.tone} dot className="ml-auto">
-                {t(status.label)}
-              </Badge>
-            </div>
-            {operation.description ? (
-              <p className="line-clamp-3 text-body whitespace-pre-line">{operation.description}</p>
-            ) : null}
-            <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-caption text-muted-foreground">
-              {operation.exposure.length === 0 ? (
-                t("connections.exposureNone")
-              ) : (
-                <>
-                  <span>{t("connections.operationExposure")}</span>
-                  {operation.exposure.map((exposure) => (
-                    <Chip key={exposure} size="sm">
-                      {t(EXPOSURE_LABELS[exposure])}
-                    </Chip>
-                  ))}
-                </>
-              )}
-            </div>
-            {status.text ? (
-              <p className="text-caption text-muted-foreground">
-                {t(status.text)}
-                {operation.status === "needs_review" && operation.discoveredFingerprint ? (
-                  <>
-                    {" "}
-                    {t("connections.statusNeedsReviewFingerprint")}{" "}
-                    <code className="font-mono break-all">{operation.discoveredFingerprint}</code>
-                  </>
-                ) : null}
-              </p>
-            ) : null}
-          </li>
-        );
-      })}
-    </List>
+    <KeyValueList>
+      <KeyValue label={t("connections.connectorType")}>
+        <code className="font-mono text-code">{textOf(config, "connectorType")}</code>
+      </KeyValue>
+      <KeyValue label={t("connections.authScheme")}>
+        <code className="font-mono text-code">{textOf(config, "authScheme")}</code>
+      </KeyValue>
+      {description ? (
+        <KeyValue label={t("connections.descriptionLabel")} foldable>
+          {description}
+        </KeyValue>
+      ) : null}
+      {settingsOf(config).map(([key, value]) => (
+        <KeyValue key={key} label={<code className="font-mono">{key}</code>}>
+          <code className="font-mono text-code">
+            {typeof value === "string" ? value : JSON.stringify(value)}
+          </code>
+        </KeyValue>
+      ))}
+    </KeyValueList>
   );
 }
 

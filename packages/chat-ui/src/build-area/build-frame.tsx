@@ -439,7 +439,7 @@ function BuildList({
         description={entry.description ? t(entry.description) : undefined}
         primaryAction={newButton}
         overflow={
-          editable ? (
+          editable && !editable.withoutCli ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <IconButton label={t("build.listActions")} variant="outline">

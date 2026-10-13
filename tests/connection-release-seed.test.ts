@@ -523,20 +523,34 @@ describe("a seeded Connection is read-only on the instance", () => {
     expect(await readAssets()).toMatchObject([{ name: "outside", deleted: false }]);
   });
 
-  it("still refuses a new Connection as runtime authoring, with the type registered", async () => {
+  it("takes a new Connection on the instance only where the egress list names its host", async () => {
     const w = world();
     const instance = await w.start();
-    const response = await instance.call("assets.put", {
-      params: { kind: "connection", name: "made-here" },
-      payload: {
-        config: connection("made-here", { connectorType: "test", origin: "runtime" }),
-        expectedRevision: null
-      }
-    });
-    expect(errorSchema.parse(response.json()).error.details).toEqual({
-      reason: "connection_runtime_authoring_unavailable"
+    const create = (url: string) =>
+      instance.call("assets.put", {
+        params: { kind: "connection", name: "made-here" },
+        payload: {
+          config: connection("made-here", { connectorType: "test", settings: { url } }),
+          expectedRevision: null
+        }
+      });
+    // The list is asked by host and port, without a lookup of the name.
+    const refused = errorSchema.parse((await create("https://outside.example.test/mcp")).json());
+    expect(refused.error.details).toEqual({
+      issues: [
+        {
+          message:
+            "egress_denied: the address outside.example.test:443 is not on this instance's egress list. An operator adds it under 'egress.allow' in release config",
+          path: ["settings"]
+        }
+      ]
     });
     expect(await readAssets()).toHaveLength(1);
+    expect((await create(`https://${OUTSIDE_HOST}/mcp`)).statusCode).toBe(200);
+    expect(await readAssets()).toMatchObject([
+      { name: "made-here", deleted: false },
+      { name: "outside", deleted: false }
+    ]);
   });
 });
 

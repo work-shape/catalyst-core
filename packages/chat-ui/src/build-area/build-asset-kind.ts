@@ -113,6 +113,8 @@ export interface BuildAssetKind extends BuildKindBase {
    * it: a person who may create one of the kind copies it and edits the copy.
    */
   shippedTitle?(asset: BuildAsset): string | undefined;
+  /** The CLI does not write the kind yet, so its list offers no CLI entry. */
+  withoutCli?: true;
 }
 
 /** What the frame hands a page that shows one asset and changes nothing of it. */

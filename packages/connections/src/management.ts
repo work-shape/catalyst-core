@@ -1,7 +1,9 @@
 import {
   AppError,
   CONNECTION_ASSET_KIND,
+  CONNECTION_REFUSALS,
   CREDENTIAL_REFUSALS,
+  SECRET_WRITE_CONFLICT,
   EGRESS_DENIED,
   SHARED_CREDENTIAL_SUBJECT,
   connectionCallError,
@@ -26,7 +28,8 @@ import {
   type ConnectionOperationSourceDeps,
   type StoredConnection
 } from "./connection-reads";
-import { openConnectorContext } from "./connector-context";
+import { AUTH_SCHEME_NONE, openConnectorContext } from "./connector-context";
+import { createSecretStore, type SecretKeyring } from "./secret-store";
 
 // What the Connection's page and the agent editor read beyond the asset, and the test of a
 // Connection. Nothing here answers a secret, a handle of one or data of the outside system.
@@ -47,6 +50,14 @@ export interface ConnectionOperationView {
   schemaRefusal?: string;
 }
 
+/** A tool the last discovery read that the Connection does not accept. */
+export interface ConnectionDiscoveredToolView {
+  name: string;
+  description?: string;
+  proposedEffect: ConnectionOperationEffect;
+  fingerprint: string;
+}
+
 export interface ConnectionView {
   name: string;
   health: ConnectionHealth;
@@ -55,6 +66,7 @@ export interface ConnectionView {
   secret: { state: SecretState; version?: number };
   sharedCredential: boolean;
   operations: ConnectionOperationView[];
+  discovered: ConnectionDiscoveredToolView[];
   usedBy: { agentName: string; title: string; toolNames: string[] }[];
   discoveredAt?: string;
 }
@@ -96,6 +108,15 @@ export interface ConnectionManagement {
   test(name: string, signal?: AbortSignal): Promise<ConnectionTestView>;
   /** The tools an agent can carry, of the Connections `readable` admits. */
   listTools(readable: (resource: AccessResource) => boolean): Promise<ConnectionToolsView>;
+  /**
+   * Stores the shared secret of a Connection made on the instance, as the next version. The
+   * value is written once and never read back. `expectedVersion` is the version the writer
+   * saw, `null` for none: another writer's version in between refuses the write.
+   */
+  setSecret(
+    name: string,
+    input: { value: string; expectedVersion: number | null }
+  ): Promise<{ state: "set"; version: number }>;
 }
 
 function resourceOf(connection: StoredConnection): OperationResource {
@@ -109,6 +130,25 @@ function resourceOf(connection: StoredConnection): OperationResource {
 
 function notFound(name: string): AppError {
   return new AppError("NOT_FOUND", `Connection '${name}' does not exist`);
+}
+
+/** What the last discovery read that the accepted list does not name. */
+function discoveredOf(connection: StoredConnection): ConnectionDiscoveredToolView[] {
+  const accepted = new Set(connection.config.operations.map((operation) => operation.name));
+  return (connection.catalog?.entries ?? [])
+    .filter((entry) => !accepted.has(entry.name))
+    .map((entry) => ({
+      name: entry.name,
+      ...(entry.description === ""
+        ? {}
+        : { description: entry.description.slice(0, CONNECTION_DESCRIPTION_MAX_CHARS) }),
+      proposedEffect: entry.proposedEffect,
+      fingerprint: entry.fingerprint
+    }));
+}
+
+function secretWriteRefusal(reason: string, sentence: string): AppError {
+  return new AppError("CONFLICT", `${reason}: ${sentence}`, { reason });
 }
 
 function operationsOf(connection: StoredConnection): ConnectionOperationView[] {
@@ -159,7 +199,11 @@ function healthOfTest(
 }
 
 export function createConnectionManagement(
-  deps: ConnectionOperationSourceDeps & { now?: () => Date }
+  deps: ConnectionOperationSourceDeps & {
+    /** The keys of the Secret Store. Without them no secret is stored. */
+    keyring?: SecretKeyring;
+    now?: () => Date;
+  }
 ): ConnectionManagement {
   const now = deps.now ?? (() => new Date());
 
@@ -200,6 +244,7 @@ export function createConnectionManagement(
         secret: await secretOf(connection),
         sharedCredential: connection.config.credentialMode === "shared",
         operations: operationsOf(connection),
+        discovered: discoveredOf(connection),
         usedBy,
         ...(catalog ? { discoveredAt: catalog.discoveredAt } : {})
       };
@@ -261,6 +306,57 @@ export function createConnectionManagement(
         lastErrorCode: status === "ready" ? null : (reason ?? status)
       });
       return { status, testedAt };
+    },
+
+    async setSecret(name, { value, expectedVersion }) {
+      const connection = await readConnection(deps, name);
+      if (!connection) throw notFound(name);
+      const { config } = connection;
+      if (config.origin === "release") {
+        throw new AppError(
+          "FORBIDDEN",
+          `${CONNECTION_REFUSALS.readOnlyOrigin}: this Connection is defined in release config, and its secret comes from the environment`,
+          { reason: CONNECTION_REFUSALS.readOnlyOrigin }
+        );
+      }
+      if (config.authScheme === AUTH_SCHEME_NONE || config.secretHandle === undefined) {
+        throw secretWriteRefusal(
+          CONNECTION_REFUSALS.takesNoSecret,
+          "the Connection sends no credential. Choose an auth scheme that does first"
+        );
+      }
+      if (!deps.keyring) {
+        throw secretWriteRefusal(
+          CONNECTION_REFUSALS.secretStoreUnavailable,
+          "this instance names no key of the Secret Store. An operator names one under 'secretStore.keys'"
+        );
+      }
+      const binding = { connectionAssetId: connection.assetId, subject: SHARED_CREDENTIAL_SUBJECT };
+      const stored = await deps.stores.connections.findSecret({
+        clientInstanceId: deps.clientInstanceId,
+        binding
+      });
+      if ((stored?.version ?? null) !== expectedVersion) {
+        throw secretWriteRefusal(
+          SECRET_WRITE_CONFLICT,
+          "the secret was changed by somebody else since it was read. Nothing was stored; read the Connection again"
+        );
+      }
+      const written = await createSecretStore({
+        clientInstanceId: deps.clientInstanceId,
+        keyring: deps.keyring,
+        store: deps.stores.connections
+      }).put({ binding, value, source: "runtime", handle: config.secretHandle });
+      if (written.changed) {
+        // What a test found was found with the secret before.
+        await deps.stores.connections.putConnectionState({
+          clientInstanceId: deps.clientInstanceId,
+          connectionAssetId: connection.assetId,
+          health: "unknown",
+          lastErrorCode: null
+        });
+      }
+      return { state: "set", version: written.version };
     },
 
     async listTools(readable) {

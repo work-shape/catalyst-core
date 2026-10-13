@@ -297,7 +297,7 @@ export type {
   ConnectionDiscoveryOutcome,
   ConnectionManagementPort
 } from "./connection-management-port";
-export { enqueueConnectionDiscovery } from "./connection-jobs";
+export { requestConnectionDiscovery } from "./connection-jobs";
 export type { WorkflowListEntry, WorkflowRunsPort } from "./workflow-runs-port";
 export { createWorkflowRoutes } from "./routes/workflow-routes";
 export type { ConfigAssetValidationRefs, WorkflowAssetKind } from "./asset-kinds/shared";

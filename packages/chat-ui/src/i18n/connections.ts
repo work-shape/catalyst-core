@@ -3,7 +3,70 @@ import { defineTranslations } from "./translation-area";
 export const connections = defineTranslations({
   en: {
     "connections.description":
-      "The operator of this instance sets up its connections. They cannot be changed here.",
+      "Connections give agents, apps and workflows access to outside systems. Those from the release config are read-only here.",
+    "connections.releaseNotice":
+      "This connection is defined in the release config. The operator changes it there; it cannot be changed here.",
+    "connections.new": "New connection",
+    "connections.titleLabel": "Name",
+    "connections.deleteTitle": "Delete connection {name}?",
+    "connections.deleteDescription":
+      "Its credential is deleted with it, and nothing can call it afterwards. The account in the outside system stays as it is.",
+    "connections.emptyReadOnly": "No connections yet.",
+    "connections.create": "Create connection",
+    "connections.serverTitle": "Server",
+    "connections.serverDescription":
+      "The remote MCP server this connection reaches. The instance reaches only hosts the operator allowed.",
+    "connections.url": "Server address",
+    "connections.urlHint":
+      "The https address of the server with the path of its MCP endpoint, as its provider gives it.",
+    "connections.authTitle": "Authentication",
+    "connections.authDescription": "How the instance proves itself to the server.",
+    "connections.authNone": "None",
+    "connections.authNoneText": "The server asks for no credential.",
+    "connections.authBearer": "Bearer token",
+    "connections.authBearerText": "The key is sent in the Authorization header.",
+    "connections.authHeader": "Key in a header",
+    "connections.authHeaderText": "The key is sent in a header the server names.",
+    "connections.headerName": "Header name",
+    "connections.headerNameHint": "The header the server reads the key from, such as X-API-Key.",
+    "connections.secret": "Key",
+    "connections.secretHint":
+      "Stored encrypted. Nobody can read it back, you included. To change it, enter a new one.",
+    "connections.secretReplace": "Enter a new key",
+    "connections.secretEnter": "Enter the key",
+    "connections.secretSave": "Save key",
+    "connections.secretSaved": "The key was saved.",
+    "connections.secretFailed": "The key could not be saved.",
+    "connections.secretCancel": "Cancel",
+    "connections.settingsEdit": "Edit",
+    "connections.settingsSave": "Save settings",
+    "connections.settingsCancel": "Cancel",
+    "connections.writeFailed": "The change could not be saved.",
+    "connections.discoveredTitle": "Discovered tools",
+    "connections.discoveredDescription":
+      "Tools the server offers that this connection does not accept. Nobody can call one until it is accepted.",
+    "connections.discoveredEmpty": "The server offers no tool that is not accepted.",
+    "connections.discoveredWaiting": "The instance is reading the tools of the server.",
+    "connections.discoveredNever": "The tools of the server have not been read yet.",
+    "connections.discoveredFailed": "The tools could not be read. Test the connection to see why.",
+    "connections.discoverAgain": "Read tools again",
+    "connections.discoverHeld": "Reading the tools waits for approval in the Inbox.",
+    "connections.discoverFailed": "The tools could not be read again.",
+    "connections.accept": "Accept",
+    "connections.acceptEffect": "What it does",
+    "connections.acceptForAgents": "Agents can use it",
+    "connections.proposedReading": "The server says this tool only reads.",
+    "connections.proposedChanging": "The server does not say this tool only reads.",
+    "connections.removeOperation": "Remove",
+    "connections.acceptNewDescription": "Accept new description",
+    "connections.healthNotConfiguredNextRuntime":
+      "Enter the key under Credential. Then test again.",
+    "connections.healthUnauthorizedNextRuntime":
+      "Enter a new key under Credential. Then test again.",
+    "connections.healthSecretUnreadableNextRuntime":
+      "Enter the key again under Credential. Then test again.",
+    "connections.healthUnavailableNextRuntime":
+      "Check the address under Settings and change it if it is wrong.",
     "connections.disabled": "Disabled",
     "connections.empty": "No connections yet. A connection holds the access to an outside system.",
     "connections.healthFailed": "Failed",
@@ -130,7 +193,73 @@ export const connections = defineTranslations({
   },
   de: {
     "connections.description":
-      "Der Betreiber dieser Instanz richtet ihre Verbindungen ein. Hier lassen sie sich nicht ändern.",
+      "Verbindungen geben Agenten, Apps und Workflows Zugang zu externen Systemen. Die aus der Release-Konfiguration sind hier schreibgeschützt.",
+    "connections.releaseNotice":
+      "Diese Verbindung ist in der Release-Konfiguration festgelegt. Der Betreiber ändert sie dort; hier lässt sie sich nicht ändern.",
+    "connections.new": "Neue Verbindung",
+    "connections.titleLabel": "Name",
+    "connections.deleteTitle": "Verbindung {name} löschen?",
+    "connections.deleteDescription":
+      "Ihre Zugangsdaten werden mit ihr gelöscht, und danach kann nichts sie aufrufen. Das Konto im externen System bleibt, wie es ist.",
+    "connections.emptyReadOnly": "Noch keine Verbindungen.",
+    "connections.create": "Verbindung anlegen",
+    "connections.serverTitle": "Server",
+    "connections.serverDescription":
+      "Der entfernte MCP-Server, den diese Verbindung erreicht. Die Instanz erreicht nur Hosts, die der Betreiber erlaubt hat.",
+    "connections.url": "Serveradresse",
+    "connections.urlHint":
+      "Die https-Adresse des Servers mit dem Pfad seines MCP-Endpunkts, wie sein Anbieter sie angibt.",
+    "connections.authTitle": "Authentifizierung",
+    "connections.authDescription": "Wie sich die Instanz beim Server ausweist.",
+    "connections.authNone": "Keine",
+    "connections.authNoneText": "Der Server verlangt keine Zugangsdaten.",
+    "connections.authBearer": "Bearer-Token",
+    "connections.authBearerText": "Der Schlüssel wird im Authorization-Header gesendet.",
+    "connections.authHeader": "Schlüssel in einem Header",
+    "connections.authHeaderText":
+      "Der Schlüssel wird in einem Header gesendet, den der Server nennt.",
+    "connections.headerName": "Header-Name",
+    "connections.headerNameHint":
+      "Der Header, aus dem der Server den Schlüssel liest, etwa X-API-Key.",
+    "connections.secret": "Schlüssel",
+    "connections.secretHint":
+      "Wird verschlüsselt gespeichert. Niemand kann ihn wieder auslesen, auch du nicht. Zum Ändern gibst du einen neuen ein.",
+    "connections.secretReplace": "Neuen Schlüssel eingeben",
+    "connections.secretEnter": "Schlüssel eingeben",
+    "connections.secretSave": "Schlüssel speichern",
+    "connections.secretSaved": "Der Schlüssel wurde gespeichert.",
+    "connections.secretFailed": "Der Schlüssel konnte nicht gespeichert werden.",
+    "connections.secretCancel": "Abbrechen",
+    "connections.settingsEdit": "Bearbeiten",
+    "connections.settingsSave": "Einstellungen speichern",
+    "connections.settingsCancel": "Abbrechen",
+    "connections.writeFailed": "Die Änderung konnte nicht gespeichert werden.",
+    "connections.discoveredTitle": "Gefundene Tools",
+    "connections.discoveredDescription":
+      "Tools, die der Server anbietet und die diese Verbindung nicht akzeptiert. Niemand kann eines aufrufen, bevor es akzeptiert ist.",
+    "connections.discoveredEmpty": "Der Server bietet kein Tool an, das nicht akzeptiert ist.",
+    "connections.discoveredWaiting": "Die Instanz liest die Tools des Servers.",
+    "connections.discoveredNever": "Die Tools des Servers wurden noch nicht gelesen.",
+    "connections.discoveredFailed":
+      "Die Tools ließen sich nicht lesen. Teste die Verbindung, um den Grund zu sehen.",
+    "connections.discoverAgain": "Tools neu lesen",
+    "connections.discoverHeld": "Das Lesen der Tools wartet auf eine Freigabe im Eingang.",
+    "connections.discoverFailed": "Die Tools konnten nicht neu gelesen werden.",
+    "connections.accept": "Akzeptieren",
+    "connections.acceptEffect": "Was es tut",
+    "connections.acceptForAgents": "Agenten dürfen es nutzen",
+    "connections.proposedReading": "Laut Server liest dieses Tool nur.",
+    "connections.proposedChanging": "Der Server sagt nicht, dass dieses Tool nur liest.",
+    "connections.removeOperation": "Entfernen",
+    "connections.acceptNewDescription": "Neue Beschreibung akzeptieren",
+    "connections.healthNotConfiguredNextRuntime":
+      "Gib den Schlüssel unter Zugangsdaten ein. Teste danach erneut.",
+    "connections.healthUnauthorizedNextRuntime":
+      "Gib unter Zugangsdaten einen neuen Schlüssel ein. Teste danach erneut.",
+    "connections.healthSecretUnreadableNextRuntime":
+      "Gib den Schlüssel unter Zugangsdaten erneut ein. Teste danach erneut.",
+    "connections.healthUnavailableNextRuntime":
+      "Prüfe die Adresse unter Einstellungen und ändere sie, wenn sie falsch ist.",
     "connections.healthFailed": "Fehlgeschlagen",
     "connections.healthFailedText":
       "Der Test ist aus einem Grund fehlgeschlagen, den die Instanz nicht nennt.",

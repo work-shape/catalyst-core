@@ -8,13 +8,13 @@ export type {
   BuildAssetEditorProps,
   BuildAssetKind,
   BuildAssetRow,
-  BuildKind,
-  BuildListedKind
+  BuildKind
 } from "./build-asset-kind";
 export { buildAssetKinds, BuildAssetKindsProvider } from "./build-asset-kinds";
 export { type BuildAssetRead, type BuildList, type BuildSource } from "./build-data";
 export { BuildFrame } from "./build-frame";
-export { ConnectionPage } from "./connection-page";
+export { ConnectionEditor } from "./connection-editor";
+export * from "./connection-form-model";
 export type {
   ConnectionDetailRead,
   ConnectionHoldersRead,
