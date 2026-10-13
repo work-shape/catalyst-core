@@ -11624,6 +11624,25 @@
                               ]
                             }
                           },
+                          "concurrency": {
+                            "type": "object",
+                            "properties": {
+                              "asked": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
+                              },
+                              "ranWith": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "asked",
+                              "ranWith"
+                            ]
+                          },
                           "effect": {
                             "type": "string",
                             "enum": [

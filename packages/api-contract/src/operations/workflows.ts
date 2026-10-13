@@ -108,6 +108,14 @@ export const workflowStepRunSchema = z.object({
   loop: countsSchema.optional(),
   /** On the step run of a loop: how the step runs of each step directly inside it stand, by step id. */
   bodyCounts: z.record(z.string(), countsSchema).optional(),
+  /**
+   * On the step run of a loop: how many of its items run at once. `asked` is the loop's
+   * `concurrency`, an upper bound; `ranWith` is what one process runs of it, which the step
+   * slots of a process bound.
+   */
+  concurrency: z
+    .object({ asked: z.number().int().min(1), ranWith: z.number().int().min(1) })
+    .optional(),
   /** On the step run of an operation step: what its operation does and what it belongs to. */
   effect: z.enum(["reading", "changing"]).optional(),
   source: z.string().optional(),

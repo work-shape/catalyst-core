@@ -86,6 +86,7 @@ export const stepRunsSchema = z.object({
       branch: z.string().optional(),
       iteration: z.object({ index: z.number(), label: z.string().optional() }).optional(),
       loop: countsSchema.optional(),
+      concurrency: z.object({ asked: z.number(), ranWith: z.number() }).optional(),
       bodyCounts: z.record(z.string(), countsSchema).optional(),
       effect: z.string().optional(),
       source: z.string().optional(),

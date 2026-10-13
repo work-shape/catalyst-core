@@ -182,6 +182,8 @@ export type WorkflowStepRunView = WorkflowStepRun &
     outputPreview?: WorkflowOutputPreview;
     /** On the step run of a loop step alone. */
     loop?: WorkflowLoopCounts;
+    /** On the step run of a loop step alone. */
+    concurrency?: WorkflowLoopConcurrency;
     /** On the step run of a code step that ran: what its script wrote beside its result. */
     log?: WorkflowStepRunLog;
   };
@@ -216,6 +218,16 @@ export interface WorkflowStagedCode {
 /** How the script of a code step ended, before the engine has checked what it returned. */
 export type WorkflowCodeOutcome =
   { kind: "output"; value: JsonValue } | { kind: "failed"; error: WorkflowRunError };
+
+/**
+ * How many items of a loop run at once. `asked` is the loop's `concurrency`, an upper bound.
+ * `ranWith` is what one process of the instance runs of it: the step slots of a process bound
+ * every loop, so a loop that asks for more runs with as many items as a process has slots.
+ */
+export interface WorkflowLoopConcurrency {
+  asked: number;
+  ranWith: number;
+}
 
 /** Names one run of one instance. */
 export interface WorkflowRunRef {

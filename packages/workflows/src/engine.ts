@@ -1,6 +1,5 @@
 import {
   AppError,
-  WORKFLOW_LOOP_MAX_CONCURRENCY,
   asUserId,
   auditActorFromIdentity,
   createPlatformId,
@@ -36,7 +35,7 @@ import { WORKFLOW_RUN_LIMITS, WORKFLOW_STEP_JOB_SLOTS, type WorkflowRunLimits } 
 import type { WorkflowOperationCalls } from "./operation-step";
 import { itemLabelOf } from "./references";
 import { principalActor } from "./run-identity";
-import { withEveryBodyStep } from "./run-view";
+import { loopConcurrencyOf, withEveryBodyStep } from "./run-view";
 import { createBlockEnds } from "./run-blocks";
 import { createStartCheck, type PreparedStart } from "./run-start";
 import { createScheduleTrigger } from "./schedule-trigger";
@@ -331,10 +330,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     const loop = index.get(loopRun.stepId)?.step;
     const first = loop?.type === "loop" ? loop.steps[0] : undefined;
     // A definition nothing checked may name more than a loop may run at once.
-    const width =
-      loop?.type === "loop"
-        ? Math.min(Math.max(1, loop.concurrency ?? 1), WORKFLOW_LOOP_MAX_CONCURRENCY)
-        : 1;
+    const width = loop?.type === "loop" ? loopConcurrencyOf(loop) : 1;
     const total = (await tx.workflowRuns.countLoopItems(loopRef)) ?? 0;
     let started = await tx.workflowRuns.countLoopItemsStarted(loopRef);
     let going = (await tx.workflowRuns.readLoopCounts(loopRef))?.running ?? 0;
