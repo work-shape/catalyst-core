@@ -13,9 +13,9 @@ import {
   ListRow,
   Page,
   PageHeader,
+  PageOutline,
   Section,
   SkeletonList,
-  SubRail,
   Table,
   TableBody,
   TableCell,
@@ -30,7 +30,7 @@ import {
 } from "@vivd-catalyst/ui";
 import { formatDateTime } from "../control-plane/locale-format";
 import { useTranslation } from "../i18n";
-import { usePageShown } from "./asset-editor-shell";
+import { AssetIdentifier, usePageShown } from "./asset-editor-shell";
 import type { BuildAssetViewProps } from "./build-asset-kind";
 import {
   cellText,
@@ -94,15 +94,18 @@ export function DataStorePage({
       label: t("dataStores.statusTitle"),
       description: t("dataStores.statusDescription"),
       body: (
-        <ReadState read={read} failedText={t("dataStores.stateFailed")} rows={3}>
-          {(loaded) => (
-            <DataStoreStatus
-              state={loaded}
-              description={textOf(asset.config, "description")}
-              updatedAt={asset.updatedAt}
-            />
-          )}
-        </ReadState>
+        <>
+          <AssetIdentifier name={asset.name} />
+          <ReadState read={read} failedText={t("dataStores.stateFailed")} rows={3}>
+            {(loaded) => (
+              <DataStoreStatus
+                state={loaded}
+                description={textOf(asset.config, "description")}
+                updatedAt={asset.updatedAt}
+              />
+            )}
+          </ReadState>
+        </>
       )
     },
     ...(state && state.conditions.length > 0
@@ -172,27 +175,17 @@ export function DataStorePage({
               </Badge>
             ) : undefined
           }
-          description={
-            <span className="flex min-w-0 items-center gap-2">
-              <span>{t("dataStores.kindSingular")}</span>
-              <code className="min-w-0 truncate text-code" title={asset.name}>
-                {asset.name}
-              </code>
-            </span>
-          }
         />
       }
-      subRail={
-        <SubRail
-          mode="anchors"
+      outline={
+        <PageOutline
           belowHeader
-          label={t("build.sections")}
-          groups={[{ id: "sections", items: sections.map(({ id, label }) => ({ id, label })) }]}
+          items={sections.map(({ id, label, count }) => ({ id, label, count }))}
         />
       }
     >
       {page.above}
-      {/* The first line of the content starts where the first item of the index does. */}
+      {/* The first line of the content starts where the outline does. */}
       <div className="grid min-w-0 content-start pt-5">
         <Banner layout="line" className="mb-4" data-build-read-only="">
           {t("dataStores.description")}
@@ -201,6 +194,7 @@ export function DataStorePage({
           <Section
             key={section.id}
             id={section.id}
+            layout="stacked"
             title={section.label}
             description={section.description}
             count={section.count}

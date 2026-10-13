@@ -295,7 +295,9 @@ describe("Data Stores in Build", () => {
     const page = render({ kindPath: "data-stores", name: "visit-log" });
 
     expect(page).toContain(">Visit log</h1>");
-    expect(page).toContain('title="visit-log"');
+    // The id stands in the first section with a copy button, and not in the one-row head.
+    expect(page.indexOf("data-asset-identifier")).toBeGreaterThan(page.indexOf("</header>"));
+    expect(page).toMatch(/data-asset-identifier[^]*?>visit-log<\/code>/u);
     expect(page).toContain('data-data-store-state="ready"');
     expect(page).toContain("8 MB of 500 MB");
     expect(page).toContain("0002_add_referrer");
