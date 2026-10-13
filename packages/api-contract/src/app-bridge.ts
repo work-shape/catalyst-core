@@ -1,4 +1,4 @@
-import { IDEMPOTENCY_KEY_MAX_LENGTH } from "@vivd-catalyst/core";
+import { IDEMPOTENCY_KEY_MAX_LENGTH } from "@vivd-catalyst/asset-schemas";
 import { z } from "zod";
 
 // The bridge between a Page and the interface that shows it, as the interface reads it. A Page
