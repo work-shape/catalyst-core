@@ -122,7 +122,7 @@ describe("an App with a draft and a published revision", () => {
     expect(draft).toMatchObject({
       fileSetId: app.fileSetId,
       revision: 1,
-      interfacePath: `/w/${t.workspaceId}/apps/offers/edit`,
+      interfacePath: `/w/${t.workspaceId}/app-drafts/offers`,
       document: { status: 200 }
     });
     expect(draft.document.body).toContain("from a page");

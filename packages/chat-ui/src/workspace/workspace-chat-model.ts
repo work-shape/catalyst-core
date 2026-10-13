@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type {
-  ApiClient,
-  ApiUser,
-  CollaborationWorkspaceAgents,
-  ConversationListItem,
-  DraftAttachment,
-  LocaleCode,
-  Message,
-  SafeConfig,
-  StartConversationRunResponse
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import {
+  APP_ASSET_KIND,
+  type ApiClient,
+  type ApiUser,
+  type CollaborationWorkspaceAgents,
+  type ConversationListItem,
+  type DraftAttachment,
+  type LocaleCode,
+  type Message,
+  type SafeConfig,
+  type StartConversationRunResponse
 } from "@vivd-catalyst/api-client";
 import { WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
 import type { ThemeInputs } from "@vivd-catalyst/ui/theme";
@@ -225,6 +226,11 @@ interface AppsModel {
   rights: AppRights;
   /** Opens a new conversation of the open workspace with this text in its composer. */
   startChat(prompt: string): void;
+  /**
+   * Starts a conversation of the open workspace about this App and opens it, with the App's
+   * draft beside it. Rejects where the instance refuses the conversation.
+   */
+  editWithAgent(app: string): Promise<void>;
 }
 
 export interface WorkspaceAuthModel {
@@ -634,6 +640,19 @@ export function useWorkspaceChatModel({
     routeState.showConversation(activeCollaborationWorkspaceId, conversationId, options);
   }
 
+  /**
+   * A conversation the server just made opens in the workspace the server put it in. The open
+   * workspace is not known yet while the address is still the application root, which is where a
+   * person lands on the first sign-in, and the server places such a conversation in the Personal
+   * Workspace.
+   */
+  function showCreatedConversation(
+    conversation: { id: string; collaborationWorkspaceId: string },
+    options?: { replace?: boolean }
+  ) {
+    routeState.showConversation(conversation.collaborationWorkspaceId, conversation.id, options);
+  }
+
   function goToActiveCollaborationWorkspaceChat(options?: { replace?: boolean }) {
     routeState.goToDefaultChat(activeCollaborationWorkspaceId, options);
   }
@@ -658,7 +677,7 @@ export function useWorkspaceChatModel({
       fromConversationId: undefined,
       toConversationId: conversation.id
     });
-    showConversationInActiveCollaborationWorkspace(conversation.id, {
+    showCreatedConversation(conversation, {
       replace: route.kind === "new-conversation"
     });
     setNotice(undefined);
@@ -667,21 +686,22 @@ export function useWorkspaceChatModel({
   }
 
   /**
-   * A conversation of the open workspace about one Workflow, opened once the instance made it.
-   * What a conversation is about is set when it is made, so it is made before its first turn.
+   * A conversation of the open workspace about one asset, opened once the instance made it.
+   * What a conversation is about is set when it is made, so it is made before its first turn;
+   * the asset opens beside it as the conversation opens.
    */
-  async function startConversationAboutWorkflow(workflow: string): Promise<void> {
+  async function startConversationAbout(subject: { kind: string; name: string }): Promise<void> {
     if (!activeCollaborationWorkspaceId) {
-      throw new Error("A conversation about a Workflow belongs to a workspace");
+      throw new Error("A conversation about an asset belongs to a workspace");
     }
     const conversation = await client.conversations.create({
       body: {
         locale: activeLocale,
         collaborationWorkspaceId: activeCollaborationWorkspaceId,
-        subject: { kind: WORKFLOW_ASSET_KIND, name: workflow }
+        subject
       }
     });
-    showConversationInActiveCollaborationWorkspace(conversation.id);
+    showCreatedConversation(conversation);
     setNotice(undefined);
     workspaceCache.invalidateConversations();
     chrome.requestComposerFocus();
@@ -848,7 +868,9 @@ export function useWorkspaceChatModel({
   const configuredCompactThresholdTokens =
     selectedModel?.compactThresholdTokens ?? activeAgent?.compactThresholdTokens;
 
-  useEffect(() => {
+  // A layout effect: it runs before the effects of the thread, so the surface of the next
+  // conversation's subject opens after this close and not before it.
+  useLayoutEffect(() => {
     displayPanel.close();
   }, [displayPanel.close, selectedConversationId]);
 
@@ -965,7 +987,7 @@ export function useWorkspaceChatModel({
 
   function runStarted(response: StartConversationRunResponse) {
     workspaceCache.cacheRunStarted(response);
-    showConversationInActiveCollaborationWorkspace(response.conversation.id, {
+    showCreatedConversation(response.conversation, {
       replace: route.kind === "new-conversation"
     });
     setNotice(undefined);
@@ -1155,12 +1177,14 @@ export function useWorkspaceChatModel({
     apps: {
       enabled: appsEnabled,
       rights: appRights,
-      startChat: startNewConversationWith
+      startChat: startNewConversationWith,
+      editWithAgent: (app) => startConversationAbout({ kind: APP_ASSET_KIND, name: app })
     },
     workflows: {
       access: workflowsOpen,
       rights: workflowRights,
-      editWithAgent: startConversationAboutWorkflow
+      editWithAgent: (workflow) =>
+        startConversationAbout({ kind: WORKFLOW_ASSET_KIND, name: workflow })
     },
     selectedChat: {
       client,
