@@ -532,9 +532,12 @@ function ChatWorkspaceContent({
                               ? model.route.showRoute
                               : undefined
                           }
-                          onNewAgent={
-                            model.controlPlane.canCreateAgentsInBuild
-                              ? () => startNewAgent(model.route.showRoute)
+                          newAgent={
+                            model.controlPlane.agentCreation
+                              ? {
+                                  ...model.controlPlane.agentCreation,
+                                  onStart: (start) => startNewAgent(model.route.showRoute, start)
+                                }
                               : undefined
                           }
                         />

@@ -919,6 +919,10 @@ id from config_assets where status = 'deleted')`.
 
 ### Changed
 
+- **Agents page:** a card shows the agent mark in place of the initials, the name, the default
+  badge, what the agent does in two lines at most, and Start chat. Its starter prompts are no
+  longer on the card; they wait in the empty chat with that agent. New agent opens its dialog
+  on the page: Cancel stays there, and Continue leads to the new agent's page in Studio.
 - **Chat:** the usage consumption on a model card has six steps in place of four: `very_low`,
   `low`, `moderate`, `elevated`, `high` and `very_high`, and its filled steps take a colour that
   goes from cool to warm with the level. The tier still comes from the model's Customer Rate
