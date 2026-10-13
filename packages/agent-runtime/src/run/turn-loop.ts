@@ -10,6 +10,7 @@ import {
 } from "@vivd-catalyst/core";
 import {
   isModelProviderContinuationRejected,
+  withStorableToolInput,
   type ModelCompletion,
   type ModelMessage
 } from "@vivd-catalyst/model-provider";
@@ -198,6 +199,7 @@ export class TurnLoop {
       });
       carriesEarlierContinuation = false;
       const { completion, emittedDeltas, reasoning } = modelResult;
+      const toolCalls = completion.toolCalls.map(withStorableToolInput);
       providerContinuation = completion.continuation;
       const compactedThisCall = completion.contextManagement?.compacted === true;
       runCompacted ||= compactedThisCall;
@@ -217,7 +219,7 @@ export class TurnLoop {
             }
           : undefined;
 
-      if (completion.toolCalls.length === 0) {
+      if (toolCalls.length === 0) {
         if (context.signal?.aborted || isCancellationRequested(state.getStatus())) {
           return;
         }
@@ -251,7 +253,7 @@ export class TurnLoop {
       messages.push({
         role: "assistant",
         content: completion.text,
-        toolCalls: completion.toolCalls
+        toolCalls
       });
       await this.runEvents.beforeEffect("assistant_message", runId);
       await this.options.conversationHistory.appendAssistantMessage({
@@ -260,7 +262,7 @@ export class TurnLoop {
         text: completion.text,
         metadata: createAssistantToolCallsMetadata({
           runId,
-          toolCalls: completion.toolCalls,
+          toolCalls,
           reasoning,
           modelContext
         }),
@@ -273,7 +275,7 @@ export class TurnLoop {
           input,
           context,
           state,
-          completion.toolCalls,
+          toolCalls,
           repeatedToolCalls,
           messages,
           offeredDataTools
