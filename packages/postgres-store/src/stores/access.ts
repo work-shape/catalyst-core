@@ -259,6 +259,7 @@ export function createPostgresAccessStore(db: PostgresConnection): AccessAdminis
             input.holderId ? eq(permissionGrants.holderId, input.holderId) : undefined,
             input.action ? eq(permissionGrants.action, input.action) : undefined,
             input.scopeKind ? eq(permissionGrants.scopeKind, input.scopeKind) : undefined,
+            input.scopeId ? eq(permissionGrants.scopeId, input.scopeId) : undefined,
             input.excludeSuperadminHolders
               ? sql`NOT (${permissionGrants.holderKind} = 'user' AND EXISTS (
                   SELECT 1 FROM ${productUsers}

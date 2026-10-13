@@ -6996,6 +6996,15 @@
             "schema": {
               "$ref": "#/components/schemas/GrantScopeKind"
             }
+          },
+          {
+            "name": "scopeId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         ],
         "responses": {
@@ -22125,6 +22134,12 @@
               "write",
               "delete"
             ]
+          },
+          "principalActions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "manifestFile": {
             "type": "string"

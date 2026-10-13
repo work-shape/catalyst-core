@@ -67,7 +67,13 @@ export const listPermissionGrantsQuerySchema = listQuerySchema.extend({
   holderKind: grantHolderKindSchema.optional(),
   holderId: storedText.optional(),
   action: storedText.optional(),
-  scopeKind: grantScopeKindSchema.optional()
+  scopeKind: grantScopeKindSchema.optional(),
+  /**
+   * The asset or the workspace the rows name: with `scopeKind: "asset"`, who holds a right on
+   * that one asset. A service principal's rows are among them only for a caller who is shown
+   * service principals; for anyone else the answer is the same as if there were none.
+   */
+  scopeId: storedText.optional()
 });
 
 export const effectivePermissionsQuerySchema = z.object({

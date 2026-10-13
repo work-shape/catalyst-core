@@ -553,8 +553,13 @@ describe("a Connection through the asset operations", () => {
         use: "connection.use",
         write: "connection.write",
         delete: "connection.delete"
-      }
+      },
+      // What a service principal can be granted on one Connection, and nothing that changes it.
+      principalActions: ["connection.use"]
     });
+    expect(context.kinds.find((kind) => kind.kind === "agent")).not.toHaveProperty(
+      "principalActions"
+    );
     // The kinds without such a right name none.
     expect(context.kinds.find((kind) => kind.kind === "agent")?.actions).toEqual({
       read: "agent.read",
