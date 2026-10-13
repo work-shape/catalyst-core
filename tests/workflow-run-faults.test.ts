@@ -381,7 +381,7 @@ describe("a definition another release stored", () => {
     definitions.hold(change(checked.manifest), "rev-unchecked");
     return definitions.source;
   };
-  const withLoop = (fields: { collect?: { step: string; path: string }; concurrency?: number }) =>
+  const withLoop = (fields: { collect?: { step: string; path: string } }) =>
     manifest((base) => ({
       ...base,
       steps: base.steps.map((step) => (step.type === "loop" ? { ...step, ...fields } : step))
@@ -389,7 +389,6 @@ describe("a definition another release stored", () => {
 
   const cases: [string, () => ReturnType<typeof manifest>][] = [
     ["collect", () => withLoop({ collect: { step: "send", path: "" } })],
-    ["concurrency", () => withLoop({ concurrency: 4 })],
     [
       "parent",
       () =>

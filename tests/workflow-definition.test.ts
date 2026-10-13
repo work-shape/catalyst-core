@@ -245,10 +245,6 @@ describe("the definitions a folder holds", () => {
         "steps[1].paginate"
       ],
       [
-        { steps: [trigger, loop("each", inner, { concurrency: 4 }), output()] },
-        "steps[1].concurrency"
-      ],
-      [
         { steps: [trigger, loop("each", inner, { collect: ref("inner").ref }), output()] },
         "steps[1].collect"
       ],

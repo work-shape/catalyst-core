@@ -215,9 +215,6 @@ function unsupportedIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[
         }
       }
       if (step.type === "loop") {
-        if ((step.concurrency ?? 1) !== 1) {
-          issues.push(notSupported(`${at}.concurrency`, "a loop with 'concurrency' above 1"));
-        }
         // `collect` returns a dataset, and this engine keeps none.
         if (step.collect !== undefined) issues.push(notSupported(`${at}.collect`, "'collect'"));
         walk(step.steps, `${at}.steps`);

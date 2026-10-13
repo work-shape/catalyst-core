@@ -156,9 +156,6 @@ export function createStepExecutor(options: StepExecutorOptions) {
         }
         case "loop": {
           if (step.collect !== undefined) throw notSupportedFailure("'collect' on a loop");
-          if ((step.concurrency ?? 1) !== 1) {
-            throw notSupportedFailure("a loop with 'concurrency' above 1");
-          }
           const items = await resolveReference(scope, step.items);
           if (workflowDatasetReferenceSchema.safeParse(items).success) {
             throw notSupportedFailure("a loop over a dataset");

@@ -1,6 +1,7 @@
 import { compileJsonSchema } from "@vivd-catalyst/connections";
 import {
   AppError,
+  WORKFLOW_LOOP_MAX_CONCURRENCY,
   WORKFLOW_RUN_JOB_KINDS,
   asUserId,
   auditActorFromIdentity,
@@ -238,7 +239,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       if (!loopRun) break;
       const loop = index.get(loopRun.stepId)?.step;
       if (!ofPrincipal && loop?.type === "loop" && loop.onItemFailure === "continue") {
-        await nextItem(tx, run, index, loopRun, (failed.iteration?.index ?? 0) + 1);
+        await fillLoop(tx, run, index, loopRun);
         return;
       }
       await tx.workflowRuns.endStepRun({
@@ -258,14 +259,15 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
   /**
    * Creates the step run of a step and the job that executes it. A run that has created as
-   * many step runs as it may ends as `limit_reached` instead.
+   * many step runs as it may ends as `limit_reached` instead, and this answers false: whoever
+   * begins several steps in one transaction begins none after that.
    */
   async function beginStep(
     tx: PlatformStores,
     run: WorkflowRun,
     step: WorkflowStep,
     place: StepPlace
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (run.stepRunCount >= limits.maxStepRuns) {
       await finishRun(tx, run, {
         status: "limit_reached",
@@ -274,8 +276,10 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           message: `The run reached its limit of ${limits.maxStepRuns} steps`
         }
       });
-      return;
+      return false;
     }
+    // The run was read when its row was locked: what this transaction adds is counted here.
+    run.stepRunCount += 1;
     // A step run is created between two steps, and so between two items of a loop. `claim`
     // starts none of a run that was cancelled or is past its time.
     const stepRun = await tx.workflowRuns.createStepRun({
@@ -300,6 +304,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         correlationId: run.correlationId
       }
     );
+    return true;
   }
 
   /** Where the first step of one item of a loop stands, with what labels the item. */
@@ -327,24 +332,38 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
   }
 
   /**
-   * Starts one item of a loop, or ends the loop after its last one. The loop's output is its
-   * counts as they then stand, the failed items it continued past among them, and never a
-   * result of an item.
+   * Carries a loop on after it read its list and after each item that ended: starts the next
+   * items in the order of the list while fewer than the loop's `concurrency` are going, and
+   * ends the loop when none is going and none is left. It runs behind the lock of the run, so
+   * two items that end at the same moment start two different next items. The loop's output
+   * is its counts as they then stand, the failed items it continued past among them, and
+   * never a result of an item.
    */
-  async function nextItem(
+  async function fillLoop(
     tx: PlatformStores,
     run: WorkflowRun,
     index: WorkflowStepIndex,
-    loopRun: WorkflowStepRun,
-    iteration: number
+    loopRun: WorkflowStepRun
   ): Promise<void> {
     const loopRef: WorkflowStepRunRef = { clientInstanceId, id: loopRun.id };
     const loop = index.get(loopRun.stepId)?.step;
     const first = loop?.type === "loop" ? loop.steps[0] : undefined;
-    if (first && iteration < ((await tx.workflowRuns.countLoopItems(loopRef)) ?? 0)) {
-      await beginStep(tx, run, first, await itemPlace(tx, index, loopRun, first, iteration));
-      return;
+    // A definition nothing checked may name more than a loop may run at once.
+    const width =
+      loop?.type === "loop"
+        ? Math.min(Math.max(1, loop.concurrency ?? 1), WORKFLOW_LOOP_MAX_CONCURRENCY)
+        : 1;
+    const total = (await tx.workflowRuns.countLoopItems(loopRef)) ?? 0;
+    let started = await tx.workflowRuns.countLoopItemsStarted(loopRef);
+    let going = (await tx.workflowRuns.readLoopCounts(loopRef))?.running ?? 0;
+    while (first && started < total && going < width) {
+      const place = await itemPlace(tx, index, loopRun, first, started);
+      // The run ended at its limit of step runs: no further item starts.
+      if (!(await beginStep(tx, run, first, place))) return;
+      started += 1;
+      going += 1;
     }
+    if (going > 0) return;
     const counts = await tx.workflowRuns.readLoopCounts(loopRef);
     const output: WorkflowLoopOutput = {
       total: counts?.total ?? 0,
@@ -383,13 +402,13 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       return;
     }
     if (stepRun.containerStepRunId === undefined) return;
-    // The last step of one item ended: the next item, or the end of the loop.
+    // The last step of one item ended: the next items, or the end of the loop.
     const loopRun = await tx.workflowRuns.getStepRun({
       clientInstanceId,
       id: stepRun.containerStepRunId
     });
     if (!loopRun) return;
-    await nextItem(tx, run, index, loopRun, (stepRun.iteration?.index ?? 0) + 1);
+    await fillLoop(tx, run, index, loopRun);
   }
 
   /**
@@ -479,7 +498,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         items: end.items,
         ...(last === undefined ? {} : { lastStepId: last })
       });
-      await nextItem(tx, run, index, stepRun, 0);
+      await fillLoop(tx, run, index, stepRun);
       return;
     }
     const { kind: _kind, ...done } = end;

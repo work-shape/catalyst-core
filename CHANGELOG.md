@@ -37,6 +37,14 @@ contain breaking changes; a patch version does not.
   schedules of what is published when it starts. **Migration `0063_workflow_run_schedule`**
   adds the column `workflow_runs.scheduled_for` and a unique index on it per Workflow; the
   previous release runs on the migrated database.
+- **Workflow loops, several items at once:** a loop with `concurrency` from 2 to 8 runs that
+  many of its items at the same time, each as its own jobs on the job executor, and starts the
+  next item in the order of the list whenever one ends. One process runs four step jobs at
+  once, so more than four items go at once only with more than one worker. `onItemFailure`
+  holds as before: a loop that continues counts its failed items and ends `done`; a loop that
+  stops fails at the first failed item, starts no item after that failure is written, and
+  cancels what it had started and not yet run. A cancel starts no further item. The run's
+  limit of step runs binds as before: the loop starts no item past it.
 - **Workflow Runs:** with the module `workflows` on, a Workflow is started by hand and runs to
   its end on the job executor. `POST /api/v1/workflows/{workflow}/runs` starts a run
   (`workflow.use`), `GET` on the same path lists the runs of a Workflow, `GET /api/v1/workflows`
@@ -53,8 +61,8 @@ contain breaking changes; a patch version does not.
   with the contract's block check, and refused with the reason `block_depth` (more than 16
   nested blocks), `reference_out_of_scope`, `duplicate_step_id` or `not_supported_yet`: the
   last for the reserved blocks `condition` and `parallel` and for every field the file form
-  holds and this engine does not run (`dataset`, `paginate`, `collect`, a loop's `concurrency`
-  above 1, the step types `code`, `agent`, `notify` and `workflow`, the trigger `parent`,
+  holds and this engine does not run (`dataset`, `paginate`, `collect`, the step types
+  `code`, `agent`, `notify` and `workflow`, the trigger `parent`,
   `labels`, `onFailure`, `retention`, `types`). A loop returns how many of its items ended how
   (`total`, `done`, `failed`) and never what an item returned. With `onItemFailure: continue`
   the loop goes on past a failed item and ends as `done`, and so does its run; without it the
