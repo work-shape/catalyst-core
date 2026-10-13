@@ -5,7 +5,12 @@ import {
   type Asset,
   type AssetSummary
 } from "@vivd-catalyst/api-contract";
-import { ApiError, createApiClient, type OperationInput } from "@vivd-catalyst/api-client";
+import {
+  ApiError,
+  createApiClient,
+  type ApiClient,
+  type OperationInput
+} from "@vivd-catalyst/api-client";
 
 export class ConfigApiError extends Error {
   readonly status: number;
@@ -63,7 +68,40 @@ export async function createConfigApi(options: ConfigApiOptions) {
 
   const sleep = options.sleep ?? defaultSleep;
 
+  /**
+   * Sends one changing call, all its tries under one key: a try whose answer never arrived is
+   * sent again with it, and the instance answers what the first one did instead of writing
+   * twice. `unanswered` is what the caller is told when no try got an answer.
+   */
+  const change = async <Output>(
+    request: (client: ApiClient, idempotencyKey: string) => Promise<Output>,
+    unanswered: string
+  ): Promise<Output> => {
+    const idempotencyKey = randomUUID();
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return await request(client, idempotencyKey);
+      } catch (error) {
+        if (isDroppedConnection(error) && attempt < CHANGE_ATTEMPTS) {
+          await sleep(CHANGE_RETRY_DELAY_MS * attempt);
+          continue;
+        }
+        if (isDroppedConnection(error)) {
+          throw new Error(
+            `The connection to the instance dropped ${CHANGE_ATTEMPTS} times and the call has no answer. ${unanswered}`,
+            { cause: error }
+          );
+        }
+        throw toConfigApiError(error);
+      }
+    }
+  };
+
   return {
+    /** Any reading operation of the instance. A refusal throws as `ConfigApiError`. */
+    read: <Output>(request: (client: ApiClient) => Promise<Output>): Promise<Output> =>
+      read(sleep, () => request(client)),
+    change,
     /** The version of the instance's asset set and the name of its default agent. */
     getOverview: async (): Promise<{ version: number; defaultAgentName?: string }> => {
       const overview = await read(sleep, () => client.config_assets.get_overview());
@@ -114,27 +152,13 @@ export async function createConfigApi(options: ConfigApiOptions) {
      * first one did instead of writing twice.
      */
     syncAssets: async (batch: SyncBatch): Promise<SyncOutcome> => {
-      const idempotencyKey = randomUUID();
-      for (let attempt = 1; ; attempt += 1) {
-        try {
-          const outcome = await client.assets.sync({ body: batch, idempotencyKey });
-          return outcome.status === "done"
-            ? { status: "done", output: outcome.output }
-            : { status: "pending_approval", operationRunId: outcome.run.id };
-        } catch (error) {
-          if (isDroppedConnection(error) && attempt < SYNC_ATTEMPTS) {
-            await sleep(SYNC_RETRY_DELAY_MS * attempt);
-            continue;
-          }
-          if (isDroppedConnection(error)) {
-            throw new Error(
-              `The connection to the instance dropped ${SYNC_ATTEMPTS} times and the push has no answer. It may have been applied: run 'catalyst config diff' before pushing again.`,
-              { cause: error }
-            );
-          }
-          throw toConfigApiError(error);
-        }
-      }
+      const outcome = await change(
+        (operations, idempotencyKey) => operations.assets.sync({ body: batch, idempotencyKey }),
+        "It may have been applied: run 'catalyst config diff' before pushing again."
+      );
+      return outcome.status === "done"
+        ? { status: "done", output: outcome.output }
+        : { status: "pending_approval", operationRunId: outcome.run.id };
     }
   };
 }
@@ -148,9 +172,9 @@ export type SyncOutcome =
   /** Nothing was written yet: the instance holds the push for another person's approval. */
   | { status: "pending_approval"; operationRunId: string };
 
-/** How often one push is sent before a dropped connection is reported. */
-const SYNC_ATTEMPTS = 3;
-const SYNC_RETRY_DELAY_MS = 500;
+/** How often one changing call is sent before a dropped connection is reported. */
+const CHANGE_ATTEMPTS = 3;
+const CHANGE_RETRY_DELAY_MS = 500;
 /** How often a read that is over the rate limit waits and asks again. */
 const READ_ATTEMPTS = 5;
 /** The longest one wait for the rate limit. A longer one is reported instead. */

@@ -1,5 +1,5 @@
 import { paginate, pageScope } from "../http/paging";
-import { apiOperations } from "@vivd-catalyst/api-contract";
+import { DEFAULT_LIST_LIMIT, apiOperations } from "@vivd-catalyst/api-contract";
 import { createSafeConfigView } from "@vivd-catalyst/config-schema";
 import { agentConnections } from "../agent-connections";
 import {
@@ -21,12 +21,14 @@ import type { Route } from "../http/route";
 import { deletionState } from "./deletion-answer";
 import { requirePathParam, resolveRequestLocale } from "../request-context";
 import type { ChatServerOptions } from "../types";
+import { requireWorkspaceAccess } from "../workspace-access";
+import { findWorkspaceFiles } from "../workspace-files";
 
 /**
- * Collaboration Workspaces. The reads are plain routes, and so is `workspaces.ensure_personal`,
- * which the interface calls on every load. The ten other changes are registered operations:
- * each call is an Operation Run that names the workspace, and the caller's role in it is asked
- * before the policy.
+ * Collaboration Workspaces. The reads are plain routes but `workspaces.files.list`, which an
+ * agent's tool projects; so is `workspaces.ensure_personal`, which the interface calls on every
+ * load. The ten other changes are registered operations: each call is an Operation Run that
+ * names the workspace, and the caller's role in it is asked before the policy.
  */
 export function registerCollaborationWorkspaceRoutes(
   route: Route,
@@ -102,6 +104,23 @@ export function registerCollaborationWorkspaceRoutes(
         pageScope(apiOperations["workspaces.agents.list"].id, params, query)
       )
     };
+  });
+
+  route.operation(apiOperations["workspaces.files.list"], {
+    // Any member may search; which conversations they may read the search itself decides.
+    authorize: async (input, { actor }) => {
+      await requireWorkspaceAccess(options, personOf(actor), collaborationWorkspaceId(input));
+      return { allowed: true };
+    },
+    resource: workspaceResource,
+    execute: (input, context) =>
+      findWorkspaceFiles(options, {
+        user: personOf(context.actor),
+        collaborationWorkspaceId: collaborationWorkspaceId(input),
+        ...(input.kind === undefined ? {} : { kind: input.kind }),
+        ...(input.text === undefined ? {} : { text: input.text }),
+        page: context.paging ?? { limit: DEFAULT_LIST_LIMIT + 1 }
+      })
   });
 
   route.operation(update, {

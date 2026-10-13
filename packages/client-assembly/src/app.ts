@@ -79,7 +79,7 @@ import { createInfrastructureWorkflow } from "./infrastructure";
 import { createInProcessAgentRunWorker, type AgentRunWorkerPlacement } from "./agent-run-jobs";
 import { createInstancePageSave, createInstancePages } from "./pages";
 import { createJobWorker } from "./job-worker";
-import { createSubjectTools } from "./conversation-offer";
+import { createPlatformTools } from "./conversation-offer";
 import { assembleModules, endResolveOnlyRun, resolveInstanceModules } from "./modules";
 import { createRuntimeFailureReporter } from "./runtime-error-logging";
 import { createPlatformStore } from "./store";
@@ -390,8 +390,8 @@ export async function createClientInstanceExecutionAssembly(
     const handler = createSkillChangeApprovalHandler({ config, clientInstanceId, configAssets });
     approvalRequestHandlers.set(handler.kind, handler);
   }
-  const subjectTools = createSubjectTools({ stores: store, modules });
-  const { conversationOffer } = subjectTools;
+  const platformTools = createPlatformTools({ stores: store, modules });
+  const { conversationOffer } = platformTools;
   const { authorizer, operationCalls, approvalRequestCreator } = createInstanceOperationCalls({
     clientInstanceId,
     conversationOffer,
@@ -409,7 +409,7 @@ export async function createClientInstanceExecutionAssembly(
   const handlers = operationCalls.approvalRequestHandlers;
   // The agent's asset tools are carried out by the asset operations, in this process too.
   const assetOptions = { logger, config, modules, clientInstanceId, stores: store, pages };
-  subjectTools.bind({ ...assetOptions, auditRecorder, configAssets, authorizer, operationCalls });
+  platformTools.bind({ ...assetOptions, auditRecorder, configAssets, authorizer, operationCalls });
   const workspaceService = config.executionWorkspaces.enabled
     ? new WorkspaceCommandService({
         store,
@@ -445,7 +445,7 @@ export async function createClientInstanceExecutionAssembly(
         : []),
       ...createDataSourceTools({ dataSources }),
       createReadSkillTool({ assetSource, conversationOffer }),
-      ...subjectTools.tools,
+      ...platformTools.tools,
       ...(skillPolicy.enabled
         ? [
             createProposeSkillChangeTool({
@@ -461,7 +461,7 @@ export async function createClientInstanceExecutionAssembly(
     ]
   });
   assertClientAssemblyValid({ config, tools, approvalRequestHandlers: handlers, modules });
-  const toolRegistry = subjectTools.registry(tools, getEnabledToolNames(config));
+  const toolRegistry = platformTools.registry(tools, getEnabledToolNames(config));
   const modulesStarted = await moduleAssembly.start({
     operationCalls,
     authorizer,
