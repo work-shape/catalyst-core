@@ -7,7 +7,7 @@ import { cn } from "../cn";
  * `service` is a service principal: it acts like a person and is none, so it is a square too
  * and never mistaken for one in a list that names both.
  */
-export type AvatarKind = "person" | "workspace" | "agent" | "app" | "service";
+export type AvatarKind = "person" | "workspace" | "agent" | "app" | "workflow" | "service";
 export type AvatarSize = "xs" | "sm" | "md" | "lg";
 
 /** A fill and the text colour that reads on it, as CSS colour values. */
