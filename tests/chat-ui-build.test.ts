@@ -76,7 +76,12 @@ function asset(kind: string, name: string, overrides: Partial<BuildAsset> = {}):
 // In the order the instance answers them: by name.
 const agents: BuildAssetRow[] = [
   row("agent", "tax-steuer_agent", { title: "Steuer-Agent", namespace: "tax-" }),
-  row("agent", "workflow_assistant", { title: "Workflow Assistant", isDefault: true, revision: 3 })
+  row("agent", "workflow_assistant", {
+    title: "Workflow Assistant",
+    description: "Reviews a workflow and plans the next checks.",
+    isDefault: true,
+    revision: 3
+  })
 ];
 const skills: BuildAssetRow[] = [row("skill", "tax-review", { title: "Tax review" })];
 
@@ -233,12 +238,14 @@ describe("Studio frame", () => {
     }
   });
 
-  it("lands on the Agents list, titled by the name with the id beneath", () => {
+  it("lands on the Agents list, titled by the name with what the agent does beneath", () => {
     const markup = render({});
 
     expect(markup).toContain('<h1 class="min-w-0 break-words outline-none text-title-lg">Agents');
     expect(markup).toContain(">Workflow Assistant<");
-    expect(markup).toContain('<code class="font-mono">workflow_assistant</code>');
+    expect(markup).toContain(">Reviews a workflow and plans the next checks.<");
+    // An id is never the second line of an agent.
+    expect(markup).not.toContain(">workflow_assistant<");
     expect(markup).toContain(">Default agent<");
     expect(markup).toContain(">New agent<");
     expect(markup).not.toContain("New skill");
@@ -262,7 +269,7 @@ describe("Studio frame", () => {
     );
 
     expect(markup).toContain(">untitled</");
-    expect(markup).toContain('<code class="font-mono">untitled</code>');
+    expect(markup).not.toContain('<code class="font-mono">untitled</code>');
   });
 
   it("says what a skill knows how to do, and shows a skill without a summary by its title alone", () => {
@@ -549,12 +556,11 @@ describe("Studio for a Namespace holder", () => {
 
   it("names the Namespace of a row, and none on a row that belongs to none", () => {
     const markup = render({ kindPath: "agents" }, { source: holder([taxNamespace]) });
-    const rowOf = (name: string) =>
-      markup.split("<li").find((item) => item.includes(`${name}</code>`)) ?? "";
+    const rowOf = (title: string) =>
+      markup.split("<li").find((item) => item.includes(`>${title}<`)) ?? "";
 
-    expect(rowOf("tax-steuer_agent")).toContain(">Tax<");
-    expect(rowOf("workflow_assistant")).toContain(">Workflow Assistant<");
-    expect(rowOf("workflow_assistant")).not.toContain(">Tax<");
+    expect(rowOf("Steuer-Agent")).toContain(">Tax<");
+    expect(rowOf("Workflow Assistant")).not.toContain(">Tax<");
   });
 
   it("shows the prefix on a row whose Namespace the reader does not hold", () => {

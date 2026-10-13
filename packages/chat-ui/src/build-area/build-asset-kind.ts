@@ -74,9 +74,10 @@ interface BuildKindBase {
   avatar?: AvatarKind;
   /**
    * What a row says of an asset where the kind tells more than its icon and the asset's id: its
-   * own mark, and the line under the title. A row without a line shows the title alone.
+   * own mark, where it has one, and the line under the title. A row without a line shows the
+   * title alone.
    */
-  row?(asset: BuildAssetRow): { leading: ReactNode; description?: string };
+  row?(asset: BuildAssetRow): { leading?: ReactNode; description?: string };
   /** What a row says after the asset's id, on the same line: such as the asset's description. */
   rowText?(asset: BuildAssetRow): string | undefined;
   /** The row's badges, such as the default marker. */

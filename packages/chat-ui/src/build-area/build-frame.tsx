@@ -504,7 +504,7 @@ function BuildList({
                 return (
                   <ListRow
                     key={asset.name}
-                    leading={own ? own.leading : <RowMark entry={entry} title={title} />}
+                    leading={own?.leading ?? <RowMark entry={entry} title={title} />}
                     title={title}
                     description={
                       own ? (
