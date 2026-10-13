@@ -440,14 +440,21 @@ describe("what a service principal's grant row may give", () => {
     const s = await setup();
     const { t } = s;
     const crm = await t.seed("crm", forWorkflows);
-    // The kinds of Knowledge Bases and Workflows are not loaded here. Their rights are in the
-    // list and are handed out once a kind registers them.
+    // The kind of Knowledge Bases is not loaded here. Its right is in the list and is handed
+    // out once a kind registers it.
     const dataStoreRights = PRINCIPAL_GRANTABLE_ACTIONS.filter((name) =>
       name.startsWith("data_store.")
     );
     expect(dataStoreRights).toHaveLength(3);
+    const workflowRights = PRINCIPAL_GRANTABLE_ACTIONS.filter((name) =>
+      name.startsWith("workflow.")
+    );
+    expect(workflowRights).toHaveLength(1);
     for (const action of PRINCIPAL_GRANTABLE_ACTIONS.filter(
-      (name) => name !== "connection.use" && !name.startsWith("data_store.")
+      (name) =>
+        name !== "connection.use" &&
+        !name.startsWith("data_store.") &&
+        !name.startsWith("workflow.")
     )) {
       const error = await t.expectRefused(
         t.root.id,
@@ -457,16 +464,21 @@ describe("what a service principal's grant row may give", () => {
       );
       expect(error.details, action).toMatchObject({ reason: "action_not_grantable_to_principal" });
     }
-    // The kind of Data Stores belongs to a module that is off here, so its rights are refused
-    // like everything else of that module.
-    for (const action of dataStoreRights) {
-      const error = await t.expectRefused(
-        t.root.id,
-        "permissions.grant",
-        { payload: s.payload(crm, { action }) },
-        { status: 404, code: "NOT_FOUND" }
-      );
-      expect(error.details, action).toMatchObject({ reason: "module_off", module: "dataStores" });
+    // The kinds of Data Stores and of Workflows each belong to a module that is off here, so
+    // their rights are refused like everything else of that module.
+    for (const [rights, module] of [
+      [dataStoreRights, "dataStores"],
+      [workflowRights, "workflows"]
+    ] as const) {
+      for (const action of rights) {
+        const error = await t.expectRefused(
+          t.root.id,
+          "permissions.grant",
+          { payload: s.payload(crm, { action }) },
+          { status: 404, code: "NOT_FOUND" }
+        );
+        expect(error.details, action).toMatchObject({ reason: "module_off", module });
+      }
     }
     expect(await s.principalRows()).toEqual([]);
   });

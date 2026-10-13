@@ -314,7 +314,7 @@ describe("an operation a Workflow Run is refused", () => {
     expect(run.status).toBe("failed");
     expect(run.error?.code).toBe("POLICY_DENIED");
     expect(run.error?.message).toBe(
-      "The instance's policy does not allow 'connection.crm.write' from here"
+      "The instance's policy asks for another person's approval of 'connection.crm.write', and this call cannot wait for one. In a Workflow, put an approval step before the step that calls it."
     );
     expect(writesOf(t)).toEqual([]);
     const stepRuns = await stepRunsOf(t, run.id);
