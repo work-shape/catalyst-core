@@ -1,7 +1,15 @@
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { Page, PageHeader, PageOutline, SubRail, UiRoot, uiLabelsEn } from "@vivd-catalyst/ui";
+import {
+  Page,
+  PageHeader,
+  PageLead,
+  PageOutline,
+  SubRail,
+  UiRoot,
+  uiLabelsEn
+} from "@vivd-catalyst/ui";
 
 function render(element: ReactElement): string {
   return renderToStaticMarkup(
@@ -83,5 +91,14 @@ describe("the room above a page's title line", () => {
     expect(markup).toMatch(
       /data-sub-rail="" class="[^"]*pt-\[max\(var\(--spacing\)\*2,var\(--subrail-room\)\)\]/u
     );
+  });
+});
+
+describe("the lead paragraph of a page", () => {
+  it("keeps to two lines and offers no control before a text is known to be longer", () => {
+    const markup = render(createElement(PageLead, null, "What the page is about."));
+    expect(markup).toMatch(/<p[^>]*class="[^"]*line-clamp-2[^"]*">What the page is about\.<\/p>/u);
+    expect(markup).toContain("text-muted-foreground");
+    expect(markup).not.toContain("<button");
   });
 });

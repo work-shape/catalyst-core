@@ -607,7 +607,7 @@
       "target": "types:packages",
       "rule": "typescript/unused",
       "scope": "packages/chat-ui",
-      "count": 5,
+      "count": 4,
       "owner": "G-5c"
     },
     {
@@ -635,7 +635,7 @@
       "target": "types:tests",
       "rule": "typescript/unused",
       "scope": "packages/chat-ui",
-      "count": 5,
+      "count": 4,
       "owner": "G-5c"
     },
     {

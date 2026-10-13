@@ -119,8 +119,7 @@
     animation: none;
   }
 
-  .chat-assistant-text + .chat-tool-work,
-  .chat-tool-part + .chat-assistant-text {
+  .chat-assistant-text + .chat-tool-work {
     margin-top: 1.5rem;
   }
 
@@ -244,6 +243,35 @@
 
 .chat-user-message-bubble .chat-markdown [data-streamdown="code-block"] {
   color: var(--foreground);
+}
+
+/* One distance between a block inside an assistant message and the text before and after it:
+   a code block, a table, an inline view, a file or artifact card. Six steps of spacing, the
+   distance an inline view keeps (tool-call.tsx). The markdown renderer and the cards bring
+   margins of their own as utilities, so these rules stand outside the layers. The work
+   timeline keeps its own tight rhythm. */
+.chat-assistant-text {
+  --chat-block-gap: calc(var(--spacing) * 6);
+}
+
+.chat-assistant-text:not(.chat-work-timeline *)
+  .chat-markdown
+  :is([data-streamdown="code-block"], [data-streamdown="table-wrapper"]):not(:first-child) {
+  margin-top: var(--chat-block-gap);
+}
+
+.chat-assistant-text:not(.chat-work-timeline *)
+  .chat-markdown
+  :is([data-streamdown="code-block"], [data-streamdown="table-wrapper"]):not(:last-child) {
+  margin-bottom: var(--chat-block-gap);
+}
+
+.chat-assistant-text:not(.chat-work-timeline *):has(+ :is(.chat-tool-part, .chat-message-block)) {
+  margin-bottom: var(--chat-block-gap);
+}
+
+:is(.chat-tool-part, .chat-message-block) + .chat-assistant-text:not(.chat-work-timeline *) {
+  margin-top: var(--chat-block-gap);
 }
 
 .chat-markdown [data-streamdown="code-block-body"] pre code > span {

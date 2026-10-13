@@ -15,6 +15,7 @@ export {
   type DisclosureVariant
 } from "./disclosure";
 export { Page, PageFooter, type PageProps, type PageWidth } from "./page";
+export { PageLead } from "./page-lead";
 export {
   PageHeader,
   PageHeaderBack,

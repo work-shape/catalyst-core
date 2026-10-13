@@ -7,6 +7,7 @@ import {
   Dialog,
   InlineError,
   PageHeader,
+  PageLead,
   TextLink
 } from "@vivd-catalyst/ui";
 import { instanceSentence } from "../build-area/build-refusals";
@@ -223,24 +224,6 @@ export function WorkflowRunPageView({
         }
         title={title ?? <TitlePlaceholder>{t("workflows.sectionRuns")}</TitlePlaceholder>}
         state={run ? <RunStateBadge status={run.status} stopping={stopping} /> : undefined}
-        description={
-          run ? (
-            <>
-              {workflow ? (
-                <>
-                  <TextLink {...routeLink({ kind: "workflow", ...address }, onOpenRoute)}>
-                    {workflow.name}
-                  </TextLink>
-                  <span aria-hidden="true"> · </span>
-                </>
-              ) : null}
-              {secondary}
-            </>
-          ) : undefined
-        }
-        descriptionTooltip={[workflow?.name, secondary]
-          .filter((part) => part !== undefined && part !== "")
-          .join(" · ")}
         primaryAction={
           run === undefined ? undefined : !run.ended ? (
             canCancel && !stopping ? (
@@ -257,6 +240,20 @@ export function WorkflowRunPageView({
           ) : undefined
         }
       />
+      {/* Whose run it is and how it went is the first line of the page, not a part of its head. */}
+      {run === undefined ? null : (
+        <PageLead className="shrink-0 pb-3">
+          {workflow ? (
+            <>
+              <TextLink {...routeLink({ kind: "workflow", ...address }, onOpenRoute)}>
+                {workflow.name}
+              </TextLink>
+              <span aria-hidden="true"> · </span>
+            </>
+          ) : null}
+          {secondary}
+        </PageLead>
+      )}
       {parentRoute === undefined || run === undefined ? null : (
         <div className="shrink-0 border-b px-(--layout-gutter) py-2">
           <Breadcrumb

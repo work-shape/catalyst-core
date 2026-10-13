@@ -30,6 +30,7 @@ import {
 } from "../structure/disclosure";
 import { Page, PageFooter, type PageWidth } from "../structure/page";
 import { PageHeader, PageHeaderBack } from "../structure/page-header";
+import { PageLead } from "../structure/page-lead";
 import { Section, type SectionLayout } from "../structure/section";
 import { SurfaceFrame } from "../structure/surface-frame";
 import { Samples, type GalleryGroup } from "./entry";
@@ -292,6 +293,21 @@ export const structureGallery: GalleryGroup = {
       name: "PageHeader",
       components: ["PageHeader", "PageHeaderBack"],
       render: (text) => <PageHeaderSamples text={text} />
+    },
+    {
+      name: "PageLead",
+      components: ["PageLead"],
+      render: (text) => (
+        <div className="grid gap-3">
+          {/* One sentence stands whole; a text of more than two lines ends in "Show more". */}
+          <div className="rounded-lg border pb-3" data-gallery-sample="page-lead-short">
+            <PageLead>{text.cardBody}</PageLead>
+          </div>
+          <div className="max-w-md rounded-lg border pb-3" data-gallery-sample="page-lead-long">
+            <PageLead>{Array.from({ length: 6 }, () => text.cardBody).join(" ")}</PageLead>
+          </div>
+        </div>
+      )
     },
     {
       name: "Section",

@@ -123,7 +123,6 @@ describe("the outline of a page's sections", () => {
       );
     const content = (markup: string) => markup.match(/<div class="([^"]*)">BODY</u)?.[1];
     expect(content(page(null))).toBe(content(page(outline(true))));
-    expect(content(page(null))).not.toContain("mx-auto");
     expect(page(null)).toContain("@outline/page:grid-cols-[minmax(0,1fr)_var(--layout-outline)]");
     expect(page(null)).not.toContain("data-page-outline");
   });
@@ -137,7 +136,7 @@ describe("the outline of a page's sections", () => {
     expect(heading("split")).toBe("min-w-0 text-heading");
   });
 
-  it("stands in the column right of the content, which starts at the page's left edge", () => {
+  it("stands at the page's right edge, and the content is centred in the room left of it", () => {
     const markup = render(
       createElement(
         Page,
@@ -158,8 +157,13 @@ describe("the outline of a page's sections", () => {
     expect(markup).toMatch(/<div class="[^"]*@outline\/page:col-start-2[^"]*"><nav/u);
     const content = markup.match(/<div class="([^"]*)">BODY</u)?.[1]?.split(" ") ?? [];
     expect(content).toEqual(
-      expect.arrayContaining(["@outline/page:col-start-1", "max-w-(--layout-content-narrow)"])
+      expect.arrayContaining([
+        "@outline/page:col-start-1",
+        "max-w-(--layout-content-narrow)",
+        "mx-auto"
+      ])
     );
-    expect(content).not.toContain("mx-auto");
+    // The row takes the page's whole width, so the outline's column ends on the page's edge.
+    expect(markup).not.toMatch(/@outline\/page:grid-cols-[^"]*max-w-/u);
   });
 });
