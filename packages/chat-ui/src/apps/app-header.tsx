@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, Link } from "lucide-react";
+import { Check, Link } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Asset } from "@vivd-catalyst/api-client";
 import {
@@ -11,6 +11,7 @@ import {
   KeyValue,
   KeyValueList,
   PageHeader,
+  PageHeaderBack,
   SkeletonList
 } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
@@ -138,21 +139,18 @@ export function AppHeader({
       variant="detail"
       className="shrink-0"
       back={
-        <Button asChild variant="ghost" size="sm">
-          <a
-            href={backHref}
-            aria-label={t("apps.backToList")}
-            onClick={(event) => {
-              if (opensHere(event)) {
-                event.preventDefault();
-                onBack();
-              }
-            }}
-          >
-            <ArrowLeft aria-hidden="true" />
-            <span className="max-sm:hidden">{t("apps.title")}</span>
-          </a>
-        </Button>
+        <PageHeaderBack
+          href={backHref}
+          label={t("apps.backToList")}
+          onClick={(event) => {
+            if (opensHere(event)) {
+              event.preventDefault();
+              onBack();
+            }
+          }}
+        >
+          {t("apps.title")}
+        </PageHeaderBack>
       }
       title={name}
       state={state}

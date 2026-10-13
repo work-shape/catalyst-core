@@ -1,4 +1,4 @@
-import { ArrowLeft, MoreHorizontal, Plus, Search, SearchX, Terminal } from "lucide-react";
+import { MoreHorizontal, Plus, Search, SearchX, Terminal } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import {
   Avatar,
@@ -19,6 +19,7 @@ import {
   ListRow,
   Page,
   PageHeader,
+  PageHeaderBack,
   Picker,
   PickerButton,
   SkeletonList,
@@ -221,15 +222,9 @@ export function BuildFrame({ source }: { source: BuildSource }) {
 
   const assetName = creating ? undefined : place.name;
   const back = (
-    <Button
-      variant="ghost"
-      size="sm"
-      aria-label={t("build.backToList", { kind: t(entry.label) })}
-      onClick={openList}
-    >
-      <ArrowLeft aria-hidden="true" />
+    <PageHeaderBack label={t("build.backToList", { kind: t(entry.label) })} onClick={openList}>
       {t(entry.label)}
-    </Button>
+    </PageHeaderBack>
   );
   if (!isEditableKind(entry) && entry.view && assetName !== undefined) {
     return (

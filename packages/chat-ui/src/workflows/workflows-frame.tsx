@@ -1,6 +1,5 @@
-import { ArrowLeft } from "lucide-react";
 import { useEffect, useRef, type MouseEvent, type ReactNode } from "react";
-import { Badge, Button, InlineError, Skeleton, Spinner } from "@vivd-catalyst/ui";
+import { Badge, Button, InlineError, PageHeaderBack, Skeleton, Spinner } from "@vivd-catalyst/ui";
 import { opensHere } from "../apps/app-header";
 import { formatElapsed } from "../control-plane/locale-format";
 import { useTranslation, type TranslationContextValue } from "../i18n";
@@ -79,7 +78,7 @@ export function WorkflowsFrame({
   );
 }
 
-/** The way back in the head of a page: an arrow with where it leads, as text from `sm`. */
+/** The way back in the head of a page: an arrow with where it leads. */
 export function BackLink({
   route,
   label,
@@ -93,12 +92,9 @@ export function BackLink({
   onOpenRoute: OpenRoute;
 }) {
   return (
-    <Button asChild variant="ghost" size="sm">
-      <a aria-label={label} {...routeLink(route, onOpenRoute)}>
-        <ArrowLeft aria-hidden="true" />
-        <span className="max-sm:hidden">{children}</span>
-      </a>
-    </Button>
+    <PageHeaderBack label={label} {...routeLink(route, onOpenRoute)}>
+      {children}
+    </PageHeaderBack>
   );
 }
 
