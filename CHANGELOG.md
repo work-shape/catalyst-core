@@ -44,7 +44,12 @@ contain breaking changes; a patch version does not.
   holds as before: a loop that continues counts its failed items and ends `done`; a loop that
   stops fails at the first failed item, starts no item after that failure is written, and
   cancels what it had started and not yet run. A cancel starts no further item. The run's
-  limit of step runs binds as before: the loop starts no item past it.
+  limit of step runs binds as before: the loop starts no item past it. A refusal by the
+  instance's policy (`POLICY_DENIED`) stops a loop that continues, as a refusal of the
+  principal does: the run fails with that reason and is not audited as a success. A refused
+  right reads "The service principal '…', which the Workflow runs as, does not hold the right
+  '…' to call '…'". A step whose worker was gone when its run ran out of its time says what
+  its call did, as it does after a cancel.
 - **Workflow Runs:** with the module `workflows` on, a Workflow is started by hand and runs to
   its end on the job executor. `POST /api/v1/workflows/{workflow}/runs` starts a run
   (`workflow.use`), `GET` on the same path lists the runs of a Workflow, `GET /api/v1/workflows`

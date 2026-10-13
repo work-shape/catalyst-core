@@ -228,7 +228,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     stepRun: WorkflowStepRun,
     error: WorkflowRunError,
     /** The run's principal itself was refused, so the next item would be refused as well. */
-    ofPrincipal = false
+    systemic = false
   ): Promise<void> {
     let failed = stepRun;
     while (failed.containerStepRunId !== undefined) {
@@ -238,7 +238,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       });
       if (!loopRun) break;
       const loop = index.get(loopRun.stepId)?.step;
-      if (!ofPrincipal && loop?.type === "loop" && loop.onItemFailure === "continue") {
+      if (!systemic && loop?.type === "loop" && loop.onItemFailure === "continue") {
         await fillLoop(tx, run, index, loopRun);
         return;
       }
@@ -429,8 +429,11 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       if (stepRun.status !== "queued" && stepRun.status !== "running") return undefined;
       const moment = now();
       const finishedAt = moment.toISOString();
-      if (isWorkflowRunEnded(run.status)) {
-        // An attempt nobody ended may have made its call before its worker was gone.
+      const ended = isWorkflowRunEnded(run.status);
+      if (ended || moment.getTime() >= Date.parse(run.deadlineAt)) {
+        // The step does not run: its run was cancelled or ended, or is past its time. An
+        // attempt nobody ended may have made its call before its worker was gone, and then
+        // the step run says what the call did and not that nothing happened.
         const known =
           stepRun.status === "running"
             ? await executor.knownCallEnd(tx, run, stepRun, finishedAt)
@@ -439,10 +442,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           ...ref,
           ...(known ?? { status: "cancelled", finishedAt })
         });
-        return undefined;
-      }
-      if (moment.getTime() >= Date.parse(run.deadlineAt)) {
-        await tx.workflowRuns.endStepRun({ ...ref, status: "cancelled", finishedAt });
+        if (ended) return undefined;
         await finishRun(tx, run, {
           status: "limit_reached",
           error: {
@@ -480,9 +480,9 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     const live = !isWorkflowRunEnded(run.status);
     const finishedAt = now().toISOString();
     if (end.kind === "failed") {
-      const { kind: _kind, ofPrincipal, ...failure } = end;
+      const { kind: _kind, systemic, ...failure } = end;
       await tx.workflowRuns.endStepRun({ ...ref, status: "failed", finishedAt, ...failure });
-      if (live) await failStep(tx, run, index, stepRun, end.error, ofPrincipal);
+      if (live) await failStep(tx, run, index, stepRun, end.error, systemic);
       return;
     }
     if (end.kind === "loop") {

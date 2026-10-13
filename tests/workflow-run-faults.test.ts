@@ -338,6 +338,11 @@ describe("a loop that continues past a failed item", () => {
     const run = await t.finish((await start(t)).id);
     expect(run.status).toBe("failed");
     expect(run.error).toMatchObject({ code: "FORBIDDEN", action: "connection.use" });
+    // The sentence names who lacks the right: the run's principal, and no person.
+    expect(run.error?.message).toBe(
+      "The service principal 'workflow-runner', which the Workflow runs as, does not hold the right 'connection.use' to call 'connection.crm.write'. An administrator can grant it to the principal"
+    );
+    expect(run.error?.message).not.toContain("person");
     expect(writesOf(t)).toHaveLength(1);
     const stepRuns = await stepRunsOf(t, run.id);
     expect(stepRuns.at(-1)).toMatchObject({
@@ -346,6 +351,37 @@ describe("a loop that continues past a failed item", () => {
       error: { code: "FORBIDDEN", action: "connection.use" }
     });
     expect(stepRuns.find((stepRun) => stepRun.key === "each_client")?.status).toBe("failed");
+  });
+
+  it("stops where the instance's policy refuses the operation, and does not end done", async () => {
+    const t = await continuing();
+    // The policy asks for a confirmation nobody is there to give: every item would be refused.
+    t.state.centralSettings = [{ operation: "connection.crm.write", value: "confirm" }];
+    const run = await t.finish((await start(t)).id);
+    expect(run.status).toBe("failed");
+    expect(run.error?.code).toBe("POLICY_DENIED");
+    expect(writesOf(t)).toEqual([]);
+    const stepRuns = await stepRunsOf(t, run.id);
+    // The first item was refused, and no second one was asked.
+    expect(stepRuns.filter((stepRun) => stepRun.iteration !== undefined)).toHaveLength(1);
+    expect(stepRuns.find((stepRun) => stepRun.key === "each_client")?.status).toBe("failed");
+    const [ended] = await t.stores.audit.listAuditEvents({
+      clientInstanceId,
+      type: "workflow_run.ended"
+    });
+    expect(ended).toMatchObject({ status: "failed", metadata: { errorCode: "POLICY_DENIED" } });
+  });
+
+  it("still continues past an item whose own call failed", async () => {
+    const t = await continuing();
+    t.setBehaviour((operation, input) =>
+      JSON.stringify(input).includes("client-bert")
+        ? Promise.reject(new Error("The outside system is down"))
+        : Promise.resolve(answer(operation, input))
+    );
+    const run = await t.finish((await start(t)).id);
+    expect(run.status).toBe("done");
+    expect(JSON.parse(run.outputPreview?.text ?? "null")).toEqual({ sent: 2, failed: 1 });
   });
 
   it("counts an item a limit cut off between two of its steps as neither done nor failed", async () => {
@@ -486,6 +522,37 @@ describe("a cancel while the worker of a step is gone", () => {
       (candidate) => candidate.key === "each_client[0].send"
     );
     // The call happened, and the step run says so.
+    expect(stepRun).toMatchObject({ status: "done", effect: "changing" });
+    const [call] = (await t.runs()).filter((made) => made.effect === "changing");
+    expect(stepRun?.operationRunId).toBe(call?.id);
+    expect(writesOf(t)).toHaveLength(1);
+  }, 60_000);
+
+  it("records it as well where the run ran out of its time while the worker was gone", async () => {
+    let late = 0;
+    const t = await ready({ now: () => new Date(Date.now() + late) });
+    const started = await start(t);
+    const dying = hangingAt(t.workflows.jobHandlers, 8);
+    const dead = t.worker(dying.handlers);
+    let reached = false;
+    const arrived = dying.reached.then(() => {
+      reached = true;
+    });
+    for (let pass = 0; pass < 20 && !reached; pass++) {
+      await Promise.race([dead.runDue(), arrived]);
+    }
+    expect(writesOf(t)).toHaveLength(1);
+    await dead.stop();
+    // Thirteen hours on, the run is past the twelve it may take.
+    late = 13 * 60 * 60 * 1_000;
+    const run = await t.finish(started.id, t.worker());
+
+    expect(run.status).toBe("limit_reached");
+    expect(run.error?.code).toBe("duration_limit");
+    const stepRun = (await stepRunsOf(t, started.id)).find(
+      (candidate) => candidate.key === "each_client[0].send"
+    );
+    // The step did not run again, and it does not read as if its call had never been made.
     expect(stepRun).toMatchObject({ status: "done", effect: "changing" });
     const [call] = (await t.runs()).filter((made) => made.effect === "changing");
     expect(stepRun?.operationRunId).toBe(call?.id);

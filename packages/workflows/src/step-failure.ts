@@ -5,11 +5,11 @@ export interface WorkflowStepFailureOptions {
   /** The right the run's principal does not hold. */
   action?: string;
   /**
-   * The refusal is of the run's principal itself: it is disabled or missing, or it does not
-   * hold the right. Every further step would be refused the same way, so no loop continues
-   * past it.
+   * The refusal is no failure of one item: the run's principal is disabled or missing or does
+   * not hold the right, or the instance's policy does not allow the operation from a Workflow.
+   * Every further item would be refused the same way, so no loop continues past it.
    */
-  ofPrincipal?: boolean;
+  systemic?: boolean;
 }
 
 /**
@@ -21,14 +21,14 @@ export interface WorkflowStepFailureOptions {
 export class WorkflowStepFailure extends Error {
   readonly code: string;
   readonly action: string | undefined;
-  readonly ofPrincipal: boolean;
+  readonly systemic: boolean;
 
   constructor(code: string, message: string, options: WorkflowStepFailureOptions = {}) {
     super(message);
     this.name = "WorkflowStepFailure";
     this.code = code;
     this.action = options.action;
-    this.ofPrincipal = options.ofPrincipal === true;
+    this.systemic = options.systemic === true;
   }
 
   toRunError(): WorkflowRunError {

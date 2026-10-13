@@ -236,7 +236,7 @@ export async function callStepOperation(input: {
   try {
     outcome = await runOperation(call, deps, changing ? {} : { signal: input.signal });
   } catch (error) {
-    throw refusalOf(error, operation, made) ?? error;
+    throw refusalOf(error, operation, made, run.principal.name) ?? error;
   }
   const { result } = outcome;
   const trace = traceOf(made, outcome.unrecorded ? undefined : result.runId);
@@ -254,14 +254,21 @@ export async function callStepOperation(input: {
     }
     case "denied": {
       const refusal = operationDenialError(result.reason);
+      if (result.reason.kind === "forbidden") {
+        // The principal does not hold the right, or may not call from a Workflow at all.
+        throw new OperationStepFailure(
+          refusal.code,
+          missingRight(run.principal.name, operation, result.reason.action),
+          trace,
+          { systemic: true, action: result.reason.action }
+        );
+      }
+      // A policy is set for the operation and not for one item: the next would meet it too.
       throw new OperationStepFailure(
         refusal.code,
         refusal.message,
         trace,
-        // The principal does not hold the right, or may not call from a Workflow at all.
-        result.reason.kind === "forbidden"
-          ? { ofPrincipal: true, action: result.reason.action }
-          : {}
+        result.reason.kind === "policy" ? { systemic: true } : {}
       );
     }
     case "failed":
@@ -289,7 +296,8 @@ export async function callStepOperation(input: {
 function refusalOf(
   error: unknown,
   operation: string,
-  call: WorkflowStepRunCall
+  call: WorkflowStepRunCall,
+  principal: string
 ): OperationStepFailure | undefined {
   if (!isAppError(error)) return undefined;
   const held = heldRunSchema.safeParse(error.details);
@@ -324,14 +332,31 @@ function refusalOf(
   }
   if (!(error instanceof AppError) || error.statusCode !== 403) return undefined;
   const right = refusedRightSchema.safeParse(error.details);
+  const action = right.success ? right.data.action : undefined;
+  if (error.code === "FORBIDDEN") {
+    return new OperationStepFailure(
+      error.code,
+      missingRight(principal, operation, action),
+      { call },
+      { systemic: true, ...(action === undefined ? {} : { action }) }
+    );
+  }
   return new OperationStepFailure(
     error.code,
     error.message,
     { call },
-    error.code === "FORBIDDEN"
-      ? { ofPrincipal: true, ...(right.success ? { action: right.data.action } : {}) }
-      : {}
+    error.code === "POLICY_DENIED" ? { systemic: true } : {}
   );
+}
+
+/**
+ * The sentence of a refused right. The call path words its refusal for a person who made a
+ * request; the caller of a step is the service principal of the run, and whoever reads the
+ * run needs to know which principal lacks which right.
+ */
+function missingRight(principal: string, operation: string, action: string | undefined): string {
+  const right = action === undefined ? "the right it needs" : `the right '${action}'`;
+  return `The service principal '${principal}', which the Workflow runs as, does not hold ${right} to call '${operation}'. An administrator can grant it to the principal`;
 }
 
 /**

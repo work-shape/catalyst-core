@@ -45,7 +45,7 @@ export type StepEnd =
       operationRunId?: OperationRunId;
       call?: WorkflowStepRunCall;
       /** The run's principal itself was refused: no loop continues past this failure. */
-      ofPrincipal: boolean;
+      systemic: boolean;
     }
   /** A loop read its list. Its items are run by step runs of their own. */
   | { kind: "loop"; items: JsonValue[] };
@@ -117,7 +117,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
             throw new WorkflowStepFailure(
               "principal_inactive",
               "The service principal the run acts as no longer exists or is disabled",
-              { ofPrincipal: true }
+              { systemic: true }
             );
           }
           const result = await callStepOperation({
@@ -199,7 +199,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
       return {
         kind: "failed",
         error: error.toRunError(),
-        ofPrincipal: error.ofPrincipal,
+        systemic: error.systemic,
         ...(error instanceof OperationStepFailure ? error.trace : {})
       };
     }
