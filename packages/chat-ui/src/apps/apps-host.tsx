@@ -24,6 +24,12 @@ export interface AppsHost {
   /** Opens a new conversation of the workspace with this text in its composer. */
   startChat(prompt: string): void;
   /**
+   * Starts a conversation of the open workspace about this App and opens it: its agent reads
+   * and saves the App's draft, which is shown beside it. Rejects where the instance refuses
+   * the conversation. Absent where no conversation can be started.
+   */
+  editWithAgent?(app: string): Promise<void>;
+  /**
    * Where the runs of calls are read, Instance > Operations, and where one run is, for a
    * reader who may open that place. Absent for everybody else: nothing links to a page its
    * reader is not shown.

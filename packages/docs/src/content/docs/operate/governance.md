@@ -61,7 +61,7 @@ Record:
 - model id, and the model binding the call named
 - token counts when reported by the provider
 - conversation id, where a conversation caused the call
-- agent run id and agent name, or for a call the product made for itself what it was for: `conversation_title`, `guardrail_judge` or `document_extraction`
+- agent run id and agent name, or for a call the product made for itself what it was for: `conversation_title`, `guardrail_judge`, `document_extraction`, `knowledge_embedding` (the chunks of a Knowledge Base at ingestion and re-index) or `knowledge_query` (the query of a Knowledge Base search)
 - the user who caused the call and the workspace it happened in, where there is one
 - correlation id
 - persisted customer billable cost and completeness state

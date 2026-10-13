@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import { shoot, shotsDir, signIn } from "./inbox-fixtures";
+import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
 // The Agents page: its row in the rail, the cards of the agents a person may use in the open
@@ -15,8 +16,9 @@ const builder = { email: "e2e-superadmin@example.test", password: "e2e-superadmi
 const DEFAULT_AGENT = "Application Assistant";
 const OTHER_AGENT = "Research Assistant";
 const PROMPT_TITLE = "Find review risks";
-const PROMPT_TEXT =
-  "List the most important application or document review risks I should check first.";
+
+const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
+const agentPath = (name: string) => `${apiBaseUrl}/api/v1/assets/agent/${name}`;
 
 const rail = (page: Page) => page.getByRole("navigation", { name: "Main navigation" });
 const agentsArea = (page: Page) => page.getByRole("region", { name: /^(Agents|Agenten)$/u });
@@ -62,6 +64,8 @@ test("a member finds the agents of the workspace under New chat and starts a cha
   await expect(defaultCard).toContainText("Help with application and document review.");
   await expect(defaultCard).toContainText("Default agent");
   await expect(otherCard).not.toContainText("Default agent");
+  // A card names the agent and what it does: its starter prompts wait in the chat with it.
+  await expect(defaultCard.getByRole("button", { name: PROMPT_TITLE })).toHaveCount(0);
   // A member changes nothing here and is not led to where agents are changed.
   await expect(agentsArea(page).getByRole("link", { name: "Edit in Studio" })).toHaveCount(0);
   await shoot(
@@ -82,15 +86,12 @@ test("a member finds the agents of the workspace under New chat and starts a cha
   await expect(composer).toBeFocused();
   await expect(composer).toHaveValue("");
 
-  // A suggestion opens one with its text in the composer, ready to be finished and sent.
+  // The starter prompts of the default agent stand in the empty chat with it.
   await openAgents(page);
-  await defaultCard.getByRole("button", { name: PROMPT_TITLE }).click();
+  await defaultCard.getByRole("button", { name: "Start chat" }).click();
   await expect(page).toHaveURL(/\/w\/[^/]+$/u);
   await expect(startPageAgent(page)).toHaveAccessibleName(`Select agent: ${DEFAULT_AGENT}`);
-  await expect(composer).toHaveValue(PROMPT_TEXT);
-  await expect(composer).toBeFocused();
-  // Nothing was sent: the text is the person's to change.
-  await composer.fill("");
+  await expect(page.getByRole("button", { name: PROMPT_TITLE })).toBeVisible();
 });
 
 test("the Agents page reads in German and keeps inside a phone's width", async ({
@@ -154,4 +155,103 @@ test("a builder is led from a card to the agent's page in Studio", async ({
   // The way back is the browser's: the cards are where they were.
   await page.goBack();
   await expect(card(page, OTHER_AGENT)).toBeVisible();
+});
+
+test("a builder who renames an agent in Studio finds the new name on its card", async ({
+  page,
+  // The probe agent is offered in every workspace while it exists, so the tests that count
+  // the agents of the instance wait for this one.
+  instanceAgentsChange: _instanceAgentsChange
+}) => {
+  test.setTimeout(90_000);
+  const name = "e2e_rename_probe";
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page, builder);
+  const remove = async () => {
+    if ((await page.request.get(agentPath(name))).ok()) {
+      await requestWithOrigin(page, "post", `${agentPath(name)}/delete`, {
+        data: { expectedRevision: await assetRevision(page, agentPath(name)) }
+      });
+    }
+  };
+  await remove();
+  const created = await requestWithOrigin(page, "put", agentPath(name), {
+    data: {
+      expectedRevision: await assetBaseRevision(page, agentPath(name)),
+      config: {
+        name,
+        displayName: "Rename Probe",
+        modelProviderId: "local",
+        instructions: "A probe of the Agents page tests.",
+        toolNames: []
+      }
+    }
+  });
+  expect(created.ok()).toBe(true);
+  try {
+    // The page has read the workspace's agents before the rename.
+    await page.reload();
+    await openAgents(page);
+    await card(page, "Rename Probe").getByRole("link", { name: "Edit in Studio" }).click();
+    await expect(page).toHaveURL(new RegExp(`/build/agents/${name}$`, "u"));
+    await page.getByRole("textbox", { name: /^Display name/u }).fill("Renamed Probe");
+    await page.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
+
+    // Back on the Agents page without a reload, the card carries the saved name.
+    await rail(page).getByRole("button", { name: "Agents", exact: true }).click();
+    await expect(page).toHaveURL(/\/w\/[^/]+\/agents$/u);
+    await expect(card(page, "Renamed Probe")).toBeVisible();
+    await expect(card(page, "Rename Probe")).toHaveCount(0);
+  } finally {
+    await remove();
+  }
+});
+
+test("a builder who cancels a new agent stays on the Agents page", async ({
+  page,
+  instanceAgents: _instanceAgents
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page, builder);
+  await openAgents(page);
+  const agentsUrl = page.url();
+
+  // The dialog opens on the page itself, and Cancel, Escape and the close button leave the
+  // reader where they were.
+  const newAgent = page.getByRole("button", { name: "New agent", exact: true });
+  const dialog = page.getByRole("dialog", { name: "New agent", exact: true });
+  await newAgent.click();
+  await expect(dialog).toBeVisible();
+  expect(page.url()).toBe(agentsUrl);
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(page.url()).toBe(agentsUrl);
+  await expect(card(page, DEFAULT_AGENT)).toBeVisible();
+  // The focus returns to the button that opened the dialog, whichever way it was left.
+  await expect(newAgent).toBeFocused();
+
+  await newAgent.click();
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  expect(page.url()).toBe(agentsUrl);
+  await expect(newAgent).toBeFocused();
+
+  await newAgent.click();
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(page.url()).toBe(agentsUrl);
+  await expect(newAgent).toBeFocused();
+
+  // Continue leads to Studio with the new agent's page, named as typed; nothing is stored
+  // before it is created there.
+  await newAgent.click();
+  await dialog.getByRole("textbox", { name: /^Display name/u }).fill("Not Yet Stored");
+  await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page).toHaveURL(/\/build\/agents$/u);
+  await expect(page.getByRole("heading", { level: 1, name: "Not Yet Stored" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: /^Display name/u })).toHaveValue("Not Yet Stored");
+  expect((await page.request.get(agentPath("not_yet_stored"))).status()).toBe(404);
 });

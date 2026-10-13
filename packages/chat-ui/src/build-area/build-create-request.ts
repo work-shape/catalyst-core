@@ -1,21 +1,24 @@
+import type { BuildAssetStart } from "./build-asset-kind";
+
 /**
- * A wish to start a new asset that was made outside Build, such as on the Agents page. A new
- * asset has no address, so the wish cannot travel in one: it is kept here for the one step
- * from that page to the kind's list, which opens its dialog and forgets the wish.
+ * A new asset started outside Studio, such as from the Agents page: its dialog was answered
+ * there, and the kind's list opens the new asset's page with that name and id. A new asset has
+ * no address, so the start cannot travel in one: it is kept here for the one step to the list,
+ * which takes it and forgets it.
  */
-let requestedKindPath: string | undefined;
+let requested: { kindPath: string; start: BuildAssetStart } | undefined;
 
-/** Asks the list of a kind to open the dialog that starts an asset, once it is shown. */
-export function requestBuildCreate(kindPath: string): void {
-  requestedKindPath = kindPath;
+/** Asks the list of a kind to open the page of this new asset, once it is shown. */
+export function requestBuildStart(kindPath: string, start: BuildAssetStart): void {
+  requested = { kindPath, start };
 }
 
-/** A list of this kind was asked to open its dialog. Reading it changes nothing. */
-export function buildCreateRequested(kindPath: string | undefined): boolean {
-  return kindPath !== undefined && requestedKindPath === kindPath;
+/** The new asset a list of this kind was asked to open. Reading it changes nothing. */
+export function requestedBuildStart(kindPath: string | undefined): BuildAssetStart | undefined {
+  return kindPath !== undefined && requested?.kindPath === kindPath ? requested.start : undefined;
 }
 
-/** Forgets the wish: Build has been reached, whatever it showed. */
-export function clearBuildCreateRequest(): void {
-  requestedKindPath = undefined;
+/** Forgets the start: Studio has been reached, whatever it showed. */
+export function clearBuildStartRequest(): void {
+  requested = undefined;
 }
