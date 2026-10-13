@@ -183,6 +183,10 @@ describe("Connection page", () => {
     expect(markup).toContain("Revenue, customers and orders of the sample business.");
     expect(markup).toContain('data-connection-credential="set"');
     expect(markup).toContain("Set, version 2");
+    // A reader who may not change the Connection is told that it is set, not its version.
+    const readOnly = renderPage({ mayTest: false });
+    expect(readOnly).toContain(">Set<");
+    expect(readOnly).not.toContain("version 2");
     expect(markup).toContain(
       "The credential stays in the Secret Store. This page shows only whether it is there."
     );

@@ -469,8 +469,9 @@ function ConnectionStatus({
                         : "neutral"
                   }
                 >
+                  {/* The version of the credential is for whoever may change the Connection. */}
                   {secret.state === "set"
-                    ? secret.version === undefined
+                    ? secret.version === undefined || !mayTest
                       ? t("connections.credentialSet")
                       : t("connections.credentialSetVersion", { version: secret.version })
                     : t(
