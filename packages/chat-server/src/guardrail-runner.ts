@@ -37,7 +37,6 @@ const GUARDRAIL_CHECK_TIMEOUT_MS = 60_000;
 const GUARDRAIL_CHECK_TIMEOUT_MESSAGE = `did not answer within ${GUARDRAIL_CHECK_TIMEOUT_MS / 1000} seconds`;
 const GUARDRAIL_CHECK_LIMIT_MESSAGE =
   "could not run because the model usage limit of this instance is reached";
-const TOO_LARGE_MESSAGE = `could not read content longer than ${GUARDRAIL_CHECKED_FIELD_MAX_CHARS} characters`;
 const verdictSchema = z
   .object({
     violates: z.boolean(),
@@ -225,7 +224,7 @@ export class GuardrailRunner {
       throw new Error(`Guardrail '${name}' is no model judge`);
     }
     if (content.some(([, text]) => text === null)) {
-      return unchecked(entry, TOO_LARGE_MESSAGE);
+      return unchecked(entry, tooLargeMessage(GUARDRAIL_CHECKED_FIELD_MAX_CHARS));
     }
     // The check's own limit, unless the caller's deadline comes first.
     const ownDeadline = new Date(Date.now() + GUARDRAIL_CHECK_TIMEOUT_MS);
@@ -348,8 +347,9 @@ function matchPattern(
   const { guardrail } = entry;
   if (content.length === 0 || guardrail.check.kind !== "pattern") return undefined;
   for (const [field, text] of content) {
-    if (text === null) {
-      return unchecked(entry, TOO_LARGE_MESSAGE);
+    // A pattern reads less of a field the larger its program is, so no check holds the server.
+    if (text === null || text.length > pattern.maxChars) {
+      return unchecked(entry, tooLargeMessage(pattern.maxChars));
     }
     if (pattern.test(text)) {
       return answerOf(
@@ -360,6 +360,10 @@ function matchPattern(
     }
   }
   return answerOf(entry, "allow", "");
+}
+
+function tooLargeMessage(chars: number): string {
+  return `could not read content longer than ${chars} characters`;
 }
 
 function answerOf(entry: Bound, outcome: Outcome, reason: string): GuardrailAnswer {

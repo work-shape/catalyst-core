@@ -8,6 +8,7 @@ import {
 } from "@vivd-catalyst/core";
 import { GuardrailRunner, createAuditingEventEmitter } from "@vivd-catalyst/chat-server";
 import {
+  compileGuardrailPattern,
   parseClientInstanceConfig,
   type ClientInstanceConfig,
   type ReleaseGuardrailConfig
@@ -234,6 +235,27 @@ describe("the guardrails at one before-event", () => {
     expect(f.complete).not.toHaveBeenCalled();
   });
 
+  // Fails without the change: a pattern of a large program read 2 Mi characters and held the
+  // server for seconds.
+  it("reads less of a field the larger a pattern's program is", async () => {
+    const pattern = `${ibanPattern}|[a-z]{300}[0-9]`;
+    const { maxChars } = compileGuardrailPattern(pattern);
+    expect(maxChars).toBeLessThan(2 * 1024 * 1024);
+    const f = await fixture({
+      blocking: noIban({ check: { kind: "pattern", pattern } }),
+      warning: noIban({ check: { kind: "pattern", pattern }, outcome: "warn" })
+    });
+    expect(
+      (await f.runner.answer(write("x".repeat(maxChars)), context)).map((a) => a.outcome)
+    ).toEqual(["allow", "allow"]);
+    const answers = await f.runner.answer(write("x".repeat(maxChars + 1)), context);
+    expect(answers.map((answer) => [answer.guardrailName, answer.outcome])).toEqual([
+      ["blocking", "block"],
+      ["warning", "warn"]
+    ]);
+    expect(answers[0]?.reason).toContain(`could not read content longer than ${maxChars}`);
+  });
+
   it("holds where a judge that holds cannot answer, and keeps no hit when asked again", async () => {
     const f = await fixture({ holding: judge("asset.before_write", "require_approval") });
     f.complete.mockRejectedValue(new Error("provider detail"));
@@ -279,6 +301,11 @@ describe("guardrails in release config", () => {
 
   it.each([
     ["a pattern past its limit", { check: { kind: "pattern", pattern: "a".repeat(2_001) } }],
+    // Fails without the change: a short pattern of a large program was accepted and read little.
+    [
+      "a pattern too complex to read 64 Ki",
+      { check: { kind: "pattern", pattern: "[a-z]{1000}[0-9]" } }
+    ],
     ["a filter its event does not know", { filter: { operation: "data_store.*" } }],
     [
       "a field its event does not have",

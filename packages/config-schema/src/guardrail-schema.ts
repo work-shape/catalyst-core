@@ -54,10 +54,7 @@ const patternCheckSchema = z
       .superRefine((pattern, context) => {
         const error = guardrailPatternError(pattern);
         if (error !== undefined) {
-          context.addIssue({
-            code: "custom",
-            message: `The pattern is no RE2 expression, which has no backreferences and no lookaround: ${error}`
-          });
+          context.addIssue({ code: "custom", message: error });
         }
       }),
     fields: checkedFieldsSchema,

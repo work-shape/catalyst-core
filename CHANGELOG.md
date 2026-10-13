@@ -44,12 +44,15 @@ contain breaking changes; a patch version does not.
   among them skips the judges. Every guardrail that applies runs and the strictest answer wins.
   A refusal names the guardrail, the asset and the reason, as `GUARDRAIL_BLOCKED` with
   `details.guardrailId`, and `catalyst config push` prints it. Content longer than 2 Mi
-  characters is not read in part: a guardrail that blocks or holds answers as on a match. A hit
+  characters is not read in part: a guardrail that blocks or holds answers as on a match. A
+  pattern reads less the larger its compiled program is (40 million steps a field, about half a
+  second at most on the server's one thread), so no pattern holds the server. A hit
   now names its subject (the asset's kind, id and name, or the operation's name, never the run
   and never a person), and Build > Guardrails links an asset's hit to its page (migration
   `0072_guardrail_hit_subject`). A call that waited for an approval is asked again before it is
   executed without keeping a second hit. **Operators:** release config refuses at start a
-  pattern RE2 does not compile, one longer than 2,000 characters, a filter key or a field its
+  pattern RE2 does not compile, one longer than 2,000 characters, one whose program is too large
+  to read 64 Ki characters (such as `[a-z]{1000}`), a filter key or a field its
   event does not have, and `require_approval` on `approval_request.before_create`.
   **Rollback:** an earlier release ignores the two new columns, and refuses a config with a
   guardrail it does not know: remove guardrails on the new events, of kind `pattern` or with
