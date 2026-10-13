@@ -137,7 +137,10 @@ const sameSubject = (left: ConversationSubject, right: ConversationSubject | und
   right !== undefined && left.kind === right.kind && left.name === right.name;
 
 /** What a save of a Page answers about its App, where the App's draft was not written. */
-const draftNotWritten = (app: { name: string; title: string }, message: string): PageSaveIntoApp => ({
+const draftNotWritten = (
+  app: { name: string; title: string },
+  message: string
+): PageSaveIntoApp => ({
   ...app,
   saved: false,
   message

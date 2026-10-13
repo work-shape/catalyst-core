@@ -62,9 +62,9 @@ describe("the tools a conversation is offered to build a Page", () => {
   });
 
   it("leave out a file tool the release turned off, and offer nothing where no folder can be written", async () => {
-    expect(
-      await offered({ apps: true, release: ["workspace.write_file"] })
-    ).toEqual(expect.arrayContaining(["page.save", "page.save_as_app", "workspace.write_file"]));
+    expect(await offered({ apps: true, release: ["workspace.write_file"] })).toEqual(
+      expect.arrayContaining(["page.save", "page.save_as_app", "workspace.write_file"])
+    );
     expect(await offered({ apps: true, release: ["workspace.write_file"] })).not.toContain(
       "workspace.edit_file"
     );

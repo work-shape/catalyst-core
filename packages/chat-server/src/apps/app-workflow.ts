@@ -326,7 +326,6 @@ function titleOf(asset: ConfigAssetRecord): string {
 
 const pageNotFound = () => new AppError("NOT_FOUND", "Page is not available");
 
-
 /**
  * The revision a mode shows: the one `liveRevisionId` names for the App's users, the draft for
  * its writers. Nothing for `published` before the first publish.

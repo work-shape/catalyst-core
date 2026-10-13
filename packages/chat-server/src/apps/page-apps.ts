@@ -31,7 +31,11 @@ export class PageApps {
    * Saves the newest revision of a Page as an App with a draft. The files are copied: the
    * conversation of the Page may expire while the App stays. The App remembers the Page.
    */
-  async create(call: AssetCall, page: Page, input: { name: string; title: string; workspaceId: string }) {
+  async create(
+    call: AssetCall,
+    page: Page,
+    input: { name: string; title: string; workspaceId: string }
+  ) {
     const { source, origin } = await this.newestRevision(page);
     const created = await this.assets.drafts.createFromFileSet(
       call,
@@ -98,7 +102,9 @@ export class PageApps {
   }
 
   /** The newest revision of a Page, and what a copy of it records. */
-  private async newestRevision(page: Page): Promise<{ source: FileSet; origin: PageRevisionOrigin }> {
+  private async newestRevision(
+    page: Page
+  ): Promise<{ source: FileSet; origin: PageRevisionOrigin }> {
     const source = await this.options.stores.pages.getPageFileSet({
       clientInstanceId: this.options.clientInstanceId,
       pageId: page.id
