@@ -163,6 +163,12 @@ describe("the Actions side of a draft", () => {
     expect(row).toContain("Reading");
     expect(row).toContain('data-policy="allow"');
     expect(row).toContain("Can be tested");
+    // Under the target, what it is: a store and its SQL, never a Connection.
+    expect(row).toContain("The data store and the SQL the action runs on it");
+    expect(row).not.toContain("The connection");
+    expect(rowOf(actionsView(ready([list]), true, "de"), "list_findings")).toContain(
+      "Der Datenspeicher und das SQL, das die Aktion darauf ausführt"
+    );
     // Without a title the store goes by its name, and a store that is not there says so.
     expect(rowOf(markup, "load_gone")).toContain("ledger");
     expect(rowOf(markup, "load_gone")).toContain('data-unavailable="data_store_missing"');
