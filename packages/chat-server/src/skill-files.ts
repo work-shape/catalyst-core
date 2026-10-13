@@ -17,20 +17,41 @@ import {
   type JsonObject
 } from "@vivd-catalyst/core";
 
-// A skill as a folder of files: `SKILL.md`, and files below `references/`, `scripts/` and
-// `assets/`. The config of a skill stays what it was and stays the one place its text is
-// read from: the instructions of `SKILL.md` and the text resources. Every other file, such as
-// a script, a PDF or an image, is kept in the file set of the revision, and the config names
-// it in an index (`files`) without its content. So a skill that is text alone has the config
+// A skill as a folder of files, as the public skill convention has it: `SKILL.md`, and
+// whatever lies beside it, commonly below `references/`, `scripts/` and `assets/`. A folder
+// taken from a public library is stored as its bytes and read back as them. The config of a
+// skill stays what it was and stays the one place its text is read from: the instructions of
+// `SKILL.md` and the text resources. Every other file, such as a script, a PDF or an image,
+// is kept in the file set of the revision, and the config names it in an index (`files`)
+// without its content. So a skill that is text alone has the config
 // it always had and needs no store of files, and a write that sends a config alone leaves the
 // other files of the skill where they are.
 
 /** The file of a skill's folder that holds its instructions. */
 export const SKILL_MANIFEST_FILE = "SKILL.md";
-/** The folders of a skill below which its files lie. */
-const SKILL_FOLDERS = ["references", "scripts", "assets"] as const;
-/** The folder whose files a skill runs: each is UTF-8 text. */
+/** The folder whose files a skill runs. None of them is a resource an agent's proposal changes. */
 const SKILL_SCRIPTS_FOLDER = "scripts";
+/**
+ * The extensions that say a file is a script or a text. Such a file is UTF-8, wherever it
+ * lies. A file of any other extension is bytes.
+ */
+const SKILL_TEXT_EXTENSIONS: readonly string[] = [
+  "py",
+  "js",
+  "mjs",
+  "ts",
+  "sh",
+  "rb",
+  "md",
+  "txt",
+  "json",
+  "yaml",
+  "yml",
+  "xml",
+  "html",
+  "css",
+  "csv"
+];
 
 /** How large one file of a skill is at most, in bytes. */
 const SKILL_FILE_MAX_BYTES = 2 * 1024 * 1024;
@@ -44,13 +65,12 @@ type SkillFileRefusal =
   | "skill_manifest_invalid"
   | "skill_path_invalid"
   | "skill_path_duplicate"
-  | "skill_file_outside_folders"
   | "skill_file_too_large"
   | "skill_too_many_files"
   | "skill_too_large"
   | "skill_file_executable"
   | "skill_file_lfs_pointer"
-  | "skill_script_not_text";
+  | "skill_file_not_text";
 
 function refusal(reason: SkillFileRefusal, message: string, details: JsonObject = {}): AppError {
   return new AppError("VALIDATION_FAILED", message, { reason, ...details });
@@ -179,10 +199,10 @@ export interface SkillFilesReading {
  * Reads the whole folder of a skill as one write carries it. It refuses the set for a limit
  * and each file for its path, its place and what it is, with the path and a reason of its own.
  *
- * A text file with the extension of a resource (`.md`, `.txt`, `.json`, `.yaml`, `.yml`)
- * outside `scripts/` is a resource of the config, at whatever path: the resources a skill had
- * before it could hold other files stay where they are. Every other file lies below
- * `references/`, `scripts/` or `assets/`, and one below `scripts/` is UTF-8 text.
+ * Any normalized relative path is a file of the skill. A file whose extension says script or
+ * text is UTF-8. One with the extension of a resource (`.md`, `.txt`, `.json`, `.yaml`,
+ * `.yml`) outside `scripts/` is a resource of the config, at whatever path, such as a
+ * `reference.md` or a `LICENSE.txt` at the root. Every other file is kept as its bytes.
  */
 export function readSkillFiles(name: string, files: readonly SkillFileInput[]): SkillFilesReading {
   if (files.length > SKILL_MAX_FILES) {
@@ -237,10 +257,15 @@ export function readSkillFiles(name: string, files: readonly SkillFileInput[]): 
       );
     }
     const inScripts = below.length > 0 && folder === SKILL_SCRIPTS_FOLDER;
-    if (inScripts && text === undefined) {
+    const extension = /\.([A-Za-z0-9]+)$/u.exec(path)?.[1]?.toLowerCase();
+    if (
+      text === undefined &&
+      extension !== undefined &&
+      SKILL_TEXT_EXTENSIONS.includes(extension)
+    ) {
       throw refusal(
-        "skill_script_not_text",
-        `The file '${path}' is no UTF-8 text. A file below '${SKILL_SCRIPTS_FOLDER}/' is a script as text.`,
+        "skill_file_not_text",
+        `The file '${path}' is no UTF-8 text. A file with the extension '.${extension}' is a script or a text.`,
         { path }
       );
     }
@@ -248,13 +273,6 @@ export function readSkillFiles(name: string, files: readonly SkillFileInput[]): 
     if (text !== undefined && mediaType !== undefined && !inScripts) {
       resources.push({ path, mediaType, content: text });
       continue;
-    }
-    if (below.length === 0 || !SKILL_FOLDERS.some((allowed) => allowed === folder)) {
-      throw refusal(
-        "skill_file_outside_folders",
-        `The file '${path}' lies outside the folders of a skill. Beside '${SKILL_MANIFEST_FILE}' and its text resources a skill holds files below ${SKILL_FOLDERS.map((allowed) => `'${allowed}/'`).join(", ")}.`,
-        { path }
-      );
     }
     extras.push(path);
   }
@@ -325,11 +343,27 @@ export function storedFileMatchesConfig(config: unknown, file: SkillFileInput): 
       read.data.name === skill.data.name &&
       read.data.title === skill.data.title &&
       read.data.description === skill.data.description &&
-      read.data.content === skill.data.content
+      read.data.content === skill.data.content &&
+      sameJson(read.data.frontmatter ?? {}, skill.data.frontmatter ?? {})
     );
   } catch {
     return false;
   }
+}
+
+/** Whether two JSON values say the same, whatever the order of their keys. */
+function sameJson(left: unknown, right: unknown): boolean {
+  const sorted = (value: unknown): unknown =>
+    Array.isArray(value)
+      ? value.map(sorted)
+      : typeof value === "object" && value !== null
+        ? Object.fromEntries(
+            Object.entries(value)
+              .sort(([one], [other]) => (one < other ? -1 : one > other ? 1 : 0))
+              .map(([key, entry]) => [key, sorted(entry)])
+          )
+        : value;
+  return JSON.stringify(sorted(left)) === JSON.stringify(sorted(right));
 }
 
 const extrasSchema = (manifest: unknown): string[] => {
@@ -361,9 +395,28 @@ export function skillFileIndex(fileSet: FileSet | undefined): SkillFileEntry[] {
 }
 
 /** The index a stored config of a skill carries, or none. */
-export function skillFileIndexOfConfig(config: unknown): SkillFileEntry[] {
+function skillFileIndexOfConfig(config: unknown): SkillFileEntry[] {
   const read = z.object({ files: z.array(skillFileEntrySchema) }).safeParse(config);
   return read.success ? read.data.files : [];
+}
+
+/**
+ * What a write of the config alone keeps of the revision before it: the further frontmatter
+ * of its `SKILL.md` where the write says nothing of it, since a caller that does not know
+ * those keys must not lose them, and the index of the files where that revision has a file
+ * set. A write that sends `frontmatter`, an empty one too, has said what it is.
+ */
+export function withCarriedSkillParts(
+  config: JsonObject,
+  before: unknown,
+  beforeHasFiles: boolean
+): JsonObject {
+  const indexed = withSkillFileIndex(config, beforeHasFiles ? skillFileIndexOfConfig(before) : []);
+  if ("frontmatter" in indexed) return indexed;
+  const kept = z.object({ frontmatter: z.record(z.string(), z.json()) }).safeParse(before);
+  return kept.success && Object.keys(kept.data.frontmatter).length > 0
+    ? { ...indexed, frontmatter: kept.data.frontmatter }
+    : indexed;
 }
 
 /** The config of a skill with the index of the files it does not hold, or without one. */

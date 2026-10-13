@@ -2,17 +2,19 @@ import {
   SKILL_NAME_PATTERN,
   SKILL_NAME_RULE,
   skillConfigSchema,
+  skillPortabilityIssues,
   type ClientInstanceConfig
 } from "@vivd-catalyst/config-schema";
 import { AppError, defineAssetKind, type SkillOrigin } from "@vivd-catalyst/core";
+import { z } from "zod";
 import {
   SKILL_MANIFEST_FILE,
   readSkillFiles,
   skillFileIndex,
-  skillFileIndexOfConfig,
   skillFileSetManifest,
   skillFilesOfConfig,
   storedFileMatchesConfig,
+  withCarriedSkillParts,
   withSkillFileIndex
 } from "../skill-files";
 import type { WorkflowAssetKind } from "./shared";
@@ -54,13 +56,18 @@ export function createSkillAssetKind(options: { config: ClientInstanceConfig }):
     missingUpsertRight: () => undefined,
     assertInteractiveUpsertAllowed: assertEditingAllowed,
     assertInteractiveDeleteAllowed: assertEditingAllowed,
+    // A name or a description outside the public skill convention is said and not refused.
+    writeWarnings: (definition) =>
+      skillPortabilityIssues(
+        z.object({ name: z.unknown(), description: z.unknown() }).parse(definition)
+      ),
     // A skill is a folder: `SKILL.md`, its text resources, and whatever else it carries.
     revisionFiles: {
       manifestFile: SKILL_MANIFEST_FILE,
       read: readSkillFiles,
       manifestOf: skillFileSetManifest,
       indexed: (config, fileSet) => withSkillFileIndex(config, skillFileIndex(fileSet)),
-      withIndexOf: (config, source) => withSkillFileIndex(config, skillFileIndexOfConfig(source)),
+      carried: withCarriedSkillParts,
       filesOfConfig: skillFilesOfConfig,
       matchesConfig: storedFileMatchesConfig
     }

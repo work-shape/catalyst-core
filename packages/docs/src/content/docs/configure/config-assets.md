@@ -120,18 +120,23 @@ The exchange needs `SERVICE_ACCESS_TOKEN_SECRET` set on the server; without it t
 
 ## A skill as a folder of files
 
-Beside `SKILL.md` and its text resources a skill may carry real files below `references/`, `scripts/` and `assets/`: a PDF form, a template, an image, an office file, a script. The asset API writes and reads the whole folder: `assets.put` with `files` (each `{ path, text }` or `{ path, base64 }`, `SKILL.md` among them) and `assets.get` with `files=true`, which answers every file with its hash and its content as it was written.
+A skill follows the public Agent Skills convention, so a folder taken unchanged from a public skill library saves, reads and round-trips byte for byte: `SKILL.md` with YAML frontmatter and Markdown, and whatever lies beside it, commonly below `scripts/`, `references/` and `assets/`, and also files at the root such as `LICENSE.txt` or `reference.md`. The asset API writes and reads the whole folder: `assets.put` with `files` (each `{ path, text }` or `{ path, base64 }`, `SKILL.md` among them) and `assets.get` with `files=true`, which answers every file with its hash and its content as it was written.
 
-The config of a skill stays what it was and stays where its text is read from: `content` from `SKILL.md`, and `resources` for every UTF-8 text file with a resource extension outside `scripts/`, at whatever path it lies. Every other file is kept in the file set of the revision, and the config names it in `files`, an index of `path`, `sha256`, `bytes` and `mediaType` without content. So a skill that is text alone has the config it always had, `read_skill` and a proposal of an agent work on it unchanged, and a write of the config alone (a release sync, the interface, an approved proposal) changes the text and leaves the other files of the skill where they are. Reverting to a revision brings its files back with it. What a caller sends as `files` in a config is not read.
+**Frontmatter.** `name` and `description` are required; a file without a `name` takes the name of the asset. `title` is optional: where it is absent the skill is shown under the first Markdown heading of its content, or else under its name with spaces for hyphens and a capital first letter. Every other key (`license`, `metadata`, `allowed-tools`, `compatibility`, anything else) is kept as it is, returned as `frontmatter` of the config, and read by nothing. The file is stored as its bytes, so nothing reorders or reformats it.
+
+**Names.** Every name of the convention is accepted (lowercase letters, digits and hyphens), and so is what a skill here could always be named: letters, digits, dots, underscores and hyphens, starting with a letter or a digit. A write of a skill whose name is outside the convention or longer than 64 characters, or whose description is longer than 1,024, is answered with a warning (`skill_name_not_portable`, `skill_description_not_portable`) and is not refused.
+
+**Files.** Any normalized relative path is a file of the skill. A file whose extension says script or text (`.py`, `.js`, `.mjs`, `.ts`, `.sh`, `.rb`, `.md`, `.txt`, `.json`, `.yaml`, `.yml`, `.xml`, `.html`, `.css`, `.csv`) is UTF-8; every other file is bytes.
+
+The config of a skill stays where its text is read from: `content` from `SKILL.md`, and `resources` for every text file with a resource extension (`.md`, `.txt`, `.json`, `.yaml`, `.yml`) outside `scripts/`, at whatever path it lies. Every other file is kept in the file set of the revision, and the config names it in `files`, an index of `path`, `sha256`, `bytes` and `mediaType` without content. So a skill that is text alone has the config it always had, `read_skill` and a proposal of an agent work on it unchanged, and a write of the config alone (a release sync, the interface, an approved proposal) changes the text and leaves the other files and the further frontmatter of the skill where they are. Reverting to a revision brings its files back with it. What a caller sends as `files` in a config is not read; `frontmatter` is, and an empty one clears it.
 
 A folder is refused with the path and a reason of its own:
 
 | Reason | What is refused |
 | --- | --- |
-| `skill_manifest_missing`, `skill_manifest_invalid` | no `SKILL.md`, or one whose frontmatter does not read |
-| `skill_path_invalid`, `skill_path_duplicate` | a path that escapes the folder or is not normalized, a second `SKILL.md`, two paths that differ in case alone |
-| `skill_file_outside_folders` | a file that is no text resource and lies outside `references/`, `scripts/` and `assets/` |
-| `skill_script_not_text` | a file below `scripts/` that is no UTF-8 text |
+| `skill_manifest_missing`, `skill_manifest_invalid` | no `SKILL.md`, or one whose frontmatter does not read or lacks a description |
+| `skill_path_invalid`, `skill_path_duplicate` | a path that escapes the folder or is not normalized, a `SKILL.md` below the root, two paths that differ in case alone |
+| `skill_file_not_text` | a file whose extension says script or text and whose bytes are no UTF-8 |
 | `skill_file_executable` | a compiled program by its first bytes (ELF, Mach-O, PE), whatever its name |
 | `skill_file_lfs_pointer` | a Git LFS pointer in place of the file |
 | `skill_file_too_large`, `skill_too_many_files`, `skill_too_large` | a file over 2 MiB, more than 500 files, more than 8 MiB in all |

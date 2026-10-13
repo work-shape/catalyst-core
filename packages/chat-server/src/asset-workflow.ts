@@ -636,7 +636,7 @@ export class AssetWorkflow {
           ...(write.auditFiles ? { files: write.auditFiles.map((file) => ({ ...file })) } : {})
         })
     ]);
-    return { version: result.version, revision, warnings: [] };
+    return { version: result.version, revision, warnings: kind.writeWarnings?.(next) ?? [] };
   }
 
   /**

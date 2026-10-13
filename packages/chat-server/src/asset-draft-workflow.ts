@@ -58,7 +58,11 @@ export interface AssetWorkflowHost {
       /** The files of the write as its event names them: path, hash and size, no content. */
       auditFiles?: readonly { path: string; sha256: string; bytes: number }[];
     }
-  ): Promise<{ version: number; revision: number; warnings: never[] }>;
+  ): Promise<{
+    version: number;
+    revision: number;
+    warnings: { code: string; message: string }[];
+  }>;
   authorizeEditing(call: AssetCall, surface: "put"): Promise<void>;
 }
 

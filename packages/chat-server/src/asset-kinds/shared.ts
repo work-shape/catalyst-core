@@ -132,15 +132,21 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
      */
     indexed(config: JsonObject, fileSet: FileSet | undefined): JsonObject;
     /**
-     * The config with the index another config of the asset carries, and without one where
-     * that has none: what a write of the config alone keeps of the revision before it.
+     * What a write of the config alone keeps of the revision before it: the index of the
+     * files where that revision has a file set, and whatever else of its config such a write
+     * cannot know to send.
      */
-    withIndexOf(config: JsonObject, source: unknown): JsonObject;
+    carried(config: JsonObject, before: unknown, beforeHasFiles: boolean): JsonObject;
     /** The files a config holds itself, as a read of the folder answers them. */
     filesOfConfig(config: unknown): { path: string; bytes: Uint8Array }[];
     /** Whether stored bytes say what the config says at their path. */
     matchesConfig(config: unknown, file: { path: string; bytes: Uint8Array }): boolean;
   };
+  /**
+   * What the answer of a write says of a definition that was written and that its caller
+   * should know: each a warning with a code, none a refusal.
+   */
+  writeWarnings?(definition: unknown): { code: string; message: string }[];
   /**
    * What a publish does beside moving the published pointer, with `stores` bound to the
    * transaction that moves it. A throw refuses the publish and leaves the pointer where it was.

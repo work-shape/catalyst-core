@@ -140,10 +140,7 @@ function withRevisionFiles(
       mutation.operation === "revert"
         ? undefined
         : assets.find((asset) => asset.kind === mutation.kind && asset.name === mutation.name);
-    const config = hook.withIndexOf(
-      mutation.config,
-      current?.fileSetId === undefined ? undefined : current.config
-    );
+    const config = hook.carried(mutation.config, current?.config, current?.fileSetId !== undefined);
     // A file set is carried along for the files the config does not hold, and for nothing else.
     return {
       ...mutation,
