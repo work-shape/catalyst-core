@@ -71,6 +71,10 @@ interface ProbeWorldOptions {
    * loader, which holds some 400 MB by itself.
    */
   built?: { nodeArgs: readonly string[] };
+  /** Modules the instance has on beside the ones every probe needs. */
+  modules?: Readonly<Record<string, { enabled: boolean }>>;
+  /** Gives the instance a store of files in a folder of the probe, for assets that are files. */
+  fileStore?: boolean;
 }
 
 export interface ProbeWorker {
@@ -89,6 +93,9 @@ export interface ProbeWorker {
 export interface ProbeWorld {
   /** The API of the instance in this process. It runs no job. */
   api: TestInstance;
+  /** The service principal the Workflows of the probe run as, and the person who starts them. */
+  principalId: string;
+  starterId: string;
   /** How often the outside system was asked to run a tool. */
   arrivals(name: ToolName): number;
   /** The key each call of a tool arrived with, in order. `undefined` for a call without one. */
@@ -152,6 +159,9 @@ export async function openProbeWorld(
     });
     closing.push(() => outside.close());
 
+    const directory = await mkdtemp(join(tmpdir(), "catalyst-workflow-probe-"));
+    closing.push(() => rm(directory, { recursive: true, force: true }));
+    const base = createTestConfig();
     const config = parseClientInstanceConfig({
       ...createTestConfig({
         developmentAuth: {
@@ -167,7 +177,8 @@ export async function openProbeWorld(
       modules: {
         assetManagement: { enabled: true },
         connections: { enabled: true },
-        workflows: { enabled: true }
+        workflows: { enabled: true },
+        ...options.modules
       },
       administration: { agentConfiguration: { enabled: true, allowSkillEditing: true } },
       connections: {
@@ -180,6 +191,18 @@ export async function openProbeWorld(
           operations: TOOLS.map((tool) => ({ ...tool, exposure: ["workflow"] }))
         }
       },
+      // An asset that is a folder of files is kept in the instance's store of files.
+      ...(options.fileStore
+        ? {
+            infrastructure: {
+              ...base.infrastructure,
+              objectStorage: {
+                ...base.infrastructure.objectStorage,
+                files: { provider: "filesystem", root: join(directory, "files") }
+              }
+            }
+          }
+        : {}),
       // A Workflow has nobody to confirm a changing call.
       policy: { defaults: { changing: "allow" } },
       secretStore: { keys: [{ id: "k1", ref: "CATALYST_SECRET_STORE_KEY" }] },
@@ -200,8 +223,6 @@ export async function openProbeWorld(
 
     const api = await createTestInstance({ config, env, tools: [] });
     closing.push(() => api.close());
-    const directory = await mkdtemp(join(tmpdir(), "catalyst-workflow-probe-"));
-    closing.push(() => rm(directory, { recursive: true, force: true }));
     const configPath = join(directory, "app.yaml");
     // JSON is YAML.
     await writeFile(configPath, JSON.stringify(config));
@@ -239,6 +260,8 @@ export async function openProbeWorld(
     let started = 0;
     const world: ProbeWorld = {
       api,
+      principalId: principal.id,
+      starterId: starter.id,
       arrivals: (name) => arrived.get(name)?.length ?? 0,
       keys: (name) => arrived.get(name) ?? [],
       hold(name) {
