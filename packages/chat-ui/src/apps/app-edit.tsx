@@ -446,18 +446,18 @@ export function AppEditFrame({
       )}
     </AppFrame>
   );
-  return switchable ? (
+  // The tabs hold the frame whether or not they switch: the draft's record arrives after the
+  // first draw, and a frame that moved into them then would draw its head a second time.
+  return (
     <Tabs
-      value={view}
+      value={view ?? "preview"}
       onValueChange={(next) =>
-        onViewChange(APP_DRAFT_VIEWS.find((candidate) => candidate === next) ?? "preview")
+        onViewChange?.(APP_DRAFT_VIEWS.find((candidate) => candidate === next) ?? "preview")
       }
       className="contents"
     >
       {frame}
     </Tabs>
-  ) : (
-    frame
   );
 }
 
