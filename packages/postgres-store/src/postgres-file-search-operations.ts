@@ -45,7 +45,10 @@ export async function searchWorkspaceFiles(
       scope: { kind: "viewer", userId: input.viewerUserId }
     }
   )}`;
-  const inReadable = (column: SQL) => drizzleSql`${column} in (select id from readable)`;
+  // An array, not a join: each kind is read through the index on its conversation, and no
+  // estimate of a filter (the planner has none for the metadata of a made file) can turn it
+  // into comparing every file with every conversation.
+  const inReadable = (column: SQL) => drizzleSql`${column} = any(array(select id from readable))`;
   const branches: Record<FoundFile["kind"], SQL> = {
     // The newest revision of a Page gives its size and when it last changed.
     page: drizzleSql`
