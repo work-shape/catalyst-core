@@ -230,12 +230,54 @@ describe("Studio frame", () => {
 
   it("falls back to the id where the instance sent no title", () => {
     const markup = render(
-      { kindPath: "skills" },
-      { source: source({ lists: { skill: { rows: [row("skill", "untitled", { title: " " })] } } }) }
+      { kindPath: "agents" },
+      { source: source({ lists: { agent: { rows: [row("agent", "untitled", { title: " " })] } } }) }
     );
 
     expect(markup).toContain(">untitled</");
     expect(markup).toContain('<code class="font-mono">untitled</code>');
+  });
+
+  it("says what a skill knows how to do, and shows a skill without a summary by its title alone", () => {
+    const summary = "Knows how to review a tax file.";
+    const markup = render(
+      { kindPath: "skills" },
+      {
+        source: source({
+          lists: {
+            skill: {
+              rows: [
+                row("skill", "tax-review", { title: "Tax review", attributes: { summary } }),
+                row("skill", "plain", { title: "Plain language" }),
+                // A custom skill named like a shipped one, which claims the shipped icon.
+                row("skill", "pdf", { title: "PDF", attributes: { icon: "pdf" } }),
+                row("skill", "platform.pdf", {
+                  title: "PDF",
+                  attributes: { origin: "release", icon: "pdf" }
+                })
+              ]
+            }
+          }
+        })
+      }
+    );
+    const rowOf = (name: string) =>
+      new RegExp(
+        `<li[^>]*>(?:(?!</li>).)*href="/build/skills/${name}"(?:(?!</li>).)*</li>`,
+        "u"
+      ).exec(markup)?.[0] ?? "";
+
+    expect(rowOf("tax-review")).toContain(`>${summary}<`);
+    // Never the id and never the text for the agent.
+    expect(markup).not.toContain("<code");
+    expect(rowOf("plain")).toContain(">Plain language<");
+    expect(rowOf("plain")).not.toContain("text-caption text-muted-foreground");
+    expect(rowOf("plain")).toContain('data-skill-icon="generic"');
+    expect(rowOf("pdf")).toContain('data-skill-icon="generic"');
+    expect(rowOf("pdf")).not.toContain("data-file-type");
+    expect(rowOf("platform.pdf")).toContain('data-file-type="pdf"');
+    // The icon repeats the title beside it.
+    expect(rowOf("platform.pdf")).toMatch(/<span aria-hidden="true" data-skill-icon="pdf"/u);
   });
 
   it("names the kinds in the reader's language", () => {

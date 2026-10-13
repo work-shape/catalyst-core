@@ -72,6 +72,11 @@ interface BuildKindBase {
   icon: LucideIcon;
   /** Rows show an avatar with the name's initials. Without it they show the kind's icon. */
   avatar?: AvatarKind;
+  /**
+   * What a row says of an asset where the kind tells more than its icon and the asset's id: its
+   * own mark, and the line under the title. A row without a line shows the title alone.
+   */
+  row?(asset: BuildAssetRow): { leading: ReactNode; description?: string };
   /** The row's badges, such as the default marker. */
   badges?(asset: BuildAssetRow, t: (key: TranslationKey) => string): ReactNode;
 }

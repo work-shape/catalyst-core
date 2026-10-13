@@ -37,3 +37,4 @@ export {
   type BuildLocation
 } from "./build-route";
 export { SkillEditor } from "./skill-editor";
+export { skillFacts } from "./skill-facts";

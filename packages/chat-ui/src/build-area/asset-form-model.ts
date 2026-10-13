@@ -36,6 +36,8 @@ export interface SkillFormState {
   name: string;
   title: string;
   description: string;
+  /** The sentence for people. Empty where the skill has none. */
+  summary: string;
   content: string;
   resources: SkillResourceFormState[];
 }
@@ -371,6 +373,7 @@ export function skillConfigToForm(config: Record<string, unknown>): SkillFormSta
     name: typeof config.name === "string" ? config.name : "",
     title: typeof config.title === "string" ? config.title : "",
     description: typeof config.description === "string" ? config.description : "",
+    summary: typeof config.summary === "string" ? config.summary : "",
     content: typeof config.content === "string" ? config.content : "",
     resources: resources.flatMap((resource) => {
       if (!resource || typeof resource !== "object" || Array.isArray(resource)) {
@@ -391,6 +394,7 @@ export function skillFormToConfig(form: SkillFormState): Record<string, unknown>
     name: form.name.trim(),
     title: form.title.trim(),
     description: form.description.trim(),
+    ...(form.summary.trim() ? { summary: form.summary.trim() } : {}),
     content: form.content,
     ...(form.resources.length ? { resources: form.resources } : {})
   };
@@ -402,7 +406,7 @@ export function skillFormToConfig(form: SkillFormState): Record<string, unknown>
 export const SKILL_ROOT_FILE_NAME = "SKILL.md";
 
 export function emptySkillForm(): SkillFormState {
-  return { name: "", title: "", description: "", content: "", resources: [] };
+  return { name: "", title: "", description: "", summary: "", content: "", resources: [] };
 }
 
 function hasLocalizedContent(pair: LocalizedPair): boolean {

@@ -499,12 +499,15 @@ function BuildList({
               {list.rows.map((asset) => {
                 const title = asset.title.trim() || asset.name;
                 const namespace = namespaceName(asset.namespace) ?? asset.namespace;
+                const own = entry.row?.(asset);
                 return (
                   <ListRow
                     key={asset.name}
-                    leading={<RowMark entry={entry} title={title} />}
+                    leading={own ? own.leading : <RowMark entry={entry} title={title} />}
                     title={title}
-                    description={<code className="font-mono">{asset.name}</code>}
+                    description={
+                      own ? own.description : <code className="font-mono">{asset.name}</code>
+                    }
                     chips={
                       <>
                         {namespace ? <Chip size="sm">{namespace}</Chip> : null}

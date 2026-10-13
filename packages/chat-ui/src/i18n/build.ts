@@ -96,9 +96,14 @@ export const build = defineTranslations({
     "build.noKinds": "There is nothing to build on this instance yet.",
     "build.noMatch": "Nothing matches “{query}”.",
     "build.skillMissing": "There is no skill with the id {name}.",
+    "build.skillSummary": "Summary",
+    "build.skillSummaryHint":
+      "One sentence for people that says what an agent with this skill knows how to do. Lists show it under the title.",
+    "build.skillSummaryPlaceholder": "Knows how to write short, easy sentences.",
     "build.skillsEmpty":
       "No skills yet. A skill holds instructions that an agent reads when a task calls for them.",
     "build.skillsEmptyReadOnly": "No skills yet.",
+    "build.skillsNote": "A skill is instructions the agent follows. It adds no tools.",
     "build.skillsSearch": "Search skills"
   },
   de: {
@@ -198,9 +203,15 @@ export const build = defineTranslations({
     "build.noKinds": "Auf dieser Instanz gibt es noch nichts zu bauen.",
     "build.noMatch": "Nichts passt zu „{query}“.",
     "build.skillMissing": "Es gibt keinen Skill mit der Kennung {name}.",
+    "build.skillSummary": "Kurzbeschreibung",
+    "build.skillSummaryHint":
+      "Ein Satz für Menschen, der sagt, was ein Agent mit diesem Skill kann. Listen zeigen ihn unter dem Titel.",
+    "build.skillSummaryPlaceholder": "Weiß, wie man kurze, einfache Sätze schreibt.",
     "build.skillsEmpty":
       "Noch keine Skills. Ein Skill enthält Anweisungen, die ein Agent liest, wenn eine Aufgabe sie braucht.",
     "build.skillsEmptyReadOnly": "Noch keine Skills.",
+    "build.skillsNote":
+      "Ein Skill ist eine Anleitung, der der Agent folgt. Er bringt keine Werkzeuge mit.",
     "build.skillsSearch": "Skills durchsuchen"
   }
 });

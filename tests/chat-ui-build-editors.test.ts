@@ -420,6 +420,19 @@ describe("agent page", () => {
     expect(section(agentPage(), "skills")).toContain("No skills chosen.");
   });
 
+  it("gives each skill of an agent its icon: the generic one unless a release ships the skill", () => {
+    const skills = section(
+      agentPage({
+        config: { skillNames: ["tax-review", "gone_skill"], toolNames: ["read_skill"] }
+      }),
+      "skills"
+    );
+
+    expect(skills.match(/data-skill-icon="generic"/gu)).toHaveLength(2);
+    expect(skills).not.toContain("data-file-type");
+    expect(skills).toMatch(/<span aria-hidden="true" data-skill-icon="generic"/u);
+  });
+
   it("offers to make the agent the default only where the frame hands the way", () => {
     expect(agentPage({ onMakeDefault: async () => undefined })).toContain("Make default");
     expect(agentPage()).not.toContain("Make default");

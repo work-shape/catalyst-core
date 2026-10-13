@@ -1,6 +1,6 @@
 import { FileText, Plus, X } from "lucide-react";
 import { useState } from "react";
-import { SKILL_RESOURCE_MEDIA_TYPES } from "@vivd-catalyst/core";
+import { SKILL_RESOURCE_MEDIA_TYPES, SKILL_SUMMARY_MAX_LENGTH } from "@vivd-catalyst/core";
 import { Button, Field, Input, List, ListRow, Select, Textarea } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
 import { AssetEditorShell, useAssetForm, type AssetSection } from "./asset-editor-shell";
@@ -78,6 +78,15 @@ export function SkillEditor({
               value={form.description}
               readOnly={!editable}
               onChange={(event) => update({ description: event.target.value })}
+            />
+          </Field>
+          <Field label={t("build.skillSummary")} hint={t("build.skillSummaryHint")}>
+            <Input
+              value={form.summary}
+              maxLength={SKILL_SUMMARY_MAX_LENGTH}
+              placeholder={editable ? t("build.skillSummaryPlaceholder") : undefined}
+              readOnly={!editable}
+              onChange={(event) => update({ summary: event.target.value })}
             />
           </Field>
         </>
