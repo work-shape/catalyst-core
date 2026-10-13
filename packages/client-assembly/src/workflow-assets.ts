@@ -17,6 +17,7 @@ import {
   type ConfigAssetStore
 } from "@vivd-catalyst/core";
 import {
+  WORKFLOW_MANIFEST_MAX_BYTES,
   parseWorkflowManifest,
   workflowDefinitionRefusal,
   type WorkflowDefinitionResult,
@@ -36,6 +37,31 @@ const runAsOfConfigSchema = z.object({ manifest: z.object({ runAs: z.unknown() }
  * is the bound of its one read.
  */
 export const WORKFLOW_LIST_MAX = 500;
+
+/** How much of a Workflow's name and of its description one entry of the list carries. */
+export const WORKFLOW_LIST_NAME_MAX = 200;
+export const WORKFLOW_LIST_DESCRIPTION_MAX = 500;
+
+/**
+ * A stored manifest read as the engine reads `workflow.yaml`: held to the bound of the file,
+ * measured as JSON, then parsed. Every run copies its definition, so one over the bound is no
+ * definition, at a save, at a publish and where an earlier release stored it.
+ */
+function parseStoredManifest(manifest: unknown): WorkflowDefinitionResult {
+  const bytes = Buffer.byteLength(JSON.stringify(manifest) ?? "", "utf8");
+  if (bytes > WORKFLOW_MANIFEST_MAX_BYTES) {
+    return {
+      ok: false,
+      issues: [
+        {
+          path: "",
+          message: `The definition is larger than ${WORKFLOW_MANIFEST_MAX_BYTES} bytes`
+        }
+      ]
+    };
+  }
+  return parseWorkflowManifest(manifest);
+}
 
 /**
  * The Workflow kind: one definition with a draft and a published revision, owned by the
@@ -67,7 +93,7 @@ export function createWorkflowAssetKind(options: WorkflowRunAsOptions): Workflow
       validateWrite(context, workflows) {
         for (const workflow of workflows) {
           if (!context.changes(WORKFLOW_ASSET_KIND, workflow.name)) continue;
-          const result = parseWorkflowManifest(workflow.manifest);
+          const result = parseStoredManifest(workflow.manifest);
           if (!result.ok) throw workflowDefinitionRefusal(workflow.name, result.issues);
           if (result.manifest.id !== workflow.name) {
             return [
@@ -120,7 +146,7 @@ function publishedWorkflowOf(asset: ConfigAssetRecord): PublishedWorkflow | unde
     return undefined;
   }
   const config = workflowConfigSchema.safeParse(publishedConfig);
-  const parsed = parseWorkflowManifest(
+  const parsed = parseStoredManifest(
     manifestOfConfigSchema.safeParse(publishedConfig).data?.manifest
   );
   // The asset is addressed by its name whatever the manifest says. A save refuses a manifest
@@ -141,8 +167,10 @@ function publishedWorkflowOf(asset: ConfigAssetRecord): PublishedWorkflow | unde
   return {
     id: asset.name,
     assetId: asset.id,
-    name: shown?.name ?? asset.name,
-    ...(shown?.description === undefined ? {} : { description: shown.description }),
+    name: (shown?.name ?? asset.name).slice(0, WORKFLOW_LIST_NAME_MAX),
+    ...(shown?.description === undefined
+      ? {}
+      : { description: shown.description.slice(0, WORKFLOW_LIST_DESCRIPTION_MAX) }),
     revisionId,
     definition
   };

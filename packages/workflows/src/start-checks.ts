@@ -5,7 +5,7 @@ import type {
   OperationRegistry,
   WorkflowManifest
 } from "@vivd-catalyst/core";
-import type { WorkflowDefinitionIssue } from "./definition";
+import { indexWorkflowSteps, type WorkflowDefinitionIssue } from "./definition";
 import { secretOperationSteps } from "./operation-step";
 import { workflowRunPrincipal } from "./run-identity";
 
@@ -19,7 +19,8 @@ export interface WorkflowStartIssue {
    * A code of the definition's parser (`not_supported_yet`, `block_depth`,
    * `reference_out_of_scope`, `duplicate_step_id`, or `definition_invalid` where the parser
    * names none), or of the start: `no_manual_trigger`, `inputs_unreadable`,
-   * `operation_secret`, `principal_inactive`.
+   * `operation_secret`, `principal_inactive`. `operation_unknown` is the one a start does not
+   * refuse for: the run would fail at that step with `operation_not_found`.
    */
   code: string;
   /** A sentence of the product. Never a value of a run. */
@@ -66,6 +67,16 @@ export async function workflowStartIssues(
       code: "inputs_unreadable",
       message: "The Workflow's inputs are a schema that cannot be checked",
       path: "inputs"
+    });
+  }
+  // An operation the instance does not have now: a Connection that was removed, or a name
+  // nothing registers. A start is accepted and its run fails at the step, so the list says it.
+  for (const [id, { step }] of indexWorkflowSteps(manifest)) {
+    if (step.type !== "operation" || (await instance.registry.resolve(step.operation))) continue;
+    issues.push({
+      code: "operation_unknown",
+      message: `The operation '${step.operation}' does not exist on this instance`,
+      path: `steps.${id}.operation`
     });
   }
   issues.push(...(await secretOperationSteps(manifest, instance.registry)));

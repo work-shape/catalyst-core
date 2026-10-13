@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
+import { WORKFLOW_LIST_DESCRIPTION_MAX } from "@vivd-catalyst/client-assembly";
 import { WORKFLOW_ASSET_KIND, type JsonObject } from "@vivd-catalyst/core";
+import { WORKFLOW_MANIFEST_MAX_BYTES } from "@vivd-catalyst/workflows";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
 import { runSchema, workflowFixture, type WorkflowFixture } from "./support/workflow-instance";
 import { NOTE, notifyClients, readyWorkflows, start, stepRunsOf } from "./support/workflow-runs";
@@ -190,6 +192,25 @@ describe("a Workflow stored as an asset", () => {
     });
     expect(otherId.statusCode, otherId.body).toBe(422);
 
+    // A definition over the bound of `workflow.yaml` is none: every run would copy it.
+    const oversize = await t.call(t.admin.id, "assets.put", {
+      params: address,
+      payload: {
+        config: {
+          name: WORKFLOW,
+          manifest: { ...notifyClients(), description: "x".repeat(WORKFLOW_MANIFEST_MAX_BYTES) }
+        },
+        expectedRevision: null
+      }
+    });
+    expect(oversize.statusCode, oversize.body.slice(0, 300)).toBe(422);
+    const oversizeError = errorSchema.parse(oversize.json()).error;
+    expect(oversizeError.details).toMatchObject({ reason: "definition_invalid" });
+    expect(oversizeError.message).toContain(String(WORKFLOW_MANIFEST_MAX_BYTES));
+    expect(await t.stores.configAssets.getConfigAsset({ clientInstanceId, ...address })).toBe(
+      undefined
+    );
+
     // A revision an earlier release stored, which this engine does not run: the publish asks
     // the engine again and refuses it, so it never becomes the one a start reads.
     const good = await put(t, notifyClients(), null);
@@ -293,6 +314,27 @@ describe("a Workflow stored as an asset", () => {
     );
     expect(unsupported?.reasons[0]?.path).toContain("steps");
     expect(await startReason()).toBe("not_supported_yet");
+  });
+
+  it("lists an operation the instance does not have as the reason, and a summary of the text", async () => {
+    const t = await ready();
+    const definition = notifyClients();
+    const steps = definition.steps.map((step) =>
+      step.id === "clients" ? { ...step, operation: "connection.crm.gone" } : step
+    );
+    const revision = await put(
+      t,
+      { ...definition, description: "d".repeat(WORKFLOW_LIST_DESCRIPTION_MAX + 100), steps },
+      null
+    );
+    expect((await publish(t, revision)).statusCode).toBe(200);
+    const [unknown] = await listed(t);
+    expect(unknown).toMatchObject({ id: WORKFLOW, runnable: false });
+    expect(unknown?.reasons.map((reason) => [reason.code, reason.path])).toEqual([
+      ["operation_unknown", "steps.clients.operation"]
+    ]);
+    // The list names a Workflow and carries no definition: the page reads that as the asset.
+    expect(unknown?.description).toHaveLength(WORKFLOW_LIST_DESCRIPTION_MAX);
   });
 
   it("keeps a run on the revision it started with when another is published", async () => {

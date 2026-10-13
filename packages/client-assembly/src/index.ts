@@ -51,7 +51,9 @@ export {
 // What a client that brings a Workflow as a file reads it with, as the engine does.
 export { readWorkflowManifest } from "@vivd-catalyst/workflows";
 export {
+  WORKFLOW_LIST_DESCRIPTION_MAX,
   WORKFLOW_LIST_MAX,
+  WORKFLOW_LIST_NAME_MAX,
   createWorkflowAssetDefinitions,
   createWorkflowAssetKind,
   type PublishedWorkflow
