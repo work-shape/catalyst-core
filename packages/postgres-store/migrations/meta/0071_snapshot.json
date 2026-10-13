@@ -1,5 +1,5 @@
 {
-  "id": "db8d03c9-9c0d-44fa-8aad-d16aa626738b",
+  "id": "92da596a-1dd9-4241-9f41-4af0da73112a",
   "prevId": "94a511d1-c480-49a9-b64d-1f7bd764f90b",
   "version": "7",
   "dialect": "postgresql",
@@ -5824,13 +5824,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "target": {
-          "name": "target",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'live'"
-        },
         "conversation_id": {
           "name": "conversation_id",
           "type": "text",
@@ -6295,101 +6288,8 @@
         "operation_runs_status_check": {
           "name": "operation_runs_status_check",
           "value": "\"operation_runs\".\"status\" in ('running', 'pending_confirmation', 'pending_approval', 'done', 'failed', 'denied', 'expired')"
-        },
-        "operation_runs_target_check": {
-          "name": "operation_runs_target_check",
-          "value": "\"operation_runs\".\"target\" in ('live', 'test', 'dry_run')"
         }
       },
-      "isRLSEnabled": false
-    },
-    "public.live_once_switches": {
-      "name": "live_once_switches",
-      "schema": "",
-      "columns": {
-        "client_instance_id": {
-          "name": "client_instance_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "asset_id": {
-          "name": "asset_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "asset_kind": {
-          "name": "asset_kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "asset_name": {
-          "name": "asset_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "part": {
-          "name": "part",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "revision_id": {
-          "name": "revision_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "switched_by_id": {
-          "name": "switched_by_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "switched_by_label": {
-          "name": "switched_by_label",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "switched_at": {
-          "name": "switched_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "live_once_switches_asset_id_config_assets_id_fk": {
-          "name": "live_once_switches_asset_id_config_assets_id_fk",
-          "tableFrom": "live_once_switches",
-          "tableTo": "config_assets",
-          "columnsFrom": [
-            "asset_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "live_once_switches_pk": {
-          "name": "live_once_switches_pk",
-          "columns": [
-            "asset_id",
-            "part"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.namespaces": {
@@ -7920,6 +7820,102 @@
           "value": "\"data_stores\".\"level\" >= 0"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.guardrail_hits": {
+      "name": "guardrail_hits",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "client_instance_id": {
+          "name": "client_instance_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "guardrail_name": {
+          "name": "guardrail_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event": {
+          "name": "event",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "message": {
+          "name": "message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "subject_kind": {
+          "name": "subject_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "guardrail_hits_client_guardrail_created_idx": {
+          "name": "guardrail_hits_client_guardrail_created_idx",
+          "columns": [
+            {
+              "expression": "client_instance_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "guardrail_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.account": {

@@ -12,6 +12,7 @@ export * from "./origins";
 export * from "./operations";
 export * from "./operation-denial";
 export * from "./events";
+export * from "./guardrails";
 export * from "./operation-policy";
 export * from "./operation-registry";
 export * from "./connection-operations";

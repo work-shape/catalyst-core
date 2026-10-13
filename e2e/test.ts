@@ -587,10 +587,10 @@ export const test = base.extend<{
     { timeout: 2 * ACCESS_STATE_WAIT_MS + 10_000 }
   ],
   /**
-   * Asked for by a test that puts a Connection of origin `release` into the store by hand. An
-   * API process that starts makes the stored release Connections equal to its release config
-   * and deletes such a row, so a spec that starts an API takes the same turn while it starts
-   * (`takeTurn("release-connections", …)`).
+   * Asked for by a test that puts a Connection or a Guardrail of origin `release` into the
+   * store by hand. An API process that starts makes the stored release Connections and
+   * Guardrails equal to its release config and deletes such a row, so a spec that starts an API
+   * takes the same turn while it starts (`takeTurn("release-connections", …)`).
    */
   releaseConnections: [
     async ({ baseURL }, use) => {

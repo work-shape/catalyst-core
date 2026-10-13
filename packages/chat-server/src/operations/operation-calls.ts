@@ -31,7 +31,7 @@ export type OperationCallsOptions = Pick<
 > & {
   /** Without it this process holds no call for an approval and refuses one that needs it. */
   approvalRequests?: ChatServerOptions["approvalRequests"] &
-    Pick<ApprovalRequestWorkflowOptions, "checkRunner">;
+    Pick<ApprovalRequestWorkflowOptions, "guardrails">;
   /**
    * The asset kinds of the instance. With them a held `assets.put` is shown as the asset it
    * saves; without them it is shown as any other call.

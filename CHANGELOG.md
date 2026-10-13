@@ -19,11 +19,32 @@ contain breaking changes; a patch version does not.
   since is cleared and never applies. A call of a Workflow test run (`draft.boundBy`) is made
   as the person testing and allowed only where the Workflow's service principal holds the right
   too; a refusal on the principal's side names it, and such a call cannot wait for an approval.
-  Migrations `0071_draft_call_targets` (adds `operation_runs.target`, default `live`, and the
-  table `live_once_switches`) and `0072_draft_call_targets_validate` (validates the check of
+  Migrations `0072_draft_call_targets` (adds `operation_runs.target`, default `live`, and the
+  table `live_once_switches`) and `0073_draft_call_targets_validate` (validates the check of
   `target`) are expand-only. **Rollback:** the previous release ignores the column and the
   table; runs it writes during a rollback get `live`, and switches set before it stay unused
   until a release that reads them, where a changed draft clears them.
+- **Guardrails replace approval checks, and Build lists them:** release config takes
+  `guardrails`, keyed by name, each with `on: approval_request.before_create`, an optional
+  `filter.kind`, a `check` of kind `model_judge` (`modelBindingId`, `instruction`) and
+  `outcome: warn | block`. They run where approval checks ran, with the same judge, timeout and
+  usage purpose `guardrail_judge`. The API seeds them as read-only assets of the kind
+  `guardrail` when it starts; Build > Guardrails lists them with their newest 50 hits for
+  holders of the new right `guardrail.read` (administrators), read through
+  `guardrails.list_hits` (`GET /api/v1/guardrails/:name/hits`), with counts for the last 7 and
+  30 days. A hit keeps the guardrail, the outcome, its reason and the kind of request, never the
+  checked content and never the person: hits are counted by rule and period, not listed by
+  person (works-council co-determination). Hits are deleted with the audit events (migration
+  `0071_guardrail_hits`). Every write of a guardrail
+  through the asset operations is refused with the reason `guardrail_release_config_only`.
+  **Operators:** `approvalChecks` still loads for this release, each check as the guardrail it
+  became (`id` the name, `appliesTo` the `filter.kind`, `onFail` the `outcome`). A config with
+  both keys stops startup with "'approvalChecks' was replaced by 'guardrails', and the config
+  sets both. Move each approval check into 'guardrails' and remove 'approvalChecks'." The next
+  release refuses `approvalChecks`; move the checks now. **Rollback:** an earlier release
+  ignores the table `guardrail_hits` and the stored guardrails, and it does not read
+  `guardrails`: roll back with the config that still has `approvalChecks`, or the instance runs
+  no checks.
 - **Skills that ship with the platform:** the guide to the platform (`platform-guide`) and, with
   Workflows on, `workflow-authoring` are stored skills of origin `release`. The API process
   writes them at start: a changed one gets a revision in History, one a release no longer ships
