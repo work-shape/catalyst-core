@@ -94,7 +94,10 @@ export interface PlatformAssetCalls extends PlatformDiscoveryCalls {
    * any asset in a conversation others read.
    */
   open(context: ToolExecutionContext, named: ConversationSubject): Promise<PlatformAssetOpened>;
-  /** Reads `named`, or the subject where nothing is named. Moves no subject. */
+  /**
+   * Reads `named`, or the subject where nothing is named. Moves no subject. Another asset is
+   * refused as `open` refuses it, but for the move.
+   */
   get(context: ToolExecutionContext, named?: ConversationSubject): Promise<PlatformAssetRead>;
   validate(
     context: ToolExecutionContext,
@@ -281,7 +284,7 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
       description: [
         "Read the definition of an asset of the platform, such as a Workflow, an App or an agent: its config and the revision it is at.",
         `Without 'kind' and 'name' it reads the asset the conversation is about. With them it reads that asset and changes nothing: the conversation stays about what it was, and the person sees nothing beside the chat. To work on that asset, open it with ${open.name}.`,
-        "It reads with the rights of the person you act for: an asset they may not read is answered as one that does not exist.",
+        "It reads with the rights of the person you act for: an asset they may not read is answered as one that does not exist. A conversation shared with a workspace reads no asset but the one it is about.",
         "Answers the draft where one differs from the published revision, and says which of the two it shows. 'publishedRevision' is the revision that runs; it is missing while nothing is published, and on a kind without drafts, such as an agent, whose saves are live at once.",
         "Read before you change anything, and send the 'revision' you read as 'expectedRevision' when you save."
       ].join(" "),

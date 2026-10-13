@@ -155,7 +155,7 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
   }
 
   /**
-   * Refuses to open an asset in a transcript that others read. A member of a Shared
+   * Refuses to open or read an asset in a transcript that others read. A member of a Shared
    * Workspace need not hold the read right on the asset, so a conversation about one is its
    * creator's alone, as `createConversation` makes it.
    */
@@ -168,7 +168,7 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
     if (workspace?.kind === "personal") return;
     throw new AppError(
       "CONFLICT",
-      "This conversation is shared with its workspace, and an asset is opened only in a conversation of the person's own. Ask the person to start a new conversation, or to open the asset's page and choose Edit with the agent",
+      "This conversation is shared with its workspace, and an asset is opened and read only in a conversation of the person's own. Ask the person to start a new conversation, or to open the asset's page and choose Edit with the agent",
       { reason: "subject_conversation_shared" },
       { exposeMessage: true }
     );
@@ -315,8 +315,10 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       if (!asset) throw withoutSubject();
       if (named !== undefined && !sameSubject(named, conversation.subject)) {
         // Another asset is told as the subject would be: one that does not exist and one the
-        // person may not read alike.
+        // person may not read alike. Its definition reaches no transcript that members read
+        // who may not read it, as the subject's does not.
         await requireReadableSubject(options, context.user, named);
+        await requireOwnTranscript(conversation);
       }
       return readAsset(context, conversation, asset);
     },

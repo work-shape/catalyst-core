@@ -60,7 +60,7 @@ describe("system instructions", () => {
   it("tells the agent the subject of a conversation with only the tools and skills it is offered", () => {
     const skill = { name: "workflow-authoring", title: "Workflows", description: "", content: "" };
     const content = createSystemInstructions("Use customer workflow rules.", "en", {
-      offer: {
+      subject: {
         subject: { kind: "data_store", name: "visit-log" },
         toolNames: ["platform.assets.get", "read_skill"],
         skills: [skill]
@@ -77,21 +77,18 @@ describe("system instructions", () => {
 
     const without = createSystemInstructions("Use customer workflow rules.", "en");
     expect(without).not.toContain("Subject of this conversation:");
-    expect(without).not.toContain("Assets of the platform:");
   });
 
-  it("tells the agent of a conversation about nothing yet how it starts on an asset", () => {
+  it("tells the agent nothing of how it opens an asset: the tool and the platform skill do", () => {
     const content = createSystemInstructions("Use customer workflow rules.", "en", {
-      offer: { toolNames: ["platform.assets.get", "platform.assets.put"], skills: [] }
+      subject: {
+        subject: { kind: "workflow", name: "intake" },
+        toolNames: ["platform.assets.open", "platform.assets.get", "platform.assets.put"],
+        skills: []
+      }
     });
 
-    expect(content).not.toContain("Subject of this conversation:");
-    expect(content).toContain("Assets of the platform:");
-    expect(content).toContain("read it with platform.assets.get, naming its kind and its name");
-    // Without the read there is no way to start, so nothing is said.
-    const noRead = createSystemInstructions("Use customer workflow rules.", "en", {
-      offer: { toolNames: [], skills: [] }
-    });
-    expect(noRead).not.toContain("Assets of the platform:");
+    expect(content).toContain("This conversation is about one workflow, named 'intake'.");
+    expect(content).not.toContain("platform.assets.open");
   });
 });

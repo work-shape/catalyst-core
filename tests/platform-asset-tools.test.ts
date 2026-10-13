@@ -375,7 +375,7 @@ describe("a conversation about a Workflow", () => {
     ).toBeUndefined();
   }, 120_000);
 
-  it("makes the asset its agent first reads the subject of a conversation about nothing, the last one read winning", async () => {
+  it("makes the asset its agent opens the subject of a conversation about nothing, the last one opened winning, and a read moves nothing", async () => {
     const t = await fixture();
     const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse(undefined))).json());
     const subjectOf = async (as?: string) =>
@@ -389,14 +389,16 @@ describe("a conversation about a Workflow", () => {
           ).json()
         ).conversation.subject;
 
-    // Nothing is checked or saved before an asset is read: there is none yet.
+    // Nothing is checked or saved before an asset is opened: there is none yet.
     for (const [tool, input] of [
       ["platform.assets.get", {}],
       ["platform.assets.validate", { config: configOf() }],
       ["platform.assets.put", { config: configOf(), expectedRevision: t.published }]
     ] as const) {
       const { answer } = await t.say(id, `/tool ${tool} ${JSON.stringify(input)}`);
-      expect(answer).toContain("This conversation is about no asset yet");
+      expect(answer).toContain(
+        "This conversation is about no asset yet. Open the one to work on with platform.assets.open"
+      );
     }
     const halfNamed = await t.say(id, `/tool platform.assets.get {"kind":"workflow"}`);
     expect(halfNamed.answer).toContain("Name the asset with both 'kind' and 'name'");
@@ -405,14 +407,29 @@ describe("a conversation about a Workflow", () => {
     // An asset that does not exist is refused, and the conversation stays about nothing.
     const missing = await t.say(
       id,
-      `/tool platform.assets.get ${JSON.stringify({ kind: WORKFLOW_ASSET_KIND, name: "no-such-workflow" })}`
+      `/tool platform.assets.open ${JSON.stringify({ kind: WORKFLOW_ASSET_KIND, name: "no-such-workflow" })}`
     );
     expect(missing.answer).toContain("The subject of the conversation is not available");
     expect(await subjectOf()).toBeUndefined();
 
-    // The read of the Workflow makes it the subject: a save then reaches it.
-    const read = readSchema.parse(await t.call(id, "platform.assets.get", subject));
+    // A read of the Workflow reads it and moves nothing: the save still has no asset.
+    const looked = readSchema.parse(await t.call(id, "platform.assets.get", subject));
+    expect(looked.config.name).toBe(WORKFLOW);
+    expect(await subjectOf()).toBeUndefined();
+    const unopened = await t.say(
+      id,
+      `/tool platform.assets.put ${JSON.stringify({ config: configOf([added]), expectedRevision: looked.revision })}`
+    );
+    expect(unopened.answer).toContain("This conversation is about no asset yet");
+    expect((await t.asset()).revision).toBe(t.published);
+
+    // Opening the Workflow makes it the subject and answers its read and its title: a save
+    // then reaches it.
+    const read = readSchema
+      .extend({ title: z.string() })
+      .parse(await t.call(id, "platform.assets.open", subject));
     expect(read.config.name).toBe(WORKFLOW);
+    expect(read.title).toBe("Month end");
     expect(await subjectOf()).toEqual(subject);
     const saved = writeSchema.parse(
       await t.call(id, "platform.assets.put", {
@@ -422,13 +439,13 @@ describe("a conversation about a Workflow", () => {
     );
     expect(saved).toEqual({ saved: true, revision: t.published + 1 });
 
-    // An agent read next is the subject from then on. It has no draft, so its agent reads it
+    // An agent opened next is the subject from then on. It has no draft, so its agent reads it
     // and saves nothing, and the Workflow is not reached any more.
     const agent = { kind: "agent", name: "test_agent" };
     expect(
       z
         .object({ kind: z.string(), name: z.string() })
-        .parse(await t.call(id, "platform.assets.get", agent))
+        .parse(await t.call(id, "platform.assets.open", agent))
     ).toEqual(agent);
     expect(await subjectOf()).toEqual(agent);
     const live = await t.say(
@@ -439,17 +456,17 @@ describe("a conversation about a Workflow", () => {
     expect((await t.asset()).revision).toBe(t.published + 1);
   }, 120_000);
 
-  it("reads a hidden asset as a missing one, and none into a conversation its workspace shares", async () => {
+  it("opens a hidden asset as a missing one, and none into a conversation its workspace shares", async () => {
     const t = await fixture();
-    // The member may not read the Workflow: the read is refused as for one that does not
+    // The member may not read the Workflow: the open is refused as for one that does not
     // exist, and the conversation stays about nothing.
     const { id: own } = z
       .object({ id: z.string() })
       .parse((await t.ok(t.converse(undefined, OTHER))).json());
-    const hidden = await t.say(own, `/tool platform.assets.get ${JSON.stringify(subject)}`, OTHER);
+    const hidden = await t.say(own, `/tool platform.assets.open ${JSON.stringify(subject)}`, OTHER);
     const missing = await t.say(
       own,
-      `/tool platform.assets.get ${JSON.stringify({ kind: WORKFLOW_ASSET_KIND, name: "no-such-workflow" })}`,
+      `/tool platform.assets.open ${JSON.stringify({ kind: WORKFLOW_ASSET_KIND, name: "no-such-workflow" })}`,
       OTHER
     );
     expect(hidden.answer).toContain("The subject of the conversation is not available");
@@ -465,7 +482,8 @@ describe("a conversation about a Workflow", () => {
       );
     expect(conversation.conversation.subject).toBeUndefined();
 
-    // A conversation of a Shared Workspace that its members read gets no definition into it.
+    // A conversation of a Shared Workspace that its members read opens no asset and gets no
+    // definition into it, also not by a read.
     const { id: workspaceId } = z
       .object({ id: z.string() })
       .parse((await t.ok(t.app.call("workspaces.create", { payload: { name: "Shared" } }))).json());
@@ -478,9 +496,19 @@ describe("a conversation about a Workflow", () => {
         )
       ).json()
     );
-    const refused = await t.say(shared, `/tool platform.assets.get ${JSON.stringify(subject)}`);
-    expect(refused.answer).toContain("This conversation is shared with its workspace");
-    expect(refused.answer).not.toContain("manifest");
+    for (const tool of ["platform.assets.open", "platform.assets.get"]) {
+      const refused = await t.say(shared, `/tool ${tool} ${JSON.stringify(subject)}`);
+      expect(refused.answer).toContain("This conversation is shared with its workspace");
+      expect(refused.answer).not.toContain("manifest");
+    }
+    const sharedThread = z
+      .object({ conversation: z.object({ subject: subjectSchema.optional() }) })
+      .parse(
+        (
+          await t.ok(t.app.call("conversations.thread.get", { params: { conversationId: shared } }))
+        ).json()
+      );
+    expect(sharedThread.conversation.subject).toBeUndefined();
   }, 120_000);
 
   it("refuses a conversation about a Workflow its creator may not read as it refuses one about nothing", async () => {
