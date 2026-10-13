@@ -42,6 +42,8 @@ export interface ConversationSubject {
  * nothing here, and none of `SUBJECT_TOOL_PREFIX` either.
  */
 export interface ConversationOffer {
+  /** The asset the conversation is about: what its agent is told before the first turn. */
+  subject: ConversationSubject;
   toolNames: readonly string[];
   skills: readonly ShippedSkill[];
 }
