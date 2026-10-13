@@ -39,6 +39,8 @@ export interface CatalystManifest {
   instances: Record<string, ManifestInstance>;
   defaultInstance?: string;
   defaultAgentName?: string;
+  /** The workspace the commands of a workspace-owned kind, such as `app`, address. */
+  workspace?: string;
   agents: string[];
   skills: string[];
   /** The globs of `guardrail.yaml` files. Left out, the working copy holds no guardrails. */
@@ -139,10 +141,12 @@ export function parseManifest(contents: string, source = MANIFEST_FILENAME): Cat
 
   const defaultInstance = readOptionalString(input, "defaultInstance", source);
   const defaultAgentName = readOptionalString(input, "defaultAgentName", source);
+  const workspace = readOptionalString(input, "workspace", source);
   return {
     instances,
     ...(defaultInstance === undefined ? {} : { defaultInstance }),
     ...(defaultAgentName === undefined ? {} : { defaultAgentName }),
+    ...(workspace === undefined ? {} : { workspace }),
     agents: readStringArray(input, "agents", source),
     skills: readStringArray(input, "skills", source),
     ...(input.guardrails === undefined

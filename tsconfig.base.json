@@ -81,7 +81,8 @@
       "@vivd-catalyst/ui": ["packages/ui/src/index.ts"],
       "@vivd-catalyst/usage-governance": ["packages/usage-governance/src/index.ts"],
       "@vivd-catalyst/web-access": ["packages/web-access/src/index.ts"],
-      "@vivd-catalyst/workflows": ["packages/workflows/src/index.ts"]
+      "@vivd-catalyst/workflows": ["packages/workflows/src/index.ts"],
+      "@work-shape/catalyst-cli": ["packages/config-cli/src/index.ts"]
     },
     "target": "ES2023",
     "types": ["node"]

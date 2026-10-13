@@ -9,7 +9,14 @@ import {
 } from "@vivd-catalyst/api-contract";
 import type { OperationOutcome } from "@vivd-catalyst/api-client";
 import { ConfigApiError, type ConfigApi } from "./api";
-import { readAssetSource } from "./asset-sources";
+import {
+  APP_VERBS,
+  AppUsageError,
+  isAppVerb,
+  runAppCommand,
+  type AppCommandOptions
+} from "./app-commands";
+import { readAssetSource, readDefinition } from "./asset-sources";
 import { runFollowCommand } from "./follow-commands";
 import {
   formatAsset,
@@ -63,6 +70,7 @@ const OPTIONS = {
   confirm: { type: "string" },
   yes: { type: "boolean", default: false },
   withdraw: { type: "string" },
+  published: { type: "boolean", default: false },
   help: { type: "boolean", short: "h", default: false }
 } as const;
 
@@ -568,13 +576,21 @@ async function guardrailDryRunBeforePublish(
   return EXIT.refused;
 }
 
+/** The options of the App commands beside the common ones. */
+const APP_FLAGS = {
+  pull: ["revision", "published"],
+  push: [],
+  publish: ["revision", "yes"],
+  status: []
+} as const satisfies Record<keyof typeof APP_VERBS, readonly OptionName[]>;
+
 /** The words before the kind that are commands of their own. */
 const INSTANCE_COMMANDS = ["context", "kinds", "references", "operation", "requests"] as const;
 
 /** Runs `catalyst <argv>` for every command but `config`. */
 export async function runAssetCommand(
   argv: readonly string[],
-  base: Omit<ConfigCommandOptions, "dir" | "instance">
+  base: Omit<AppCommandOptions, "dir" | "instance">
 ): Promise<number> {
   const [noun = "", ...rest] = argv;
   let values: Values;
@@ -588,7 +604,7 @@ export async function runAssetCommand(
     );
     return EXIT.usage;
   }
-  const options: ConfigCommandOptions = {
+  const options: AppCommandOptions = {
     ...base,
     ...(values.dir === undefined ? {} : { dir: values.dir }),
     ...(values.instance === undefined ? {} : { instance: values.instance })
@@ -624,6 +640,10 @@ export async function runAssetCommand(
       if (values.withdraw !== undefined) required(values.withdraw, "--withdraw <id>");
       return await runInstanceCommand(instanceCommand, values, options, name);
     }
+    if ((noun === "app" || noun === "apps") && isAppVerb(verbName)) {
+      refuseFlags(values, [...COMMON_FLAGS, ...APP_FLAGS[verbName]], verbName);
+      return await runAppCommand(verbName, positionals.slice(1), values, options);
+    }
     const verb = VERBS[verbName];
     if (verb === undefined) throw new UsageError(`Unknown command '${noun} ${verbName}'.`);
     refuseFlags(values, [...COMMON_FLAGS, ...verb.flags], verbName);
@@ -643,7 +663,7 @@ export async function runAssetCommand(
       options
     });
   } catch (error) {
-    if (error instanceof UsageError) {
+    if (error instanceof UsageError || error instanceof AppUsageError) {
       writeError(options, error.message);
       return EXIT.usage;
     }
@@ -779,6 +799,11 @@ Instance:
 Assets, for every kind the instance registers (agent, skill, app, workflow, data-store, ...):
 ${Object.values(VERBS)
   .map((verb) => `  catalyst <kind> ${verb.usage}\n      ${verb.summary}`)
+  .join("\n")}
+
+An App as a folder (its draft is built on push; publish shows what goes live and asks):
+${Object.values(APP_VERBS)
+  .map((verb) => `  catalyst app ${verb.usage}\n      ${verb.summary}`)
   .join("\n")}
 
 Options:

@@ -13,6 +13,7 @@ import { loginCommand, logoutCommand } from "./login";
 import { isLocalAgentTool, SETUP_USAGE, setupCommand } from "./setup";
 
 export * from "./api";
+export { publishReview, type PublishReview } from "./app-commands";
 export * from "./commands";
 export * from "./diff";
 export * from "./serialization";
@@ -317,5 +318,16 @@ function isConfigCommand(value: string): value is ConfigCommandName {
 const entryPath = process.argv[1];
 // The bin is reached through a node_modules symlink, so compare resolved paths.
 if (entryPath && import.meta.url === pathToFileURL(realpathSync(entryPath)).href) {
-  process.exitCode = await runCli(process.argv.slice(2));
+  process.exitCode = await runCli(process.argv.slice(2), {
+    ...(process.stdin.isTTY && process.stdout.isTTY ? { confirm: askAtTerminal } : {})
+  });
+}
+
+async function askAtTerminal(question: string): Promise<boolean> {
+  const terminal = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return /^y(es)?$/iu.test((await terminal.question(`${question} [y/N] `)).trim());
+  } finally {
+    terminal.close();
+  }
 }
