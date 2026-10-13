@@ -430,9 +430,25 @@ export const workflowsConfigSchema = z
         /** Room for an interpreter and its threads, and an end to a script that forks. */
         pidsLimit: z.number().int().positive().default(64),
         /** After this long a script is stopped and its step fails. */
-        timeoutSeconds: z.number().int().positive().max(900).default(60)
+        timeoutSeconds: z.number().int().positive().max(900).default(60),
+        /**
+         * The size of the script's working directory, which is memory and no disk: the
+         * script, its input and its result of at most 256 KiB each, and room to work in. It
+         * counts against `memoryBytes`, so it is part of that number and no number beside it.
+         * A script that fills it reads "no space left".
+         */
+        scratchBytes: z
+          .number()
+          .int()
+          .min(4 * 1024 * 1024)
+          .default(64 * 1024 * 1024)
       })
       .prefault({})
+      .refine((codeSteps) => codeSteps.scratchBytes * 2 <= codeSteps.memoryBytes, {
+        path: ["scratchBytes"],
+        message:
+          "scratchBytes is memory of the code step and at most half of memoryBytes: the script itself needs the rest"
+      })
   })
   .prefault({});
 
