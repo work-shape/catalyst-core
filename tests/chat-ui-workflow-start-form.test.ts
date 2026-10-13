@@ -19,7 +19,7 @@ const inputs = {
 };
 
 describe("the start form of a Workflow", () => {
-  it("has one field per input, in the schema's order, with its rules and its default", () => {
+  it("has one field per input, the required ones first, with its rules and its default", () => {
     const form = startFormOf(inputs);
     expect(form.unsupported).toEqual([]);
     expect(form.fields).toEqual([
@@ -42,6 +42,14 @@ describe("the start form of a Workflow", () => {
         pattern: "^K[0-9]+$"
       },
       {
+        name: "region",
+        label: "Region",
+        control: "choice",
+        required: true,
+        initial: "south",
+        options: ["north", "south"]
+      },
+      {
         name: "limit",
         label: "Limit",
         control: "number",
@@ -59,14 +67,6 @@ describe("the start form of a Workflow", () => {
         initial: "",
         exclusiveMinimum: 0,
         exclusiveMaximum: 1
-      },
-      {
-        name: "region",
-        label: "Region",
-        control: "choice",
-        required: true,
-        initial: "south",
-        options: ["north", "south"]
       },
       { name: "notify", label: "Notify", control: "yesNo", required: false, initial: false },
       { name: "contact", label: "Contact", control: "email", required: false, initial: "" }

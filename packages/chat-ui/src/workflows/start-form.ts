@@ -1,7 +1,7 @@
 import type { TranslationKey } from "../i18n";
 
 // The start form of a Workflow, made from the JSON Schema of its published `inputs`: one field
-// per property, in the order the schema names them, and the check of what a person entered
+// per property, the required ones first, and the check of what a person entered
 // before it goes to the instance. The instance checks the input again on the start.
 
 /** How a field is asked for. */
@@ -161,7 +161,7 @@ function shapeOf(schema: Record<string, unknown>): FieldShape | undefined {
 }
 
 /**
- * The start form for the `inputs` of a Workflow. A schema without properties asks for
+ * The start form for the `inputs` of a Workflow, required fields first. A schema without properties asks for
  * nothing. A property the form cannot ask for is named in `unsupported`.
  */
 export function startFormOf(inputs: unknown): StartForm {
@@ -188,7 +188,16 @@ export function startFormOf(inputs: unknown): StartForm {
       ...shape
     });
   }
-  return { fields, unsupported };
+  // The instance stores a definition as JSON whose keys it orders by itself, so the order of
+  // `properties` is not the author's. The fields a start needs come first; within each group
+  // the order is the one that arrived.
+  return {
+    fields: [
+      ...fields.filter((field) => field.required),
+      ...fields.filter((field) => !field.required)
+    ],
+    unsupported
+  };
 }
 
 /** The form can give every input a start needs: none it has no field for is required. */
