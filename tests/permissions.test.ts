@@ -51,6 +51,9 @@ describe("permissions", () => {
       "knowledge_base.publish",
       "knowledge_base.delete",
       "knowledge_base.use",
+      "guardrail.read",
+      "guardrail.write",
+      "guardrail.delete",
       "operations.approve",
       "users.manage",
       "usage.view",
@@ -59,10 +62,10 @@ describe("permissions", () => {
       "agent_models.manage",
       "assets.release"
     ]);
-    // The rights of a Connection, an App, a Workflow, a Data Store and a Knowledge Base came
+    // The rights of a Connection, an App, a Workflow, a Data Store, a Knowledge Base and a Guardrail came
     // after the legacy keys: no key names one, so nobody holds one through the legacy column.
     const unkeyed = (action: string) =>
-      /^(?:connection|app|workflow|data_store|knowledge_base)\./u.test(action);
+      /^(?:connection|app|workflow|data_store|knowledge_base|guardrail)\./u.test(action);
     const keyed = ACTIONS.filter((action) => !unkeyed(action));
     expect(keyed).toHaveLength(14);
     for (const action of ACTIONS.filter(unkeyed)) {
@@ -147,6 +150,9 @@ describe("permissions", () => {
       "knowledge_base.publish",
       "knowledge_base.delete",
       "knowledge_base.use",
+      "guardrail.read",
+      "guardrail.write",
+      "guardrail.delete",
       "operations.approve",
       "users.manage",
       "usage.view",
@@ -173,7 +179,8 @@ describe("permissions", () => {
         new Set(
           ROLE_DEFAULT_ACTIONS[role]
             .filter(
-              (action) => !/^(?:connection|app|workflow|data_store|knowledge_base)\./u.test(action)
+              (action) =>
+                !/^(?:connection|app|workflow|data_store|knowledge_base|guardrail)\./u.test(action)
             )
             .map(legacyPermissionFor)
         )
