@@ -419,7 +419,7 @@ describe("agent page", () => {
     expect(section(agentPage(), "skills")).toContain("No skills chosen.");
   });
 
-  it("gives each skill of an agent its icon: the generic one unless the skill names one", () => {
+  it("gives each skill of an agent its icon: the generic one unless a release ships the skill", () => {
     const skills = section(
       agentPage({
         config: { skillNames: ["tax-review", "gone_skill"], toolNames: ["read_skill"] }
@@ -509,9 +509,7 @@ describe("texts per language", () => {
     );
 
     expect(markup).not.toContain("Texts in");
-    // The one group of radios on the page chooses the skill's icon.
-    expect(markup.match(/role="radiogroup"/gu)).toHaveLength(1);
-    expect(markup).toContain('aria-label="Spreadsheet"');
+    expect(markup).not.toContain('role="radio"');
   });
 });
 

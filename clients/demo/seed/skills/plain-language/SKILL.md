@@ -3,7 +3,6 @@ name: plain-language
 title: Plain language
 description: Use when a text should be short and easy to read, in German or English.
 summary: Knows how to write short, easy sentences in German and English.
-icon: text
 starters:
   - title:
       de: Text vereinfachen

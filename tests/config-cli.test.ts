@@ -187,21 +187,6 @@ describe("config CLI serialization", () => {
     expect(canonicalizeSkillConfig({ ...plain, starters })).toEqual({ ...plain, starters });
     expect(serializeSkillMarkdown(plain)).not.toContain("starters");
   });
-
-  it("keeps a skill's icon through a pull and a push and refuses a name the registry lacks", () => {
-    const skill = {
-      name: "review",
-      title: "Review",
-      description: "Review a workflow",
-      content: "# Review"
-    };
-    const serialized = serializeSkillMarkdown({ ...skill, icon: "spreadsheet" });
-
-    expect(serialized).toContain("icon: spreadsheet\n");
-    expect(parseSkillFile(serialized)).toEqual({ ...skill, icon: "spreadsheet" });
-    expect(serializeSkillMarkdown(skill)).not.toContain("icon");
-    expect(() => parseSkillFile(serialized.replace("spreadsheet", "outlook"))).toThrow();
-  });
 });
 
 describe("config CLI state and manifest", () => {

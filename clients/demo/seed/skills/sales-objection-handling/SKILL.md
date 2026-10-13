@@ -3,7 +3,6 @@ name: sales-objection-handling
 title: Objection handling
 description: Use when a first call or an objection is rehearsed.
 summary: Knows how to rehearse a first call and answer an objection.
-icon: presentation
 ---
 
 # Objection handling

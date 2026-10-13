@@ -3,13 +3,11 @@ import { useState } from "react";
 import { Button } from "../actions/button";
 import { Checkbox } from "../forms/checkbox";
 import { Field } from "../forms/field";
-import { IconChoice } from "../forms/icon-choice";
 import { Input, Textarea } from "../forms/input";
 import { RadioGroup } from "../forms/radio-group";
 import { SaveBar } from "../forms/save-bar";
 import { Select } from "../forms/select";
 import { Switch } from "../forms/switch";
-import { SkillIcon } from "../status/skill-icon";
 import { Page } from "../structure/page";
 import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
@@ -303,42 +301,6 @@ export const formsGallery: GalleryGroup = {
             options={[
               { value: "all", label: text.availabilityAll },
               { value: "selected", label: text.availabilitySelected }
-            ]}
-          />
-        </div>
-      )
-    },
-    {
-      name: "IconChoice",
-      components: ["IconChoice"],
-      render: (text) => (
-        <div className="grid max-w-sm gap-6">
-          <IconChoice
-            label={text.skillIconChoice}
-            hint={text.skillIconChoiceHint}
-            defaultValue="spreadsheet"
-            options={[
-              { value: "none", label: text.skillIconGeneric, icon: <SkillIcon /> },
-              {
-                value: "spreadsheet",
-                label: text.skillSpreadsheets,
-                icon: <SkillIcon icon="spreadsheet" />
-              },
-              {
-                value: "document",
-                label: text.skillDocuments,
-                icon: <SkillIcon icon="document" />
-              },
-              { value: "pdf", label: text.skillPdf, icon: <SkillIcon icon="pdf" /> }
-            ]}
-          />
-          <IconChoice
-            label={text.disabled}
-            defaultValue="none"
-            disabled
-            options={[
-              { value: "none", label: text.skillIconGeneric, icon: <SkillIcon /> },
-              { value: "pdf", label: text.skillPdf, icon: <SkillIcon icon="pdf" /> }
             ]}
           />
         </div>

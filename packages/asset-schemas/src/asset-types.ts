@@ -58,11 +58,6 @@ export interface SkillConfig {
   summary?: string;
   /** Up to `SKILL_STARTERS_MAX` first requests the empty chat offers for an agent with the skill. */
   starters?: SkillStarterConfig[];
-  /**
-   * The key of the interface's icon registry the skill shows beside its title, one of
-   * `SKILL_ICON_KEYS`. A skill without one shows the generic skill icon.
-   */
-  icon?: SkillIconKey;
   content: string;
   resources?: SkillResourceConfig[];
 }
@@ -90,23 +85,6 @@ export interface SkillStarterConfig {
 
 /** The most characters a skill's `summary` holds. */
 export const SKILL_SUMMARY_MAX_LENGTH = 120;
-
-/**
- * The icons a skill may name: the pages of the interface's icon registry. A skill's icon is a
- * page or the generic book, so no icon of a Connection or of a tool is among them.
- */
-export const SKILL_ICON_KEYS = [
-  "spreadsheet",
-  "document",
-  "presentation",
-  "pdf",
-  "image",
-  "archive",
-  "text",
-  "file"
-] as const;
-
-export type SkillIconKey = (typeof SKILL_ICON_KEYS)[number];
 
 /**
  * Who ships a skill, as a list says it. Every stored skill is the instance's own; `release`

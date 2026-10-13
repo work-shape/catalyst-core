@@ -249,8 +249,8 @@ describe("Studio frame", () => {
               rows: [
                 row("skill", "tax-review", { title: "Tax review", attributes: { summary } }),
                 row("skill", "plain", { title: "Plain language" }),
-                // A skill named like a file type that names no icon.
-                row("skill", "pdf", { title: "PDF", attributes: { origin: "instance" } }),
+                // A custom skill named like a shipped one, which claims the shipped icon.
+                row("skill", "pdf", { title: "PDF", attributes: { icon: "pdf" } }),
                 row("skill", "platform.pdf", {
                   title: "PDF",
                   attributes: { origin: "release", icon: "pdf" }

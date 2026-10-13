@@ -79,23 +79,13 @@ describe("what a list shows of a skill", () => {
     expect(skillFacts({})).toEqual({});
   });
 
-  it("takes the icon the skill names, whoever ships it, and never reads its name for one", () => {
+  it("takes the icon from a skill a release ships and from no other", () => {
     expect(skillFacts({ attributes: { origin: "release", icon: "pdf" } })).toEqual({
       icon: "pdf"
     });
-    expect(skillFacts({ attributes: { origin: "instance", icon: "pdf" } })).toEqual({
-      icon: "pdf"
-    });
-    expect(skillFacts({ attributes: { origin: "instance" } })).toEqual({});
-    expect(skillFacts({ attributes: { icon: "" } })).toEqual({});
-  });
-
-  it("keeps the icon a builder chose through the form, and none where none is chosen", () => {
-    const skill = { name: "sheets", title: "Sheets", description: "When.", content: "# Text" };
-    expect(skillFormToConfig(skillConfigToForm({ ...skill, icon: "spreadsheet" }))).toEqual({
-      ...skill,
-      icon: "spreadsheet"
-    });
-    expect(skillFormToConfig({ ...skillConfigToForm(skill), icon: "" })).toEqual(skill);
+    // A custom skill named like a shipped one, or one that claims an icon, stays generic.
+    expect(skillFacts({ attributes: { icon: "pdf" } })).toEqual({});
+    expect(skillFacts({ attributes: { origin: "custom", icon: "pdf" } })).toEqual({});
+    expect(skillFacts({ attributes: { origin: "release" } })).toEqual({});
   });
 });
