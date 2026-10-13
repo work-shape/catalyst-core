@@ -18189,6 +18189,9 @@
             "items": {
               "type": "string"
             }
+          },
+          "code": {
+            "type": "string"
           }
         },
         "required": [
@@ -19535,6 +19538,9 @@
           },
           "deletedAt": {
             "$ref": "#/components/schemas/Timestamp"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/ConversationSubject"
           }
         },
         "required": [
@@ -19589,6 +19595,9 @@
           },
           "deletedAt": {
             "$ref": "#/components/schemas/Timestamp"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/ConversationSubject"
           },
           "latestMessageAt": {
             "$ref": "#/components/schemas/Timestamp"
@@ -19961,6 +19970,25 @@
           }
         ]
       },
+      "ConversationSubject": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "kind",
+          "name"
+        ]
+      },
       "ConversationThreadSnapshot": {
         "type": "object",
         "properties": {
@@ -20271,6 +20299,9 @@
           },
           "locale": {
             "$ref": "#/components/schemas/LocaleCode"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/ConversationSubject"
           }
         }
       },

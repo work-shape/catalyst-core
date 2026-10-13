@@ -6,6 +6,16 @@ export {
   type PageSaveToolOptions
 } from "./page-save-tool";
 export * from "./read-skill-tool";
+export {
+  PLATFORM_ASSET_TOOLS,
+  PLATFORM_ASSET_TOOL_NAMES,
+  createPlatformAssetBinding,
+  createPlatformAssetTools,
+  platformAssetWriteRefusal,
+  type PlatformAssetBinding,
+  type PlatformAssetCalls,
+  type PlatformCallableOperation
+} from "./platform-asset-tools";
 export * from "./workspace-tools";
 export * from "./workspace-tool-schemas";
 export * from "./workspace-file-write-schemas";

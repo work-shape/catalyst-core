@@ -45,7 +45,8 @@ import {
   type PolicySource,
   type PolicyInput,
   type PolicyResolution,
-  type ToolExecutionResult
+  type ToolExecutionResult,
+  type ConversationId
 } from "@vivd-catalyst/core";
 import { z } from "zod";
 import { failureLogFields } from "./tool-failure-log";
@@ -92,10 +93,14 @@ export interface RunOperationDeps {
   /** Which modules are on. An operation or a tool of a module that is off does not exist. */
   modules?: ModuleSnapshot;
   /**
-   * The tools an agent's definition lists. An agent calls nothing else. Without it this
-   * process serves no agent and refuses every call of one.
+   * The tools an agent may call: those its definition lists, and in a conversation about an
+   * asset the tools the server binds to that subject. An agent calls nothing else. Without it
+   * this process serves no agent and refuses every call of one.
    */
-  agentToolNames?(agentName: string): readonly string[] | Promise<readonly string[]>;
+  agentToolNames?(
+    agentName: string,
+    conversationId?: ConversationId
+  ): readonly string[] | Promise<readonly string[]>;
   /**
    * Whether a person is a member of a workspace now. Asked before a call that waited for an
    * approval is executed in a workspace, for an agent's call and for an operation whose right
@@ -259,8 +264,8 @@ export async function authorizeOrigin(
   if (call.origin.kind !== "agent") {
     return { allowed: true };
   }
-  const { agentName, toolName } = call.origin;
-  const listed = (await deps.agentToolNames?.(agentName)) ?? [];
+  const { agentName, toolName, conversationId } = call.origin;
+  const listed = (await deps.agentToolNames?.(agentName, conversationId)) ?? [];
   return toolName === definition.name && listed.includes(toolName)
     ? { allowed: true }
     : { allowed: false, action: `${AGENT_TOOL_ACTION_PREFIX}${toolName}`, reason: "no_grant" };

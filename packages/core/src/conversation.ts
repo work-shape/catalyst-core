@@ -24,6 +24,50 @@ export type ConversationVisibility = "workspace" | "private";
  */
 export type ConversationListScope = { kind: "viewer"; userId: string } | { kind: "lifecycle" };
 
+/**
+ * The asset a conversation is about, by its kind and its name, such as a Workflow whose draft
+ * the agent edits. It is set when the conversation is created and never changed. The server
+ * binds the tools that read and save an asset to it: a tool of such a conversation reaches
+ * this asset and no other, whatever a model names.
+ */
+export interface ConversationSubject {
+  kind: string;
+  name: string;
+}
+
+/**
+ * What the conversations of an instance are offered beyond what their agent's definition
+ * lists: the tools the server binds to the subject of a conversation, and the skills the
+ * platform ships for an asset of that kind. A conversation without a subject is offered
+ * nothing here, and none of `SUBJECT_TOOL_PREFIX` either.
+ */
+export interface ConversationOffer {
+  toolNames: readonly string[];
+  skills: readonly ShippedSkill[];
+}
+
+/** A skill that ships with the platform's code. It is no asset and nobody edits it. */
+export interface ShippedSkill {
+  name: string;
+  title: string;
+  description: string;
+  content: string;
+}
+
+export interface ConversationOfferSource {
+  /** Nothing where the conversation has no subject, or is gone. */
+  offerOf(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+  }): Promise<ConversationOffer | undefined>;
+}
+
+/**
+ * The prefix of the tools the server binds to the subject of a conversation. An agent is
+ * offered one only in a conversation that has a subject, whatever its definition lists.
+ */
+export const SUBJECT_TOOL_PREFIX = "platform.assets.";
+
 export interface Conversation {
   id: ConversationId;
   clientInstanceId: ClientInstanceId;
@@ -37,6 +81,8 @@ export interface Conversation {
   updatedAt: ISODateString;
   retainedUntil: ISODateString;
   deletedAt?: ISODateString;
+  /** The asset the conversation is about. Missing on a conversation about none. */
+  subject?: ConversationSubject;
 }
 
 export interface ConversationListItem extends Conversation {
@@ -89,6 +135,7 @@ export interface CreateConversationInput {
   visibility: ConversationVisibility;
   title: string;
   retainedUntil: ISODateString;
+  subject?: ConversationSubject;
 }
 
 export interface CreateMessageInput {

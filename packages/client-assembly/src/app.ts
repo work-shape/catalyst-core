@@ -18,6 +18,7 @@ import {
   createAppAssetKind,
   createConnectionAssetKind,
   createChatServer,
+  createPlatformAssetCalls,
   createChatServerJobs,
   createSkillAssetKind
 } from "@vivd-catalyst/chat-server";
@@ -52,7 +53,6 @@ import {
   createProposeSkillChangeTool,
   createStructuredDataToolDefinitions,
   createWorkspaceToolDefinitions,
-  ToolRegistry,
   WorkspaceCommandService
 } from "@vivd-catalyst/tool-execution";
 import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
@@ -80,6 +80,7 @@ import { createInfrastructureWorkflow } from "./infrastructure";
 import { createInProcessAgentRunWorker, type AgentRunWorkerPlacement } from "./agent-run-jobs";
 import { createInstancePageSave, createInstancePages } from "./pages";
 import { createJobWorker } from "./job-worker";
+import { createSubjectTools } from "./conversation-offer";
 import { assembleModules, endResolveOnlyRun, resolveInstanceModules } from "./modules";
 import { createRuntimeFailureReporter } from "./runtime-error-logging";
 import { createPlatformStore } from "./store";
@@ -206,6 +207,7 @@ export async function createClientInstanceApp(
     sessionToken,
     serviceAccessToken
   };
+  execution.platformAssets.bind(createPlatformAssetCalls(serverOptions));
   const server = await createChatServer(serverOptions, { routes: execution.modulesStarted.routes });
   const serverJobs = createChatServerJobs(serverOptions);
   const jobs = createJobWorker({
@@ -390,8 +392,11 @@ export async function createClientInstanceExecutionAssembly(
     const handler = createSkillChangeApprovalHandler({ config, clientInstanceId, configAssets });
     approvalRequestHandlers.set(handler.kind, handler);
   }
+  const subjectTools = createSubjectTools({ stores: store, modules });
+  const { conversationOffer, platformAssets } = subjectTools;
   const { authorizer, operationCalls, approvalRequestCreator } = createInstanceOperationCalls({
     clientInstanceId,
+    conversationOffer,
     config,
     logger,
     modules,
@@ -438,7 +443,8 @@ export async function createClientInstanceExecutionAssembly(
         ? createWebFetchToolDefinitions({ config: config.webAccess.fetch })
         : []),
       ...createDataSourceTools({ dataSources }),
-      createReadSkillTool({ assetSource }),
+      createReadSkillTool({ assetSource, conversationOffer }),
+      ...subjectTools.tools,
       ...(skillPolicy.enabled
         ? [
             createProposeSkillChangeTool({
@@ -454,11 +460,7 @@ export async function createClientInstanceExecutionAssembly(
     ]
   });
   assertClientAssemblyValid({ config, tools, approvalRequestHandlers: handlers, modules });
-  const toolRegistry = new ToolRegistry({
-    tools,
-    enabledToolNames: getEnabledToolNames(config),
-    modules
-  });
+  const toolRegistry = subjectTools.registry(tools, getEnabledToolNames(config));
   const modulesStarted = await moduleAssembly.start({
     operationCalls,
     authorizer,
@@ -489,6 +491,7 @@ export async function createClientInstanceExecutionAssembly(
     modelProviderContinuationStore: store.conversations,
     modelGateway,
     ...createInstanceAgentTools(operationCalls, toolRegistry, toolOptions),
+    conversationOffer,
     webAccess: config.webAccess,
     agentSkillChangesEnabled: skillPolicy.enabled,
     maxSteps: config.runtime.maxSteps,
@@ -551,6 +554,7 @@ export async function createClientInstanceExecutionAssembly(
     approvalRequestHandlers: handlers,
     connections,
     modulesStarted,
+    platformAssets,
     async close() {
       await modulesStarted.close();
       await closeCapabilityContributions(capabilityContributions);

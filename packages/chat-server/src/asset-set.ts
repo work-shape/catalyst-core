@@ -77,6 +77,8 @@ export interface AssetSetIssue {
   assetName?: string;
   index?: number;
   path?: PropertyKey[];
+  /** The fixed code of the check that found it, where the check names one. */
+  code?: string;
 }
 
 export const INVALID_ASSET_SET_MESSAGE = "Config asset bundle is invalid";

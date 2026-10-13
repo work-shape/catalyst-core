@@ -314,3 +314,4 @@ function adaptLogger(logger: Logger): FastifyInstance["log"] {
     child: (bindings: Record<string, unknown>) => adaptLogger(logger.child(bindings))
   };
 }
+export { createPlatformAssetCalls } from "./platform-asset-calls";

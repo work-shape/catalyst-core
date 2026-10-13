@@ -8,6 +8,7 @@ import { AppError } from "./errors";
 import type { PlatformEventName } from "./events";
 import type { AuthenticatedIdentity, OperationScope } from "./identity";
 import type { CollaborationWorkspaceId, OperationRunId } from "./ids";
+import type { JsonObject } from "./json";
 import type { PolicyTarget } from "./operation-policy";
 import type {
   OperationCallRuntime,
@@ -206,6 +207,13 @@ interface OperationDefinitionBase<Input, Output> {
   auth: "user" | "principal";
   inputSchema: z.ZodType<Input>;
   outputSchema: z.ZodType;
+  /**
+   * The input and the output as JSON Schema, where the operation was described by one: an
+   * operation of a Connection carries what its outside system listed. A reader that shows an
+   * operation to a person or a model takes these before it derives one from `inputSchema`.
+   */
+  inputJsonSchema?: JsonObject;
+  outputJsonSchema?: JsonObject;
   resource(input: Input): OperationResource | undefined;
   /**
    * What the policy is asked about, where the resource does not say it all: the Namespace of

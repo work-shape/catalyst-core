@@ -322,7 +322,9 @@ export const validateAssetRequestSchema = z.object({
 
 export const assetValidationIssueSchema = z.object({
   message: z.string(),
-  path: z.array(z.string()).optional()
+  path: z.array(z.string()).optional(),
+  /** The fixed code of the check that found the issue, such as `not_supported_yet`. */
+  code: z.string().optional()
 });
 
 export const validateAssetResponseSchema = z.object({

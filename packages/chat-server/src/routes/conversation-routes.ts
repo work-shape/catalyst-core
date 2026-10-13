@@ -33,7 +33,8 @@ export function registerConversationRoutes(route: Route, options: ChatServerOpti
         title: body.title,
         collaborationWorkspaceId: body.collaborationWorkspaceId
           ? asCollaborationWorkspaceId(body.collaborationWorkspaceId)
-          : undefined
+          : undefined,
+        ...(body.subject ? { subject: body.subject } : {})
       }
     )
   );

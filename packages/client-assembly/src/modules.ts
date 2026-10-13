@@ -7,6 +7,7 @@ import {
   type ModuleSnapshot
 } from "@vivd-catalyst/core";
 import { resolveModuleSwitches, type ClientInstanceConfig } from "@vivd-catalyst/config-schema";
+import { PLATFORM_ASSET_TOOLS } from "@vivd-catalyst/tool-execution";
 import type { ClientInstanceCapability } from "./capabilities";
 import { assembleDataStores, dataStoresModule } from "./data-stores";
 import { assembleKnowledge, knowledgeModule } from "./knowledge";
@@ -42,6 +43,8 @@ const assetManagementModule = defineModule({
     "assets.set_availability"
   ],
   selfCheckedOperations: ["assets.sync"],
+  // The agent's save of a draft is a change of an asset like `assets.put`, which it projects.
+  tools: [PLATFORM_ASSET_TOOLS.put.name],
   ui: ["settings.build"]
 });
 

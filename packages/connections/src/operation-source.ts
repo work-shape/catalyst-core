@@ -188,6 +188,9 @@ function definitionOf(
     inputSchema: inputSchemaOf(deps, connection, operation, descriptor),
     // The result is checked inside the call, where a failure has a reason of its own.
     outputSchema: z.unknown(),
+    // What the outside system, or the type, described: for whoever shows the operation.
+    ...(descriptor ? { inputJsonSchema: descriptor.inputSchema } : {}),
+    ...(descriptor?.outputSchema ? { outputJsonSchema: descriptor.outputSchema } : {}),
     resource: () => resource,
     module: CONNECTIONS_MODULE,
     timeoutMs: limits.slotWaitMs + limits.callTimeoutMs + CONNECTION_RUN_GRACE_MS,

@@ -471,9 +471,10 @@ export class AssetWorkflow {
       (ofDefinition.length > 0 ? ofDefinition : await this.writeIssues(call, view.set, found));
     return {
       valid: issues.length === 0,
-      issues: issues.map(({ message, path }) => ({
+      issues: issues.map(({ message, path, code }) => ({
         message,
-        ...(path === undefined || path.length === 0 ? {} : { path: path.map(String) })
+        ...(path === undefined || path.length === 0 ? {} : { path: path.map(String) }),
+        ...(code === undefined ? {} : { code })
       }))
     };
   }
