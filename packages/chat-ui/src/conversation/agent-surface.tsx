@@ -1,10 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
-import { Chip, IconButton, KeyValue, KeyValueList, Skeleton } from "@vivd-catalyst/ui";
+import { IconButton, Skeleton } from "@vivd-catalyst/ui";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { useAppsHost } from "../apps/apps-host";
+import { AgentEditor, type SkillChoice } from "../build-area/agent-editor";
 import { agentConfigToForm, type AgentFormState } from "../build-area/asset-form-model";
+import type { BuildPageSlot } from "../build-area/build-asset-kind";
+import type { BuildWriteOutcome } from "../build-area/build-refusals";
 import { AGENT_ASSET_KIND } from "../build-area/build-rights";
 import { AGENTS_BUILD_PATH } from "../build-area/build-route";
 import { useTranslation } from "../i18n";
@@ -33,29 +36,29 @@ export function agentTitle(form: AgentFormState, locale: string, fallback: strin
   return title.trim() === "" ? fallback : title;
 }
 
-function Names({ names, empty }: { names: readonly string[]; empty: string }) {
-  if (names.length === 0) {
-    return <span className="text-muted-foreground">{empty}</span>;
-  }
-  return (
-    <span className="flex flex-wrap gap-1">
-      {names.map((name) => (
-        <Chip key={name} size="sm">
-          {name}
-        </Chip>
-      ))}
-    </span>
-  );
-}
+/** The form of an agent shown read-only: nothing on the surface saves. */
+const SURFACE_PAGE: BuildPageSlot = { ref: null, above: null, shown: () => undefined };
+const NO_SKILL_CHOICE: SkillChoice = { options: [], onSearch: () => undefined };
+const ignoreUnsaved = () => undefined;
+const refuseSave = (): Promise<BuildWriteOutcome> =>
+  Promise.resolve({ ok: false, conflict: false, refusals: [] });
 
 /**
- * An agent beside the conversation in which its agent changes it, read only. An agent has no
- * draft: what is saved is live at once, so the surface shows the saved state, and Build is
- * where a person changes it by hand.
+ * An agent beside the conversation in which its agent changes it: the form of its page in
+ * Build, read only. An agent has no draft: what is saved is live at once, so the surface shows
+ * the saved state and is drawn again with each save, and Build is where a person changes it by
+ * hand.
  */
 export function AgentSurface({ agent }: { agent: string }) {
-  const { locale, t } = useTranslation();
+  const { t } = useTranslation();
+  const { apiBaseUrl, client } = useWorkspaceApiClient();
   const query = useAgentAsset(agent);
+  // The model names the form shows. A reader the instance does not tell sees the ids.
+  const references = useQuery({
+    queryKey: workspaceQueryKeys.platformReferences(apiBaseUrl, "standalone"),
+    queryFn: ({ signal }) => client.platform.references.get({ signal }),
+    retry: false
+  });
   if (query.isPending) {
     return (
       <div className="grid gap-3 p-(--layout-gutter)">
@@ -71,33 +74,32 @@ export function AgentSurface({ agent }: { agent: string }) {
       </p>
     );
   }
-  const form = agentConfigToForm(query.data.config);
-  const description = locale === "de" ? form.description.de : form.description.en;
+  const asset = query.data;
   return (
-    <div className="grid gap-4 p-(--layout-gutter)" data-testid="agent-surface">
-      <p className="text-caption text-muted-foreground">
-        {t("agentSurfaceRevision", { number: query.data.revision })}
-      </p>
-      <KeyValueList layout="stacked">
-        <KeyValue label={t("agentSurfaceName")}>{agentTitle(form, locale, agent)}</KeyValue>
-        {description.trim() === "" ? null : (
-          <KeyValue label={t("agentSurfaceDescription")}>{description}</KeyValue>
-        )}
-        <KeyValue label={t("agentSurfaceModel")}>
-          {form.modelBindingId === "" ? t("agentSurfaceDefaultModel") : form.modelBindingId}
-        </KeyValue>
-        <KeyValue label={t("agentSurfaceTools")}>
-          <Names names={form.toolNames} empty={t("agentSurfaceNone")} />
-        </KeyValue>
-        <KeyValue label={t("agentSurfaceSkills")}>
-          <Names names={form.skillNames} empty={t("agentSurfaceNone")} />
-        </KeyValue>
-        <KeyValue label={t("agentSurfaceInstructions")} foldable>
-          <span className="whitespace-pre-wrap">
-            {form.instructions.trim() === "" ? t("agentSurfaceNone") : form.instructions}
-          </span>
-        </KeyValue>
-      </KeyValueList>
+    <div data-testid="agent-surface" className="min-w-0">
+      <AgentEditor
+        // The form keeps what it was first given: each saved revision draws it anew.
+        key={asset.revision}
+        frame={{
+          page: SURFACE_PAGE,
+          asset,
+          start: undefined,
+          canWrite: false,
+          readOnlyReason: t("agentSurfaceReadOnly", { number: asset.revision }),
+          instanceWrite: false,
+          back: null,
+          actions: null,
+          notice: null,
+          onUnsavedChange: ignoreUnsaved,
+          save: refuseSave
+        }}
+        initialForm={agentConfigToForm(asset.config)}
+        isDefault={asset.isDefault === true}
+        references={references.data}
+        editableAgentFields={[]}
+        canManageAgentModels={false}
+        skillChoice={NO_SKILL_CHOICE}
+      />
     </div>
   );
 }

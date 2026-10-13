@@ -2,17 +2,10 @@ import { defineTranslations } from "./translation-area";
 
 export const conversation = defineTranslations({
   en: {
-    agentSurfaceDefaultModel: "The default model",
-    agentSurfaceDescription: "Description",
-    agentSurfaceInstructions: "Instructions",
     agentSurfaceMissing: "This agent is not available to you.",
-    agentSurfaceModel: "Model",
-    agentSurfaceName: "Name",
-    agentSurfaceNone: "None",
     agentSurfaceOpenBuild: "Open the agent in Build",
-    agentSurfaceRevision: "Saved revision {number}. A saved change is live at once.",
-    agentSurfaceSkills: "Skills",
-    agentSurfaceTools: "Tools",
+    agentSurfaceReadOnly:
+      "Saved revision {number}, shown read-only. A saved change of an agent is live at once; a person changes it in Build.",
     confirmDeleteConversation: "Delete",
     conversationExpiresOn: "Will be deleted automatically on {date}",
     conversationExpiresShortly: "Will be deleted shortly",
@@ -37,17 +30,10 @@ export const conversation = defineTranslations({
     deleteFailed: "Delete failed"
   },
   de: {
-    agentSurfaceDefaultModel: "Das Standardmodell",
-    agentSurfaceDescription: "Beschreibung",
-    agentSurfaceInstructions: "Anweisungen",
     agentSurfaceMissing: "Dieser Agent ist für dich nicht verfügbar.",
-    agentSurfaceModel: "Modell",
-    agentSurfaceName: "Name",
-    agentSurfaceNone: "Keine",
     agentSurfaceOpenBuild: "Agenten in Build öffnen",
-    agentSurfaceRevision: "Gespeicherte Revision {number}. Eine gespeicherte Änderung gilt sofort.",
-    agentSurfaceSkills: "Skills",
-    agentSurfaceTools: "Tools",
+    agentSurfaceReadOnly:
+      "Gespeicherte Revision {number}, nur zum Lesen. Eine gespeicherte Änderung eines Agenten gilt sofort; geändert wird er in Build.",
     confirmDeleteConversation: "Löschen",
     conversationExpiresOn: "Wird am {date} automatisch gelöscht",
     conversationExpiresShortly: "Wird in Kürze gelöscht",
