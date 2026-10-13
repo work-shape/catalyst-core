@@ -38,6 +38,9 @@ const silent: Logger = {
 
 export type StoreFile = { path: string; text: string };
 
+/** Where a load reads the rows of a dataset from, as the Data Stores of a test are given it. */
+type DatasetReader = NonNullable<Parameters<typeof createDataStores>[0]["datasets"]>;
+
 /** The findings of a monthly check of bookings: the store these tests publish. */
 export const INIT_SQL = `
   create table findings (
@@ -140,7 +143,8 @@ export function useDataStoreWorld(prefix: string) {
   async function setup(
     label: string,
     limits: { sizeLimitBytes?: number; poolMaxConnections?: number } = {},
-    databaseUrl = db.databaseUrl
+    databaseUrl = db.databaseUrl,
+    datasets?: DatasetReader
   ) {
     const clientInstanceId = db.clientInstance(label);
     const key = randomBytes(32).toString("base64");
@@ -153,6 +157,7 @@ export function useDataStoreWorld(prefix: string) {
         secrets: { resolve: () => Promise.resolve(key) }
       }),
       limits: { sizeLimitBytes: 5 * 1024 ** 3, poolMaxConnections: 5, ...limits },
+      ...(datasets ? { datasets } : {}),
       logger: silent
     });
     opened.push(dataStores);
@@ -220,8 +225,12 @@ export function useDataStoreWorld(prefix: string) {
   }
 
   /** A store that is published and at the level of its files. */
-  async function published(label: string, files: StoreFile[] = [manifest(), init]) {
-    const world = await setup(label);
+  async function published(
+    label: string,
+    files: StoreFile[] = [manifest(), init],
+    datasets?: DatasetReader
+  ) {
+    const world = await setup(label, {}, db.databaseUrl, datasets);
     const id = await publish(world, files);
     const record = await settle(world, id, files.length - 1);
     return { ...world, id, record };

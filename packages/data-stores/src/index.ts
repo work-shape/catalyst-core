@@ -28,7 +28,7 @@ import {
 } from "./definition";
 import { createDataStoreJobs, publishDataStore, retireDataStore } from "./jobs";
 import { createDataStoreOperationSource, createDataStoreToolSource } from "./operations";
-import type { DataStoreLimits, DataStoreRuntime } from "./runtime";
+import type { DataStoreDatasetReader, DataStoreLimits, DataStoreRuntime } from "./runtime";
 
 export { sizeLimitBytes } from "./definition";
 import { createDataStoreServer } from "./server";
@@ -96,6 +96,11 @@ export function createDataStores(input: {
   keyring: SecretKeyring;
   /** The limits of release config (`dataStores`). */
   limits: DataStoreLimits;
+  /**
+   * Where `load` reads the rows of a dataset of a Workflow Run from. Without one a load is
+   * refused as `not_supported_yet`.
+   */
+  datasets?: DataStoreDatasetReader;
   logger: Logger;
 }): DataStores {
   const { clientInstanceId, stores, limits, logger } = input;
@@ -114,6 +119,7 @@ export function createDataStores(input: {
     limits,
     credentials,
     auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: stores.audit }),
+    ...(input.datasets ? { datasets: input.datasets } : {}),
     logger
   };
   const jobs = createDataStoreJobs(runtime);

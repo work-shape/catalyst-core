@@ -97,7 +97,12 @@ contain breaking changes; a patch version does not.
   most 1,000 rows and 2 MiB), `describe` (tables, columns and types) and `preview_rows` (at
   most 50 rows of one table) need `data_store.read` and record every call; `insert` (at most
   1,000 rows and 1 MiB per call, `onConflict: fail | skip`, answers `inserted` and `skipped`)
-  needs `data_store.insert`. `load` is reserved and answers `not_supported_yet`. Release
+  needs `data_store.insert`. `load` takes a dataset of a Workflow Run into one table in one
+  transaction (at most 100,000 rows and 64 MiB per call; `key` with `onConflict: fail | skip |
+  update`; `replace.by` deletes the rows of the dataset's values and adds the dataset, so a
+  reader never sees the table half replaced); it needs `data_store.insert`, and
+  `data_store.execute` as well for `update` and `replace`. Until the datasets of Workflow Runs
+  exist it answers `not_supported_yet`. Release
   config `dataStores.sizeLimit` (default `5GB`) is the most one store may hold and
   `dataStores.poolMaxConnections` (default 5) the connections one process holds to one store.
   Migration `0062_data_stores` adds the table `data_stores`, the platform's record of each

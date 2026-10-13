@@ -1,4 +1,11 @@
-import type { AuditRecorder, ClientInstanceId, Logger, PlatformStores } from "@vivd-catalyst/core";
+import type {
+  AuditRecorder,
+  ClientInstanceId,
+  JsonObject,
+  Logger,
+  PlatformStores,
+  WorkflowDatasetReference
+} from "@vivd-catalyst/core";
 import type { DataStoreCredentials } from "./credentials";
 import type { DataStoreServer } from "./server";
 
@@ -10,6 +17,21 @@ export interface DataStoreLimits {
   poolMaxConnections: number;
 }
 
+/**
+ * Where a load reads the rows of a dataset from. The slice that brings the datasets of
+ * Workflow Runs gives it; a process without one refuses `load` as `not_supported_yet`.
+ */
+export interface DataStoreDatasetReader {
+  /**
+   * The rows of the dataset in its order, in parts of whatever size. It throws an `AppError`
+   * where the dataset cannot be read, such as one that was deleted.
+   */
+  read(
+    reference: WorkflowDatasetReference,
+    signal: AbortSignal | undefined
+  ): AsyncIterable<readonly JsonObject[]>;
+}
+
 /** What everything that serves Data Stores in one process is built on. */
 export interface DataStoreRuntime {
   clientInstanceId: ClientInstanceId;
@@ -19,5 +41,7 @@ export interface DataStoreRuntime {
   limits: DataStoreLimits;
   credentials: DataStoreCredentials;
   auditRecorder: AuditRecorder;
+  /** Where `load` reads the rows of a dataset from. Missing until the datasets of Workflow Runs exist. */
+  datasets?: DataStoreDatasetReader;
   logger: Logger;
 }

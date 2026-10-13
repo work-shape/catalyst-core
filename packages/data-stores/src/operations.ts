@@ -4,8 +4,7 @@ import {
   POSTGRES_RESULT_MAX_BYTES,
   POSTGRES_RESULT_MAX_ROWS,
   POSTGRES_STATEMENT_TIMEOUT_MS,
-  PostgresExecutorError,
-  type PostgresTarget
+  PostgresExecutorError
 } from "@vivd-catalyst/postgres-connector";
 import {
   AppError,
@@ -17,33 +16,29 @@ import {
   DATA_STORE_SCALAR_TYPES,
   dataStoreInsertConflictSchema,
   dataStoreInsertResultSchema,
-  dataStoreLoadInputSchema,
-  dataStoreLoadResultSchema,
   dataStoreOperationName,
   type ConfigAssetRecord,
   type DataStoreInsertResult,
-  type DataStoreOperationVerb,
   type DataStoreParameterType,
   type DataStoreRecord,
   type DataStoreSchema,
   type DataToolDescriptor,
   type DataToolSource,
   type JsonObject,
-  type OperationChangeClass,
   type OperationDefinition,
-  type OperationEffect,
-  type OperationResource,
   type OperationSource
 } from "@vivd-catalyst/core";
 import { z } from "zod";
 import { catalogTarget, readTables, rowsOf } from "./catalog";
-import { dataStoreDefinitionSchema, type DataStoreDefinition } from "./definition";
+import { dataStoreDefinitionSchema } from "./definition";
 import { databaseFailureError } from "./failures";
 import { DATA_STORE_ROLE_LIMITS } from "./role-limits";
 import type { DataStoreRuntime } from "./runtime";
 import { asStoreRole } from "./roles";
 import { quoteIdentifier } from "./server";
 import { storeSizeBytes } from "./size";
+import { reclaim, storeFull, tableUnknown, type PublishedStore, type StoreVerb } from "./verbs";
+import { load } from "./load";
 
 // The operations on the rows of one store. Each is called through `runOperation` like every
 // other operation: this file says who may call it and what it does, as the app role of the
@@ -114,42 +109,6 @@ const previewInputSchema = z.strictObject({
 });
 
 const jsonObjectSchema = z.record(z.string(), z.json());
-
-/** A store as its operations read it: the published definition and the record of its database. */
-interface PublishedStore {
-  definition: DataStoreDefinition;
-  record: DataStoreRecord;
-  resource: OperationResource;
-}
-
-/** What one call of a verb works with: the store and the way to its database as the app role. */
-interface VerbCall {
-  runtime: DataStoreRuntime;
-  store: PublishedStore;
-  /** The database of the store as its app role, cancelled with the call. */
-  target: PostgresTarget;
-}
-
-/**
- * One verb: what it takes, what it does and how an agent is told to use it. The right it asks
- * is the contract's (`DATA_STORE_OPERATION_RIGHTS`).
- */
-interface StoreVerb {
-  verb: DataStoreOperationVerb;
-  effect: OperationEffect;
-  changeClass?: OperationChangeClass;
-  inputSchema: z.ZodType;
-  outputSchema: z.ZodType;
-  /** What an agent reads of the tool, after the sentence that names the store. Missing where no agent is offered it. */
-  use?: string;
-  run(call: VerbCall, input: unknown): Promise<unknown>;
-}
-
-function tableUnknown(table: string): AppError {
-  return new AppError("VALIDATION_FAILED", `The store has no table '${table}'`, {
-    reason: "table_unknown"
-  });
-}
 
 /** The columns the rows of one insert name: those of its first row, which every row shares. */
 function sharedColumns(rows: readonly JsonObject[]): string[] {
@@ -306,33 +265,6 @@ function emptyKeyStatement(
     where not (${bound})`;
 }
 
-/** How long giving back what a refused insert wrote may take. Past it the space stays for the server's own vacuum. */
-const DATA_STORE_RECLAIM_TIMEOUT_MS = 60_000;
-
-/**
- * Gives the space of rows that were written and not kept back to the files of a store, as the
- * platform's own role, which owns the database. A refused insert and one the database ended
- * for its time leave such rows, and a store whose files stay over its limit takes no insert.
- * Postgres gives back what lies at the end of a table; the rest is free for later rows.
- */
-async function reclaim(runtime: DataStoreRuntime, record: DataStoreRecord): Promise<void> {
-  await runtime.server.executor
-    .change(
-      {
-        ...runtime.server.asPlatform(record.location.database),
-        timeoutMs: DATA_STORE_RECLAIM_TIMEOUT_MS,
-        transaction: false
-      },
-      (sql) => sql.script("vacuum")
-    )
-    .catch(() =>
-      runtime.logger.warn(
-        { storeId: record.id },
-        "The space of a refused insert was not given back"
-      )
-    );
-}
-
 const query: StoreVerb = {
   verb: "query",
   effect: "reading",
@@ -416,12 +348,7 @@ const insert: StoreVerb = {
         returning 1
       )
       select pg_catalog.count(*)::pg_catalog.int4 as count from inserted`;
-    const full = (sizeBytes: number) =>
-      new AppError(
-        "CONFLICT",
-        `The Data Store '${record.name}' holds ${sizeBytes} bytes and its size limit is ${record.sizeLimitBytes} bytes (sizeLimit). No rows are added until it is smaller or the limit is raised; reading keeps working.`,
-        { reason: "data_store_size_limit", limit: record.sizeLimitBytes, actual: sizeBytes }
-      );
+    const full = (sizeBytes: number) => storeFull(record, sizeBytes);
     // The size is the server's own word for the files of the store, read on a connection of
     // the platform's own, which nothing the store runs can have touched. It is read before
     // the rows are written and again once they are: whoever calls and from whichever
@@ -481,23 +408,6 @@ const insert: StoreVerb = {
       inserted,
       skipped: input.rows.length - inserted
     } satisfies DataStoreInsertResult;
-  }
-};
-
-const load: StoreVerb = {
-  verb: "load",
-  effect: "changing",
-  inputSchema: dataStoreLoadInputSchema,
-  outputSchema: dataStoreLoadResultSchema,
-  run({ store }) {
-    const name = store.record.name;
-    return Promise.reject(
-      new AppError(
-        "VALIDATION_FAILED",
-        `${dataStoreOperationName(name, "load")} is not supported yet: a dataset of a Workflow Run cannot be loaded into a Data Store by this release. Add rows with ${dataStoreOperationName(name, "insert")}.`,
-        { reason: "not_supported_yet" }
-      )
-    );
   }
 };
 
@@ -656,8 +566,31 @@ async function runVerb(
   } catch (error) {
     throw error instanceof AppError
       ? error
-      : databaseFailureError(error, `The ${verb.verb === "insert" ? "insert" : "query"}`);
+      : databaseFailureError(error, `The ${verb.effect === "changing" ? verb.verb : "query"}`);
   }
+}
+
+/**
+ * Who may call a verb: the one right the contract names for it, or, where a call needs more
+ * by what it asks for, each of those rights on the store. A refusal names the right that lacks.
+ */
+function rightsOf(
+  store: PublishedStore,
+  verb: StoreVerb
+): { action: string } | { action: null; authorize: NonNullable<OperationDefinition["authorize"]> } {
+  const action = DATA_STORE_OPERATION_RIGHTS[verb.verb];
+  const { furtherRights } = verb;
+  if (!furtherRights) return { action };
+  return {
+    action: null,
+    authorize(input, context) {
+      for (const right of [action, ...furtherRights(input)]) {
+        const decision = context.access.authorize(right, store.resource);
+        if (!decision.allowed) return { allowed: false, action: right, reason: decision.reason };
+      }
+      return { allowed: true };
+    }
+  };
 }
 
 function operationOf(
@@ -671,7 +604,7 @@ function operationOf(
     // A read of a customer's rows is recorded, every time.
     ...(verb.effect === "reading" ? { recordsEveryCall: true as const } : {}),
     ...(verb.changeClass ? { changeClass: verb.changeClass } : {}),
-    action: DATA_STORE_OPERATION_RIGHTS[verb.verb],
+    ...rightsOf(store, verb),
     // What a key must carry to call the verb over HTTP. The grants of its holder still decide.
     scope: DATA_STORE_OPERATION_SCOPES[verb.verb],
     auth: "principal",
@@ -679,7 +612,7 @@ function operationOf(
     outputSchema: verb.outputSchema,
     resource: () => store.resource,
     module: DATA_STORES_MODULE,
-    timeoutMs: RUN_TIMEOUT_MS,
+    timeoutMs: verb.timeoutMs ?? RUN_TIMEOUT_MS,
     execute: (input, context) => runVerb(runtime, store, verb, input, context.runtime.signal)
   };
 }
