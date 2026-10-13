@@ -237,7 +237,13 @@ test("a member starts a Workflow with inputs from its form and sees the run end;
       await expect(dialog).toBeVisible();
       return dialog;
     };
-    await shootForm(page, openForm);
+    // The pictures are taken in both languages, so the card's start is found in either.
+    await shootForm(page, async () => {
+      await card.getByRole("button", { name: /^(?:Start now|Jetzt starten)$/u }).click();
+      const shown = page.getByRole("dialog");
+      await expect(shown).toBeVisible();
+      return shown;
+    });
     await openForm();
     await expect(dialog).toContainText("Fill in what this run starts with.");
     await expect(dialog).toContainText("Whose bookings to check.");
