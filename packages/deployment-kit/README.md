@@ -123,9 +123,10 @@ into one tar archive in the backup bucket:
 
 The databases come from the server's own catalog, not from the platform's records of its stores,
 so a store whose record is missing or not yet written is backed up too. Left out are the
-templates, `postgres` (the maintenance database, so a grant changed there is not in the backup)
-and the `<database>_restore_<timestamp>` and `<database>_replaced_<timestamp>` databases that
-`restore-postgres.sh` makes. A database whose name cannot be a file name fails the backup instead
+templates, `postgres` (the maintenance database, so a grant changed there is not in the backup),
+the `<database>_restore_<timestamp>` and `<database>_replaced_<timestamp>` databases that
+`restore-postgres.sh` makes, and a database an interrupted `DROP DATABASE` left invalid, which
+the backup names on stderr. A database whose name cannot be a file name fails the backup instead
 of being skipped. `CATALYST_SECRET_STORE_KEY` is not in the backup: the platform reads the store
 roles' passwords with it, so a restored instance needs the key from the password manager.
 

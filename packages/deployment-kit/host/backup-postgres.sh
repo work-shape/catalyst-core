@@ -98,13 +98,22 @@ postgres_exec() {
 # Store and whatever else it holds, so a store the platform has not recorded yet is not missed.
 # Left out: the templates, "postgres" (initdb's empty maintenance database, unless it is the
 # platform's), and the scratch and replaced databases that restore-postgres.sh names
-# <database>_restore_<timestamp> and <database>_replaced_<timestamp>.
+# <database>_restore_<timestamp> and <database>_replaced_<timestamp>. Also left out, as
+# pg_dumpall does, is a database an interrupted DROP DATABASE left invalid: nothing can connect
+# to it, so it would fail every backup until it is dropped.
 databases="$(postgres_exec psql -X -q -At -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
   select datname from pg_catalog.pg_database
   where not datistemplate
+    and datconnlimit <> -2
     and (datname <> 'postgres' or datname = '$POSTGRES_DB')
     and datname !~ '_(restore|replaced)_[0-9]{8}t[0-9]{6}z\$'
   order by datname")"
+
+invalid_databases="$(postgres_exec psql -X -q -At -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  -c "select datname from pg_catalog.pg_database where datconnlimit = -2 order by datname")"
+if [[ -n "$invalid_databases" ]]; then
+  echo "Left out, invalid after an interrupted DROP DATABASE (drop them): $(paste -sd ' ' - <<< "$invalid_databases")" >&2
+fi
 
 if ! grep -Fqx -e "$POSTGRES_DB" <<< "$databases"; then
   echo "The server has no database $POSTGRES_DB." >&2

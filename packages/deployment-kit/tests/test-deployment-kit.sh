@@ -818,6 +818,7 @@ test_host_backup_scripts() {
 #!/usr/bin/env bash
 printf 'docker %s\n' "$*" >> "$HOST_LOG"
 case "$*" in
+  *"datconnlimit = -2"*) echo "catalyst_ds_dropped" ;;
   *" psql "*"pg_database"*) printf 'agent_chat\ncatalyst_ds_0123\n' ;;
   *"pg_dumpall"*) echo "CREATE ROLE catalyst_ds_0123_app;" ;;
   *"pg_dump"*) echo "-- dump of ${*: -1}" ;;
@@ -850,7 +851,9 @@ ENV
     "APP_DIR=$host/app" "ENV_FILE=$host/app.env")
 
   # Every database the server lists is dumped, the roles with it, into one archive.
-  "${run[@]}" "$scripts/backup-postgres.sh" > "$host/output"
+  "${run[@]}" "$scripts/backup-postgres.sh" > "$host/output" 2> "$host/errors"
+  # A database left invalid by an interrupted DROP DATABASE is named, not dumped.
+  assert_contains "$host/errors" "invalid after an interrupted DROP DATABASE (drop them): catalyst_ds_dropped"
   local compose="docker compose --env-file $host/app.env -f $host/app/docker-compose.prod.yml exec -T postgres"
   assert_contains "$log" "$compose pg_dumpall -U catalyst --globals-only"
   assert_contains "$log" "$compose pg_dump -U catalyst -Fc -d agent_chat"
@@ -1060,7 +1063,7 @@ test_digit_leading_instance() {
 
   # The rendered backup script names its backups after the instance.
   mkdir -p "$host/backup-bin"
-  printf '#!/usr/bin/env bash\n[[ "$*" != *pg_database* ]] || echo agent_chat\n' > "$host/backup-bin/docker"
+  printf '#!/usr/bin/env bash\n[[ "$*" == *"datconnlimit = -2"* || "$*" != *pg_database* ]] || echo agent_chat\n' > "$host/backup-bin/docker"
   chmod +x "$host/backup-bin/docker"
   printf 'POSTGRES_USER=catalyst\nPOSTGRES_DB=agent_chat\nBACKUP_OBJECT_STORE_ENDPOINT=https://objects.example.test\nBACKUP_OBJECT_STORE_BUCKET=backups\nBACKUP_OBJECT_STORE_REGION=eu\nBACKUP_AWS_ACCESS_KEY_ID=key\nBACKUP_AWS_SECRET_ACCESS_KEY=secret\n' \
     > "$host/backup.env"
