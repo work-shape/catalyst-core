@@ -74,6 +74,7 @@ export function ModalSurface({
 }: ModalSurfaceProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const pointerStartedOnBackdropRef = useRef(false);
+  const openerRef = useRef<Element | null>(null);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -81,12 +82,34 @@ export function ModalSurface({
       return;
     }
     if (open && !dialog.open) {
+      openerRef.current = document.activeElement;
       dialog.showModal();
       initialFocus?.current?.focus();
     } else if (!open && dialog.open) {
       dialog.close();
     }
   }, [initialFocus, open]);
+
+  // A dialog its owner takes off the page while it is open is never closed, so the browser does
+  // not return the focus to what opened it: the surface does, where the focus was left nowhere.
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!open || !dialog) {
+      return;
+    }
+    return () => {
+      const opener = openerRef.current;
+      const focus = document.activeElement;
+      if (
+        !dialog.isConnected &&
+        opener instanceof HTMLElement &&
+        opener.isConnected &&
+        (focus === null || focus === document.body)
+      ) {
+        opener.focus();
+      }
+    };
+  }, [open]);
 
   useEffect(() => {
     const dialog = dialogRef.current;

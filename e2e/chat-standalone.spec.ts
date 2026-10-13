@@ -1187,7 +1187,8 @@ test("links in user messages keep the bubble foreground contrast", async ({ page
   await page.goto("/");
 
   const input = page.getByPlaceholder("Message");
-  await input.fill("[Visible link](https://example.com)");
+  // A link to another host is shown as text; one into the instance stays a link.
+  await input.fill("[Visible link](/settings)");
   await input.press("Enter");
 
   const userMessage = page.getByRole("region", { name: "Chat" }).locator('[data-role="user"]');
@@ -1203,6 +1204,82 @@ test("links in user messages keep the bubble foreground contrast", async ({ page
   expect(colors.link).toBe(colors.bubble);
   expect(colors.decoration).toContain("underline");
   await expect(bubble).toBeVisible();
+});
+
+test("a reply with remote images, also in a Mermaid diagram, makes no request outside", async ({
+  page
+}) => {
+  const outsideHost = "outside-pixel.example.test";
+  const isOutside = (address: string) => new URL(address).hostname === outsideHost;
+  // Chromium reports a load the content policy refused as a request that failed with the
+  // reason "csp"; such a request never reaches the network. Every other outcome counts.
+  const outsideRequests: string[] = [];
+  const refusedByPolicy: string[] = [];
+  page.on("request", (request) => {
+    if (isOutside(request.url())) {
+      outsideRequests.push(request.url());
+    }
+  });
+  page.on("requestfailed", (request) => {
+    if (isOutside(request.url()) && request.failure()?.errorText === "csp") {
+      refusedByPolicy.push(request.url());
+    }
+  });
+  // A request that did reach the network would be answered here.
+  const answered: string[] = [];
+  await page.route(`**://${outsideHost}/**`, async (route) => {
+    answered.push(route.request().url());
+    await route.fulfill({ status: 200, contentType: "image/gif", body: Buffer.alloc(0) });
+  });
+  await signInViaApi(page, normalUser);
+  await page.goto("/");
+
+  // The fixture agent quotes the message in its reply, so the reply carries the same Markdown.
+  // The last line keeps the diagram's closing fence apart from the rest of the reply.
+  const input = page.getByPlaceholder("Message");
+  await input.fill(
+    [
+      "Pixel check",
+      "",
+      `![Markdown image](https://${outsideHost}/markdown.png)`,
+      "",
+      `<img src="https://${outsideHost}/html.gif" width="1" height="1" alt="">`,
+      "",
+      "```mermaid",
+      `%%{init: {"themeCSS": ".label { background-image: url(https://${outsideHost}/theme.png) }"}}%%`,
+      "flowchart TD",
+      `  A["<img src='https://${outsideHost}/label.png' width='16' /> Label node"] --> B[Plain node]`,
+      "```",
+      "",
+      "```mermaid",
+      "flowchart TD",
+      `  C@{ img: "https://${outsideHost}/shape.png", label: "Image shape", pos: "t", w: 60, h: 60, constraint: "on" }`,
+      "```",
+      "",
+      "End of check"
+    ].join("\n")
+  );
+  await input.press("Enter");
+
+  const reply = page
+    .getByRole("region", { name: "Chat" })
+    .locator('[data-role="assistant"]')
+    .last();
+  await expect(reply.locator("svg").getByText("Label node")).toBeVisible({ timeout: 20_000 });
+  await expect(reply.getByText("Image not loaded: Markdown image")).toBeVisible();
+  // The image shape is drawn, or refused by Mermaid itself once its image did not load.
+  await expect(
+    reply
+      .locator("svg")
+      .getByText("Image shape")
+      .or(reply.getByText(/Mermaid Error/u))
+  ).toBeVisible();
+  // Mermaid drew into the page; give any image it named the time to be requested.
+  await page.waitForTimeout(1_000);
+
+  expect(answered).toEqual([]);
+  expect(outsideRequests.length).toBeGreaterThan(0);
+  expect(refusedByPolicy.sort()).toEqual(outsideRequests.sort());
 });
 
 test("a first message sent while the workspace still loads goes out once it has loaded", async ({

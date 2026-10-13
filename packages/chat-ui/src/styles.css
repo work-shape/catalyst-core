@@ -54,6 +54,16 @@
     overflow-wrap: anywhere;
   }
 
+  /* A link to a host outside the instance's link hosts, shown as text with its address. */
+  .chat-markdown-blocked-link {
+    @apply text-muted-foreground;
+  }
+
+  /* An image a reply or preview names but never loads. */
+  .chat-markdown-blocked-image {
+    @apply inline-block rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground;
+  }
+
   .artifact-markdown {
     @apply mx-auto w-full max-w-4xl;
   }

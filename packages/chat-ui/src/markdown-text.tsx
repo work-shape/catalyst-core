@@ -3,9 +3,11 @@ import {
   type ControlsConfig as AssistantControlsConfig
 } from "@assistant-ui/react-streamdown";
 import { mermaid } from "@streamdown/mermaid";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { Streamdown, type ControlsConfig, type StreamdownTranslations } from "streamdown";
 import { CODE_THEMES, codeHighlighter } from "./code-highlight";
 import { useTranslation } from "./i18n";
+import { markdownRehypePlugins, type MarkdownLinkPolicy } from "./markdown-security";
 
 const plugins = { code: codeHighlighter, mermaid };
 const controls: ControlsConfig = {
@@ -16,15 +18,64 @@ const controls: ControlsConfig = {
 // The assistant-ui wrapper still exposes Streamdown's older, narrower control type,
 // while passing this object through to the current Streamdown runtime unchanged.
 const assistantControls = controls as AssistantControlsConfig;
-const security = {
-  allowedLinkPrefixes: ["*"],
-  allowedImagePrefixes: [],
-  allowedProtocols: ["http", "https", "mailto"],
-  allowDataImages: false
-};
+
+const MarkdownLinkPolicyContext = createContext<MarkdownLinkPolicy | undefined>(undefined);
+
+/**
+ * Names the hosts links in replies and Markdown file previews may point to besides the
+ * instance. Without it only links to the page's own origin stay links.
+ */
+export function MarkdownLinkPolicyProvider({
+  allowedLinkHosts,
+  ownOrigins,
+  children
+}: {
+  /** `replies.allowedLinkHosts` of the instance config. */
+  allowedLinkHosts: readonly string[];
+  /** The instance's own origins; the page's origin is always one. */
+  ownOrigins: readonly string[];
+  children: ReactNode;
+}) {
+  // The config is fetched again from time to time; compared by content so that an equal list
+  // does not render every reply again.
+  const hostsKey = allowedLinkHosts.join(" ");
+  const originsKey = ownOrigins.join(" ");
+  const value = useMemo<MarkdownLinkPolicy>(
+    () => ({
+      allowedLinkHosts: hostsKey ? hostsKey.split(" ") : [],
+      ownOrigins: originsKey ? originsKey.split(" ") : []
+    }),
+    [hostsKey, originsKey]
+  );
+  return (
+    <MarkdownLinkPolicyContext.Provider value={value}>
+      {children}
+    </MarkdownLinkPolicyContext.Provider>
+  );
+}
+
+function useMarkdownRehypePlugins() {
+  const policy = useContext(MarkdownLinkPolicyContext);
+  const { t } = useTranslation();
+  const imageWithDescription = t("markdownImageNotLoaded", { description: "{description}" });
+  const image = t("markdownImageNotLoadedNoDescription");
+  return useMemo(
+    () =>
+      markdownRehypePlugins(policy ?? { allowedLinkHosts: [], ownOrigins: pageOrigin() }, {
+        imageWithDescription,
+        image
+      }),
+    [policy, imageWithDescription, image]
+  );
+}
+
+function pageOrigin(): string[] {
+  return typeof window === "undefined" ? [] : [window.location.origin];
+}
 
 export function MarkdownText() {
   const translations = useMarkdownTranslations();
+  const rehypePlugins = useMarkdownRehypePlugins();
 
   return (
     <StreamdownTextPrimitive
@@ -32,7 +83,7 @@ export function MarkdownText() {
       controls={assistantControls}
       lineNumbers={false}
       plugins={plugins}
-      security={security}
+      rehypePlugins={rehypePlugins}
       shikiTheme={CODE_THEMES}
       translations={translations}
     />
@@ -41,6 +92,7 @@ export function MarkdownText() {
 
 export function MarkdownArtifact({ children }: { children: string }) {
   const translations = useMarkdownTranslations();
+  const rehypePlugins = useMarkdownRehypePlugins();
 
   return (
     <Streamdown
@@ -49,6 +101,7 @@ export function MarkdownArtifact({ children }: { children: string }) {
       lineNumbers={false}
       mode="static"
       plugins={plugins}
+      rehypePlugins={rehypePlugins}
       shikiTheme={CODE_THEMES}
       translations={translations}
     >

@@ -18,13 +18,7 @@ import type {
   UsageSafeguardsConfig,
   WebAccessConfig
 } from "@vivd-catalyst/core";
-import {
-  AGENT_EDITABLE_FIELDS,
-  isSecretName,
-  MODEL_USAGE_TIERS,
-  REASONING_EFFORTS,
-  SECRET_NAME_EXPECTATION
-} from "@vivd-catalyst/core";
+import { AGENT_EDITABLE_FIELDS, isSecretName, SECRET_NAME_EXPECTATION } from "@vivd-catalyst/core";
 import {
   egressConfigSchema,
   releaseConnectionsConfigSchema,
@@ -34,6 +28,7 @@ import { dataStoresConfigSchema } from "./data-store-schema";
 import { releaseGuardrailsConfigSchema } from "./guardrail-schema";
 import { infrastructureConfigSchema } from "./infrastructure";
 import { localizationConfigSchema, localizedStringSchema } from "./localization";
+import { knowledgeConfigSchema, modelBindingConfigSchema } from "./model-binding-schema";
 
 export const userIdentitySchema = z.object({
   id: z.string().min(1).default("dev-user"),
@@ -157,6 +152,30 @@ const viewsConfigSchema = z
   })
   .default({ allowedScriptSrc: [] });
 
+const replyLinkHostSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^(\*\.)?[a-z0-9-]+(\.[a-z0-9-]+)*$/u, {
+    message:
+      'Link hosts must be host names such as "example.com", or "*.example.com" for every subdomain, without a scheme, port or path.'
+  });
+
+const repliesConfigSchema = z
+  .object({
+    /**
+     * Hosts a link in a reply or in a Markdown file preview may point to besides the instance
+     * itself. A link to any other host is shown as text with its address. Images from other
+     * hosts are never loaded, whatever this list names.
+     */
+    allowedLinkHosts: z
+      .array(replyLinkHostSchema)
+      .default([])
+      .transform((hosts) => Array.from(new Set(hosts)))
+  })
+  .strict()
+  .default({ allowedLinkHosts: [] });
+
 const dataSourceConfigSchema = z.object({
   kind: z.literal("postgres"),
   connectionRef: z.string().min(1),
@@ -203,22 +222,6 @@ export {
   workflowConfigSchema,
   type WorkflowAssetConfig
 } from "@vivd-catalyst/asset-schemas";
-
-export const modelBindingConfigSchema = z.object({
-  id: z.string().min(1),
-  providerId: z.string().min(1),
-  model: z.string().min(1).optional(),
-  reasoningEffort: z.enum(REASONING_EFFORTS).optional(),
-  agentSelectable: z.boolean().default(true),
-  // Accepted for compatibility; no effect. Each agent lists the models its users may pick.
-  userSelectable: z.boolean().default(false),
-  supportsFastMode: z.boolean().default(false),
-  description: localizedStringSchema.optional(),
-  label: z.string().trim().min(1).optional(),
-  vendor: z.string().min(1).optional(),
-  usageTier: z.enum(MODEL_USAGE_TIERS).optional(),
-  userSelectableReasoningEfforts: z.array(z.enum(REASONING_EFFORTS)).optional()
-});
 
 export const usageBudgetConfigSchema = z
   .object({
@@ -840,6 +843,8 @@ export const clientInstanceConfigSchema = z.object({
     }),
   infrastructure: infrastructureConfigSchema,
   modelBindings: z.array(modelBindingConfigSchema).default([]),
+  /** The Knowledge Bases of the instance: which embedding binding semantic search uses. */
+  knowledge: knowledgeConfigSchema,
   localization: localizationConfigSchema,
   conversationTitles: conversationTitleConfigSchema,
   /** The release's guardrails: the operator's floor. Seeded as read-only assets when the API starts. */
@@ -866,6 +871,7 @@ export const clientInstanceConfigSchema = z.object({
     }),
   tools: z.array(toolInstanceConfigSchema).default([]),
   views: viewsConfigSchema,
+  replies: repliesConfigSchema,
   dataSources: z.record(z.string(), dataSourceConfigSchema).default({}),
   /** The Connections the release defines. Seeded as read-only assets when the API starts. */
   connections: releaseConnectionsConfigSchema,

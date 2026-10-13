@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import type { ConfigAssetRevision, OperationOutcome } from "@vivd-catalyst/api-client";
+import { invalidateOfferedAgents } from "../api/agent-placement-mutations";
 import { createAssetWrites } from "../api/asset-writes";
 import { usePlatformContextQuery } from "../api/workspace-queries";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
@@ -9,7 +10,7 @@ import { useSettingsPage } from "../settings/settings-page-context";
 import { apiErrorCode } from "../workspace-utils";
 import type { BuildAsset, BuildAssetRow } from "./build-asset-kind";
 import { instanceSentence, PendingApprovalError } from "./build-refusals";
-import { resolveBuildRights, type BuildRights } from "./build-rights";
+import { AGENT_ASSET_KIND, resolveBuildRights, type BuildRights } from "./build-rights";
 
 /**
  * How many assets one read of a list asks for. The instance searches, filters and cuts the
@@ -166,7 +167,15 @@ export function useBuildSource(): BuildSource {
   ]);
 
   const writes = createAssetWrites(client);
-  const changed = () => queryClient.invalidateQueries({ queryKey: assetsKey });
+  // An agent's name, description and starter prompts are also read outside Studio, from the
+  // lists of offered agents: a written agent is asked for there again. The save does not wait
+  // for those lists.
+  const changed = (kind: string) => () => {
+    if (kind === AGENT_ASSET_KIND) {
+      invalidateOfferedAgents(queryClient, apiBaseUrl, authScope).catch(() => undefined);
+    }
+    return queryClient.invalidateQueries({ queryKey: assetsKey });
+  };
   return {
     kinds,
     rights,
@@ -255,9 +264,9 @@ export function useBuildSource(): BuildSource {
         (error: unknown) => (apiErrorCode(error) === "NOT_FOUND" ? false : undefined)
       ),
     writes: {
-      put: (input) => made(writes.put(input)).finally(changed),
-      delete: (input) => made(writes.delete(input)).finally(changed),
-      revert: (input) => made(writes.revert(input)).finally(changed),
+      put: (input) => made(writes.put(input)).finally(changed(input.kind)),
+      delete: (input) => made(writes.delete(input)).finally(changed(input.kind)),
+      revert: (input) => made(writes.revert(input)).finally(changed(input.kind)),
       revisions: ({ kind, name, cursor }) =>
         client.assets.revisions.list({
           params: { kind, name },
