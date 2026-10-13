@@ -1,0 +1,1 @@
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "workflow_runs_data_prune_idx" ON "workflow_runs" USING btree ("client_instance_id","finished_at") WHERE "workflow_runs"."data_pruned_at" is null and "workflow_runs"."finished_at" is not null;

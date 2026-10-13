@@ -16,7 +16,7 @@ import {
   revisionConflictOf
 } from "./asset-revision";
 import { assertScopeCanOwn } from "./config-asset-writer";
-import type { ChatServerOptions } from "./types";
+import type { AssetWorkflowOptions } from "./types";
 
 // What the address of a call comes to, and what every write asks of it before it writes.
 
@@ -121,7 +121,7 @@ export function requireFreeName(target: AssetTarget): void {
  * revision of its delete.
  */
 export async function requireExpectedRevision(
-  options: Pick<ChatServerOptions, "clientInstanceId" | "configAssets">,
+  options: Pick<AssetWorkflowOptions, "clientInstanceId" | "configAssets">,
   call: AssetCall,
   target: AssetTarget,
   expected: number | null
@@ -138,7 +138,7 @@ export async function requireExpectedRevision(
  * caller nothing of whether an asset exists.
  */
 export async function requireDeletable(
-  options: Pick<ChatServerOptions, "clientInstanceId" | "configAssets">,
+  options: Pick<AssetWorkflowOptions, "clientInstanceId" | "configAssets">,
   call: AssetCall,
   target: AssetTarget,
   expected: number
@@ -192,7 +192,7 @@ export async function recordAssetEvent(
  * record. An error here would tell the caller that nothing was written.
  */
 export async function recordCommitted(
-  options: Pick<ChatServerOptions, "logger">,
+  options: Pick<AssetWorkflowOptions, "logger">,
   call: AssetCall,
   records: readonly (() => Promise<void>)[]
 ): Promise<void> {

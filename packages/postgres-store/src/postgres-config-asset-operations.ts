@@ -34,8 +34,8 @@ import {
 } from "./schema";
 
 /** The revision the published pointer of an asset names, joined beside the active one. */
-const publishedRevisions = alias(configAssetRevisions, "published_revisions");
-const publishedColumns = {
+export const publishedRevisions = alias(configAssetRevisions, "published_revisions");
+export const publishedColumns = {
   id: publishedRevisions.id,
   revision: publishedRevisions.revision,
   fileSetId: publishedRevisions.fileSetId,
@@ -246,27 +246,6 @@ export async function listConfigAssetRevisions(
     .orderBy(newestFirst ? desc(configAssetRevisions.revision) : asc(configAssetRevisions.revision))
     .limit(input.page?.limit ?? 2147483647);
   return rows.map(mapConfigAssetRevision);
-}
-
-export async function getConfigAssetRevision(
-  db: PostgresConnection,
-  input: Parameters<ConfigAssetStore["getConfigAssetRevision"]>[0]
-): Promise<ConfigAssetRevisionRecord | undefined> {
-  const [row] = await db
-    .select({ revision: configAssetRevisions })
-    .from(configAssetRevisions)
-    .innerJoin(configAssets, eq(configAssets.id, configAssetRevisions.assetId))
-    .where(
-      and(
-        eq(configAssets.clientInstanceId, input.clientInstanceId),
-        eq(configAssets.kind, input.kind),
-        eq(configAssets.name, input.name),
-        eq(configAssetRevisions.clientInstanceId, input.clientInstanceId),
-        eq(configAssetRevisions.revision, input.revision)
-      )
-    )
-    .limit(1);
-  return row ? mapConfigAssetRevision(row.revision) : undefined;
 }
 
 /**

@@ -8,6 +8,7 @@ import {
 } from "@vivd-catalyst/api-client";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { accessWriteFailure, GrantWriteError, type GrantWriteResult } from "./access-model";
+import { PrincipalGrantHeldError, principalGrantRequest } from "./principal-grants-model";
 
 interface AccessApiInput {
   apiBaseUrl: string;
@@ -43,6 +44,42 @@ export function usePermissionGrantsQuery(input: AccessApiInput) {
       listAll((paging) =>
         input.client.permissions.list({ query: { ...paging, holderKind: "user" } })
       )
+  });
+}
+
+/** The rows one service principal holds. Read by who is shown service principals. */
+export function usePrincipalGrantsQuery(input: AccessApiInput & { principalId: string }) {
+  const { principalId } = input;
+  return useQuery({
+    queryKey: [...accessQueryKeys.grants(input.apiBaseUrl, input.authScope), "of", principalId],
+    queryFn: () =>
+      listAll((paging) =>
+        input.client.permissions.list({
+          query: { ...paging, holderKind: "service_principal", holderId: principalId }
+        })
+      ),
+    retry: false
+  });
+}
+
+/**
+ * The rows that name one asset: who holds a right on it. A service principal's rows are among
+ * them for a reader who is shown service principals, and left out without a word for anyone else.
+ */
+export function useAssetGrantsQuery(
+  input: AccessApiInput & { assetId: string; action: string; enabled: boolean }
+) {
+  const { assetId, action } = input;
+  return useQuery({
+    queryKey: [...accessQueryKeys.grants(input.apiBaseUrl, input.authScope), "on", assetId, action],
+    queryFn: () =>
+      listAll((paging) =>
+        input.client.permissions.list({
+          query: { ...paging, scopeKind: "asset", scopeId: assetId, action }
+        })
+      ),
+    enabled: input.enabled,
+    retry: false
   });
 }
 
@@ -119,4 +156,41 @@ export function useAccessMutations(input: AccessApiInput) {
   });
 
   return { createNamespace, updateNamespace, deleteNamespace, grant, revoke };
+}
+
+/**
+ * Giving a service principal a right on one resource, and removing one. A write that waits for
+ * somebody else's approval changed nothing, and says so. Each one reads the rows again.
+ */
+export function usePrincipalGrantMutations(input: AccessApiInput & { principalId: string }) {
+  const queryClient = useQueryClient();
+  const refresh = () => {
+    for (const queryKey of [
+      accessQueryKeys.all(input.apiBaseUrl, input.authScope),
+      workspaceQueryKeys.auditEvents(input.apiBaseUrl, input.authScope)
+    ]) {
+      queryClient.invalidateQueries({ queryKey }).catch(() => undefined);
+    }
+  };
+  const give = useMutation({
+    mutationFn: async (right: { action: string; assetId: string }) => {
+      const outcome = await input.client.permissions.grant({
+        body: principalGrantRequest({ principalId: input.principalId, ...right })
+      });
+      if (outcome.status !== "done") {
+        throw new PrincipalGrantHeldError();
+      }
+    },
+    onSettled: refresh
+  });
+  const remove = useMutation({
+    mutationFn: async (grantId: string) => {
+      const outcome = await input.client.permissions.revoke({ params: { grantId } });
+      if (outcome.status !== "done") {
+        throw new PrincipalGrantHeldError();
+      }
+    },
+    onSettled: refresh
+  });
+  return { give, remove };
 }

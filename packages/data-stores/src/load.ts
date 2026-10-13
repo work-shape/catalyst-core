@@ -262,7 +262,7 @@ export const load: StoreVerb = {
       ? [DATA_STORE_LOAD_CHANGE_RIGHT]
       : [];
   },
-  async run({ runtime, store, target }, call) {
+  async run({ runtime, store, target, keyed }, call) {
     const input = dataStoreLoadInputSchema.parse(call);
     const { record } = store;
     const reader = runtime.datasets;
@@ -356,8 +356,8 @@ export const load: StoreVerb = {
     }
 
     try {
-      await changeWhole(
-        runtime,
+      return await changeWhole(
+        { runtime, keyed },
         { ...target, timeoutMs: DATA_STORE_LOAD_TIMEOUT_MS },
         async (sql) => {
           try {
@@ -396,6 +396,13 @@ export const load: StoreVerb = {
             await sql.script("set constraints all immediate");
             const after = await size();
             if (after > record.sizeLimitBytes) throw storeFull(record, after);
+            return {
+              table: table.name,
+              inserted: counts.inserted,
+              updated: counts.updated,
+              skipped: counts.rows - counts.inserted - counts.updated,
+              deleted: counts.deleted
+            } satisfies DataStoreLoadResult;
           } catch (error) {
             if (error instanceof AppError) refusal = error;
             throw error;
@@ -407,12 +414,5 @@ export const load: StoreVerb = {
       if (wrote) await reclaim(runtime, record);
       throw refusal ?? error;
     }
-    return {
-      table: table.name,
-      inserted: counts.inserted,
-      updated: counts.updated,
-      skipped: counts.rows - counts.inserted - counts.updated,
-      deleted: counts.deleted
-    } satisfies DataStoreLoadResult;
   }
 };

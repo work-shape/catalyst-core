@@ -42,7 +42,7 @@ import {
   type AssetSetIssue
 } from "./asset-set";
 import { recordGovernanceAccess } from "./governance-actions";
-import type { ChatServerOptions } from "./types";
+import type { AssetWorkflowOptions } from "./types";
 
 /** The rules every write of an asset passes, whichever operation it arrives through. */
 
@@ -52,7 +52,7 @@ export interface StoredAssets {
   set: AssetSet;
 }
 
-export async function loadStoredAssets(options: ChatServerOptions): Promise<StoredAssets> {
+export async function loadStoredAssets(options: AssetWorkflowOptions): Promise<StoredAssets> {
   const [state, assets] = await Promise.all([
     options.configAssets.store.getConfigAssetState({ clientInstanceId: options.clientInstanceId }),
     options.configAssets.store.listActiveConfigAssets({
@@ -85,7 +85,7 @@ interface ReferableAssets {
  * the rule that an instance with agents has one is about the set and not about the change.
  */
 export function loadReferableAssets(
-  options: ChatServerOptions,
+  options: AssetWorkflowOptions,
   access: ActorAccess,
   stored: StoredAssets
 ): ReferableAssets {
@@ -348,7 +348,7 @@ export function itemWriteDecision(
 
 /** Refuses a call that names an asset kind of a module that is off, as a call of that module. */
 export function requireAssetKindModuleOn(
-  modules: ChatServerOptions["modules"],
+  modules: AssetWorkflowOptions["modules"],
   kind: string
 ): void {
   const module = modules.offModuleOf("kind", kind);
@@ -359,7 +359,7 @@ export function requireAssetKindModuleOn(
 
 /** Refuses a write where changing assets is off, as a call of an operation of the module. */
 export function requireAssetManagementOn(
-  options: Pick<ChatServerOptions, "modules">,
+  options: Pick<AssetWorkflowOptions, "modules">,
   access: ActorAccess,
   surface: AssetWriteSurface
 ): void {
@@ -370,7 +370,7 @@ export function requireAssetManagementOn(
 
 /** Records the write and refuses it where the instance has interactive editing off. */
 export async function authorizeInteractiveWrite(
-  options: ChatServerOptions,
+  options: AssetWorkflowOptions,
   user: AuthenticatedIdentity,
   context: Pick<RuntimeCallContext, "correlationId">,
   /** The recorder of the Operation Run, where the write is one. */
@@ -389,7 +389,7 @@ export async function authorizeInteractiveWrite(
 
 /** Refuses everyone but a release where the instance has interactive editing off. */
 export function requireInteractiveEditingOn(
-  options: Pick<ChatServerOptions, "modules">,
+  options: Pick<AssetWorkflowOptions, "modules">,
   releaseSync: boolean
 ): void {
   if (!releaseSync && !options.modules.isEnabled(ASSET_MANAGEMENT_MODULE)) {
@@ -497,7 +497,7 @@ export interface ChangedAgentRefusal {
  * tool set is added by default), so the tool list is complete once those names are checked.
  */
 export async function findChangedAgentRefusals(
-  options: ChatServerOptions,
+  options: AssetWorkflowOptions,
   access: ActorAccess,
   stored: AssetSet,
   validated: AssetSet
@@ -538,7 +538,7 @@ export async function findChangedAgentRefusals(
 
 /** Throws the first refusal of `findChangedAgentRefusals`: the model issues before the lists. */
 export async function assertChangedAgentsAllowed(
-  options: ChatServerOptions,
+  options: AssetWorkflowOptions,
   access: ActorAccess,
   stored: AssetSet,
   validated: AssetSet

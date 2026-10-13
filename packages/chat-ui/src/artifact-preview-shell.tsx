@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { cn } from "@vivd-catalyst/ui";
+import { FileTypeIcon } from "./file-type-icon";
 import type { ArtifactFileType } from "./tool-artifacts";
 
 export function ArtifactPreviewFrame({ children }: { children: ReactNode }) {
@@ -54,15 +54,7 @@ export function ArtifactPreviewMessage({
     <div className="flex min-h-64 items-center justify-center">
       <div className="max-w-sm rounded-md border bg-card px-4 py-3 text-sm shadow-xs">
         <div className="flex items-center gap-3">
-          <span
-            className={cn(
-              "grid size-10 shrink-0 place-items-center rounded-md text-xs font-bold text-white",
-              fileType.className
-            )}
-            aria-hidden="true"
-          >
-            {fileType.badge}
-          </span>
+          <FileTypeIcon type={fileType} className="size-10" />
           <div className="min-w-0">
             <p className="font-medium">{title}</p>
             {detail ? (

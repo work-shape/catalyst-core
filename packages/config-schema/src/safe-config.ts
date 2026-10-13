@@ -1,14 +1,17 @@
 import {
+  AGENT_STARTERS_MAX,
   defaultReasoningEffortForAgentBinding,
   modelUsageTierFromRates,
   reasoningEffortChoiceForBinding,
   userSelectableModelBindingsForAgent,
   type LocaleCode,
+  type LocalizedStringConfig,
   type ModelBindingConfig,
   type ModelProviderConfig,
   type ModuleSnapshot,
   type ReasoningEffortConfig,
-  type RuntimeAssetSnapshot
+  type RuntimeAssetSnapshot,
+  type SkillConfig
 } from "@vivd-catalyst/core";
 import type { AgentConfig, ClientInstanceConfig } from "./schemas";
 import { createClientBranding } from "./branding";
@@ -25,6 +28,20 @@ export interface SafeConfigViewOptions extends ConfigLocaleInput {
    * reports them. Left out, a binding offers only the efforts it lists itself.
    */
   reasoningEffortsOfBinding?: (bindingId: string) => readonly ReasoningEffortConfig[];
+  /**
+   * The Connections of the instance with the tools an agent can carry. Each agent is told
+   * those its own tools reach. Left out, no agent names a Connection.
+   */
+  connections?: readonly SafeConfigConnection[];
+}
+
+/** One Connection as a conversation names it: what a tool call touched, and its icon. */
+export interface SafeConfigConnection {
+  name: string;
+  title: string;
+  service?: string;
+  connectorType?: string;
+  tools: readonly { toolName: string; effect: "reading" | "changing" }[];
 }
 
 export function createSafeConfigView(
@@ -122,10 +139,60 @@ export function createSafeConfigView(
           locale,
           config.localization.defaultLocale
         )
-      }))
+      })),
+      starters: agentStarters(agent, assets.skills, locale, config.localization.defaultLocale),
+      connections: agentConnections(agent, options.connections ?? [])
     })),
     ui
   };
+}
+
+/** The Connections an agent's tools reach, each with the tools of it the agent holds. */
+function agentConnections(agent: AgentConfig, connections: readonly SafeConfigConnection[]) {
+  return connections.flatMap(({ name, title, service, connectorType, tools }) => {
+    const held = tools
+      .filter((tool) => agent.toolNames.includes(tool.toolName))
+      .map(({ toolName, effect }) => ({ toolName, effect }));
+    return held.length === 0
+      ? []
+      : [
+          {
+            name,
+            title,
+            ...(service === undefined ? {} : { service }),
+            ...(connectorType === undefined ? {} : { connectorType }),
+            tools: held
+          }
+        ];
+  });
+}
+
+/**
+ * The starters the empty chat offers for an agent: those of its skills, the skills in the
+ * order the agent names them, at most `AGENT_STARTERS_MAX`. A starter that names a tool the
+ * agent does not hold is left out, so none offers what the agent cannot do.
+ */
+function agentStarters(
+  agent: AgentConfig,
+  skills: readonly SkillConfig[],
+  locale: LocaleCode,
+  defaultLocale: LocaleCode
+) {
+  const text = (value: LocalizedStringConfig) =>
+    resolveLocalizedString(value, locale, defaultLocale);
+  return agent.skillNames
+    .flatMap((skillName) => {
+      const skill = skills.find((candidate) => candidate.name === skillName);
+      return (skill?.starters ?? [])
+        .filter((starter) => (starter.tools ?? []).every((tool) => agent.toolNames.includes(tool)))
+        .map((starter) => ({
+          skillName,
+          title: text(starter.title),
+          ...(starter.hint === undefined ? {} : { hint: text(starter.hint) }),
+          prompt: text(starter.prompt)
+        }));
+    })
+    .slice(0, AGENT_STARTERS_MAX);
 }
 
 /** The agent's own model first, then the bindings users may pick instead. */

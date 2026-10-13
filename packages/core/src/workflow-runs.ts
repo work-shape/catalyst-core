@@ -90,6 +90,12 @@ export interface WorkflowRun extends WorkflowRunRecordView {
   createdAt: ISODateString;
   startedAt?: ISODateString;
   finishedAt?: ISODateString;
+  /**
+   * When the values of the run were removed: its input and result, and the inputs and outputs
+   * of its step runs. The run and its step runs stay as they were otherwise. Missing while
+   * the run still has its values.
+   */
+  dataPrunedAt?: ISODateString;
 }
 
 export type NewWorkflowRun = Pick<
@@ -182,6 +188,8 @@ export type WorkflowStepRunView = WorkflowStepRun &
     outputPreview?: WorkflowOutputPreview;
     /** On the step run of a loop step alone. */
     loop?: WorkflowLoopCounts;
+    /** On the step run of a loop step alone. */
+    concurrency?: WorkflowLoopConcurrency;
     /** On the step run of a code step that ran: what its script wrote beside its result. */
     log?: WorkflowStepRunLog;
   };
@@ -216,6 +224,16 @@ export interface WorkflowStagedCode {
 /** How the script of a code step ended, before the engine has checked what it returned. */
 export type WorkflowCodeOutcome =
   { kind: "output"; value: JsonValue } | { kind: "failed"; error: WorkflowRunError };
+
+/**
+ * How many items of a loop run at once. `asked` is the loop's `concurrency`, an upper bound.
+ * `ranWith` is what one process of the instance runs of it: the step slots of a process bound
+ * every loop, so a loop that asks for more runs with as many items as a process has slots.
+ */
+export interface WorkflowLoopConcurrency {
+  asked: number;
+  ranWith: number;
+}
 
 /** Names one run of one instance. */
 export interface WorkflowRunRef {
@@ -343,6 +361,27 @@ export interface WorkflowRunsStore {
   readCodeOutcome(ref: WorkflowStepRunRef): Promise<WorkflowCodeOutcome | undefined>;
   /** The step runs of a run that have not ended. */
   listOpenStepRuns(ref: WorkflowRunRef): Promise<WorkflowStepRun[]>;
+  /**
+   * The runs whose values are due to be removed: ended before the moment and still with
+   * their values, oldest first and at most `limit` of them. A run that has not ended is never
+   * among them, however old it is: what carries it on reads its values.
+   */
+  listRunsWithDataEndedBefore(input: {
+    clientInstanceId: ClientInstanceId;
+    endedBefore: ISODateString;
+    limit: number;
+  }): Promise<WorkflowRunId[]>;
+  /**
+   * Removes the input and the output of at most `limit` step runs of one run that still have
+   * one, in one statement. A loop keeps how many items it had and which step ended an item,
+   * so its counts read as before. Answers how many step runs it took them from.
+   */
+  pruneStepRunData(ref: WorkflowRunRef & { limit: number }): Promise<number>;
+  /**
+   * Removes the input and the result of a run that has ended and marks it as pruned. Answers
+   * whether this call did.
+   */
+  markRunDataPruned(ref: WorkflowRunRef & { prunedAt: ISODateString }): Promise<boolean>;
   /**
    * The step runs of one run in the order they were created: all of them, or those of one
    * block, of one status and of one item of a loop.

@@ -71,7 +71,9 @@ export const workflowRuns = pgTable(
     cancelledBy: text("cancelled_by").$type<UserId>(),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     // The due time of the schedule that started the run. Null on every other run.
-    scheduledFor: timestamp("scheduled_for", { withTimezone: true })
+    scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
+    // When the run's values and those of its step runs were removed. Null while it has them.
+    dataPrunedAt: timestamp("data_pruned_at", { withTimezone: true })
   },
   (table) => [
     check("workflow_runs_mode_check", sql`${table.mode} in ('live', 'test')`),
@@ -93,7 +95,11 @@ export const workflowRuns = pgTable(
     // time, by another worker or after a restart, starts nothing.
     uniqueIndex("workflow_runs_scheduled_for_idx")
       .on(table.clientInstanceId, table.workflow, table.scheduledFor)
-      .where(sql`${table.scheduledFor} is not null`)
+      .where(sql`${table.scheduledFor} is not null`),
+    // The ended runs that still have their values, oldest first: what the prune job asks for.
+    index("workflow_runs_data_prune_idx")
+      .on(table.clientInstanceId, table.finishedAt)
+      .where(sql`${table.dataPrunedAt} is null and ${table.finishedAt} is not null`)
   ]
 );
 

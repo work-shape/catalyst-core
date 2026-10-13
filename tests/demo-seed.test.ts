@@ -61,7 +61,8 @@ describe("the demo seed on the fixture instance", () => {
       "connection grant rows": 0,
       workspaces: 1,
       "workspace members": 4,
-      apps: 2
+      apps: 2,
+      workflows: 1
     });
   });
 
@@ -184,7 +185,9 @@ describe("the demo seed on the fixture instance", () => {
         id: expect.any(String),
         displayLabel: "Local config CLI",
         credentials: [expect.any(String)]
-      }
+      },
+      // The seed's Workflow runs as this one. Nobody signs in as it, so it holds no key.
+      { id: expect.any(String), displayLabel: "Workflow demo", credentials: [] }
     ]);
     const held = {
       id: expect.any(String),
@@ -242,7 +245,7 @@ describe("the demo seed on the fixture instance", () => {
   });
 
   it("changes nothing when it runs a second time", () => {
-    expectSecondRunChangedNothing(seeded());
+    expectSecondRunChangedNothing(seeded(), ["workflows"]);
   });
 
   it("gives the Check tab the answers the demo README promises", async () => {

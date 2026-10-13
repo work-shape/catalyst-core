@@ -2,6 +2,7 @@ import { History, MoreHorizontal, Trash2 } from "lucide-react";
 import { useId, useState, type ReactNode } from "react";
 import type { ConfigAssetRevision } from "@vivd-catalyst/api-client";
 import {
+  Banner,
   Badge,
   Button,
   ConfirmDialog,
@@ -334,95 +335,100 @@ export function AppEditFrame({
       label={t("apps.draftArea", { name })}
       testId="app-edit"
       header={
-        <AppHeader
-          name={name}
-          state={
-            known ? (
-              <Badge tone={ahead ? "warning" : "neutral"} size="sm" dot>
-                {t("apps.draftRevision", { number: draftRevision })}
-              </Badge>
-            ) : (
-              <Badge size="sm">{t("apps.draft")}</Badge>
-            )
-          }
-          description={
-            missingRight ? (
+        <>
+          <AppHeader
+            name={name}
+            state={
+              known ? (
+                <Badge tone={ahead ? "warning" : "neutral"} size="sm" dot>
+                  {t("apps.draftRevision", { number: draftRevision })}
+                </Badge>
+              ) : (
+                <Badge size="sm">{t("apps.draft")}</Badge>
+              )
+            }
+            backHref={workspaceRoutePath({ kind: "apps", collaborationWorkspaceId: workspace.id })}
+            onBack={onBack}
+            secondaryActions={
+              known ? (
+                <>
+                  {view !== undefined && onViewChange ? (
+                    <SegmentedControl
+                      size="sm"
+                      label={t("pages.view")}
+                      value={view}
+                      onValueChange={(next) =>
+                        onViewChange(
+                          APP_DRAFT_VIEWS.find((candidate) => candidate === next) ?? "preview"
+                        )
+                      }
+                    >
+                      <SegmentedControlItem value="preview">
+                        {t("pages.preview")}
+                      </SegmentedControlItem>
+                      <SegmentedControlItem value="files">{t("pages.files")}</SegmentedControlItem>
+                      <SegmentedControlItem value="actions">
+                        {t("apps.actions")}
+                      </SegmentedControlItem>
+                    </SegmentedControl>
+                  ) : null}
+                  {ahead && publishedRevision !== undefined ? (
+                    <Button variant="outline" onClick={onDiscard}>
+                      {t("apps.discard")}
+                    </Button>
+                  ) : null}
+                </>
+              ) : undefined
+            }
+            primaryAction={
+              known ? (
+                <Button
+                  disabled={!rights.publish || !ahead}
+                  aria-describedby={missingRight ? missingRightId : undefined}
+                  onClick={onPublish}
+                >
+                  {t("apps.publish")}
+                </Button>
+              ) : undefined
+            }
+            overflow={
+              known ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <IconButton label={t("apps.moreActions")} variant="outline">
+                      <MoreHorizontal aria-hidden="true" />
+                    </IconButton>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem icon={<History aria-hidden="true" />} onSelect={onRevisions}>
+                      {t("apps.revisions")}
+                    </DropdownMenuItem>
+                    {rights.delete ? (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          tone="danger"
+                          icon={<Trash2 aria-hidden="true" />}
+                          onSelect={onDelete}
+                        >
+                          {t("apps.delete")}
+                        </DropdownMenuItem>
+                      </>
+                    ) : null}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : undefined
+            }
+          />
+          {/* The head is one row; what the reader may not do is said in a line under it. */}
+          {missingRight ? (
+            <Banner layout="page" className="shrink-0">
               <span id={missingRightId}>
                 {t("apps.publishMissingRight", { right: APP_RIGHT_NAMES.publish })}
               </span>
-            ) : undefined
-          }
-          backHref={workspaceRoutePath({ kind: "apps", collaborationWorkspaceId: workspace.id })}
-          onBack={onBack}
-          secondaryActions={
-            known ? (
-              <>
-                {view !== undefined && onViewChange ? (
-                  <SegmentedControl
-                    size="sm"
-                    label={t("pages.view")}
-                    value={view}
-                    onValueChange={(next) =>
-                      onViewChange(
-                        APP_DRAFT_VIEWS.find((candidate) => candidate === next) ?? "preview"
-                      )
-                    }
-                  >
-                    <SegmentedControlItem value="preview">
-                      {t("pages.preview")}
-                    </SegmentedControlItem>
-                    <SegmentedControlItem value="files">{t("pages.files")}</SegmentedControlItem>
-                    <SegmentedControlItem value="actions">{t("apps.actions")}</SegmentedControlItem>
-                  </SegmentedControl>
-                ) : null}
-                {ahead && publishedRevision !== undefined ? (
-                  <Button variant="outline" onClick={onDiscard}>
-                    {t("apps.discard")}
-                  </Button>
-                ) : null}
-              </>
-            ) : undefined
-          }
-          primaryAction={
-            known ? (
-              <Button
-                disabled={!rights.publish || !ahead}
-                aria-describedby={missingRight ? missingRightId : undefined}
-                onClick={onPublish}
-              >
-                {t("apps.publish")}
-              </Button>
-            ) : undefined
-          }
-          overflow={
-            known ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <IconButton label={t("apps.moreActions")} variant="outline">
-                    <MoreHorizontal aria-hidden="true" />
-                  </IconButton>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem icon={<History aria-hidden="true" />} onSelect={onRevisions}>
-                    {t("apps.revisions")}
-                  </DropdownMenuItem>
-                  {rights.delete ? (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        tone="danger"
-                        icon={<Trash2 aria-hidden="true" />}
-                        onSelect={onDelete}
-                      >
-                        {t("apps.delete")}
-                      </DropdownMenuItem>
-                    </>
-                  ) : null}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : undefined
-          }
-        />
+            </Banner>
+          ) : null}
+        </>
       }
     >
       {children}

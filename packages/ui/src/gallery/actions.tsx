@@ -1,6 +1,9 @@
 import { Ellipsis, Plus, Settings } from "lucide-react";
 import { Button, type ButtonSize, type ButtonVariant } from "../actions/button";
 import { IconButton, type IconButtonSize } from "../actions/icon-button";
+import { TextLink } from "../actions/text-link";
+import { Starter, StarterList } from "../actions/starter";
+import { SkillIcon } from "../status/skill-icon";
 import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
 
@@ -82,6 +85,53 @@ export const actionsGallery: GalleryGroup = {
             </IconButton>
           </Samples>
         </>
+      )
+    },
+    {
+      name: "TextLink",
+      components: ["TextLink"],
+      render: (text) => (
+        <Samples>
+          <p className="text-body text-muted-foreground">
+            <TextLink href="#" onClick={(event) => event.preventDefault()}>
+              {text.learnMore}
+            </TextLink>
+            {" · "}
+            {text.disabled}
+          </p>
+          <p className="text-caption text-muted-foreground">
+            <TextLink href="#" onClick={(event) => event.preventDefault()}>
+              {text.learnMore}
+            </TextLink>
+          </p>
+        </Samples>
+      )
+    },
+    {
+      name: "Starter",
+      components: ["Starter", "StarterList"],
+      render: (text) => (
+        <div className="max-w-2xl" data-gallery-sample="starters">
+          <StarterList label={text.starterListLabel}>
+            <Starter
+              icon={<SkillIcon icon="spreadsheet" size="lg" />}
+              title={text.starterSheet}
+              hint={text.starterSheetHint}
+            />
+            <Starter
+              icon={<SkillIcon icon="document" size="lg" />}
+              title={text.starterLetter}
+              hint={text.starterLetterHint}
+            />
+            <Starter icon={<SkillIcon size="lg" />} title={text.starterPlain} />
+            <Starter
+              icon={<SkillIcon icon="pdf" size="lg" />}
+              title={text.starterPdf}
+              hint={text.starterPdfHint}
+              disabled
+            />
+          </StarterList>
+        </div>
       )
     }
   ]

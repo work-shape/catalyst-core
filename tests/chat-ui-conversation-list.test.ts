@@ -100,12 +100,19 @@ describe("workspace rail without a Chat row", () => {
   const inbox = { toDecide: 0 };
 
   it("has no Chat row: New chat is the one entry for a chat", () => {
-    expect(railSections.map((section) => section.id)).toEqual(["apps", "inbox"]);
+    expect(railSections.map((section) => section.id)).toEqual([
+      "agents",
+      "apps",
+      "workflows",
+      "inbox"
+    ]);
 
     for (const markup of [renderRail(), renderRail([], { inbox })]) {
       expect(markup).not.toContain(">Chat<");
       expect(markup).not.toMatch(/lucide-message-square[ "]/u);
-      expect(markup.match(/New chat/gu)).toHaveLength(1);
+      // One row; the plus on the Recent heading does the same and is named the same.
+      expect(markup.match(/>New chat</gu)).toHaveLength(1);
+      expect(markup.match(/aria-label="New chat"/gu)).toHaveLength(1);
     }
   });
 
@@ -141,7 +148,7 @@ describe("workspace rail without a Chat row", () => {
     for (const collapsed of [false, true]) {
       const several = renderRail(many(1), { inbox, collapsed, sections: [inboxSection, second] });
       expect(groupStarts(several, "New chat", "Inbox")).toHaveLength(0);
-      expect(groupStarts(several, "Inbox", "Build")).toHaveLength(0);
+      expect(groupStarts(several, "Inbox", "Studio")).toHaveLength(0);
     }
     // The next group is the list under "Recent", with or without a section before it.
     for (const markup of [renderRail(many(1), { inbox }), renderRail(many(1))]) {

@@ -49,6 +49,14 @@ export class ToolRegistry {
     return [...this.toolsByName.keys()].flatMap((toolName) => this.get(toolName) ?? []);
   }
 
+  /**
+   * Every tool the release defines, whether the instance has it on or not. For a check that
+   * holds for the release, not for one configuration of it.
+   */
+  listDefined(): AnyToolDefinition[] {
+    return [...this.toolsByName.values()];
+  }
+
   listDescriptorsForAgent(toolNames: readonly string[]): ToolDescriptor[] {
     return toolNames
       .map((toolName) => this.get(toolName))

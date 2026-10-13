@@ -94,7 +94,7 @@ const allowedPageErrors: readonly AllowedPageError[] = [
       "the instance answers 404 and the page says that there is no such agent.",
     matches: requestAnswered(404),
     path: /^\/api\/v1\/assets\/agent\/not_an_agent$/u,
-    tests: ["Build opens on a list, and a list and an asset each have an address"]
+    tests: ["Studio opens on a list, and a list and an asset each have an address"]
   },
   {
     name: "refused-asset-in-build",
@@ -123,6 +123,18 @@ const allowedPageErrors: readonly AllowedPageError[] = [
       "the notice of a newer version leaves the text in reach on a phone, in German",
       "a newer version that cannot be loaded leaves the page as it is and says so",
       "an asset that was deleted meanwhile says so, keeps the text and offers the way out"
+    ]
+  },
+  {
+    name: "refused-right-for-a-principal",
+    reason:
+      "Chromium's own log line: the test gives a service principal a right on a Connection " +
+      "that was deleted meanwhile, the instance answers 422, and the dialog says what was " +
+      "refused and what to do, which the test asserts.",
+    matches: requestAnswered(422),
+    path: /^\/api\/v1\/instance\/access\/grants$/u,
+    tests: [
+      "a superadmin gives a service principal a Connection, is refused one that is gone, and removes the right"
     ]
   },
   {
@@ -337,6 +349,25 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     tests: [
       "a builder reads the actions of a draft, tests a reading one and finds its run in Operations"
     ]
+  },
+  {
+    name: "save-as-app-under-a-taken-id",
+    reason:
+      "Chromium's own log line: the test saves a Page under the id of an App that exists, the " +
+      "save is answered with 409, and the test asserts that the dialog offers to update that App.",
+    matches: requestAnswered(409),
+    path: /^\/api\/v1\/apps$/u,
+    tests: ["a Page is put into an App that was saved before Apps remembered their Page"]
+  },
+  {
+    name: "app-update-over-a-draft-that-moved",
+    reason:
+      "Chromium's own log line: the test writes the draft of an App with the API while the " +
+      "update of it is asked for, the update is answered with 412, and the test asserts that " +
+      "the dialog says so and offers to replace the draft.",
+    matches: requestAnswered(412),
+    path: /^\/api\/v1\/apps\/[^/]+\/update-from-page$/u,
+    tests: ["a Page saved as an App updates the draft of that App, and nothing that is published"]
   },
   {
     name: "unread-configuration-diagnostic",

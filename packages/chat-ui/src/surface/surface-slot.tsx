@@ -10,20 +10,19 @@ import {
   type ReactNode
 } from "react";
 import { Maximize2, MessageSquare, Minimize2, X } from "lucide-react";
-import { Button, cn, EmptyState, IconButton, SurfaceFrame } from "@vivd-catalyst/ui";
+import { Button, cn, EmptyState, IconButton, SurfaceFrame, useExit } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
 import { useToolDisplayPanel } from "../tool-display-panel";
 import { readStoredSurfaceWidth, writeStoredSurfaceWidth } from "../workspace-utils";
 import type { Surface, SurfaceKind } from "./surface";
+import { announcePanelMove } from "./panel-move";
 import {
   clampSurfaceWidth,
-  DEFAULT_SURFACE_WIDTH,
+  defaultSurfaceWidth,
   maxSurfaceWidth,
-  measureSplitMin,
-  SPLIT_MIN_FALLBACK_PX,
-  surfaceDefaultWidths,
   surfacePlacement
 } from "./surface-layout";
+import { useSplitArea } from "./use-split-area";
 import { renderSurface, surfaceRenderers, type SurfaceRenderers } from "./surface-renderers";
 
 /** How far one arrow key moves the split, in pixels. */
@@ -58,6 +57,11 @@ export interface SurfaceSlotIdle {
  * The one place a surface is shown. It sits beside the conversation while both sides keep their
  * minimum, and covers the main area below that. Its width is free, is kept per surface kind and
  * is never a property: a slice that adds a kind adds a renderer, not a mount and not a width.
+ *
+ * A surface comes in from the right edge and leaves to it. The conversation takes its new width
+ * in the frame the surface opens or closes and moves to its new place meanwhile (`panel-move`),
+ * so opening and closing are one movement and the text wraps once. A slot with an `idle` state
+ * is always there and moves nothing.
  */
 export function SurfaceSlot({
   renderers = surfaceRenderers,
@@ -81,9 +85,9 @@ export function SurfaceSlot({
 }) {
   const panel = useToolDisplayPanel();
   const { t } = useTranslation();
-  const slotRef = useRef<HTMLElement | null>(null);
-  const [mainWidth, setMainWidth] = useState<number | undefined>();
-  const [splitMin, setSplitMin] = useState(SPLIT_MIN_FALLBACK_PX);
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  // The main area is what the slot shares with the conversation: the element it stands in.
+  const { mainWidth, splitMin } = useSplitArea(slot, "parent");
   // The widths chosen since the page loaded. Before that a kind's width comes from storage.
   const [chosenWidths, setChosenWidths] = useState<Partial<Record<SurfaceKind, number>>>({});
   const [fullscreen, setFullscreen] = useState(false);
@@ -93,7 +97,16 @@ export function SurfaceSlot({
   // An empty slot shows only where it would stand beside the main side.
   const idleContent =
     !surface && idle && mainWidth !== undefined && placement === "beside" ? idle : undefined;
-  const kind = surface?.kind ?? idleContent?.kind;
+  // A surface that closes beside the conversation or over it is held while it leaves to the
+  // right edge. One that closes from fullscreen, or gives its place to the empty slot, is gone
+  // at once.
+  const exit = useExit(
+    useMemo(() => (surface ? { surface, fullscreen } : undefined), [surface, fullscreen])
+  );
+  const leavingSurface =
+    exit.leaving && !exit.held?.fullscreen && !idle ? exit.held?.surface : undefined;
+  const framedSurface = surface ?? leavingSurface;
+  const kind = framedSurface?.kind ?? idleContent?.kind;
   const shown = Boolean(surface) || idleContent !== undefined;
   const maximumWidth = maxSurfaceWidth(mainWidth, splitMin);
   const storedWidth = useMemo(
@@ -103,10 +116,20 @@ export function SurfaceSlot({
         : readStoredSurfaceWidth(kind, { min: splitMin, max: maximumWidth }),
     [kind, maximumWidth, splitMin]
   );
+  // The width a kind opens at is taken from the main area as it is when the slot opens, and
+  // held while it stays open: a window that is resized moves the split, not the surface.
+  const [opened, setOpened] = useState<{ kind: SurfaceKind; width: number } | undefined>();
+  if (
+    kind === undefined ? opened !== undefined : mainWidth !== undefined && opened?.kind !== kind
+  ) {
+    setOpened(
+      kind === undefined ? undefined : { kind, width: defaultSurfaceWidth(kind, mainWidth) }
+    );
+  }
   const width = clampSurfaceWidth(
-    (kind === undefined
-      ? undefined
-      : (chosenWidths[kind] ?? storedWidth ?? surfaceDefaultWidths[kind])) ?? DEFAULT_SURFACE_WIDTH,
+    (kind === undefined ? undefined : (chosenWidths[kind] ?? storedWidth)) ??
+      opened?.width ??
+      defaultSurfaceWidth(kind, mainWidth),
     mainWidth,
     splitMin
   );
@@ -202,37 +225,6 @@ export function SurfaceSlot({
     [chooseWidth, kind, maximumWidth, width, splitMin]
   );
 
-  // The main area is what the slot shares with the conversation: the element it stands in.
-  useLayoutEffect(() => {
-    const slot = slotRef.current;
-    const main = slot?.parentElement;
-    if (!slot || !main) {
-      return undefined;
-    }
-    const measure = () => {
-      setMainWidth(main.getBoundingClientRect().width);
-      setSplitMin(measureSplitMin(slot));
-    };
-    measure();
-
-    if (typeof ResizeObserver === "undefined") {
-      window.addEventListener("resize", measure);
-      return () => window.removeEventListener("resize", measure);
-    }
-    // Measured a frame later: a width set while the browser still delivers resizes changes
-    // what other observers watch, which it reports as a resize observer loop.
-    let frame = 0;
-    const observer = new ResizeObserver(() => {
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(measure);
-    });
-    observer.observe(main);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      observer.disconnect();
-    };
-  }, []);
-
   useEffect(() => {
     if (!surface) {
       return undefined;
@@ -263,26 +255,48 @@ export function SurfaceSlot({
     }
   }, [surface]);
 
-  useEffect(() => {
+  // Told before the frame is painted, so the header beside the surface ends with it at once.
+  useLayoutEffect(() => {
     onBesideWidthChange?.(besideWidth);
   }, [besideWidth, onBesideWidthChange]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     onCoveringChange?.(covering);
   }, [covering, onCoveringChange]);
 
+  // What stands beside the slot moves with it when it opens, closes or changes its kind, and
+  // with nothing else: not with a drag of the split and not with the window.
+  const besideKind = shown && mode === "beside" ? kind : undefined;
+  const besideKindBefore = useRef(besideKind);
+  useLayoutEffect(() => {
+    if (besideKindBefore.current !== besideKind) {
+      besideKindBefore.current = besideKind;
+      announcePanelMove(besideKind === undefined ? "close" : "open");
+    }
+  }, [besideKind]);
+
   return (
     <aside
-      ref={slotRef}
-      hidden={!shown}
+      ref={setSlot}
+      hidden={!shown && !leavingSurface}
+      // A surface on its way out is no longer there for the reader.
+      inert={leavingSurface !== undefined}
       aria-label={surface?.title}
       data-surface-kind={surface?.kind}
       data-surface-mode={surface ? mode : undefined}
+      onAnimationEnd={exit.onAnimationEnd}
       className={cn(
         "bg-card",
-        mode === "beside" && "relative z-50 h-full min-h-0 shrink-0 border-l",
+        mode === "beside" &&
+          (leavingSurface
+            ? // Out of the row, so the conversation has its full width from the first frame.
+              "absolute inset-y-0 right-0 z-50 border-l"
+            : "relative z-50 h-full min-h-0 shrink-0 border-l"),
         mode === "covering" && "absolute inset-0 z-50",
-        mode === "fullscreen" && "fixed inset-0 z-(--layer-fullscreen)"
+        mode === "fullscreen" && "fixed inset-0 z-(--layer-fullscreen)",
+        // Stated for as long as the surface is shown, so it plays once: when the slot appears.
+        surface && !idle && "motion-safe:animate-panel-in",
+        leavingSurface && "motion-safe:animate-panel-out"
       )}
       style={mode === "beside" ? { width: `${width}px` } : undefined}
     >
@@ -307,9 +321,9 @@ export function SurfaceSlot({
           onKeyDown={onResizeKeyDown}
         />
       ) : null}
-      {surface ? (
+      {framedSurface ? (
         <SurfaceSlotFrame
-          surface={surface}
+          surface={framedSurface}
           renderers={renderers}
           mode={mode}
           under={under}
@@ -361,6 +375,7 @@ export function SurfaceSlotFrame({
           </Button>
         )
       }
+      icon={rendering?.titleIcon}
       title={surface.title}
       subtitle={surface.subtitle}
       actions={rendering?.actions}

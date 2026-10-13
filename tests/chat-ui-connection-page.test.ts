@@ -13,6 +13,7 @@ import {
   type BuildListedKind,
   type BuildSource,
   type ConnectionDetailRead,
+  type ConnectionHoldersRead,
   type ConnectionSource,
   type ConnectionTestRun
 } from "@vivd-catalyst/chat-ui/build-area";
@@ -46,6 +47,8 @@ interface PageInput {
   detailRead?: ConnectionDetailRead;
   run?: ConnectionTestRun;
   mayTest?: boolean;
+  /** Who was given the Connection. Without it the reader is not shown rights. */
+  holders?: ConnectionHoldersRead;
   locale?: LocaleCode;
 }
 
@@ -56,7 +59,9 @@ function renderPage(input: PageInput = {}): string {
     mayTest: () => input.mayTest ?? true,
     useDetail: (name) =>
       input.detailRead ?? { status: "ready", detail: connectionDetail(name, input.detail) },
-    useTest: () => ({ run: input.run ?? { status: "idle" }, start: noop })
+    useTest: () => ({ run: input.run ?? { status: "idle" }, start: noop }),
+    useHolders: () => input.holders ?? { status: "hidden" },
+    principalHref: (principalId) => `/settings/instance/api-access?principal=${principalId}`
   };
   const context = platformContext();
   const source: BuildSource = {
@@ -132,8 +137,10 @@ describe("Connection page", () => {
     const markup = renderPage();
 
     expect(markup).toContain(">Sample business</h1>");
-    expect(markup).toContain(">Connection<");
-    expect(markup).toContain('title="sample-business"');
+    // The head names the Connection only; its id stands in the first section.
+    expect(markup).not.toContain(">Connection<");
+    expect(markup.indexOf("data-asset-identifier")).toBeGreaterThan(markup.indexOf("</header>"));
+    expect(markup.match(/>sample-business<\/code>/gu)).toHaveLength(1);
     expect(markup).toContain(">Instance<");
     expect(markup).toContain(
       "Connections come from the release config and cannot be changed here."
@@ -512,6 +519,61 @@ describe("Connection page", () => {
     );
     expect(renderPage({ assetRead: { status: "refused" } })).toContain(
       "You may not read this asset."
+    );
+  });
+
+  it("has no section on who may use it for a reader who is not shown rights", () => {
+    const markup = renderPage();
+    expect(markup).not.toContain("Who may use it");
+    expect(markup).not.toContain('id="access"');
+  });
+
+  it("lists the service principals that may use it beside the people, told apart and linked", () => {
+    const markup = renderPage({
+      holders: {
+        status: "ready",
+        holders: [
+          {
+            grantId: "g1",
+            kind: "person",
+            id: "user_kai",
+            name: "Kai Example",
+            detail: "kai@example.test",
+            disabled: false
+          },
+          {
+            grantId: "g2",
+            kind: "service_principal",
+            id: "spn_1",
+            name: "Monthly check",
+            detail: "monthly-check",
+            disabled: true
+          }
+        ]
+      }
+    });
+    expect(markup).toContain('id="access"');
+    expect(markup).toContain(">Who may use it<");
+    const person = /<li[^>]*data-holder-kind="person".*?<\/li>/su.exec(markup)?.[0] ?? "";
+    const service =
+      /<li[^>]*data-holder-kind="service_principal".*?<\/li>/su.exec(markup)?.[0] ?? "";
+    // A person is a round avatar with an address and no link.
+    expect(person).toContain('data-kind="person"');
+    expect(person).toContain("kai@example.test");
+    expect(person).not.toContain("<a ");
+    // A service principal is a square one, says what it is in words and opens its page.
+    expect(service).toContain('data-kind="service"');
+    expect(service).toContain(">Service principal<");
+    expect(service).toContain(">Disabled<");
+    expect(service).toContain('href="/settings/instance/api-access?principal=spn_1"');
+    expect(service).toContain("monthly-check");
+  });
+
+  it("says that nobody was given the Connection by itself", () => {
+    const markup = renderPage({ holders: { status: "ready", holders: [] } });
+    expect(markup).toContain("Nobody was given this Connection by itself.");
+    expect(renderPage({ holders: { status: "ready", holders: [] }, locale: "de" })).toContain(
+      "Wer sie verwenden darf"
     );
   });
 });

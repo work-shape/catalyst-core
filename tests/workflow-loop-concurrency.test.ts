@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { JsonValue } from "@vivd-catalyst/core";
-import { parseWorkflowManifest } from "@vivd-catalyst/workflows";
+import { WORKFLOW_STEP_JOB_SLOTS, parseWorkflowManifest } from "@vivd-catalyst/workflows";
 import {
   publishedDefinitions,
   type workflowFixture,
@@ -90,9 +90,28 @@ describe("a loop with concurrency above 1", () => {
     expect(stepRuns.find((stepRun) => stepRun.key === "each_client")).toMatchObject({
       status: "done",
       loop: { total: 8, done: 8, failed: 0, running: 0 },
+      // What the loop asked for is what it ran with: a process has a slot for each.
+      concurrency: { asked: 3, ranWith: 3 },
       bodyCounts: { send: { total: 8, done: 8, failed: 0, running: 0 } }
     });
     expect(run.stepRunCount).toBe(12);
+  });
+
+  // Fails without the change: a run said nowhere that a process ran fewer items at once than
+  // its loop asked for.
+  it("says on the loop's step run that a process ran fewer items at once than the loop asked for", async () => {
+    const t = await ready({ concurrency: 8 });
+    const run = await t.finish((await start(t)).id);
+    const stepRuns = await stepRunsOf(t, run.id);
+    expect(stepRuns.find((stepRun) => stepRun.key === "each_client")?.concurrency).toEqual({
+      asked: 8,
+      ranWith: WORKFLOW_STEP_JOB_SLOTS
+    });
+    expect(WORKFLOW_STEP_JOB_SLOTS).toBeLessThan(8);
+    // No other step run says anything of it.
+    expect(
+      stepRuns.filter((stepRun) => stepRun.key !== "each_client" && stepRun.concurrency)
+    ).toEqual([]);
   });
 
   it("starts the items in the order of the list and keeps the count of those going", async () => {

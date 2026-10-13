@@ -591,7 +591,7 @@ test("a new save opens a closed Page again, and coming back to the conversation 
   // Leaving the conversation and coming back shows its cards and opens nothing.
   const conversation = new URL(page.url()).pathname;
   expect(conversation).toMatch(/\/c\//u);
-  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
   await expect(page.getByTestId("page-card")).toHaveCount(0);
   await expect(surface).toBeHidden();
   // Back through the browser's history. The list cannot say which row is this conversation:

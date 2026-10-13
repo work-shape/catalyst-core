@@ -20,6 +20,15 @@ export const connections = defineTranslations({
     "connections.healthUnavailableNext":
       "Check the address under Settings. It is changed in the release config.",
     "connections.statusDescription": "Whether the instance reaches the outside system.",
+    "connections.accessTitle": "Who may use it",
+    "connections.accessDescription":
+      "People and service principals with a right on this Connection itself. Rights on a whole workspace or Namespace are on the Access page.",
+    "connections.accessEmpty": "Nobody was given this Connection by itself.",
+    "connections.accessFailed": "Who may use this Connection could not be loaded.",
+    "connections.accessServicePrincipal": "Service principal",
+    "connections.accessPrincipalDisabled": "Disabled",
+    "connections.accessUnknownPerson": "A person you cannot see",
+    "connections.accessUnknownPrincipal": "A service principal that no longer exists",
     "connections.agentsTitle": "Used by",
     "connections.agentsDescription": "The agents that carry a tool of this connection.",
     "connections.agentsEmpty": "No agent carries a tool of this connection.",
@@ -138,6 +147,15 @@ export const connections = defineTranslations({
     "connections.healthUnavailableNext":
       "Prüfen Sie die Adresse unter Einstellungen. Sie wird in der Release-Konfiguration geändert.",
     "connections.statusDescription": "Ob die Instanz das externe System erreicht.",
+    "connections.accessTitle": "Wer sie verwenden darf",
+    "connections.accessDescription":
+      "Personen und Service Principals mit einem Recht auf dieser Verbindung selbst. Rechte auf einem ganzen Arbeitsbereich oder Namespace stehen auf der Seite Zugriff.",
+    "connections.accessEmpty": "Niemand hat diese Verbindung einzeln erhalten.",
+    "connections.accessFailed": "Wer diese Verbindung verwenden darf, konnte nicht geladen werden.",
+    "connections.accessServicePrincipal": "Service Principal",
+    "connections.accessPrincipalDisabled": "Deaktiviert",
+    "connections.accessUnknownPerson": "Eine Person, die du nicht sehen kannst",
+    "connections.accessUnknownPrincipal": "Ein Service Principal, den es nicht mehr gibt",
     "connections.agentsTitle": "Verwendet von",
     "connections.agentsDescription": "Die Agenten, die ein Tool dieser Verbindung führen.",
     "connections.agentsEmpty": "Kein Agent führt ein Tool dieser Verbindung.",

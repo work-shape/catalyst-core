@@ -178,7 +178,45 @@ export const safeConfigSchema = z.object({
           title: z.string(),
           prompt: z.string()
         })
-      )
+      ),
+      /**
+       * What the empty chat offers as first requests: the starters of the agent's skills that
+       * name no tool the agent lacks, the skills in the agent's order, at most four. Choosing
+       * one fills the composer with `prompt` and sends nothing.
+       */
+      starters: z
+        .array(
+          z.object({
+            /** The skill the starter comes from. */
+            skillName: z.string(),
+            title: z.string(),
+            hint: z.string().optional(),
+            prompt: z.string(),
+            /** A key of the interface's icon registry, where the skill names an icon. */
+            icon: z.string().optional()
+          })
+        )
+        .optional(),
+      /**
+       * The Connections the agent's tools reach, each with the tools of it the agent holds.
+       * A conversation says with it what a tool call touched: the Connection's name for
+       * people, its icon and whether the call read or changed. It names no setting, no
+       * operation the agent does not hold and no credential.
+       */
+      connections: z
+        .array(
+          z.object({
+            name: z.string(),
+            title: z.string(),
+            /** The system behind the Connection, where it names one. It only picks an icon. */
+            service: z.string().optional(),
+            connectorType: z.string().optional(),
+            tools: z.array(
+              z.object({ toolName: z.string(), effect: z.enum(["reading", "changing"]) })
+            )
+          })
+        )
+        .optional()
     })
   ),
   ui: clientUiBrandingSchema
@@ -232,8 +270,18 @@ export const configAssetRevisionSchema = z.object({
   operation: z.enum(["create", "update", "delete", "revert"]),
   config: configAssetConfigSchema.nullable(),
   actor: auditActorSchema.nullable(),
+  /** Where the revision came from: the approval that applied it, or the Page it copies. */
   origin: z
-    .object({ kind: z.literal("approval_request"), requestId: z.string(), summary: z.string() })
+    .discriminatedUnion("kind", [
+      z.object({ kind: z.literal("approval_request"), requestId: z.string(), summary: z.string() }),
+      z.object({
+        kind: z.literal("page"),
+        conversationId: z.string(),
+        pageId: z.string(),
+        /** The number of the Page revision the files were copied from. */
+        fileSetNumber: z.number().int().positive()
+      })
+    ])
     .optional(),
   globalVersion: z.number().int().positive(),
   createdAt: timestampSchema

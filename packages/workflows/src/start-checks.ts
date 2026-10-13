@@ -19,8 +19,10 @@ export interface WorkflowStartIssue {
    * A code of the definition's parser (`not_supported_yet`, `block_depth`,
    * `reference_out_of_scope`, `duplicate_step_id`, or `definition_invalid` where the parser
    * names none), or of the start: `no_manual_trigger`, `inputs_unreadable`,
-   * `operation_secret`, `principal_inactive`. `operation_unknown` is the one a start does not
-   * refuse for: the run would fail at that step with `operation_not_found`.
+   * `operation_secret`, `principal_inactive`, and of a code step's script:
+   * `code_file_missing`, `code_file_too_large`, `code_file_invalid`. `operation_unknown` is the
+   * one a start does not refuse for: the run would fail at that step with
+   * `operation_not_found`.
    */
   code: string;
   /** A sentence of the product. Never a value of a run. */

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ConfigAssetSource } from "@vivd-catalyst/core";
+import type { ConfigAssetSource, ConversationOfferSource } from "@vivd-catalyst/core";
 import { createSkillSourceVersion } from "./skill-source-version";
 import {
   defineTool,
@@ -59,6 +59,8 @@ const readSkillOutputSchema = z.object({
 
 export interface ReadSkillToolOptions {
   assetSource: ConfigAssetSource;
+  /** The skills the platform ships for the subject of a conversation. Read like any other. */
+  conversationOffer?: ConversationOfferSource;
 }
 
 export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefinition {
@@ -73,6 +75,42 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
       const agentName = context.toolRequest?.agentName;
       if (!agentName) {
         return toolFailed("handler_failed", "read_skill requires an active agent run");
+      }
+
+      // A skill the platform ships for the subject of this conversation: it is no asset, so
+      // no agent's definition lists it.
+      const conversationId = context.toolRequest?.conversationId;
+      const offer = conversationId
+        ? await options.conversationOffer?.offerOf({
+            clientInstanceId: context.clientInstanceId,
+            conversationId
+          })
+        : undefined;
+      const shipped = offer?.skills.find((candidate) => candidate.name === input.name);
+      if (shipped) {
+        if (input.resourcePath) {
+          return toolFailed(
+            "validation_failed",
+            `Skill '${input.name}' does not define resource '${input.resourcePath}'`
+          );
+        }
+        const sourceVersion = createSkillSourceVersion({ ...shipped, resources: [] });
+        return toolSuccess(
+          {
+            name: shipped.name,
+            title: shipped.title,
+            description: shipped.description,
+            content: shipped.content,
+            sourceVersion
+          },
+          {
+            auditSummary: {
+              action: "read_skill",
+              subject: shipped.name,
+              metadata: { agentName, sourceVersion, shipped: true }
+            }
+          }
+        );
       }
 
       const assets = await options.assetSource.getSnapshot();

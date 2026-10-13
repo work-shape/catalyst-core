@@ -9,6 +9,7 @@ import {
   type CollaborationWorkspaceId,
   type ConversationListItem,
   type ConversationId,
+  type ConversationSubject,
   type ConversationVisibility,
   type JobControl,
   type JsonObject,
@@ -31,12 +32,15 @@ import {
   normalizeGeneratedConversationTitle,
   temporaryAttachmentTitles
 } from "../conversation-title";
+import { requireReadableSubject } from "../platform-asset-calls";
 import { modelBindingRefOf, reasoningEffortTheModelTakes } from "../system-model-call";
 import type { ChatServerOptions } from "../types";
 
 export interface CreateConversationCommand {
   title?: string;
   collaborationWorkspaceId?: CollaborationWorkspaceId;
+  /** The asset the conversation is about. Its creator holds the read right on it. */
+  subject?: ConversationSubject;
 }
 
 export interface MoveConversationCommand {
@@ -90,17 +94,26 @@ export class ConversationWorkflow {
   ): Promise<Conversation> {
     const subjectUserId = getSubjectUserId(user);
     const workspace = await this.resolveTargetWorkspace(user, command.collaborationWorkspaceId);
+    if (command.subject) {
+      await requireReadableSubject(this.options, user, command.subject);
+    }
     const conversation = await this.options.stores.conversations.createConversation({
       clientInstanceId: this.options.clientInstanceId,
       collaborationWorkspaceId: workspace.id,
       createdByUserId: subjectUserId,
       createdByExternalUserId: user.externalUserId,
-      visibility: workspace.defaultConversationVisibility,
+      // The transcript of a conversation about an asset holds the asset's definition, and a
+      // member of the workspace need not hold the read right on it: it is its creator's alone.
+      visibility:
+        command.subject && workspace.kind !== "personal"
+          ? "private"
+          : workspace.defaultConversationVisibility,
       title: command.title ?? "New conversation",
       retainedUntil: addDays(
         new Date(),
         this.options.config.retention.conversationDays
-      ).toISOString()
+      ).toISOString(),
+      ...(command.subject ? { subject: command.subject } : {})
     });
 
     await this.options.auditRecorder.record({
@@ -110,7 +123,10 @@ export class ConversationWorkflow {
       subject: conversation.id,
       correlationId: context.correlationId,
       metadata: {
-        retainedUntil: conversation.retainedUntil
+        retainedUntil: conversation.retainedUntil,
+        ...(conversation.subject
+          ? { subjectKind: conversation.subject.kind, subjectName: conversation.subject.name }
+          : {})
       }
     });
     return conversation;
@@ -158,11 +174,23 @@ export class ConversationWorkflow {
     if (conversation.collaborationWorkspaceId === command.collaborationWorkspaceId) {
       throw new AppError("VALIDATION_FAILED", "Conversation already belongs to this workspace");
     }
+    if (
+      conversation.subject &&
+      destination.kind !== "personal" &&
+      command.visibility === "workspace"
+    ) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "A conversation about an asset stays private: its transcript holds the asset's definition",
+        { reason: "subject_conversation_private" },
+        { exposeMessage: true }
+      );
+    }
     const visibility: ConversationVisibility =
       destination.kind === "personal"
         ? "workspace"
         : (command.visibility ??
-          (conversation.visibility === "private"
+          (conversation.visibility === "private" || conversation.subject
             ? "private"
             : destination.defaultConversationVisibility));
     if (visibility === "private" && conversation.createdByUserId !== getSubjectUserId(user)) {

@@ -229,6 +229,53 @@ describe("the definition of a Connection", () => {
     expect(withPolicy("changing", "confirm")).toHaveLength(1);
   });
 
+  it("accepts a header for the idempotency key on a changing operation, and no header of the request itself", () => {
+    const withHeader = (effect: string, idempotencyKeyHeader: string) =>
+      issuesOf(
+        connection("outside", {
+          operations: [{ name: "write", effect, exposure: [], idempotencyKeyHeader }]
+        })
+      );
+    expect(withHeader("changing", "Idempotency-Key")).toEqual([]);
+    expect(withHeader("reading", "Idempotency-Key")).toEqual([
+      {
+        path: "operations.0.idempotencyKeyHeader",
+        message: "Only a changing operation can name a header for its idempotency key"
+      }
+    ]);
+    // A name is accepted for what it says it is, and for nothing else.
+    for (const named of ["X-Request-Id", "Stripe-Idempotency-Key", "Acme-Request-Id"]) {
+      expect(withHeader("changing", named)).toEqual([]);
+    }
+    // Fails without the change: every name that starts with `X-` passed, a credential's and
+    // a proxy's among them.
+    for (const other of [
+      "X-Api-Key",
+      "X-HTTP-Method-Override",
+      "X-Original-URL",
+      "X-Amz-Security-Token",
+      "X-",
+      "X-Forwarded-For",
+      "Expect",
+      "Upgrade",
+      "Authorization",
+      "content-type",
+      "Mcp-Session-Id",
+      "Cookie",
+      "-Request-Id",
+      "a header-Request-Id",
+      `${"a".repeat(60)}-Request-Id`
+    ]) {
+      expect(withHeader("changing", other)).toEqual([
+        {
+          path: "operations.0.idempotencyKeyHeader",
+          message:
+            "The header of an idempotency key is 'Idempotency-Key' or a name of at most 64 letters, digits and hyphens that ends in '-Idempotency-Key' or '-Request-Id'"
+        }
+      ]);
+    }
+  });
+
   it("refuses an operation without an effect, a doubled operation and too many of them", () => {
     expect(
       issuesOf(connection("outside", { operations: [{ name: "echo", exposure: ["agent"] }] }))
@@ -438,7 +485,7 @@ describe("a Connection through the asset operations", () => {
 
   it("lists and reads a seeded Connection with its handle and no secret", async () => {
     const t = await setupConnectionInstance();
-    const id = await t.seed("outside", { description: "The outside system." });
+    const id = await t.seed("outside", { description: "The outside system.", service: "ledger" });
     await t.seed("paused", { enabled: false, origin: "runtime", secretHandle: undefined });
     const page = (
       await t.expectOk(t.admin.id, "assets.list", { params: { kind: "connection" } })
@@ -455,8 +502,10 @@ describe("a Connection through the asset operations", () => {
       description: "The outside system.",
       scope: { kind: "instance" },
       revision: 1,
-      attributes: { connectorType: "fixture", origin: "release", enabled: true }
+      // The key of its icon, where it names one.
+      attributes: { connectorType: "fixture", origin: "release", enabled: true, service: "ledger" }
     });
+    expect(page.items[1]?.attributes).not.toHaveProperty("service");
     expect(page.items[1]).toMatchObject({
       attributes: { connectorType: "fixture", origin: "runtime", enabled: false }
     });
@@ -469,7 +518,9 @@ describe("a Connection through the asset operations", () => {
         params: { kind: "connection", name: "outside" }
       })
     ).json<{ config: Record<string, unknown> }>();
-    expect(read.config).toEqual(connection("outside", { description: "The outside system." }));
+    expect(read.config).toEqual(
+      connection("outside", { description: "The outside system.", service: "ledger" })
+    );
     const history = (
       await t.expectOk(t.admin.id, "assets.revisions.list", {
         params: { kind: "connection", name: "outside" }
@@ -506,8 +557,13 @@ describe("a Connection through the asset operations", () => {
         use: "connection.use",
         write: "connection.write",
         delete: "connection.delete"
-      }
+      },
+      // What a service principal can be granted on one Connection, and nothing that changes it.
+      principalActions: ["connection.use"]
     });
+    expect(context.kinds.find((kind) => kind.kind === "agent")).not.toHaveProperty(
+      "principalActions"
+    );
     // The kinds without such a right name none.
     expect(context.kinds.find((kind) => kind.kind === "agent")?.actions).toEqual({
       read: "agent.read",

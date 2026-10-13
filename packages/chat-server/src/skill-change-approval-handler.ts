@@ -208,7 +208,8 @@ export function createSkillChangeApprovalHandler(
       const latest = history.at(-1);
       // A previous revert may have committed before its request transition failed.
       if (
-        latest?.origin?.requestId === request.id &&
+        latest !== undefined &&
+        appliedBy(latest, request.id) &&
         (latest.operation === "revert" || latest.operation === "delete")
       ) {
         return revisionResult(data.skillName, latest);
@@ -316,10 +317,15 @@ function validatePayload(payload: JsonObject) {
   return result.data;
 }
 
+/** Whether the revision was written for this request. */
+function appliedBy(revision: ConfigAssetRevisionRecord, requestId: string): boolean {
+  return revision.origin?.kind === "approval_request" && revision.origin.requestId === requestId;
+}
+
 function findRequestRevision(revisions: ConfigAssetRevisionRecord[], requestId: string) {
   return revisions.find(
     (revision) =>
-      revision.origin?.requestId === requestId &&
+      appliedBy(revision, requestId) &&
       revision.operation !== "revert" &&
       revision.operation !== "delete"
   );

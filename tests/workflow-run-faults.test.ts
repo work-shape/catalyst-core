@@ -3,7 +3,6 @@ import { z } from "zod";
 import {
   createPlatformId,
   workflowStepIdempotencyKey,
-  type JsonValue,
   type WorkflowManifest
 } from "@vivd-catalyst/core";
 import { parseWorkflowManifest } from "@vivd-catalyst/workflows";
@@ -18,7 +17,10 @@ import {
 import {
   CLIENTS,
   NOTE,
+  answer,
+  holdingFirst,
   notifyClients,
+  reach,
   readyWorkflows,
   start,
   stepRunsOf,
@@ -43,50 +45,6 @@ const ready = (options: Parameters<typeof workflowFixture>[0] = {}) =>
     open = fixture;
   }, options);
 
-const answer = (operation: string, input: JsonValue): JsonValue =>
-  operation === "echo" ? { clients: CLIENTS } : { received: input };
-
-/**
- * A Connection whose first call of one operation does not answer until the test lets it go.
- * `entered` resolves when that call is with the outside system.
- */
-function holdingFirst(t: WorkflowFixture, held: "echo" | "write") {
-  let first = true;
-  let entered: () => void = () => undefined;
-  let letGo: () => void = () => undefined;
-  const inCall = new Promise<void>((resolve) => {
-    entered = resolve;
-  });
-  const gate = new Promise<void>((resolve) => {
-    letGo = resolve;
-  });
-  hanging.push(letGo);
-  // A call may take as long as a Connection lets any call take.
-  t.state.limits = { ...t.state.limits, callTimeoutMs: 30_000 };
-  t.setBehaviour((operation, input) => {
-    if (operation !== held || !first) return Promise.resolve(answer(operation, input));
-    first = false;
-    entered();
-    return gate.then(() => answer(operation, input));
-  });
-  return { inCall, letGo };
-}
-
-/** Runs passes of a worker until the held call is with the outside system. */
-async function reach(t: WorkflowFixture, inCall: Promise<void>) {
-  const worker = t.worker();
-  let there = false;
-  const arrived = inCall.then(() => {
-    there = true;
-  });
-  for (let pass = 0; pass < 20 && !there; pass++) {
-    const running = worker.runDue();
-    await Promise.race([running, arrived]);
-  }
-  expect(there).toBe(true);
-  return worker;
-}
-
 const twoSteps = [
   {
     id: "confirm",
@@ -100,7 +58,7 @@ const twoSteps = [
 describe("a worker that stops inside a call", () => {
   it("fails nothing: a reading call is made again by the next worker and the run finishes", async () => {
     const t = await ready();
-    const held = holdingFirst(t, "echo");
+    const held = holdingFirst(t, "echo", hanging);
     const started = await start(t);
     const worker = await reach(t, held.inCall);
     await worker.stop();
@@ -127,7 +85,7 @@ describe("a worker that stops inside a call", () => {
 
   it("lets a changing call end, and the next worker is answered what it answered", async () => {
     const t = await ready();
-    const held = holdingFirst(t, "write");
+    const held = holdingFirst(t, "write", hanging);
     const started = await start(t);
     const worker = await reach(t, held.inCall);
     // The stop arrives while the call is with the outside system, which then answers.
@@ -188,6 +146,9 @@ describe("a changing call whose first attempt left no outcome", () => {
     const run = await t.finish(started.id, worker);
     expect(run.status).toBe("failed");
     expect(run.error).toMatchObject({ code: "operation_interrupted", stepRunId: stepRun.id });
+    // One sentence: what is not known, and what makes such a call one that is made again.
+    expect(run.error?.message).toContain("may or may not have taken effect");
+    expect(run.error?.message).toContain("idempotencyKeyHeader");
     // The outside system was not called a second time, under this key or another.
     expect(writesOf(t)).toEqual([]);
     const stepRuns = await stepRunsOf(t, run.id);

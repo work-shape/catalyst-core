@@ -23,6 +23,11 @@ export const platformAssetKindSchema = z.object({
      */
     use: z.string().optional()
   }),
+  /**
+   * The rights of the kind a service principal can be granted, each on one named asset. Left
+   * out for a kind that has none. `permissions.grant` hands out these and no other.
+   */
+  principalActions: z.array(z.string()).optional(),
   /** The file of a `files` kind that holds its manifest. */
   manifestFile: z.string().optional(),
   /** What a write of a `files` kind is held to, by the names of the limits. */

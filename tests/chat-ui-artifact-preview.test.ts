@@ -12,7 +12,10 @@ import {
   shouldUseLiveArtifactPreviewState
 } from "../packages/chat-ui/src/artifact-preview";
 import { ArtifactPreviewMessage } from "../packages/chat-ui/src/artifact-preview-shell";
-import type { ToolArtifactDownloadRef } from "../packages/chat-ui/src/tool-artifacts";
+import {
+  getArtifactFileType,
+  type ToolArtifactDownloadRef
+} from "../packages/chat-ui/src/tool-artifacts";
 import { conversationFileFromResource } from "../packages/chat-ui/src/conversation-file-presentation";
 import { TranslationProvider } from "./chat-ui-render-harness";
 
@@ -53,12 +56,7 @@ describe("chat UI artifact preview state", () => {
   it("wraps long preview details inside the status card", () => {
     const markup = renderToStaticMarkup(
       createElement(ArtifactPreviewMessage, {
-        fileType: {
-          badge: "PPT",
-          label: "Presentation",
-          className: "bg-orange-700",
-          extension: "pptx"
-        },
+        fileType: getArtifactFileType({ artifactId: "art_deck", filename: "deck.pptx" }),
         title: "Loading preview",
         detail: "Surprise_The_Museum_of_Things_We_Havent_Lost_Yet.pptx"
       })
@@ -66,6 +64,7 @@ describe("chat UI artifact preview state", () => {
 
     expect(markup).toContain("[overflow-wrap:anywhere]");
     expect(markup).toContain("Surprise_The_Museum_of_Things_We_Havent_Lost_Yet.pptx");
+    expect(markup).toContain('data-file-type="presentation"');
   });
 
   it("backs off while pending and continues polling at the capped interval", () => {

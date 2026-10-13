@@ -1,5 +1,6 @@
 import {
   AppError,
+  SUBJECT_TOOL_PREFIX,
   systemClock,
   unknownToJsonValue,
   type AgentRunId,
@@ -47,7 +48,23 @@ export class TurnLoop {
     context: RuntimeCallContext
   ): Promise<void> {
     const assets = await this.options.assetSource.getSnapshot();
-    const agent = getSnapshotAgentConfig(assets, input.agentName);
+    const listed = getSnapshotAgentConfig(assets, input.agentName);
+    // A conversation about an asset is offered the tools the server binds to that subject and
+    // the skills the platform ships for it. No other conversation is offered a tool of a
+    // subject, whatever its agent's definition lists.
+    const offer = await this.options.conversationOffer?.offerOf({
+      clientInstanceId: context.clientInstanceId,
+      conversationId: input.conversationId
+    });
+    const agent = {
+      ...listed,
+      toolNames: [
+        ...new Set([
+          ...listed.toolNames.filter((toolName) => !toolName.startsWith(SUBJECT_TOOL_PREFIX)),
+          ...(offer?.toolNames ?? [])
+        ])
+      ]
+    };
     const modelSelection = this.modelInput.getModelSelectionForAgent(
       agent,
       input.modelBindingId,
@@ -114,9 +131,17 @@ export class TurnLoop {
       role: "system",
       content: createSystemInstructions(agent.instructions, context.locale, {
         currentDate: this.options.clock?.now() ?? systemClock.now(),
-        skills: getSnapshotSkillMetadataForAgent(assets, agent),
+        skills: [
+          ...getSnapshotSkillMetadataForAgent(assets, agent),
+          ...(offer?.skills ?? []).map(({ name, title, description }) => ({
+            name,
+            title,
+            description
+          }))
+        ],
         agentToolNames: agent.toolNames,
-        agentSkillChangesEnabled: this.options.agentSkillChangesEnabled
+        agentSkillChangesEnabled: this.options.agentSkillChangesEnabled,
+        ...(offer ? { subject: offer } : {})
       })
     };
     const userMessage: ModelMessage = { role: "user", content: userContent };

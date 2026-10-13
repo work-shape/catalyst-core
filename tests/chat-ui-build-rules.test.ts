@@ -4,6 +4,7 @@ import { createTranslationContext } from "@vivd-catalyst/chat-ui";
 import {
   assetIdFromTitle,
   PendingApprovalError,
+  mayCreateAgents,
   readBuildRefusal,
   refusalsOf,
   resolveBuildRights
@@ -17,7 +18,7 @@ import {
   type Namespaces
 } from "./chat-ui-build-fixtures";
 
-describe("Build ids", () => {
+describe("Studio ids", () => {
   it("makes an id from the name people read", () => {
     expect(assetIdFromTitle("Tax Review")).toBe("tax_review");
     expect(assetIdFromTitle("  Steuer-Prüfung (Köln) 2026 ")).toBe("steuer_prufung_koln_2026");
@@ -29,7 +30,7 @@ describe("Build ids", () => {
   });
 });
 
-describe("Build rights", () => {
+describe("Studio rights", () => {
   const rights = (permissions: string[], namespaces: Namespaces = []) =>
     resolveBuildRights({ permissions }, platformContext(namespaces, instanceActions(permissions)));
   const taxAgent = { kind: "agent", namespace: "tax-" };
@@ -89,6 +90,21 @@ describe("Build rights", () => {
     ).toBe(false);
   });
 
+  it("lets an agent be started by a writer on an instance that lets agents be created", () => {
+    const on = { allowAgentCreation: true };
+
+    expect(mayCreateAgents(rights(["config_assets.write"]), on)).toBe(true);
+    expect(mayCreateAgents(rights([], [taxNamespace]), on)).toBe(true);
+    // The right alone is not enough: the instance has its own switch.
+    expect(mayCreateAgents(rights(["config_assets.write"]), { allowAgentCreation: false })).toBe(
+      false
+    );
+    expect(mayCreateAgents(rights(["config_assets.write"]), undefined)).toBe(false);
+    // Nor is the switch: a reader, and a writer of another kind's Namespace, start nothing.
+    expect(mayCreateAgents(rights(["config_assets.read"]), on)).toBe(false);
+    expect(mayCreateAgents(rights([], [legalNamespace]), on)).toBe(false);
+  });
+
   it("names the Namespaces a new asset of a kind may be named in", () => {
     const writer = rights([], [taxNamespace, legalNamespace]);
 
@@ -128,14 +144,14 @@ describe("Build rights", () => {
       expect(nobody.mayCreate("agent")).toBe(false);
       expect(nobody.namespaces).toEqual([]);
     }
-    // The session alone opens Build for an instance reader before the instance answered.
+    // The session alone opens Studio for an instance reader before the instance answered.
     expect(resolveBuildRights({ permissions: ["config_assets.read"] }, undefined).readsAny).toBe(
       true
     );
   });
 });
 
-describe("Build refusals", () => {
+describe("Studio refusals", () => {
   const { t } = createTranslationContext("en");
   const refusal = (code: string, message: string, details?: Record<string, unknown>) =>
     new ApiError(code === "REVISION_CONFLICT" ? 412 : code === "FORBIDDEN" ? 403 : 400, message, {

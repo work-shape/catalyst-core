@@ -125,6 +125,8 @@ export interface OpenConnectorContextInput {
   egress: EgressChecker;
   credentials: ConnectionCredentialResolver;
   signal: AbortSignal;
+  /** The key of a changing call and the header that carries it, where the call has both. */
+  idempotencyKey?: { header: string; value: string };
 }
 
 /**
@@ -189,6 +191,7 @@ export async function openConnectorContext(
       }
       return credential;
     },
+    ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
     signal
   };
 }

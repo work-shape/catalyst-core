@@ -138,7 +138,7 @@ The demo runs with Execution Workspaces and the `apps` module on. Its agent read
 
 Beside the instance runs a small outside system: the Compose service `sample-mcp` (`sample-mcp/`), a remote MCP server with customers, orders and invoices of an invented wholesale company over the last twelve full months. The data is generated at start from a fixed seed, so it is the same for a whole month. At `/mcp` the server has six reading tools. It publishes no host port and answers only with its key.
 
-The instance reaches it through the Connection `sample-business` ("Sample business" under Build > Connections), which release config defines in `config/app.yaml`:
+The instance reaches it through the Connection `sample-business` ("Sample business" under Studio > Connections), which release config defines in `config/app.yaml`:
 
 - `connections.sample-business` names the Connector type `mcp`, the address `http://sample-mcp:8787/mcp`, the secret `DEMO_SAMPLE_MCP_KEY` and the six accepted operations, each reading and open to agents and to Pages.
 - `egress.allow` lists the one target a Connection may reach: `sample-mcp`, port 8787, as a private target whose address lies in a private range. Docker gives a Compose network such a range. Remove the entry and the Connection's test answers `network_denied`.

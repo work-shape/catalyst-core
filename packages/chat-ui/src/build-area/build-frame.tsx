@@ -1,4 +1,4 @@
-import { ArrowLeft, MoreHorizontal, Plus, Search, SearchX, Terminal } from "lucide-react";
+import { MoreHorizontal, Plus, Search, SearchX, Terminal } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import {
   Avatar,
@@ -19,6 +19,7 @@ import {
   ListRow,
   Page,
   PageHeader,
+  PageHeaderBack,
   Picker,
   PickerButton,
   SkeletonList,
@@ -38,6 +39,7 @@ import {
 import { useBuildAssetKinds } from "./build-asset-kinds";
 import { ExistingAssetPage, NewAssetPage, ViewedAssetPage } from "./build-asset-page";
 import { BuildCreateDialog } from "./build-create-dialog";
+import { buildCreateRequested, clearBuildCreateRequest } from "./build-create-request";
 import { BUILD_SEARCH_DELAY_MS, type BuildListFilter, type BuildSource } from "./build-data";
 import {
   formatUpdated,
@@ -79,7 +81,11 @@ export function BuildFrame({ source }: { source: BuildSource }) {
   const [listViews, setListViews] = useState<Record<string, ListView>>({});
   // A new asset has no address yet: it is written on the list's address and ends with it.
   const locationKey = `${location.kindPath ?? ""}/${location.name ?? ""}`;
-  const [asking, setAsking] = useState(false);
+  // A page outside Build may have asked for the dialog: the list it leads to opens with it.
+  const [asking, setAsking] = useState(
+    () => location.name === undefined && buildCreateRequested(location.kindPath)
+  );
+  useEffect(clearBuildCreateRequest, []);
   const [start, setStart] = useState<BuildAssetStart>();
   const [seenLocationKey, setSeenLocationKey] = useState(locationKey);
   if (seenLocationKey !== locationKey) {
@@ -221,15 +227,9 @@ export function BuildFrame({ source }: { source: BuildSource }) {
 
   const assetName = creating ? undefined : place.name;
   const back = (
-    <Button
-      variant="ghost"
-      size="sm"
-      aria-label={t("build.backToList", { kind: t(entry.label) })}
-      onClick={openList}
-    >
-      <ArrowLeft aria-hidden="true" />
+    <PageHeaderBack label={t("build.backToList", { kind: t(entry.label) })} onClick={openList}>
       {t(entry.label)}
-    </Button>
+    </PageHeaderBack>
   );
   if (!isEditableKind(entry) && entry.view && assetName !== undefined) {
     return (
@@ -294,7 +294,7 @@ export function BuildFrame({ source }: { source: BuildSource }) {
       subRail={
         kinds.length > 1 ? (
           <SubRail
-            mode="routes"
+            title={t("nav.build")}
             label={t("build.kinds")}
             groups={[
               {
@@ -326,7 +326,7 @@ export function BuildFrame({ source }: { source: BuildSource }) {
         onOpen={(asset) => open({ kindPath: entry.path, name: asset.name })}
         onNew={() => setAsking(true)}
       />
-      {asking && isEditableKind(entry) ? (
+      {asking && isEditableKind(entry) && place.kind.state.canCreate ? (
         <BuildCreateDialog
           entry={entry}
           namespaces={source.rights.creatableNamespaces(entry.kind)}
@@ -499,12 +499,23 @@ function BuildList({
               {list.rows.map((asset) => {
                 const title = asset.title.trim() || asset.name;
                 const namespace = namespaceName(asset.namespace) ?? asset.namespace;
+                const own = entry.row?.(asset);
+                const rowText = entry.rowText?.(asset)?.trim();
                 return (
                   <ListRow
                     key={asset.name}
-                    leading={<RowMark entry={entry} title={title} />}
+                    leading={own ? own.leading : <RowMark entry={entry} title={title} />}
                     title={title}
-                    description={<code className="font-mono">{asset.name}</code>}
+                    description={
+                      own ? (
+                        own.description
+                      ) : (
+                        <>
+                          <code className="font-mono">{asset.name}</code>
+                          {rowText ? ` · ${rowText}` : null}
+                        </>
+                      )
+                    }
                     chips={
                       <>
                         {namespace ? <Chip size="sm">{namespace}</Chip> : null}

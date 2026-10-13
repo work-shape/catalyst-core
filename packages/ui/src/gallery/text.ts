@@ -4,6 +4,7 @@ import { layoutGalleryText, type LayoutGalleryText } from "./text-layout";
 import { levelMeterGalleryText, type LevelMeterGalleryText } from "./text-level-meter";
 import { progressGalleryText, type ProgressGalleryText } from "./text-progress";
 import { sampleGalleryText, type SampleGalleryText } from "./text-samples";
+import { skillsGalleryText, type SkillsGalleryText } from "./text-skills";
 import { stepsGalleryText, type StepsGalleryText } from "./text-steps";
 
 export type GalleryLanguage = "en" | "de";
@@ -17,6 +18,7 @@ export interface GalleryText
     ProgressGalleryText,
     LevelMeterGalleryText,
     StepsGalleryText,
+    SkillsGalleryText,
     FlowGalleryText {
   title: string;
   mode: string;
@@ -154,6 +156,7 @@ export interface GalleryText
   avatarWorkspace: string;
   avatarAgent: string;
   avatarApp: string;
+  avatarService: string;
   bannerInfo: string;
   bannerSuccess: string;
   bannerWarningTitle: string;
@@ -192,12 +195,15 @@ export interface GalleryText
   hoverCardBody: string;
   cardTitle: string;
   cardBody: string;
+  cardBodyLong: string;
+  cardAction: string;
   tableName: string;
   tableState: string;
   tableUpdated: string;
   tableUpdatedTime: string;
   rowAgent: string;
   rowWorkflow: string;
+  rowServicePrincipal: string;
   rowKnowledge: string;
   countPending: string;
   today: string;
@@ -378,6 +384,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     avatarWorkspace: "Workspace",
     avatarAgent: "Agent",
     avatarApp: "App",
+    avatarService: "Service principal",
     bannerInfo: "This agent comes from the instance and is read-only here.",
     bannerSuccess: "Your profile was saved.",
     bannerWarningTitle: "2 steps need a connection",
@@ -417,12 +424,16 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     hoverCardBody: "About a third of the context window is in use.",
     cardTitle: "Support assistant",
     cardBody: "Answers questions from the product handbook.",
+    cardBodyLong:
+      "Answers questions from the product handbook, looks up orders and drafts the reply to the customer.",
+    cardAction: "Start chat",
     tableName: "Name",
     tableState: "State",
     tableUpdated: "Updated",
     tableUpdatedTime: "9:41 AM",
     rowAgent: "Support assistant",
     rowWorkflow: "Invoice check",
+    rowServicePrincipal: "Monthly check",
     rowKnowledge: "Product handbook",
     ...layoutGalleryText.en,
     ...sampleGalleryText.en,
@@ -430,6 +441,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     ...progressGalleryText.en,
     ...levelMeterGalleryText.en,
     ...stepsGalleryText.en,
+    ...skillsGalleryText.en,
     ...flowGalleryText.en,
     countPending: "3 requests wait",
     today: "Today",
@@ -543,7 +555,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     skipLinkHint: "Der Link erscheint, solange er den Fokus hat: von hier aus Tab drücken.",
     skipLinkTarget: "Inhalt",
     docsLinkSentence:
-      "Agenten und Fähigkeiten, deren Name mit dem Präfix beginnt, gehören zum Namespace.",
+      "Agenten und Skills, deren Name mit dem Präfix beginnt, gehören zum Namespace.",
     docsLinkLearnMore: "Mehr erfahren",
     docsLinkLearnMoreName: "Mehr erfahren über Namespaces, öffnet in neuem Tab",
     docsLinkNamed: "So funktionieren Rechte",
@@ -608,6 +620,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     avatarWorkspace: "Workspace",
     avatarAgent: "Agent",
     avatarApp: "App",
+    avatarService: "Service principal",
     bannerInfo: "Dieser Agent stammt aus der Instanz und ist hier schreibgeschützt.",
     bannerSuccess: "Dein Profil wurde gespeichert.",
     bannerWarningTitle: "2 Schritte brauchen eine Verbindung",
@@ -648,12 +661,16 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     hoverCardBody: "Etwa ein Drittel des Kontextfensters ist belegt.",
     cardTitle: "Support-Assistent",
     cardBody: "Beantwortet Fragen aus dem Produkthandbuch.",
+    cardBodyLong:
+      "Beantwortet Fragen aus dem Produkthandbuch, schlägt Bestellungen nach und entwirft die Antwort an den Kunden.",
+    cardAction: "Chat starten",
     tableName: "Name",
     tableState: "Status",
     tableUpdated: "Geändert",
     tableUpdatedTime: "09:41",
     rowAgent: "Support-Assistent",
     rowWorkflow: "Rechnungsprüfung",
+    rowServicePrincipal: "Monatsprüfung",
     rowKnowledge: "Produkthandbuch",
     ...layoutGalleryText.de,
     ...sampleGalleryText.de,
@@ -661,6 +678,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     ...progressGalleryText.de,
     ...levelMeterGalleryText.de,
     ...stepsGalleryText.de,
+    ...skillsGalleryText.de,
     ...flowGalleryText.de,
     countPending: "3 Anfragen warten",
     today: "Heute",

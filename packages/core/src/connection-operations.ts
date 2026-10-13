@@ -136,6 +136,11 @@ export const CONNECTION_CALL_REASONS = {
   upstream_timeout: "TIMEOUT",
   /** The outside system reported a failure. Its text is not passed on. */
   upstream_error: "CONFLICT",
+  /**
+   * The outside system answered 409: what the call would change conflicts with what is there,
+   * or with another call under the same key. The same call again is answered the same.
+   */
+  upstream_conflict: "CONFLICT",
   /** Every slot of the Connection stayed taken for as long as a call waits for one. */
   connection_busy: "CONFLICT",
   /**
@@ -159,6 +164,20 @@ export const CONNECTION_CALL_REASONS = {
 
 export type ConnectionCallReason = keyof typeof CONNECTION_CALL_REASONS;
 
+/**
+ * The reasons a call may fail for today and not tomorrow: the outside system was not there,
+ * was busy, reported a failure of its own or did not answer in time. A changing call that
+ * carried its key to the outside system and failed for one of them is made again under the
+ * key. A conflict, a refused credential and everything the platform refuses itself are none.
+ */
+export const CONNECTION_TRANSIENT_CALL_REASONS: ReadonlySet<ConnectionCallReason> = new Set([
+  "connection_unavailable",
+  "connection_busy",
+  "upstream_error",
+  "upstream_timeout",
+  "upstream_rate_limited"
+]);
+
 /** What each reason says where the caller adds nothing. No sentence holds a value of a call. */
 const CONNECTION_CALL_MESSAGES: Record<ConnectionCallReason, string> = {
   connection_unavailable: "the Connection cannot be used now",
@@ -175,6 +194,7 @@ const CONNECTION_CALL_MESSAGES: Record<ConnectionCallReason, string> = {
   upstream_rate_limited: "the outside system limits the rate of calls",
   upstream_timeout: "the outside system did not answer in time",
   upstream_error: "the outside system reported a failure",
+  upstream_conflict: "the outside system answered 409 Conflict",
   connection_busy: "too many calls of the Connection are running",
   schema_check_timeout: "the check against the operation's schema took too long and was stopped",
   schema_check_unavailable: "the check against the operation's schema could not be made now",
@@ -205,7 +225,7 @@ function isConnectionCallReason(value: unknown): value is ConnectionCallReason {
 }
 
 /** Where an administrator looks after a Connection, as the sentences name it. */
-const WHERE = "Build > Connections";
+const WHERE = "Studio > Connections";
 
 /** Where an administrator gives a right, as the sentence of a missing right names it. */
 const WHERE_RIGHTS = "Settings > Instance > Access";
@@ -265,6 +285,8 @@ const CONNECTION_CALL_SENTENCES: Record<
       : `${c} did not answer in time. If the action changes something, it is not known whether the change happened, so check before trying again. If it keeps failing, an administrator can check it under ${WHERE}.`,
   upstream_error: (c) =>
     `The outside system behind ${c} reported an error. Trying again later may work. If it keeps failing, an administrator can check it under ${WHERE}.`,
+  upstream_conflict: (c) =>
+    `The outside system behind ${c} refused the call with a conflict (HTTP 409): what it would change does not fit what is there. Trying again will not help.`,
   connection_busy: (c) => `Too many calls of ${c} are waiting right now. Try again in a moment.`,
   // The check of the input stops a call before it is sent, the check of the answer after.
   schema_check_timeout: (c, effect) =>

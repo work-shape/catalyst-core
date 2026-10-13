@@ -12,6 +12,9 @@ import {
   Page,
   PageFooter,
   PageHeader,
+  PageHeaderBack,
+  PageOutline,
+  type PageProps,
   SaveBar,
   type SaveBarProps,
   Section,
@@ -20,6 +23,8 @@ import {
   Sidebar,
   SkipLink,
   SubRail,
+  type SubRailGroup,
+  type SubRailProps,
   Tabs,
   TabsContent,
   TabsLink,
@@ -31,10 +36,8 @@ import {
   uiLabelsEn
 } from "@vivd-catalyst/ui";
 
-function render(element: ReactElement): string {
-  return renderToStaticMarkup(
-    createElement(UiRoot, { mode: "light", labels: uiLabelsEn }, element)
-  );
+function render(element: ReactElement, labels = uiLabelsEn): string {
+  return renderToStaticMarkup(createElement(UiRoot, { mode: "light", labels }, element));
 }
 
 const link = (href: string, label?: string) => createElement("a", { href }, label);
@@ -210,6 +213,26 @@ describe("navigation, page structure and data components", () => {
     expect(markup).toMatch(/role="radio"[^>]*>Rights<span[^>]*>0<\/span><\/button>/u);
   });
 
+  it("shows a segment's whole count where the number is the fact the segment states", () => {
+    const markup = render(
+      createElement(
+        SegmentedControl,
+        { label: "Entries", value: "all" },
+        createElement(
+          SegmentedControlItem,
+          { value: "failed", count: 3, exactCount: true },
+          "Failed"
+        ),
+        createElement(SegmentedControlItem, { value: "all", count: 20000, exactCount: true }, "All")
+      )
+    );
+
+    expect(markup).toMatch(/role="radio"[^>]*>Failed<span[^>]*tabular-nums[^>]*>3<\/span>/u);
+    expect(markup).toMatch(/role="radio"[^>]*>All<span[^>]*tabular-nums[^>]*>20000<\/span>/u);
+    expect(markup).not.toContain("99+");
+    expect(render(createElement(CountBadge, { count: 600, exact: true }))).toContain(">600<");
+  });
+
   it("renders a navigation item as a 32 px button or as the caller's link", () => {
     const button = render(createElement(NavItem, { selected: true, count: 120 }, "Inbox"));
     expect(button).toMatch(/<button[^>]*class="[^"]*\bh-8\b[^"]*bg-state-selected font-medium/u);
@@ -367,7 +390,6 @@ describe("navigation, page structure and data components", () => {
   it("offers a sub-rail's entries as a select and as links", () => {
     const markup = render(
       createElement(SubRail, {
-        mode: "routes",
         label: "Settings",
         value: "members",
         onValueChange: () => undefined,
@@ -410,6 +432,35 @@ describe("navigation, page structure and data components", () => {
     expect(order.every((position) => position >= 0)).toBe(true);
     expect([...order].sort((left, right) => left - right)).toEqual(order);
     expect(markup).toMatch(/<h1[^>]*>NAME<\/h1>/u);
+  });
+
+  it("puts the description of a detail head on the name's row and none under it", () => {
+    const head = render(
+      createElement(PageHeader, {
+        variant: "detail",
+        back: createElement(PageHeaderBack, { label: "WAY", href: "/agents", children: "BACK" }),
+        title: "NAME",
+        scope: "SCOPE",
+        state: "STATE",
+        description: "ABOUT",
+        primaryAction: "PRIMARY"
+      })
+    );
+    const order = ["BACK", "NAME", "SCOPE", "STATE", "ABOUT", "PRIMARY"].map((slot) =>
+      head.indexOf(slot)
+    );
+    expect([...order].sort((left, right) => left - right)).toEqual(order);
+    // The way back is a link named without its text, which gives way to the name.
+    expect(head).toMatch(
+      /<a href="\/agents"[^>]*data-slot="page-header-back"[^>]*aria-label="WAY"/u
+    );
+    // The name is cut last and says itself whole in a tooltip.
+    expect(head).toMatch(/<h1[^>]*class="[^"]*truncate[^"]*"[^>]*title="NAME"[^>]*>NAME<\/h1>/u);
+    expect(head).toMatch(/data-slot="page-header-description"[^>]*>ABOUT</u);
+    expect(head).toMatch(/shrink-\[1000000000000\][^>]*><div[^>]*data-slot="page-header-chips"/u);
+    const list = render(createElement(PageHeader, { title: "NAME", description: "ABOUT" }));
+    expect(list).not.toContain("page-header-description");
+    expect(list).toMatch(/<\/h1><\/div><div[^>]*>ABOUT<\/div>/u);
   });
 
   it("keeps a section flat and gives it its anchor, count and action", () => {
@@ -523,13 +574,13 @@ describe("navigation, page structure and data components", () => {
 describe("the space a page ends with", () => {
   const rail = () =>
     createElement(SubRail, {
-      mode: "routes",
       label: "Pages",
       value: "a",
       onValueChange: () => undefined,
       groups: [{ id: "g", items: [{ id: "a", label: "A" }] }]
     });
   const head = () => createElement(PageHeader, { variant: "detail", title: "HEAD" });
+  const outline = () => createElement(PageOutline, { items: [{ id: "a", label: "A" }] });
 
   it("is the page-end token on the content column of every layout, and nowhere else", () => {
     // Fails with the three `pb-6` the layouts carried: no layout named the token.
@@ -537,7 +588,9 @@ describe("the space a page ends with", () => {
       createElement(Page, null, "BODY"),
       createElement(Page, { subRail: rail() }, "BODY"),
       createElement(Page, { header: head() }, "BODY"),
-      createElement(Page, { header: head(), subRail: rail() }, "BODY")
+      createElement(Page, { header: head(), subRail: rail() }, "BODY"),
+      createElement(Page, { outline: outline() }, "BODY"),
+      createElement(Page, { header: head(), outline: outline() }, "BODY")
     ];
     for (const layout of layouts) {
       const markup = render(layout);
@@ -590,9 +643,10 @@ describe("a page with a head across its width", () => {
         {
           header: createElement(PageHeader, { variant: "detail", title: "HEAD" }),
           subRail: createElement(SubRail, {
-            mode: "anchors",
             belowHeader: true,
-            label: "Sections",
+            label: "Pages",
+            value: "a",
+            onValueChange: () => undefined,
             groups: [{ id: "g", items: [{ id: "a", label: "A" }] }]
           })
         },
@@ -600,28 +654,24 @@ describe("a page with a head across its width", () => {
       )
     );
     const head = markup.indexOf("HEAD");
-    const rail = markup.indexOf('data-mode="anchors"');
+    const rail = markup.indexOf('data-sub-rail=""');
     expect(head).toBeGreaterThan(-1);
     expect(head).toBeLessThan(rail);
     expect(rail).toBeLessThan(markup.indexOf("BODY"));
     // The page itself brings no gutter: the head and the row under it each bring their own.
     expect(markup).toMatch(/^<div[^>]*><div class="@container\/page w-full min-w-0">/u);
-    // The select that names sections is part of the page's flow and pinned only as a rail.
-    expect(markup).toMatch(/data-mode="anchors" class="[^"]*@subrail\/page:sticky/u);
-    expect(markup).not.toMatch(/data-mode="anchors" class="sticky /u);
   });
 
-  it("keeps the select of a rail that names routes pinned", () => {
+  it("keeps the select of a sub-rail pinned", () => {
     const markup = render(
       createElement(SubRail, {
-        mode: "routes",
         label: "Pages",
         value: "a",
         onValueChange: () => undefined,
         groups: [{ id: "g", items: [{ id: "a", label: "A" }] }]
       })
     );
-    expect(markup).toMatch(/data-mode="routes" class="[^"]*\bsticky\b/u);
+    expect(markup).toMatch(/data-sub-rail="" class="[^"]*\bsticky\b/u);
   });
 
   it("links into the documentation from the instance's docs address, in a new tab", () => {
@@ -665,5 +715,39 @@ describe("a page with a head across its width", () => {
     ).not.toContain("<a");
     expect(docsAddress(undefined, "/operate/")).toBeUndefined();
     expect(docsAddress("", "/operate/")).toBeUndefined();
+  });
+});
+
+/** Whether a value of `Candidate` may be handed where `Props` are asked for. */
+type Fits<Candidate, Props> = [Candidate] extends [Props] ? true : false;
+
+describe("a sub-rail only opens pages", () => {
+  it("refuses, by its types, to scroll within a page or to share a page with an outline", () => {
+    // Each line fails the type check of the tests once the library accepts what it names.
+    // What the editors handed a sub-rail that followed the scroll: no open route.
+    const sectionsOnly: Fits<{ label: string; groups: SubRailGroup[] }, SubRailProps> = false;
+    const hasMode: Fits<"mode", keyof SubRailProps> = false;
+    // The left column navigates, the right outline scrolls: a page has one of them.
+    const both: Fits<{ subRail: ReactElement; outline: ReactElement }, PageProps> = false;
+    const railOnly: Fits<{ subRail: ReactElement }, PageProps> = true;
+    const outlineOnly: Fits<{ outline: ReactElement }, PageProps> = true;
+    expect([sectionsOnly, hasMode, both, railOnly, outlineOnly]).toEqual([
+      false,
+      false,
+      false,
+      true,
+      true
+    ]);
+
+    const rail = render(
+      createElement(SubRail, {
+        label: "Pages",
+        value: "a",
+        onValueChange: () => undefined,
+        groups: [{ id: "g", items: [{ id: "a", label: "A" }] }]
+      })
+    );
+    expect(rail).not.toContain('href="#');
+    expect(rail).not.toContain('aria-current="location"');
   });
 });

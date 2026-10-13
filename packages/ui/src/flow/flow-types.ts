@@ -77,6 +77,8 @@ export interface FlowGraphGroup extends FlowItemBase {
   counts?: FlowCounts;
   /** The amount in words, such as "212 of 600". It is what a screen reader reads for the bar. */
   countsLabel?: string;
+  /** The share that failed, in words such as "3 failed". It stands in the failure colour. */
+  failedLabel?: string;
   /** A line under the bar. */
   note?: string;
   /** The group starts folded to its head. */

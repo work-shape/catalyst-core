@@ -13,7 +13,15 @@ import { IconButton } from "../actions/icon-button";
 import { EmptyState } from "../feedback/empty-state";
 import { Input } from "../forms/input";
 import { Badge } from "../status/badge";
-import { Card, CardContent, CardHeader, CardTitle, type CardPadding } from "../structure/card";
+import { RegistryIcon } from "../status/registry-icon";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  type CardPadding
+} from "../structure/card";
 import {
   Disclosure,
   DisclosureContent,
@@ -21,7 +29,8 @@ import {
   type DisclosureVariant
 } from "../structure/disclosure";
 import { Page, PageFooter, type PageWidth } from "../structure/page";
-import { PageHeader } from "../structure/page-header";
+import { PageHeader, PageHeaderBack } from "../structure/page-header";
+import { PageLead } from "../structure/page-lead";
 import { Section, type SectionLayout } from "../structure/section";
 import { SurfaceFrame } from "../structure/surface-frame";
 import { Samples, type GalleryGroup } from "./entry";
@@ -89,6 +98,23 @@ function PageHeaderSamples({ text }: { text: GalleryText }) {
           <Page>
             <p className="min-h-64 text-body text-muted-foreground">{text.saveStickyBody}</p>
           </Page>
+        </div>
+      </Samples>
+      <Samples label="detail: PageHeaderBack, description">
+        <div className="w-full overflow-hidden rounded-lg border">
+          <PageHeader
+            variant="detail"
+            headingLevel={2}
+            className="static border-b-0"
+            back={
+              <PageHeaderBack label={text.headerBack} onClick={() => undefined}>
+                {text.headerBreadcrumbAgents}
+              </PageHeaderBack>
+            }
+            title={text.rowAgent}
+            description={text.headerListDescription}
+            {...actions}
+          />
         </div>
       </Samples>
       <Samples label={text.headerDetailBreadcrumb}>
@@ -165,6 +191,7 @@ function SurfaceFrameSamples({ text }: { text: GalleryText }) {
       <Samples label={text.surfaceBeside}>
         <div className="h-56 w-full overflow-hidden rounded-lg border">
           <SurfaceFrame
+            icon={<RegistryIcon name="spreadsheet" family="file" className="size-5" />}
             title={text.surfaceTitle}
             subtitle={text.surfaceSubtitle}
             actions={
@@ -264,8 +291,23 @@ export const structureGallery: GalleryGroup = {
     },
     {
       name: "PageHeader",
-      components: ["PageHeader"],
+      components: ["PageHeader", "PageHeaderBack"],
       render: (text) => <PageHeaderSamples text={text} />
+    },
+    {
+      name: "PageLead",
+      components: ["PageLead"],
+      render: (text) => (
+        <div className="grid gap-3">
+          {/* One sentence stands whole; a text of more than two lines ends in "Show more". */}
+          <div className="rounded-lg border pb-3" data-gallery-sample="page-lead-short">
+            <PageLead>{text.cardBody}</PageLead>
+          </div>
+          <div className="max-w-md rounded-lg border pb-3" data-gallery-sample="page-lead-long">
+            <PageLead>{Array.from({ length: 6 }, () => text.cardBody).join(" ")}</PageLead>
+          </div>
+        </div>
+      )
     },
     {
       name: "Section",
@@ -279,7 +321,7 @@ export const structureGallery: GalleryGroup = {
     },
     {
       name: "Card",
-      components: ["Card", "CardHeader", "CardTitle", "CardContent"],
+      components: ["Card", "CardHeader", "CardTitle", "CardContent", "CardFooter"],
       render: (text) => (
         <div className="grid gap-4 sm:grid-cols-2">
           {cardPaddings.map((padding) => (
@@ -290,6 +332,20 @@ export const structureGallery: GalleryGroup = {
               <CardContent>
                 <p className="text-body text-muted-foreground">{text.cardBody}</p>
               </CardContent>
+            </Card>
+          ))}
+          {/* Side by side the cards are equally tall, and their actions share the lower edge. */}
+          {[text.cardBody, text.cardBodyLong].map((body) => (
+            <Card key={body} padding="md" className="flex flex-col">
+              <CardHeader>
+                <CardTitle>{text.cardTitle}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-body text-muted-foreground">{body}</p>
+              </CardContent>
+              <CardFooter>
+                <Button size="sm">{text.cardAction}</Button>
+              </CardFooter>
             </Card>
           ))}
         </div>

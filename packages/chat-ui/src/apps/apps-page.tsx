@@ -1,10 +1,15 @@
 import { LayoutGrid, MoreHorizontal } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { AssetSummary, LocaleCode } from "@vivd-catalyst/api-client";
 import {
   Avatar,
   Badge,
   Button,
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
   Chip,
   DropdownMenu,
   DropdownMenuContent,
@@ -14,8 +19,6 @@ import {
   EmptyState,
   IconButton,
   InlineError,
-  List,
-  ListRow,
   Page,
   PageHeader,
   SkeletonList
@@ -24,16 +27,10 @@ import { instanceSentence } from "../build-area/build-refusals";
 import { formatUpdated } from "../build-area/build-model";
 import { formatDateTime } from "../control-plane/locale-format";
 import { useTranslation } from "../i18n";
-import { workspaceRoutePath } from "../routes";
+import { RouteLink } from "../route-link";
 import type { WorkspaceRoute } from "../workspace/workspace-route";
 import { useApp, useAppActions, useAppList, useAppWrites, type AppList } from "./app-data";
-import {
-  AppDeleteDialog,
-  AppDetailsDialog,
-  AppStateBadge,
-  CopyAppLinkItem,
-  opensHere
-} from "./app-header";
+import { AppDeleteDialog, AppDetailsDialog, AppStateBadge, CopyAppLinkItem } from "./app-header";
 import {
   appBuilder,
   appDraftShown,
@@ -52,8 +49,8 @@ function appDisplayName(app: Pick<AssetSummary, "name" | "title">): string {
 }
 
 /**
- * Where a row leads: the App as its users are served it, or its draft for a writer while
- * nothing is published. A reader who can open neither gets a row without a link.
+ * Where the main action of a card leads: the App as its users are served it, or its draft for
+ * a writer while nothing is published. A reader who can open neither gets a card without one.
  */
 export function appRowRoute(
   workspaceId: string,
@@ -70,8 +67,8 @@ export function appRowRoute(
 }
 
 /**
- * The Apps of the open workspace: the list, what a row offers, and the two dialogs a row
- * opens. The list is read page by page; the record of one App is read only when its details
+ * The Apps of the open workspace: one card each, what a card offers, and the two dialogs a
+ * card opens. The list is read page by page; the record of one App is read only when its details
  * are asked for.
  */
 export function AppsPage() {
@@ -95,15 +92,8 @@ export function AppsPage() {
     return null;
   }
   const show = (route: WorkspaceRoute) => host.showRoute(route);
-  const act = (action: AppRowAction, app: AssetSummary) => {
-    const address = { collaborationWorkspaceId: workspace.id, app: app.name };
+  const act = (action: AppMenuAction, app: AssetSummary) => {
     switch (action) {
-      case "open":
-        show({ kind: "app", ...address });
-        break;
-      case "edit":
-        show({ kind: "app-edit", ...address });
-        break;
       case "details":
         setDetailsOf(app);
         break;
@@ -165,7 +155,7 @@ export function AppsPage() {
   );
 }
 
-/** The Apps list as it stands for a given list and a given reader. */
+/** The Apps page as it stands for a given list and a given reader. */
 export function AppsPageView({
   workspace,
   rights,
@@ -180,7 +170,7 @@ export function AppsPageView({
   list: AppList;
   now: Date;
   onOpenRoute(route: WorkspaceRoute): void;
-  onAction(action: AppRowAction, app: AssetSummary): void;
+  onAction(action: AppMenuAction, app: AssetSummary): void;
   /** Opens a new conversation with this text in its composer. */
   onBuildInChat(prompt: string): void;
 }) {
@@ -250,21 +240,22 @@ export function AppsPageView({
               </EmptyState>
             )
           ) : (
-            <div className="grid min-w-0 gap-3">
-              <List aria-label={t("apps.title")}>
+            <div className="grid min-w-0 gap-4">
+              <ul aria-label={t("apps.title")} className="grid grid-cols-1 gap-4 @2xl:grid-cols-2">
                 {rows.map((app) => (
-                  <AppRow
-                    key={app.name}
-                    app={app}
-                    workspace={workspace}
-                    rights={rights}
-                    now={now}
-                    locale={locale}
-                    onOpenRoute={onOpenRoute}
-                    onAction={onAction}
-                  />
+                  <li key={app.name} className="flex min-w-0">
+                    <AppCard
+                      app={app}
+                      workspace={workspace}
+                      rights={rights}
+                      now={now}
+                      locale={locale}
+                      onOpenRoute={onOpenRoute}
+                      onAction={onAction}
+                    />
+                  </li>
                 ))}
-              </List>
+              </ul>
               {list.hasMore ? (
                 <Button
                   variant="outline"
@@ -283,15 +274,25 @@ export function AppsPageView({
   );
 }
 
-const ROW_ACTION_LABELS = {
-  open: "apps.open",
-  edit: "apps.edit",
+/** What the menu of a card holds: what the card does not offer as a button of its own. */
+type AppMenuAction = Exclude<AppRowAction, "open" | "edit">;
+
+const MENU_ACTION_LABELS = {
   details: "apps.details",
   copy_link: "apps.copyLink",
   delete: "apps.delete"
-} as const;
+} as const satisfies Record<AppMenuAction, string>;
 
-function AppRow({
+function menuAction(action: AppRowAction): action is AppMenuAction {
+  return action !== "open" && action !== "edit";
+}
+
+/**
+ * One App: what it is called and what it is for, where it stands, when it last changed, and
+ * the way into it. The main action is the first of the footer; what a builder does beside it
+ * stands at the other end.
+ */
+function AppCard({
   app,
   workspace,
   rights,
@@ -306,100 +307,106 @@ function AppRow({
   now: Date;
   locale: LocaleCode;
   onOpenRoute(route: WorkspaceRoute): void;
-  onAction(action: AppRowAction, app: AssetSummary): void;
+  onAction(action: AppMenuAction, app: AssetSummary): void;
 }) {
   const { t } = useTranslation();
+  const titleId = useId();
   const name = appDisplayName(app);
   const state = appState(app);
   const route = appRowRoute(workspace.id, app, state, rights);
   const actions = appRowActions(rights, state, appDraftShown(app));
+  const menu = actions.filter(menuAction);
   const builder = appBuilder(rights);
-  // Whoever uses Apps is shown the App: the number of its revision and its id are a builder's.
-  // That nothing is published yet is said to everybody, since such a row opens nothing.
-  const stateChips =
-    builder || state.kind === "draft_only" ? (
-      <>
-        <AppStateBadge state={state} />
-        {rights.write && state.kind === "published" && state.draftAhead ? (
-          <Badge tone="warning" size="sm">
-            {t("apps.unpublishedChanges")}
-          </Badge>
-        ) : null}
-      </>
-    ) : undefined;
-  const about =
-    app.description?.trim() ||
-    (builder ? <code className="font-mono">{app.name}</code> : undefined);
+  const description = app.description?.trim();
+  // A published App opens; the draft is edited beside it. An App with a draft alone has the
+  // draft as its main action, so no second way leads to the same place.
+  const editRoute: WorkspaceRoute | undefined =
+    state.kind === "published" && actions.includes("edit")
+      ? { kind: "app-edit", collaborationWorkspaceId: workspace.id, app: app.name }
+      : undefined;
+
   return (
-    <ListRow
-      leading={<Avatar kind="app" name={name} />}
-      title={name}
-      // A phone gives the first line to the name: the state stands under it, where a wider
-      // window has the description or the id. The list is the one of the open workspace, so
-      // no row names it.
-      description={
-        stateChips ? (
-          <>
-            <span className="flex flex-wrap gap-1.5 py-0.5 sm:hidden">{stateChips}</span>
-            <span className="max-sm:hidden">{about}</span>
-          </>
-        ) : (
-          about
-        )
-      }
-      descriptionWraps
-      chips={stateChips ? <span className="hidden sm:contents">{stateChips}</span> : undefined}
-      time={
-        <time
-          className="hidden sm:inline"
-          dateTime={app.updatedAt}
-          title={formatDateTime(app.updatedAt, locale)}
-        >
-          {formatUpdated(app.updatedAt, now, locale)}
-        </time>
-      }
-      link={
-        route ? (
-          <a
-            href={workspaceRoutePath(route)}
-            onClick={(event) => {
-              if (opensHere(event)) {
-                event.preventDefault();
-                onOpenRoute(route);
-              }
-            }}
-          />
-        ) : undefined
-      }
-      actions={
-        actions.length > 0 ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <IconButton label={t("apps.actionsOf", { name })}>
-                <MoreHorizontal aria-hidden="true" />
-              </IconButton>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {actions.map((action) =>
-                action === "delete" ? (
-                  <DeleteItem
-                    key={action}
-                    separated={actions.length > 1}
-                    onSelect={() => onAction(action, app)}
-                  />
-                ) : action === "copy_link" ? (
-                  <CopyAppLinkItem key={action} workspaceId={workspace.id} app={app.name} />
-                ) : (
-                  <DropdownMenuItem key={action} onSelect={() => onAction(action, app)}>
-                    {t(ROW_ACTION_LABELS[action])}
-                  </DropdownMenuItem>
-                )
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : undefined
-      }
-    />
+    <Card padding="md" className="flex w-full min-w-0 flex-col">
+      <CardHeader>
+        <div className="flex min-w-0 items-center gap-3">
+          <Avatar kind="app" name={name} />
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <CardTitle id={titleId} className="min-w-0 break-words">
+              {name}
+            </CardTitle>
+            {/*
+              Whoever uses Apps is shown the App: the number of its revision is a builder's.
+              That nothing is published yet is said to everybody, since such a card opens
+              nothing.
+            */}
+            {builder || state.kind === "draft_only" ? <AppStateBadge state={state} /> : null}
+            {rights.write && state.kind === "published" && state.draftAhead ? (
+              <Badge tone="warning" size="sm">
+                {t("apps.unpublishedChanges")}
+              </Badge>
+            ) : null}
+          </div>
+        </div>
+        {description ? <p className="text-body text-muted-foreground">{description}</p> : null}
+      </CardHeader>
+      <CardContent>
+        {/* The list is the one of the open workspace, so no card names it. */}
+        <p className="flex min-w-0 flex-wrap items-center gap-x-2 text-caption text-muted-foreground">
+          {/* The id is part of the App's address: a builder's, as the revision is. */}
+          {builder ? <code className="min-w-0 font-mono break-all">{app.name}</code> : null}
+          <time dateTime={app.updatedAt} title={formatDateTime(app.updatedAt, locale)}>
+            {t("apps.changed", { when: formatUpdated(app.updatedAt, now, locale) })}
+          </time>
+        </p>
+      </CardContent>
+      {route || editRoute || menu.length > 0 ? (
+        <CardFooter>
+          {route ? (
+            <RouteLink route={route} variant="primary" describedBy={titleId} onOpen={onOpenRoute}>
+              {t(route.kind === "app" ? "apps.open" : "apps.edit")}
+            </RouteLink>
+          ) : null}
+          <div className="ml-auto flex items-center gap-1">
+            {editRoute ? (
+              <RouteLink
+                route={editRoute}
+                variant="link"
+                describedBy={titleId}
+                onOpen={onOpenRoute}
+              >
+                {t("apps.edit")}
+              </RouteLink>
+            ) : null}
+            {menu.length > 0 ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <IconButton size="sm" label={t("apps.actionsOf", { name })}>
+                    <MoreHorizontal aria-hidden="true" />
+                  </IconButton>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {menu.map((action) =>
+                    action === "delete" ? (
+                      <DeleteItem
+                        key={action}
+                        separated={menu.length > 1}
+                        onSelect={() => onAction(action, app)}
+                      />
+                    ) : action === "copy_link" ? (
+                      <CopyAppLinkItem key={action} workspaceId={workspace.id} app={app.name} />
+                    ) : (
+                      <DropdownMenuItem key={action} onSelect={() => onAction(action, app)}>
+                        {t(MENU_ACTION_LABELS[action])}
+                      </DropdownMenuItem>
+                    )
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+          </div>
+        </CardFooter>
+      ) : null}
+    </Card>
   );
 }
 

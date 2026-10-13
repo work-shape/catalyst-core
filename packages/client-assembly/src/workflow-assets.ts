@@ -22,18 +22,29 @@ import {
   WORKFLOW_MANIFEST_MAX_BYTES,
   parseWorkflowManifest,
   replaceScheduleJob,
+  stepFileBytes,
   workflowDefinitionRefusal,
+  workflowStepFileIssues,
+  workflowStepFilesRefusal,
   type WorkflowDefinitionResult,
-  type WorkflowDefinitionSource
+  type WorkflowDefinitionSource,
+  type WorkflowStepFile,
+  type WorkflowStepFiles
 } from "@vivd-catalyst/workflows";
 import { z } from "zod";
 
 // A Workflow as an asset: the kind the asset operations register, and the published revisions
 // of that kind as the engine reads its definitions. A revision's config is the id of the
-// Workflow under `name` and `workflow.yaml` as an object under `manifest`.
+// Workflow under `name`, `workflow.yaml` as an object under `manifest` and the files of its
+// `steps/` folder under `files`. The files are part of the revision, as the resources of a
+// skill are: one write stores both, a revision never changes, and whoever reads the revision
+// reads its files.
 
 const manifestOfConfigSchema = z.object({ manifest: z.unknown() });
 const nameOfConfigSchema = z.object({ name: z.string() });
+const filesOfConfigSchema = z.object({
+  files: z.array(z.object({ path: z.string(), content: z.string() })).optional()
+});
 const runAsOfConfigSchema = z.object({ manifest: z.object({ runAs: z.unknown() }) });
 
 /**
@@ -143,6 +154,8 @@ export function createWorkflowAssetKind(
               }
             ];
           }
+          const files = workflowStepFileIssues(result.manifest, workflow.files ?? []);
+          if (files.length > 0) throw workflowStepFilesRefusal(workflow.name, files);
         }
         return [];
       },
@@ -180,6 +193,13 @@ export interface PublishedWorkflow {
   revisionId: string;
   /** The definition, or what the engine of this release refuses of it. */
   definition: WorkflowDefinitionResult;
+  /** The step files of the revision, where it is stored with them. */
+  files?: readonly WorkflowStepFile[];
+}
+
+/** The step files a stored config holds. None where it holds none or is no config of the kind. */
+function stepFilesOf(config: JsonObject | null | undefined): readonly WorkflowStepFile[] {
+  return filesOfConfigSchema.safeParse(config).data?.files ?? [];
 }
 
 function publishedWorkflowOf(asset: ConfigAssetRecord): PublishedWorkflow | undefined {
@@ -214,7 +234,32 @@ function publishedWorkflowOf(asset: ConfigAssetRecord): PublishedWorkflow | unde
       ? {}
       : { description: shown.description.slice(0, WORKFLOW_LIST_DESCRIPTION_MAX) }),
     revisionId,
-    definition
+    definition,
+    files: stepFilesOf(publishedConfig)
+  };
+}
+
+/**
+ * The step files of the Workflow assets of one instance, read from the revision a run names.
+ * A run keeps the id of the revision it was started on, and a revision never changes: the
+ * script it reads is the one that revision was saved with, whatever was published since and
+ * also where the Workflow was deleted since.
+ */
+export function createWorkflowAssetStepFiles(options: {
+  clientInstanceId: ClientInstanceId;
+  configAssets: Pick<ConfigAssetStore, "getConfigAssetRevisionById">;
+}): WorkflowStepFiles {
+  return {
+    async readStepFile({ workflow, revisionId, path }) {
+      if (!WORKFLOW_NAME_PATTERN.test(workflow)) return undefined;
+      const revision = await options.configAssets.getConfigAssetRevisionById({
+        clientInstanceId: options.clientInstanceId,
+        kind: WORKFLOW_ASSET_KIND,
+        name: workflow,
+        revisionId
+      });
+      return stepFileBytes(stepFilesOf(revision?.config), path);
+    }
   };
 }
 

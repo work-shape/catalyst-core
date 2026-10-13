@@ -142,6 +142,27 @@ describe("composed view document", () => {
     expect(html.endsWith("</head>\n<body></body></html>")).toBe(true);
   });
 
+  it("shows a stored HTML file under the closed policy with its own inline scripts and no script host", () => {
+    const stored =
+      "<!doctype html><html><head><style>h1{margin:0}</style></head><body><h1>Page</h1><script>window.ready = true;</script></body></html>";
+    const html = compose(stored, {
+      kind: "html.file",
+      allowedScriptSrc: ["https:", "https://cdn.jsdelivr.net"]
+    });
+
+    // No view runtime and no host the instance allows a view: the file is not a view.
+    expect(scriptAddresses(html)).toEqual([]);
+    expect(hostsNamedIn(html)).toEqual([]);
+    const scriptSrc = readCspDirective(html, "script-src");
+    expect(sourcesOf(scriptSrc)).toEqual([]);
+    expect(scriptSrc).toContain(scriptHashSource("window.ready = true;"));
+    expect(readCsp(html)).toContain("default-src 'none'");
+    expect(readCsp(html)).toContain("connect-src 'none'");
+    expect(html.startsWith(composedOpening)).toBe(true);
+    // The file is handed on whole: its own styles are what make it the page it is.
+    expect(html.endsWith(stored)).toBe(true);
+  });
+
   it("takes the address from every link of a view that runs scripts, as hardening only", () => {
     const html = compose('<a href="https://elsewhere.example.test/?rows=1">Open</a>');
     const linkScript = [...html.matchAll(/<script>([\s\S]*?)<\/script>/gu)]

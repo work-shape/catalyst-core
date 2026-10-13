@@ -1179,6 +1179,128 @@
         "x-catalyst-rate-class": "read"
       }
     },
+    "/api/v1/apps/{app}/update-from-page": {
+      "post": {
+        "operationId": "apps.update_from_page",
+        "summary": "Write the newest revision of a Page as a new draft revision of the App that is updated from it",
+        "tags": [
+          "Apps"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAppFromPageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateAppFromPageResponse"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "412": {
+            "$ref": "#/components/responses/RevisionConflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
+      }
+    },
     "/api/v1/assets/sync": {
       "post": {
         "operationId": "assets.sync",
@@ -2867,6 +2989,12 @@
                             "type": "string"
                           },
                           "title": {
+                            "type": "string"
+                          },
+                          "service": {
+                            "type": "string"
+                          },
+                          "connectorType": {
                             "type": "string"
                           },
                           "tools": {
@@ -4942,6 +5070,89 @@
         "x-catalyst-rate-class": "read"
       }
     },
+    "/api/v1/conversations/{conversationId}/pages/{pageId}/app": {
+      "get": {
+        "operationId": "apps.get_from_page",
+        "summary": "Read the App a Page is updated into, where the caller may write it",
+        "tags": [
+          "Apps"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "conversation:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "conversation:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "app",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppFromPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/conversations/{conversationId}/pages/{pageId}/file-sets/{fileSetId}/source-file": {
       "get": {
         "operationId": "pages.files.get",
@@ -5849,6 +6060,142 @@
         },
         "x-catalyst-effect": "changing",
         "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/data-stores": {
+      "get": {
+        "operationId": "data_stores.list",
+        "summary": "List the Data Stores the caller may read, each with its size, its number of tables and the estimate of its rows as last measured",
+        "tags": [
+          "Data Stores"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:read"
+            ]
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "provisioning",
+                              "ready"
+                            ]
+                          },
+                          "level": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "sizeBytes": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "sizeLimitBytes": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "tableCount": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "rowEstimate": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "measuredAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "title",
+                          "status",
+                          "level",
+                          "sizeLimitBytes"
+                        ]
+                      }
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "truncated"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
       }
     },
     "/api/v1/data-stores/{store}": {
@@ -6788,6 +7135,491 @@
         "x-catalyst-rate-class": "read"
       }
     },
+    "/api/v1/data-stores/{store}/rows": {
+      "get": {
+        "operationId": "data_stores.rows",
+        "summary": "Read one page of the rows of one table of one Data Store, in the order of its primary key",
+        "tags": [
+          "Data Stores"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "data_store_rows:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "data_store_rows:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "data_store_rows:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "store",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "table",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 63
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "table": {
+                      "type": "string"
+                    },
+                    "columns": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "nativeType": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "type",
+                          "nativeType"
+                        ]
+                      }
+                    },
+                    "order": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "by": {
+                              "type": "string",
+                              "const": "key"
+                            },
+                            "columns": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "by",
+                            "columns"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "by": {
+                              "type": "string",
+                              "const": "physical"
+                            }
+                          },
+                          "required": [
+                            "by"
+                          ]
+                        }
+                      ]
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "at": {
+                            "type": "string"
+                          },
+                          "values": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "cut": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "at",
+                          "values"
+                        ]
+                      }
+                    },
+                    "next": {
+                      "type": "string"
+                    },
+                    "valueMaxChars": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "table",
+                    "columns",
+                    "order",
+                    "rows",
+                    "valueMaxChars"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "504": {
+            "$ref": "#/components/responses/Timeout"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
+    "/api/v1/data-stores/{store}/used-by": {
+      "get": {
+        "operationId": "data_stores.used_by",
+        "summary": "Read which published Apps and Workflows use one Data Store",
+        "tags": [
+          "Data Stores"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "store",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "apps": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "title"
+                        ]
+                      }
+                    },
+                    "workflows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "title"
+                        ]
+                      }
+                    },
+                    "hidden": {
+                      "type": "object",
+                      "properties": {
+                        "apps": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "workflows": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "apps",
+                        "workflows"
+                      ]
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "apps",
+                    "workflows",
+                    "hidden",
+                    "truncated"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
+    "/api/v1/data-stores/{store}/value": {
+      "get": {
+        "operationId": "data_stores.value",
+        "summary": "Read one value of one row of one Data Store whole",
+        "tags": [
+          "Data Stores"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "data_store_rows:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "data_store_rows:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "data_store_rows:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "store",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "table",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 63
+            }
+          },
+          {
+            "name": "column",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 63
+            }
+          },
+          {
+            "name": "at",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "value": {}
+                  },
+                  "required": [
+                    "value"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "504": {
+            "$ref": "#/components/responses/Timeout"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/docs": {
       "get": {
         "operationId": "docs.get",
@@ -6995,6 +7827,15 @@
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/GrantScopeKind"
+            }
+          },
+          {
+            "name": "scopeId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
             }
           }
         ],
@@ -11070,6 +11911,9 @@
                     },
                     "cancelledAt": {
                       "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "dataPrunedAt": {
+                      "$ref": "#/components/schemas/Timestamp"
                     }
                   },
                   "required": [
@@ -11315,6 +12159,9 @@
                       "type": "string"
                     },
                     "cancelledAt": {
+                      "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "dataPrunedAt": {
                       "$ref": "#/components/schemas/Timestamp"
                     }
                   },
@@ -11623,6 +12470,25 @@
                                 "running"
                               ]
                             }
+                          },
+                          "concurrency": {
+                            "type": "object",
+                            "properties": {
+                              "asked": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
+                              },
+                              "ranWith": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "asked",
+                              "ranWith"
+                            ]
                           },
                           "effect": {
                             "type": "string",
@@ -12140,6 +13006,9 @@
                           },
                           "cancelledAt": {
                             "$ref": "#/components/schemas/Timestamp"
+                          },
+                          "dataPrunedAt": {
+                            "$ref": "#/components/schemas/Timestamp"
                           }
                         },
                         "required": [
@@ -12408,6 +13277,9 @@
                       "type": "string"
                     },
                     "cancelledAt": {
+                      "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "dataPrunedAt": {
                       "$ref": "#/components/schemas/Timestamp"
                     }
                   },
@@ -16102,6 +16974,92 @@
           "INTERNAL"
         ]
       },
+      "AppFromPage": {
+        "type": "object",
+        "properties": {
+          "app": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "workspaceId": {
+                    "type": "string"
+                  },
+                  "draftRevision": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "draftFromPage": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "name",
+                  "title",
+                  "workspaceId",
+                  "draftRevision",
+                  "draftFromPage"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "candidate": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "workspaceId": {
+                    "type": "string"
+                  },
+                  "draftRevision": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "page": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "this",
+                      "other_page",
+                      "other_conversation"
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "title",
+                  "workspaceId",
+                  "draftRevision",
+                  "page"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "app"
+        ]
+      },
       "AppMode": {
         "type": "string",
         "enum": [
@@ -17231,6 +18189,9 @@
             "items": {
               "type": "string"
             }
+          },
+          "code": {
+            "type": "string"
           }
         },
         "required": [
@@ -17945,6 +18906,81 @@
                       "prompt"
                     ]
                   }
+                },
+                "starters": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "skillName": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "hint": {
+                        "type": "string"
+                      },
+                      "prompt": {
+                        "type": "string"
+                      },
+                      "icon": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "skillName",
+                      "title",
+                      "prompt"
+                    ]
+                  }
+                },
+                "connections": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "service": {
+                        "type": "string"
+                      },
+                      "connectorType": {
+                        "type": "string"
+                      },
+                      "tools": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "toolName": {
+                              "type": "string"
+                            },
+                            "effect": {
+                              "type": "string",
+                              "enum": [
+                                "reading",
+                                "changing"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "toolName",
+                            "effect"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "title",
+                      "tools"
+                    ]
+                  }
                 }
               },
               "required": [
@@ -18338,23 +19374,53 @@
             ]
           },
           "origin": {
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "const": "approval_request"
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "approval_request"
+                  },
+                  "requestId": {
+                    "type": "string"
+                  },
+                  "summary": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "requestId",
+                  "summary"
+                ]
               },
-              "requestId": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "page"
+                  },
+                  "conversationId": {
+                    "type": "string"
+                  },
+                  "pageId": {
+                    "type": "string"
+                  },
+                  "fileSetNumber": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "kind",
+                  "conversationId",
+                  "pageId",
+                  "fileSetNumber"
+                ]
               }
-            },
-            "required": [
-              "kind",
-              "requestId",
-              "summary"
             ]
           },
           "globalVersion": {
@@ -18472,6 +19538,9 @@
           },
           "deletedAt": {
             "$ref": "#/components/schemas/Timestamp"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/ConversationSubject"
           }
         },
         "required": [
@@ -18526,6 +19595,9 @@
           },
           "deletedAt": {
             "$ref": "#/components/schemas/Timestamp"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/ConversationSubject"
           },
           "latestMessageAt": {
             "$ref": "#/components/schemas/Timestamp"
@@ -18898,6 +19970,25 @@
           }
         ]
       },
+      "ConversationSubject": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "kind",
+          "name"
+        ]
+      },
       "ConversationThreadSnapshot": {
         "type": "object",
         "properties": {
@@ -19208,6 +20299,9 @@
           },
           "locale": {
             "$ref": "#/components/schemas/LocaleCode"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/ConversationSubject"
           }
         }
       },
@@ -22095,6 +23189,12 @@
               "delete"
             ]
           },
+          "principalActions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "manifestFile": {
             "type": "string"
           },
@@ -22788,6 +23888,81 @@
                     "required": [
                       "title",
                       "prompt"
+                    ]
+                  }
+                },
+                "starters": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "skillName": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "hint": {
+                        "type": "string"
+                      },
+                      "prompt": {
+                        "type": "string"
+                      },
+                      "icon": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "skillName",
+                      "title",
+                      "prompt"
+                    ]
+                  }
+                },
+                "connections": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "service": {
+                        "type": "string"
+                      },
+                      "connectorType": {
+                        "type": "string"
+                      },
+                      "tools": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "toolName": {
+                              "type": "string"
+                            },
+                            "effect": {
+                              "type": "string",
+                              "enum": [
+                                "reading",
+                                "changing"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "toolName",
+                            "effect"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "title",
+                      "tools"
                     ]
                   }
                 }
@@ -23531,6 +24706,37 @@
             "$ref": "#/components/schemas/UserStatus"
           }
         }
+      },
+      "UpdateAppFromPageRequest": {
+        "type": "object",
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "pageId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "link": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "conversationId",
+          "pageId",
+          "workspaceId",
+          "expectedRevision"
+        ]
       },
       "UpdateCollaborationWorkspaceRequest": {
         "type": "object",

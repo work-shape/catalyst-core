@@ -68,6 +68,9 @@ export interface ConnectionToolsView {
   connections: {
     name: string;
     title: string;
+    /** The system behind the Connection, as it names it for its icon. */
+    service?: string;
+    connectorType: string;
     tools: {
       toolName: string;
       operation: string;
@@ -284,8 +287,17 @@ export function createConnectionManagement(
                 : { description: operation.description }),
               effect: operation.effect
             }));
+          const { name, displayName, service, connectorType } = connection.config;
           return tools.length > 0
-            ? [{ name: connection.config.name, title: connection.config.displayName, tools }]
+            ? [
+                {
+                  name,
+                  title: displayName,
+                  ...(service === undefined ? {} : { service }),
+                  connectorType,
+                  tools
+                }
+              ]
             : [];
         })
       };

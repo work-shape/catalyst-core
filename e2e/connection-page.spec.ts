@@ -170,10 +170,11 @@ test("a Connection's page shows its definition, its state in every case and the 
   });
   expect(signedIn.ok()).toBe(true);
   await page.setViewportSize({ width: 1280, height: widths[1280] });
-  const main = page.getByRole("region", { name: /^(Build|Bauen)$/u });
+  const main = page.getByRole("region", { name: "Studio" });
   const health = main.locator("[data-connection-health]");
-  // The one button of the Status section. While a test runs it shows a spinner and no name.
-  const testButton = main.locator("#status").getByRole("button");
+  // The one button of the Status section beside the copy button of the id. While a test runs
+  // it shows a spinner and no name.
+  const testButton = main.locator("#status button:not([data-asset-identifier] button)");
 
   /** The page of a Connection, in the given language. */
   const open = async (

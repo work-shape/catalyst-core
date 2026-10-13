@@ -21,7 +21,7 @@ export interface SectionProps extends Omit<HTMLAttributes<HTMLElement>, "title">
 
 /**
  * One section of a page. It is flat: no frame, no fill, no shadow, and a hairline between it
- * and the next section. Its `id` is the anchor a `SubRail` in `anchors` mode scrolls to. The
+ * and the next section. Its `id` is the anchor a `PageOutline` scrolls to. The
  * first section, and one directly under a list `PageHeader`, starts without the top padding.
  */
 export function Section({
@@ -55,7 +55,12 @@ export function Section({
       >
         <div className="grid min-w-0 content-start gap-1">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <Heading className="min-w-0 text-heading">{title}</Heading>
+            {/* Above its fields a title is larger than their labels; beside them the column tells them apart. */}
+            <Heading
+              className={cn("min-w-0", layout === "stacked" ? "text-title-sm" : "text-heading")}
+            >
+              {title}
+            </Heading>
             {count === undefined ? null : <CountBadge count={count} tone="muted" />}
             {action === undefined ? null : <div className="ml-auto shrink-0">{action}</div>}
           </div>

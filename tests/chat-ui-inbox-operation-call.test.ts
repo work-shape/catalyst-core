@@ -366,13 +366,13 @@ describe("inbox item of an operation call", () => {
 
     const german = put(newSkill, "de");
     expect(german).toContain(
-      "Elif Aydin möchte die Fähigkeit „Elternzeit: häufige Fragen“ im Namespace hr- anlegen."
+      "Elif Aydin möchte den Skill „Elternzeit: häufige Fragen“ im Namespace hr- anlegen."
     );
     expect(german).toContain(
-      "Wenn du freigibst, wird die Fähigkeit gespeichert. Wenn du ablehnst, ändert sich nichts."
+      "Wenn du freigibst, wird der Skill gespeichert. Wenn du ablehnst, ändert sich nichts."
     );
     expect(german).toContain(
-      "Braucht eine Entscheidung, weil diese Instanz neue und geänderte Fähigkeiten zur Freigabe vorlegt."
+      "Braucht eine Entscheidung, weil diese Instanz neue und geänderte Skills zur Freigabe vorlegt."
     );
     // Outside a Namespace the sentence names none.
     const { namespace: _namespace, ...plain } = newSkill;
@@ -456,7 +456,7 @@ describe("inbox item of an operation call", () => {
       title: "Skill change",
       subtitle: "Urlaubsrichtlinie"
     });
-    expect(surface({ ...putPreview, asset: newSkill }, "de").title).toBe("Neue Fähigkeit");
+    expect(surface({ ...putPreview, asset: newSkill }, "de").title).toBe("Neuer Skill");
     // A row carries no content: the list is not sent any.
     const { content: _content, ...listed } = newSkill;
     const markup = row({ ...putPreview, asset: listed });

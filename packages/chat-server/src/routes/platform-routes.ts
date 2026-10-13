@@ -7,6 +7,7 @@ import {
   FILE_SET_MAX_FILES,
   FILE_SET_MAX_TOTAL_BYTES,
   hasAuthScope,
+  isPrincipalGrantableAction,
   type ActorAccess,
   type AssetKindActions,
   type AuthenticatedIdentity,
@@ -70,6 +71,24 @@ function readActionsOnSingleAssets(
     .filter((action) => context.access.holdsGrantAt(action, ["asset", "workspace"]));
 }
 
+/**
+ * The rights of a kind a service principal can be granted: the ones of the one list in `core`
+ * that the kind registers, which is what the grant write hands out. A kind of a module that is
+ * off has none to hand out.
+ */
+function principalActionsOf(
+  options: ChatServerOptions,
+  kind: { kind: string; actions: AssetKindActions }
+): { principalActions?: string[] } {
+  if (options.modules.offModuleOf("kind", kind.kind) !== undefined) {
+    return {};
+  }
+  const principalActions = Object.values(kind.actions).filter(
+    (action): action is string => action !== undefined && isPrincipalGrantableAction(action)
+  );
+  return principalActions.length > 0 ? { principalActions } : {};
+}
+
 export function registerPlatformRoutes(route: Route, options: ChatServerOptions): void {
   // Orientation for an outside editor, a person or a service principal. A Namespace is listed
   // for a caller who holds at least one action of a registered kind in it, through any grant
@@ -96,6 +115,7 @@ export function registerPlatformRoutes(route: Route, options: ChatServerOptions)
           lifecycle: kind.lifecycle,
           representation: kind.representation,
           actions: { ...kind.actions },
+          ...principalActionsOf(options, kind),
           ...(kind.representation === "files"
             ? {
                 ...(kind.manifestFile === undefined ? {} : { manifestFile: kind.manifestFile }),

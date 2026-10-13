@@ -7,6 +7,16 @@ contain breaking changes; a patch version does not.
 
 ### Added
 
+- **Data Stores, the reads of a store's page:** `data_stores.list` (`GET /api/v1/data-stores`)
+  lists the stores a caller may read with the size, the number of tables and the estimate of
+  rows of the last measurement (migration `0069_data_store_table_counts` adds the two columns;
+  absent until measured). `data_stores.rows` pages through one table by keyset on its primary
+  key, at most 50 rows a page, values cut at 1,000 characters, and `data_stores.value` reads
+  one value whole; a table without a key is paged in physical order and the answer says so.
+  `data_stores.used_by` names the published Apps and Workflows that use a store, as far as the
+  caller is shown them, and counts the others. `preview_rows` is unchanged. On a store's page
+  in Studio a Workflow under "Used by" is a link to its page, as an App is, for a reader the
+  Workflows area is open to.
 - **Claude on Amazon Bedrock:** a model provider `aws-bedrock` beside `openai-compatible` and
   `google-vertex`. It calls Claude through the Bedrock runtime in Frankfurt
   (`eu-central-1`) with a Bedrock API key named by `credentialSecret` (default
@@ -26,6 +36,26 @@ contain breaking changes; a patch version does not.
   with a price above zero for the entry's model and for the model of every binding on it. The
   adapter fixes the endpoint; the profile, the key's IAM policy, Bedrock's data retention and
   invocation logging decide the rest and are the operator's to set, see the configuration docs.
+- **Workflows, editing with the agent from the page:** the page of a Workflow offers "Edit with
+  the agent" to a person who holds `workflow.write` and is shown the draft. It starts a
+  conversation of the open workspace about that Workflow and opens it. Where the draft is not
+  the published revision, a bar on the page says so, and says of a draft that was never
+  published that it is not published. The bar offers Publish to a holder of `workflow.publish`
+  and Discard to a holder of `workflow.write`, each after one question; a refusal of the
+  instance is answered in the question. The page reads the Workflow again each time it is
+  opened, so a draft the agent saved shows on the way back from the conversation.
+- **Step files of a Workflow:** the config of a Workflow asset takes `files` beside `name` and
+  `manifest`: the scripts of its `code` steps, each `{ path, content }` with a path such as
+  `steps/check.py`. One `assets.put` saves them with the manifest as one revision, `assets.get`
+  answers them with the config to whoever may read the definition, and a run reads the script
+  of the revision it was started on, whatever is published after. A script is at most 256 KiB
+  and the files of one revision 2 MiB together. A save and a publish are refused with the
+  reason `code_file_missing` for a script the manifest names and the save does not bring,
+  `code_file_unused` for a file no step names, `code_file_invalid` for a path outside `steps/`,
+  one with `..`, one given twice or one that is no `.py`, `.js` or `.mjs`, and
+  `code_file_too_large` or `code_files_too_large` for the sizes. `workflows.list` shows a
+  published Workflow without its script as not runnable with `code_file_missing`. A Workflow
+  with a code step that was published before has no script: save it again with its files.
 - **Workflow code steps:** a step of the type `code` runs one script of the Workflow's
   `steps/` folder on the step's input. The script is Python (`.py`) or JavaScript (`.js`,
   `.mjs`), at most 256 KiB, and runs in a fresh container of the runner image, started by the
@@ -118,6 +148,46 @@ contain breaking changes; a patch version does not.
   under the action's name and does not offer the kind in its form yet. A run a caller may not
   read on its Workflow is answered like a run that does not exist, also under a deny on one
   Workflow.
+- **Workflows, the pages on the canvas:** a Workflow opens as a drawing of its steps, left to
+  right on a wide page and top to bottom on a phone, fitted to the page when it opens. A loop
+  and a parallel part are frames around their steps, a condition is a step with one exit per
+  path, and a step that starts another Workflow opens that Workflow at an address of its own
+  (`/w/<workspace>/workflows/<workflow>/open/<child>`): the browser's way back leads one level
+  up, a trail names the way, and the head, the start and the runs are those of the Workflow
+  shown. A press on a step opens one panel beside the drawing (a sheet on a phone) that says
+  what the step does. The page of a run draws the same graph with how far each step is: a loop
+  shows its counts and its bar however many entries it has, with the failed in the failure
+  colour; a failed step says why and its panel opens by itself, and what an ended run did not
+  reach is dimmed. A step's panel shows what the step returned: a list of records as a table of
+  its first rows, anything else as text. The entries of a loop are listed in the loop's panel,
+  failed ones first, a page at a time, under a filter that stays in view. The run page draws the
+  published definition and says so when the run started on an earlier one. A Workflow has two
+  tabs, "Workflow" and "Runs". The drawing can be read with the keyboard and cannot be
+  rearranged. The pages read and write through the operations of the module `workflows`: the list with
+  each Workflow's latest run, the runs, a run and its step runs, the start and the cancel; the
+  drawing is the manifest of the Workflow's asset. A Workflow the instance accepts no start of
+  is listed as "Cannot start" and opens with the reasons its list entry names, in the
+  instance's words, over a start that is switched off. The start is offered where the Workflow's
+  entry of the list names `workflow.use` for the reader; one who only reads sees the Workflow
+  and its runs without it. A failed step
+  names the right the account of the Workflow lacks, a run interrupted while a step changed
+  data says that the change may or may not have happened and was not repeated, and a run that
+  was asked to stop says that it ends when the call that is going has. The sample Workflows
+  and runs stay at `/ui-library/workflows`, behind the right that opens the UI library. **Not
+  in this release:** a start with input, for which there is no form.
+  The step runs outside the items of a loop have no read of their own: the page
+  picks them out of at most 2,000 step runs of a run and says so where a run has more.
+  `condition` and `parallel` are drawn and run by no engine. A step run carries the start of its output and no
+  count, so a table of a long output names no total.
+- **UI library:** `Breadcrumb`, the way into a nested place with the current one marked, and
+  `IconTile`, the square an icon stands in on a node of a graph and in the head of its panel.
+  On the flow canvas a group names its failed share in the failure colour (`failedLabel`),
+  folding a group leaves it where it stood, a graph that runs top to bottom and is wide enough
+  to be small either way opens whole, and on a narrow canvas the canvas library's mark stands
+  in the corner on the canvas' ground. `ListRow` takes `descriptionWraps="always"` for a list in
+  a narrow column. A panel that opens beside the canvas is given room: until the reader moves
+  the view, the graph is fitted again into what the panel leaves free, and again when it
+  closes, at the pace of the library's `--duration-open`.
 - **Workflow Runs:** with the module `workflows` on, a Workflow is started by hand and runs to
   its end on the job executor. `POST /api/v1/workflows/{workflow}/runs` starts a run
   (`workflow.use`), `GET` on the same path lists the runs of a Workflow, `GET /api/v1/workflows`
@@ -207,7 +277,14 @@ contain breaking changes; a patch version does not.
   yet: such a call is refused as `POLICY_DENIED` with `details.reason: approval_unavailable`,
   and runs where `policy.defaults.changing` is `allow`. A changing call of a store that failed
   and rolled back whole is run again under its idempotency key, so a step that is tried again
-  recovers once the cause is gone; an operation says so with `AppError.changedNothing`. Release
+  recovers once the cause is gone; an operation says so with `AppError.changedNothing`. A changing
+  call of a store that carries an idempotency key records the key in the store's database with
+  its rows (`catalyst.calls`: hashes of key and input, the operation and the counts it
+  answered; kept 30 days; the app role reaches it through two functions and holds nothing
+  on the table, so a query or an `sql` action of an App reads no record): the same key with the same input changes nothing and is answered
+  again, with another input it is refused as `data_store_key_reused`. `insert` and `load`
+  declare `repeatsUnderKey`, so a step whose worker died is made again under its key and its
+  run ends `done` with each row once. Release
   config `dataStores.sizeLimit` (default `5GB`) is the most one store may hold and
   `dataStores.poolMaxConnections` (default 5) the connections one process holds to one store.
   Migration `0062_data_stores` adds the table `data_stores`, the platform's record of each
@@ -297,6 +374,57 @@ contain breaking changes; a patch version does not.
 - **Database:** migration `0065_asset_repo_commit_request` adds the columns `request` and
   `result` to `asset_repo_bundles`: what a pending save commits, without bytes, and how its
   commit ended. **Rollback:** an earlier release ignores them.
+- **Published Apps in the rail:** under the "Apps" row the main rail lists the published Apps
+  of the open workspace that the person may open, at most five. The App this person opened last
+  in this browser stands first; Apps never opened follow by their latest change. A row opens
+  the App, and the "Apps" row opens the page with every App as before. The collapsed rail shows
+  nothing more, and there is no block without the Apps module or for a person without a
+  published App. The rail reads the first page of the Apps list, so in a workspace with more
+  than fifty Apps it chooses among those fifty.
+- **New chat from the Recent heading:** the "Recent" heading of the main rail has a small plus
+  at its right end that starts a new chat as the "New chat" row does. It shows while the pointer
+  is over the Recent section or the keyboard is on it, and always on a screen without hover.
+  `NavGroup` of `@vivd-catalyst/ui` has the slot for it, `labelAction`.
+- **Agents page:** the main rail has a row "Agents" directly under New chat, for everyone in a
+  session with workspaces. It opens `/w/<workspace>/agents`, a page with one card per agent the
+  person may use in that workspace: the name, the description, the first three starter prompts
+  and "Start chat". Start chat opens a new conversation with that agent selected; a starter
+  prompt opens one with its text in the composer. The workspace's default agent is marked. The
+  card shows the description whatever `ui.showAgentDescriptions` says. Nothing is edited there:
+  a person who may read agents in Studio gets "Edit in Studio" on each card. The page reads the
+  list the agent picker already reads and adds no call. `@vivd-catalyst/ui` gains `CardFooter`.
+  A person who may create an agent (`allowAgentCreation` and the right to write one) finds
+  "New agent" in the page head: it opens the list of agents in Studio with the dialog that
+  starts one.
+- **Workflows, the pages on the canvas:** a Workflow opens as a drawing of its steps, left to
+  right on a wide page and top to bottom on a phone, fitted to the page when it opens. A loop
+  and a parallel part are frames around their steps, a condition is a step with one exit per
+  path, and a step that starts another Workflow opens that Workflow at an address of its own
+  (`/w/<workspace>/workflows/<workflow>/open/<child>`): the browser's way back leads one level
+  up, a trail names the way, and the head, the start and the runs are those of the Workflow
+  shown. A press on a step opens one panel beside the drawing (a sheet on a phone) that says
+  what the step does. The page of a run draws the same graph with how far each step is: a loop
+  shows its counts and its bar however many entries it has, with the failed in the failure
+  colour; a failed step says why and its panel opens by itself, and what an ended run did not
+  reach is dimmed. A step's panel shows what the step returned: a list of records as a table of
+  its first rows, anything else as text. The entries of a loop are listed in the loop's panel,
+  failed ones first, a page at a time, under a filter that stays in view. The run page draws the
+  published definition and says so when the run started on an earlier one. A Workflow has two
+  tabs, "Workflow" and "Runs". The drawing can be read with the keyboard and cannot be
+  rearranged. **Not in this release:** the instance runs no Workflow yet, so on an instance the
+  list of runs says so and no start is offered; the pages are shown over sample Workflows and
+  runs at `/ui-library/workflows`, behind the right that opens the UI library. `condition` and
+  `parallel` are drawn and run by no engine. A step run carries the start of its output and no
+  count, so a table of a long output names no total; and an instance cannot yet tell an earlier
+  definition, because the read of a Workflow answers its revision's number and a run names the
+  revision's id.
+- **UI library:** `Breadcrumb`, the way into a nested place with the current one marked, and
+  `IconTile`, the square an icon stands in on a node of a graph and in the head of its panel.
+  On the flow canvas a group names its failed share in the failure colour (`failedLabel`),
+  folding a group leaves it where it stood, a graph that runs top to bottom and is wide enough
+  to be small either way opens whole, and on a narrow canvas the canvas library's mark stands
+  in the corner on the canvas' ground. `ListRow` takes `descriptionWraps="always"` for a list in
+  a narrow column.
 - **Pages, plain HTML:** App Kit version `1.2.0`, with two new files, `page.css` and `theme.js`.
   A plain HTML Page that names it comes out with the look of the platform: the build links
   `page.css` and `theme.js` first into every HTML file of a Page with an `entry`, also one whose
@@ -331,6 +459,23 @@ contain breaking changes; a patch version does not.
   deployment name of its own, as on Azure, sets `label` and `vendor` to get the model's name
   and logo. `GET /config` carries it as `label` on a selectable model, and the config asset
   references carry it on a model binding.
+- **Update app:** an App remembers the Page it is updated from, and the header of that Page
+  offers "Update app" in place of "Save as app" to whoever may write the App. The update writes
+  the Page's newest revision as the next draft revision; nothing is published, and the App
+  keeps its title. For an App with a repository the update is its next commit, on the commit
+  of the draft it replaces. New operations: `apps.update_from_page`
+  (`POST /api/v1/apps/{app}/update-from-page`, `app.write` on the App and read access to the
+  Page, `expectedRevision` required, `412 REVISION_CONFLICT` for a draft that moved, `409` with
+  `details.reason: "app_not_from_page"` for an App of another Page or of none unless the call
+  says `"link": true`) and `apps.get_from_page`
+  (`GET /api/v1/conversations/{conversationId}/pages/{pageId}/app`, with `?app=<id>` also the
+  App of that id where the caller may write it). The link is the `origin` of an App revision,
+  which gains the kind `page`: an App's Page is the one its newest revision with such an
+  origin names. No migration. **An App saved before this release has no link:** saving its
+  Page under the App's id now offers "Update <App> from this page", which replaces the App's
+  draft with the Page and links the two. After a rollback the previous release logs a
+  response-schema error when it lists the revisions of an App that carries the new origin;
+  the answer is still sent.
 - **Documentation links:** release config `ui.docsUrl` names where an instance's documentation
   is read. With it the account menu has a "Documentation" item in a group of its own above
   Sign out, and the Access page, the New right dialog, the rights check and the read-only
@@ -796,6 +941,65 @@ id from config_assets where status = 'deleted')`.
   the workspace name an App or a Page is given. The first name comes from the display label;
   an account whose label is an e-mail address keeps "Personal workspace". The name stored on
   the row is unchanged and still not shown.
+- **Studio:** the area that was named "Build" ("Bauen" in German) is named "Studio" in both
+  languages: its row in the main rail, the head of its column, the palette's "Go to" entry, the
+  sentences that name it and the documentation. The sentence of a failed Connection call now
+  ends with "Studio > Connections". Its addresses stay `/build/...`, and it shows to the same
+  people as before.
+- **Apps page:** the Apps of a workspace are cards in a grid, as the agents are, where they were
+  rows of a list. A card shows the name, the description where the App has one, the state, and
+  when the App last changed. Its main action is "Open"; an App with a draft alone has "Edit" in
+  that place for whoever may write it. A writer gets "Edit" as a quiet link beside Open. The
+  menu of a card keeps Details, Copy link and Delete, and no longer repeats Open and Edit. The
+  App's id shows to builders on every card, and to nobody else.
+- **Page frame:** every page of Build, Settings, the Inbox and Apps starts its title line 56 px
+  under the top edge, where it started 24 px under it. A page whose head is pinned, such as an
+  asset page in Build, is unchanged: its head is the top band from the start. The column of
+  pages in Build and in Settings is headed by the area's name, "Build" or "Settings", level
+  with the open page's name. In a window too narrow for the column the name stands over the
+  select of the area's pages; under 768 px it stands beside the button that opens the sidebar.
+  `@vivd-catalyst/ui`: the room is the new token `--layout-page-top`, which `Page` applies in
+  every layout without a pinned head, and `SubRail` in `routes` mode takes the area's name as
+  `title`. A screen built on `Page` gets the room without a change; one that set a top padding
+  of its own to make up for it now has both.
+- **Asset pages, head:** the head of an agent, skill, Connection or App page is one row: the
+  way back, the name, its chips and the actions. From 768 px up it never wraps, and a name
+  that does not fit is cut and shown whole in a tooltip. In a narrower window the actions move
+  to a second row only when they do not fit. The kind and the technical id are gone from the
+  head: the id stands at the top of the page's first section, read-only with a copy button. On
+  an App draft the sentence that names the missing publish right is a line under the head.
+  `@vivd-catalyst/ui`: a `detail` `PageHeader` shows no line under the name.
+- **Detail heads, one row everywhere:** every `detail` `PageHeader` is one row. A `description`
+  stands after the name and its chips in the muted style, cut with an ellipsis and read in full
+  in a tooltip; the Workflow and run pages use it, and `descriptionPlacement` is gone. The name
+  wins a narrow row: the description goes first, then the state and the scope chip, then the
+  text of the way back, and only then is the name cut. New `PageHeaderBack` is that way back:
+  an arrow with where it leads, the arrow alone where the name needs the room. Under 768 px the
+  actions go to a second row when they do not fit beside the whole name.
+- **Build, the sections of a page:** the page of an agent, a skill and a Connection no longer
+  lists its sections in a column on the left that looked like the list of pages in Build and
+  Settings. The sections are an outline on the right of the content, under "On this page": a
+  thin line marks the section in view and follows the scrolling, a count stands after the name,
+  and a section a refused save names is marked. A link scrolls to its section and hands the
+  focus to the section's heading. The content starts at the page's left edge, is at most 44rem
+  wide, and each section's title stands above its fields. In a narrow window and on a phone the
+  outline is one line above the content, "On this page: Overview", that names the section in
+  view and offers the others, with a mark while a section has a refused field. A section rests
+  under the page's head as tall as the head is on that screen, "Overview" scrolls to the top of
+  the page, and the sections at the end of a page are marked in their turn while it scrolls to
+  its end. Build's list of kinds and the Settings pages are otherwise unchanged.
+- **Section titles above their fields are larger:** a `Section` with `layout="stacked"` shows
+  its title at 16 px instead of 14 px, so it is not taken for a field's label. This also
+  applies to the Settings pages that stack their sections.
+- **UI library (breaking for a client assembly and for a Page on the next App Kit version):**
+  new `PageOutline`, which `Page` takes as `outline`, with the labels `onThisPage` and
+  `sectionHasError` in `UiLabels`. `SubRail` only opens pages: `mode` is gone, `value` and
+  `onValueChange` are required, and `SubRailRoutesProps` and `SubRailAnchorsProps` are removed
+  in favour of `SubRailProps`. Code that passed `mode="routes"` drops the prop; code that
+  passed `mode="anchors"` hands its sections to `<Page outline={<PageOutline items={…} />}>`.
+  A `Page` takes `subRail` or `outline`, not both; `outline={null}` leaves the column empty and
+  the content where it is. A released App Kit version keeps the `SubRail` it was built with.
+
 - **Every process of an instance is assembled from one build (breaking for a client
   assembly):** `defineClientInstance` gains `runWorkspaceCommandWorker()` and
   `runArtifactPreviewWorker()`, which hand the worker the capabilities of the build as
@@ -1831,6 +2035,29 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- **Claude runs with `workspace.preview_images` or `structured_data.publish`:** the input schema
+  a model is shown for each of the two had a combinator at its root (`anyOf` over the three
+  preview sources, `oneOf` over replace and patch), which Anthropic's Messages format, also on
+  Amazon Bedrock, refuses, so every run of an agent that lists one of them failed at the first
+  model call. Both are now one object at the root. `workspace.preview_images` names the rule
+  "exactly one of `artifactId`, `path`, `paths`" in its description, and
+  `structured_data.publish` shows the fields of both operations with `operation` as the choice.
+  What each tool accepts is unchanged: a call with no source or several, or with a field of the
+  other operation, is still refused.
+- **Workflows, the agent's save and a policy on `assets.put`:** a central policy setting on
+  `assets.put`, or on `assets.*`, that matches the Workflow of a conversation now holds for
+  the agent's `platform.assets.put` too: `deny` refuses the save and `approval` holds it for
+  the Inbox, as the API does. Before, only a setting on `platform.assets.put` itself did.
+- **Workflows, the conversation about one in a shared workspace:** a conversation with a
+  subject is created `private` in a shared workspace, whatever the workspace's default is, and
+  `conversations.move` refuses `visibility: workspace` for it with the reason
+  `subject_conversation_private`. Its transcript holds the definition the agent read, which a
+  member of the workspace without `workflow.read` could open before.
+- **Assets, a text the store cannot hold:** a definition with a NUL character or half of a
+  surrogate pair in any text or key is refused by `assets.validate` and by a save of any kind
+  with an issue of the code `text_not_storable` at the path of the value (for a key, at the
+  object that has it), where a save answered an internal error. The content of a step file
+  of a Workflow is answered the same way, no longer as `code_file_invalid`.
 - **Connections, schemas of an outside system:** a JSON Schema that an MCP server lists for a
   tool can no longer hold the API process. Such a schema is compiled, and an input or a result
   checked by it, in a worker thread: 2 threads per process, a check of at most 2 seconds, 500

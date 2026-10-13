@@ -597,7 +597,12 @@ describe("the files of a revision", () => {
     expect(markup).toContain('aria-label="Source files"');
     expect(markup).toMatch(/role="region" aria-label="src\/routes\/index\.tsx"/u);
     expect(markup).toContain("export const Route = 1;");
-    expect(markup).not.toMatch(/<(?:textarea|input)\b|contenteditable/u);
+    // The header above the text holds a switch and a copy button; the text itself takes no
+    // input.
+    const text = /<div role="region"[\s\S]*?<\/pre><\/div>/u.exec(markup)?.[0] ?? "";
+    expect(text).toContain("export const Route = 1;");
+    expect(text).not.toMatch(/<(?:textarea|input|button)\b|contenteditable/u);
+    expect(markup).not.toMatch(/<textarea\b|contenteditable/u);
   });
 
   it("says so when the files are loading, failed, absent or not text", () => {

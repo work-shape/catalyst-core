@@ -468,22 +468,29 @@ export interface FlowInsets {
 /**
  * The view a canvas opens with. Left to right it shows the whole graph, centred in what the
  * insets leave free, and never larger than full size. Top to bottom it fits the width and
- * starts at the top, because a tall graph shown whole could not be read.
+ * starts at the top, because a tall graph shown whole could not be read. A graph so wide that
+ * its width alone brings it under `wholeBelow` is shown whole instead, as long as that keeps
+ * it at `wholeFloor` or above: at that size a node is its title either way, and the reader
+ * sees where the graph leads.
  */
 export function fitFlowViewport(
   bounds: FlowBox,
   canvas: FlowSize,
   insets: FlowInsets,
   direction: FlowDirection,
-  minZoom = 0.2
+  minZoom = 0.2,
+  wholeBelow = 0,
+  wholeFloor = 0.35
 ): FlowViewport {
   const freeWidth = Math.max(1, canvas.width - insets.left - insets.right);
   const freeHeight = Math.max(1, canvas.height - insets.top - insets.bottom);
   const byWidth = freeWidth / Math.max(bounds.width, 1);
   const byHeight = freeHeight / Math.max(bounds.height, 1);
+  const whole = Math.min(1, byWidth, byHeight);
+  const wide = Math.min(1, byWidth);
   const zoom = Math.max(
     minZoom,
-    Math.min(1, direction === "vertical" ? byWidth : Math.min(byWidth, byHeight))
+    direction === "vertical" && !(wide < wholeBelow && whole >= wholeFloor) ? wide : whole
   );
   const x = insets.left + (freeWidth - bounds.width * zoom) / 2 - bounds.x * zoom;
   const centred = insets.top + (freeHeight - bounds.height * zoom) / 2 - bounds.y * zoom;

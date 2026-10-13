@@ -6,6 +6,7 @@ import type {
   LocaleCode,
   SafeConfig
 } from "@vivd-catalyst/api-client";
+import { AGENT_ASSET_KIND, mayCreateAgents, resolveBuildRights } from "../build-area/build-rights";
 import {
   buildLocationOfRoute,
   buildRouteOfLocation,
@@ -72,6 +73,10 @@ export interface ControlPlaneModel {
   canViewAdministration: boolean;
   /** The viewer may open Build: the rail shows its row. */
   canViewBuild: boolean;
+  /** The viewer may open agents in Build: the Agents page links each agent to its page there. */
+  canOpenAgentsInBuild: boolean;
+  /** The viewer may start a new agent in Build: the Agents page offers it. */
+  canCreateAgentsInBuild: boolean;
   /** True while the UI library gallery's route is active for a user who may open it. */
   showUiLibrary: boolean;
   /** Where the command palette's "Go to" group leads for this viewer. */
@@ -181,7 +186,8 @@ export function useControlPlaneModel({
   }, [goToDefaultChat, resolution, showRoute]);
 
   useEffect(() => {
-    if (isAuthenticated && route.kind === "ui-library" && !canViewUiLibrary) {
+    const forUiLibraryReaders = route.kind === "ui-library" || route.kind === "workflow-samples";
+    if (isAuthenticated && forUiLibraryReaders && !canViewUiLibrary) {
       goToDefaultChat({ replace: true });
     }
   }, [canViewUiLibrary, goToDefaultChat, isAuthenticated, route.kind]);
@@ -224,9 +230,15 @@ export function useControlPlaneModel({
     [buildAssetName, buildKindPath, inBuild, showRoute]
   );
 
+  const canViewBuild = Boolean(build.enabled && build.page?.visible(viewer));
+  const buildRights = resolveBuildRights(user, platformContext);
+
   return {
     canViewAdministration: firstAdministrationRoute(catalog, build, viewer) !== undefined,
-    canViewBuild: Boolean(build.enabled && build.page?.visible(viewer)),
+    canViewBuild,
+    canOpenAgentsInBuild: canViewBuild && buildRights.reads(AGENT_ASSET_KIND),
+    canCreateAgentsInBuild:
+      canViewBuild && mayCreateAgents(buildRights, config?.features.configAssets),
     showUiLibrary: view === "ui-library" && canViewUiLibrary,
     goToTargets: settingsGoToTargets(catalog, build, viewer),
     settings:

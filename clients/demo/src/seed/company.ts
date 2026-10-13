@@ -237,7 +237,7 @@ interface SeedConnectionGrant {
  * user holds none, so an agent of anybody else is refused when it calls one of its tools.
  */
 export const connectionGrants: SeedConnectionGrant[] = [
-  // Sales reads the business figures and sees the Connection under Build.
+  // Sales reads the business figures and sees the Connection under Studio.
   { holder: "sven", verbs: ["read", "use"], grantedBy: "jonas" },
   // Tax may ask an agent for the figures and does not see the Connection itself.
   { holder: "tobias", verbs: ["use"], grantedBy: "mara" }
@@ -432,7 +432,7 @@ export const connectionCheckQuestions: CheckQuestion<"connection", Verb | "use">
       delete: no("no_grant")
     },
     because:
-      "His row on this Connection allows using it: his agents get its data. He does not see it under Build."
+      "His row on this Connection allows using it: his agents get its data. He does not see it under Studio."
   },
   {
     person: "sven",

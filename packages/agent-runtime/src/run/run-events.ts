@@ -7,6 +7,7 @@ import {
   type AgentRunStatus,
   type Clock,
   type ConversationHistoryStore,
+  type ConversationOfferSource,
   type DataToolSource,
   type ModelBindingConfig,
   type ModelProviderContinuationStore,
@@ -51,6 +52,12 @@ export interface LocalAgentRuntimeOptions {
   /** How long a run's start waits for `dataTools`. Without it `DATA_TOOL_DESCRIBE_TIMEOUT_MS`. */
   dataToolDescribeTimeoutMs?: number;
   runTool: ToolOperationRunner;
+  /**
+   * What a conversation is offered beyond its agent's definition: the tools the server binds
+   * to the subject of a conversation about an asset, and the skills the platform ships for
+   * that kind. Asked once when a run starts. Without it no conversation is offered any.
+   */
+  conversationOffer?: ConversationOfferSource;
   webAccess?: WebAccessConfig;
   agentSkillChangesEnabled?: boolean;
   historyMessageLimit?: number;

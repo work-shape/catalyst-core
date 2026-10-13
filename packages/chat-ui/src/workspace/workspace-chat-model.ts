@@ -10,6 +10,7 @@ import type {
   SafeConfig,
   StartConversationRunResponse
 } from "@vivd-catalyst/api-client";
+import { WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
 import type { ThemeInputs } from "@vivd-catalyst/ui/theme";
 import { useApprovalPendingCountQuery } from "../approvals/approval-request-api";
 import {
@@ -61,7 +62,14 @@ import { useChatFileDropzone } from "../chat-file-dropzone";
 import { useToolDisplayPanel } from "../tool-display-panel";
 import type { ResolvedThemeMode } from "../theme";
 import type { WorkspaceView } from "./workspace-rail";
+import { agentListStatus, type AgentListStatus } from "../agents/agents-model";
 import { NO_APP_RIGHTS, resolveAppRights, type AppRights } from "../apps/app-model";
+import {
+  resolveWorkflowRights,
+  workflowsAccess,
+  type WorkflowRights,
+  type WorkflowsAccess
+} from "../workflows/workflow-model";
 import { inboxRailEntry } from "../inbox/inbox-model";
 import type { WorkspaceRoute } from "./workspace-route";
 import { apiErrorStatus, applyFavicon, createEnvironmentDocumentTitle } from "../workspace-utils";
@@ -182,7 +190,32 @@ export interface WorkspaceChatModel {
   controlPlane: ControlPlaneModel;
   toolDisplay: ToolDisplayModel;
   approvalRevision: ApprovalRevisionHost;
+  agents: AgentsModel;
   apps: AppsModel;
+  workflows: WorkflowsModel;
+}
+
+/** What the workspace knows about Workflows: whether the area is there, and the reader's rights. */
+interface WorkflowsModel {
+  access: WorkflowsAccess;
+  rights: WorkflowRights;
+  /**
+   * Starts a conversation of the open workspace about this Workflow and opens it. Rejects
+   * where the instance refuses the conversation.
+   */
+  editWithAgent(workflow: string): Promise<void>;
+}
+
+/** What the workspace knows for the Agents page. The agents themselves are the picker's. */
+interface AgentsModel {
+  /** How the open workspace's own list of agents stands. */
+  status: AgentListStatus;
+  retry(): void;
+  /**
+   * Opens a new conversation of the open workspace with this agent selected. With `prompt`,
+   * that text stands in its composer.
+   */
+  startChat(agentName: string, prompt?: string): void;
 }
 
 /** What the workspace knows about Apps: the module's state and the reader's rights. */
@@ -271,8 +304,12 @@ export interface ConversationRailModel {
   canViewAdministration: boolean;
   /** Present for a person who may decide requests or has made one: the Inbox row shows. */
   inbox: { toDecide: number } | undefined;
+  /** The session has workspaces: the Agents row shows. */
+  agents: boolean;
   /** The Apps module is on: the Apps row shows. */
   apps: boolean;
+  /** The Workflows area is open to the person: the Workflows row shows. */
+  workflows: boolean;
   view: WorkspaceView;
   creatingConversation: boolean;
   deletingConversation: boolean;
@@ -298,6 +335,10 @@ export interface SelectedChatModel {
   selectedConversationId: string | undefined;
   /** The open conversation's retention date, once its thread has loaded. */
   selectedConversationRetainedUntil: string | undefined;
+  /** The asset the open conversation is about, once its thread has loaded. */
+  selectedConversationSubject: { kind: string; name: string } | undefined;
+  /** Goes to a route of the interface, such as the page of that asset. */
+  openRoute(route: WorkspaceRoute): void;
   messages: Message[] | undefined;
   completedRunProjections: ConversationControllerState["completedRunProjections"];
   messagesLoaded: boolean;
@@ -625,6 +666,27 @@ export function useWorkspaceChatModel({
     return conversation.id;
   }
 
+  /**
+   * A conversation of the open workspace about one Workflow, opened once the instance made it.
+   * What a conversation is about is set when it is made, so it is made before its first turn.
+   */
+  async function startConversationAboutWorkflow(workflow: string): Promise<void> {
+    if (!activeCollaborationWorkspaceId) {
+      throw new Error("A conversation about a Workflow belongs to a workspace");
+    }
+    const conversation = await client.conversations.create({
+      body: {
+        locale: activeLocale,
+        collaborationWorkspaceId: activeCollaborationWorkspaceId,
+        subject: { kind: WORKFLOW_ASSET_KIND, name: workflow }
+      }
+    });
+    showConversationInActiveCollaborationWorkspace(conversation.id);
+    setNotice(undefined);
+    workspaceCache.invalidateConversations();
+    chrome.requestComposerFocus();
+  }
+
   // A conversation that only existed to hold draft attachments is an unsent draft. Once the
   // last one is removed the composer is back on the start page; the server stops listing the
   // empty conversation and its retention job removes it.
@@ -723,20 +785,35 @@ export function useWorkspaceChatModel({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
     client,
-    enabled: isAuthenticated && appsEnabled
+    enabled:
+      isAuthenticated &&
+      (appsEnabled ||
+        (collaborationWorkspacesAvailable && instanceModules?.workflows?.enabled === true))
   });
   const appRights = useMemo(
     () => (appsEnabled ? resolveAppRights(platformContextQuery.data) : NO_APP_RIGHTS),
     [appsEnabled, platformContextQuery.data]
   );
-  // With the module off, an address of the Apps area leads to the chat.
-  const appsClosed = view === "apps" && instanceModules !== undefined && !appsEnabled;
+  const workflowsOpen = workflowsAccess({
+    modules: instanceModules,
+    workspaces: collaborationWorkspacesAvailable,
+    context: platformContextQuery.data
+  });
+  const workflowRights = useMemo(
+    () => resolveWorkflowRights(workflowsOpen === "open" ? platformContextQuery.data : undefined),
+    [workflowsOpen, platformContextQuery.data]
+  );
+  // With its module off, an address of the Apps or the Workflows area leads to the chat, as an
+  // unknown address does; so does an address of the Workflows for a person who may read none.
+  const areaClosed =
+    (view === "apps" && instanceModules !== undefined && !appsEnabled) ||
+    (view === "workflows" && workflowsOpen === "closed");
   const { goToDefaultChat } = routeState;
   useEffect(() => {
-    if (appsClosed) {
+    if (areaClosed) {
       goToDefaultChat(activeCollaborationWorkspaceId, { replace: true });
     }
-  }, [activeCollaborationWorkspaceId, appsClosed, goToDefaultChat]);
+  }, [activeCollaborationWorkspaceId, areaClosed, goToDefaultChat]);
   const activeAgent = config?.agents.find((agent) => agent.name === activeAgentName);
   const selectedThread =
     threadQuery.data?.conversation.id === selectedConversationId ? threadQuery.data : undefined;
@@ -859,6 +936,15 @@ export function useWorkspaceChatModel({
     goToActiveCollaborationWorkspaceChat();
     setNotice(undefined);
     chrome.requestComposerFocus();
+  }
+
+  /** A new conversation of the open workspace, with this text in its composer. */
+  function startNewConversationWith(prompt: string) {
+    draftController.setDraft(
+      { authScope: WORKSPACE_AUTH_SCOPE, conversationId: undefined },
+      prompt
+    );
+    startNewConversation();
   }
 
   function conversationStarted(conversationId: string) {
@@ -1010,7 +1096,9 @@ export function useWorkspaceChatModel({
       selectedConversationId,
       canViewAdministration,
       inbox,
+      agents: collaborationWorkspacesAvailable,
       apps: appsEnabled,
+      workflows: workflowsOpen === "open",
       view,
       creatingConversation: false,
       deletingConversation: deleteConversationMutation.isPending,
@@ -1030,10 +1118,14 @@ export function useWorkspaceChatModel({
       },
       deleteConversation: (conversationId) => deleteConversationMutation.mutate(conversationId),
       selectWorkspaceView: (nextView) => {
-        // The Apps of the open workspace: the row has no address without one.
-        if (nextView === "apps" && activeCollaborationWorkspaceId) {
+        // The agents, the Apps and the Workflows of the open workspace: the row has no address
+        // without one.
+        if (
+          (nextView === "agents" || nextView === "apps" || nextView === "workflows") &&
+          activeCollaborationWorkspaceId
+        ) {
           routeState.showRoute({
-            kind: "apps",
+            kind: nextView,
             collaborationWorkspaceId: activeCollaborationWorkspaceId
           });
           return;
@@ -1041,16 +1133,34 @@ export function useWorkspaceChatModel({
         routeState.selectWorkspaceView(nextView);
       }
     },
+    agents: {
+      status: agentListStatus({
+        // While another workspace's list stands in, this workspace's has not arrived.
+        loaded: workspaceAgentsQuery.data !== undefined && !workspaceAgentsQuery.isPlaceholderData,
+        failed: workspaceAgentsQuery.isError
+      }),
+      // A reload that fails again shows in the state of the query.
+      retry: () => {
+        workspaceAgentsQuery.refetch().catch(() => undefined);
+      },
+      startChat: (agentName, prompt) => {
+        setSelectedAgentName(agentName);
+        if (prompt === undefined) {
+          startNewConversation();
+        } else {
+          startNewConversationWith(prompt);
+        }
+      }
+    },
     apps: {
       enabled: appsEnabled,
       rights: appRights,
-      startChat: (prompt) => {
-        draftController.setDraft(
-          { authScope: WORKSPACE_AUTH_SCOPE, conversationId: undefined },
-          prompt
-        );
-        startNewConversation();
-      }
+      startChat: startNewConversationWith
+    },
+    workflows: {
+      access: workflowsOpen,
+      rights: workflowRights,
+      editWithAgent: startConversationAboutWorkflow
     },
     selectedChat: {
       client,
@@ -1065,6 +1175,8 @@ export function useWorkspaceChatModel({
           "private",
       selectedConversationId,
       selectedConversationRetainedUntil: selectedThread?.conversation.retainedUntil,
+      selectedConversationSubject: selectedThread?.conversation.subject,
+      openRoute: routeState.showRoute,
       messages,
       completedRunProjections: controller.completedRunProjections,
       messagesLoaded,

@@ -47,14 +47,25 @@ const addresses: [path: string, route: WorkspaceRoute, view: Area][] = [
     { kind: "build-asset", assetKind: "skills", name: "tax-review" },
     "build"
   ],
-  ["/ui-library", { kind: "ui-library" }, "ui-library"]
+  ["/ui-library", { kind: "ui-library" }, "ui-library"],
+  // The Workflow pages over samples stand beside the library, behind the same right.
+  ["/ui-library/workflows", { kind: "workflow-samples" }, "ui-library"]
 ];
 
 describe("area route table", () => {
   it("has one row per area", () => {
     const areas = areaRoutes.map((row) => row.area);
 
-    expect(areas).toEqual(["chat", "apps", "settings", "inbox", "build", "ui-library"]);
+    expect(areas).toEqual([
+      "chat",
+      "agents",
+      "apps",
+      "workflows",
+      "settings",
+      "inbox",
+      "build",
+      "ui-library"
+    ]);
   });
 
   it.each(addresses)("resolves %s to the view it had before", (path, route, view) => {
@@ -127,7 +138,7 @@ describe("area route table", () => {
     expect(workspaceRouteFromPath("/admin")).toEqual({ kind: "administration" });
   });
 
-  it("leads the old Config address to Build, which opens a list", () => {
+  it("leads the old Config address to Studio, which opens a list", () => {
     const row = areaRoutePaths().find((candidate) => candidate.path === "/admin/config");
 
     expect(row?.route).toBeUndefined();
@@ -135,7 +146,7 @@ describe("area route table", () => {
     expect(workspaceRouteFromPath("/admin/config")).toEqual({ kind: "build" });
   });
 
-  it("reads the id of a Build asset as written, with its Namespace prefix and dots", () => {
+  it("reads the id of a Studio asset as written, with its Namespace prefix and dots", () => {
     expect(workspaceRouteFromPath("/build/agents/tax-steuer_agent.v2")).toEqual({
       kind: "build-asset",
       assetKind: "agents",

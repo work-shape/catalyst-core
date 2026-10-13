@@ -151,10 +151,15 @@ export interface AppInstance extends AccessInstance {
   ): Promise<{ revision: number; draftRevision?: number; publishedRevision?: number }>;
   /** The document a frame is answered at the address `apps.preview` gave. */
   open(url: string): Promise<{ status: number; body: string }>;
-  /** A Page with one revision in a conversation of the workspace, stored as a save stores it. */
+  /**
+   * A Page with one revision in a conversation of the administrator, stored as a save stores
+   * it. With `conversationId` the Page of that conversation gets its next revision instead.
+   * `shared` puts a new conversation into the Shared Workspace, where `kai` reads it.
+   */
   storePage(
     marker: string,
-    manifest?: Record<string, unknown>
+    manifest?: Record<string, unknown>,
+    options?: { conversationId?: string; kitVersion?: string; shared?: boolean }
   ): Promise<{ conversationId: string; pageId: string }>;
   /** Every object below the prefix of one asset. */
   objectKeys(assetId: string): string[];
@@ -292,33 +297,39 @@ export async function setupAppInstance(options: AppInstanceOptions = {}): Promis
       const response = await callTestPath(instance, "GET", url, { "sec-fetch-dest": "iframe" });
       return { status: response.statusCode, body: response.body };
     },
-    async storePage(marker, manifest = {}) {
-      const created = await access.expectOk(admin.id, "conversations.create", {
-        payload: { title: "Offers" }
-      });
-      const conversation = z.object({ id: z.string() }).parse(created.json());
+    async storePage(marker, manifest = {}, options = {}) {
+      const conversationId =
+        options.conversationId ??
+        z.object({ id: z.string() }).parse(
+          (
+            await access.expectOk(admin.id, "conversations.create", {
+              payload: {
+                title: "Offers",
+                ...(options.shared ? { collaborationWorkspaceId: workspaceId } : {})
+              }
+            })
+          ).json()
+        ).id;
+      const kit = options.kitVersion ?? "1.0.0";
       const html = text(`<!doctype html><title>Offers</title><p>${marker}</p>`);
       const stored = await storePageFileSet(
         { clientInstanceId, stores, pages },
         {
-          conversationId: asConversationId(conversation.id),
+          conversationId: asConversationId(conversationId),
           pageName: "Offers",
-          kitVersion: "1.0.0",
-          manifest: {
-            id: "offers-page",
-            name: "Offers",
-            kit: "1.0.0",
-            entry: "index.html",
-            ...manifest
-          },
+          kitVersion: kit,
+          manifest: { id: "offers-page", name: "Offers", kit, entry: "index.html", ...manifest },
           sourceFiles: [
-            { path: "app.yaml", bytes: text(appManifest({ id: "offers-page", ...manifest })) },
+            {
+              path: "app.yaml",
+              bytes: text(appManifest({ id: "offers-page", kit, ...manifest }))
+            },
             { path: "index.html", bytes: html }
           ],
           builtFiles: [{ path: "index.html", bytes: html }]
         }
       );
-      return { conversationId: conversation.id, pageId: stored.page.id };
+      return { conversationId, pageId: stored.page.id };
     },
     objectKeys: (assetId) =>
       objects.keys().filter((key) => key.startsWith(assetObjectPrefix(assetId))),

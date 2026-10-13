@@ -58,15 +58,24 @@ export const WORKFLOW_STEP_JOB_BACKOFF_MAX_MS = 60_000;
 
 /**
  * After this long without a heartbeat a running step counts as abandoned and is attempted
- * again. It is above the time one operation call may take by default.
+ * again: a step whose process was killed is taken up within about this time. The lengths are
+ * those of an Agent Run's job (`AGENT_RUN_LEASE_MS`, `AGENT_RUN_HEARTBEAT_MS`), and like them
+ * no setting of a release changes them.
  */
-export const WORKFLOW_STEP_JOB_LEASE_MS = 10 * 60 * 1_000;
+export const WORKFLOW_STEP_JOB_LEASE_MS = 90 * 1_000;
 
 /**
- * How long a step waits for a changing call that an earlier attempt of it started and that
- * has no outcome yet, counted from the start of that call. It is the lease of the step's job,
- * which is above the time one call may take: a call without an outcome after it was cut off
- * with its process, and nobody will write one.
+ * How often the process that holds a step's job renews its lease while the step runs, however
+ * long that is. Five heartbeats may be lost before the lease ends.
+ */
+export const WORKFLOW_STEP_JOB_HEARTBEAT_MS = 15 * 1_000;
+
+/**
+ * The longest a step waits for a changing call that an earlier attempt of it started and that
+ * has no outcome yet, counted from the start of that call. The wait is the time the call's
+ * operation gives a call (`timeoutMs`) where that is shorter, which it is for every
+ * operation of this release: a call without an outcome after it was cut off with its process,
+ * and nobody will write one.
  */
 export const WORKFLOW_OPERATION_OUTCOME_WAIT_MS = 10 * 60 * 1_000;
 

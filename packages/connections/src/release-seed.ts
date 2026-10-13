@@ -115,7 +115,10 @@ function toJsonObject(config: ConnectionConfig): JsonObject {
       ...(operation.policy === undefined ? {} : { policy: operation.policy }),
       ...(operation.schemaFingerprint === undefined
         ? {}
-        : { schemaFingerprint: operation.schemaFingerprint })
+        : { schemaFingerprint: operation.schemaFingerprint }),
+      ...(operation.idempotencyKeyHeader === undefined
+        ? {}
+        : { idempotencyKeyHeader: operation.idempotencyKeyHeader })
     })),
     enabled: config.enabled,
     origin: config.origin

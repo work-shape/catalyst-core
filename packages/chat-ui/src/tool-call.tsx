@@ -2,7 +2,8 @@ import { CheckCircle2, ChevronRight, CircleAlert, Wrench } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import type { ToolCallMessagePartProps } from "@assistant-ui/react";
 import type { LocaleCode } from "@vivd-catalyst/api-client";
-import { cn, Spinner } from "@vivd-catalyst/ui";
+import { cn, ConnectionIcon, Spinner } from "@vivd-catalyst/ui";
+import { useConnectionToolSubject, type ConnectionToolSubject } from "./assistant/tool-subjects";
 import { ApprovalRequestCard } from "./approvals/approval-request-card";
 import { readApprovalRequestDisplay } from "./approvals/approval-request-model";
 import {
@@ -35,6 +36,9 @@ import {
   projectWorkspaceToolDisplay,
   type ToolDetailSection
 } from "./workspace-tool-display";
+
+// Whoever renders tool calls outside the thread gives them their subjects with this.
+export { ToolSubjectsProvider } from "./assistant/tool-subjects";
 
 interface DataPartProps {
   name: string;
@@ -93,15 +97,20 @@ export function ToolCallPart({
   const displayMode = readDisplayMode(display);
   const workspaceProjection = projectWorkspaceToolDisplay({ args, result, toolName });
   const toolDisplay = readToolDisplayProjection({ args, result, toolName, locale });
-  const detailSections =
-    workspaceProjection?.sections ??
-    toolDetailSections({
-      args,
-      argsText,
-      toolName,
-      result,
-      labels: { input: t("toolInput"), output: t("toolOutput") }
-    });
+  const subject = useConnectionToolSubject(toolName);
+  const detailSections = [
+    // The line of the call says what was touched in words. The name the agent called stays
+    // here for whoever builds the agent.
+    ...(subject ? [{ label: t("toolTechnicalName"), value: toolName, kind: "name" as const }] : []),
+    ...(workspaceProjection?.sections ??
+      toolDetailSections({
+        args,
+        argsText,
+        toolName,
+        result,
+        labels: { input: t("toolInput"), output: t("toolOutput") }
+      }))
+  ];
   const artifacts = readToolArtifactRefs(result);
   const surfacedArtifacts = readSurfacedToolArtifactRefs(result, toolName);
   const summary = workspaceProjection?.summary ?? getToolSummary(result, t);
@@ -133,6 +142,7 @@ export function ToolCallPart({
           artifacts={surfacedArtifacts}
           toolCallId={toolCallId}
           toolTitle={toolDisplay.title}
+          subject={subject}
         />
       );
     }
@@ -147,6 +157,7 @@ export function ToolCallPart({
         artifacts={artifacts}
         surfacedArtifacts={surfacedArtifacts}
         toolTitle={toolDisplay.title}
+        subject={subject}
       />
     );
   }
@@ -163,10 +174,13 @@ export function ToolCallPart({
         )}
         data-testid="tool-call-card"
       >
-        <ToolStatusIcon state={state} />
-        <span className="truncate font-medium text-foreground">{toolDisplay.title}</span>
-        {actionLabel ? <span className="min-w-0 truncate">{actionLabel}</span> : null}
-        <span className="shrink-0">{statusLabel}</span>
+        <ToolCallHead
+          state={state}
+          toolTitle={toolDisplay.title}
+          actionLabel={actionLabel}
+          statusLabel={statusLabel}
+          subject={subject}
+        />
       </div>
     );
   }
@@ -180,6 +194,7 @@ export function ToolCallPart({
       summary={summary}
       surfacedArtifacts={surfacedArtifacts}
       toolTitle={toolDisplay.title}
+      subject={subject}
     />
   );
 }
@@ -210,7 +225,9 @@ export function DataPart({
     return (
       // Surfaces shown elsewhere render nothing here; an empty wrapper would
       // still add its margin below the message.
-      <div className="chat-tool-part my-3 max-w-5xl has-[>div:empty]:hidden">
+      // An inline view has no frame of its own, so it keeps the distance to the text before
+      // it that the text after a block keeps (styles.css).
+      <div className="chat-tool-part my-6 max-w-5xl has-[>div:empty]:hidden">
         <ToolSurfaceList autoPreview={autoPreviewSurfaces} surfaces={promotedSurfaces.surfaces} />
       </div>
     );
@@ -280,7 +297,8 @@ function SidePanelToolCall({
   statusLabel,
   artifacts,
   toolCallId,
-  toolTitle
+  toolTitle,
+  subject
 }: {
   actionLabel?: string;
   detailSections: ToolDetailSection[];
@@ -291,6 +309,7 @@ function SidePanelToolCall({
   artifacts: ToolArtifactDownloadRef[];
   toolCallId: string;
   toolTitle: string;
+  subject?: ConnectionToolSubject;
 }) {
   const { t } = useTranslation();
   const panel = useToolDisplayPanel();
@@ -325,10 +344,13 @@ function SidePanelToolCall({
         }
         className="flex w-full min-w-0 items-center gap-2 px-2.5 py-2 text-left text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
       >
-        <ToolStatusIcon state={state} />
-        <span className="truncate font-medium text-foreground">{toolTitle}</span>
-        {actionLabel ? <span className="min-w-0 truncate">{actionLabel}</span> : null}
-        <span className="shrink-0">{statusLabel}</span>
+        <ToolCallHead
+          state={state}
+          toolTitle={toolTitle}
+          actionLabel={actionLabel}
+          statusLabel={statusLabel}
+          subject={subject}
+        />
         <span className="ml-auto shrink-0 rounded-md bg-muted px-2 py-1">
           {t(panelActive ? "shownInSidePanel" : "openDisplayPanel")}
         </span>
@@ -407,7 +429,8 @@ function DisplayToolCall({
   statusLabel,
   artifacts,
   surfacedArtifacts,
-  toolTitle
+  toolTitle,
+  subject
 }: {
   actionLabel?: string;
   detailSections: ToolDetailSection[];
@@ -417,6 +440,7 @@ function DisplayToolCall({
   artifacts: ToolArtifactDownloadRef[];
   surfacedArtifacts: ToolArtifactDownloadRef[];
   toolTitle: string;
+  subject?: ConnectionToolSubject;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(true);
@@ -439,10 +463,13 @@ function DisplayToolCall({
           onClick={() => setOpen((current) => !current)}
           className="flex w-full min-w-0 items-center gap-2 border-b px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
         >
-          <ToolStatusIcon state={state} />
-          <span className="truncate font-medium text-foreground">{toolTitle}</span>
-          {actionLabel ? <span className="min-w-0 truncate">{actionLabel}</span> : null}
-          <span className="shrink-0">{statusLabel}</span>
+          <ToolCallHead
+            state={state}
+            toolTitle={toolTitle}
+            actionLabel={actionLabel}
+            statusLabel={statusLabel}
+            subject={subject}
+          />
           <ChevronRight
             size={14}
             className={cn("ml-auto shrink-0 transition-transform", open && "rotate-90")}
@@ -741,6 +768,128 @@ function formatDetails(value: unknown): string | undefined {
   }
 }
 
+type ToolUiState = "running" | "completed" | "failed";
+
+/** Stands where the name goes while a sentence is translated. No text holds it. */
+const NAME_MARK = "\u0000";
+
+/** The sentence of a call of a Connection, by what the call does and how it stands. */
+const CONNECTION_SENTENCES = {
+  reading: {
+    running: "toolConnectionReading",
+    completed: "toolConnectionRead",
+    failed: "toolConnectionReadFailed"
+  },
+  changing: {
+    running: "toolConnectionChanging",
+    completed: "toolConnectionChanged",
+    failed: "toolConnectionChangeFailed"
+  },
+  unknown: {
+    running: "toolConnectionUsing",
+    completed: "toolConnectionUsed",
+    failed: "toolConnectionUseFailed"
+  }
+} as const;
+
+/**
+ * The first line of a tool call. A call of a Connection says what was touched in words, beside
+ * the Connection's icon: "Read Bookings". Every other call says its tool and how it stands.
+ */
+function ToolCallHead({
+  state,
+  toolTitle,
+  actionLabel,
+  statusLabel,
+  subject
+}: {
+  state: ToolUiState;
+  toolTitle: string;
+  actionLabel?: string;
+  statusLabel: string;
+  subject?: ConnectionToolSubject;
+}) {
+  if (!subject) {
+    return (
+      <>
+        <ToolStatusIcon state={state} />
+        <span className="truncate font-medium text-foreground">{toolTitle}</span>
+        {actionLabel ? <span className="min-w-0 truncate">{actionLabel}</span> : null}
+        <span className="shrink-0">{statusLabel}</span>
+      </>
+    );
+  }
+  return <ConnectionCallLine subject={subject} state={state} />;
+}
+
+/**
+ * What a call of a Connection did, in words beside the Connection's icon. The line of the
+ * call shows it, and so does the fold of a group that holds this one call.
+ */
+function ConnectionCallLine({
+  subject,
+  state
+}: {
+  subject: ConnectionToolSubject;
+  state: ToolUiState;
+}) {
+  const { t } = useTranslation();
+  const { connection, effect } = subject;
+  // The name is set apart in the sentence, wherever the language puts it.
+  const [before, after = ""] = t(CONNECTION_SENTENCES[effect ?? "unknown"][state], {
+    name: NAME_MARK
+  }).split(NAME_MARK);
+  return (
+    <>
+      <ConnectionIcon size="sm" service={connection.service} category={connection.category} />
+      <span className="min-w-0 truncate" data-testid="tool-call-sentence">
+        {before}
+        <span className="font-medium text-foreground">{connection.title}</span>
+        {after}
+      </span>
+      {state === "completed" ? null : <ToolStatusIcon state={state} />}
+    </>
+  );
+}
+
+/**
+ * What the fold of a group of tool calls says. A fold that holds one call of a Connection
+ * says what the call did, as the call's own line does. Several calls, and a call that has no
+ * sentence, are counted.
+ */
+export function ToolCallFoldLabel({
+  only,
+  count
+}: {
+  /** The group's one tool call, where it holds a single call. */
+  only?: {
+    toolName: string;
+    result?: unknown;
+    isError?: boolean;
+    status?: ToolCallMessagePartProps["status"];
+  };
+  count: number;
+}) {
+  const { t } = useTranslation();
+  const subject = useConnectionToolSubject(only?.toolName ?? "");
+  if (!only || !subject) {
+    return <>{t(count === 1 ? "toolCallCountSingular" : "toolCallCount", { count })}</>;
+  }
+  return (
+    <span className="inline-flex min-w-0 items-center gap-2" data-testid="tool-call-fold-line">
+      <ConnectionCallLine
+        subject={subject}
+        state={toolUiState({
+          isError: only.isError,
+          result: only.result,
+          status: only.status,
+          toolName: only.toolName
+        })}
+      />
+    </span>
+  );
+}
+
 function ToolStatusIcon({ state }: { state: "running" | "completed" | "failed" }) {
   if (state === "running") {
     return <Spinner size="sm" className="text-muted-foreground" />;
@@ -764,7 +913,8 @@ function CompactToolCall({
   statusLabel,
   summary,
   surfacedArtifacts,
-  toolTitle
+  toolTitle,
+  subject
 }: {
   actionLabel?: string;
   detailSections: ToolDetailSection[];
@@ -773,7 +923,9 @@ function CompactToolCall({
   summary: string | undefined;
   surfacedArtifacts: ToolArtifactDownloadRef[];
   toolTitle: string;
+  subject?: ConnectionToolSubject;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(state === "failed");
 
   return (
@@ -790,10 +942,13 @@ function CompactToolCall({
         onClick={() => setOpen((current) => !current)}
         className="flex w-full min-w-0 items-center gap-2 px-2.5 py-2 text-left text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
       >
-        <ToolStatusIcon state={state} />
-        <span className="truncate font-medium text-foreground">{toolTitle}</span>
-        {actionLabel ? <span className="min-w-0 truncate">{actionLabel}</span> : null}
-        <span className="shrink-0">{statusLabel}</span>
+        <ToolCallHead
+          state={state}
+          toolTitle={toolTitle}
+          actionLabel={actionLabel}
+          statusLabel={statusLabel}
+          subject={subject}
+        />
         <ChevronRight
           size={14}
           className={cn("ml-auto shrink-0 transition-transform", open && "rotate-90")}
@@ -811,6 +966,9 @@ function CompactToolCall({
             <p className="text-sm leading-6 text-muted-foreground [overflow-wrap:anywhere]">
               {summary}
             </p>
+          ) : null}
+          {subject && detailSections.length > 0 ? (
+            <p className="text-muted-foreground">{t("toolDetails")}</p>
           ) : null}
           <ToolDetails sections={detailSections} />
         </div>
@@ -869,7 +1027,14 @@ function ToolDetails({ sections }: { sections: ToolDetailSection[] }) {
       {sections.map((section) => (
         <div key={section.label} className="grid gap-1">
           <p className="font-medium text-muted-foreground">{section.label}</p>
-          {section.kind === "text" ? (
+          {section.kind === "name" ? (
+            <code
+              className="font-mono text-code text-foreground [overflow-wrap:anywhere]"
+              data-testid="tool-technical-name"
+            >
+              {section.value}
+            </code>
+          ) : section.kind === "text" ? (
             <p
               className="text-body text-foreground [overflow-wrap:anywhere]"
               data-testid="tool-detail-text"

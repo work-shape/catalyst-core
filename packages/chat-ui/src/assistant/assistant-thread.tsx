@@ -6,9 +6,9 @@ import {
   useThreadViewportStore
 } from "@assistant-ui/react";
 import { ArrowDown, CircleAlert, Lock } from "lucide-react";
-import { useLayoutEffect, useMemo, useRef, type RefObject } from "react";
+import { useLayoutEffect, useMemo, useRef, type ReactNode, type RefObject } from "react";
 import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
-import { Banner, cn } from "@vivd-catalyst/ui";
+import { Banner, cn, SkillIcon, Starter, StarterList } from "@vivd-catalyst/ui";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
 import {
   agentChipDisplayFor,
@@ -20,8 +20,11 @@ import { RetentionNotice } from "../conversation/retention-notice";
 import { AssistantComposer, type LocalUploadingAttachment } from "./assistant-composer";
 import { ThreadMessage } from "./assistant-message";
 import { useTranslation } from "../i18n";
+import { useKeepReadingPlace } from "./reading-place";
 import type { SendBlock } from "./send-block";
+import { useMoveWithPanels } from "../surface/panel-move";
 import { findRunActivity, shouldShowRunActivity } from "./thread-activity";
+import { ToolSubjectsProvider } from "./tool-subjects";
 
 /** How long the composer takes to settle at the bottom after the first message. */
 const COMPOSER_SETTLE_MS = 220;
@@ -49,6 +52,7 @@ export function AssistantThread({
   contextSnapshot,
   notice,
   newConversationPrivate,
+  subjectLine,
   retainedUntil,
   draftAttachments,
   localUploadingAttachments,
@@ -94,6 +98,8 @@ export function AssistantThread({
     | undefined;
   notice: string | undefined;
   newConversationPrivate?: boolean;
+  /** What the open conversation is about, where it is about an asset. */
+  subjectLine?: ReactNode;
   /** The open conversation's retention date. */
   retainedUntil?: string;
   draftAttachments: DraftAttachment[];
@@ -135,12 +141,21 @@ export function AssistantThread({
   const { t } = useTranslation();
   const agent = getSelectedAgent(config, selectedAgentName);
   const initialPrompts = agent?.initialPrompts ?? [];
+  // A conversation names what a tool call touched from the agents the person is offered,
+  // here and in their own workspace.
+  const toolSubjectAgents = useMemo(
+    () => [...(config?.agents ?? []), ...agents],
+    [config?.agents, agents]
+  );
   const startPage =
     useAuiState((state) => state.thread.isEmpty) &&
     messagesLoaded &&
     loadedMessageCount === 0 &&
     !conversationRunning;
   const composerRef = useComposerSettleTransition(startPage, conversationId, startComposerRef);
+  // The column travels with a panel that opens or closes beside the conversation.
+  const columnRef = useMoveWithPanels<HTMLDivElement>();
+  useKeepReadingPlace(columnRef);
 
   // An existing conversation stays readable; only the composer is blocked.
   if (noAgentsMessage && !messagesEnabled) {
@@ -175,7 +190,10 @@ export function AssistantThread({
           className="chat-thread-inset relative flex min-h-0 flex-col overflow-y-auto overflow-x-hidden scroll-smooth"
         >
           <ConversationRunTopAnchor activeRunId={activeRunId} />
-          <div className="mx-auto flex min-h-full w-full max-w-[var(--thread-max-width)] flex-1 flex-col px-5 pt-20">
+          <div
+            ref={columnRef}
+            className="mx-auto flex min-h-full w-full max-w-[var(--thread-max-width)] flex-1 flex-col px-5 pt-20"
+          >
             {startPage ? (
               <ThreadWelcomeHeading
                 agent={agent}
@@ -190,15 +208,17 @@ export function AssistantThread({
 
             {messagesEnabled ? (
               <div className="flex flex-col gap-6 pb-12 empty:hidden md:pb-16">
-                <ThreadPrimitive.Messages>
-                  {() => (
-                    <ThreadMessage
-                      conversationRunning={conversationRunning}
-                      activeRunId={activeRunId}
-                      optimisticPending={optimisticPending}
-                    />
-                  )}
-                </ThreadPrimitive.Messages>
+                <ToolSubjectsProvider agents={toolSubjectAgents}>
+                  <ThreadPrimitive.Messages>
+                    {() => (
+                      <ThreadMessage
+                        conversationRunning={conversationRunning}
+                        activeRunId={activeRunId}
+                        optimisticPending={optimisticPending}
+                      />
+                    )}
+                  </ThreadPrimitive.Messages>
+                </ToolSubjectsProvider>
                 <RunActivityRow
                   activeRunId={activeRunId}
                   conversationRunning={conversationRunning}
@@ -233,6 +253,7 @@ export function AssistantThread({
                     <span>{t("newConversationPrivateHint")}</span>
                   </p>
                 ) : null}
+                {subjectLine}
                 {/* A conversation without a message is a draft and keeps the start page as it is. */}
                 {startPage ? null : (
                   <RetentionNotice retention={config?.retention} retainedUntil={retainedUntil} />
@@ -271,7 +292,20 @@ export function AssistantThread({
               </div>
             </ThreadPrimitive.ViewportFooter>
 
-            {startPage ? <ThreadStartBlock initialPrompts={initialPrompts} /> : null}
+            {startPage ? (
+              <ThreadStartBlock
+                initialPrompts={initialPrompts}
+                starters={agent?.starters ?? []}
+                onStarterChosen={() => {
+                  // The request stands in the composer now: the person goes on writing there.
+                  window.requestAnimationFrame(() => {
+                    const input = composerRef.current?.querySelector("textarea");
+                    input?.focus({ preventScroll: true });
+                    input?.setSelectionRange(input.value.length, input.value.length);
+                  });
+                }}
+              />
+            ) : null}
           </div>
         </ThreadPrimitive.Viewport>
       </ThreadPrimitive.Root>
@@ -419,13 +453,39 @@ export function ThreadWelcomeHeading({
 const suggestionChipClassName =
   "inline-flex min-h-8 max-w-full items-center rounded-full border px-3 py-1 text-left text-body transition-colors hover:bg-state-hover focus-visible:focus-ring";
 
-function ThreadStartBlock({
-  initialPrompts
+/** What the start page offers under the composer: the starters, then the agent's own prompts. */
+export function ThreadStartBlock({
+  initialPrompts,
+  starters,
+  onStarterChosen
 }: {
   initialPrompts: Array<{ title: string; prompt: string }>;
+  starters: NonNullable<SafeConfig["agents"][number]["starters"]>;
+  onStarterChosen(): void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="grid flex-[3] basis-0 content-start gap-5 pb-8 pt-2">
+      {/* What the agent's skills offer to begin with. Choosing one fills the composer and
+          sends nothing, so the person reads and completes the request first. */}
+      {starters.length > 0 ? (
+        <StarterList label={t("chatStarters")}>
+          {starters.map((starter, index) => (
+            <ThreadPrimitive.Suggestion
+              key={`${index}:${starter.skillName}:${starter.title}`}
+              prompt={starter.prompt}
+              asChild
+            >
+              <Starter
+                icon={<SkillIcon icon={starter.icon} size="lg" />}
+                title={starter.title}
+                hint={starter.hint}
+                onClick={onStarterChosen}
+              />
+            </ThreadPrimitive.Suggestion>
+          ))}
+        </StarterList>
+      ) : null}
       {initialPrompts.length > 0 ? (
         <div className="flex flex-wrap justify-center gap-2">
           {initialPrompts.map((initialPrompt) => (

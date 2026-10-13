@@ -91,6 +91,8 @@ export interface ConfigAssetRecord {
   /** The commit and tree of the active revision, for an asset whose content is a repository. */
   commit?: string;
   tree?: string;
+  /** Where the active revision came from, where its write said so. */
+  revisionOrigin?: ConfigAssetRevisionOrigin;
   /**
    * The published pointer of a `draft_published` kind, with the number and the file set of
    * the revision it names. Absent before the first publish and on every `active` kind, where
@@ -103,6 +105,28 @@ export interface ConfigAssetRecord {
   publishedConfig?: JsonObject;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Where a revision came from, where it was not written as it stands: the approval that applied
+ * it, or the Page whose files it is a copy of. The newest revision of an App that names a Page
+ * is how the App remembers the Page it is updated from: the one it was saved from, or one it
+ * was linked to later.
+ */
+export type ConfigAssetRevisionOrigin =
+  | { kind: "approval_request"; requestId: string; summary: string }
+  | {
+      kind: "page";
+      conversationId: string;
+      pageId: string;
+      /** The number of the Page revision the files were copied from. */
+      fileSetNumber: number;
+    };
+
+/** An asset whose Page is a given one, with who wrote it from that Page last. */
+export interface ConfigAssetFromPage {
+  asset: ConfigAssetRecord;
+  savedBy: AuditActor | null;
 }
 
 export interface ConfigAssetRevisionRecord {
@@ -118,7 +142,7 @@ export interface ConfigAssetRevisionRecord {
   commit?: string;
   tree?: string;
   actor: AuditActor | null;
-  origin?: { kind: "approval_request"; requestId: string; summary: string };
+  origin?: ConfigAssetRevisionOrigin;
   globalVersion: number;
   createdAt: string;
 }
@@ -397,6 +421,26 @@ export interface ConfigAssetStore {
     clientInstanceId: ClientInstanceId;
     keys: readonly { kind: ConfigAssetKind; name: string }[];
   }): Promise<ConfigAssetRecord[]>;
+  /**
+   * The active assets of a kind whose Page is this one, the earliest first: the Page named by
+   * the newest of an asset's revisions that names one. One read of at most `limit` rows. It
+   * walks the revisions of every active asset of the kind from the newest back to the first
+   * that names a Page, so its cost grows with the assets of the kind on the instance, and
+   * with the revisions of those that were never written from a Page.
+   */
+  listConfigAssetsFromPage(input: {
+    clientInstanceId: ClientInstanceId;
+    kind: ConfigAssetKind;
+    pageId: string;
+    limit: number;
+    /** How many of them to pass over first: the next read of a caller who reads in parts. */
+    offset?: number;
+  }): Promise<ConfigAssetFromPage[]>;
+  /** The Page an asset is updated from: the origin of its newest revision that names one. */
+  getConfigAssetPageOrigin(input: {
+    clientInstanceId: ClientInstanceId;
+    assetId: string;
+  }): Promise<Extract<ConfigAssetRevisionOrigin, { kind: "page" }> | undefined>;
   /** The revisions of one asset, oldest first unless `newestFirst` is set. */
   listConfigAssetRevisions(input: {
     clientInstanceId: ClientInstanceId;
@@ -412,6 +456,16 @@ export interface ConfigAssetStore {
     kind: ConfigAssetKind;
     name: string;
     revision: number;
+  }): Promise<ConfigAssetRevisionRecord | undefined>;
+  /**
+   * One revision of one asset by its id: what a reader holds that kept the id of the revision
+   * it started on, such as a Workflow Run. A revision of another asset is not answered.
+   */
+  getConfigAssetRevisionById(input: {
+    clientInstanceId: ClientInstanceId;
+    kind: ConfigAssetKind;
+    name: string;
+    revisionId: string;
   }): Promise<ConfigAssetRevisionRecord | undefined>;
   applyConfigAssetMutations(input: {
     clientInstanceId: ClientInstanceId;
@@ -432,7 +486,7 @@ export interface ConfigAssetStore {
     baseAssetIds?: Record<string, string>;
     baseDefaultAgentName?: string | null;
     actor?: AuditActor;
-    origin?: ConfigAssetRevisionRecord["origin"];
+    origin?: ConfigAssetRevisionOrigin;
     /** Defaults to `all`. */
     initialAgentAvailability?: InitialAgentAvailability;
     mutations: ConfigAssetMutation[];

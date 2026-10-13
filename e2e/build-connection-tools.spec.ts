@@ -6,7 +6,7 @@ import { ALLOWED_URL, plantConnection, removeConnection } from "./connection-fix
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
-// The Tools section of an agent's page in Build, with the tools of Connections. The Connection
+// The Tools section of an agent's page in Studio, with the tools of Connections. The Connection
 // is a real asset of the instance of the suite's Connector type `test`, which contacts nothing.
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
@@ -79,7 +79,7 @@ test("an operation of a Connection is ticked on an agent, saved and still ticked
           name,
           displayName: "Connection Tools Probe",
           modelProviderId: "local",
-          instructions: "A probe of the Build tests.",
+          instructions: "A probe of the Studio tests.",
           toolNames: [gone]
         }
       }

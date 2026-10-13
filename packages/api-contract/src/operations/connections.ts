@@ -86,7 +86,15 @@ export const connectionToolSchema = z.object({
 /** The tools an agent may carry: agent-exposed, enabled and ready, by Connection. */
 export const connectionToolsSchema = z.object({
   connections: z.array(
-    z.object({ name: z.string(), title: z.string(), tools: z.array(connectionToolSchema) })
+    z.object({
+      name: z.string(),
+      title: z.string(),
+      /** The system behind the Connection, where it names one. It only picks an icon. */
+      service: z.string().optional(),
+      /** The Connector type. The interface shows the icon of its category without a `service`. */
+      connectorType: z.string().optional(),
+      tools: z.array(connectionToolSchema)
+    })
   )
 });
 

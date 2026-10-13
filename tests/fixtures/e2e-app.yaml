@@ -86,6 +86,16 @@ auth:
           - user
         permissionRefs:
           - demo-tools
+      # The member the Workflow rights spec and the Workflow draft spec give rights to, one
+      # after the other. No other spec uses this member.
+      - email: e2e-workflow-rights@example.test
+        displayLabel: E2E Zz Workflow Rights
+        passwordEnvName: E2E_WORKFLOW_RIGHTS_PASSWORD
+        developmentPassword: e2e-workflow-rights-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
       # The three people of the Apps spec. No other spec uses them: the admin builds and
       # publishes, the member uses what is published, and the builder is the one the spec shows
       # the draft without the publish right. No grant gives a right on Apps yet, so the builder
@@ -111,6 +121,17 @@ auth:
         displayLabel: E2E Apps Builder
         passwordEnvName: E2E_APPS_BUILDER_PASSWORD
         developmentPassword: e2e-apps-builder-password
+        roles:
+          - user
+          - admin
+        permissionRefs:
+          - demo-tools
+      # The person of the Update app spec. No other spec uses them: the spec saves an App, and
+      # an App's id is taken once for the whole instance.
+      - email: e2e-app-update@example.test
+        displayLabel: Zz E2E App Update
+        passwordEnvName: E2E_APP_UPDATE_PASSWORD
+        developmentPassword: e2e-app-update-password
         roles:
           - user
           - admin
@@ -195,9 +216,13 @@ administration:
 modules:
   apps:
     enabled: true
-  # Connections are on: Build lists them and the Access page grants their rights. The suite's
+  # Connections are on: Studio lists them and the Access page grants their rights. The suite's
   # server names one connector type, `test`, which contacts nothing.
   connections:
+    enabled: true
+  # Workflows are on: the Access page grants their rights. The suite seeds none; a spec that
+  # needs a Workflow stores and publishes its own.
+  workflows:
     enabled: true
 # The one address a Connection of the suite may reach. Nothing listens there and the `test`
 # connector type contacts nothing: the entry is what lets a test of a Connection answer ready.

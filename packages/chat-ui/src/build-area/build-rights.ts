@@ -5,6 +5,9 @@ const INSTANCE_READ_PERMISSION = "config_assets.read";
 /** The right that writes and deletes every agent and skill of the instance. */
 const INSTANCE_WRITE_PERMISSION = "config_assets.write";
 
+/** The asset kind of agents, as the instance names it. */
+export const AGENT_ASSET_KIND = "agent";
+
 type AssetVerb = "read" | "write" | "delete";
 
 /** A Namespace the reader holds a right in, as the picker and the filter name it. */
@@ -88,4 +91,16 @@ export function resolveBuildRights(
 
 function toBuildNamespace(namespace: BuildNamespace): BuildNamespace {
   return { prefix: namespace.prefix, displayName: namespace.displayName };
+}
+
+/**
+ * The reader may start a new agent: the instance lets agents be created in the interface, and
+ * the reader holds the right to write one somewhere. The list of agents in Build offers its
+ * button by the same two.
+ */
+export function mayCreateAgents(
+  rights: Pick<BuildRights, "mayCreate">,
+  management: { allowAgentCreation: boolean } | undefined
+): boolean {
+  return management?.allowAgentCreation === true && rights.mayCreate(AGENT_ASSET_KIND);
 }
