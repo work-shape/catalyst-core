@@ -145,8 +145,14 @@ describe("the demo seed on the fixture instance", () => {
 
   it("pushes the agents and skills, shows every agent, and gives one agent a second revision", async () => {
     const { client, defaultAgentName } = seeded().before;
-    // The instance's own two agents are there as well, and one of them stays the default.
-    const own = ["application_assistant", "research_assistant"];
+    // The instance's own two agents are there as well, and one of them stays the default, and
+    // so are the skills the platform ships.
+    const own = [
+      "application_assistant",
+      "research_assistant",
+      "platform-guide",
+      "workflow-authoring"
+    ];
     const assets = seeded().before.assets.filter((asset) => !own.includes(asset.name));
     expect(defaultAgentName).toBe("application_assistant");
     // The company's eight and the one Kai Berger made.
