@@ -42,7 +42,6 @@ export interface PlantedConnection {
 
 /** Writes one Connection as the store holds it: the asset and its first revision. */
 export async function plantConnection(connection: PlantedConnection): Promise<void> {
-  const revisionId = `cfgr_${randomUUID()}`;
   const config = {
     name: connection.name,
     displayName: connection.displayName,
@@ -72,6 +71,20 @@ export async function plantConnection(connection: PlantedConnection): Promise<vo
     enabled: true,
     origin: "release"
   };
+  await plantReleaseAsset({ id: connection.id, kind: "connection", name: connection.name, config });
+}
+
+/**
+ * Writes one asset of origin `release` as the release seed stores it: the asset and its first
+ * revision.
+ */
+export async function plantReleaseAsset(asset: {
+  id: string;
+  kind: string;
+  name: string;
+  config: Parameters<postgres.Sql["json"]>[0];
+}): Promise<void> {
+  const revisionId = `cfgr_${randomUUID()}`;
   await withSql((sql) =>
     sql.begin(async (tx) => {
       const [state] = await tx<{ version: string }[]>`
@@ -86,16 +99,43 @@ export async function plantConnection(connection: PlantedConnection): Promise<vo
           (id, client_instance_id, kind, name, scope_kind, status, active_revision_id,
            created_at, updated_at)
         values
-          (${connection.id}, ${clientInstanceId}, 'connection', ${connection.name}, 'instance',
+          (${asset.id}, ${clientInstanceId}, ${asset.kind}, ${asset.name}, 'instance',
            'active', ${revisionId}, now(), now())`;
       await tx`
         insert into config_asset_revisions
           (id, client_instance_id, asset_id, revision, operation, config, global_version,
            created_at)
         values
-          (${revisionId}, ${clientInstanceId}, ${connection.id}, 1, 'create',
-           ${tx.json(config)}, ${state.version}, now())`;
+          (${revisionId}, ${clientInstanceId}, ${asset.id}, 1, 'create',
+           ${tx.json(asset.config)}, ${state.version}, now())`;
     })
+  );
+}
+
+/** Writes hits of one Guardrail, the newest first, each an hour before the one before it. */
+export async function plantGuardrailHits(
+  guardrailName: string,
+  hits: readonly { outcome: "warn" | "block"; message: string; actor: string; kind: string }[]
+): Promise<void> {
+  await withSql(async (sql) => {
+    for (const [index, hit] of hits.entries()) {
+      await sql`
+        insert into guardrail_hits
+          (id, client_instance_id, guardrail_name, event, outcome, message, subject_kind,
+           actor_id, actor_label, created_at)
+        values
+          (${`ghit_${randomUUID()}`}, ${clientInstanceId}, ${guardrailName},
+           'approval_request.before_create', ${hit.outcome}, ${hit.message}, ${hit.kind},
+           ${`usr_${randomUUID()}`}, ${hit.actor}, now() - make_interval(hours => ${index}))`;
+    }
+  });
+}
+
+/** Removes the hits of one Guardrail a spec planted. */
+export async function removeGuardrailHits(guardrailName: string): Promise<void> {
+  await withSql(
+    (sql) =>
+      sql`delete from guardrail_hits where client_instance_id = ${clientInstanceId} and guardrail_name = ${guardrailName}`
   );
 }
 
