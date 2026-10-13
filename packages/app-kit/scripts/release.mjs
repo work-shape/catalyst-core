@@ -163,17 +163,24 @@ async function bundle({ file, entry }) {
   return output.contents;
 }
 
+/** The rules of the flow canvas, which the library's stylesheet brings. */
+const FLOW_STYLES = "@xyflow/react/dist/base.css";
+/** What a stylesheet leaves out reads as this one, which holds no rule. */
+const NO_RULES = resolve(packageRoot, "scripts/no-rules.css");
+
 /**
  * One stylesheet of the kit. `utilities` says whether it holds the utility classes the library
- * and the kit use: the library's components need them, a plain Page must not get them.
+ * and the kit use: the library's components need them, a plain Page must not get them. Nor
+ * does a plain Page draw the flow canvas, so `canvas: false` leaves its rules out.
  */
-async function stylesheet(file, { utilities }) {
+async function stylesheet(file, { utilities, canvas }) {
   const entry = resolve(packageRoot, "src", file);
   const base = dirname(entry);
   const compiler = await compile(readFileSync(entry, "utf8"), {
     base,
     from: entry,
-    onDependency() {}
+    onDependency() {},
+    customCssResolver: (id) => Promise.resolve(!canvas && id === FLOW_STYLES ? NO_RULES : undefined)
   });
   const root =
     compiler.root === "none"
@@ -206,8 +213,14 @@ const written = [];
 for (const item of files) {
   written.push({ file: item.file, bytes: await bundle(item) });
 }
-written.push({ file: "ui.css", bytes: await stylesheet("kit.css", { utilities: true }) });
-written.push({ file: "page.css", bytes: await stylesheet("page.css", { utilities: false }) });
+written.push({
+  file: "ui.css",
+  bytes: await stylesheet("kit.css", { utilities: true, canvas: true })
+});
+written.push({
+  file: "page.css",
+  bytes: await stylesheet("page.css", { utilities: false, canvas: false })
+});
 
 const manifest = {
   version: KIT_VERSION,
