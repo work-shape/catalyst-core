@@ -15,7 +15,9 @@ import {
   type WorkflowBlockIssue,
   type WorkflowManifest,
   type WorkflowStep,
-  type WorkflowStepType
+  type WorkflowStepType,
+  yamlValueIssue,
+  yamlValueIssueSentence
 } from "@vivd-catalyst/core";
 import { JSON_SCHEMA, YAMLException, load } from "js-yaml";
 import { z } from "zod";
@@ -430,7 +432,21 @@ export function readWorkflowManifest(text: string): WorkflowDefinitionResult {
     };
   }
   try {
-    return parseWorkflowManifest(load(text, { schema: JSON_SCHEMA }));
+    const loaded: unknown = load(text, { schema: JSON_SCHEMA });
+    // Before anything walks it: a few lines of nested aliases are a value of any size.
+    const bound = yamlValueIssue(loaded);
+    if (bound) {
+      return {
+        ok: false,
+        issues: [
+          {
+            path: "",
+            message: `workflow.yaml is not read: ${yamlValueIssueSentence(bound)}`
+          }
+        ]
+      };
+    }
+    return parseWorkflowManifest(loaded);
   } catch (error) {
     // The reader of YAML follows a file as deep as it goes: one deeper than the stack ends
     // as a file that is refused, like one deeper than a definition may be.

@@ -1,6 +1,8 @@
 import {
   APP_ACTION_NAME_PATTERN,
   DATA_STORE_SCALAR_TYPES,
+  yamlValueIssue,
+  yamlValueIssueSentence,
   type JsonObject,
   type JsonValue
 } from "@vivd-catalyst/core";
@@ -389,6 +391,11 @@ function compileActionFile(
           error.mark.line + 1
         )
       : fail("The action file is not UTF-8 text.");
+  }
+  // Before anything walks it: a few lines of nested aliases are a value of any size.
+  const bound = yamlValueIssue(value);
+  if (bound) {
+    return fail(`The action file is not read: ${yamlValueIssueSentence(bound)}.`);
   }
   const parsed = actionFileSchema.safeParse(value);
   if (!parsed.success) {

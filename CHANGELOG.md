@@ -17,6 +17,10 @@ contain breaking changes; a patch version does not.
   caller is shown them, and counts the others. `preview_rows` is unchanged. On a store's page
   in Studio a Workflow under "Used by" is a link to its page, as an App is, for a reader the
   Workflows area is open to.
+- **YAML anchors with aliases are refused** in the frontmatter of a `SKILL.md`, in `store.yaml`,
+  `workflow.yaml`, `app.yaml` and an App's action files: nested aliases in a file of a few
+  hundred bytes made a value of any size for whatever read it. A file that uses one is refused
+  with a sentence that says so; write the value out where it is used.
 - **Skills as folders of files, in the public skill convention:** a skill may carry real files
   beside `SKILL.md` and its text resources, at any path, and a folder taken from a public skill
   library round-trips byte for byte. `title` is optional in the frontmatter and derived from

@@ -79,6 +79,23 @@ describe("a Data Store on Postgres", () => {
     expect(issuesOf([manifest("tables: []\n"), init])[0]).toContain("tables");
     expect(read([manifest("scope: instance\n"), init])).toMatchObject({ scope: "instance" });
     expect(issuesOf([manifest("scope: everyone\n"), init])[0]).toContain("scope");
+    // Nested aliases are a value of any size for whatever walks it: refused at once, unread.
+    for (const levels of [5, 6, 7, 12]) {
+      const lines = ["l0: &l0 [x, x, x, x, x, x, x, x, x, x]"];
+      for (let level = 1; level < levels; level += 1) {
+        const before = `*l${level - 1}`;
+        lines.push(
+          `l${level}: &l${level} [${Array.from({ length: 10 }, () => before).join(", ")}]`
+        );
+      }
+      const started = performance.now();
+      const refused = issuesOf([
+        manifest(`${lines.join("\n")}\nsizeLimit: *l${levels - 1}\n`),
+        init
+      ]);
+      expect(performance.now() - started, `${levels} levels`).toBeLessThan(1_000);
+      expect(refused[0], `${levels} levels`).toContain("anchor");
+    }
     // The schema `catalyst` is the platform's in every store: a migration that names it is refused.
     for (const touching of [
       "create table catalyst.notes (id integer);",

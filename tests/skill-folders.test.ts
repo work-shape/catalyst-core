@@ -1,10 +1,6 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import { ApprovalRequestWorkflow } from "@vivd-catalyst/chat-server";
 import { createSkillChangePreview, type SkillChangeOperation } from "@vivd-catalyst/config-schema";
 import {
@@ -24,8 +20,19 @@ import {
 import { accessOf } from "./support/access";
 import { agent } from "./support/access-instance";
 import { required } from "./support/assertions";
-import { createTestConfig } from "./support/fixtures";
-import { createTestInstance, getTestExecution, type TestInstance } from "./support/test-instance";
+import {
+  GUIDE,
+  PDF,
+  SCRIPT,
+  SKILL,
+  SKILL_MD,
+  get,
+  put,
+  refusal,
+  useSkillWorlds,
+  type SkillFileRead,
+  type SkillWorld
+} from "./support/skill-folders";
 import { createTestToolRunner } from "./support/tool-runner";
 
 // A skill as a folder of real files, walked over the API of an assembled instance: its
@@ -34,31 +41,6 @@ import { createTestToolRunner } from "./support/tool-runner";
 // as its config stays what it was, and a skill from before all this reads with its history.
 
 const clientInstanceId = asClientInstanceId("demo-local");
-const SKILL = { kind: "skill", name: "form-filler" } as const;
-
-const SKILL_MD = `---
-title: Form filler
-description: Use when a customer form has to be filled from a case.
----
-
-# Form filler
-
-Run \`scripts/fill_form.py\` on the case and attach \`assets/form.pdf\`.
-`;
-const SCRIPT = "#!/usr/bin/env python3\nimport sys\n\nprint('filled', sys.argv[1:])\n";
-const GUIDE = "# Guide\n\nWhich field takes which value.\n";
-/** A small PDF as a program writes one: its second line holds bytes that are no text. */
-const PDF = Buffer.concat([
-  Buffer.from("%PDF-1.4\n%", "latin1"),
-  Buffer.from([0xe2, 0xe3, 0xcf, 0xd3, 0x0a]),
-  Buffer.from(
-    "1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n" +
-      "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n",
-    "latin1"
-  )
-]);
-/** The first bytes of a program compiled for Linux. */
-const ELF = Buffer.concat([Buffer.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0]), Buffer.alloc(56)]);
 
 const sha256 = (bytes: Uint8Array | string) => createHash("sha256").update(bytes).digest("hex");
 
@@ -69,107 +51,17 @@ const folder: JsonObject[] = [
   { path: "assets/form.pdf", base64: PDF.toString("base64") }
 ];
 
-const fileSchema = z.object({
-  path: z.string(),
-  contentType: z.string(),
-  sha256: z.string(),
-  bytes: z.number(),
-  text: z.string().optional(),
-  base64: z.string().optional()
-});
-const readSchema = z.object({
-  config: z.record(z.string(), z.unknown()),
-  revision: z.number(),
-  files: z.array(fileSchema).optional()
-});
 const writtenSchema = z.object({
   revision: z.number(),
   fileSetId: z.string().optional(),
   files: z.array(z.object({ path: z.string(), sha256: z.string(), bytes: z.number() })).optional()
 });
-const refusedSchema = z.object({
-  error: z.object({
-    code: z.string(),
-    message: z.string(),
-    details: z.record(z.string(), z.unknown()).optional()
-  })
-});
 
 describe("a skill as a folder of files", () => {
-  const roots: string[] = [];
-  const started: TestInstance[] = [];
+  const { start } = useSkillWorlds();
+  type World = SkillWorld;
 
-  afterEach(async () => {
-    await Promise.all(started.splice(0).map((instance) => instance.close()));
-    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-  });
-
-  /** An assembled instance and its call path on one database, with or without a store of files. */
-  async function start(files = true, agentSkillChanges = false) {
-    const root = await mkdtemp(join(tmpdir(), "skill-folders-test-"));
-    roots.push(root);
-    const base = createTestConfig({
-      tools: [
-        { name: "read_skill", enabled: true },
-        ...(agentSkillChanges ? [{ name: "propose_skill_change", enabled: true }] : [])
-      ]
-    });
-    const config = parseClientInstanceConfig({
-      ...base,
-      modules: { assetManagement: { enabled: true } },
-      administration: {
-        agentConfiguration: {
-          enabled: true,
-          allowSkillEditing: true,
-          ...(agentSkillChanges
-            ? { agentSkillChanges: { enabled: true, allowSkillCreation: false } }
-            : {})
-        }
-      },
-      ...(files
-        ? {
-            infrastructure: {
-              ...base.infrastructure,
-              objectStorage: {
-                ...base.infrastructure.objectStorage,
-                files: { provider: "filesystem", root }
-              }
-            }
-          }
-        : {})
-    });
-    const api = await createTestInstance({ config, env: {}, tools: [] });
-    started.push(api);
-    const calls = await createTestInstance({ execution: { config, env: {}, tools: [] } });
-    started.push(calls);
-    return { api, execution: getTestExecution(calls) };
-  }
-
-  type World = Awaited<ReturnType<typeof start>>;
-
-  const put = (
-    { api }: World,
-    payload: JsonObject,
-    address: { kind: string; name: string } = SKILL
-  ) => api.call("assets.put", { params: address, payload });
-  const get = async (
-    { api }: World,
-    files = true,
-    address: { kind: string; name: string } = SKILL
-  ) => {
-    const response = await api.call("assets.get", {
-      params: address,
-      ...(files ? { query: { files: "true" } } : {})
-    });
-    expect(response.statusCode, response.body).toBe(200);
-    return readSchema.parse(response.json());
-  };
-  const refusal = async (response: ReturnType<World["api"]["call"]>) => {
-    const answered = await response;
-    expect(answered.statusCode, answered.body).toBe(422);
-    return refusedSchema.parse(answered.json()).error;
-  };
-  const bytesOf = (file: z.infer<typeof fileSchema>) =>
+  const bytesOf = (file: SkillFileRead) =>
     file.text !== undefined
       ? Buffer.from(file.text, "utf8")
       : Buffer.from(file.base64 ?? "", "base64");
@@ -296,102 +188,6 @@ describe("a skill as a folder of files", () => {
         resources: [{ path: "references/guide.md", mediaType: "text/markdown" }]
       }
     });
-  });
-
-  it("refuses what a skill may not hold, each with its path and a reason of its own, and writes nothing", async () => {
-    const world = await start();
-    const manifest = { path: "SKILL.md", text: SKILL_MD };
-    const refused = async (files: JsonObject[]) =>
-      (await refusal(put(world, { files: [manifest, ...files], expectedRevision: null }))).details;
-    const lfs = "version https://git-lfs.github.com/spec/v1\noid sha256:abc\nsize 12\n";
-
-    expect(await refused([{ path: "assets/tool", base64: ELF.toString("base64") }])).toMatchObject({
-      reason: "skill_file_executable",
-      path: "assets/tool",
-      format: "ELF"
-    });
-    expect(
-      await refused([
-        { path: "assets/tool.exe", base64: Buffer.from("MZ\u0090\0").toString("base64") }
-      ])
-    ).toMatchObject({ reason: "skill_file_executable", path: "assets/tool.exe", format: "PE" });
-    expect(
-      await refused([
-        {
-          path: "assets/tool.dylib",
-          base64: Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 7]).toString("base64")
-        }
-      ])
-    ).toMatchObject({ reason: "skill_file_executable", format: "Mach-O" });
-    expect(await refused([{ path: "assets/large.bin", text: lfs }])).toMatchObject({
-      reason: "skill_file_lfs_pointer",
-      path: "assets/large.bin"
-    });
-    expect(
-      await refused([
-        { path: "scripts/run.py", base64: Buffer.from([0xff, 0xfe, 0x41]).toString("base64") }
-      ])
-    ).toMatchObject({ reason: "skill_file_not_text", path: "scripts/run.py" });
-    // A text by its extension is UTF-8 wherever it lies. A file of another extension is bytes.
-    expect(
-      await refused([
-        { path: "notes/readme.txt", base64: Buffer.from([0xff, 0xfe, 0x41]).toString("base64") }
-      ])
-    ).toMatchObject({ reason: "skill_file_not_text", path: "notes/readme.txt" });
-    expect(await refused([{ path: "docs/SKILL.md", text: SKILL_MD }])).toMatchObject({
-      reason: "skill_path_invalid",
-      path: "docs/SKILL.md"
-    });
-    expect(await refused([{ path: "../outside.md", text: "x" }])).toMatchObject({
-      reason: "skill_path_invalid",
-      path: "../outside.md"
-    });
-    expect(await refused([{ path: "assets//form.pdf", text: "x" }])).toMatchObject({
-      reason: "skill_path_invalid"
-    });
-    expect(
-      await refused([
-        { path: "assets/big.bin", base64: Buffer.alloc(2 * 1024 ** 2 + 1, 1).toString("base64") }
-      ])
-    ).toMatchObject({ reason: "skill_file_too_large", path: "assets/big.bin" });
-    expect(
-      await refused(
-        Array.from({ length: 5 }, (_, index) => ({
-          path: `assets/part-${index}.bin`,
-          base64: Buffer.alloc(1_700_000, 1).toString("base64")
-        }))
-      )
-    ).toMatchObject({ reason: expect.stringMatching(/^(skill_too_large|files_too_large)$/u) });
-    // More files than a skill holds: the call itself takes no more.
-    expect(
-      (
-        await refusal(
-          put(world, {
-            files: [
-              manifest,
-              ...Array.from({ length: 500 }, (_, index) => ({
-                path: `assets/n-${index}.txt`,
-                text: "x"
-              }))
-            ],
-            expectedRevision: null
-          })
-        )
-      ).code
-    ).toBe("VALIDATION_FAILED");
-    expect(
-      (
-        await refusal(
-          put(world, {
-            files: [{ path: "scripts/fill_form.py", text: SCRIPT }],
-            expectedRevision: null
-          })
-        )
-      ).details
-    ).toMatchObject({ reason: "skill_manifest_missing" });
-
-    const missing = await world.api.call("assets.get", { params: SKILL });
-    expect(missing.statusCode).toBe(404);
   });
 
   it("keeps a skill that is written as its config what it was, and leaves the other files of a folder to a write of the config", async () => {

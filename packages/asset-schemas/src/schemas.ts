@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { yamlValueIssue } from "./yaml-bounds";
 import {
   REASONING_EFFORTS,
   SKILL_RESOURCE_MEDIA_TYPES,
@@ -153,6 +154,14 @@ export const skillStarterSchema = z.strictObject({
   tools: z.array(z.string().min(1)).optional()
 });
 
+/**
+ * How much frontmatter a `SKILL.md` holds beside its name, title and description, as JSON, in
+ * characters. The keys of the public skill convention are a few lines.
+ */
+export const SKILL_FRONTMATTER_MAX_BYTES = 8_192;
+/** How deep the frontmatter of a `SKILL.md` nests at most. */
+export const SKILL_FRONTMATTER_MAX_DEPTH = 8;
+
 /** One file of a skill's folder as its index names it: no content. */
 export const skillFileEntrySchema = z.object({
   path: z.string().min(1),
@@ -184,7 +193,20 @@ const skillConfigObjectSchema = z.object({
   content: z.string().min(1),
   resources: z.array(skillResourceConfigSchema).optional(),
   files: z.array(skillFileEntrySchema).optional(),
-  frontmatter: z.record(z.string(), z.unknown()).optional()
+  frontmatter: z
+    .record(z.string(), z.unknown())
+    .optional()
+    // A config is JSON, which has no alias. Its frontmatter is held to the size and the depth
+    // a file's is, so neither way of writing a skill stores more than the other.
+    .refine(
+      (frontmatter) =>
+        frontmatter === undefined ||
+        (yamlValueIssue(frontmatter, SKILL_FRONTMATTER_MAX_DEPTH) === undefined &&
+          JSON.stringify(frontmatter).length <= SKILL_FRONTMATTER_MAX_BYTES),
+      {
+        message: `Skill frontmatter holds at most ${SKILL_FRONTMATTER_MAX_BYTES} characters as JSON, nested at most ${SKILL_FRONTMATTER_MAX_DEPTH} levels`
+      }
+    )
 });
 
 export const skillConfigSchema = skillConfigObjectSchema.superRefine((skill, context) => {

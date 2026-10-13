@@ -53,6 +53,14 @@ const SKILL_TEXT_EXTENSIONS: readonly string[] = [
   "csv"
 ];
 
+/**
+ * How long the path of a file of a skill is at most, in characters, and one segment of it. A
+ * file set takes longer paths than a file system holds as one name, and a folder of a skill
+ * is one that is put on a disk.
+ */
+const SKILL_PATH_MAX_CHARS = 240;
+const SKILL_PATH_SEGMENT_MAX_CHARS = 100;
+
 /** How large one file of a skill is at most, in bytes. */
 const SKILL_FILE_MAX_BYTES = 2 * 1024 * 1024;
 /** How many files one skill holds at most. */
@@ -63,6 +71,9 @@ const SKILL_MAX_BYTES = 8 * 1024 * 1024;
 type SkillFileRefusal =
   | "skill_manifest_missing"
   | "skill_manifest_invalid"
+  | "skill_frontmatter_alias"
+  | "skill_frontmatter_too_deep"
+  | "skill_frontmatter_too_large"
   | "skill_path_invalid"
   | "skill_path_duplicate"
   | "skill_file_too_large"
@@ -146,6 +157,23 @@ const LFS_POINTER = /^version https:\/\/git-lfs\.[a-z0-9.-]+\/spec\/v\d+\r?\n/u;
 /** How many bytes of a file are read for the first line of a pointer. */
 const LFS_POINTER_LINE_MAX_BYTES = 128;
 
+/** Where the first header of a PE program says its second one begins. */
+const PE_HEADER_OFFSET_AT = 0x3c;
+
+/**
+ * Whether a file that begins with `MZ` is a PE program: its first header names where the
+ * second begins, and that one begins with `PE` and two zero bytes. A text may begin with the
+ * two letters.
+ */
+function holdsPeHeader(bytes: Uint8Array): boolean {
+  if (bytes.byteLength < PE_HEADER_OFFSET_AT + 4) return false;
+  const at = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(
+    PE_HEADER_OFFSET_AT,
+    true
+  );
+  return at + 4 <= bytes.byteLength && startsWith(bytes.subarray(at), [0x50, 0x45, 0, 0]);
+}
+
 const startsWith = (bytes: Uint8Array, prefix: ArrayLike<number>) =>
   bytes.byteLength >= prefix.length &&
   Array.from(prefix).every((byte, index) => bytes[index] === byte);
@@ -153,7 +181,12 @@ const startsWith = (bytes: Uint8Array, prefix: ArrayLike<number>) =>
 /** Refuses one file for what it is, whatever its path says it is. */
 function requireStorableSkillFile(file: SkillFileInput): void {
   const { path, bytes } = file;
-  const issue = fileSetPathIssue(path);
+  const tooLong =
+    path.length > SKILL_PATH_MAX_CHARS ||
+    path.split("/").some((segment) => segment.length > SKILL_PATH_SEGMENT_MAX_CHARS);
+  const issue = tooLong
+    ? `a path has at most ${SKILL_PATH_MAX_CHARS} characters and each of its segments at most ${SKILL_PATH_SEGMENT_MAX_CHARS}`
+    : fileSetPathIssue(path);
   if (issue || path.includes("\\")) {
     throw refusal(
       "skill_path_invalid",
@@ -168,7 +201,9 @@ function requireStorableSkillFile(file: SkillFileInput): void {
       { path, cap: "SKILL_FILE_MAX_BYTES", limit: SKILL_FILE_MAX_BYTES, actual: bytes.byteLength }
     );
   }
-  const compiled = EXECUTABLE_MAGIC.find((magic) => startsWith(bytes, magic.bytes));
+  const compiled = EXECUTABLE_MAGIC.find(
+    (magic) => startsWith(bytes, magic.bytes) && (magic.name !== "PE" || holdsPeHeader(bytes))
+  );
   if (compiled) {
     throw refusal(
       "skill_file_executable",
@@ -233,6 +268,20 @@ export function readSkillFiles(name: string, files: readonly SkillFileInput[]): 
     }
     seen.add(key);
   }
+  // A path that is the folder of another one is two things at one place.
+  for (const file of files) {
+    const segments = file.path.toLowerCase().split("/");
+    for (let depth = 1; depth < segments.length; depth += 1) {
+      const folder = segments.slice(0, depth).join("/");
+      if (seen.has(folder)) {
+        throw refusal(
+          "skill_path_duplicate",
+          `The file '${file.path}' lies below '${folder}', which is a file of the skill itself. A path is a file or a folder and not both.`,
+          { path: file.path }
+        );
+      }
+    }
+  }
   const manifest = files.find((file) => file.path === SKILL_MANIFEST_FILE);
   if (!manifest) {
     throw refusal(
@@ -284,8 +333,11 @@ export function readSkillFiles(name: string, files: readonly SkillFileInput[]): 
 
 /** The name, title, description and content a `SKILL.md` holds. A file without a name has the skill's. */
 function readSkillManifest(name: string, bytes: Uint8Array): Record<string, unknown> {
-  const invalid = (message: string, details: JsonObject = {}) =>
-    refusal("skill_manifest_invalid", message, { path: SKILL_MANIFEST_FILE, ...details });
+  const invalid = (
+    message: string,
+    details: JsonObject = {},
+    reason: SkillFileRefusal = "skill_manifest_invalid"
+  ) => refusal(reason, message, { path: SKILL_MANIFEST_FILE, ...details });
   const text = textOf(bytes);
   if (text === undefined) {
     throw invalid(`'${SKILL_MANIFEST_FILE}' is no UTF-8 text.`);
@@ -305,7 +357,8 @@ function readSkillManifest(name: string, bytes: Uint8Array): Record<string, unkn
               path: path.map(String)
             }))
           }
-        : {}
+        : {},
+      error.reason
     );
   }
 }

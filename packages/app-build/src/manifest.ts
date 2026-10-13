@@ -1,5 +1,5 @@
 import { load, JSON_SCHEMA, YAMLException } from "js-yaml";
-import { fileSetPathIssue } from "@vivd-catalyst/core";
+import { fileSetPathIssue, yamlValueIssue, yamlValueIssueSentence } from "@vivd-catalyst/core";
 import { z } from "zod";
 import { compiledAppActionSchema, dataStoreReferenceSchema } from "./action-input";
 import { RELEASED_KIT_VERSIONS } from "./kit";
@@ -155,6 +155,11 @@ export function parsePageManifest(bytes: Uint8Array): ParsedPageManifest {
       return fail(`The manifest is not valid YAML: ${error.reason}`, error.mark.line + 1);
     }
     return fail("The manifest is not UTF-8 text.");
+  }
+  // Before anything walks it: a few lines of nested aliases are a value of any size.
+  const bound = yamlValueIssue(value);
+  if (bound) {
+    return fail(`The manifest is not read: ${yamlValueIssueSentence(bound)}.`);
   }
   const parsed = pageManifestSchema.safeParse(value);
   if (parsed.success) {

@@ -8,7 +8,9 @@ import {
   type AssetScope,
   type AssetValidationIssue,
   type DataStoreAppliedMigration,
-  type JsonObject
+  type JsonObject,
+  yamlValueIssue,
+  yamlValueIssueSentence
 } from "@vivd-catalyst/core";
 
 // What a Data Store's folder is read into: the definition a revision holds as its config.
@@ -252,6 +254,15 @@ function readManifest(
     loaded = text === undefined ? undefined : yaml.load(text);
   } catch {
     loaded = undefined;
+  }
+  // Before anything walks it: a few lines of nested aliases are a value of any size.
+  const bound = yamlValueIssue(loaded);
+  if (bound) {
+    issues.push({
+      message: `'${DATA_STORE_MANIFEST_FILE}' is not read: ${yamlValueIssueSentence(bound)}`,
+      path
+    });
+    return undefined;
   }
   const parsed = manifestSchema.safeParse(loaded);
   if (!parsed.success) {

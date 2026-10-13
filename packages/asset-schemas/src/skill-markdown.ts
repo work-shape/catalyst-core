@@ -1,15 +1,36 @@
 import yaml from "js-yaml";
 import type { z } from "zod";
-import { skillFileFrontmatterSchema } from "./schemas";
+import {
+  SKILL_FRONTMATTER_MAX_BYTES,
+  SKILL_FRONTMATTER_MAX_DEPTH,
+  skillFileFrontmatterSchema
+} from "./schemas";
+import { yamlValueIssue, yamlValueIssueSentence } from "./yaml-bounds";
 
-/** A skill file that cannot be read as a skill. `details.issues` names each invalid field. */
+/**
+ * Why a frontmatter is refused before its fields are read: for an alias, for its depth, or
+ * for the size of what it holds beside the name, the title and the description.
+ */
+export type SkillFrontmatterRefusal =
+  "skill_frontmatter_alias" | "skill_frontmatter_too_deep" | "skill_frontmatter_too_large";
+
+/**
+ * A skill file that cannot be read as a skill. `details.issues` names each invalid field, and
+ * `reason` what refused the frontmatter as a whole.
+ */
 export class SkillMarkdownError extends Error {
   readonly details?: { issues: z.core.$ZodIssue[] };
+  readonly reason?: SkillFrontmatterRefusal;
 
-  constructor(message: string, details?: { issues: z.core.$ZodIssue[] }) {
+  constructor(
+    message: string,
+    details?: { issues: z.core.$ZodIssue[] },
+    reason?: SkillFrontmatterRefusal
+  ) {
     super(message);
     this.name = "SkillMarkdownError";
     this.details = details;
+    this.reason = reason;
   }
 }
 
@@ -29,6 +50,15 @@ export function parseSkillMarkdown(
   }
 
   const frontmatterRaw = yaml.load(match[1] ?? "");
+  // Before anything walks it: a few lines of nested aliases are a value of any size.
+  const issue = yamlValueIssue(frontmatterRaw, SKILL_FRONTMATTER_MAX_DEPTH);
+  if (issue) {
+    throw new SkillMarkdownError(
+      `Skill file '${skillFile}' frontmatter is not read: ${yamlValueIssueSentence(issue, SKILL_FRONTMATTER_MAX_DEPTH)}`,
+      undefined,
+      issue === "alias" ? "skill_frontmatter_alias" : "skill_frontmatter_too_deep"
+    );
+  }
   const frontmatter = skillFileFrontmatterSchema.safeParse(frontmatterRaw);
   if (!frontmatter.success) {
     throw new SkillMarkdownError(`Skill file '${skillFile}' frontmatter is invalid`, {
@@ -40,7 +70,15 @@ export function parseSkillMarkdown(
   const { name: named, title, description, ...others } = frontmatter.data;
   const name = named ?? deriveSkillName(skillPath);
   // What the platform does not read is kept as JSON: a date of the YAML becomes its text.
-  const kept: unknown = JSON.parse(JSON.stringify(others));
+  const json = JSON.stringify(others);
+  if (json.length > SKILL_FRONTMATTER_MAX_BYTES) {
+    throw new SkillMarkdownError(
+      `Skill file '${skillFile}' holds ${json.length} characters of frontmatter beside its name, title and description. It holds at most ${SKILL_FRONTMATTER_MAX_BYTES} (SKILL_FRONTMATTER_MAX_BYTES)`,
+      undefined,
+      "skill_frontmatter_too_large"
+    );
+  }
+  const kept: unknown = JSON.parse(json);
   return {
     name,
     title: title ?? deriveSkillTitle(name, content),
