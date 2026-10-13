@@ -21,6 +21,15 @@ import {
 // record, and how long the reads of the run's page take afterwards.
 
 const ITEMS = Number(process.env.WORKFLOW_PROBE_ITEMS ?? WORKFLOW_LOOP_MAX_ITEMS);
+/**
+ * `WORKFLOW_PROBE_BUILT=1` starts the server from the built packages, with the arguments of
+ * Node that `WORKFLOW_PROBE_NODE_ARGS` names, such as `--max-old-space-size=256 --expose-gc`.
+ * The server then says what it holds once a second, and the record keeps what it said when the
+ * loop had started none, a quarter, half, three quarters and all of its items.
+ */
+const BUILT = process.env.WORKFLOW_PROBE_BUILT === "1";
+const NODE_ARGS = (process.env.WORKFLOW_PROBE_NODE_ARGS ?? "").split(" ").filter(Boolean);
+const QUARTERS = [0, 0.25, 0.5, 0.75, 1].map((part) => Math.round(ITEMS * part));
 const MINUTE_MS = 60_000;
 /** The bound a read of the run list or of the run's page is held to. */
 const READ_WITHIN_MS = 200;
@@ -76,7 +85,9 @@ describe(`a Workflow Run with a loop over ${ITEMS} items`, () => {
   it(
     "ends, and its record is read within the bound",
     async () => {
-      const { world: t, worker } = await openProbeWorld();
+      const { world: t, worker } = await openProbeWorld(
+        BUILT ? { built: { nodeArgs: NODE_ARGS } } : {}
+      );
       open = t;
       await t.publish(WORKFLOW);
 
@@ -104,8 +115,14 @@ describe(`a Workflow Run with a loop over ${ITEMS} items`, () => {
 
       // How many jobs of the run its process holds at once, asked while the run runs.
       let mostRunningJobs = 0;
+      /** When the run had created the step runs of so many items, by the clock of this process. */
+      const reachedAt = new Map<number, number>([[0, startedAt]]);
       await waitFor(
         async () => {
+          const items = (await t.run(run.id)).stepRunCount - 2;
+          for (const quarter of QUARTERS) {
+            if (items >= quarter && !reachedAt.has(quarter)) reachedAt.set(quarter, Date.now());
+          }
           const [row] = await t.sql(
             (sql) => sql<{ count: number }[]>`
               select count(*)::int as count from platform_jobs
@@ -120,6 +137,22 @@ describe(`a Workflow Run with a loop over ${ITEMS} items`, () => {
       const wallMs = Date.now() - startedAt;
       const after = await t.run(run.id);
       const peakResidentBytes = worker.peakResidentBytes();
+      const samples = await worker.memorySamples();
+      const megabytes = (bytes: number) => Math.round(bytes / (1_024 * 1_024));
+      const memory = QUARTERS.map((items) => {
+        const at = reachedAt.get(items) ?? Date.now();
+        const sample = samples.find((candidate) => candidate.at >= at) ?? samples.at(-1);
+        return sample
+          ? {
+              items,
+              rssMb: megabytes(sample.rss),
+              heapUsedMb: megabytes(sample.heapUsed),
+              heapTotalMb: megabytes(sample.heapTotal),
+              externalMb: megabytes(sample.external),
+              arrayBuffersMb: megabytes(sample.arrayBuffers)
+            }
+          : { items };
+      });
 
       const counts = await rowCounts();
       const rowsWritten = Object.fromEntries(
@@ -216,8 +249,11 @@ describe(`a Workflow Run with a loop over ${ITEMS} items`, () => {
         },
         wallMs,
         itemsPerSecond: Math.round((ITEMS / wallMs) * 1_000),
+        built: BUILT,
+        nodeArgs: NODE_ARGS,
         idleResidentBytes,
         peakResidentBytes,
+        memory,
         mostRunningJobs,
         run: { status: after.status, error: after.error, stepRunCount: after.stepRunCount },
         loop: loop?.loop,

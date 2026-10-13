@@ -1,9 +1,10 @@
-import { execFile, type ChildProcess } from "node:child_process";
+import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { createWriteStream } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import type { ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import type postgres from "postgres";
 import { z } from "zod";
@@ -53,6 +54,25 @@ const TOOLS = [
 ] as const;
 type ToolName = (typeof TOOLS)[number]["name"];
 
+const memorySampleSchema = z.object({
+  at: z.number(),
+  rss: z.number(),
+  heapTotal: z.number(),
+  heapUsed: z.number(),
+  external: z.number(),
+  arrayBuffers: z.number()
+});
+type ProbeMemorySample = z.infer<typeof memorySampleSchema>;
+
+interface ProbeWorldOptions {
+  /**
+   * Starts the server from the built packages, as a deployment runs it, with these arguments
+   * of Node before its file. Left out, the server starts from source through the TypeScript
+   * loader, which holds some 400 MB by itself.
+   */
+  built?: { nodeArgs: readonly string[] };
+}
+
 export interface ProbeWorker {
   /** The process id of the server, which the probe started and alone may kill. */
   readonly pid: number;
@@ -60,6 +80,8 @@ export interface ProbeWorker {
   residentBytes(): Promise<number>;
   /** The largest resident set the process had when it was sampled, in bytes. */
   peakResidentBytes(): number;
+  /** What the process said of its own memory, once a second. Only of a built server. */
+  memorySamples(): Promise<ProbeMemorySample[]>;
   /** Ends the process as the kernel does: `SIGKILL`, with no chance to clean up. */
   kill(): Promise<void>;
 }
@@ -92,7 +114,9 @@ async function residentBytes(pid: number): Promise<number> {
 }
 
 /** Opens the world with its first server process, which has discovered the Connection. */
-export async function openProbeWorld(): Promise<{ world: ProbeWorld; worker: ProbeWorker }> {
+export async function openProbeWorld(
+  options: ProbeWorldOptions = {}
+): Promise<{ world: ProbeWorld; worker: ProbeWorker }> {
   const closing: (() => Promise<unknown>)[] = [];
   const close = async () => {
     for (const end of closing.splice(0).reverse()) await end();
@@ -228,18 +252,33 @@ export async function openProbeWorld(): Promise<{ world: ProbeWorld; worker: Pro
         const applicationName = `workflow_probe_worker_${started}`;
         const url = new URL(databaseUrl);
         url.searchParams.set("application_name", applicationName);
-        const child = startTestProcess(new URL("./instance-process.ts", import.meta.url), {
-          args: ["server", "without-capability"],
-          env: {
-            PATH: process.env.PATH,
-            CLIENT_CONFIG_PATH: configPath,
-            DATABASE_URL: url.toString(),
-            // Any free port: the probe speaks to the API of its own process.
-            PORT: "0",
-            ...env
-          },
-          stdio: ["ignore", "pipe", "inherit"]
-        });
+        const processEnv = {
+          PATH: process.env.PATH,
+          CLIENT_CONFIG_PATH: configPath,
+          DATABASE_URL: url.toString(),
+          // Any free port: the probe speaks to the API of its own process.
+          PORT: "0",
+          ...env
+        };
+        const memoryFile = join(directory, `${applicationName}.memory.jsonl`);
+        const child = options.built
+          ? spawn(
+              process.execPath,
+              [
+                ...options.built.nodeArgs,
+                fileURLToPath(new URL("./built-instance-process.mjs", import.meta.url))
+              ],
+              {
+                cwd: directory,
+                env: { ...processEnv, WORKFLOW_PROBE_MEMORY_FILE: memoryFile },
+                stdio: ["ignore", "pipe", "inherit"]
+              }
+            )
+          : startTestProcess(new URL("./instance-process.ts", import.meta.url), {
+              args: ["server", "without-capability"],
+              env: processEnv,
+              stdio: ["ignore", "pipe", "inherit"]
+            });
         children.push(child);
         child.stdout?.pipe(createWriteStream(join(directory, `${applicationName}.log`)));
         const pid = child.pid;
@@ -277,6 +316,13 @@ export async function openProbeWorld(): Promise<{ world: ProbeWorld; worker: Pro
         return {
           pid,
           residentBytes: () => residentBytes(pid),
+          async memorySamples() {
+            const text = await readFile(memoryFile, "utf8").catch(() => "");
+            return text
+              .split("\n")
+              .filter((line) => line !== "")
+              .map((line) => memorySampleSchema.parse(JSON.parse(line)));
+          },
           peakResidentBytes: () => peak,
           kill: () => killTestProcess(child)
         };

@@ -4,7 +4,9 @@
 // test Postgres of the suite in POSTGRES_STORE_TEST_DATABASE_URL. Arguments go to Vitest, so
 // one probe is run by its file name. WORKFLOW_PROBE_REAL_TIME=1 lets the kill probe wait out
 // the lease of a killed step and the wait for a changing call, ten minutes each, instead of
-// moving the two times in the database.
+// moving the two times in the database. WORKFLOW_PROBE_BUILT=1 runs the loop on a server from
+// the built packages (`pnpm build` first), which says what memory it holds as the loop goes;
+// WORKFLOW_PROBE_NODE_ARGS names arguments of Node for it, such as --max-old-space-size=256.
 import { spawnSync } from "node:child_process";
 import { mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
