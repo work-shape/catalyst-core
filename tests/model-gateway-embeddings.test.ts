@@ -481,6 +481,25 @@ describe("openai-compatible embeddings", () => {
     ).rejects.toMatchObject({ kind: "invalid_response" });
   });
 
+  it("settles the tokens the provider reported with an answer it refused", async () => {
+    vi.stubGlobal("fetch", async () =>
+      Response.json({
+        data: [{ index: 3, embedding: [1, 0] }],
+        usage: { prompt_tokens: 5, total_tokens: 5 }
+      })
+    );
+    const f = await fixture({ adapter: await azureAdapter() });
+
+    await expect(f.gateway.embed(embedCall(["first"]))).rejects.toMatchObject({
+      kind: "invalid_response"
+    });
+
+    expect(f.governance.settled).toBe(1);
+    expect(f.governance.recorded).toEqual([
+      expect.objectContaining({ inputTokens: 5, totalTokens: 5, source: "provider_reported" })
+    ]);
+  });
+
   it("reports a refusal for too many requests as a rate limit with the provider's pause", async () => {
     vi.stubGlobal("fetch", async () =>
       Response.json(

@@ -10,6 +10,7 @@ import {
   type ModelCallUsage,
   type ModelEmbeddingPurpose,
   type ModelProviderConfig,
+  type ModelTokenUsage,
   type ReasoningEffortConfig,
   type SystemModelAttribution
 } from "@vivd-catalyst/core";
@@ -446,8 +447,9 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
       }
     });
     const limit = limitModelCall(call.signal, call.deadline);
-    // What the provider answered, which it bills whether or not the answer is whole.
-    let answered: ModelAdapterEmbedding | undefined;
+    // What the provider counted for its last answer, which it bills whether or not the answer
+    // is whole.
+    let billed: ModelTokenUsage | undefined;
     let handedOn = false;
     try {
       for (;;) {
@@ -462,7 +464,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
               deadline: call.deadline
             })
           );
-          answered = answer;
+          billed = answer.usage;
           assertEmbeddingAnswers(answer, call.texts.length, dimensions);
           handedOn = true;
           return { vectors: answer.vectors, inputTokens: answer.usage.inputTokens };
@@ -471,6 +473,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
           if (limit.expired()) throw deadlinePassed();
           const error = normalizeModelAdapterError(thrown);
           if (error instanceof ModelProviderError) {
+            if (error.usage) billed = error.usage;
             logProviderError(error, target, call.attribution);
           }
           const waitMs = policy.waitBeforeRetryMs(error, { retrySafe: true });
@@ -480,12 +483,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
     } finally {
       limit.release();
       // An embedding reads no cache, so its input is priced whole at the uncached rate.
-      await settle(
-        target,
-        admitted,
-        answered && { ...answered.usage, cachedInputTokens: 0 },
-        handedOn
-      );
+      await settle(target, admitted, billed && { ...billed, cachedInputTokens: 0 }, handedOn);
     }
   }
 

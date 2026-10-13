@@ -16,6 +16,11 @@ export function toOpenAiEmbeddingsRequestBody(request: ModelAdapterEmbeddingRequ
   };
 }
 
+const openAiEmbeddingsUsageSchema = z.object({
+  prompt_tokens: z.number().int().nonnegative(),
+  total_tokens: z.number().int().nonnegative().optional()
+});
+
 const openAiEmbeddingsResponseSchema = z.object({
   data: z.array(
     z.object({
@@ -23,17 +28,17 @@ const openAiEmbeddingsResponseSchema = z.object({
       embedding: z.array(z.number())
     })
   ),
-  usage: z
-    .object({
-      prompt_tokens: z.number().int().nonnegative(),
-      total_tokens: z.number().int().nonnegative().optional()
-    })
-    .optional()
+  usage: openAiEmbeddingsUsageSchema.optional()
 });
+
+// The usage of an answer read on its own, so an answer refused for its vectors is still settled
+// with what the provider counted for it.
+const openAiEmbeddingsUsageOfAnswerSchema = z.object({ usage: openAiEmbeddingsUsageSchema });
 
 /**
  * The vectors of an answer in the order of the texts, by each entry's `index`. An answer whose
- * indexes are not exactly those of the texts is refused; the gateway checks the lengths.
+ * indexes are not exactly those of the texts is refused, carrying the usage the provider
+ * reported with it; the gateway checks the lengths.
  */
 export function readOpenAiEmbeddings(payload: unknown, textCount: number): ModelAdapterEmbedding {
   const parsed = openAiEmbeddingsResponseSchema.safeParse(payload);
@@ -43,21 +48,29 @@ export function readOpenAiEmbeddings(payload: unknown, textCount: number): Model
     data.length !== textCount ||
     data.some((entry, position) => entry.index !== position)
   ) {
+    const billed = openAiEmbeddingsUsageOfAnswerSchema.safeParse(payload);
     throw new ModelProviderError({
       kind: "invalid_response",
-      message: "Model provider returned no embedding for each text"
+      message: "Model provider returned no embedding for each text",
+      ...(billed.success
+        ? { usage: { ...toEmbeddingUsage(billed.data.usage), webSearchCallCount: 0 } }
+        : {})
     });
   }
   const usage = parsed.data.usage;
   return {
     vectors: data.map((entry) => entry.embedding),
-    usage: usage
-      ? {
-          inputTokens: usage.prompt_tokens,
-          outputTokens: 0,
-          totalTokens: usage.prompt_tokens,
-          source: "provider_reported"
-        }
-      : noReportedUsage()
+    usage: usage ? toEmbeddingUsage(usage) : noReportedUsage()
+  };
+}
+
+function toEmbeddingUsage(
+  usage: z.output<typeof openAiEmbeddingsUsageSchema>
+): ModelAdapterEmbedding["usage"] {
+  return {
+    inputTokens: usage.prompt_tokens,
+    outputTokens: 0,
+    totalTokens: usage.prompt_tokens,
+    source: "provider_reported"
   };
 }
