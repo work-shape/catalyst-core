@@ -83,7 +83,7 @@ describe("system instructions", () => {
       subject: {
         subject: { kind: "workflow", name: "intake" },
         toolNames: ["platform.assets.open", "platform.assets.get", "platform.assets.put"],
-        skills: []
+        skillNames: []
       }
     });
 
