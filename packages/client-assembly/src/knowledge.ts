@@ -21,9 +21,9 @@ function workflowAssetKind(knowledgeBases: KnowledgeBases): WorkflowAssetKind {
     missingUpsertRight: () => undefined,
     assertInteractiveUpsertAllowed: () => undefined,
     assertInteractiveDeleteAllowed: () => undefined,
-    onPublish: ({ stores, access, assetId, revision, config }) =>
-      knowledgeBases.publish(stores, { access, assetId, revision, config }),
-    onRemove: ({ stores, assetId }) => knowledgeBases.retire(stores, assetId)
+    onPublish: ({ stores, access, assetId, revision, config, replaced }) =>
+      knowledgeBases.publish(stores, { access, assetId, revision, config, replaced }),
+    onRemove: ({ stores, assetId, published }) => knowledgeBases.retire(stores, assetId, published)
   };
 }
 

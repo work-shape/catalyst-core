@@ -33,15 +33,25 @@ export interface KnowledgeBases {
   readonly assetKind: RegisteredAssetKind<typeof KNOWLEDGE_BASE_ASSET_KIND>;
   /**
    * What a publish does beside moving the published pointer, with `stores` bound to the
-   * transaction of the publish: the publisher must be let to hand the backend's rows on, and
-   * every described table must be readable. A throw refuses the publish.
+   * transaction of the publish: the publisher must be let to hand the backend's rows on, every
+   * described table must be readable, and then the Knowledge Base is let to read those tables
+   * and no others, `replaced` being the revision published before. A throw refuses the publish.
    */
   publish(
     stores: PlatformStores,
-    input: { access: ActorAccess; assetId: string; revision: number; config: unknown }
+    input: {
+      access: ActorAccess;
+      assetId: string;
+      revision: number;
+      config: unknown;
+      replaced: unknown;
+    }
   ): Promise<void>;
-  /** What deleting the asset does: its last check goes. The backend is never touched. */
-  retire(stores: PlatformStores, assetId: string): Promise<void>;
+  /**
+   * What deleting the asset does: its last check goes, and its access to the backend with the
+   * role it read as. No table and no row of the backend is touched.
+   */
+  retire(stores: PlatformStores, assetId: string, published: unknown): Promise<void>;
   readonly operationSource: OperationSource;
   /** Describes the one knowledge tool to an agent that lists Knowledge Bases. */
   readonly toolSource: DataToolSource;
@@ -83,11 +93,20 @@ export function createKnowledgeBases(input: {
         description: knowledgeBase.description
       })
     }),
-    async publish(stores, { access, assetId, revision, config }) {
+    async publish(stores, { access, assetId, revision, config, replaced }) {
       const definition = knowledgeBaseDefinitionSchema.parse(config);
-      await runtime.backend.requirePublishRight(knowledgeTargetOf(definition), access);
+      const target = knowledgeTargetOf(definition, assetId);
+      await runtime.backend.requirePublishRight(target, access);
       const state = await checkKnowledgeBase(runtime, stores, { assetId, revision, definition });
-      if (state.status === "ok") return;
+      if (state.status === "ok") {
+        const before = knowledgeBaseDefinitionSchema.safeParse(replaced);
+        await runtime.backend.grant(
+          stores,
+          target,
+          before.success ? knowledgeTargetOf(before.data, assetId) : undefined
+        );
+        return;
+      }
       const missing = state.tables.filter((table) => !table.readable).map((table) => table.name);
       throw new AppError(
         "VALIDATION_FAILED",
@@ -97,11 +116,17 @@ export function createKnowledgeBases(input: {
         { exposeMessage: true }
       );
     },
-    retire: (stores, assetId) =>
-      stores.knowledgeBases.deleteKnowledgeBaseState({
+    async retire(stores, assetId, published) {
+      await stores.knowledgeBases.deleteKnowledgeBaseState({
         clientInstanceId: input.clientInstanceId,
         assetId
-      }),
+      });
+      const definition = knowledgeBaseDefinitionSchema.safeParse(published);
+      // A Knowledge Base never published was never let to read anything.
+      if (definition.success) {
+        await runtime.backend.retire(stores, knowledgeTargetOf(definition.data, assetId));
+      }
+    },
     operationSource: createKnowledgeOperationSource(runtime),
     toolSource: createKnowledgeToolSource(runtime)
   };

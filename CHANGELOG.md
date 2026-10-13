@@ -17,8 +17,13 @@ contain breaking changes; a patch version does not.
   that every described table can be read; otherwise it is refused with the reason
   `knowledge_base_needs_attention` and the tables it could not read. `knowledge.<id>.query`
   (`POST /api/v1/knowledge-bases/:knowledgeBase/query`) runs one read-only statement with bound
-  parameters as the store's app role under the store's timeout, row and byte caps, with the
-  asker's `knowledge_base.use` and no right on the store; every call is one recorded Operation
+  parameters under the store's timeout, row and byte caps, with the asker's
+  `knowledge_base.use` and no right on the store. It connects as a login role of the Knowledge
+  Base's own (`catalyst_kb_…`, password in the Secret Store, member of no role), which may
+  select from exactly the tables the published revision describes: publishing grants them and
+  takes the rest away in one transaction, "Check now" sets them again, and deleting the
+  Knowledge Base drops the role. A store that has a Knowledge Base takes EXECUTE on its
+  functions from PUBLIC and keeps it for its app role; every call is one recorded Operation
   Run, and the audit holds no SQL, parameter or row. `knowledge_bases.get` reads the last
   check and `knowledge_bases.check` runs it again. An agent lists Knowledge Bases under
   `knowledgeBases`; however many it lists, it gets one tool, `knowledge.query`, whose

@@ -3,6 +3,7 @@ import type { AssetKindActions } from "./asset-kinds";
 import type { ActorAccess } from "./permissions";
 import type { DataStoreRows, DataStoreStatement } from "./data-stores";
 import type { ClientInstanceId } from "./ids";
+import type { ConnectionsStore } from "./connections";
 import type { ISODateString } from "./time";
 
 // The names and shapes of a Knowledge Base that more than one package reads: the asset kind,
@@ -105,6 +106,8 @@ export interface KnowledgeBackendReference {
 
 /** The described tables of a Knowledge Base and where a backend finds them. */
 export interface KnowledgeBaseTarget {
+  /** The id of the Knowledge Base's asset, which its access on the backend is bound to. */
+  assetId: string;
   /** The id of the Knowledge Base. */
   name: string;
   backend: KnowledgeBackendReference;
@@ -123,7 +126,29 @@ export interface KnowledgeBackend {
   requirePublishRight(target: KnowledgeBaseTarget, access: ActorAccess): Promise<void>;
   /** Whether every described table can be read. It reads the catalog and no row. */
   check(target: KnowledgeBaseTarget, signal?: AbortSignal): Promise<KnowledgeCheckResult>;
-  /** Runs one read-only statement with bound parameters, under the backend's row and byte caps. */
+  /**
+   * Lets the Knowledge Base read exactly the tables `target` describes, and nothing it read
+   * for `replaced`, the revision that was published before. At no step can it read more than
+   * one of the two revisions describes. Repeating it changes nothing. What it keeps of the
+   * access, such as a password, it writes to `stores`, which a publish binds to its own
+   * transaction: a write beside it would wait for that transaction to end.
+   */
+  grant(
+    stores: { connections: ConnectionsStore },
+    target: KnowledgeBaseTarget,
+    replaced: KnowledgeBaseTarget | undefined,
+    signal?: AbortSignal
+  ): Promise<void>;
+  /** Takes every access of a deleted Knowledge Base away. Repeating it changes nothing. */
+  retire(
+    stores: { connections: ConnectionsStore },
+    target: KnowledgeBaseTarget,
+    signal?: AbortSignal
+  ): Promise<void>;
+  /**
+   * Runs one read-only statement with bound parameters, under the backend's row and byte caps,
+   * with the access `grant` gave the Knowledge Base and no other.
+   */
   query(
     target: KnowledgeBaseTarget,
     statement: DataStoreStatement,

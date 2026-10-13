@@ -9,14 +9,16 @@ import {
 import { catalogTarget, rowsOf } from "../catalog";
 import { databaseFailureError } from "../failures";
 import { readStores } from "../operations";
+import { PostgresExecutorError } from "@vivd-catalyst/postgres-connector";
 import { asStoreRole } from "../roles";
 import type { DataStoreRuntime } from "../runtime";
 import type { PublishedStore } from "../verbs";
+import { dropReader, grantReader, revokeReader } from "./reader";
 
 // The Data Store as the backend of a Knowledge Base. A Knowledge Base reads the store's rows
-// as the store's app role, in a read-only transaction under the role's statement timeout and
-// the executor's row and byte caps: the same way a query of the store itself runs. It creates
-// no table and applies no migration there. Spec: Knowledge Base on top; the Knowledge Base
+// as a role of its own, which may select from the tables it describes and nothing else
+// (`reader.ts`), in a read-only transaction under the app role's statement timeout and the
+// executor's row and byte caps. It creates no table and applies no migration there. Spec: Knowledge Base on top; the Knowledge Base
 // that describes a Data Store's tables (build plan, readiness review slice 1).
 
 /**
@@ -103,31 +105,65 @@ export function createDataStoreKnowledgeBackend(runtime: DataStoreRuntime): Know
       };
     },
 
+    async grant(stores, target, replaced, signal) {
+      const reached = await reachableStore(runtime, target);
+      if ("problem" in reached) throw unavailable(reached.problem);
+      // Away from the store before first: at no step may it read in both.
+      const before = replaced?.backend.dataStore;
+      if (before !== undefined && before !== target.backend.dataStore) {
+        const old = await storeOf(runtime, { ...target, backend: { dataStore: before } });
+        if (old?.record.status === "ready") {
+          await revokeReader(runtime, old.record, target.assetId, signal);
+        }
+      }
+      await grantReader(runtime, stores.connections, reached.store.record, target, signal);
+    },
+
+    async retire(stores, target, signal) {
+      const store = await storeOf(runtime, target);
+      if (store?.record.status === "ready") {
+        await revokeReader(runtime, store.record, target.assetId, signal);
+      }
+      await dropReader(runtime, stores.connections, target.assetId, signal);
+    },
+
     async query(target, statement, signal) {
       const reached = await reachableStore(runtime, target);
-      if ("problem" in reached) {
-        throw new AppError(
-          "CONFLICT",
-          reached.problem,
-          { reason: "knowledge_backend_unavailable" },
-          { exposeMessage: true }
-        );
-      }
+      if ("problem" in reached) throw unavailable(reached.problem);
       const { record } = reached.store;
-      try {
-        return await asStoreRole(runtime, record, signal, async () =>
-          rowsOf(
-            await runtime.server.executor.query({
-              ...runtime.server.asRole(record, "app"),
-              ...(signal ? { signal } : {}),
-              sql: statement.sql,
-              ...(statement.parameters ? { parameters: statement.parameters } : {})
-            })
-          )
+      const read = async () =>
+        rowsOf(
+          await runtime.server.executor.query({
+            ...runtime.server.asReader(record, target.assetId),
+            ...(signal ? { signal } : {}),
+            sql: statement.sql,
+            ...(statement.parameters ? { parameters: statement.parameters } : {})
+          })
         );
+      try {
+        try {
+          return await read();
+        } catch (error) {
+          // The role is missing or its password is not the one held, as for a Knowledge Base
+          // published before it had a role of its own: it is given the published access again.
+          if (!(error instanceof PostgresExecutorError) || error.kind !== "unauthorized") {
+            throw error;
+          }
+          await grantReader(runtime, runtime.stores.connections, record, target, signal);
+          return await read();
+        }
       } catch (error) {
         throw error instanceof AppError ? error : databaseFailureError(error, "The query");
       }
     }
   };
+}
+
+function unavailable(problem: string): AppError {
+  return new AppError(
+    "CONFLICT",
+    problem,
+    { reason: "knowledge_backend_unavailable" },
+    { exposeMessage: true }
+  );
 }

@@ -92,7 +92,15 @@ export const knowledgeBaseDefinitionSchema = z.strictObject({
 
 export type KnowledgeBaseDefinition = z.infer<typeof knowledgeBaseDefinitionSchema>;
 
-/** What a backend is asked about one definition. */
-export function knowledgeTargetOf(definition: KnowledgeBaseDefinition): KnowledgeBaseTarget {
-  return { name: definition.name, backend: definition.backend, tables: definition.tables };
+/** What a backend is asked about one definition of the Knowledge Base whose asset is `assetId`. */
+export function knowledgeTargetOf(
+  definition: KnowledgeBaseDefinition,
+  assetId: string
+): KnowledgeBaseTarget {
+  return {
+    assetId,
+    name: definition.name,
+    backend: definition.backend,
+    tables: definition.tables
+  };
 }

@@ -109,9 +109,15 @@ export function useDataStoreInstance(): {
         { database_name: string; app_role: string; migration_role: string }[]
       >`select database_name, app_role, migration_role from data_stores`;
       for (const record of records) {
+        // The role of a Knowledge Base on the store is found by what it may connect to.
+        const readers = await sql<{ name: string }[]>`
+          select rolname as name from pg_roles
+          where rolname like 'catalyst_kb_%'
+            and has_database_privilege(oid, ${record.database_name}, 'CONNECT')`;
         await sql.unsafe(`drop database if exists "${record.database_name}" with (force)`);
         await sql.unsafe(`drop role if exists "${record.app_role}"`);
         await sql.unsafe(`drop role if exists "${record.migration_role}"`);
+        for (const reader of readers) await sql.unsafe(`drop role if exists "${reader.name}"`);
       }
     } finally {
       await sql.end();

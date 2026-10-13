@@ -208,7 +208,7 @@ function queryOperation(
       const statement = queryInputSchema.parse(input);
       try {
         const rows = await runtime.backend.query(
-          knowledgeTargetOf(definition),
+          knowledgeTargetOf(definition, knowledgeBase.asset.id),
           statement,
           context.runtime.signal
         );
@@ -255,7 +255,11 @@ function stateOperation(
   };
 }
 
-/** Checks the published revision now and keeps what it found. It reads the catalog and no row. */
+/**
+ * Checks the published revision now and keeps what it found. It reads the catalog and no row.
+ * Where every table can be read, the Knowledge Base's access is set again to exactly those
+ * tables: a grant to its role that a store's migration added by hand is taken back.
+ */
 function checkOperation(
   runtime: KnowledgeRuntime,
   knowledgeBase: PublishedKnowledgeBase
@@ -274,19 +278,23 @@ function checkOperation(
     module: KNOWLEDGE_MODULE,
     timeoutMs: RUN_TIMEOUT_MS,
     async execute(_input, context) {
-      return stateOf(
-        knowledgeBase,
-        await checkKnowledgeBase(
-          runtime,
-          runtime.stores,
-          {
-            assetId: knowledgeBase.asset.id,
-            revision: knowledgeBase.revision,
-            definition: knowledgeBase.definition
-          },
-          context.runtime.signal
-        )
+      const { signal } = context.runtime;
+      const { asset, definition } = knowledgeBase;
+      const state = await checkKnowledgeBase(
+        runtime,
+        runtime.stores,
+        { assetId: asset.id, revision: knowledgeBase.revision, definition },
+        signal
       );
+      if (state.status === "ok") {
+        await runtime.backend.grant(
+          runtime.stores,
+          knowledgeTargetOf(definition, asset.id),
+          undefined,
+          signal
+        );
+      }
+      return stateOf(knowledgeBase, state);
     }
   };
 }

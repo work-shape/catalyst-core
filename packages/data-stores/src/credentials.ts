@@ -11,9 +11,11 @@ export type DataStoreRole = "app" | "migration";
 
 /**
  * What the Secret Store keeps per store: the password of each role, and the key the platform
- * signs its record of applied migrations with, which no role of the store ever holds.
+ * signs its record of applied migrations with, which no role of the store ever holds. Bound to
+ * a Knowledge Base on a store instead, `reader` is the password of that Knowledge Base's own
+ * role, which reads the tables it describes and nothing else.
  */
-type DataStoreSecret = DataStoreRole | "ledger";
+type DataStoreSecret = DataStoreRole | "ledger" | "reader";
 
 /** The bytes of a secret before encoding. It is random and nobody types it. */
 const DATA_STORE_PASSWORD_BYTES = 32;
@@ -32,6 +34,8 @@ export interface DataStoreCredentials {
   ): Promise<string | undefined>;
   /** The secret, made and stored when `read` has none. */
   ensure(rows: ConnectionsStore, storeId: string, secret: DataStoreSecret): Promise<string>;
+  /** Removes the secret, as when what it opens is dropped. Nothing where none is stored. */
+  remove(rows: ConnectionsStore, storeId: string, secret: DataStoreSecret): Promise<void>;
 }
 
 function bindingOf(storeId: string, secret: DataStoreSecret): SecretBinding {
@@ -61,7 +65,9 @@ export function createDataStoreCredentials(input: {
         source: "runtime"
       });
       return password;
-    }
+    },
+    remove: (rows, storeId, role) =>
+      createSecretStore({ ...input, store: rows }).delete(bindingOf(storeId, role))
   };
   return credentials;
 }

@@ -27,7 +27,10 @@ export async function checkKnowledgeBase(
   input: { assetId: string; revision: number; definition: KnowledgeBaseDefinition },
   signal?: AbortSignal
 ): Promise<KnowledgeBaseState> {
-  const result = await runtime.backend.check(knowledgeTargetOf(input.definition), signal);
+  const result = await runtime.backend.check(
+    knowledgeTargetOf(input.definition, input.assetId),
+    signal
+  );
   const state: KnowledgeBaseState = {
     ...result,
     assetId: input.assetId,
