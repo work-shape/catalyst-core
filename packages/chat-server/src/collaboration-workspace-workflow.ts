@@ -24,6 +24,11 @@ import {
 } from "@vivd-catalyst/core";
 import { getWorkspaceAssetSnapshot } from "./agent-availability";
 import type { ChatServerOptions } from "./types";
+import {
+  effectiveWorkspaceRole,
+  requireWorkspaceAccess,
+  type WorkspaceAccess
+} from "./workspace-access";
 import { assertConversationIdle } from "./conversation-idle";
 import type { DeletionOutcome } from "./subject-deletion";
 import { requestWorkspaceDeletion, type WorkspaceDeletionResult } from "./workspace-deletion";
@@ -34,17 +39,6 @@ const MAX_WORKSPACE_EMOJI_LENGTH = 32;
 const CANNOT_ADD_MEMBER_MESSAGE =
   "This user cannot be added. Invitations for people without an eligible account are not available yet.";
 const LAST_OWNER_MESSAGE = "A Shared Workspace must retain at least one active owner";
-
-/**
- * What a user may do in one Collaboration Workspace. A superadmin acts as Owner of every Shared
- * Workspace, so `role` can exceed the user's own Workspace Membership or exist without one.
- */
-export interface WorkspaceAccess {
-  userId: UserRecord["id"];
-  role: WorkspaceMembershipRole;
-  /** The user's own Workspace Membership role; null when only the superadmin role gives access. */
-  membershipRole: WorkspaceMembershipRole | null;
-}
 
 /** The least role a workspace operation asks of its caller. `member` is any role. */
 export type WorkspaceRoleNeeded = "member" | "admin" | "owner";
@@ -115,35 +109,12 @@ export interface UpdateWorkspaceSettingsCommand {
 export class CollaborationWorkspaceWorkflow {
   constructor(private readonly options: ChatServerOptions) {}
 
-  /**
-   * The single access check for a Collaboration Workspace. Nobody but its user reaches a
-   * Personal Workspace, and private Conversations stay with their author (ADR-0015).
-   */
-  async requireWorkspaceAccess(
+  /** The single access check for a Collaboration Workspace: `requireWorkspaceAccess`. */
+  requireWorkspaceAccess(
     user: AuthenticatedUser,
     collaborationWorkspaceId: CollaborationWorkspaceId
   ): Promise<WorkspaceAccess> {
-    const userId = asUserId(getSubjectUserId(user));
-    const membership = await this.options.stores.workspaces.getMembership({
-      clientInstanceId: this.options.clientInstanceId,
-      collaborationWorkspaceId,
-      userId
-    });
-    const membershipRole = membership?.role ?? null;
-    // Only a superadmin's access depends on the workspace itself, so only they load it here.
-    const workspace = isSuperadmin(user)
-      ? await this.options.stores.workspaces.getWorkspace(
-          this.options.clientInstanceId,
-          collaborationWorkspaceId
-        )
-      : undefined;
-    const role = workspace
-      ? effectiveWorkspaceRole(user, workspace, membershipRole)
-      : membershipRole;
-    if (!role) {
-      throw new AppError("NOT_FOUND", "Collaboration Workspace is not available");
-    }
-    return { userId, role, membershipRole };
+    return requireWorkspaceAccess(this.options, user, collaborationWorkspaceId);
   }
 
   /**
@@ -865,15 +836,6 @@ export class CollaborationWorkspaceWorkflow {
       metadata
     });
   }
-}
-
-/** Membership decides, except that a superadmin is Owner of every Shared Workspace. */
-function effectiveWorkspaceRole<Role extends WorkspaceMembershipRole | null>(
-  user: AuthenticatedUser,
-  workspace: Pick<CollaborationWorkspace, "kind">,
-  membershipRole: Role
-): WorkspaceMembershipRole | Role {
-  return isSuperadmin(user) && workspace.kind === "shared" ? "owner" : membershipRole;
 }
 
 /**

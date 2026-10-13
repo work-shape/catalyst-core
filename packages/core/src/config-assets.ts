@@ -363,6 +363,12 @@ export interface ConfigAssetKey {
   published?: boolean;
 }
 
+/** The definitions a title is read from: the active revision, and the published one if any. */
+export interface ConfigAssetTitleSource {
+  active?: JsonObject;
+  published?: JsonObject;
+}
+
 export interface ConfigAssetStore {
   getConfigAssetState(input: { clientInstanceId: ClientInstanceId }): Promise<ConfigAssetState>;
   listActiveConfigAssets(input: {
@@ -382,8 +388,15 @@ export interface ConfigAssetStore {
     scope: AssetScope;
     /** Only assets whose name starts with this text, such as a Namespace prefix. */
     namePrefix?: string;
-    /** Only assets whose name contains this text, whatever the case. */
-    nameContains?: string;
+    /**
+     * Only assets whose name or title contains `contains`, whatever the case. The title is the
+     * kind's, so the store reads the revisions of an asset whose name does not match and asks
+     * `titleOf` for the title its caller is shown.
+     */
+    text?: {
+      contains: string;
+      titleOf(asset: ConfigAssetKey, revisions: ConfigAssetTitleSource): string;
+    };
     /** The name the page starts after. */
     afterName?: string;
     limit: number;
