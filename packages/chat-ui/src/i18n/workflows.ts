@@ -52,6 +52,26 @@ export const workflows = defineTranslations({
     "workflows.canvas.workflow": "Workflow",
     "workflows.description":
       "Work the platform does by itself, step by step: on a schedule or when you start it.",
+    "workflows.draft.ahead": "Draft differs from published",
+    "workflows.draft.aheadBody":
+      "You see the draft here. Runs use the published version until the draft is published.",
+    "workflows.draft.discard": "Discard",
+    "workflows.draft.discardBody":
+      "The draft goes back to the published revision {number}. The discarded revisions are kept.",
+    "workflows.draft.discardFailed": "The draft could not be discarded.",
+    "workflows.draft.discardTitle": "Discard the draft of “{name}”?",
+    "workflows.draft.pending": "The change waits for an approval.",
+    "workflows.draft.publish": "Publish",
+    "workflows.draft.publishBody":
+      "Revision {number} becomes the version that runs, by hand and on its schedule.",
+    "workflows.draft.publishFailed": "The draft could not be published.",
+    "workflows.draft.publishTitle": "Publish “{name}”?",
+    "workflows.draft.unpublished": "Draft, not published yet",
+    "workflows.draft.unpublishedBody":
+      "This workflow has no published version. It can be started once the draft is published.",
+    "workflows.edit.failed": "The conversation could not be started.",
+    "workflows.edit.refused": "This workflow is not available to you for editing with the agent.",
+    "workflows.edit.withAgent": "Edit with the agent",
     "workflows.emptyReadOnly": "No workflows yet. A builder of this workspace can add one.",
     "workflows.failed": "The workflow could not be loaded.",
     "workflows.listFailed": "The workflows could not be loaded.",
@@ -266,6 +286,27 @@ export const workflows = defineTranslations({
     "workflows.canvas.workflow": "Workflow",
     "workflows.description":
       "Arbeit, die die Plattform selbst erledigt, Schritt für Schritt: nach Zeitplan oder wenn du sie startest.",
+    "workflows.draft.ahead": "Entwurf weicht von der veröffentlichten Version ab",
+    "workflows.draft.aheadBody":
+      "Du siehst hier den Entwurf. Läufe nutzen die veröffentlichte Version, bis der Entwurf veröffentlicht ist.",
+    "workflows.draft.discard": "Verwerfen",
+    "workflows.draft.discardBody":
+      "Der Entwurf geht auf die veröffentlichte Revision {number} zurück. Die verworfenen Revisionen bleiben erhalten.",
+    "workflows.draft.discardFailed": "Der Entwurf konnte nicht verworfen werden.",
+    "workflows.draft.discardTitle": "Entwurf von „{name}“ verwerfen?",
+    "workflows.draft.pending": "Die Änderung wartet auf eine Freigabe.",
+    "workflows.draft.publish": "Veröffentlichen",
+    "workflows.draft.publishBody":
+      "Revision {number} wird die Version, die läuft, von Hand und nach ihrem Zeitplan.",
+    "workflows.draft.publishFailed": "Der Entwurf konnte nicht veröffentlicht werden.",
+    "workflows.draft.publishTitle": "„{name}“ veröffentlichen?",
+    "workflows.draft.unpublished": "Entwurf, noch nicht veröffentlicht",
+    "workflows.draft.unpublishedBody":
+      "Dieser Workflow hat keine veröffentlichte Version. Er kann gestartet werden, sobald der Entwurf veröffentlicht ist.",
+    "workflows.edit.failed": "Die Unterhaltung konnte nicht gestartet werden.",
+    "workflows.edit.refused":
+      "Dieser Workflow steht dir für die Bearbeitung mit dem Agenten nicht zur Verfügung.",
+    "workflows.edit.withAgent": "Mit dem Agenten bearbeiten",
     "workflows.emptyReadOnly":
       "Noch keine Workflows. Wer in diesem Arbeitsbereich bauen darf, kann einen hinzufügen.",
     "workflows.failed": "Der Workflow konnte nicht geladen werden.",

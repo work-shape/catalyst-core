@@ -439,7 +439,9 @@ function stepNames(value: unknown, names = new Map<string, string>()): Map<strin
 /** One Workflow from its record: the definition is the record's `config`. */
 export function toWorkflow(
   asset: Pick<Asset, "name" | "config" | "publishedRevision">,
-  { revisionId, refusedFor = [], mayStart = false }: WorkflowListed = {}
+  { revisionId, refusedFor = [], mayStart = false }: WorkflowListed = {},
+  /** The asset's own pointers. The instance names a draft only to who may read it. */
+  pointers: Pick<Asset, "draftRevision" | "publishedRevision"> = {}
 ): WorkflowView {
   const definition = asset.config;
   const description = text(definition.description);
@@ -464,6 +466,16 @@ export function toWorkflow(
       (isRecord(inputs.properties) && Object.keys(inputs.properties).length > 0) ||
       (Array.isArray(inputs.required) && inputs.required.length > 0),
     refusedFor,
-    mayStart
+    mayStart,
+    ...(pointers.draftRevision === undefined
+      ? {}
+      : {
+          draft: {
+            revision: pointers.draftRevision,
+            ...(pointers.publishedRevision === undefined
+              ? {}
+              : { publishedRevision: pointers.publishedRevision })
+          }
+        })
   };
 }

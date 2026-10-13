@@ -23,6 +23,8 @@ export interface WorkflowRights {
   read: boolean;
   /** Writes every Workflow, which also cancels a run someone else started. */
   write: boolean;
+  /** Publishes every Workflow, as far as the right of the kind goes. */
+  publish: boolean;
 }
 
 /**
@@ -35,7 +37,8 @@ export function resolveWorkflowRights(context: HeldActions | undefined): Workflo
     read:
       onAll.includes(WORKFLOW_ACTIONS.read) ||
       (context?.assetActions ?? []).includes(WORKFLOW_ACTIONS.read),
-    write: onAll.includes(WORKFLOW_ACTIONS.write)
+    write: onAll.includes(WORKFLOW_ACTIONS.write),
+    publish: onAll.includes(WORKFLOW_ACTIONS.publish)
   };
 }
 
@@ -85,6 +88,42 @@ export function startOffered(
     // What the instance would refuse is not offered: the page says why in its place.
     workflow.refusedFor.length === 0
   );
+}
+
+/** How the draft of a Workflow stands beside what is published, where the two differ. */
+export type WorkflowDraftState =
+  /** No revision was published yet: the draft is all there is. */
+  | "unpublished"
+  /** The draft is another revision than the published one. */
+  | "ahead";
+
+/**
+ * What the bar over a Workflow says of its draft. Nothing where the reader is not shown the
+ * draft, and nothing where the draft is the published revision.
+ */
+export function draftState(
+  workflow: Pick<WorkflowView, "draft"> | undefined
+): WorkflowDraftState | undefined {
+  const draft = workflow?.draft;
+  if (draft === undefined) {
+    return undefined;
+  }
+  if (draft.publishedRevision === undefined) {
+    return "unpublished";
+  }
+  return draft.revision === draft.publishedRevision ? undefined : "ahead";
+}
+
+/**
+ * Whether "Edit with the agent" stands on the page of a Workflow: the reader may write
+ * Workflows, and the instance showed them the draft of this one, which is what the agent of
+ * such a conversation reads and saves.
+ */
+export function editOffered(
+  rights: Pick<WorkflowRights, "write">,
+  workflow: Pick<WorkflowView, "draft"> | undefined
+): boolean {
+  return rights.write && workflow?.draft !== undefined;
 }
 
 /** Whether "Cancel run" stands on the page of a run: it is going, and the reader may end it. */

@@ -110,7 +110,11 @@ export function useWorkflow(
     queryKey: [...keys.assets, "workflow", workspaceId ?? "", workflow ?? ""],
     queryFn: ({ signal }) => source.getWorkflow(workspaceId ?? "", workflow ?? "", signal),
     enabled: workspaceId !== undefined && workflow !== undefined,
-    retry: retryUnlessGone
+    retry: retryUnlessGone,
+    // The agent of a conversation saves a draft without this page knowing: whoever comes back
+    // to the page is shown the Workflow as it is now. A return to the window reads it again
+    // by the default of every read.
+    refetchOnMount: "always"
   });
   return {
     workflow: query.data,
@@ -336,4 +340,31 @@ export function useWorkflowWrites(): WorkflowWrites {
       cancel: async (runId) => runsOf(runs).cancel(runId).finally(changed)
     };
   }, [keys, queryClient, runs]);
+}
+
+/** What a person does to the draft of a Workflow from its page. */
+export interface WorkflowDraftWrites {
+  publish(workflow: string, revision: number): Promise<void>;
+  discard(workflow: string, expectedRevision: number): Promise<void>;
+}
+
+/**
+ * The publish and the discard of a draft, where the source holds drafts. Each drops every
+ * read of a Workflow, refused or not: a refusal may say that the draft is another one now.
+ */
+export function useWorkflowDraftWrites(): WorkflowDraftWrites | undefined {
+  const { drafts } = useWorkflowsSource();
+  const queryClient = useQueryClient();
+  const keys = useWorkflowKeys();
+  return useMemo(() => {
+    if (drafts === undefined) {
+      return undefined;
+    }
+    const changed = () => queryClient.invalidateQueries({ queryKey: keys.assets });
+    return {
+      publish: async (workflow, revision) => drafts.publish(workflow, revision).finally(changed),
+      discard: async (workflow, expectedRevision) =>
+        drafts.discard(workflow, expectedRevision).finally(changed)
+    };
+  }, [drafts, keys, queryClient]);
 }

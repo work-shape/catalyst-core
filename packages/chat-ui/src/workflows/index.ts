@@ -22,12 +22,15 @@ export {
 } from "./workflow-data";
 export {
   cancelOffered,
+  draftState,
+  editOffered,
   failureHappened,
   resolveWorkflowRights,
   startOffered,
   workflowsAccess
 } from "./workflow-model";
 export { StartDialog } from "./start-run";
+export { DraftChangeDialog } from "./workflow-draft";
 export { WorkflowPageView } from "./workflow-page";
 export { WorkflowsPageView } from "./workflows-page";
 // The address of the area and its row in the rail, which the same tests hold.

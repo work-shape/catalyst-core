@@ -78,18 +78,29 @@ describe("who is shown the Workflows area", () => {
 
 describe("what a reader holds on Workflows as a whole", () => {
   it("names reading and writing, and leaves the start to each Workflow's entry of the list", () => {
-    expect(resolveWorkflowRights(reader)).toEqual({ read: true, write: false });
+    expect(resolveWorkflowRights(reader)).toEqual({ read: true, write: false, publish: false });
     expect(resolveWorkflowRights({ actions: [], assetActions: ["workflow.read"] })).toEqual({
       read: true,
-      write: false
+      write: false,
+      publish: false
     });
     expect(
       resolveWorkflowRights({ actions: ["workflow.read", "workflow.write"], assetActions: [] })
-    ).toEqual({ read: true, write: true });
+    ).toEqual({ read: true, write: true, publish: false });
+  });
+
+  it("names publishing apart from writing", () => {
+    expect(
+      resolveWorkflowRights({ actions: ["workflow.read", "workflow.publish"], assetActions: [] })
+    ).toEqual({ read: true, write: false, publish: true });
   });
 
   it("holds nothing before the instance has answered", () => {
-    expect(resolveWorkflowRights(undefined)).toEqual({ read: false, write: false });
+    expect(resolveWorkflowRights(undefined)).toEqual({
+      read: false,
+      write: false,
+      publish: false
+    });
   });
 });
 

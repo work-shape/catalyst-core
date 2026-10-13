@@ -10,6 +10,7 @@ import type {
   SafeConfig,
   StartConversationRunResponse
 } from "@vivd-catalyst/api-client";
+import { WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
 import type { ThemeInputs } from "@vivd-catalyst/ui/theme";
 import { useApprovalPendingCountQuery } from "../approvals/approval-request-api";
 import {
@@ -198,6 +199,11 @@ export interface WorkspaceChatModel {
 interface WorkflowsModel {
   access: WorkflowsAccess;
   rights: WorkflowRights;
+  /**
+   * Starts a conversation of the open workspace about this Workflow and opens it. Rejects
+   * where the instance refuses the conversation.
+   */
+  editWithAgent(workflow: string): Promise<void>;
 }
 
 /** What the workspace knows for the Agents page. The agents themselves are the picker's. */
@@ -654,6 +660,27 @@ export function useWorkspaceChatModel({
     setNotice(undefined);
     workspaceCache.invalidateConversations();
     return conversation.id;
+  }
+
+  /**
+   * A conversation of the open workspace about one Workflow, opened once the instance made it.
+   * What a conversation is about is set when it is made, so it is made before its first turn.
+   */
+  async function startConversationAboutWorkflow(workflow: string): Promise<void> {
+    if (!activeCollaborationWorkspaceId) {
+      throw new Error("A conversation about a Workflow belongs to a workspace");
+    }
+    const conversation = await client.conversations.create({
+      body: {
+        locale: activeLocale,
+        collaborationWorkspaceId: activeCollaborationWorkspaceId,
+        subject: { kind: WORKFLOW_ASSET_KIND, name: workflow }
+      }
+    });
+    showConversationInActiveCollaborationWorkspace(conversation.id);
+    setNotice(undefined);
+    workspaceCache.invalidateConversations();
+    chrome.requestComposerFocus();
   }
 
   // A conversation that only existed to hold draft attachments is an unsent draft. Once the
@@ -1126,7 +1153,11 @@ export function useWorkspaceChatModel({
       rights: appRights,
       startChat: startNewConversationWith
     },
-    workflows: { access: workflowsOpen, rights: workflowRights },
+    workflows: {
+      access: workflowsOpen,
+      rights: workflowRights,
+      editWithAgent: startConversationAboutWorkflow
+    },
     selectedChat: {
       client,
       config,

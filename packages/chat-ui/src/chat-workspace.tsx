@@ -543,7 +543,8 @@ function ChatWorkspaceContent({
                             workspace: activeWorkspace
                               ? { id: activeWorkspace.id, name: activeWorkspace.name }
                               : undefined,
-                            showRoute: model.route.showRoute
+                            showRoute: model.route.showRoute,
+                            editWithAgent: model.workflows.editWithAgent
                           }}
                         >
                           <WorkflowsArea route={workflowsRoute} />

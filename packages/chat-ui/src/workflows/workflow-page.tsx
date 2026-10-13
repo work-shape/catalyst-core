@@ -10,6 +10,14 @@ import {
   type WorkflowRead,
   type WorkflowReadProblem
 } from "./workflow-data";
+import {
+  EditRefusedBanner,
+  WorkflowDraftBar,
+  useEditWithAgent,
+  useWorkflowDraft,
+  type WorkflowDraftBarState,
+  type WorkflowEdit
+} from "./workflow-draft";
 import { WorkflowHead } from "./workflow-head";
 import { startOffered } from "./workflow-model";
 import type { WorkflowStartIssue, WorkflowStepView } from "./workflow-views";
@@ -45,6 +53,8 @@ export function WorkflowPage({ workflow, opened }: { workflow: string; opened?: 
   const names = useWorkflowNames(workspaceId, before);
   const runsAvailable = useRunsAvailable();
   const start = useStartRun({ workflow: shownId, name: read.workflow?.name });
+  const edit = useEditWithAgent(shownId, read.workflow);
+  const draft = useWorkflowDraft(shownId, read.workflow);
 
   if (!host || workspaceId === undefined) {
     return null;
@@ -63,6 +73,8 @@ export function WorkflowPage({ workflow, opened }: { workflow: string; opened?: 
         read={read}
         trail={before.map((id, depth) => ({ id, name: names[depth], route: routeAt(depth) }))}
         runsAvailable={runsAvailable}
+        edit={edit}
+        draft={draft.bar}
         onOpenChild={(step) => {
           if (step.workflow !== undefined) {
             // An address of its own: the browser's way back leads one level up.
@@ -78,6 +90,7 @@ export function WorkflowPage({ workflow, opened }: { workflow: string; opened?: 
         onStart={start.open}
       />
       {start.dialog}
+      {draft.dialog}
     </>
   );
 }
@@ -89,6 +102,8 @@ export function WorkflowPageView({
   read,
   trail = [],
   runsAvailable,
+  edit,
+  draft,
   onOpenChild,
   onOpenRoute,
   onStart
@@ -101,6 +116,10 @@ export function WorkflowPageView({
   trail?: readonly WorkflowTrailEntry[];
   /** The instance runs Workflows: there is a start and a list of runs. */
   runsAvailable: boolean;
+  /** "Edit with the agent", for a reader who may write the Workflow. */
+  edit?: WorkflowEdit;
+  /** The bar of the draft, where the draft is not the published revision. */
+  draft?: WorkflowDraftBarState;
   onOpenChild(step: WorkflowStepView): void;
   onOpenRoute: OpenRoute;
   onStart(): void;
@@ -125,9 +144,12 @@ export function WorkflowPageView({
         runsAvailable={runsAvailable}
         canStart={canStart}
         startOff={startOff}
+        edit={edit}
         onStart={onStart}
         onOpenRoute={onOpenRoute}
       />
+      {edit === undefined ? null : <EditRefusedBanner edit={edit} />}
+      {draft === undefined ? null : <WorkflowDraftBar {...draft} />}
       {trail.length === 0 ? null : (
         <div className="shrink-0 border-b px-(--layout-gutter) py-2">
           <Breadcrumb

@@ -1,12 +1,13 @@
-import { Play } from "lucide-react";
+import { Bot, Play } from "lucide-react";
 import { Button, PageHeader, TabsLink, TabsNav } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
+import type { WorkflowEdit } from "./workflow-draft";
 import type { WorkflowView } from "./workflow-views";
 import { BackLink, TitlePlaceholder, routeLink, type OpenRoute } from "./workflows-frame";
 
 /**
  * The head of a Workflow, on its canvas and on the list of its runs: the way back, the name
- * and the description, "Start now", and the two tabs. The tabs are addresses. Without runs on
+ * and the description, "Edit with the agent", "Start now", and the two tabs. The tabs are addresses. Without runs on
  * the instance there is one view and no tabs.
  */
 export function WorkflowHead({
@@ -17,6 +18,7 @@ export function WorkflowHead({
   runsAvailable,
   canStart,
   startOff = false,
+  edit,
   onStart,
   onOpenRoute
 }: {
@@ -29,6 +31,8 @@ export function WorkflowHead({
   canStart: boolean;
   /** The reader may start the Workflow and the instance accepts no start of it now. */
   startOff?: boolean;
+  /** The conversation in which the agent changes the Workflow, for a reader who may write it. */
+  edit?: Pick<WorkflowEdit, "busy" | "start">;
   onStart(): void;
   onOpenRoute: OpenRoute;
 }) {
@@ -57,6 +61,14 @@ export function WorkflowHead({
         // names the area, and the Workflow's id is never shown.
         title={workflow?.name ?? <TitlePlaceholder>{t("workflows.title")}</TitlePlaceholder>}
         description={workflow?.description}
+        secondaryActions={
+          edit === undefined ? undefined : (
+            <Button variant="outline" loading={edit.busy} onClick={edit.start}>
+              <Bot aria-hidden="true" />
+              {t("workflows.edit.withAgent")}
+            </Button>
+          )
+        }
         primaryAction={
           canStart || startOff ? (
             <Button disabled={startOff} onClick={onStart}>

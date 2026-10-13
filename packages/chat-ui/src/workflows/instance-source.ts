@@ -121,10 +121,30 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
           config: isRecord(manifest) ? manifest : {},
           publishedRevision: summary === undefined ? undefined : asset.publishedRevision
         },
-        listedOf(summary)
+        listedOf(summary),
+        asset
       );
     },
-    runs: runsSource(client)
+    runs: runsSource(client),
+    // A draft is published and discarded as the draft of any asset is.
+    drafts: {
+      publish: async (workflow, revision) => {
+        done(
+          await client.assets.publish({
+            params: { kind: WORKFLOW_ASSET_KIND, name: workflow },
+            body: { revision }
+          })
+        );
+      },
+      discard: async (workflow, expectedRevision) => {
+        done(
+          await client.assets.discard_draft({
+            params: { kind: WORKFLOW_ASSET_KIND, name: workflow },
+            body: { expectedRevision }
+          })
+        );
+      }
+    }
   };
 }
 

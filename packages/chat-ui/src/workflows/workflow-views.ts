@@ -101,6 +101,18 @@ export interface WorkflowView {
   refusedFor: readonly WorkflowStartIssue[];
   /** The reader holds the right to start this Workflow, as its entry of the list says. */
   mayStart: boolean;
+  /**
+   * The draft, where the instance showed it to the reader: the steps above are then the
+   * draft's. Absent for a reader who is answered the published revision.
+   */
+  draft?: WorkflowDraftView;
+}
+
+/** The two pointers of a Workflow whose draft the reader is shown, as revision numbers. */
+interface WorkflowDraftView {
+  revision: number;
+  /** Absent before the first publish. */
+  publishedRevision?: number;
 }
 
 /** One thing the instance refuses a start for: its code and its own sentence. */

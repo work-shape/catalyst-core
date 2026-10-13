@@ -13,6 +13,12 @@ export interface WorkflowsHost {
   /** The open workspace. Absent while none is open. */
   workspace: { id: string; name: string } | undefined;
   showRoute(route: WorkspaceRoute, options?: WorkspaceRouteChangeOptions): void;
+  /**
+   * Starts a conversation of the open workspace that is about this Workflow and opens it: its
+   * agent reads and saves the draft of the Workflow. Rejects where the instance refuses the
+   * conversation. Absent where no conversation can be started, such as over samples.
+   */
+  editWithAgent?(workflow: string): Promise<void>;
 }
 
 const WorkflowsHostContext = createContext<WorkflowsHost | undefined>(undefined);

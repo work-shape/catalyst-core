@@ -66,4 +66,14 @@ export interface WorkflowsSource {
   getWorkflow(workspaceId: string, workflow: string, signal: AbortSignal): Promise<WorkflowView>;
   /** Absent where the source has no runs. */
   runs: WorkflowRunsSource | undefined;
+  /** Absent where the source holds no drafts, such as samples. */
+  drafts?: WorkflowDraftsSource;
+}
+
+/** What a person does to the draft of a Workflow: `assets.publish`, `assets.discard_draft`. */
+interface WorkflowDraftsSource {
+  /** Makes the revision with this number the published one: the one a run starts on. */
+  publish(workflow: string, revision: number): Promise<void>;
+  /** Puts the draft back on the published revision. `expectedRevision` is the draft read. */
+  discard(workflow: string, expectedRevision: number): Promise<void>;
 }

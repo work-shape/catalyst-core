@@ -78,7 +78,7 @@ export function WorkflowSamples({
   const source = useMemo(() => createSampleSource(locale, !reader), [locale, reader]);
   const host = useMemo<WorkflowsHost>(
     () => ({
-      rights: { read: true, write: !reader },
+      rights: { read: true, write: !reader, publish: false },
       viewerId: reader ? "sample-reader" : SAMPLE_VIEWER_ID,
       workspace: WORKSPACE,
       showRoute: (next: WorkspaceRoute, options) => {
