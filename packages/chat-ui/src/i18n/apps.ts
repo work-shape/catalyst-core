@@ -38,12 +38,16 @@ export const apps = defineTranslations({
     "apps.actionResultTruncated": "Shortened: the first {shown} of {total} characters.",
     "apps.actionTest": "Test",
     "apps.actionTestBody": "A real call from the draft, made in your name.",
+    "apps.actionTestBodyWorkflow":
+      "A test from the draft, in your name. It checks your rights and the input and starts no run.",
     "apps.actionTestFailed": "The call could not be made.",
     "apps.actionTestListed": "It is listed under Operations.",
     "apps.actionTestOf": "Test {name}",
     "apps.actionTestOpenRun": "Open the run in Operations",
     "apps.actionTestPending": "The call waits for an approval. Its run shows how it ends.",
     "apps.actionTestDryRun": "Not carried out in the draft",
+    "apps.actionTestDryRunWorkflow":
+      "Would have started the Workflow '{workflow}' with the input below. The draft of an App runs in safe mode and changes nothing. Publish the App to carry it out.",
     "apps.actionTestRunning": "Waiting for the answer. This can take up to half a minute.",
     "apps.actionTestTitle": "Test “{name}”",
     "apps.actionTestableInDraft": "Can be tested",
@@ -225,12 +229,16 @@ export const apps = defineTranslations({
     "apps.actionResultTruncated": "Gekürzt: die ersten {shown} von {total} Zeichen.",
     "apps.actionTest": "Testen",
     "apps.actionTestBody": "Ein echter Aufruf aus dem Entwurf in deinem Namen.",
+    "apps.actionTestBodyWorkflow":
+      "Ein Test aus dem Entwurf in deinem Namen. Er prüft deine Rechte und die Eingabe und startet keinen Lauf.",
     "apps.actionTestFailed": "Der Aufruf konnte nicht ausgeführt werden.",
     "apps.actionTestListed": "Er steht unter Operationen.",
     "apps.actionTestOf": "{name} testen",
     "apps.actionTestOpenRun": "Lauf in Operationen öffnen",
     "apps.actionTestPending": "Der Aufruf wartet auf eine Freigabe. Sein Lauf zeigt, wie er endet.",
     "apps.actionTestDryRun": "Im Entwurf nicht ausgeführt",
+    "apps.actionTestDryRunWorkflow":
+      "Hätte den Workflow „{workflow}“ mit der Eingabe unten gestartet. Der Entwurf einer App läuft im sicheren Modus und ändert nichts. Veröffentliche die App, um ihn auszuführen.",
     "apps.actionTestRunning":
       "Die Antwort steht noch aus. Das kann bis zu einer halben Minute dauern.",
     "apps.actionTestTitle": "„{name}“ testen",

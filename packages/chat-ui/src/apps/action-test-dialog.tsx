@@ -144,18 +144,23 @@ export function ActionTestDialogView({
       size="lg"
       title={t("apps.actionTestTitle", { name: action.name })}
       description={
-        <>
-          {t("apps.actionTestBody")}{" "}
-          {operations ? (
-            <Button asChild variant="link" size="sm" className="h-auto px-0 align-baseline">
-              <a href={operations.href} data-app-action-test-operations>
-                {t("apps.actionTestListed")}
-              </a>
-            </Button>
-          ) : (
-            t("apps.actionTestListed")
-          )}
-        </>
+        // A draft starts no Workflow: its test asks the rights and the input, and lists no run.
+        action.kind === "workflow" ? (
+          t("apps.actionTestBodyWorkflow")
+        ) : (
+          <>
+            {t("apps.actionTestBody")}{" "}
+            {operations ? (
+              <Button asChild variant="link" size="sm" className="h-auto px-0 align-baseline">
+                <a href={operations.href} data-app-action-test-operations>
+                  {t("apps.actionTestListed")}
+                </a>
+              </Button>
+            ) : (
+              t("apps.actionTestListed")
+            )}
+          </>
+        )
       }
       onClose={onClose}
       footer={
@@ -269,7 +274,11 @@ function TestOutcome({
         ) : null}
       </div>
       {outcome.status === "dry_run" ? (
-        <p className="text-body text-muted-foreground">{outcome.message}</p>
+        <p className="text-body text-muted-foreground">
+          {action.kind === "workflow"
+            ? t("apps.actionTestDryRunWorkflow", { workflow: action.workflow.name })
+            : outcome.message}
+        </p>
       ) : null}
       {result ? (
         <div className="grid grid-cols-1 gap-1" data-truncated={result.truncated || undefined}>
