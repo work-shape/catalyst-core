@@ -408,7 +408,9 @@ describe("Studio frame", () => {
     expect(list).not.toContain(">New ");
     expect(list).not.toContain("More actions");
     // The list says where Connections come from, with rows and without.
-    expect(list).toContain("Connections come from the release config and cannot be changed here.");
+    expect(list).toContain(
+      "The operator of this instance sets up its connections. They cannot be changed here."
+    );
     // The address of a Connection the instance does not hold says so, and names the way back.
     const missing = render(
       { kindPath: "connections", name: "crm" },
@@ -434,11 +436,11 @@ describe("Studio frame", () => {
       "No connections yet. A connection holds the access to an outside system."
     );
     expect(empty("en")).toContain(
-      "Connections come from the release config and cannot be changed here."
+      "The operator of this instance sets up its connections. They cannot be changed here."
     );
     expect(empty("en")).not.toContain("cannot be created here");
     expect(empty("de")).toContain(
-      "Verbindungen kommen aus der Release-Konfiguration und lassen sich hier nicht ändern."
+      "Der Betreiber dieser Instanz richtet ihre Verbindungen ein. Hier lassen sie sich nicht ändern."
     );
     expect(empty("en")).not.toContain(">New ");
     expect(empty("de")).toContain(

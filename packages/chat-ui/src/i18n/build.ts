@@ -117,7 +117,7 @@ export const build = defineTranslations({
       "{name} hat dies am {time} gespeichert, während du es bearbeitet hast. Dein Text ist noch da und nichts wurde überschrieben. Die neuere Version zu laden ersetzt deinen Text. Kopiere vorher, was du behalten willst.",
     "build.conflictDeletedBy":
       "{name} hat dies am {time} gelöscht, während du es bearbeitet hast. Dein Text steht noch hier, lässt sich aber nicht mehr speichern.",
-    "build.assetRefused": "Sie dürfen dieses Asset nicht lesen.",
+    "build.assetRefused": "Du darfst dieses Asset nicht lesen.",
     "build.conflictDeleted":
       "Jemand hat dies gelöscht, während du es bearbeitet hast. Dein Text steht noch hier, lässt sich aber nicht mehr speichern.",
     "build.createContinue": "Weiter",
@@ -136,26 +136,25 @@ export const build = defineTranslations({
     "build.history": "Verlauf",
     "build.historyDescription": "Jede gespeicherte Version von {name}, die neueste zuerst.",
     "build.historyStale":
-      "Diese Seite zeigt eine ältere Version. Laden Sie die neuere Version, bevor Sie eine wiederherstellen.",
+      "Diese Seite zeigt eine ältere Version. Lade die neuere Version, bevor du eine wiederherstellst.",
     "build.loadNewer": "Neuere Version laden",
     "build.loadNewerDescription": "Ungespeicherte Änderungen auf dieser Seite gehen verloren.",
     "build.loadNewerFailed":
-      "Die neuere Version konnte nicht geladen werden. Ihr Text steht noch hier. Versuchen Sie es gleich noch einmal.",
+      "Die neuere Version konnte nicht geladen werden. Dein Text steht noch hier. Versuch es gleich noch einmal.",
     "build.loadNewerTitle": "Neuere Version laden?",
     "build.nameDeleted":
-      "Ein Asset mit der Kennung {name} wurde gelöscht, und Sie dürfen seinen Verlauf nicht lesen. Gehen Sie zurück und wählen Sie eine andere.",
-    "build.nameTaken":
-      "Die Kennung {name} ist vergeben. Gehen Sie zurück und wählen Sie eine andere.",
+      "Ein Asset mit der Kennung {name} wurde gelöscht, und du darfst seinen Verlauf nicht lesen. Geh zurück und wähle eine andere.",
+    "build.nameTaken": "Die Kennung {name} ist vergeben. Geh zurück und wähle eine andere.",
     "build.openHistory": "Verlauf öffnen",
     "build.namespaceAll": "Alle Namespaces",
     "build.namespaceFilter": "Namespace",
     "build.noAccess":
-      "Studio steht Ihnen nicht zur Verfügung. Es öffnet sich für Personen mit einem Recht an einem Agenten oder einem Skill.",
+      "Studio steht dir nicht zur Verfügung. Es öffnet sich für Personen mit einem Recht an einem Agenten oder einem Skill.",
     "build.noMatchInNamespace": "Nichts in diesem Namespace.",
     "build.noSkillsChosen": "Keine Skills ausgewählt.",
     "build.pendingApproval":
-      "Diese Änderung wartet auf eine Freigabe. Es wurde noch nichts geändert und Ihr Text ist noch da.",
-    "build.readOnly": "Sie können dies lesen, aber nicht ändern.",
+      "Diese Änderung wartet auf eine Freigabe. Es wurde noch nichts geändert und dein Text ist noch da.",
+    "build.readOnly": "Du kannst dies lesen, aber nicht ändern.",
     "build.readOnlyInstance":
       "Gehört zu keinem Namespace. Ändern kann es nur, wer in der ganzen Instanz bearbeiten darf.",
     "build.readOnlyNamespace":
@@ -198,7 +197,7 @@ export const build = defineTranslations({
     "build.loadFailed": "Studio konnte nicht geladen werden.",
     "build.leaveConfirm": "Änderungen verwerfen",
     "build.leaveDescription":
-      "Was Sie auf dieser Seite geändert haben, ist noch nicht gespeichert. Beim Verlassen geht es verloren.",
+      "Was du auf dieser Seite geändert hast, ist noch nicht gespeichert. Beim Verlassen geht es verloren.",
     "build.leaveTitle": "Ohne Speichern verlassen?",
     "build.noKinds": "Auf dieser Instanz gibt es noch nichts zu bauen.",
     "build.noMatch": "Nichts passt zu „{query}“.",
