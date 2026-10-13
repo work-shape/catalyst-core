@@ -56,7 +56,7 @@ describe("a changing call that carries its key to the outside system", () => {
     await withTestSql(
       (sql) => sql`
         update platform_jobs set lease_expires_at = now() - interval '1 second'
-        where kind like 'workflow%' and status = 'running'`
+        where kind = 'workflow_run.execute_step' and status = 'running'`
     );
 
     // The next worker finds the lease ended and queues the step again after the wait before a
@@ -117,7 +117,7 @@ describe("a changing call that carries its key to the outside system", () => {
     withTestSql(
       (sql) => sql`
         update platform_jobs set lease_expires_at = now() - interval '1 second'
-        where kind like 'workflow%' and status = 'running'`
+        where kind = 'workflow_run.execute_step' and status = 'running'`
     );
   const firstWrite = async (t: WorkflowFixture) => {
     const [run] = (await t.runs()).filter(

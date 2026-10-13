@@ -92,7 +92,7 @@ describe("a Workflow Run whose worker process is killed", () => {
       >`
         select status, attempts, heartbeat_at as "beatAt",
           extract(epoch from lease_expires_at - now())::float8 as "leaseLeftSeconds"
-        from platform_jobs where kind like 'workflow%' and status in ('queued', 'running')`
+        from platform_jobs where kind = 'workflow_run.execute_step' and status in ('queued', 'running')`
     );
   /** Ends the wait for a job whose process is gone: its lease, or the time moved to it. */
   async function afterTheLease(
@@ -109,7 +109,7 @@ describe("a Workflow Run whose worker process is killed", () => {
       await t.sql(async (sql) => {
         await sql`
           update platform_jobs set lease_expires_at = now()
-          where kind like 'workflow%' and status = 'running'`;
+          where kind = 'workflow_run.execute_step' and status = 'running'`;
         if (!callInFlight) return;
         await sql`
           update operation_runs
