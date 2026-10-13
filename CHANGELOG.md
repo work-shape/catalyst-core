@@ -14,10 +14,14 @@ contain breaking changes; a patch version does not.
   must be the ARN of an application inference profile of that account in `eu-central-1`: a model
   id, a shared `eu.anthropic.…` profile, another region or another account stops startup. It
   carries text, images, tool calls and streaming, and a binding on it can be chosen for agents.
-  An answer has at most 16,000 output tokens. It does not carry reasoning efforts, documents, a
-  JSON answer format or web search yet. It is checked against Claude Sonnet 4.6 only: the
-  Claude 5.5 models think by default and bill thinking as output, so keep a 5.5 profile out of
-  the config until thinking support is built and checked. **Operators:** the API and the agent
+  An answer has at most 16,000 output tokens, thinking included. The reasoning efforts `low`,
+  `medium` and `high` ask for adaptive thinking, and the thinking of a turn that calls a tool
+  goes back to Bedrock unchanged with the tool's result. A PDF is sent as a document; one above
+  4.5 MB, or more than 100 pages in one request, is refused with the reason `document_too_large`
+  or `document_too_many_pages`. A JSON answer format is sent as the Messages format's structured
+  output. It does not carry web search. It is checked against Claude Sonnet 4.6 only, on
+  recorded exchanges: keep a Claude 5.5 profile out of the config until the adapter has run
+  against one. **Operators:** the API and the agent
   run worker need the secret. Startup stops unless `usage.costs.customer.models` holds a row
   with a price above zero for the entry's model and for the model of every binding on it. The
   adapter fixes the endpoint; the profile, the key's IAM policy, Bedrock's data retention and

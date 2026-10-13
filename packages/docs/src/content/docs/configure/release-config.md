@@ -524,16 +524,39 @@ row in `usage.costs.customer.models` with the entry's id as `providerId`, the sa
 `model`, and a price above zero for uncached input, cached input and output. The message names
 the binding or the entry.
 
-The adapter reads text and images, calls tools, also several at once, and streams. A binding on
-it can be chosen for agents. In this version it declares no reasoning efforts, no documents, no
-JSON answer format, no web search, no fast tier and no server-side compaction; a call that asks
-for one of them is refused before it is sent, and an agent with web search configured runs
-without it. The adapter asks for no prompt cache.
+The adapter reads text, images and PDF documents, calls tools, also several at once, streams,
+thinks and answers in a JSON format. A binding on it can be chosen for agents. It declares no
+web search, no fast tier and no server-side compaction; a call that asks for one of them is
+refused before it is sent, and an agent with web search configured runs without it. The adapter
+asks for no prompt cache.
 
-**Claude 5.5 profiles are not supported yet.** The adapter is checked against Claude Sonnet 4.6.
-The Claude 5.5 models think by default, and thinking is billed as output; the adapter does not
-steer thinking or send it back in later turns yet. Keep a binding on a 5.5 profile out of the
-config until thinking support is built and checked.
+**Thinking.** The reasoning efforts `low`, `medium` and `high` ask for adaptive thinking
+(`thinking: { type: adaptive }`) with that effort; `none`, or no effort, sends no thinking
+setting. `xhigh` and `max` are not offered. The adapter sends no thinking budget: the output
+limit of 16,000 tokens is the one limit on thinking and answer together, so thinking can never
+ask for more than the limit, and a long thought leaves a shorter answer. Thinking is billed as
+output and is part of the output tokens of the usage record; it has no count of its own. A
+person reads the model's thinking as reasoning while it streams. When the model thinks and then
+calls a tool, its thinking blocks, with their signatures and any redacted block, go back to
+Bedrock unchanged with the tool's result. They are held for the run that made the call and are
+not stored with the conversation; a turn of an earlier run is sent without its thinking.
+
+**Documents.** A PDF is sent as a document block. PDF is the one document format a call can
+carry, on every provider; a file of another format is not sent as a document. A document is never left out of a request: a
+call with a document above the limits below is refused before anything is sent, with the reason
+`document_too_large` or `document_too_many_pages`.
+
+**JSON answer format.** A call that asks for an answer format sends the schema as the Messages
+format's own structured output (`output_config.format`). No tool is forced for it, so tools and
+thinking work in the same call. Bedrock compiles the schema and takes a subset of JSON Schema:
+the adapter states `additionalProperties: false` on every object and leaves out bounds on
+numbers, on string lengths and on list lengths above one, which the caller still checks on the
+answer. A schema that refers to itself is refused by Bedrock.
+
+**Claude 5.5 profiles are not supported yet.** The adapter is checked against Claude Sonnet 4.6,
+on recorded exchanges. The Claude 5.5 models think by default and bill thinking as output. The
+adapter now steers thinking and sends it back, but none of this has run against a 5.5 model.
+Keep a binding on a 5.5 profile out of the config until it has.
 
 Limits of one request:
 
@@ -541,6 +564,10 @@ Limits of one request:
   answer never uses more output than the budget held for it. A longer answer ends there. Every
   Claude model from the 4 generation on allows this much; Bedrock refuses the request for an
   older model with a smaller limit.
+- A PDF has at most 4.5 MB, and the PDFs of one request have at most 100 pages together. AWS
+  states the 100 pages; it states no size of one PDF for this API, so 4.5 MB is the smallest
+  document limit AWS states for Bedrock. Pages are counted from the page objects the file shows;
+  a PDF that keeps them in compressed object streams is sent, and Bedrock judges it.
 - An image above 3.75 MB is left out. Of more than 20 images the newest 20 are sent. The model
   is told what was left out.
 - A request above 20 MB is not sent; the user reads that the conversation is too long.
