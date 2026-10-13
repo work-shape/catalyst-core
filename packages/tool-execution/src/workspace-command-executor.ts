@@ -28,7 +28,18 @@ export interface SandboxCommandLimits {
   /** The memory of the command, with no swap beyond it. */
   memoryBytes: number;
   pidsLimit: number;
+  /**
+   * With it the command cannot write to the worker's disk at all. Its working directory,
+   * `/workspace`, is a file system in memory of this size, which counts against
+   * `memoryBytes`: a command that fills it reads "no space left". The workspace directory of
+   * the worker is handed in read-only as `SANDBOX_SOURCE_DIRECTORY`, and the command copies
+   * what it needs from there.
+   */
+  scratchBytes?: number;
 }
+
+/** Where a command with a scratch directory finds the directory its worker filled. */
+export const SANDBOX_SOURCE_DIRECTORY = "/code";
 
 export interface WorkspaceCommandProcessInput {
   command: SandboxCommand;
@@ -55,6 +66,12 @@ export interface ProcessResult {
   cancelled?: boolean;
   cancellationReason?: string;
   spawnError?: Error;
+  /**
+   * Whether the sandbox ended a process of the command because the command was over its
+   * memory. Set by a sandbox that can read it for a command with limits of its own, and
+   * missing everywhere else: an exit code alone does not say it.
+   */
+  outOfMemory?: boolean;
 }
 
 export interface WorkspaceCommandProcessExecutor {

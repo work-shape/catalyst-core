@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
   DEFAULT_WORKSPACE_COMMAND_SHELL,
   DEFAULT_WORKSPACE_COMMAND_PATH,
+  SANDBOX_SOURCE_DIRECTORY,
   runSpawnedProcess,
   type ProcessResult,
   type WorkspaceCommandProcessExecutor,
@@ -95,6 +96,11 @@ export interface DockerWorkspaceCommandProcessExecutorOptions {
 export interface DockerCommandClient {
   run(input: DockerCommandRunInput): Promise<ProcessResult>;
   removeContainer?(name: string): Promise<void>;
+  /**
+   * Whether the engine ended a process of this container for its memory, as the engine itself
+   * recorded it. Nothing where the engine cannot be asked or the container is gone.
+   */
+  wasOutOfMemory?(name: string): Promise<boolean | undefined>;
   /** The containers, running or not, whose name starts with `namePrefix`. */
   listContainers?(namePrefix: string): Promise<DockerContainerListing[]>;
   /** Whether the engine answers. A client without it is taken to answer. */
@@ -192,10 +198,20 @@ export class DockerWorkspaceCommandProcessExecutor implements WorkspaceCommandPr
       command: input.command,
       signal: input.signal
     });
-    if (result.cancelled || result.timeoutKind) {
-      await this.options.commandClient.removeContainer?.(invocation.containerName);
+    if (!input.sandboxLimits) {
+      if (result.cancelled || result.timeoutKind) {
+        await this.options.commandClient.removeContainer?.(invocation.containerName);
+      }
+      return result;
     }
-    return result;
+    // A command with limits of its own keeps its container when it ends, so that the engine
+    // can be asked how it ended. An exit code of 137 is what a script may exit with itself.
+    const ended = !result.cancelled && !result.timeoutKind && !result.spawnError;
+    const outOfMemory = ended
+      ? await this.options.commandClient.wasOutOfMemory?.(invocation.containerName)
+      : undefined;
+    await this.options.commandClient.removeContainer?.(invocation.containerName);
+    return { ...result, ...(outOfMemory === undefined ? {} : { outOfMemory }) };
   }
 
   /** Whether the Docker engine answers. It asks for the engine's version and starts nothing. */
@@ -253,9 +269,12 @@ export function createDockerRunInvocation(
   );
   const environment = filterDockerSandboxEnvironment(input.env);
   const own = input.sandboxLimits;
+  const scratch = own?.scratchBytes;
   const args = [
     "run",
-    "--rm",
+    // The container of a command with limits of its own is removed by its worker, after the
+    // engine was asked how it ended.
+    ...(own ? [] : ["--rm"]),
     "--name",
     containerName,
     "--network",
@@ -283,8 +302,16 @@ export function createDockerRunInvocation(
     `/tmp:rw,nosuid,nodev,size=64m,uid=${user.uid},gid=${user.gid}`,
     "--tmpfs",
     `/var/tmp:rw,nosuid,nodev,size=64m,uid=${user.uid},gid=${user.gid}`,
-    "--mount",
-    `type=bind,source=${input.workspaceDirectory},target=/workspace`,
+    ...(scratch === undefined
+      ? ["--mount", `type=bind,source=${input.workspaceDirectory},target=/workspace`]
+      : [
+          // Nothing the command writes reaches the worker's disk: what the worker filled is
+          // read-only, and the working directory is memory of a stated size.
+          "--mount",
+          `type=bind,source=${input.workspaceDirectory},target=${SANDBOX_SOURCE_DIRECTORY},readonly`,
+          "--tmpfs",
+          `/workspace:rw,nosuid,nodev,size=${String(scratch)},uid=${user.uid},gid=${user.gid}`
+        ]),
     "--workdir",
     containerWorkspaceCwd(input.workspaceCwd)
   ];
@@ -342,6 +369,19 @@ class DockerCliCommandClient implements DockerCommandClient {
       signal: input.signal,
       onTerminate: () => this.removeContainer(input.containerName)
     });
+  }
+
+  async wasOutOfMemory(name: string): Promise<boolean | undefined> {
+    const result = await runSpawnedProcess({
+      executable: this.options.dockerPath,
+      args: [...this.endpointArgs, "inspect", "--format", "{{.State.OOMKilled}}", name],
+      timeoutSeconds: 10,
+      maxStdoutBytes: 64,
+      maxStderrBytes: 1024
+    });
+    if (result.exitCode !== 0 || result.spawnError || result.timeoutKind) return undefined;
+    const answer = result.stdoutPreview.trim();
+    return answer === "true" ? true : answer === "false" ? false : undefined;
   }
 
   async engineAnswers(signal: AbortSignal): Promise<boolean> {
