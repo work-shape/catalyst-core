@@ -120,14 +120,15 @@ describe("Bedrock adapter: what a config may name", () => {
     });
   });
 
-  it("declares tool calls and images, and nothing it does not map", async () => {
+  it("declares tool calls, images and thinking, and nothing it does not map", async () => {
     const adapter = await bedrock();
     expect(adapter.capabilities(RECORDED_BEDROCK_PROFILE)).toEqual({
-      reasoningEfforts: [],
+      reasoningEfforts: ["none", "low", "medium", "high"],
       nativeTools: [],
       toolCalls: true,
       serverCompaction: false,
-      continuation: false,
+      // Carries the thinking of a run's tool-use turns to the run's next request.
+      continuation: true,
       fastTier: false,
       imageInput: true,
       documentInput: false,

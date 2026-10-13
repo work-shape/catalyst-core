@@ -7,6 +7,12 @@ import {
   toBedrockModelUsage,
   toBedrockRequest
 } from "./bedrock-mapping";
+import {
+  BEDROCK_REASONING_EFFORTS,
+  toBedrockContinuation,
+  toBedrockTurnBlock,
+  type BedrockTurnBlock
+} from "./bedrock-thinking";
 import type {
   BedrockMessagesRequest,
   BedrockMessagesResponse,
@@ -69,17 +75,18 @@ function bedrockModelRefusal(model: string, accountId: string): string | undefin
 
 /**
  * What Claude on Bedrock does through this adapter. Web search is not declared: Bedrock has
- * none. Reasoning efforts, document input and answer formats are not mapped yet, so a call that
- * asks for one is refused before it is sent. The adapter sets no cache breakpoint and asks for
- * no cache. Every token is billed to the consumer's profile, so a model without a price is
- * not called.
+ * none. Document input and answer formats are not mapped yet, so a call that asks for one is
+ * refused before it is sent. The continuation carries the thinking of a run's tool-use turns to
+ * the run's next request and nothing else. The adapter sets no cache breakpoint and asks for no
+ * cache. Every token is billed to the consumer's profile, so a model without a price is not
+ * called.
  */
 export const BEDROCK_CAPABILITIES: ModelCapabilities = {
-  reasoningEfforts: [],
+  reasoningEfforts: BEDROCK_REASONING_EFFORTS,
   nativeTools: [],
   toolCalls: true,
   serverCompaction: false,
-  continuation: false,
+  continuation: true,
   fastTier: false,
   imageInput: true,
   documentInput: false,
@@ -116,18 +123,25 @@ export class BedrockProvider {
   }
 
   async complete(request: ModelAdapterRequest): Promise<ModelCompletion> {
-    const { body, toolNames } = toBedrockRequest(request);
+    const { body, toolNames, thinkingTurns } = toBedrockRequest(request, this.options.id);
     const response = await this.post(request, "invoke", body);
     const payload = await this.readJson(response);
-    const answer = readBedrockAnswer(payload, toolNames);
+    const { blocks, ...answer } = readBedrockAnswer(payload, toolNames);
     // Read before the answer is judged: Bedrock bills an answer the model refused to give.
     const usage = toBedrockModelUsage(payload.usage);
     this.assertAnswered(answer, payload.stop_reason, response.status, usage);
-    return { ...answer, sources: [], citations: [], usage };
+    const continuation = toBedrockContinuation(this.options.id, thinkingTurns, blocks);
+    return {
+      ...answer,
+      ...(continuation ? { continuation } : {}),
+      sources: [],
+      citations: [],
+      usage
+    };
   }
 
   async *stream(request: ModelAdapterRequest): AsyncIterable<ModelAdapterStreamEvent> {
-    const { body, toolNames } = toBedrockRequest(request);
+    const { body, toolNames, thinkingTurns } = toBedrockRequest(request, this.options.id);
     const response = await this.post(request, "invoke-with-response-stream", body);
     if (!response.body) {
       throw new AppError("INTERNAL", "Model provider stream returned no response body", {
@@ -137,6 +151,11 @@ export class BedrockProvider {
     let text = "";
     // The tool calls of the answer by the index of their block, with the input as it arrives.
     const toolCalls = new Map<number, { id: string; name: string; given: unknown; json: string }>();
+    // The text and thinking blocks of the answer by their index, as they arrive.
+    const written = new Map<
+      number,
+      { type?: string; text: string; signature: string; data?: string }
+    >();
     let started: BedrockUsage | undefined;
     let usage = toBedrockModelUsage(undefined);
     let stopReason: string | null | undefined;
@@ -157,11 +176,20 @@ export class BedrockProvider {
           const name = toolNames.productNameFor(block.name);
           toolCalls.set(event.index, { id: block.id, name, given: block.input, json: "" });
           yield { type: "tool_call_preparing", toolCallId: block.id, toolName: name };
+        } else if (block) {
+          written.set(event.index, {
+            type: block.type,
+            text: "",
+            signature: typeof block.signature === "string" ? block.signature : "",
+            ...(typeof block.data === "string" ? { data: block.data } : {})
+          });
         }
       } else if (event.type === "content_block_delta" && typeof event.index === "number") {
         const delta = event.delta;
+        const block = written.get(event.index);
         if (delta?.type === "text_delta" && typeof delta.text === "string") {
           text += delta.text;
+          if (block) block.text += delta.text;
           yield { type: "text_delta", delta: delta.text };
         } else if (delta?.type === "input_json_delta" && typeof delta.partial_json === "string") {
           const toolCall = toolCalls.get(event.index);
@@ -170,7 +198,11 @@ export class BedrockProvider {
             yield { type: "tool_call_input_delta", delta: delta.partial_json };
           }
         } else if (delta?.type === "thinking_delta" && typeof delta.thinking === "string") {
+          if (block) block.text += delta.thinking;
           yield { type: "reasoning_delta", id: `thinking_${event.index}`, delta: delta.thinking };
+        } else if (delta?.type === "signature_delta" && typeof delta.signature === "string") {
+          // The signature of a thinking block comes at its end. It is kept, never shown.
+          if (block) block.signature += delta.signature;
         }
       } else if (event.type === "message_delta") {
         stopReason = event.delta?.stop_reason;
@@ -204,7 +236,30 @@ export class BedrockProvider {
         }))
     };
     this.assertAnswered(answer, stopReason, response.status, usage);
-    yield { type: "completed", completion: { ...answer, sources: [], citations: [], usage } };
+    // Every block of the answer in the order the model wrote it.
+    const blocks = [
+      ...[...written].map(([index, block]): [number, BedrockTurnBlock | undefined] => [
+        index,
+        toBedrockTurnBlock({ ...block, thinking: block.text })
+      ]),
+      ...[...toolCalls].map(([index, toolCall]): [number, BedrockTurnBlock | undefined] => [
+        index,
+        { type: "tool_use", id: toolCall.id }
+      ])
+    ]
+      .sort(([first], [second]) => first - second)
+      .flatMap(([, block]) => (block ? [block] : []));
+    const continuation = toBedrockContinuation(this.options.id, thinkingTurns, blocks);
+    yield {
+      type: "completed",
+      completion: {
+        ...answer,
+        ...(continuation ? { continuation } : {}),
+        sources: [],
+        citations: [],
+        usage
+      }
+    };
   }
 
   /**

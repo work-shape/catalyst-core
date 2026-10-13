@@ -11,8 +11,17 @@ export type BedrockContentBlock =
   | { type: "text"; text: string }
   | { type: "image"; source: { type: "base64"; media_type: string; data: string } };
 
+/**
+ * What the model thought before or between its tool calls. `signature` and `data` are opaque:
+ * Bedrock checks them when the block comes back, so a block is sent as it arrived or not at all.
+ */
+export type BedrockThinkingBlock =
+  | { type: "thinking"; thinking: string; signature: string }
+  | { type: "redacted_thinking"; data: string };
+
 export type BedrockRequestBlock =
   | BedrockContentBlock
+  | BedrockThinkingBlock
   | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
   | { type: "tool_result"; tool_use_id: string; content?: BedrockContentBlock[] };
 
@@ -26,25 +35,35 @@ export interface BedrockMessagesRequest {
   max_tokens: number;
   system?: { type: "text"; text: string }[];
   messages: BedrockRequestMessage[];
+  /** The model decides whether and how much it thinks; `output_config.effort` guides it. */
+  thinking?: { type: "adaptive" };
+  output_config?: { effort?: BedrockEffort };
   tools?: { name: string; description: string; input_schema: Record<string, unknown> }[];
 }
+
+/** The efforts the Messages format takes on every model this adapter is checked against. */
+export type BedrockEffort = "low" | "medium" | "high";
 
 export interface BedrockUsage {
   /** The input that was neither read from nor written to a cache. */
   input_tokens?: number;
   cache_read_input_tokens?: number;
   cache_creation_input_tokens?: number;
+  /** What the model wrote, its thinking included: Bedrock bills thinking as output. */
   output_tokens?: number;
 }
 
-/** A block of an answer. `type` is open: thinking and later block types are passed over. */
-interface BedrockResponseBlock {
+/** A block of an answer. `type` is open: a block type of a later release is passed over. */
+export interface BedrockResponseBlock {
   type?: string;
   text?: string;
   id?: string;
   name?: string;
   input?: unknown;
   thinking?: string;
+  signature?: string;
+  /** The content of a `redacted_thinking` block. */
+  data?: string;
 }
 
 export interface BedrockMessagesResponse {
@@ -64,6 +83,7 @@ export interface BedrockStreamEvent {
     text?: string;
     partial_json?: string;
     thinking?: string;
+    signature?: string;
     stop_reason?: string | null;
   };
   usage?: BedrockUsage;

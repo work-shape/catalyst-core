@@ -3,6 +3,14 @@ import { MODEL_CALL_RESERVED_OUTPUT_TOKENS } from "@vivd-catalyst/core";
 import { createProviderToolMetadata, type ProviderToolNames } from "../openai-compatible-mapping";
 import type { ModelAdapterRequest, ModelCompletion, ModelContent, ModelToolCall } from "../types";
 import {
+  bedrockThinkingSettings,
+  findBedrockThinkingTurn,
+  readBedrockThinkingTurns,
+  toBedrockTurnBlock,
+  type BedrockThinkingTurn,
+  type BedrockTurnBlock
+} from "./bedrock-thinking";
+import {
   BEDROCK_ANTHROPIC_VERSION,
   type BedrockContentBlock,
   type BedrockMessagesRequest,
@@ -14,8 +22,11 @@ import {
 
 // The Messages format requires an output limit. It is what admission reserves for the answer
 // of a call, so an answer never uses more output than was held for it on the budget; a longer
-// one ends there and the user reads it cut off. Every Claude model from the 4 generation on gives
-// at least this much. Bedrock refuses the request for an older model with a smaller limit.
+// one ends there and the user reads it cut off. Thinking is output too: the limit holds thinking
+// and answer together, so no thinking setting can ask for more than the limit, and an answer
+// after long thinking has what the thinking left of it. Every Claude model from the 4 generation
+// on gives at least this much. Bedrock refuses the request for an older model with a smaller
+// limit.
 const BEDROCK_MAX_OUTPUT_TOKENS = MODEL_CALL_RESERVED_OUTPUT_TOKENS;
 // Protects a request from being refused whole over one image: Bedrock takes an image of at most
 // 3.75 MB. A larger one is left out, and the model is told so in its place.
@@ -24,12 +35,21 @@ const BEDROCK_IMAGE_MAX_BYTES = 3_750_000;
 // in one request. The newest are kept; an older one is left out, and the model is told so.
 const BEDROCK_MAX_IMAGES = 20;
 
-/** A request in the Messages format, and the table that turns its tool names back. */
-export function toBedrockRequest(request: ModelAdapterRequest): {
+/**
+ * A request in the Messages format, the table that turns its tool names back, and the thinking
+ * turns of the run it sent, which the answer hands on to the next request.
+ */
+export function toBedrockRequest(
+  request: ModelAdapterRequest,
+  providerId: string
+): {
   body: BedrockMessagesRequest;
   toolNames: ProviderToolNames;
+  thinkingTurns: BedrockThinkingTurn[];
 } {
   const tools = createProviderToolMetadata(request.tools);
+  const recordedTurns = readBedrockThinkingTurns(providerId, request.continuation);
+  const thinkingTurns: BedrockThinkingTurn[] = [];
   // Images that fit by their size, counted so that the oldest above the limit are left out.
   let imagesToLeaveOut =
     request.messages
@@ -57,16 +77,33 @@ export function toBedrockRequest(request: ModelAdapterRequest): {
     if (message.role === "system") {
       system.push(...toTextBlocks(message.content));
     } else if (message.role === "assistant") {
-      push("assistant", [
-        ...toTextBlocks(message.content),
-        ...(message.toolCalls ?? []).map((toolCall): BedrockRequestBlock => ({
-          type: "tool_use",
-          id: wireToolCallId(toolCall.toolCallId),
-          name: tools.wireNameFor(toolCall.toolName),
-          // The format takes an object. An input the model wrote as broken JSON has none.
-          input: isRecord(toolCall.input) ? toolCall.input : {}
-        }))
-      ]);
+      const toolCalls = message.toolCalls ?? [];
+      const toolUse = (toolCall: ModelToolCall): BedrockRequestBlock => ({
+        type: "tool_use",
+        id: wireToolCallId(toolCall.toolCallId),
+        name: tools.wireNameFor(toolCall.toolName),
+        // The format takes an object. An input the model wrote as broken JSON has none.
+        input: isRecord(toolCall.input) ? toolCall.input : {}
+      });
+      const thought = findBedrockThinkingTurn(
+        recordedTurns,
+        toolCalls.map((toolCall) => toolCall.toolCallId)
+      );
+      if (thought && toolCalls.length > 0) {
+        // The turn as the model wrote it: its thinking blocks unchanged and every block in its
+        // place. Bedrock refuses the tool results of a turn whose thinking was changed or moved.
+        thinkingTurns.push(thought);
+        push(
+          "assistant",
+          thought.blocks.flatMap((block): BedrockRequestBlock[] => {
+            if (block.type !== "tool_use") return [block];
+            const toolCall = toolCalls.find((candidate) => candidate.toolCallId === block.id);
+            return toolCall ? [toolUse(toolCall)] : [];
+          })
+        );
+      } else {
+        push("assistant", [...toTextBlocks(message.content), ...toolCalls.map(toolUse)]);
+      }
     } else if (message.role === "tool") {
       const content = toContentBlocks(message.content);
       push("user", [
@@ -83,11 +120,13 @@ export function toBedrockRequest(request: ModelAdapterRequest): {
 
   return {
     toolNames: tools,
+    thinkingTurns,
     body: {
       anthropic_version: BEDROCK_ANTHROPIC_VERSION,
       max_tokens: BEDROCK_MAX_OUTPUT_TOKENS,
       ...(system.length > 0 ? { system } : {}),
       messages,
+      ...bedrockThinkingSettings(request.reasoningEffort),
       ...(tools.providerTools.length > 0
         ? {
             tools: tools.providerTools.map(({ tool, providerName }) => ({
@@ -163,15 +202,21 @@ function wireToolCallId(toolCallId: string): string {
     : `tc_${createHash("sha256").update(toolCallId, "utf8").digest("hex").slice(0, 32)}`;
 }
 
-/** What one answer holds. Blocks of any other type, such as thinking, are passed over. */
+/**
+ * What one answer holds: its text, its tool calls, and its blocks as a later request of the run
+ * sends them back. A block of a type this adapter does not know is passed over.
+ */
 export function readBedrockAnswer(
   payload: BedrockMessagesResponse,
   toolNames: ProviderToolNames
-): { text: string; toolCalls: ModelToolCall[] } {
+): { text: string; toolCalls: ModelToolCall[]; blocks: BedrockTurnBlock[] } {
   let text = "";
   const toolCalls: ModelToolCall[] = [];
+  const blocks: BedrockTurnBlock[] = [];
   for (const block of Array.isArray(payload.content) ? payload.content : []) {
     if (!isRecord(block)) continue;
+    const turnBlock = toBedrockTurnBlock(block);
+    if (turnBlock) blocks.push(turnBlock);
     if (block.type === "text" && typeof block.text === "string") {
       text += block.text;
     } else if (
@@ -186,7 +231,7 @@ export function readBedrockAnswer(
       });
     }
   }
-  return { text, toolCalls };
+  return { text, toolCalls, blocks };
 }
 
 /**
