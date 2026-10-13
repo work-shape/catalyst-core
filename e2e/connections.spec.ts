@@ -195,8 +195,11 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
     await test.step("a Connection the store holds shows as a row with its chips", async () => {
       await plantConnection(connection);
       await page.reload();
-      const row = list.getByRole("listitem").filter({ hasText: connection.name });
+      // A row says what the Connection is, not its id: the id stands on the Connection's page.
+      const rowLink = page.locator(`a[href="/build/connections/${connection.name}"]`);
+      const row = list.getByRole("listitem").filter({ has: rowLink });
       await expect(row).toContainText("Client records");
+      await expect(row).not.toContainText(connection.name);
       // The explanation stands above the rows as it stood above the empty list.
       await expect(main.getByText(DESCRIPTION_EN, { exact: true })).toBeVisible();
       for (const chip of ["mcp", "Instance", "Enabled"]) {
@@ -212,11 +215,11 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
       await expect(main).not.toContainText("secret_");
       await expect(main).not.toContainText("records.example.test");
       await shoot(page, "connections-list", async () => {
-        await expect(page.getByText(connection.name, { exact: true })).toBeVisible();
+        await expect(row).toBeVisible();
       });
       if (shotsDir) {
         await page.setViewportSize({ width: 390, height: 844 });
-        await expect(page.getByText(connection.name, { exact: true })).toBeVisible();
+        await expect(row).toBeVisible();
         await page.screenshot({ path: join(shotsDir, "connections-list-light-en-390.png") });
         await page.setViewportSize({ width: 1280, height: 800 });
       }
@@ -226,7 +229,7 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
       const germanRow = page
         .getByRole("list", { name: "Verbindungen", exact: true })
         .getByRole("listitem")
-        .filter({ hasText: connection.name });
+        .filter({ has: rowLink });
       for (const chip of ["mcp", "Instanz", "Aktiv"]) {
         await expect(germanRow.getByText(chip, { exact: true })).toBeVisible();
       }
