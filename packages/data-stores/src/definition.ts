@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
-import yaml from "js-yaml";
 import { z } from "zod";
 import {
   AppError,
   DATA_STORE_MANIFEST_FILE,
   DATA_STORE_RESERVED_SCHEMA,
+  readYamlData,
   type AssetScope,
   type AssetValidationIssue,
   type DataStoreAppliedMigration,
@@ -247,22 +247,23 @@ function readManifest(
     return undefined;
   }
   const text = readText(bytes);
-  let loaded: unknown;
-  try {
-    loaded = text === undefined ? undefined : yaml.load(text);
-  } catch {
-    loaded = undefined;
+  if (text === undefined) {
+    issues.push({ message: `'${DATA_STORE_MANIFEST_FILE}' is not UTF-8 text`, path });
+    return undefined;
   }
-  const parsed = manifestSchema.safeParse(loaded);
+  const read = readYamlData(text, DATA_STORE_MANIFEST_FILE);
+  if (!read.ok) {
+    issues.push({ message: read.issue.message, path });
+    return undefined;
+  }
+  const parsed = manifestSchema.safeParse(read.value);
   if (!parsed.success) {
     issues.push(
-      ...(loaded === undefined
-        ? [{ message: `'${DATA_STORE_MANIFEST_FILE}' is not readable YAML`, path }]
-        : parsed.error.issues.map((issue) => ({
-            // The key is named in the sentence: a reader of the refusal sees no path.
-            message: `${issue.path.length > 0 ? `'${issue.path.join(".")}': ` : ""}${issue.message}`,
-            path: [...path, ...issue.path]
-          })))
+      ...parsed.error.issues.map((issue) => ({
+        // The key is named in the sentence: a reader of the refusal sees no path.
+        message: `${issue.path.length > 0 ? `'${issue.path.join(".")}': ` : ""}${issue.message}`,
+        path: [...path, ...issue.path]
+      }))
     );
     return undefined;
   }

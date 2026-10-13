@@ -13,6 +13,7 @@ import { connections } from "./connections";
 import { conversation } from "./conversation";
 import { dataStores } from "./data-stores";
 import { files } from "./files";
+import { guardrails } from "./guardrails";
 import { inbox } from "./inbox";
 import { navigation } from "./navigation";
 import { operations } from "./operations";
@@ -43,6 +44,7 @@ export const translations = combineTranslations(common)
   .and(conversation)
   .and(dataStores)
   .and(files)
+  .and(guardrails)
   .and(inbox)
   .and(navigation)
   .and(operations)

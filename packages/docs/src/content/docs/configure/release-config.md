@@ -134,24 +134,44 @@ usage:
 
 Every model binding with `supportsFastMode: true` needs these rates; startup validation fails without them. The usage event records both that the call was requested in fast mode and the service tier the provider reported. A fast request is settled with the `fast` rates unless the provider explicitly reported another tier, for example `default` after a downgrade to standard processing; then it is settled with the normal rates. When the provider reports no tier, the `fast` rates apply. The usage view marks a call as fast only when it was billed that way. Adding or changing fast rates is a rate change and needs a new card `version`; earlier usage is not re-rated.
 
-## Approval checks
+## Guardrails
 
-`approvalChecks` defines model-evaluated rules for proposed approval requests. It defaults to an empty list. Each check needs a unique id, a registered request kind, and an existing model binding. `skill_change` is the only request kind in this release. Instructions may be written in any language.
+`guardrails` defines the checks the instance runs before an action happens. It defaults to none. Each entry is keyed by its name: lowercase words of letters and digits joined by hyphens or underscores, at most 64 characters. The name stays the guardrail's id in Build, in its hits and on an approval request it checked.
 
 ```yaml
-approvalChecks:
-  - id: no_personal_data
-    appliesTo: skill_change
-    modelBindingId: guardrailCheck
-    instruction: Check whether the proposed content contains personal data.
-    onFail: warn
+guardrails:
+  no_personal_data:
+    displayName: No personal data in skills
+    description: Keeps customer details out of shared skills.
+    on: approval_request.before_create
+    filter:
+      kind: skill_change
+    check:
+      kind: model_judge
+      modelBindingId: guardrailCheck
+      instruction: Check whether the proposed content contains personal data.
+    outcome: warn
 ```
 
-Checks run concurrently when a request is created. For skill changes, the summary and proposed new text are sent to the configured model provider; existing skill text and replaced text are excluded. Select a provider and binding approved for that content. Each check is a model call of the instance: it counts toward the usage budgets and safeguards and leaves one usage record with the purpose `guardrail_judge`, also when it fails or times out. The record names the originating conversation when there is one and never an agent run.
+| Field                        | Meaning                                                                                                                                                |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `displayName`, `description` | What Build shows. Without `displayName` the name is shown.                                                                                             |
+| `on`                         | The event the guardrail answers. `approval_request.before_create` is the only one in this release: it runs before a request for approval is filed.     |
+| `filter.kind`                | The kind of request it applies to, such as `skill_change`. Without it, every kind. The kind needs a registered request handler.                        |
+| `check`                      | `model_judge`: a model of `modelBindingId` reads the content against `instruction` (at most 8,000 characters, any language) and answers with no tools. |
+| `outcome`                    | `warn` or `block`, what a hit does.                                                                                                                    |
 
-`warn` stores a visible warning and leaves the decision with the approver. `block` refuses a violating proposal and returns the reason to the agent without storing a request. If a check cannot be evaluated, including provider failures or the 60-second timeout, `warn` stores a neutral warning and `block` refuses the proposal, so a blocking rule never lets unchecked content through. When a usage limit of the instance refuses the check, the reason given to the agent says that the limit is reached. Checks are not repeated when a request is decided. Request kinds without a proposed-content extractor are not checked.
+All guardrails bound to an event run concurrently. For skill changes, the summary and proposed new text are sent to the configured model provider; existing skill text and replaced text are excluded. Select a provider and binding approved for that content. Each check is a model call of the instance: it counts toward the usage budgets and safeguards and leaves one usage record with the purpose `guardrail_judge`, also when it fails or times out. The record names the originating conversation when there is one and never an agent run.
 
-Creation audit metadata contains only check ids and statuses, never proposed content or reasons. Stored check messages remain part of the approval request.
+`warn` stores a visible warning and leaves the decision with the approver. `block` refuses a violating proposal and returns the reason to the agent without storing a request. If a check cannot be evaluated, including provider failures or the 60-second timeout, `warn` stores a neutral warning and `block` refuses the proposal, so a blocking guardrail never lets unchecked content through. When a usage limit of the instance refuses the check, the reason given to the agent says that the limit is reached. Guardrails are not run again when a request is decided. Request kinds without a proposed-content extractor are not checked.
+
+Every warning and block is kept as a hit: the guardrail, the outcome, its one-sentence reason and the kind of request, never the checked content and never the person. The judge is told to word its reason without quoting the content. Build > Guardrails lists the guardrails read-only, and a guardrail's page counts its hits for the last 7 and 30 days and lists the newest 50, for holders of `guardrail.read` (administrators). Hits are counted by rule and period and never listed by person, because a list of who tripped which rule would let the instance monitor employees, which in Germany needs the works council's co-determination (§87(1) no. 6 BetrVG). Who made a request is in the audit log: `approval_request.created` for a request a guardrail warned on, and `operation.failed` of the agent's `propose_skill_change` call for one it blocked. Hits are deleted with the audit events, after `retention.auditDays`. Creation audit metadata contains only guardrail names and statuses, never proposed content or reasons. Stored check messages remain part of the approval request.
+
+The API seeds the guardrails into the asset store when it starts, so a change of `guardrails` shows in Build after a restart. They cannot be changed or deleted through the asset operations or the CLI.
+
+### From `approvalChecks`
+
+`guardrails` replaces `approvalChecks`. For this release a config that still has `approvalChecks` loads each check as the guardrail it became: `id` becomes the name, `appliesTo` the `filter.kind`, `modelBindingId` and `instruction` the `model_judge` check, and `onFail` the `outcome`, with `on: approval_request.before_create`. A config with both keys is refused at start. The next release refuses `approvalChecks`.
 
 ## Sharing Config Across Environments With `extends`
 

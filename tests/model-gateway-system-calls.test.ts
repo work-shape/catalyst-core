@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  ApprovalCheckRunner,
+  GuardrailRunner,
   createChatServerJobs,
   generateConversationTitleJob
 } from "@vivd-catalyst/chat-server";
@@ -10,13 +10,12 @@ import {
   asClientInstanceId,
   asConversationId,
   asToolCallId,
-  type ApprovalCheckConfig,
   type ApprovalRequest,
-  type ApprovalRequestHandler,
   type AuthenticatedUser,
   type ModelUsageEvent,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
+import type { ReleaseGuardrailConfig } from "@vivd-catalyst/config-schema";
 import type { ModelCompletion } from "@vivd-catalyst/model-provider";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { settleOnFakeClock, useFakeClockBesidePostgres } from "./support/fake-clock";
@@ -209,7 +208,7 @@ describe("a conversation title through the gateway", () => {
   });
 });
 
-describe("an approval check through the gateway", () => {
+describe("a guardrail's judge through the gateway", () => {
   const user: AuthenticatedUser = {
     id: "requester",
     externalUserId: "requester",
@@ -220,21 +219,12 @@ describe("an approval check through the gateway", () => {
     authSource: "test"
   };
   const context: RuntimeCallContext = { user, clientInstanceId, correlationId: "judge-call" };
-  const rule: ApprovalCheckConfig = {
-    id: "no_personal_data",
-    appliesTo: "fake",
-    modelBindingId: "judge",
-    instruction: "Refuse personal data.",
-    onFail: "block"
-  };
-  const handler: ApprovalRequestHandler = {
-    kind: "fake",
-    requiredPermission: "agent_skills.approve",
-    validate: (payload) => payload,
-    checkContent: (payload) => String(payload.newText),
-    preview: async (payload) => payload,
-    isStale: async () => false,
-    apply: async () => ({})
+  const rule = { id: "no_personal_data" };
+  const guardrail: ReleaseGuardrailConfig = {
+    on: "approval_request.before_create",
+    filter: { kind: "fake" },
+    check: { kind: "model_judge", modelBindingId: "judge", instruction: "Refuse personal data." },
+    outcome: "block"
   };
   const origin: ApprovalRequest["origin"] = {
     conversationId: asConversationId("conv_judged"),
@@ -242,7 +232,15 @@ describe("an approval check through the gateway", () => {
     toolCallId: asToolCallId("call_judged"),
     agentName: "assistant"
   };
-  const proposal = { kind: "fake", summary: "A proposal", payload: { newText: "New text" } };
+  /** The before-event of an approval request of kind `fake`, as the workflow raises it. */
+  function proposal(requestOrigin?: ApprovalRequest["origin"]) {
+    return {
+      event: "approval_request.before_create" as const,
+      subjectKind: "fake",
+      content: () => JSON.stringify({ summary: "A proposal", newContent: "New text" }),
+      ...(requestOrigin ? { origin: requestOrigin } : {})
+    };
+  }
 
   async function judge(
     modelProvider: ScriptedModelProvider,
@@ -253,13 +251,14 @@ describe("an approval check through the gateway", () => {
         { id: "judge", providerId: "local", model: "cheap-check", agentSelectable: false }
       ]
     });
-    config.approvalChecks = [rule];
+    config.guardrails = { [rule.id]: guardrail };
     const store = (await createTestInstance()).stores;
     // The requester exists: an event keeps its conversation only for a user that does.
     await ensureTestUser(clientInstanceId, user.id);
-    const runner = new ApprovalCheckRunner({
+    const runner = new GuardrailRunner({
       config,
       clientInstanceId,
+      hits: store.guardrails,
       modelGateway: createScriptedInstanceModelGateway({
         config,
         modelProvider,
@@ -278,7 +277,7 @@ describe("an approval check through the gateway", () => {
       complete: async () => answer('{"violates":false,"reason":"Nothing personal."}')
     });
 
-    await expect(f.runner.run(handler, { ...proposal, origin }, context)).resolves.toEqual([
+    await expect(f.runner.check(proposal(origin), context)).resolves.toEqual([
       { id: rule.id, status: "passed", message: "" }
     ]);
 
@@ -298,7 +297,7 @@ describe("an approval check through the gateway", () => {
       complete: async () => answer('{"violates":false,"reason":"Nothing personal."}')
     });
 
-    await f.runner.run(handler, { ...proposal, origin: undefined }, context);
+    await f.runner.check(proposal(), context);
 
     const events = await f.events();
     expect(events).toHaveLength(1);
@@ -317,9 +316,9 @@ describe("an approval check through the gateway", () => {
       },
       { modelCallsPerDay: 1 }
     );
-    await f.runner.run(handler, { ...proposal, origin }, context);
+    await f.runner.check(proposal(origin), context);
 
-    await expect(f.runner.run(handler, { ...proposal, origin }, context)).resolves.toEqual([
+    await expect(f.runner.check(proposal(origin), context)).resolves.toEqual([
       {
         id: rule.id,
         status: "blocked",
@@ -348,7 +347,7 @@ describe("an approval check through the gateway", () => {
     });
     useFakeClockBesidePostgres();
 
-    const result = f.runner.run(handler, { ...proposal, origin }, context);
+    const result = f.runner.check(proposal(origin), context);
     await settleOnFakeClock(reachedProvider);
     await vi.advanceTimersByTimeAsync(60_000);
 

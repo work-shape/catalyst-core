@@ -84,6 +84,15 @@ const ASSET = {
   }
 };
 
+/** The published inputs of "Open invoices": one month, as the list names them. */
+const MONTH_INPUTS = {
+  type: "object",
+  properties: {
+    month: { type: "string", description: "The month to look at.", pattern: "^\\d{4}-\\d{2}$" }
+  },
+  required: ["month"]
+};
+
 /**
  * The source over the release's own client, whose requests are kept and answered here as the
  * instance answers them: what the source asks for is what the contract names.
@@ -105,7 +114,8 @@ function instance(
               definitionRevisionId: "rev_1",
               actions: ["workflow.read"],
               runnable: true,
-              reasons: []
+              reasons: [],
+              inputs: MONTH_INPUTS
             },
             {
               id: "month-end",
@@ -143,15 +153,40 @@ describe("the Workflow screens over the engine of an instance", () => {
     const { source } = instance();
     const list = await source.listWorkflows("cw_1", { limit: 50, cursor: undefined }, signal);
     expect(list.items).toEqual([
-      { id: "open-invoices", name: "Open invoices", published: true, refusedFor: [] },
+      {
+        id: "open-invoices",
+        name: "Open invoices",
+        published: true,
+        startsByHand: true,
+        refusedFor: [],
+        mayStart: false,
+        // The form of a start is made from the published inputs the list names.
+        startForm: {
+          fields: [
+            {
+              name: "month",
+              label: "Month",
+              hint: "The month to look at.",
+              control: "text",
+              required: true,
+              initial: "",
+              pattern: "^\\d{4}-\\d{2}$"
+            }
+          ],
+          unsupported: []
+        }
+      },
       {
         id: "month-end",
         // A name of blanks is no name: the id stands for it.
         name: "month-end",
         description: "Closes the month.",
         published: true,
+        startsByHand: true,
         // Listed although the instance starts none of it, with the instance's own reason.
         refusedFor: [{ code: NOT_BUILT.code, message: NOT_BUILT.message }],
+        mayStart: true,
+        startForm: { fields: [], unsupported: [] },
         lastRun: { id: "wfr_0", status: "failed", startedAt: "2026-10-11T09:00:00.000Z" }
       }
     ]);
@@ -182,6 +217,8 @@ describe("the Workflow screens over the engine of an instance", () => {
     const { source } = instance();
     const workflow = await source.getWorkflow("cw_1", "open-invoices", signal);
     expect(workflow).toMatchObject({ published: true, refusedFor: [], mayStart: false });
+    // The form is the published revision's, as the list names it, not the draft's.
+    expect(workflow.startForm.fields.map((field) => field.name)).toEqual(["month"]);
     expect(startOffered(workflow)).toBe(false);
   });
 
@@ -251,12 +288,12 @@ describe("the Workflow screens over the engine of an instance", () => {
 
   it("starts and cancels through the client, and reads a cancel that waits for the going call", async () => {
     const { source, calls } = instance();
-    expect((await source.runs?.start("open-invoices"))?.id).toBe("wfr_1");
+    expect((await source.runs?.start("open-invoices", { month: "2026-09" }))?.id).toBe("wfr_1");
     expect(calls[0]).toEqual({
       operation: "workflows.start",
       params: { workflow: "open-invoices" },
       query: {},
-      body: "{}"
+      body: JSON.stringify({ input: { month: "2026-09" } })
     });
     const cancelled = await source.runs?.cancel("wfr_1");
     expect(calls[1]).toMatchObject({

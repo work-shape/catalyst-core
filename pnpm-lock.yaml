@@ -240,9 +240,6 @@ importers:
       esbuild:
         specifier: 0.28.0
         version: 0.28.0
-      js-yaml:
-        specifier: ^4.2.0
-        version: 4.3.2
       parse5:
         specifier: 7.3.0
         version: 7.3.0
@@ -250,9 +247,6 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
     devDependencies:
-      '@types/js-yaml':
-        specifier: ^4.0.9
-        version: 4.0.9
       '@types/node':
         specifier: ^24.13.1
         version: 24.13.1
@@ -743,16 +737,10 @@ importers:
       '@vivd-catalyst/core':
         specifier: workspace:*
         version: link:../core
-      js-yaml:
-        specifier: ^4.2.0
-        version: 4.2.0
       zod:
         specifier: 4.4.3
         version: 4.4.3
     devDependencies:
-      '@types/js-yaml':
-        specifier: ^4.0.9
-        version: 4.0.9
       '@types/node':
         specifier: ^24.13.1
         version: 24.13.1
@@ -849,16 +837,10 @@ importers:
       '@vivd-catalyst/postgres-connector':
         specifier: workspace:*
         version: link:../postgres-connector
-      js-yaml:
-        specifier: ^4.2.0
-        version: 4.3.2
       zod:
         specifier: 4.4.3
         version: 4.4.3
     devDependencies:
-      '@types/js-yaml':
-        specifier: ^4.0.9
-        version: 4.0.9
       '@types/node':
         specifier: ^24.13.1
         version: 24.13.1
@@ -1187,16 +1169,10 @@ importers:
       '@vivd-catalyst/tool-execution':
         specifier: workspace:*
         version: link:../tool-execution
-      js-yaml:
-        specifier: ^4.2.0
-        version: 4.3.2
       zod:
         specifier: 4.4.3
         version: 4.4.3
     devDependencies:
-      '@types/js-yaml':
-        specifier: ^4.0.9
-        version: 4.0.9
       '@types/node':
         specifier: ^24.13.1
         version: 24.13.1
