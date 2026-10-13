@@ -56,11 +56,16 @@ export const ASSET_REPO_COMMIT_DISK_BYTES =
   5 * ASSET_REPO_MAX_TREE_BYTES + 3 * ASSET_REPO_MAX_BUNDLE_BYTES;
 /** The largest `request.json` and `result.json` that is read: 2,000 revisions fit ten times. */
 export const ASSET_REPO_MAX_REQUEST_BYTES = 2 * 1024 * 1024;
+/** A size as a person reads it, in MiB with one decimal, rounded up: never below the bytes. */
+export function assetRepoMib(bytes: number): string {
+  return `${Math.ceil((bytes / (1024 * 1024)) * 10) / 10} MiB`;
+}
+
 /** What the command writes to its error stream when the disk it works on is full. */
 export const ASSET_REPO_NO_SPACE_MARK = "catalyst-asset-repo: no space";
 /** What a person is told then. */
 export const ASSET_REPO_NO_SPACE_MESSAGE =
-  "The worker that makes commits ran out of disk space. Nothing was saved. An operator has to free space on the workspace command worker; then save again.";
+  "The server has too little free disk space for this save. Nothing was saved. An operator needs to free space on the server; then save again.";
 /** How long one git process may run. Past it the command fails and the save is refused. */
 export const ASSET_REPO_GIT_TIMEOUT_MS = 60_000;
 /** A blob at or above this size is never inflated in memory by git. */

@@ -386,7 +386,8 @@ describe("the commit of a save of an asset's repository as a job", () => {
     expect(result).toMatchObject({
       status: "refused",
       code: "history_too_large",
-      message: expect.stringContaining("ASSET_REPO_MAX_BUNDLE_BYTES")
+      message:
+        "The stored history of this asset has reached the limit of 100 MiB. Nothing was saved. Until history can be shortened, the way out is a new asset from the current files."
     });
     expect(objects.keys().filter((key) => key.endsWith(".bundle"))).toEqual([]);
     expect(await rows()).toMatchObject([{ state: "pending", object_key: null }]);

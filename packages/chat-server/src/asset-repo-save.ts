@@ -1,3 +1,4 @@
+import { assetRepoMib, ASSET_REPO_MAX_BUNDLE_BYTES } from "@vivd-catalyst/asset-repo";
 import {
   AppError,
   fileSetFileObjectKey,
@@ -40,6 +41,8 @@ export async function commitAssetFileSet(
     baseCommit: string | null;
     actor: AuthenticatedIdentity;
     message: string;
+    /** What a person calls an asset of the kind, for a refusal that says what to do next. */
+    kind: string;
     signal?: AbortSignal;
   }
 ): Promise<AssetRepoWrite> {
@@ -80,7 +83,10 @@ export async function commitAssetFileSet(
   if (result.status === "refused") {
     throw new AppError(
       "VALIDATION_FAILED",
-      result.message,
+      // The worker knows no kind. Here the sentence names what the person saved.
+      result.code === "history_too_large"
+        ? `The stored history of this ${input.kind} has reached the limit of ${assetRepoMib(ASSET_REPO_MAX_BUNDLE_BYTES)}. Nothing was saved. Until history can be shortened, the way out is a new ${input.kind} from the current files.`
+        : result.message,
       { reason: result.code, ...(result.path === undefined ? {} : { path: result.path }) },
       { exposeMessage: true }
     );

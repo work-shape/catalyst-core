@@ -1,4 +1,5 @@
 import {
+  assetRepoMib,
   ASSET_REPO_MAX_FILE_BYTES,
   ASSET_REPO_MAX_FILES,
   ASSET_REPO_MAX_PATH_BYTES,
@@ -179,7 +180,7 @@ export function treeRefusal(
       return {
         code: "tree_too_large",
         path,
-        message: `The files of the tree have more than ${limits.maxTreeBytes} bytes together (ASSET_REPO_MAX_TREE_BYTES). '${path}' is the first past it.`
+        message: `The files are larger than ${assetRepoMib(limits.maxTreeBytes)} together, the most one save may hold. '${path}' is the first file past the limit. Remove files or make them smaller, then save again.`
       };
     }
   }

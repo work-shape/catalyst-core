@@ -100,7 +100,11 @@ describe("a commit to an asset's repository in the sandbox", () => {
       signal: signal()
     });
 
-    expect(outcome).toMatchObject({ status: "refused", code: "tree_too_large" });
+    expect(outcome).toMatchObject({
+      status: "refused",
+      code: "tree_too_large",
+      message: expect.stringContaining("The files are larger than 50 MiB together")
+    });
     expect(started).toBe(0);
   });
 
@@ -122,7 +126,7 @@ describe("a commit to an asset's repository in the sandbox", () => {
     ).toMatchObject({
       status: "refused",
       code: "no_space",
-      message: expect.stringContaining("ran out of disk space")
+      message: expect.stringContaining("too little free disk space for this save")
     });
   });
 

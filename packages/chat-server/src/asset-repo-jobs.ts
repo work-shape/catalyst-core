@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import {
+  assetRepoMib,
   ASSET_REPO_MAX_BUNDLE_BYTES,
   ASSET_REPO_MAX_FILE_BYTES,
   ASSET_REPO_MAX_FILES,
@@ -173,19 +174,18 @@ function requestRefusal(request: AssetRepoCommitRequest): Refused | undefined {
     return {
       status: "refused",
       code: "tree_too_large",
-      message: `The folder holds ${total} bytes. A repository takes at most ${ASSET_REPO_MAX_TREE_BYTES} in one tree (ASSET_REPO_MAX_TREE_BYTES).`
+      message: `The files have ${assetRepoMib(total)} together. One save may hold at most ${assetRepoMib(ASSET_REPO_MAX_TREE_BYTES)}. Nothing was saved. Remove files or make them smaller, then save again.`
     };
   }
   return undefined;
 }
 
-function historyTooLarge(bytes: number): Refused {
-  return {
-    status: "refused",
-    code: "history_too_large",
-    message: `The repository would hold ${bytes} bytes of history. A repository takes at most ${ASSET_REPO_MAX_BUNDLE_BYTES} (ASSET_REPO_MAX_BUNDLE_BYTES). Nothing was saved.`
-  };
-}
+/** The history of the repository is at its limit. Nothing shortens a history yet. */
+const HISTORY_TOO_LARGE: Refused = {
+  status: "refused",
+  code: "history_too_large",
+  message: `The stored history of this asset has reached the limit of ${assetRepoMib(ASSET_REPO_MAX_BUNDLE_BYTES)}. Nothing was saved. Until history can be shortened, the way out is a new asset from the current files.`
+};
 
 export interface AssetRepoJobsOptions {
   clientInstanceId: ClientInstanceId;
@@ -241,7 +241,7 @@ export function createAssetRepoJobs(options: AssetRepoJobsOptions): {
     // a save needs does not grow past it however long the history is.
     const history = ledger.reduce((sum, row) => sum + row.bytes, 0);
     if (history > ASSET_REPO_MAX_BUNDLE_BYTES) {
-      return historyTooLarge(history);
+      return HISTORY_TOO_LARGE;
     }
     if (request.baseCommit !== null && ledger.length === 0) {
       return {
@@ -316,7 +316,7 @@ export function createAssetRepoJobs(options: AssetRepoJobsOptions): {
     const { sha256, bytes, kind, prerequisite } = outcome.bundle;
     // The bundle of this save would be part of the history every later save reads.
     if (history + bytes.byteLength > ASSET_REPO_MAX_BUNDLE_BYTES) {
-      return historyTooLarge(history + bytes.byteLength);
+      return HISTORY_TOO_LARGE;
     }
     const bundle: AssetRepoSaveBundle = {
       objectKey: assetRepoBundleObjectKey({ assetId, commit: outcome.commit, sha256 }),

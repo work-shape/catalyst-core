@@ -3,6 +3,7 @@
 // the sandbox only.
 export { assetRepoCommandFile } from "./command-file";
 export {
+  assetRepoMib,
   ASSET_REPO_BUNDLES_DIRECTORY,
   ASSET_REPO_COMMAND,
   ASSET_REPO_COMMIT_DISK_BYTES,

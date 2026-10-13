@@ -201,6 +201,7 @@ export class AssetDraftWorkflow {
       fileSet: write.fileSet,
       baseCommit,
       actor: call.actor,
+      kind: target.kind.kind,
       message: write.firstCommit ?? `Write ${target.kind.kind} '${target.name}'`
     });
   }

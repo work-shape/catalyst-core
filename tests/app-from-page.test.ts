@@ -323,7 +323,7 @@ describe("an App made from a Page", () => {
     const full: AssetRepoCommitRunner = async () => ({
       status: "refused",
       code: "no_space",
-      message: "The worker that makes commits ran out of disk space."
+      message: "The server has too little free disk space for this save."
     });
     const t = await setup({ commits: full });
 
@@ -331,10 +331,29 @@ describe("an App made from a Page", () => {
 
     expectStatus(refused, 409);
     expect(errorSchema.parse(refused.json()).error).toMatchObject({
-      message: "The worker that makes commits ran out of disk space.",
+      message: "The server has too little free disk space for this save.",
       details: { reason: "no_space" }
     });
     expect(await stored(t, "full")).toBeUndefined();
+  });
+
+  it("says what to do when the history of the App is at its limit", async () => {
+    const t = await setup({
+      commits: async () => ({
+        status: "refused",
+        code: "history_too_large",
+        message: "The stored history of this asset has reached the limit."
+      })
+    });
+
+    const refused = await create(t, await t.storePage("long history"), "long");
+
+    expectStatus(refused, 422);
+    expect(errorSchema.parse(refused.json()).error).toMatchObject({
+      message:
+        "The stored history of this app has reached the limit of 100 MiB. Nothing was saved. Until history can be shortened, the way out is a new app from the current files.",
+      details: { reason: "history_too_large" }
+    });
   });
 
   it("refuses on an instance where no worker takes commits", async () => {
