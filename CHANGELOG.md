@@ -117,7 +117,7 @@ contain breaking changes; a patch version does not.
   source of an App as a git repository (ADR-0029); no operation calls it yet. Git runs in this
   image alone: the API image and the worker images carry none, and `pnpm check:images` fails
   when one does. **Operators:** the image grows by git, about 95 MB unpacked. The runner image of
-  the capabilities repository does not carry the command yet.
+  the capabilities repository carries both from the build that follows this release.
 - **Database:** migration `0061_asset_repositories` adds the tables `asset_repo_bundles` and
   `asset_checkouts` and the columns `commit` and `tree` on `config_asset_revisions`. They are
   empty for every asset that exists. The migration waits five seconds for its locks at most; one
@@ -214,11 +214,6 @@ contain breaking changes; a patch version does not.
   transaction that commits, or outside of one, for a database the platform manages itself. A
   change takes at most `POSTGRES_CHANGE_MAX_TIMEOUT_MS` (10 minutes). `createPostgresExecutor`
   takes `poolMaxConnections` for an executor whose databases the platform sizes itself.
-  the capabilities repository carries both from the build that follows this release.
-- **Database:** migration `0060_asset_repositories` adds the tables `asset_repo_bundles` and
-  `asset_checkouts` and the columns `commit` and `tree` on `config_asset_revisions`. They are
-  empty for every asset that exists. The migration waits five seconds for its locks at most; one
-  that gives up is run again. **Rollback:** an earlier release ignores them.
 - **Workspace command worker:** with the module `apps` on, the worker serves two more job
   kinds. `asset_repo.commit` makes the commit of a save in the sandbox, with the command and
   the git of the runner image: it reads the bundles the ledger names, each checked against the
@@ -240,7 +235,13 @@ contain breaking changes; a patch version does not.
   (`details.reason` `runner_image_outdated`) and a message that says the image must be rolled
   out; without a worker with `commit_unavailable`. Seeded Apps and Apps that exist are not
   changed, and `assets.discard_draft` moves the draft back as before.
-- **Database:** migration `0061_asset_repo_commit_request` adds the columns `request` and
+- **Database:** migration `0063_asset_repo_commit_request` adds the columns `request` and
+  changed, and `assets.discard_draft` moves the draft back as before. A commit works on the
+  disk of the worker, not in the 64 MiB `/tmp` of the sandbox: it needs 550 MiB free
+  (`ASSET_REPO_COMMIT_DISK_BYTES`) below the worker's temporary directory and is refused with
+  `409` `no_space` otherwise. The bundles of one repository may have 100 MiB together; a save
+  that would leave more is refused with `history_too_large`.
+- **Database:** migration `0065_asset_repo_commit_request` adds the columns `request` and
   `result` to `asset_repo_bundles`: what a pending save commits, without bytes, and how its
   commit ended. **Rollback:** an earlier release ignores them.
 - **Pages, plain HTML:** App Kit version `1.2.0`, with two new files, `page.css` and `theme.js`.
