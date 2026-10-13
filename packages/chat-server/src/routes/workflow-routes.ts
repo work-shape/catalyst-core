@@ -123,6 +123,14 @@ function registerWorkflowRoutes(
     execute: async (input, context) => {
       const run = await runOf(input.runId);
       const { containerStepRunId, status, iteration } = input;
+      const topLevel = input.topLevel === "true";
+      if (topLevel && containerStepRunId !== undefined) {
+        // A step run of a block stands in that block and so not at the top.
+        throw new AppError(
+          "VALIDATION_FAILED",
+          "'topLevel' answers the step runs outside every block: it is not given with 'containerStepRunId'"
+        );
+      }
       if (iteration !== undefined && containerStepRunId === undefined) {
         // Every loop counts its items from zero, so a number alone names an item of each.
         throw new AppError(
@@ -133,6 +141,7 @@ function registerWorkflowRoutes(
       const stepRuns = await required().listStepRuns({
         runId: run.id,
         filter: {
+          ...(topLevel ? { topLevel } : {}),
           ...(containerStepRunId === undefined ? {} : { containerStepRunId }),
           ...(status === undefined ? {} : { status }),
           ...(iteration === undefined ? {} : { iteration })

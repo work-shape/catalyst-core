@@ -662,9 +662,13 @@ export const WORKFLOW_LIST_STEP_RUNS_OPERATION = "workflows.list_step_runs";
 /**
  * The filters of `workflows.list_step_runs`: the step runs of one block, of one status and of
  * one item of a loop. A loop over 600 items is read as its step runs by `containerStepRunId`
- * and `status`.
+ * and `status`. `topLevel` answers the step runs that stand in no block: the steps of the
+ * definition's own list, a loop's own step run among them and none of its items, so the run
+ * view reads the outline of a run without the items of its loops. It is not given together
+ * with `containerStepRunId`, which names the block the step runs stand in.
  */
 export const workflowStepRunFilterSchema = z.strictObject({
+  topLevel: z.boolean().optional(),
   containerStepRunId: z.string().min(1).optional(),
   status: z.enum(WORKFLOW_STEP_RUN_STATUSES).optional(),
   iteration: z.number().int().min(0).optional()

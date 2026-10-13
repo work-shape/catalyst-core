@@ -44,7 +44,13 @@ export async function start(t: WorkflowFixture, userId = t.root.id, workflow = "
 export async function stepRunsOf(
   t: WorkflowFixture,
   runId: string,
-  query: { containerStepRunId?: string; status?: string; iteration?: number; limit?: number } = {}
+  query: {
+    topLevel?: "true" | "false";
+    containerStepRunId?: string;
+    status?: string;
+    iteration?: number;
+    limit?: number;
+  } = {}
 ) {
   const response = await t.expectOk(t.root.id, "workflows.list_step_runs", {
     params: { runId },

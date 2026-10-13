@@ -130,9 +130,12 @@ export const startWorkflowRunRequestSchema = z.object({
 /**
  * The filters of the step runs of a run: those of one block, one status, one item of a loop.
  * `iteration` counts the items of one loop, so it is given with the `containerStepRunId` of
- * that loop's step run and refused without it.
+ * that loop's step run and refused without it. `topLevel=true` answers the step runs that
+ * stand in no block, a loop's own step run among them and none of its items; it is refused
+ * together with `containerStepRunId`.
  */
 export const listWorkflowStepRunsQuerySchema = listQuerySchema.extend({
+  topLevel: z.enum(["true", "false"]).optional(),
   containerStepRunId: z.string().min(1).optional(),
   status: stepRunStatusSchema.optional(),
   iteration: z.coerce.number().int().min(0).optional()

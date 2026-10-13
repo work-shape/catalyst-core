@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import type { WorkflowManifest } from "@vivd-catalyst/core";
+import { workflowStepRunFilterSchema, type WorkflowManifest } from "@vivd-catalyst/core";
 import { clientInstanceId } from "./support/access-instance";
 import {
   publishedDefinitions,
@@ -409,6 +409,63 @@ describe("the list of the Workflows", () => {
     expect((await listed(t.kai.id)).map((workflow) => workflow.id)).toEqual([
       "notify-clients",
       "top-customers"
+    ]);
+  });
+});
+
+describe("the step runs of a run outside its loops", () => {
+  it("answers the steps of the definition's own list, a loop with its counts and none of its items", async () => {
+    const t = await ready();
+    const run = await t.finish((await start(t)).id);
+    const top = await stepRunsOf(t, run.id, { topLevel: "true" });
+    expect(top.map((stepRun) => [stepRun.key, stepRun.status])).toEqual([
+      ["start", "done"],
+      ["clients", "done"],
+      ["each_client", "done"],
+      ["result", "done"]
+    ]);
+    expect(top.every((stepRun) => stepRun.containerStepRunId === undefined)).toBe(true);
+    // The loop is read here with what the run view shows of it, and its items elsewhere.
+    expect(top[2]).toMatchObject({
+      loop: { total: 3, done: 3, failed: 0, running: 0 },
+      bodyCounts: { send: { total: 3, done: 3, failed: 0, running: 0 } }
+    });
+    // It goes with the filter of the status and pages like every list.
+    expect(await stepRunsOf(t, run.id, { topLevel: "true", status: "failed" })).toEqual([]);
+    expect(
+      (await stepRunsOf(t, run.id, { topLevel: "true", limit: 2 })).map((stepRun) => stepRun.key)
+    ).toEqual(["start", "clients"]);
+
+    // The reads there were are as they were: all step runs, and those of one block.
+    expect(await stepRunsOf(t, run.id)).toHaveLength(7);
+    expect(await stepRunsOf(t, run.id, { topLevel: "false" })).toHaveLength(7);
+    expect(await stepRunsOf(t, run.id, { containerStepRunId: top[2]?.id })).toHaveLength(3);
+    // A step run of a block stands in that block, and so not at the top.
+    await t.expectRefused(
+      t.root.id,
+      "workflows.list_step_runs",
+      { params: { runId: run.id }, query: { topLevel: "true", containerStepRunId: top[2]?.id } },
+      { status: 422, code: "VALIDATION_FAILED" }
+    );
+  });
+
+  it("is a filter of the store, which the contract's schema names", async () => {
+    const t = await ready();
+    const started = await start(t);
+    const run = await t.finish(started.id);
+    const read = await t.stores.workflowRuns.readRun({ clientInstanceId, id: run.id });
+    if (!read) throw new Error("The run cannot be read");
+    const filter = workflowStepRunFilterSchema.parse({ topLevel: true, status: "done" });
+    const stepRuns = await t.stores.workflowRuns.listStepRuns({
+      clientInstanceId,
+      runId: read.id,
+      filter
+    });
+    expect(stepRuns.map((stepRun) => stepRun.key)).toEqual([
+      "start",
+      "clients",
+      "each_client",
+      "result"
     ]);
   });
 });

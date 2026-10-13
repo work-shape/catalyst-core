@@ -429,6 +429,8 @@ export async function listWorkflowStepRuns(
         eq(workflowStepRuns.clientInstanceId, input.clientInstanceId),
         eq(workflowStepRuns.runId, input.runId),
         // An id no step run has matches none: it is a text like any other.
+        // The steps of the definition's own list: a loop's step run, and none of its items.
+        filter?.topLevel === true ? isNull(workflowStepRuns.containerStepRunId) : undefined,
         filter?.containerStepRunId === undefined
           ? undefined
           : sql`${workflowStepRuns.containerStepRunId} = ${filter.containerStepRunId}`,

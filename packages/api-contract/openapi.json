@@ -11444,6 +11444,18 @@
             }
           },
           {
+            "name": "topLevel",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
             "name": "containerStepRunId",
             "in": "query",
             "required": false,
