@@ -38,6 +38,11 @@ export interface SkillFormState {
   description: string;
   /** The sentence for people. Empty where the skill has none. */
   summary: string;
+  /**
+   * The skill's starters as its file holds them. The form does not edit them: they are kept
+   * so that a save here leaves them as they are.
+   */
+  starters: unknown[];
   content: string;
   resources: SkillResourceFormState[];
 }
@@ -374,6 +379,7 @@ export function skillConfigToForm(config: Record<string, unknown>): SkillFormSta
     title: typeof config.title === "string" ? config.title : "",
     description: typeof config.description === "string" ? config.description : "",
     summary: typeof config.summary === "string" ? config.summary : "",
+    starters: Array.isArray(config.starters) ? config.starters : [],
     content: typeof config.content === "string" ? config.content : "",
     resources: resources.flatMap((resource) => {
       if (!resource || typeof resource !== "object" || Array.isArray(resource)) {
@@ -395,6 +401,7 @@ export function skillFormToConfig(form: SkillFormState): Record<string, unknown>
     title: form.title.trim(),
     description: form.description.trim(),
     ...(form.summary.trim() ? { summary: form.summary.trim() } : {}),
+    ...(form.starters.length ? { starters: form.starters } : {}),
     content: form.content,
     ...(form.resources.length ? { resources: form.resources } : {})
   };
@@ -406,7 +413,15 @@ export function skillFormToConfig(form: SkillFormState): Record<string, unknown>
 export const SKILL_ROOT_FILE_NAME = "SKILL.md";
 
 export function emptySkillForm(): SkillFormState {
-  return { name: "", title: "", description: "", summary: "", content: "", resources: [] };
+  return {
+    name: "",
+    title: "",
+    description: "",
+    summary: "",
+    starters: [],
+    content: "",
+    resources: []
+  };
 }
 
 function hasLocalizedContent(pair: LocalizedPair): boolean {

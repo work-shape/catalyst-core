@@ -178,7 +178,25 @@ export const safeConfigSchema = z.object({
           title: z.string(),
           prompt: z.string()
         })
-      )
+      ),
+      /**
+       * What the empty chat offers as first requests: the starters of the agent's skills that
+       * name no tool the agent lacks, the skills in the agent's order, at most four. Choosing
+       * one fills the composer with `prompt` and sends nothing.
+       */
+      starters: z
+        .array(
+          z.object({
+            /** The skill the starter comes from. */
+            skillName: z.string(),
+            title: z.string(),
+            hint: z.string().optional(),
+            prompt: z.string(),
+            /** A key of the interface's icon registry, where the skill names an icon. */
+            icon: z.string().optional()
+          })
+        )
+        .optional()
     })
   ),
   ui: clientUiBrandingSchema

@@ -14,6 +14,7 @@ export function createSkillSourceVersion(skill: SkillConfig): string {
   if (skill.summary !== undefined) {
     hash.update("\0summary\0").update(skill.summary);
   }
+  // Starters are for the empty chat and no part of what the agent reads.
   for (const resource of [...(skill.resources ?? [])].sort((left, right) =>
     left.path.localeCompare(right.path)
   )) {

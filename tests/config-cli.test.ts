@@ -175,6 +175,18 @@ describe("config CLI serialization", () => {
     expect(canonicalizeSkillConfig({ ...skill, summary })).toEqual({ ...skill, summary });
     expect(serializeSkillMarkdown(skill)).not.toContain("summary");
   });
+
+  it("keeps starters through a pull and a push and writes none where there are none", () => {
+    const plain = { name: "sheets", title: "Sheets", description: "When.", content: "# Text" };
+    const starters = [
+      { title: { en: "Build", de: "Bauen" }, hint: "Short", prompt: "Build it.", tools: ["a.b"] }
+    ];
+    const serialized = serializeSkillMarkdown({ ...plain, starters });
+
+    expect(parseSkillFile(serialized)).toEqual({ ...plain, starters });
+    expect(canonicalizeSkillConfig({ ...plain, starters })).toEqual({ ...plain, starters });
+    expect(serializeSkillMarkdown(plain)).not.toContain("starters");
+  });
 });
 
 describe("config CLI state and manifest", () => {

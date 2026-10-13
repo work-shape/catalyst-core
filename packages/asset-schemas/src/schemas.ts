@@ -2,6 +2,8 @@ import { z } from "zod";
 import {
   REASONING_EFFORTS,
   SKILL_RESOURCE_MEDIA_TYPES,
+  SKILL_STARTERS_MAX,
+  SKILL_STARTER_LINE_MAX_LENGTH,
   SKILL_SUMMARY_MAX_LENGTH,
   type SkillResourceMediaType
 } from "./asset-types";
@@ -94,6 +96,22 @@ export const skillResourceConfigSchema = z
     }
   });
 
+/** A starter's title or hint: one short line in each language it is written in. */
+const starterLineSchema = localizedStringSchema.refine(
+  (value) =>
+    (typeof value === "string" ? [value] : Object.values(value)).every(
+      (line) => line.length <= SKILL_STARTER_LINE_MAX_LENGTH && !/[\r\n]/u.test(line)
+    ),
+  { message: `Must be one line of at most ${SKILL_STARTER_LINE_MAX_LENGTH} characters` }
+);
+
+export const skillStarterSchema = z.strictObject({
+  title: starterLineSchema,
+  hint: starterLineSchema.optional(),
+  prompt: localizedStringSchema,
+  tools: z.array(z.string().min(1)).optional()
+});
+
 const skillConfigObjectSchema = z.object({
   name: skillNameSchema,
   title: z.string().min(1),
@@ -106,6 +124,12 @@ const skillConfigObjectSchema = z.object({
     })
     .refine((summary) => !/[\r\n]/u.test(summary), {
       message: "Skill summary must be one line"
+    })
+    .optional(),
+  starters: z
+    .array(skillStarterSchema)
+    .max(SKILL_STARTERS_MAX, {
+      message: `A skill carries at most ${SKILL_STARTERS_MAX} starters`
     })
     .optional(),
   content: z.string().min(1),

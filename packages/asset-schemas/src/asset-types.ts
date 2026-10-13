@@ -56,8 +56,31 @@ export interface SkillConfig {
    * do. Lists and choosers show it under the title.
    */
   summary?: string;
+  /** Up to `SKILL_STARTERS_MAX` first requests the empty chat offers for an agent with the skill. */
+  starters?: SkillStarterConfig[];
   content: string;
   resources?: SkillResourceConfig[];
+}
+
+/** How many starters one skill carries at most. */
+export const SKILL_STARTERS_MAX = 2;
+/** How many starters the empty chat shows for one agent at most. */
+export const AGENT_STARTERS_MAX = 4;
+/** The most characters a starter's `title` and its `hint` hold, in each language. */
+export const SKILL_STARTER_LINE_MAX_LENGTH = 60;
+
+/** One first request a skill offers on the empty chat. Choosing it fills the composer. */
+export interface SkillStarterConfig {
+  title: LocalizedStringConfig;
+  /** One short line under the title. */
+  hint?: LocalizedStringConfig;
+  /** The text that fills the composer. */
+  prompt: LocalizedStringConfig;
+  /**
+   * The tools the request needs. The starter shows only for an agent that holds every one of
+   * them, so it never offers what the agent cannot do.
+   */
+  tools?: string[];
 }
 
 /** The most characters a skill's `summary` holds. */

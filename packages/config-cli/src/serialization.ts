@@ -4,7 +4,8 @@ import {
   parseSkillMarkdown,
   skillConfigSchema,
   type AgentConfig,
-  type SkillConfig
+  type SkillConfig,
+  type SkillStarterConfig
 } from "@vivd-catalyst/asset-schemas";
 
 export interface AssetProvenance {
@@ -68,8 +69,19 @@ export function canonicalizeSkillConfig(input: unknown): SkillConfig {
     title: skill.title,
     description: skill.description,
     ...(skill.summary === undefined ? {} : { summary: skill.summary }),
+    ...(skill.starters?.length ? { starters: skill.starters.map(canonicalStarter) } : {}),
     content: skill.content,
     ...(resources?.length ? { resources } : {})
+  };
+}
+
+/** A starter with its fields in the order a file writes them. */
+function canonicalStarter(starter: SkillStarterConfig): SkillStarterConfig {
+  return {
+    title: starter.title,
+    ...(starter.hint === undefined ? {} : { hint: starter.hint }),
+    prompt: starter.prompt,
+    ...(starter.tools?.length ? { tools: starter.tools } : {})
   };
 }
 
@@ -80,7 +92,8 @@ export function serializeSkillMarkdown(input: unknown, provenance?: AssetProvena
       name: skill.name,
       title: skill.title,
       description: skill.description,
-      ...(skill.summary === undefined ? {} : { summary: skill.summary })
+      ...(skill.summary === undefined ? {} : { summary: skill.summary }),
+      ...(skill.starters === undefined ? {} : { starters: skill.starters })
     },
     yamlDumpOptions
   );

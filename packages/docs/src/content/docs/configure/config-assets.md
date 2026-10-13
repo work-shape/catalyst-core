@@ -63,12 +63,33 @@ skills/support_review/
 
 The CLI recursively includes `.md`, `.txt`, `.json`, `.yaml`, and `.yml` resources below each matched skill directory. It validates them as UTF-8 text, includes them in pull/diff/push, and rejects unsupported files instead of silently dropping them. Resource paths are normalized relative paths; absolute paths, traversal, duplicate paths, and a second `SKILL.md` resource are invalid. Binary assets do not belong in config assets.
 
-The front matter of `SKILL.md` holds `title`, `description` and, optionally, `name` and `summary`. The two texts have different readers:
+The front matter of `SKILL.md` holds `title`, `description` and, optionally, `name`, `summary` and `starters`. The two texts have different readers:
 
 - `description` is for the agent. It says when to use the skill.
 - `summary` is for people. It is one sentence on one line, at most 120 characters, that says what an agent with the skill knows how to do, such as "Knows how to write short, easy sentences in German and English." The agent editor and the Skills list show it under the title. A skill without a summary shows its title alone.
 
 A skill is instructions the agent follows. It adds no tools, so a summary never names something only a tool can do.
+
+`starters` are first requests the empty chat offers under the composer for an agent that has the skill. A skill carries at most two:
+
+```yaml
+starters:
+  - title:
+      en: Check an invoice
+      de: Rechnung prüfen
+    hint:
+      en: Required details and tax rate
+      de: Pflichtangaben und Steuersatz
+    prompt:
+      en: "Check this invoice for the required details and the right tax rate:"
+      de: "Prüfe diese Rechnung auf Pflichtangaben und den richtigen Steuersatz:"
+    tools:
+      - workspace.read_file
+```
+
+- `title` and the optional `hint` are one line of at most 60 characters each. `prompt` is the text that fills the composer when the starter is chosen. Nothing is sent until the person sends it. Each of the three is one text or one text per language (`en`, `de`).
+- `tools` is optional. A starter shows only for an agent that holds every tool it names, so it never offers what the agent cannot do.
+- The chat shows at most four starters for an agent, the skills in the order the agent lists them. An agent whose skills carry none shows the empty chat as before.
 
 The server URL can come from a named `catalyst.yaml` instance or directly from `--instance https://catalyst.example.com`. Authentication is environment-only for now:
 

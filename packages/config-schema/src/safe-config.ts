@@ -1,14 +1,17 @@
 import {
+  AGENT_STARTERS_MAX,
   defaultReasoningEffortForAgentBinding,
   modelUsageTierFromRates,
   reasoningEffortChoiceForBinding,
   userSelectableModelBindingsForAgent,
   type LocaleCode,
+  type LocalizedStringConfig,
   type ModelBindingConfig,
   type ModelProviderConfig,
   type ModuleSnapshot,
   type ReasoningEffortConfig,
-  type RuntimeAssetSnapshot
+  type RuntimeAssetSnapshot,
+  type SkillConfig
 } from "@vivd-catalyst/core";
 import type { AgentConfig, ClientInstanceConfig } from "./schemas";
 import { createClientBranding } from "./branding";
@@ -122,10 +125,39 @@ export function createSafeConfigView(
           locale,
           config.localization.defaultLocale
         )
-      }))
+      })),
+      starters: agentStarters(agent, assets.skills, locale, config.localization.defaultLocale)
     })),
     ui
   };
+}
+
+/**
+ * The starters the empty chat offers for an agent: those of its skills, the skills in the
+ * order the agent names them, at most `AGENT_STARTERS_MAX`. A starter that names a tool the
+ * agent does not hold is left out, so none offers what the agent cannot do.
+ */
+function agentStarters(
+  agent: AgentConfig,
+  skills: readonly SkillConfig[],
+  locale: LocaleCode,
+  defaultLocale: LocaleCode
+) {
+  const text = (value: LocalizedStringConfig) =>
+    resolveLocalizedString(value, locale, defaultLocale);
+  return agent.skillNames
+    .flatMap((skillName) => {
+      const skill = skills.find((candidate) => candidate.name === skillName);
+      return (skill?.starters ?? [])
+        .filter((starter) => (starter.tools ?? []).every((tool) => agent.toolNames.includes(tool)))
+        .map((starter) => ({
+          skillName,
+          title: text(starter.title),
+          ...(starter.hint === undefined ? {} : { hint: text(starter.hint) }),
+          prompt: text(starter.prompt)
+        }));
+    })
+    .slice(0, AGENT_STARTERS_MAX);
 }
 
 /** The agent's own model first, then the bindings users may pick instead. */
