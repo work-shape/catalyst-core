@@ -234,7 +234,11 @@ contain breaking changes; a patch version does not.
   runner image of this release. On an older runner image the call is refused with `409`
   (`details.reason` `runner_image_outdated`) and a message that says the image must be rolled
   out; without a worker with `commit_unavailable`. Seeded Apps and Apps that exist are not
-  changed, and `assets.discard_draft` moves the draft back as before.
+  changed, and `assets.discard_draft` moves the draft back as before. A commit works on the
+  disk of the worker, not in the 64 MiB `/tmp` of the sandbox: it needs 550 MiB free
+  (`ASSET_REPO_COMMIT_DISK_BYTES`) below the worker's temporary directory and is refused with
+  `409` `no_space` otherwise. The bundles of one repository may have 100 MiB together; a save
+  that would leave more is refused with `history_too_large`.
 - **Database:** migration `0063_asset_repo_commit_request` adds the columns `request` and
   changed, and `assets.discard_draft` moves the draft back as before. A commit works on the
   disk of the worker, not in the 64 MiB `/tmp` of the sandbox: it needs 550 MiB free
