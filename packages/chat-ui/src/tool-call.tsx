@@ -225,7 +225,9 @@ export function DataPart({
     return (
       // Surfaces shown elsewhere render nothing here; an empty wrapper would
       // still add its margin below the message.
-      <div className="chat-tool-part my-3 max-w-5xl has-[>div:empty]:hidden">
+      // An inline view has no frame of its own, so it keeps the distance to the text before
+      // it that the text after a block keeps (styles.css).
+      <div className="chat-tool-part my-6 max-w-5xl has-[>div:empty]:hidden">
         <ToolSurfaceList autoPreview={autoPreviewSurfaces} surfaces={promotedSurfaces.surfaces} />
       </div>
     );

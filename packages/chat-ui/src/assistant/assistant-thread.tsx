@@ -6,7 +6,7 @@ import {
   useThreadViewportStore
 } from "@assistant-ui/react";
 import { ArrowDown, CircleAlert, Lock } from "lucide-react";
-import { useLayoutEffect, useMemo, useRef, type RefObject } from "react";
+import { useLayoutEffect, useMemo, useRef, type ReactNode, type RefObject } from "react";
 import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
 import { Banner, cn, SkillIcon, Starter, StarterList } from "@vivd-catalyst/ui";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
@@ -52,6 +52,7 @@ export function AssistantThread({
   contextSnapshot,
   notice,
   newConversationPrivate,
+  subjectLine,
   retainedUntil,
   draftAttachments,
   localUploadingAttachments,
@@ -97,6 +98,8 @@ export function AssistantThread({
     | undefined;
   notice: string | undefined;
   newConversationPrivate?: boolean;
+  /** What the open conversation is about, where it is about an asset. */
+  subjectLine?: ReactNode;
   /** The open conversation's retention date. */
   retainedUntil?: string;
   draftAttachments: DraftAttachment[];
@@ -250,6 +253,7 @@ export function AssistantThread({
                     <span>{t("newConversationPrivateHint")}</span>
                   </p>
                 ) : null}
+                {subjectLine}
                 {/* A conversation without a message is a draft and keeps the start page as it is. */}
                 {startPage ? null : (
                   <RetentionNotice retention={config?.retention} retainedUntil={retainedUntil} />

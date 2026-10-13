@@ -1,12 +1,7 @@
 import { loadNewerVersion } from "./build-fixtures";
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import { randomUUID } from "node:crypto";
-import {
-  assetRevision,
-  readAssetSet,
-  requestWithOrigin,
-  restoreAssetSet
-} from "./request-with-origin";
+import { assetRevision, readAsset, requestWithOrigin } from "./request-with-origin";
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./test";
 import { z } from "zod";
@@ -3303,24 +3298,34 @@ test("superadmin manages config assets with validation and conflict protection",
 }) => {
   test.setTimeout(60_000);
   await signInViaApi(page, superadminUser);
-  const original = await readAssetSet(page, apiBaseUrl);
-  const originalResearchAgent = original.assets.find(
-    (asset) => asset.kind === "agent" && asset.name === "research_assistant"
-  )?.config;
-  expect(originalResearchAgent).toBeDefined();
+  const researchAgentUrl = `${apiBaseUrl}/api/v1/assets/agent/research_assistant`;
+  const skillUrl = `${apiBaseUrl}/api/v1/assets/skill/config_e2e_skill`;
+  const original = await readAsset(page, researchAgentUrl);
+  if (!original) {
+    throw new Error("The instance has no agent research_assistant.");
+  }
+  const originalResearchAgent = original.config;
 
-  // The page shows no version counter; the instance's own answer says whether a save went through.
-  const expectVersion = async (version: number) => {
+  // The page shows no version counter; the instance's own answer says whether a save went
+  // through. It is asked for the two assets of this test only: other specs write agents and
+  // skills of their own on the same instance meanwhile, so the instance's count of releases
+  // and the set of its skills are not this test's to predict.
+  const revisionOf = async (assetUrl: string) => (await readAsset(page, assetUrl))?.revision;
+  /** Waits for the asset to stand at another revision than `before`, and answers that one. */
+  const expectSaved = async (assetUrl: string, before: number | undefined) => {
+    let revision: number | undefined;
     await expect
       .poll(async () => {
-        const response = await page.request.get(`${apiBaseUrl}/api/v1/instance/config/assets`);
-        const body: unknown = await response.json();
-        return typeof body === "object" && body !== null && "version" in body
-          ? body.version
-          : undefined;
+        revision = await revisionOf(assetUrl);
+        return revision !== undefined && revision !== before;
       })
-      .toBe(version);
+      .toBe(true);
+    return revision;
   };
+  const expectUnchanged = async (assetUrl: string, revision: number | undefined) => {
+    await expect.poll(() => revisionOf(assetUrl)).toBe(revision);
+  };
+  let agentRevision: number | undefined = original.revision;
   /** Opens a kind's list from wherever Studio is: back out of an asset page, then the kind rail. */
   const openList = async (kind: "Agents" | "Skills") => {
     const back = page.getByRole("button", { name: /^Back to /u });
@@ -3418,7 +3423,7 @@ test("superadmin manages config assets with validation and conflict protection",
     await fieldControl("Description").fill("Verifies config asset editing");
     await fieldControl("Content").fill("# Verify config assets");
     await form().getByRole("button", { name: "Create skill", exact: true }).click();
-    await expectVersion(original.version + 1);
+    const skillRevision = await expectSaved(skillUrl, undefined);
     await expect(page).toHaveURL(/\/build\/skills\/config_e2e_skill$/u);
     await expect(
       page.getByRole("heading", { name: "Config E2E skill", exact: true })
@@ -3437,13 +3442,13 @@ test("superadmin manages config assets with validation and conflict protection",
         { exact: true }
       )
     ).toBeVisible();
-    await expectVersion(original.version + 1);
+    await expectUnchanged(researchAgentUrl, agentRevision);
 
     await fieldset("Instance tools").getByLabel("read_skill", { exact: true }).check();
     const updatedPrompt = `Keep this saved prompt ${Date.now()}.`;
     await firstPromptText.fill(updatedPrompt);
     await form().getByRole("button", { name: "Save changes", exact: true }).click();
-    await expectVersion(original.version + 2);
+    agentRevision = await expectSaved(researchAgentUrl, agentRevision);
     await expect(firstPromptText).toHaveValue(updatedPrompt);
     await expect(form().getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
 
@@ -3471,7 +3476,7 @@ test("superadmin manages config assets with validation and conflict protection",
     await expect(deleteSkillDialog).toBeHidden();
     expect(configWrites).toEqual([]);
     page.off("request", recordConfigWrite);
-    await expectVersion(original.version + 2);
+    await expectUnchanged(skillUrl, skillRevision);
 
     await askToDelete();
     await page
@@ -3483,28 +3488,28 @@ test("superadmin manages config assets with validation and conflict protection",
         exact: true
       })
     ).toBeVisible();
-    await expectVersion(original.version + 2);
+    await expectUnchanged(skillUrl, skillRevision);
 
     await clickAgent();
     await toggleSkill();
     await expect(form().getByText("No skills chosen.", { exact: true })).toBeVisible();
     await form().getByRole("button", { name: "Save changes", exact: true }).click();
-    await expectVersion(original.version + 3);
+    agentRevision = await expectSaved(researchAgentUrl, agentRevision);
     await clickSkill();
     await askToDelete();
     await page
       .getByRole("dialog", { name: "Delete skill 'config_e2e_skill'?", exact: true })
       .getByRole("button", { name: "Delete", exact: true })
       .click();
-    await expectVersion(original.version + 4);
-    // A deleted asset has no page: Studio is back on the kind's list, which is empty again.
+    await expectUnchanged(skillUrl, undefined);
+    // A deleted asset has no page: Studio is back on the kind's list, which has it no more.
     await expect(page).toHaveURL(/\/build\/skills$/u);
-    await expect(page.getByText(/^No skills yet\./u)).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Skills", level: 1 })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Config E2E skill/u })).toHaveCount(0);
 
     await clickAgent();
     const instructions = form().getByRole("textbox", { name: /^System prompt/u });
     const serverInstructions = `${String(originalResearchAgent?.instructions)}\n\nServer change.`;
-    const researchAgentUrl = `${apiBaseUrl}/api/v1/assets/agent/research_assistant`;
     const serverChange = await requestWithOrigin(page, "put", researchAgentUrl, {
       data: {
         expectedRevision: await assetRevision(page, researchAgentUrl),
@@ -3512,6 +3517,7 @@ test("superadmin manages config assets with validation and conflict protection",
       }
     });
     expect(serverChange.ok()).toBe(true);
+    agentRevision = await expectSaved(researchAgentUrl, agentRevision);
     const unsaved = `${String(originalResearchAgent?.instructions)}\n\nUnsaved UI change.`;
     await instructions.fill(unsaved);
     await form().getByRole("button", { name: "Save changes", exact: true }).click();
@@ -3520,13 +3526,26 @@ test("superadmin manages config assets with validation and conflict protection",
     const conflict = page.locator("[data-build-conflict]");
     await expect(conflict).toContainText(/saved this on .+, while you were editing\./u);
     await expect(instructions).toHaveValue(unsaved);
-    await expectVersion(original.version + 5);
+    await expectUnchanged(researchAgentUrl, agentRevision);
     await loadNewerVersion(page);
     await expect(conflict).toHaveCount(0);
     await expect(instructions).toHaveValue(serverInstructions);
   } finally {
-    const restored = await restoreAssetSet(page, apiBaseUrl, original);
+    // The agent first: the skill cannot be deleted while the agent still names it.
+    const restored = await requestWithOrigin(page, "put", researchAgentUrl, {
+      data: {
+        expectedRevision: await assetRevision(page, researchAgentUrl),
+        config: originalResearchAgent
+      }
+    });
     expect(restored.ok(), await restored.text()).toBe(true);
+    const leftSkill = await revisionOf(skillUrl);
+    if (leftSkill !== undefined) {
+      const deleted = await requestWithOrigin(page, "post", `${skillUrl}/delete`, {
+        data: { expectedRevision: leftSkill }
+      });
+      expect(deleted.ok(), await deleted.text()).toBe(true);
+    }
   }
 });
 
@@ -4002,7 +4021,13 @@ test("panels at the right of the conversation open and close in one step, leave 
       ].join("\n")
     )
   });
-  await expect(page.getByText(fileName).first()).toBeVisible();
+  // The chip says the size once the upload stands; a message sent before that goes without the file.
+  await expect(
+    page
+      .locator("form")
+      .filter({ has: page.getByPlaceholder("Message") })
+      .getByText(/ · \d+ B$/u)
+  ).toBeVisible();
   await page
     .getByPlaceholder("Message")
     .fill(
@@ -4049,11 +4074,17 @@ test("panels at the right of the conversation open and close in one step, leave 
     throw new Error("The header or the Resources button has no box.");
   }
   expect(toggleBox.y + toggleBox.height).toBeLessThanOrEqual(header.y + header.height);
+  // The thread scrolls under the header's row, so a message may well stand at the button's
+  // height: the button is beside the column of the messages and none reaches under it.
   for (const message of await page.locator(".group\\/message").all()) {
     const box = await message.boundingBox();
-    expect(box && box.y < toggleBox.y + toggleBox.height && box.y + box.height > toggleBox.y).toBe(
-      false
-    );
+    expect(
+      box &&
+        box.x < toggleBox.x + toggleBox.width &&
+        box.x + box.width > toggleBox.x &&
+        box.y < toggleBox.y + toggleBox.height &&
+        box.y + box.height > toggleBox.y
+    ).toBe(false);
   }
 
   // The file opens from the message while the card is closed, and Escape closes it.

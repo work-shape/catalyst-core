@@ -140,7 +140,8 @@ export class TurnLoop {
           }))
         ],
         agentToolNames: agent.toolNames,
-        agentSkillChangesEnabled: this.options.agentSkillChangesEnabled
+        agentSkillChangesEnabled: this.options.agentSkillChangesEnabled,
+        ...(offer ? { subject: offer } : {})
       })
     };
     const userMessage: ModelMessage = { role: "user", content: userContent };

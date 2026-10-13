@@ -51,6 +51,7 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
         ? shippedSkillsOf(subject.kind, input.modules)
         : [];
       return {
+        subject,
         toolNames: [
           ...PLATFORM_ASSET_TOOL_NAMES,
           ...(skills.length > 0 ? [READ_SKILL_TOOL] : [])
