@@ -318,7 +318,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await shoot(page, "app-draft", MAIN, draftReady);
 
   // The files of the draft, with the one the draft changed marked and open.
-  await edit.getByRole("radio", { name: "Files" }).click();
+  await edit.getByRole("tab", { name: "Files" }).click();
   await expect(edit.getByRole("navigation", { name: "Files" })).toContainText(
     "src/routes/data.tsx"
   );
@@ -330,7 +330,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
       animations: "disabled"
     });
   }
-  await edit.getByRole("radio", { name: "Preview" }).click();
+  await edit.getByRole("tab", { name: "Preview" }).click();
 
   // The revisions of the App, with the way to publish one of them.
   const openRevisions = async () => {
