@@ -239,30 +239,30 @@ describe("agent list", () => {
     return agentPickerOptions(severalAgents, display({ showAgentDescriptions }).showDescriptions);
   }
 
-  it("names the agents without their descriptions unless the instance shows them", () => {
-    for (const listed of [options(undefined), options(false)]) {
+  it("names the agents without their descriptions when the instance hides them", () => {
+    expect(options(false)).toEqual([
+      { value: "catalyst_assistant", label: "Catalyst Assistant" },
+      { value: "research_assistant", label: "Research Assistant" }
+    ]);
+  });
+
+  it("puts each description under its agent's name unless the instance hides them", () => {
+    for (const listed of [options(undefined), options(true)]) {
       expect(listed).toEqual([
-        { value: "catalyst_assistant", label: "Catalyst Assistant" },
+        {
+          value: "catalyst_assistant",
+          label: "Catalyst Assistant",
+          description: "Answers questions about Catalyst."
+        },
         { value: "research_assistant", label: "Research Assistant" }
       ]);
     }
   });
-
-  it("puts each description under its agent's name when the instance shows them", () => {
-    expect(options(true)).toEqual([
-      {
-        value: "catalyst_assistant",
-        label: "Catalyst Assistant",
-        description: "Answers questions about Catalyst."
-      },
-      { value: "research_assistant", label: "Research Assistant" }
-    ]);
-  });
 });
 
 describe("agent settings", () => {
-  it("show the name without descriptions before the instance's settings are known", () => {
-    expect(agentChipDisplayFor(undefined)).toEqual({ showName: true, showDescriptions: false });
+  it("show the name and the descriptions before the instance's settings are known", () => {
+    expect(agentChipDisplayFor(undefined)).toEqual({ showName: true, showDescriptions: true });
   });
 
   it("follow ui.showAgentName and ui.showAgentDescriptions independently", () => {

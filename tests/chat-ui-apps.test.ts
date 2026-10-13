@@ -363,7 +363,7 @@ describe("the draft of an App (layout 3)", () => {
     expect(markup).not.toContain("revision 3");
   });
 
-  it("offers the files of the draft beside its preview", () => {
+  it("offers the views of the draft as tabs under its head, the open one selected", () => {
     const markup = render(
       createElement(AppEditFrame, {
         name: "Angebotsrechner",
@@ -378,8 +378,14 @@ describe("the draft of an App (layout 3)", () => {
       })
     );
 
-    expect(markup).toContain("Preview");
-    expect(markup).toContain("Files");
+    const tabs = [...markup.matchAll(/<button[^>]*role="tab"[^>]*>([^<]*)<\/button>/gu)];
+    expect(tabs.map((tab) => tab[1])).toEqual(["Preview", "Files", "Actions"]);
+    expect(tabs[0]?.[0]).toContain('aria-selected="true"');
+    expect(markup).toContain('role="tabpanel"');
+    expect(markup).not.toContain('role="radio"');
+    // The tabs stand under the head, before the view they show.
+    expect(markup.indexOf('role="tablist"')).toBeGreaterThan(markup.indexOf("</header>"));
+    expect(markup.indexOf("the draft")).toBeGreaterThan(markup.indexOf('role="tablist"'));
   });
 
   it("says in its own words that a revision lost its files or is too large to be held", () => {

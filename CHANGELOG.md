@@ -919,6 +919,13 @@ id from config_assets where status = 'deleted')`.
 
 ### Changed
 
+- **Studio:** the list of agents names each agent in the reader's language and shows what it
+  does under its name, in place of its id. `assets.list` takes an optional `locale`; an agent's
+  title and description answer in it where the agent holds that language, and in the
+  instance's default otherwise.
+- **Chat:** the agent list shows each agent's description under its name by default:
+  `ui.showAgentDescriptions` is now `true` unless release config sets it. An instance that
+  wants the names alone sets `ui.showAgentDescriptions: false`.
 - **Chat:** the usage consumption on a model card has six steps in place of four: `very_low`,
   `low`, `moderate`, `elevated`, `high` and `very_high`, and its filled steps take a colour that
   goes from cool to warm with the level. The tier still comes from the model's Customer Rate
