@@ -134,9 +134,9 @@ describe("the module registry", () => {
     const bound = (await getTestOperations(await createTestInstance())).filter(
       (operation) => operation.module !== undefined
     );
-    // The routes of Apps, of Connections and of changing assets name their module.
+    // The routes of Apps, of Connections, of Workflows and of changing assets name their module.
     expect(new Set(bound.map((operation) => operation.module))).toEqual(
-      new Set(["apps", "connections", "assetManagement"])
+      new Set(["apps", "connections", "workflows", "assetManagement"])
     );
 
     const unlisted = bound.filter((operation) => {
