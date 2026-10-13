@@ -20,7 +20,7 @@ The platform keeps assets. Each has a kind, a unique lowercase name with hyphens
 
 - agent (kind \`agent\`): an assistant with instructions, a model, tools and skills. You are one.
 - skill (\`skill\`): instructions an agent reads when a task matches, like this one.
-- Workflow (\`workflow\`): steps that run one after the other, started by hand, on a schedule or by an event. For work that repeats without a person in the chat.
+- Workflow (\`workflow\`): steps that run one after the other, started by hand or on a schedule. For work that repeats without a person in the chat.
 - App (\`app\`): a Page saved for keeps, with data and actions that read from and write to Connections and Data Stores.
 - Data Store (\`data_store\`): tables of structured data that Apps and Workflows read and write.
 - Knowledge Base (\`knowledge_base\`): documents, indexed so agents can search them.
