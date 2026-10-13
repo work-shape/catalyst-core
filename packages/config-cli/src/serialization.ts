@@ -67,6 +67,7 @@ export function canonicalizeSkillConfig(input: unknown): SkillConfig {
     name: skill.name,
     title: skill.title,
     description: skill.description,
+    ...(skill.summary === undefined ? {} : { summary: skill.summary }),
     content: skill.content,
     ...(resources?.length ? { resources } : {})
   };
@@ -78,7 +79,8 @@ export function serializeSkillMarkdown(input: unknown, provenance?: AssetProvena
     {
       name: skill.name,
       title: skill.title,
-      description: skill.description
+      description: skill.description,
+      ...(skill.summary === undefined ? {} : { summary: skill.summary })
     },
     yamlDumpOptions
   );

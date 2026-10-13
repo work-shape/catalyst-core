@@ -2,6 +2,7 @@
 name: tax-vat-rules
 title: "Umsatzsteuer: Pflichtangaben"
 description: Nutzen, wenn eine Rechnung auf Pflichtangaben oder den Steuersatz geprüft wird.
+summary: Weiß, wie man eine Rechnung auf Pflichtangaben und den Steuersatz prüft.
 ---
 
 # Umsatzsteuer: Pflichtangaben

@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   REASONING_EFFORTS,
   SKILL_RESOURCE_MEDIA_TYPES,
+  SKILL_SUMMARY_MAX_LENGTH,
   type SkillResourceMediaType
 } from "./asset-types";
 
@@ -97,6 +98,16 @@ const skillConfigObjectSchema = z.object({
   name: skillNameSchema,
   title: z.string().min(1),
   description: z.string().min(1),
+  summary: z
+    .string()
+    .min(1)
+    .max(SKILL_SUMMARY_MAX_LENGTH, {
+      message: `Skill summary must be at most ${SKILL_SUMMARY_MAX_LENGTH} characters`
+    })
+    .refine((summary) => !/[\r\n]/u.test(summary), {
+      message: "Skill summary must be one line"
+    })
+    .optional(),
   content: z.string().min(1),
   resources: z.array(skillResourceConfigSchema).optional()
 });

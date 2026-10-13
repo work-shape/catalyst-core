@@ -2,6 +2,7 @@
 name: tax-filing-checklist
 title: Checkliste Abgabefristen
 description: Nutzen, wenn Abgabefristen geplant oder fehlende Unterlagen gesucht werden.
+summary: Weiß, wie man Abgabefristen plant und fehlende Unterlagen findet.
 ---
 
 # Checkliste Abgabefristen

@@ -1,6 +1,7 @@
 ---
 title: Generic Workflow Review
 description: Use when the user asks to review workflow details, identify missing information, or plan next checks.
+summary: Knows how to review a workflow, find what is missing and plan the next checks.
 ---
 
 # Generic Workflow Review

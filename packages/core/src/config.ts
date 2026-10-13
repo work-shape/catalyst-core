@@ -1,6 +1,7 @@
 import {
   REASONING_EFFORTS,
   SKILL_RESOURCE_MEDIA_TYPES,
+  SKILL_SUMMARY_MAX_LENGTH,
   type AgentConfig,
   type AgentInitialPromptConfig,
   type ReasoningEffortConfig,
@@ -231,6 +232,7 @@ export interface AgentSkillChangesPolicy {
 export {
   REASONING_EFFORTS,
   SKILL_RESOURCE_MEDIA_TYPES,
+  SKILL_SUMMARY_MAX_LENGTH,
   type AgentConfig,
   type AgentInitialPromptConfig,
   type ReasoningEffortConfig,

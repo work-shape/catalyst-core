@@ -214,6 +214,15 @@ describe("asset kind registry", () => {
       title: "Research",
       description: "How to"
     });
+    // The sentence for people reaches a list beside the name. No skill names an icon itself.
+    expect(skillKind.summarize({ ...skill, summary: "Knows how to research a question." })).toEqual(
+      {
+        name: "research",
+        title: "Research",
+        description: "How to",
+        attributes: { summary: "Knows how to research a question." }
+      }
+    );
   });
 
   it("derives the Namespace of an asset from its name", () => {

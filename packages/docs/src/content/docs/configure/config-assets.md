@@ -63,6 +63,13 @@ skills/support_review/
 
 The CLI recursively includes `.md`, `.txt`, `.json`, `.yaml`, and `.yml` resources below each matched skill directory. It validates them as UTF-8 text, includes them in pull/diff/push, and rejects unsupported files instead of silently dropping them. Resource paths are normalized relative paths; absolute paths, traversal, duplicate paths, and a second `SKILL.md` resource are invalid. Binary assets do not belong in config assets.
 
+The front matter of `SKILL.md` holds `title`, `description` and, optionally, `name` and `summary`. The two texts have different readers:
+
+- `description` is for the agent. It says when to use the skill.
+- `summary` is for people. It is one sentence on one line, at most 120 characters, that says what an agent with the skill knows how to do, such as "Knows how to write short, easy sentences in German and English." The agent editor and the Skills list show it under the title. A skill without a summary shows its title alone.
+
+A skill is instructions the agent follows. It adds no tools, so a summary never names something only a tool can do.
+
 The server URL can come from a named `catalyst.yaml` instance or directly from `--instance https://catalyst.example.com`. Authentication is environment-only for now:
 
 ```sh

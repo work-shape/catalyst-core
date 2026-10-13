@@ -159,6 +159,22 @@ describe("config CLI serialization", () => {
     expect(parseSkillFile(serialized)).toEqual(skill);
     expect(serializeSkillMarkdown(parseSkillFile(serialized))).toBe(serializeSkillMarkdown(skill));
   });
+
+  it("keeps a skill's summary through a pull and a push, and writes none where there is none", () => {
+    const skill = {
+      name: "review",
+      title: "Review",
+      description: "Review a workflow",
+      content: "# Review"
+    };
+    const summary = "Knows how to review a workflow and name what is missing.";
+    const serialized = serializeSkillMarkdown({ ...skill, summary });
+
+    expect(serialized).toContain(`summary: ${summary}\n`);
+    expect(parseSkillFile(serialized)).toEqual({ ...skill, summary });
+    expect(canonicalizeSkillConfig({ ...skill, summary })).toEqual({ ...skill, summary });
+    expect(serializeSkillMarkdown(skill)).not.toContain("summary");
+  });
 });
 
 describe("config CLI state and manifest", () => {

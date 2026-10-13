@@ -2,6 +2,7 @@
 name: hr-leave-policy
 title: Urlaubsrichtlinie
 description: Nutzen bei Fragen zu Urlaub, Krankmeldung und Sonderurlaub.
+summary: Weiß, wie Urlaub, Krankmeldung und Sonderurlaub geregelt sind.
 ---
 
 # Urlaubsrichtlinie

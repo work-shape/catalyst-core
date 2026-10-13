@@ -49,10 +49,19 @@ export interface AgentConfig {
 export interface SkillConfig {
   name: string;
   title: string;
+  /** For the agent: when to use the skill. */
   description: string;
+  /**
+   * For people: one sentence on one line that says what an agent with the skill knows how to
+   * do. Lists and choosers show it under the title.
+   */
+  summary?: string;
   content: string;
   resources?: SkillResourceConfig[];
 }
+
+/** The most characters a skill's `summary` holds. */
+export const SKILL_SUMMARY_MAX_LENGTH = 120;
 
 export const SKILL_RESOURCE_MEDIA_TYPES = [
   "text/markdown",
