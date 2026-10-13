@@ -395,7 +395,11 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
         .getByRole("listitem");
       await expect(rows).toHaveCount(1);
       await expect(rows).toContainText("Client records");
-      await expect(rows).toContainText(connection.name);
+      // The row is this Connection's: it leads to its page. Its id is not in the row.
+      await expect(rows.getByRole("link")).toHaveAttribute(
+        "href",
+        `/build/connections/${connection.name}`
+      );
       const memberMain = memberPage.getByRole("region", { name: "Studio" });
       await expect(memberMain.getByRole("button", { name: /^New /u })).toHaveCount(0);
       await expect(memberMain).not.toContainText("secret_");
