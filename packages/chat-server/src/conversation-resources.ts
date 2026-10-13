@@ -119,6 +119,8 @@ function generatedFileResources(
 ): GeneratedFileResource[] {
   const newestByWorkspaceFile = new Map<string, ManagedArtifactRecord>();
   for (const artifact of artifacts) {
+    // Inspection rows are skipped before the newest is picked; file search in
+    // postgres-file-search-operations.ts applies the same rule of `isWorkspaceInspectionArtifact`.
     const { source, workspaceId, workspacePath } = artifact.metadata;
     if (
       source !== "execution_workspace" ||
