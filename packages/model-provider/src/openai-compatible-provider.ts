@@ -10,6 +10,8 @@ import {
 } from "@vivd-catalyst/core";
 import {
   WEB_SEARCH_MODEL_TOOL_NAME,
+  type ModelAdapterEmbedding,
+  type ModelAdapterEmbeddingRequest,
   type ModelCapabilities,
   type ModelCompletion,
   type ModelCompletionRequest,
@@ -45,6 +47,10 @@ import {
   readProviderErrorMetadata
 } from "./provider-error";
 import { parseToolInput } from "./tool-input";
+import {
+  readOpenAiEmbeddings,
+  toOpenAiEmbeddingsRequestBody
+} from "./openai-compatible-embeddings";
 import {
   streamOpenAiCompatibleCompletion,
   streamOpenAiResponsesCompletion
@@ -120,6 +126,19 @@ export class OpenAiCompatibleChatProvider {
       return;
     }
     yield* this.streamChatCompletions(request, context);
+  }
+
+  /** Posts the texts to `<baseUrl>/embeddings`, the same endpoint and key as chat calls. */
+  async embed(request: ModelAdapterEmbeddingRequest): Promise<ModelAdapterEmbedding> {
+    const response = await this.post(
+      "embeddings",
+      toOpenAiEmbeddingsRequestBody(request),
+      request.signal
+    );
+    if (!response.ok) {
+      throw await this.createProviderError(response);
+    }
+    return readOpenAiEmbeddings(await this.readResponseJson(response), request.texts.length);
   }
 
   private async completeChatCompletions(

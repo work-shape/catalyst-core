@@ -82,6 +82,9 @@ export function createSafeConfigView(
     views: {
       allowedScriptSrc: config.views.allowedScriptSrc
     },
+    replies: {
+      allowedLinkHosts: config.replies.allowedLinkHosts
+    },
     modules: Object.fromEntries(
       modules.modules.map((module) => [module.name, { enabled: module.enabled }])
     ),
