@@ -1,0 +1,6 @@
+# The Postgres image of an instance, by digest: built from Dockerfile beside this file by the
+# workflow "Postgres image", which names the line to write here. The checks
+# (.github/scripts/start-postgres.sh, scripts/check-local.mjs) read it; the demo Compose files,
+# the capabilities' and the deployments' workflows and Compose files repeat it, and
+# tests/postgres-image-pin.test.ts holds the demo Compose files to it.
+ghcr.io/vivd-solutions/catalyst-postgres@sha256:none
