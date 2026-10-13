@@ -100,3 +100,8 @@ export function asAgentRunId(value: string): AgentRunId {
 export function asToolCallId(value: string): ToolCallId {
   return value as ToolCallId;
 }
+
+/** Whether a text is the id of an Operation Run, as `createPlatformId` makes one. */
+export function isOperationRunId(value: string): value is OperationRunId {
+  return /^oprun_[A-Za-z0-9_-]{1,64}$/u.test(value);
+}

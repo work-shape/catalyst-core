@@ -4,6 +4,7 @@ import {
   check,
   index,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
@@ -12,6 +13,8 @@ import {
 } from "drizzle-orm/pg-core";
 import type {
   AssetRepoBundle,
+  AssetRepoCommitRequest,
+  AssetRepoCommitResult,
   AssetRepoSave,
   ClientInstanceId,
   ConversationId,
@@ -56,6 +59,10 @@ export const assetRepoBundles = pgTable(
     supersededAt: timestamp("superseded_at", { withTimezone: true }),
     /** When the row was given up. Its object is removed from then on, and the row a day later. */
     sweptAt: timestamp("swept_at", { withTimezone: true }),
+    /** What the save commits, where a worker builds its commit. No bytes. */
+    request: jsonb("request").$type<AssetRepoCommitRequest>(),
+    /** How the commit of the save ended. */
+    result: jsonb("result").$type<AssetRepoCommitResult>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull()
   },
   (table) => [

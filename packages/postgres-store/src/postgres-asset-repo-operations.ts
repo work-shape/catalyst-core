@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, max, ne } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, max, ne, sql } from "drizzle-orm";
 import {
   AppError,
   assetRepoBundleObjectKey,
@@ -56,7 +56,9 @@ function mapSave(row: BundleRow): AssetRepoSave {
     operationRunId: row.operationRunId,
     state: row.state,
     savedAt: row.savedAt.toISOString(),
-    ...(bundle ? { bundle } : {})
+    ...(bundle ? { bundle } : {}),
+    ...(row.request ? { request: row.request } : {}),
+    ...(row.result ? { result: row.result } : {})
   };
 }
 
@@ -89,6 +91,36 @@ export async function beginAssetRepoSave(
     });
   }
   return mapSave(row);
+}
+
+export async function getAssetRepoSave(
+  db: PostgresConnection,
+  input: Parameters<ConfigAssetStore["getAssetRepoSave"]>[0]
+): ReturnType<ConfigAssetStore["getAssetRepoSave"]> {
+  const [row] = await db.select().from(assetRepoBundles).where(saveOf(input)).limit(1);
+  return row ? mapSave(row) : undefined;
+}
+
+export async function answerAssetRepoSave(
+  db: PostgresConnection,
+  input: Parameters<ConfigAssetStore["answerAssetRepoSave"]>[0]
+): ReturnType<ConfigAssetStore["answerAssetRepoSave"]> {
+  const { result } = input;
+  const written = await db
+    .update(assetRepoBundles)
+    // The files of a save that ended for good are not asked for again.
+    .set(result === null || result.status === "failed" ? { result } : { result, request: null })
+    .where(
+      and(
+        saveOf(input),
+        eq(assetRepoBundles.state, "pending"),
+        result === null
+          ? sql`${assetRepoBundles.result}->>'status' = 'failed'`
+          : isNull(assetRepoBundles.result)
+      )
+    )
+    .returning({ assetId: assetRepoBundles.assetId });
+  return written.length > 0;
 }
 
 export async function nameAssetRepoSaveBundle(
@@ -430,7 +462,7 @@ export async function insertRepoWrites(
     }
     await tx
       .update(assetRepoBundles)
-      .set({ state: "live", sequence: sequence + 1 })
+      .set({ state: "live", sequence: sequence + 1, request: null })
       .where(saveOf(save));
     if (write.checkout) {
       const bound = {

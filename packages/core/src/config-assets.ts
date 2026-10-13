@@ -192,7 +192,58 @@ export interface AssetRepoSave {
   savedAt: string;
   /** The bundle the save named, once it did. */
   bundle?: AssetRepoSaveBundle;
+  /** What the save commits, where a worker builds its commit. */
+  request?: AssetRepoCommitRequest;
+  /** How the commit of the save ended, once it did. */
+  result?: AssetRepoCommitResult;
 }
+
+/** One file of the folder a save commits: where its bytes are and what they were. */
+export interface AssetRepoSourceFile {
+  path: string;
+  objectKey: string;
+  byteSize: number;
+  /** The SHA-256 of the bytes, in lower-case hex. */
+  checksum: string;
+}
+
+/**
+ * What a save asks of the worker that reaches the sandbox: the files of the folder as they
+ * were when the save began, the commit they were written from and who the ledger names as
+ * the author. It holds no bytes. The time of the commit is the save's.
+ */
+export interface AssetRepoCommitRequest {
+  /** The store the files lie in: the `files` store or the one of the Execution Workspaces. */
+  store: "files" | "workspaces";
+  files: AssetRepoSourceFile[];
+  /** The commit the folder was written from. `null` for the first commit of a repository. */
+  baseCommit: string | null;
+  /** The opaque id of the user. */
+  author: string;
+  /** One line, made by the caller from what the ledger knows. */
+  message: string;
+}
+
+/**
+ * How the commit of a save ended. `committed` says the bundle is named on the pending row and
+ * its object is put: the write of the revision can name it. `refused` is what the command or
+ * the worker found wrong with the files or the repository, and a second attempt with the same
+ * files ends the same way. `failed` is anything else, and the save may be tried again.
+ */
+export type AssetRepoCommitResult =
+  | {
+      status: "committed";
+      commit: string;
+      tree: string;
+      files: number;
+      bundle: Pick<AssetRepoSaveBundle, "objectKey" | "sha256" | "bytes">;
+    }
+  | { status: "refused"; code: string; path?: string; message: string }
+  | {
+      status: "failed";
+      reason: "no_worker" | "timeout" | "stopped" | "command_missing" | "crashed" | "store";
+      message: string;
+    };
 
 /**
  * What a write of an asset whose content is a repository adds to the ledger, in the
@@ -489,7 +540,26 @@ export interface ConfigAssetStore {
     clientInstanceId: ClientInstanceId;
     assetId: string;
     operationRunId: OperationRunId;
+    /** Kept by the call that writes the row. A later call of the run does not replace it. */
+    request?: AssetRepoCommitRequest;
   }): Promise<AssetRepoSave>;
+  /** The save of an Operation Run, where it began one. */
+  getAssetRepoSave(input: {
+    clientInstanceId: ClientInstanceId;
+    assetId: string;
+    operationRunId: OperationRunId;
+  }): Promise<AssetRepoSave | undefined>;
+  /**
+   * Writes how the commit of a pending save ended, once: a save that has a result keeps it,
+   * and `false` says so. `result: null` takes a `failed` result away, so that the run can try
+   * again; a result of another kind stays.
+   */
+  answerAssetRepoSave(input: {
+    clientInstanceId: ClientInstanceId;
+    assetId: string;
+    operationRunId: OperationRunId;
+    result: AssetRepoCommitResult | null;
+  }): Promise<boolean>;
   /**
    * Names the bundle of a pending save, before its object is put, so no object is in the
    * store that no row names. A save names one bundle and keeps it: naming the same again, in

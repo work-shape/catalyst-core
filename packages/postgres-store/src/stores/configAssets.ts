@@ -26,7 +26,9 @@ import {
   removeConfigAsset as removePostgresConfigAsset
 } from "../postgres-config-asset-pointers";
 import {
+  answerAssetRepoSave,
   beginAssetRepoSave,
+  getAssetRepoSave,
   getAssetCheckout,
   listAssetRepoBundles,
   nameAssetRepoSaveBundle
@@ -88,6 +90,8 @@ export function createPostgresConfigAssetsStore(
     listAssetRepoBundles: (input) => listAssetRepoBundles(db, input),
     beginAssetRepoSave: (input) => beginAssetRepoSave(own(), input),
     nameAssetRepoSaveBundle: (input) => nameAssetRepoSaveBundle(own(), input),
+    getAssetRepoSave: (input) => getAssetRepoSave(db, input),
+    answerAssetRepoSave: (input) => answerAssetRepoSave(db, input),
     sweepAssetRepoSaves: (input) => sweepAssetRepoSaves(own(), input),
     getAssetCheckout: (input) => getAssetCheckout(db, input),
     async listAgentAvailability(

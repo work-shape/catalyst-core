@@ -1,5 +1,5 @@
 import { and, asc, eq, ne, sql, type SQL } from "drizzle-orm";
-import type { ConfigAssetStore } from "@vivd-catalyst/core";
+import type { ConfigAssetStore, OperationRunId } from "@vivd-catalyst/core";
 import type { PostgresConnection } from "../postgres-database";
 import { assetRepoBundles, configAssets } from "../schema";
 
@@ -82,7 +82,7 @@ export async function sweepAssetRepoSaves(
   return { swept: pending + orphaned, removed };
 }
 
-function sameSave(row: { assetId: string; operationRunId: string }): SQL | undefined {
+function sameSave(row: { assetId: string; operationRunId: OperationRunId }): SQL | undefined {
   return and(
     eq(assetRepoBundles.assetId, row.assetId),
     eq(assetRepoBundles.operationRunId, row.operationRunId)
