@@ -4,6 +4,7 @@ import {
   Box,
   Clock,
   Code,
+  Compass,
   Database,
   FileText,
   Flag,
@@ -32,10 +33,10 @@ export type IconFamily = "file" | "service" | "skill" | "tool";
 
 /**
  * The icons the library ships: one per family, one per asset kind (`agent`, `skill`,
- * `connection`, `workflow`), one per kind of part of a graph, one per category of what a part
- * touches and one per file type (`spreadsheet`, `document`,
- * `presentation`, `pdf`, `image`, `archive`, `text`, and `file` for every other type, which is
- * also the generic icon of the family). None of them is a mark of a vendor.
+ * `connection`, `workflow`), `guide` for the platform's guide to itself, one per kind of part
+ * of a graph, one per category of what a part touches and one per file type (`spreadsheet`,
+ * `document`, `presentation`, `pdf`, `image`, `archive`, `text`, and `file` for every other
+ * type, which is also the generic icon of the family). None of them is a mark of a vendor.
  */
 export const genericIcons = {
   ...fileTypeIcons,
@@ -46,6 +47,7 @@ export const genericIcons = {
   connection: Plug,
   database: Database,
   files: FileText,
+  guide: Compass,
   mail: Mail,
   manual: Play,
   notify: Bell,

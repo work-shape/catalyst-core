@@ -383,6 +383,14 @@ describe("Workspace pages of Settings", () => {
     expect(markup).not.toContain('aria-label="Felix Pahlke entfernen"');
   });
 
+  it("keeps the role selects in one column when a row has no remove button", () => {
+    const markup = membersView(sharedCollaborationWorkspace);
+
+    expect(
+      markup.match(/<span aria-hidden="true" class="size-8 shrink-0"><\/span>/gu)
+    ).toHaveLength(1);
+  });
+
   it("shows the role as text to an admin, who may not change it", () => {
     const markup = membersView(
       { ...sharedCollaborationWorkspace, role: "admin", membershipRole: "admin" },

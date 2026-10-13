@@ -133,7 +133,9 @@ const skillConfigObjectSchema = z.object({
     })
     .optional(),
   content: z.string().min(1),
-  resources: z.array(skillResourceConfigSchema).optional()
+  resources: z.array(skillResourceConfigSchema).optional(),
+  origin: z.literal("release").optional(),
+  icon: z.string().min(1).optional()
 });
 
 export const skillConfigSchema = skillConfigObjectSchema.superRefine((skill, context) => {
@@ -151,10 +153,13 @@ export const skillConfigSchema = skillConfigObjectSchema.superRefine((skill, con
   }
 });
 
+// A skill file is the instance's own: what only a shipped skill carries is no field of it.
 export const skillFileFrontmatterSchema = skillConfigObjectSchema
   .omit({
     content: true,
-    resources: true
+    resources: true,
+    origin: true,
+    icon: true
   })
   .extend({
     name: skillNameSchema.optional()
