@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { WORKFLOW_RUN_JOB_KINDS } from "@vivd-catalyst/core";
+import { clientInstanceId } from "./support/access-instance";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, getTestJobs } from "./support/test-instance";
 import { withTestSql } from "./support/test-sql";
@@ -155,6 +156,58 @@ describe("the values of a Workflow Run", () => {
     expect(after.dataPrunedAt).toBeDefined();
     const failed = (await stepRunsOf(t, run.id)).filter((stepRun) => stepRun.status === "failed");
     expect(failed.map((stepRun) => stepRun.error?.code)).toEqual(["INTERNAL"]);
+  });
+});
+
+describe("two passes of the job at once", () => {
+  // Fails without the change: the second statement met the row the first had pruned and
+  // wrote its input as nothing, so the loop read 0 items in most rounds.
+  it("leave the rows as one pass does, whichever statement meets a row second", async () => {
+    const time = clock();
+    // One step run per statement, so every statement of one pass meets one of the other.
+    const t = await ready({ now: time.now, pruneBatch: { stepRuns: 1 } });
+    const runs: string[] = [];
+    for (let round = 0; round < 20; round++) {
+      runs.push((await t.finish((await start(t)).id)).id);
+    }
+    time.pass(DAYS + 1);
+    const [first, second] = await Promise.all([
+      t.workflows.pruneRunData(),
+      t.workflows.pruneRunData()
+    ]);
+    // Each step run was pruned by one of the two and each run marked by one.
+    expect(first.stepRuns + second.stepRuns).toBe(20 * 7);
+    expect(first.runs + second.runs).toBe(20);
+
+    for (const runId of runs) {
+      const values = await valuesOf(runId);
+      expect(values.run).toEqual({ input: {}, output: null });
+      expect(values.steps.filter((step) => step.input !== null || step.output !== null)).toEqual([
+        { key: "each_client", input: { last: "send", total: 3 }, output: null }
+      ]);
+      const loop = (await stepRunsOf(t, runId)).find((stepRun) => stepRun.key === "each_client");
+      expect(loop?.loop).toEqual({ total: 3, done: 3, failed: 0, running: 0 });
+    }
+    expect(await t.workflows.pruneRunData()).toEqual({ runs: 0, stepRuns: 0, batches: 0 });
+  }, 120_000);
+
+  it("leaves a row a statement pruned as it is when the same statement meets it again", async () => {
+    const time = clock();
+    const t = await ready({ now: time.now });
+    const run = await t.finish((await start(t)).id);
+    time.pass(DAYS + 1);
+    // The statement of one batch, twice at once on the same rows, 20 rounds: the first
+    // round prunes, and every later one meets rows that are pruned already.
+    const statement = () =>
+      t.stores.workflowRuns.pruneStepRunData({ clientInstanceId, id: run.id, limit: 100 });
+    for (let round = 0; round < 20; round++) {
+      const [one, other] = await Promise.all([statement(), statement()]);
+      expect(one + other).toBe(round === 0 ? 7 : 0);
+      const values = await valuesOf(run.id);
+      expect(values.steps.filter((step) => step.input !== null || step.output !== null)).toEqual([
+        { key: "each_client", input: { last: "send", total: 3 }, output: null }
+      ]);
+    }
   });
 });
 

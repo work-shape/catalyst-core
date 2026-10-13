@@ -724,6 +724,8 @@ export async function pruneWorkflowStepRunData(
 ): Promise<number> {
   // A step run still has a value while it has an output or, a loop, its list. The rows of one
   // batch are locked for one short statement and no other row of the table is.
+  const hasValue = sql`(${workflowStepRuns.output} is not null or ${workflowStepRuns.input} ? 'items')`;
+  // Two passes at once take different rows: one skips what the other holds.
   const due = db
     .select({ id: workflowStepRuns.id })
     .from(workflowStepRuns)
@@ -731,21 +733,27 @@ export async function pruneWorkflowStepRunData(
       and(
         eq(workflowStepRuns.clientInstanceId, ref.clientInstanceId),
         sql`${workflowStepRuns.runId} = ${ref.id}`,
-        sql`(${workflowStepRuns.output} is not null or ${workflowStepRuns.input} ? 'items')`
+        hasValue
       )
     )
-    .limit(ref.limit);
+    .limit(ref.limit)
+    .for("update", { skipLocked: true });
   const pruned = await db
     .update(workflowStepRuns)
     .set({
       output: null,
+      // What a loop keeps is made from its list alone. A row without a list is one whose list
+      // went already, or no loop: it keeps the input it has, which no statement here derives
+      // from a value it removed.
       input: sql`case when jsonb_typeof(${workflowStepRuns.input}->'items') = 'array'
         then jsonb_strip_nulls(jsonb_build_object(
           'last', ${workflowStepRuns.input}->'last',
           'total', jsonb_array_length(${workflowStepRuns.input}->'items')))
-        else null end`
+        else ${workflowStepRuns.input} end`
     })
-    .where(inArray(workflowStepRuns.id, due))
+    // Asked again of the row as it is when this statement holds it: a row that another
+    // statement pruned while this one waited for it is no longer one with a value.
+    .where(and(inArray(workflowStepRuns.id, due), hasValue))
     .returning({ id: workflowStepRuns.id });
   return pruned.length;
 }
