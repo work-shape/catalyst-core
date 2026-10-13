@@ -68,7 +68,7 @@ describe("system instructions", () => {
 
     expect(content).toContain("This conversation is about one data store, named 'visit-log'.");
     expect(content).toContain(
-      "Read it with platform.assets.get before you answer a question about it or change it."
+      "Read it with platform.assets.get, naming no asset, before you answer a question about it or change it."
     );
     expect(content).toContain("call read_skill for 'workflow-authoring'");
     // A conversation that may not save is not told of a save.
@@ -76,5 +76,18 @@ describe("system instructions", () => {
 
     const without = createSystemInstructions("Use customer workflow rules.", "en");
     expect(without).not.toContain("Subject of this conversation:");
+  });
+
+  it("tells the agent nothing of how it opens an asset: the tool and the platform skill do", () => {
+    const content = createSystemInstructions("Use customer workflow rules.", "en", {
+      subject: {
+        subject: { kind: "workflow", name: "intake" },
+        toolNames: ["platform.assets.open", "platform.assets.get", "platform.assets.put"],
+        skillNames: []
+      }
+    });
+
+    expect(content).toContain("This conversation is about one workflow, named 'intake'.");
+    expect(content).not.toContain("platform.assets.open");
   });
 });

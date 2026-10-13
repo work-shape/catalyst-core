@@ -26,7 +26,7 @@ const addresses: [path: string, route: WorkspaceRoute, view: Area][] = [
   ["/w/cw_1/apps", { kind: "apps", collaborationWorkspaceId: "cw_1" }, "apps"],
   ["/w/cw_1/apps/quote", { kind: "app", collaborationWorkspaceId: "cw_1", app: "quote" }, "apps"],
   [
-    "/w/cw_1/apps/quote/edit",
+    "/w/cw_1/app-drafts/quote",
     { kind: "app-edit", collaborationWorkspaceId: "cw_1", app: "quote" },
     "apps"
   ],

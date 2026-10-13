@@ -315,6 +315,7 @@ function renderAssistantGroupedPart({
         <AssistantWorkGroup
           count={renderableIndices.length}
           only={onlyToolCall(messageParts, renderableIndices)}
+          last={lastToolCall(messageParts, renderableIndices)}
           summary={false}
         >
           {renderableIndices.map((index) => (
@@ -371,6 +372,7 @@ function AssistantWorkTimeline({
               key={`tool-group-${item.indices[0]}`}
               count={renderableIndices.length}
               only={onlyToolCall(messageParts, renderableIndices)}
+              last={lastToolCall(messageParts, renderableIndices)}
               nested
               summary={false}
             >
@@ -423,9 +425,24 @@ function onlyToolCall(
   return part?.type === "tool-call" ? part : undefined;
 }
 
+/** The last tool call of a group. */
+function lastToolCall(
+  parts: readonly PartState[],
+  indices: readonly number[]
+): ToolCallPartState | undefined {
+  for (let position = indices.length - 1; position >= 0; position -= 1) {
+    const part = parts[indices[position] ?? -1];
+    if (part?.type === "tool-call") {
+      return part;
+    }
+  }
+  return undefined;
+}
+
 function AssistantWorkGroup({
   count,
   only,
+  last,
   children,
   nested = false,
   summary,
@@ -435,6 +452,8 @@ function AssistantWorkGroup({
   count: number;
   /** The group's one tool call, where it holds a single call. */
   only?: ToolCallPartState;
+  /** The group's last tool call. */
+  last?: ToolCallPartState;
   children: ReactNode;
   nested?: boolean;
   summary: boolean;
@@ -461,7 +480,7 @@ function AssistantWorkGroup({
   const countLabel = summary ? (
     formatWorkHistoryLabel(t("workHistory"), durationMs)
   ) : (
-    <ToolCallFoldLabel only={only} count={count} />
+    <ToolCallFoldLabel only={only} last={last} count={count} />
   );
 
   return (

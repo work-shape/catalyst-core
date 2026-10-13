@@ -26,9 +26,10 @@ export type ConversationListScope = { kind: "viewer"; userId: string } | { kind:
 
 /**
  * The asset a conversation is about, by its kind and its name, such as a Workflow whose draft
- * the agent edits. It is set when the conversation is created and never changed. The server
- * binds the tools that read and save an asset to it: a tool of such a conversation reaches
- * this asset and no other, whatever a model names.
+ * the agent edits. It is set when the conversation is created from the asset's page, and by
+ * the server when the agent opens another asset in it with `platform.assets.open`: one subject
+ * at a time, the last one opened wins. The tools that check and save a draft reach this asset
+ * and no other, whatever a model names.
  */
 export interface ConversationSubject {
   kind: string;
@@ -37,14 +38,13 @@ export interface ConversationSubject {
 
 /**
  * What the conversations of an instance are offered beyond what their agent's definition
- * lists: in every conversation the tools that find what is on the platform and the skill that
- * says how it works, and in a conversation about an asset the tools the server binds to it and
- * the skills the platform ships for an asset of that kind.
+ * lists: in every conversation the tools that find, open, read and save an asset and the skill
+ * that says how the platform works, and the skills the platform ships for the assets of a kind.
  */
 export interface ConversationOffer {
   /**
-   * The asset the conversation is about: what its agent is told before the first turn.
-   * Missing on a conversation about none.
+   * The asset the conversation is about when the run starts: what its agent is told before
+   * the first turn. Missing on a conversation about none yet.
    */
   subject?: ConversationSubject;
   toolNames: readonly string[];
@@ -78,10 +78,9 @@ export interface ConversationOfferSource {
 }
 
 /**
- * The prefix of the tools on the platform's assets. An agent is offered them only as the
- * platform offers them to a conversation, whatever its definition lists: `platform.assets.list`
- * in every conversation, the tools the server binds to a subject only in a conversation that
- * has one.
+ * The prefix of the tools on the platform's assets. The server offers them to the agent of
+ * every conversation, whatever its definition lists. Only `platform.assets.open` moves what the
+ * conversation is about; the check and the save reach that asset and no other.
  */
 export const SUBJECT_TOOL_PREFIX = "platform.assets.";
 
@@ -183,6 +182,12 @@ export interface UpdateConversationTitleInput {
   updatedAt: ISODateString;
 }
 
+export interface SetConversationSubjectInput {
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+  subject: ConversationSubject;
+}
+
 export interface ReplaceConversationTitleInput extends UpdateConversationTitleInput {
   /** The title the caller read. Another title by now means someone else wrote one. */
   expectedTitle: string;
@@ -229,6 +234,12 @@ export interface ConversationStore extends ConversationHistoryStore {
    * statement. False when it carries another title or is not active.
    */
   replaceConversationTitle(input: ReplaceConversationTitleInput): Promise<boolean>;
+  /**
+   * Makes `subject` what an active conversation is about, in place of what it was about.
+   * Leaves its time of change alone: a subject is no message. Nothing when the conversation
+   * is not active.
+   */
+  setConversationSubject(input: SetConversationSubjectInput): Promise<Conversation | undefined>;
   /**
    * Deletes an active Conversation. With `inCollaborationWorkspaceId` only while it is in
    * that workspace: one that was moved away meanwhile is answered as not available.

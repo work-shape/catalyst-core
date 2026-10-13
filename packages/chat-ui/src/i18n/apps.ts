@@ -92,6 +92,10 @@ export const apps = defineTranslations({
     "apps.draftRevision": "Draft · revision {number}",
     "apps.draftUnavailable": "The draft of this app is not available to you.",
     "apps.edit": "Edit",
+    "apps.editWithAgent": "Edit with the agent",
+    "apps.editWithAgentClose": "Close",
+    "apps.editWithAgentFailed": "The conversation could not be started.",
+    "apps.editWithAgentRefused": "This app is not available to you for editing with the agent.",
     "apps.empty":
       "No apps in this workspace yet. Describe a tool in chat and the agent builds it as a page; save it as an app so everyone here can use it.",
     "apps.emptyReadOnly": "No apps yet. A builder of this workspace can add one.",
@@ -126,6 +130,7 @@ export const apps = defineTranslations({
     "apps.open": "Open",
     "apps.openDraft": "Open the draft",
     "apps.previewOf": "App {name}",
+    "apps.surface.openPage": "Open the app's draft page",
     "apps.promptStart": "Build a page for this workspace: ",
     "apps.publish": "Publish",
     "apps.publishBody": "Everyone in {workspace} gets revision {number} when they open the app.",
@@ -273,6 +278,11 @@ export const apps = defineTranslations({
     "apps.draftRevision": "Entwurf · Revision {number}",
     "apps.draftUnavailable": "Der Entwurf dieser App ist für dich nicht verfügbar.",
     "apps.edit": "Bearbeiten",
+    "apps.editWithAgent": "Mit dem Agenten bearbeiten",
+    "apps.editWithAgentClose": "Schließen",
+    "apps.editWithAgentFailed": "Die Unterhaltung konnte nicht gestartet werden.",
+    "apps.editWithAgentRefused":
+      "Diese App ist für dich nicht zum Bearbeiten mit dem Agenten verfügbar.",
     "apps.empty":
       "In diesem Arbeitsbereich gibt es noch keine Apps. Beschreibe im Chat ein Werkzeug, und der Agent baut es als Page; speichere sie als App, damit alle hier sie nutzen können.",
     "apps.emptyReadOnly":
@@ -309,6 +319,7 @@ export const apps = defineTranslations({
     "apps.open": "Öffnen",
     "apps.openDraft": "Entwurf öffnen",
     "apps.previewOf": "App {name}",
+    "apps.surface.openPage": "Entwurfsseite der App öffnen",
     "apps.promptStart": "Baue eine Page für diesen Arbeitsbereich: ",
     "apps.publish": "Veröffentlichen",
     "apps.publishBody": "Alle in {workspace} bekommen Revision {number}, wenn sie die App öffnen.",
