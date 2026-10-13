@@ -49,7 +49,8 @@ export function checkStorableTexts(
     if (typeof next === "string") {
       if (!isStorableText(next)) return "unstorable";
     } else if (Array.isArray(next)) {
-      pending.push(...next);
+      // One push per entry: spreading a list of a hundred thousand entries ends the stack.
+      for (const entry of next) pending.push(entry);
     } else if (typeof next === "object" && next !== null) {
       for (const [key, entry] of Object.entries(next)) {
         if (!isStorableText(key)) return "unstorable";
@@ -75,15 +76,14 @@ export function readYamlData(text: string, file: string): YamlDataResult {
     value = load(text, { schema: JSON_SCHEMA, filename: file });
   } catch (error) {
     if (error instanceof YAMLException) {
+      // A file of several documents is refused without a mark, though the types say otherwise.
+      const markLine: number | undefined = error.mark?.line;
+      const line = markLine === undefined ? undefined : markLine + 1;
       // The reader stops at its own depth limit, 100 levels, before its recursion nears the
       // end of the stack.
       return error.reason.startsWith("nesting exceeded")
-        ? fail("yaml_too_deep", `'${file}' ${error.reason}.`, error.mark.line + 1)
-        : fail(
-            "yaml_invalid",
-            `'${file}' is not valid YAML: ${error.reason}.`,
-            error.mark.line + 1
-          );
+        ? fail("yaml_too_deep", `'${file}' ${error.reason}.`, line)
+        : fail("yaml_invalid", `'${file}' is not valid YAML: ${error.reason}.`, line);
     }
     throw error;
   }

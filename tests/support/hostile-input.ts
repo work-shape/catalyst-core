@@ -1,7 +1,7 @@
 // One set of hostile documents that every reader of untrusted input is run through. Each reader
 // answers each document with a refusal that names the problem, within `HOSTILE_INPUT_BOUND_MS`:
 // never a hang, a crash or a 500. The platform's readers are in `tests/hostile-input.test.ts`,
-// the document pipeline's in `capabilities/tests/hostile-documents.test.ts`.
+// the document pipeline's in `capabilities/tests/document-processing.test.ts`.
 
 /** How long a reader may take to refuse one hostile document. */
 const HOSTILE_INPUT_BOUND_MS = 2_000;
@@ -33,6 +33,11 @@ export const hostileDocuments: readonly HostileDocument[] = [
   { name: "alias bomb", bytes: text(aliasBomb()) },
   { name: "deeply nested", bytes: text(`id: ${"[".repeat(5_000)}${"]".repeat(5_000)}\n`) },
   { name: "does not parse", bytes: text("id: [unclosed\n  name: : :\n") },
+  {
+    name: "wide sequence",
+    bytes: text(`id: [${Array.from({ length: 120_000 }, () => "0").join(",")}]\n`)
+  },
+  { name: "several documents", bytes: text("id: a\n---\nid: b\n") },
   { name: "huge single line", bytes: text(`id: ${"x".repeat(4 * 1024 * 1024)}`) },
   { name: "invalid UTF-8", bytes: new Uint8Array([0x69, 0x64, 0x3a, 0x20, 0xff, 0xfe, 0x80]) },
   { name: "NUL byte", bytes: text("id: a\u0000b\n") },
