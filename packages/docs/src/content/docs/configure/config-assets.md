@@ -63,12 +63,14 @@ skills/support_review/
 
 The CLI recursively includes `.md`, `.txt`, `.json`, `.yaml`, and `.yml` resources below each matched skill directory. It validates them as UTF-8 text, includes them in pull/diff/push, and rejects unsupported files instead of silently dropping them. Resource paths are normalized relative paths; absolute paths, traversal, duplicate paths, and a second `SKILL.md` resource are invalid. Binary assets do not belong in config assets.
 
-The front matter of `SKILL.md` holds `title`, `description` and, optionally, `name`, `summary` and `starters`. The two texts have different readers:
+The front matter of `SKILL.md` holds `title`, `description` and, optionally, `name`, `summary`, `icon` and `starters`. The two texts have different readers:
 
 - `description` is for the agent. It says when to use the skill.
 - `summary` is for people. It is one sentence on one line, at most 120 characters, that says what an agent with the skill knows how to do, such as "Knows how to write short, easy sentences in German and English." The agent editor and the Skills list show it under the title. A skill without a summary shows its title alone.
 
 A skill is instructions the agent follows. It adds no tools, so a summary never names something only a tool can do.
+
+`icon` picks the icon the Skills list, the agent editor and the empty chat show beside the skill. It is one of `spreadsheet`, `document`, `presentation`, `pdf`, `image`, `archive`, `text` and `file`; any other value is refused when the skill is saved. A skill without an icon shows the generic skill icon. The same choice is offered in the skill's editor.
 
 `starters` are first requests the empty chat offers under the composer for an agent that has the skill. A skill carries at most two:
 
@@ -238,21 +240,21 @@ removed first. Reverting retains the original approval and proposal history.
 
 Every asset is read and written at one address, `/api/v1/assets/{kind}/{name}`, where `kind` is a registered kind such as `agent` or `skill`. The admin panel uses these operations, and so can a script or an outside editor. Each changing call is one Operation Run with its actor and outcome. A read is checked the same way and leaves a run only when it is refused or fails. The [API reference](/reference/api/) lists the fields.
 
-| Operation                 | Address                                      | Right                |
-| ------------------------- | -------------------------------------------- | -------------------- |
-| `assets.list`             | `GET /api/v1/assets/{kind}`                  | `<kind>.read`        |
-| `assets.get`              | `GET /api/v1/assets/{kind}/{name}`           | `<kind>.read`        |
-| `assets.put`              | `PUT /api/v1/assets/{kind}/{name}`           | `<kind>.write`       |
-| `assets.delete`           | `POST /api/v1/assets/{kind}/{name}/delete`   | `<kind>.delete`      |
-| `assets.revisions.list`   | `GET /api/v1/assets/{kind}/{name}/revisions` | `<kind>.read`        |
-| `assets.revert`           | `POST /api/v1/assets/{kind}/{name}/revert`   | `<kind>.write`       |
-| `assets.validate`         | `POST /api/v1/assets/{kind}/validate`        | `<kind>.read`        |
-| `assets.publish` | `POST /api/v1/assets/{kind}/{name}/publish` | `<kind>.publish` |
-| `assets.discard_draft` | `POST /api/v1/assets/{kind}/{name}/discard-draft` | `<kind>.write` |
-| `assets.sync`             | `POST /api/v1/assets/sync`                   | per item             |
-| `assets.sync_check`       | `POST /api/v1/assets/sync/check`             | per item             |
-| `platform.context.get`    | `GET /api/v1/context`                        | any signed-in caller |
-| `platform.references.get` | `GET /api/v1/context/references`             | a right on any kind  |
+| Operation                 | Address                                           | Right                |
+| ------------------------- | ------------------------------------------------- | -------------------- |
+| `assets.list`             | `GET /api/v1/assets/{kind}`                       | `<kind>.read`        |
+| `assets.get`              | `GET /api/v1/assets/{kind}/{name}`                | `<kind>.read`        |
+| `assets.put`              | `PUT /api/v1/assets/{kind}/{name}`                | `<kind>.write`       |
+| `assets.delete`           | `POST /api/v1/assets/{kind}/{name}/delete`        | `<kind>.delete`      |
+| `assets.revisions.list`   | `GET /api/v1/assets/{kind}/{name}/revisions`      | `<kind>.read`        |
+| `assets.revert`           | `POST /api/v1/assets/{kind}/{name}/revert`        | `<kind>.write`       |
+| `assets.validate`         | `POST /api/v1/assets/{kind}/validate`             | `<kind>.read`        |
+| `assets.publish`          | `POST /api/v1/assets/{kind}/{name}/publish`       | `<kind>.publish`     |
+| `assets.discard_draft`    | `POST /api/v1/assets/{kind}/{name}/discard-draft` | `<kind>.write`       |
+| `assets.sync`             | `POST /api/v1/assets/sync`                        | per item             |
+| `assets.sync_check`       | `POST /api/v1/assets/sync/check`                  | per item             |
+| `platform.context.get`    | `GET /api/v1/context`                             | any signed-in caller |
+| `platform.references.get` | `GET /api/v1/context/references`                  | a right on any kind  |
 
 The right is decided for the one asset: an instance right, a grant in the Namespace of its name, or a grant on the asset. `assets.list` answers only the assets the caller may read, as summaries without content, in the order of their names. It filters by `prefix` (a name prefix such as a Namespace) and by `text` (a part of the name, in any case), and pages with `limit` and `cursor`. It is built for up to 10,000 assets of a kind.
 
@@ -308,11 +310,11 @@ A write moves the draft and nothing else. The revision the members of the App's 
 
 The address `apps.preview` answers is the credential of the frame it is loaded in: the sandboxed frame has no origin and cannot send the session, so whoever holds the address is served its files. The address names the person it was made for and one file set, is valid for one hour, and that person's right is asked again at most every 30 seconds. A browser keeps a file no longer than the address is valid. Treat the address as a secret of that person and do not pass it on; share the App by its path in the interface (`interfacePath`).
 
-| Right | Who holds it | What it allows |
-| --- | --- | --- |
-| `app.read`, `app.write`, `app.delete` | admin, superadmin | Read, write and delete Apps. A writer is shown the draft. |
-| `app.publish` | admin, superadmin | Move the published revision. A credential needs the scope `config_assets:publish`, which `config_assets:write` does not include. |
-| `app.use` | every member of the App's workspace | Open the published revision, and see it in `assets.list` and `assets.get`. A member is never shown a draft. |
+| Right                                 | Who holds it                        | What it allows                                                                                                                   |
+| ------------------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `app.read`, `app.write`, `app.delete` | admin, superadmin                   | Read, write and delete Apps. A writer is shown the draft.                                                                        |
+| `app.publish`                         | admin, superadmin                   | Move the published revision. A credential needs the scope `config_assets:publish`, which `config_assets:write` does not include. |
+| `app.use`                             | every member of the App's workspace | Open the published revision, and see it in `assets.list` and `assets.get`. A member is never shown a draft.                      |
 
 ## Permissions
 

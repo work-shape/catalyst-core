@@ -43,6 +43,8 @@ export interface SkillFormState {
    * so that a save here leaves them as they are.
    */
   starters: unknown[];
+  /** The key of the icon registry the skill names. Empty for the generic skill icon. */
+  icon: string;
   content: string;
   resources: SkillResourceFormState[];
 }
@@ -380,6 +382,7 @@ export function skillConfigToForm(config: Record<string, unknown>): SkillFormSta
     description: typeof config.description === "string" ? config.description : "",
     summary: typeof config.summary === "string" ? config.summary : "",
     starters: Array.isArray(config.starters) ? config.starters : [],
+    icon: typeof config.icon === "string" ? config.icon : "",
     content: typeof config.content === "string" ? config.content : "",
     resources: resources.flatMap((resource) => {
       if (!resource || typeof resource !== "object" || Array.isArray(resource)) {
@@ -402,6 +405,7 @@ export function skillFormToConfig(form: SkillFormState): Record<string, unknown>
     description: form.description.trim(),
     ...(form.summary.trim() ? { summary: form.summary.trim() } : {}),
     ...(form.starters.length ? { starters: form.starters } : {}),
+    ...(form.icon ? { icon: form.icon } : {}),
     content: form.content,
     ...(form.resources.length ? { resources: form.resources } : {})
   };
@@ -419,6 +423,7 @@ export function emptySkillForm(): SkillFormState {
     description: "",
     summary: "",
     starters: [],
+    icon: "",
     content: "",
     resources: []
   };

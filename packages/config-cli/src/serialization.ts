@@ -70,6 +70,7 @@ export function canonicalizeSkillConfig(input: unknown): SkillConfig {
     description: skill.description,
     ...(skill.summary === undefined ? {} : { summary: skill.summary }),
     ...(skill.starters?.length ? { starters: skill.starters.map(canonicalStarter) } : {}),
+    ...(skill.icon === undefined ? {} : { icon: skill.icon }),
     content: skill.content,
     ...(resources?.length ? { resources } : {})
   };
@@ -93,6 +94,7 @@ export function serializeSkillMarkdown(input: unknown, provenance?: AssetProvena
       title: skill.title,
       description: skill.description,
       ...(skill.summary === undefined ? {} : { summary: skill.summary }),
+      ...(skill.icon === undefined ? {} : { icon: skill.icon }),
       ...(skill.starters === undefined ? {} : { starters: skill.starters })
     },
     yamlDumpOptions

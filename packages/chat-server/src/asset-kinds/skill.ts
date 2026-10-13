@@ -23,14 +23,15 @@ export function createSkillAssetKind(options: { config: ClientInstanceConfig }):
       actions: { read: "skill.read", write: "skill.write", delete: "skill.delete" },
       validate: () => [],
       // Every stored skill is the instance's own. A skill a release ships will say `release`
-      // and name its `icon` here, both written by the release seed alone.
+      // here, written by the release seed alone.
       summarize: (skill) => ({
         name: skill.name,
         title: skill.title,
         description: skill.description,
         attributes: {
           origin: "instance" satisfies SkillOrigin,
-          ...(skill.summary === undefined ? {} : { summary: skill.summary })
+          ...(skill.summary === undefined ? {} : { summary: skill.summary }),
+          ...(skill.icon === undefined ? {} : { icon: skill.icon })
         }
       })
     }),

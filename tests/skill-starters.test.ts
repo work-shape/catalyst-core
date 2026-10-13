@@ -76,6 +76,15 @@ describe("skill starters", () => {
     ]);
   });
 
+  it("gives a starter the icon its skill names", () => {
+    const sheets = { ...skill("sheets", [starter("Build a sheet")]), icon: "spreadsheet" as const };
+
+    expect(startersOf({ skillNames: ["sheets"], skills: [sheets] })?.[0]).toMatchObject({
+      skillName: "sheets",
+      icon: "spreadsheet"
+    });
+  });
+
   it("shows a starter only when the agent holds every tool it names", () => {
     const skills = [
       skill("sheets", [

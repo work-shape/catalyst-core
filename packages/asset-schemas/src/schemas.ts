@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   REASONING_EFFORTS,
+  SKILL_ICON_KEYS,
   SKILL_RESOURCE_MEDIA_TYPES,
   SKILL_STARTERS_MAX,
   SKILL_STARTER_LINE_MAX_LENGTH,
@@ -130,6 +131,11 @@ const skillConfigObjectSchema = z.object({
     .array(skillStarterSchema)
     .max(SKILL_STARTERS_MAX, {
       message: `A skill carries at most ${SKILL_STARTERS_MAX} starters`
+    })
+    .optional(),
+  icon: z
+    .enum(SKILL_ICON_KEYS, {
+      message: `Skill icon must be one of: ${SKILL_ICON_KEYS.join(", ")}`
     })
     .optional(),
   content: z.string().min(1),

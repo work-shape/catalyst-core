@@ -1,6 +1,7 @@
 import {
   AGENT_STARTERS_MAX,
   REASONING_EFFORTS,
+  SKILL_ICON_KEYS,
   SKILL_ORIGINS,
   SKILL_RESOURCE_MEDIA_TYPES,
   SKILL_STARTERS_MAX,
@@ -9,6 +10,7 @@ import {
   type AgentInitialPromptConfig,
   type ReasoningEffortConfig,
   type SkillConfig,
+  type SkillIconKey,
   type SkillOrigin,
   type SkillStarterConfig,
   type SkillResourceConfig,
@@ -237,6 +239,7 @@ export interface AgentSkillChangesPolicy {
 export {
   AGENT_STARTERS_MAX,
   REASONING_EFFORTS,
+  SKILL_ICON_KEYS,
   SKILL_ORIGINS,
   SKILL_RESOURCE_MEDIA_TYPES,
   SKILL_STARTERS_MAX,
@@ -245,6 +248,7 @@ export {
   type AgentInitialPromptConfig,
   type ReasoningEffortConfig,
   type SkillConfig,
+  type SkillIconKey,
   type SkillOrigin,
   type SkillStarterConfig,
   type SkillResourceConfig,

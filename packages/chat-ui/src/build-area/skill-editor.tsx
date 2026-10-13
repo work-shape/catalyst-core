@@ -1,7 +1,21 @@
 import { FileText, Plus, X } from "lucide-react";
 import { useState } from "react";
-import { SKILL_RESOURCE_MEDIA_TYPES, SKILL_SUMMARY_MAX_LENGTH } from "@vivd-catalyst/core";
-import { Button, Field, Input, List, ListRow, Select, Textarea } from "@vivd-catalyst/ui";
+import {
+  SKILL_ICON_KEYS,
+  SKILL_RESOURCE_MEDIA_TYPES,
+  SKILL_SUMMARY_MAX_LENGTH
+} from "@vivd-catalyst/core";
+import {
+  Button,
+  Field,
+  IconChoice,
+  Input,
+  List,
+  ListRow,
+  Select,
+  SkillIcon,
+  Textarea
+} from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
 import { AssetEditorShell, useAssetForm, type AssetSection } from "./asset-editor-shell";
 import {
@@ -13,6 +27,9 @@ import {
 import type { BuildAssetEditorProps } from "./build-asset-kind";
 
 type SkillResource = SkillFormState["resources"][number];
+
+/** The choice of no icon of the skill's own: the generic skill icon. */
+const NO_ICON = "none";
 
 export function SkillEditor({
   frame,
@@ -89,6 +106,21 @@ export function SkillEditor({
               onChange={(event) => update({ summary: event.target.value })}
             />
           </Field>
+          <IconChoice
+            label={t("build.skillIcon")}
+            hint={t("build.skillIconHint")}
+            value={form.icon || NO_ICON}
+            disabled={!editable}
+            onValueChange={(icon) => update({ icon: icon === NO_ICON ? "" : icon })}
+            options={[
+              { value: NO_ICON, label: t("build.skillIconGeneric"), icon: <SkillIcon /> },
+              ...SKILL_ICON_KEYS.map((icon) => ({
+                value: icon,
+                label: t(`build.skillIcon.${icon}`),
+                icon: <SkillIcon icon={icon} />
+              }))
+            ]}
+          />
         </>
       )
     },

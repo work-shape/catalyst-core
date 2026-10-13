@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { KnowsHowTo, SkillIcon, UiRoot, uiLabelsEn } from "@vivd-catalyst/ui";
+import { IconChoice, KnowsHowTo, SkillIcon, UiRoot, uiLabelsEn } from "@vivd-catalyst/ui";
 import { UiGallery } from "@vivd-catalyst/ui/gallery";
 
 describe("SkillIcon", () => {
@@ -68,5 +68,29 @@ describe("the skill icon in the gallery", () => {
       expect(markup).toContain(`data-gallery-sample="skill-icon-${size}"`);
     }
     expect(markup).toContain(language === "de" ? "Weiß, wie man" : "Knows how to");
+  });
+});
+
+describe("IconChoice", () => {
+  const options = [
+    { value: "none", label: "Generic", icon: createElement(SkillIcon, {}) },
+    { value: "pdf", label: "PDF", icon: createElement(SkillIcon, { icon: "pdf" }) }
+  ];
+  const render = (value: string) =>
+    renderToStaticMarkup(
+      createElement(IconChoice, { label: "Icon", hint: "Shown in lists.", options, value })
+    );
+
+  it("is one group of radios, each named in words, with the chosen one told beside the label", () => {
+    const markup = render("pdf");
+
+    expect(markup).toMatch(/role="radiogroup"[^>]*aria-labelledby=/u);
+    expect(markup.match(/role="radio"/gu)).toHaveLength(2);
+    expect(markup).toMatch(
+      /aria-checked="true"[^>]*aria-label="PDF"|aria-label="PDF"[^>]*aria-checked="true"/u
+    );
+    expect(markup).toContain('aria-label="Generic"');
+    expect(markup).toContain(">PDF</span>");
+    expect(markup).toContain("Shown in lists.");
   });
 });

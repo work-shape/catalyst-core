@@ -187,6 +187,7 @@ function agentStarters(
         .filter((starter) => (starter.tools ?? []).every((tool) => agent.toolNames.includes(tool)))
         .map((starter) => ({
           skillName,
+          ...(skill?.icon === undefined ? {} : { icon: skill.icon }),
           title: text(starter.title),
           ...(starter.hint === undefined ? {} : { hint: text(starter.hint) }),
           prompt: text(starter.prompt)

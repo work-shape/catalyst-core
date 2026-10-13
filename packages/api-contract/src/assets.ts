@@ -111,9 +111,8 @@ export const assetSummarySchema = z.object({
    * names its `connectorType`, its `origin`, whether it is `enabled` and, where it has one, its
    * `service`, which picks its icon. A skill names its
    * `origin`, who ships it: `instance` for a skill of the instance's own, `release` for one a
-   * release ships. It names its `summary`, the sentence for people, where it has one. A skill
-   * a release ships also names its `icon`, a key of the interface's icon registry; no other
-   * skill names an icon.
+   * release ships. It names its `summary`, the sentence for people, and its `icon`, a key of
+   * the interface's icon registry, where it has them.
    */
   attributes: z.record(z.string(), z.union([z.string(), z.boolean()])).optional(),
   updatedAt: timestampSchema

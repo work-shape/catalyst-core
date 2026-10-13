@@ -3,6 +3,7 @@ name: sales-offer-structure
 title: Offer structure
 description: Use when an offer or a proposal is drafted.
 summary: Knows how an offer is laid out.
+icon: document
 starters:
   - title:
       de: Angebot gliedern

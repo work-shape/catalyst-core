@@ -27,6 +27,9 @@ export interface SkillsGalleryText {
   starterPlain: string;
   starterPdf: string;
   starterPdfHint: string;
+  skillIconChoice: string;
+  skillIconChoiceHint: string;
+  skillIconGeneric: string;
 }
 
 export const skillsGalleryText: Record<"en" | "de", SkillsGalleryText> = {
@@ -58,7 +61,10 @@ export const skillsGalleryText: Record<"en" | "de", SkillsGalleryText> = {
     starterLetterHint: "As a document",
     starterPlain: "Simplify a text",
     starterPdf: "Pull figures out of a PDF",
-    starterPdfHint: "Into a table"
+    starterPdfHint: "Into a table",
+    skillIconChoice: "Icon",
+    skillIconChoiceHint: "Shown beside the skill in lists and on the empty chat.",
+    skillIconGeneric: "Generic"
   },
   de: {
     skillIconSizes:
@@ -93,6 +99,9 @@ export const skillsGalleryText: Record<"en" | "de", SkillsGalleryText> = {
     starterLetterHint: "Als Dokument",
     starterPlain: "Einen Text vereinfachen",
     starterPdf: "Zahlen aus einem PDF ziehen",
-    starterPdfHint: "In eine Tabelle"
+    starterPdfHint: "In eine Tabelle",
+    skillIconChoice: "Symbol",
+    skillIconChoiceHint: "Steht in Listen und im leeren Chat neben dem Skill.",
+    skillIconGeneric: "Allgemein"
   }
 };

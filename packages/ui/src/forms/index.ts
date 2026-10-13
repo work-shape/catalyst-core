@@ -1,5 +1,6 @@
 export { Checkbox, type CheckboxProps, type CheckboxState } from "./checkbox";
 export { Field, type FieldLayout, type FieldProps } from "./field";
+export { IconChoice, type IconChoiceOption, type IconChoiceProps } from "./icon-choice";
 export {
   Input,
   Textarea,

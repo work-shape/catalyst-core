@@ -216,15 +216,27 @@ describe("asset kind registry", () => {
       description: "How to",
       attributes: { origin: "instance" }
     });
-    // The sentence for people reaches a list beside the name. No skill names an icon itself.
-    expect(skillKind.summarize({ ...skill, summary: "Knows how to research a question." })).toEqual(
-      {
-        name: "research",
-        title: "Research",
-        description: "How to",
-        attributes: { origin: "instance", summary: "Knows how to research a question." }
+    // The sentence for people and the icon the skill names reach a list beside the name.
+    expect(
+      skillKind.summarize({
+        ...skill,
+        summary: "Knows how to research a question.",
+        icon: "document"
+      })
+    ).toEqual({
+      name: "research",
+      title: "Research",
+      description: "How to",
+      attributes: {
+        origin: "instance",
+        summary: "Knows how to research a question.",
+        icon: "document"
       }
-    );
+    });
+    // The icon is a name of the registry's pages: any other is refused when the skill is saved.
+    expect(issuesOf(skillKind, withSkills(), { ...skill, icon: "outlook" })).toEqual([
+      expect.objectContaining({ path: ["icon"] })
+    ]);
   });
 
   it("derives the Namespace of an asset from its name", () => {
