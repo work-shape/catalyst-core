@@ -54,6 +54,13 @@ export const people: SeedPerson[] = [
   person("noah", "Noah Fischer", ["user"], { invited: true })
 ];
 
+/** The seeded person of a key. */
+export function personOf(key: PersonKey): SeedPerson {
+  const found = people.find((candidate) => candidate.key === key);
+  if (!found) throw new Error(`The seed has no person '${key}'`);
+  return found;
+}
+
 /** The reference every tool of the demo asks for. */
 export const PERSON_PERMISSION_REFS = ["demo-tools"];
 
