@@ -94,6 +94,7 @@
     ".": {
       "entry": [
         "tests/**/*.test.ts",
+        "tests/probes/**/*.probe.ts",
         "e2e/**/*.ts",
         "scripts/**/*.mjs",
         "*.config.ts",
