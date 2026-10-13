@@ -10,20 +10,13 @@ import {
   useThreadViewportStore,
   type PartState
 } from "@assistant-ui/react";
-import {
-  Check,
-  Copy,
-  FileText,
-  ImageIcon,
-  ListRestart,
-  Pencil,
-  RefreshCw,
-  User
-} from "lucide-react";
+import { Check, Copy, ListRestart, Pencil, RefreshCw, User } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button, cn, IconButton } from "@vivd-catalyst/ui";
 import { ApprovalDecisionLine } from "../approvals/approval-decision-line";
 import { managedFileIdFromUrl, useAttachmentContentContext } from "../attachment-content";
+import { resolveFileType } from "../file-type";
+import { FileTypeIcon } from "../file-type-icon";
 import { MessageAttachments } from "../message-attachments";
 import {
   ASSISTANT_WORK_GROUP,
@@ -648,7 +641,7 @@ function FilePart() {
   }
   return (
     <div className="my-2 inline-flex max-w-full items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-xs">
-      <FileText size={16} aria-hidden="true" className="text-muted-foreground" />
+      <FileTypeIcon type={resolveFileType({ filename: file.filename, mimeType })} />
       <span className="truncate">{file.filename ?? mimeType ?? t("attachmentFallbackName")}</span>
     </div>
   );
@@ -727,7 +720,7 @@ function ImageFilePart({
   if (!imageUrl) {
     return (
       <div className="my-2 inline-flex max-w-full items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-xs">
-        <ImageIcon size={16} aria-hidden="true" className="text-muted-foreground" />
+        <FileTypeIcon type={resolveFileType({ filename, mimeType })} />
         <span className="truncate">{filename ?? mimeType}</span>
       </div>
     );

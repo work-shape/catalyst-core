@@ -11,6 +11,8 @@ export interface PageBuildError {
 interface RenderedSurfaceSource {
   node: ReactNode;
   headerActions?: ReactNode;
+  /** An icon of what the surface shows, such as a file's type. It stands before the title. */
+  titleIcon?: ReactNode;
 }
 
 /**

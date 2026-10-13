@@ -27,6 +27,7 @@ import {
   NativeFilePreview
 } from "./artifact-preview-shell";
 import { useConversationFileBlob } from "./conversation-file-content";
+import { resolveFileType } from "./file-type";
 import { TranslationProvider, useTranslation } from "./i18n";
 import { MarkdownArtifact } from "./markdown-text";
 import { workbookToUniverPreview, type SpreadsheetWorkbookPreview } from "./spreadsheet-preview";
@@ -262,12 +263,7 @@ function SpreadsheetArtifactPreview({ blob }: { blob: Blob }) {
   if (error) {
     return (
       <ArtifactPreviewMessage
-        fileType={{
-          badge: "XLS",
-          label: "Spreadsheet",
-          className: "bg-emerald-700",
-          extension: "xlsx"
-        }}
+        fileType={resolveFileType({ kind: "spreadsheet" })}
         title={t("artifactPreviewFailed")}
         detail={error}
       />
@@ -277,12 +273,7 @@ function SpreadsheetArtifactPreview({ blob }: { blob: Blob }) {
   if (!preview) {
     return (
       <ArtifactPreviewMessage
-        fileType={{
-          badge: "XLS",
-          label: "Spreadsheet",
-          className: "bg-emerald-700",
-          extension: "xlsx"
-        }}
+        fileType={resolveFileType({ kind: "spreadsheet" })}
         title={t("artifactPreviewLoading")}
       />
     );

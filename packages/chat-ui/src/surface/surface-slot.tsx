@@ -375,6 +375,7 @@ export function SurfaceSlotFrame({
           </Button>
         )
       }
+      icon={rendering?.titleIcon}
       title={surface.title}
       subtitle={surface.subtitle}
       actions={rendering?.actions}

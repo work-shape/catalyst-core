@@ -5,7 +5,7 @@ import {
   type ConversationResourceListItem
 } from "@vivd-catalyst/api-client";
 import { resolveFilePreviewCapability } from "@vivd-catalyst/core";
-import { Download, FileText } from "lucide-react";
+import { Download } from "lucide-react";
 import {
   Component,
   lazy,
@@ -27,6 +27,8 @@ import {
   type ConversationFileContentRef
 } from "./conversation-file-content";
 import { NativeFilePreview } from "./artifact-preview-shell";
+import { resolveFileType } from "./file-type";
+import { FileTypeIcon } from "./file-type-icon";
 import { useTranslation } from "./i18n";
 import type { Surface, SurfaceOf } from "./surface/surface";
 import { useToolDisplayPanel } from "./tool-display-panel";
@@ -241,6 +243,7 @@ export function createConversationFilePanelEntry({
     key: file.key,
     title: file.title,
     subtitle: file.subtitle,
+    titleIcon: <FileTypeIcon type={resolveFileType(file)} />,
     headerActions: (
       <ConversationFileDownloadButton
         client={client}
@@ -576,7 +579,7 @@ function FileDetails({
   return (
     <div className="grid min-h-64 place-items-center p-6">
       <div className="grid max-w-sm justify-items-center gap-3 text-center">
-        <FileText size={32} className="text-muted-foreground" aria-hidden="true" />
+        <FileTypeIcon type={resolveFileType(file)} className="size-10" />
         <div>
           <p className="font-medium">{file.filename}</p>
           <p className="text-sm text-muted-foreground">
@@ -589,8 +592,15 @@ function FileDetails({
   );
 }
 
+/** The frame while the file's resource loads, or failed to. Its title is the file name. */
 function createPanelStatusEntry(key: string, title: string, content: ReactNode): Surface {
-  return { kind: "file_preview", key, title, node: <PanelLoading>{content}</PanelLoading> };
+  return {
+    kind: "file_preview",
+    key,
+    title,
+    titleIcon: <FileTypeIcon type={resolveFileType({ filename: title })} />,
+    node: <PanelLoading>{content}</PanelLoading>
+  };
 }
 
 function PanelLoading({ children, label }: { children?: ReactNode; label?: string }) {

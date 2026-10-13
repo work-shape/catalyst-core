@@ -1,5 +1,6 @@
 import type { ArtifactPreviewResponse } from "@vivd-catalyst/api-client";
 import { ARTIFACT_PREVIEW_MAX_PAGES, resolveFilePreviewCapability } from "@vivd-catalyst/core";
+import { resolveFileType, type FileType } from "./file-type";
 
 export const WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE = "data-workspace-promoted-artifacts";
 
@@ -40,12 +41,7 @@ export interface WorkspacePromotedArtifactsData {
   artifacts: ToolArtifactDownloadRef[];
 }
 
-export interface ArtifactFileType {
-  badge: string;
-  label: string;
-  className: string;
-  extension: string;
-}
+export type ArtifactFileType = FileType;
 
 export type ArtifactPreviewKind =
   | "pdf"
@@ -121,56 +117,7 @@ export function dedupeToolArtifactRefs(
 }
 
 export function getArtifactFileType(artifact: ToolArtifactDownloadRef): ArtifactFileType {
-  const value = artifactDescriptorValue(artifact);
-  if (value.includes("pdf") || hasExtension(value, ["pdf"])) {
-    return { badge: "PDF", label: "PDF", className: "bg-red-700", extension: "pdf" };
-  }
-  if (value.includes("presentation") || hasExtension(value, ["pptx", "ppt"])) {
-    return { badge: "PPT", label: "Presentation", className: "bg-orange-700", extension: "pptx" };
-  }
-  if (
-    value.includes("wordprocessingml") ||
-    value.includes("msword") ||
-    value.includes("word") ||
-    hasExtension(value, ["docx", "doc"])
-  ) {
-    return { badge: "DOC", label: "Word document", className: "bg-blue-700", extension: "docx" };
-  }
-  if (value.includes("csv") || hasExtension(value, ["csv"])) {
-    return { badge: "CSV", label: "CSV", className: "bg-teal-700", extension: "csv" };
-  }
-  if (
-    value.includes("spreadsheet") ||
-    value.includes("excel") ||
-    hasExtension(value, ["xlsx", "xls"])
-  ) {
-    return { badge: "XLS", label: "Spreadsheet", className: "bg-emerald-700", extension: "xlsx" };
-  }
-  if (
-    value.includes("image") ||
-    hasExtension(value, ["png", "jpg", "jpeg", "webp", "gif", "svg"])
-  ) {
-    return { badge: "IMG", label: "Image", className: "bg-violet-700", extension: "png" };
-  }
-  if (
-    value.includes("zip") ||
-    value.includes("compressed") ||
-    value.includes("archive") ||
-    hasExtension(value, ["zip", "tar", "gz", "tgz", "rar", "7z"])
-  ) {
-    return { badge: "ZIP", label: "Archive", className: "bg-stone-700", extension: "zip" };
-  }
-  if (value.includes("markdown") || hasExtension(value, ["md", "mdx"])) {
-    return { badge: "MD", label: "Markdown", className: "bg-slate-700", extension: "md" };
-  }
-  if (
-    value.includes("text/") ||
-    value.includes("json") ||
-    hasExtension(value, ["txt", "rtf", "html", "json"])
-  ) {
-    return { badge: "DOC", label: "Document", className: "bg-slate-700", extension: "txt" };
-  }
-  return { badge: "FILE", label: "File", className: "bg-neutral-700", extension: "bin" };
+  return resolveFileType(artifact);
 }
 
 export function getArtifactPreviewKind(
@@ -201,10 +148,6 @@ export function readArtifactImagePagesPreview(
   artifact: ToolArtifactDownloadRef
 ): ToolArtifactImagePagesPreview | undefined {
   return artifact.metadata?.preview ?? previewSnapshotToImagePagesPreview(artifact.preview);
-}
-
-function artifactDescriptorValue(artifact: ToolArtifactDownloadRef): string {
-  return `${artifact.mimeType ?? ""} ${artifact.kind ?? ""} ${artifact.filename ?? ""}`.toLowerCase();
 }
 
 export function artifactDisplayFilename(artifact: ToolArtifactDownloadRef): string {
@@ -455,16 +398,6 @@ function isSafeMimeType(value: string): boolean {
   return /^(?:application|audio|font|image|message|model|multipart|text|video)\/[a-z0-9][a-z0-9!#$&^_.+-]*$/iu.test(
     value
   );
-}
-
-function hasExtension(value: string, extensions: string[]): boolean {
-  return extensions.some((extension) =>
-    new RegExp(`\\.${escapeRegExp(extension)}(?:\\s|$)`, "iu").test(value)
-  );
-}
-
-function escapeRegExp(value: string): string {
-  return value.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 function isInternalIdentifier(value: string): boolean {

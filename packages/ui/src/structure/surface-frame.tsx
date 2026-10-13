@@ -4,6 +4,8 @@ import { cn } from "../cn";
 export interface SurfaceFrameProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
   /** What stands before the name, such as the button that brings the conversation back. */
   leading?: ReactNode;
+  /** An icon of what the surface shows, such as a file's type. It stands before the name. */
+  icon?: ReactNode;
   /** The surface's name, on one line. */
   title: ReactNode;
   /** One muted line under the name. */
@@ -26,11 +28,12 @@ export interface SurfaceFrameProps extends Omit<HTMLAttributes<HTMLDivElement>, 
 /**
  * The frame of a working surface: a header as high as every other header, so one line runs
  * across the window, and the content below it. Its slots have one order on every surface:
- * leading, name, subtitle, the kind's actions, fullscreen, close.
+ * leading, icon, name, subtitle, the kind's actions, fullscreen, close.
  */
 export function SurfaceFrame({
   className,
   leading,
+  icon,
   title,
   subtitle,
   actions,
@@ -49,6 +52,7 @@ export function SurfaceFrame({
         {leading === undefined ? null : (
           <div className="flex shrink-0 items-center gap-2">{leading}</div>
         )}
+        {icon === undefined ? null : <div className="flex shrink-0 items-center">{icon}</div>}
         <div className="grid min-w-0 flex-1 gap-0.5">
           <h2 className="truncate text-heading">{title}</h2>
           {subtitle === undefined ? null : (

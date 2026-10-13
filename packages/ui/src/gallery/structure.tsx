@@ -13,6 +13,7 @@ import { IconButton } from "../actions/icon-button";
 import { EmptyState } from "../feedback/empty-state";
 import { Input } from "../forms/input";
 import { Badge } from "../status/badge";
+import { RegistryIcon } from "../status/registry-icon";
 import {
   Card,
   CardContent,
@@ -172,6 +173,7 @@ function SurfaceFrameSamples({ text }: { text: GalleryText }) {
       <Samples label={text.surfaceBeside}>
         <div className="h-56 w-full overflow-hidden rounded-lg border">
           <SurfaceFrame
+            icon={<RegistryIcon name="spreadsheet" family="file" className="size-5" />}
             title={text.surfaceTitle}
             subtitle={text.surfaceSubtitle}
             actions={
