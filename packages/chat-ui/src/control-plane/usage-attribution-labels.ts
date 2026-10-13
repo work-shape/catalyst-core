@@ -4,7 +4,9 @@ import type { TranslationContextValue, TranslationKey } from "../i18n";
 const PURPOSE_LABELS: Record<string, TranslationKey> = {
   conversation_title: "settings.usagePurposeConversationTitle",
   document_extraction: "settings.usagePurposeDocumentExtraction",
-  guardrail_judge: "settings.usagePurposeGuardrailJudge"
+  guardrail_judge: "settings.usagePurposeGuardrailJudge",
+  knowledge_embedding: "settings.usagePurposeKnowledgeEmbedding",
+  knowledge_query: "settings.usagePurposeKnowledgeQuery"
 };
 
 const REGION_LABELS: Record<string, TranslationKey> = {

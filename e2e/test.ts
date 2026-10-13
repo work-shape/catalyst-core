@@ -37,6 +37,15 @@ const BESIDE_TOP_ANCHORED_TURN = " (beside a turn anchored to the top)";
 
 const allowedPageErrors: readonly AllowedPageError[] = [
   {
+    name: "reply-remote-image-refused",
+    reason:
+      "Chromium's own log line for an image the interface's content policy refused. The test " +
+      "plants remote images in a Mermaid diagram of a reply and asserts no request left.",
+    matches:
+      /^Loading the image 'https:\/\/outside-pixel\.example\.test\/[^']*' violates the following Content Security Policy directive: "img-src [^"]*"\. The action has been blocked\.\s*$/u,
+    tests: ["a reply with remote images, also in a Mermaid diagram, makes no request outside"]
+  },
+  {
     name: "signed-out-session",
     reason:
       "Chromium's own log line, written by no script: every page asks who is signed in, and " +
