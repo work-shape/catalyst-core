@@ -4,9 +4,11 @@ import {
   DATA_STORE_ASSET_KIND,
   DATA_STORE_JOB_KINDS,
   DATA_STORE_MANIFEST_FILE,
+  DATA_STORE_OPERATION_PREFIX,
   StoreBackedAuditRecorder,
   defineAssetKind,
   defineModule,
+  type ActorAccess,
   type ClientInstanceId,
   type DataToolSource,
   type JobRetry,
@@ -27,11 +29,23 @@ import {
   readDataStoreFiles
 } from "./definition";
 import { createDataStoreJobs, publishDataStore, retireDataStore } from "./jobs";
+import { listDataStores } from "./list";
 import { createDataStoreOperationSource, createDataStoreToolSource } from "./operations";
 import type { DataStoreDatasetReader, DataStoreLimits, DataStoreRuntime } from "./runtime";
 
 export { sizeLimitBytes } from "./definition";
 export { dataStoreStateOperationName } from "./state";
+
+/**
+ * The name of a read of a store's page that is no verb of the contract: `rows`, `value` and
+ * `used_by`, each `data_store.<id>.<part>`, which the routes of the same name run as.
+ */
+export function dataStorePageOperationName(
+  store: string,
+  part: "rows" | "value" | "used_by"
+): string {
+  return `${DATA_STORE_OPERATION_PREFIX}${store}.${part}`;
+}
 import { createDataStoreServer } from "./server";
 
 /**
@@ -47,7 +61,11 @@ export const dataStoresModule = defineModule({
     "data_stores.insert",
     "data_stores.describe",
     "data_stores.preview_rows",
-    "data_stores.get"
+    "data_stores.get",
+    "data_stores.list",
+    "data_stores.rows",
+    "data_stores.value",
+    "data_stores.used_by"
   ],
   jobKinds: Object.values(DATA_STORE_JOB_KINDS)
 });
@@ -79,6 +97,11 @@ export interface DataStores {
   /** What deleting the asset does to the store, in the transaction of the delete: it is retired. */
   retire(stores: PlatformStores, assetId: string): Promise<void>;
   readonly operationSource: OperationSource;
+  /**
+   * The published stores the caller may read, each with what its last measurement found. It
+   * asks no database of a store.
+   */
+  list(access: ActorAccess): ReturnType<typeof listDataStores>;
   /** Describes the operations to an agent that lists them as tools. */
   readonly toolSource: DataToolSource;
   readonly jobHandlers: readonly RegisteredJobHandler[];
@@ -158,6 +181,7 @@ export function createDataStores(input: {
       }),
     retire: (bound, assetId) => retireDataStore(runtime, bound, assetId),
     operationSource: createDataStoreOperationSource(runtime),
+    list: (access) => listDataStores(runtime, access),
     toolSource: createDataStoreToolSource(runtime),
     jobHandlers: jobs.handlers,
     schedules: jobs.schedules,

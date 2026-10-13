@@ -8,6 +8,7 @@ import {
 } from "@vivd-catalyst/postgres-connector";
 import {
   AppError,
+  DATA_STORE_ACTIONS,
   DATA_STORE_ASSET_KIND,
   DATA_STORE_OPERATION_PREFIX,
   DATA_STORE_OPERATION_RIGHTS,
@@ -39,7 +40,9 @@ import type { DataStoreRuntime } from "./runtime";
 import { asStoreRole } from "./roles";
 import { quoteIdentifier } from "./server";
 import { storeSizeBytes } from "./size";
+import { rows, value } from "./rows";
 import { DATA_STORE_STATE_VERB, stateOperation } from "./state";
+import { DATA_STORE_USED_BY_PART, usedByOperation } from "./used-by";
 import {
   AnsweredBefore,
   CommitOutcomeUnknown,
@@ -48,6 +51,7 @@ import {
   storeFull,
   tableUnknown,
   type PublishedStore,
+  type StoreRead,
   type StoreVerb
 } from "./verbs";
 import { load } from "./load";
@@ -511,7 +515,7 @@ async function readStore(
  * The published stores of the instance, or those of the names: two reads, whatever their
  * number. `truncated` says that more stores exist than one listing reads.
  */
-async function readStores(
+export async function readStores(
   runtime: DataStoreRuntime,
   names?: readonly string[]
 ): Promise<{ stores: PublishedStore[]; truncated: boolean }> {
@@ -555,7 +559,7 @@ function parseOperationName(name: string): { store: string; verb: StoreVerb } | 
 async function runVerb(
   runtime: DataStoreRuntime,
   store: PublishedStore,
-  verb: StoreVerb,
+  verb: Pick<StoreVerb, "effect" | "run"> & { verb: string },
   input: unknown,
   context: OperationExecutionContext
 ): Promise<unknown> {
@@ -666,6 +670,38 @@ function operationOf(
   };
 }
 
+/** The reads of a store's page beside the contract's verbs. */
+const READS: readonly StoreRead[] = [rows, value];
+
+/** One read of a store's page: recorded like every read of a customer's rows. */
+function readOperation(
+  runtime: DataStoreRuntime,
+  store: PublishedStore,
+  read: StoreRead
+): OperationDefinition {
+  return {
+    name: `${DATA_STORE_OPERATION_PREFIX}${store.record.name}.${read.part}`,
+    effect: "reading",
+    recordsEveryCall: true,
+    action: DATA_STORE_ACTIONS.read,
+    scope: "data_store_rows:read",
+    auth: "principal",
+    inputSchema: read.inputSchema,
+    outputSchema: read.outputSchema,
+    resource: () => store.resource,
+    module: DATA_STORES_MODULE,
+    timeoutMs: RUN_TIMEOUT_MS,
+    execute: (input, context) =>
+      runVerb(
+        runtime,
+        store,
+        { verb: read.part, effect: "reading", run: read.run },
+        input,
+        context.runtime.signal
+      )
+  };
+}
+
 /**
  * The source of every store's operations. `resolve` reads the one store a name stands for,
  * `list` all of them in two reads. Neither opens a connection to a store.
@@ -678,6 +714,15 @@ export function createDataStoreOperationSource(runtime: DataStoreRuntime): Opera
         // The state of a store is answered from its record, whether its database is there or not.
         const store = await readStore(runtime, split.store);
         return store && stateOperation(store, DATA_STORES_MODULE);
+      }
+      if (split?.part === DATA_STORE_USED_BY_PART) {
+        const store = await readStore(runtime, split.store);
+        return store && usedByOperation(runtime, store, DATA_STORES_MODULE);
+      }
+      const read = split && READS.find((candidate) => candidate.part === split.part);
+      if (read) {
+        const store = await readStore(runtime, split.store);
+        return store && readOperation(runtime, store, read);
       }
       const parsed = parseOperationName(name);
       const store = parsed && (await readStore(runtime, parsed.store));

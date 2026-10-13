@@ -55,6 +55,17 @@ export interface StoreVerb {
   run(call: VerbCall, input: unknown): Promise<unknown>;
 }
 
+/**
+ * A read of the rows of a store that no agent and no Workflow step is offered: the page of a
+ * store calls it. It is named `data_store.<id>.<part>` and asks `data_store.read`.
+ */
+export interface StoreRead {
+  part: string;
+  inputSchema: z.ZodType;
+  outputSchema: z.ZodType;
+  run(call: VerbCall, input: unknown): Promise<unknown>;
+}
+
 export function tableUnknown(table: string): AppError {
   return new AppError("VALIDATION_FAILED", `The store has no table '${table}'`, {
     reason: "table_unknown"
