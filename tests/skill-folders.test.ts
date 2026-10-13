@@ -274,6 +274,7 @@ Read \`reference.md\`, then run \`scripts/x.py\`.
       "SKILL.md": Buffer.from(manifest),
       "assets/logo.png": png,
       "reference.md": Buffer.from("# Reference\n\nField names.\n"),
+      "references/forms.md": Buffer.from("# Forms\n\nWhich form takes which field.\n"),
       "scripts/x.py": Buffer.from("print('x')\n")
     };
     const files = Object.entries(sent).map(([path, bytes]): JsonObject =>
@@ -306,6 +307,11 @@ Read \`reference.md\`, then run \`scripts/x.py\`.
           path: "reference.md",
           mediaType: "text/markdown",
           content: sent["reference.md"]?.toString()
+        },
+        {
+          path: "references/forms.md",
+          mediaType: "text/markdown",
+          content: sent["references/forms.md"]?.toString()
         }
       ],
       files: [
@@ -346,6 +352,62 @@ Read \`reference.md\`, then run \`scripts/x.py\`.
     expect(required(twice.files).map(({ sha256: hash }) => hash)).toEqual(
       back.map(({ sha256: hash }) => hash)
     );
+  });
+
+  it("reads the summary and the starters of a SKILL.md as fields of the skill, and answers a changed summary in the SKILL.md it reads back", async () => {
+    const world = await start();
+    const address = { kind: "skill", name: "leave-policy" };
+    const manifest = `---
+name: leave-policy
+description: Use for questions on leave.
+summary: Knows how leave is granted.
+starters:
+  - title: Special leave
+    prompt: How many days do I get for moving house?
+license: MIT
+---
+
+# Leave policy
+
+Thirty days a year.
+`;
+    const sent = [
+      { path: "SKILL.md", text: manifest },
+      { path: "scripts/days.py", text: "print(30)\n" }
+    ];
+    const written = await put(world, { files: sent, expectedRevision: null }, address);
+    expect(written.statusCode, written.body).toBe(200);
+    const read = await get(world, true, address);
+    expect(read.config).toMatchObject({
+      summary: "Knows how leave is granted.",
+      starters: [{ title: "Special leave", prompt: "How many days do I get for moving house?" }],
+      frontmatter: { license: "MIT" }
+    });
+    const manifestOf = (files: SkillFileRead[] | undefined) =>
+      required(files).find(({ path }) => path === "SKILL.md")?.text;
+    expect(manifestOf(read.files)).toBe(manifest);
+
+    // A write of the config alone with another summary: the stored file no longer says it.
+    const changed = { ...read.config, summary: "Knows every kind of leave." };
+    const pushed = await put(world, { config: changed, expectedRevision: read.revision }, address);
+    expect(pushed.statusCode, pushed.body).toBe(200);
+    const after = await get(world, true, address);
+    expect(after.config).toEqual(changed);
+    expect(manifestOf(after.files)).toContain("summary: Knows every kind of leave.");
+    expect(manifestOf(after.files)).toContain("license: MIT");
+
+    // A field of the skill is no further frontmatter of its config.
+    const refused = await refusal(
+      put(
+        world,
+        {
+          config: { ...changed, frontmatter: { summary: "Knows nothing." } },
+          expectedRevision: after.revision
+        },
+        address
+      )
+    );
+    expect(JSON.stringify(refused)).toContain("Skill frontmatter cannot hold 'summary'");
   });
 
   it("derives a title from the name where the content has no heading, and warns of a name or a description outside the convention", async () => {
