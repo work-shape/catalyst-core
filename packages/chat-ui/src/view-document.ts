@@ -13,8 +13,13 @@ import { writeStaticViewBody } from "./static-view-html";
 // scripts, is composed here each time the view is shown. A view saved under an earlier policy
 // is therefore shown under the instance's policy of today.
 
-/** A private-data view holds query results the model never saw and runs no library at all. */
-export type ViewDisplayKind = "html.rendered" | "private_hydrated_view";
+/**
+ * A private-data view holds query results the model never saw and runs no library at all.
+ * `html.file` is a stored HTML file shown as the page it is: under the same policy and in the
+ * same frame as a view, with its own inline scripts and without the view runtime, so no script
+ * host at all.
+ */
+export type ViewDisplayKind = "html.rendered" | "private_hydrated_view" | "html.file";
 
 /**
  * Whether a view that holds private rows runs scripts. It does not, because a script can send
@@ -28,7 +33,7 @@ export type ViewDisplayKind = "html.rendered" | "private_hydrated_view";
 const PRIVATE_ROW_VIEWS_RUN_SCRIPTS: boolean = false;
 
 export function viewRunsScripts(kind: ViewDisplayKind): boolean {
-  return kind === "html.rendered" || PRIVATE_ROW_VIEWS_RUN_SCRIPTS;
+  return kind !== "private_hydrated_view" || PRIVATE_ROW_VIEWS_RUN_SCRIPTS;
 }
 
 export interface ViewRuntimeAddress {
