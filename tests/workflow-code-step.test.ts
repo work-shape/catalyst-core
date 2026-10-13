@@ -488,12 +488,14 @@ const LEFT_BEHIND: [string, string, string][] = [
     `import os\nwith open("output.json", "w") as out:\n    out.write("[")\nos.truncate("output.json", 10 * 1024 * 1024 * 1024)`,
     "code_output_too_large"
   ],
+  // The writer is started by name: the sandbox of these tests hands a script no PATH, and
+  // without one Python on Linux does not know its own path (`sys.executable` is empty).
   [
     "a file another process keeps writing to",
     `
-import subprocess, sys
+import subprocess
 subprocess.Popen(
-    [sys.executable, "-c", "import time\\nwith open('output.json', 'a') as out:\\n    while True:\\n        out.write('1,' * 4096)\\n        out.flush()\\n        time.sleep(0.001)"],
+    ["python3", "-c", "import time\\nwith open('output.json', 'a') as out:\\n    while True:\\n        out.write('1,' * 4096)\\n        out.flush()\\n        time.sleep(0.001)"],
     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
 )
 import time
