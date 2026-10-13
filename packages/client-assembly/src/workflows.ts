@@ -6,9 +6,12 @@ import {
 } from "@vivd-catalyst/chat-server";
 import type { JobSchedule, RegisteredJobHandler } from "@vivd-catalyst/core";
 import {
+  codeStepIssues,
   createWorkflowEngine,
+  noWorkflowStepFiles,
   workflowDefinitionStartIssues,
   workflowStartIssues,
+  workflowStepFileIssues,
   workflowsModule,
   type WorkflowDefinitionSource,
   type WorkflowEngineOptions
@@ -17,6 +20,7 @@ import type { ModuleAssemblyParts, ModuleSeam } from "./module-assembly";
 import {
   createWorkflowAssetDefinitions,
   createWorkflowAssetKind,
+  createWorkflowAssetStepFiles,
   publishedWorkflowsOf
 } from "./workflow-assets";
 
@@ -41,8 +45,10 @@ export interface InstanceWorkflowsParts extends Pick<
   /** The time zone the cron expressions of `schedule` triggers are read in. UTC when left out. */
   timeZone?: string;
   /**
-   * Where the script of a code step is read: the files of one revision of a Workflow. Whoever
-   * stores definitions fills it. Without it no Workflow has a script.
+   * Where the script of a code step is read, in place of the instance's own source: the step
+   * files of the revision of the Workflow asset a run was started on. For a test of the
+   * engine, which hands in its definitions as well: such definitions are no assets, so
+   * without this they have no script.
    */
   stepFiles?: WorkflowEngineOptions["stepFiles"];
   /**
@@ -105,6 +111,11 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
     configAssets: stores.configAssets
   });
   const given = parts.definitions;
+  const stepFiles =
+    parts.stepFiles ??
+    (given
+      ? noWorkflowStepFiles
+      : createWorkflowAssetStepFiles({ clientInstanceId, configAssets: stores.configAssets }));
   const engine = createWorkflowEngine({
     clientInstanceId,
     stores,
@@ -113,7 +124,7 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
     ...(parts.limits ? { limits: parts.limits } : {}),
     ...(parts.now ? { now: parts.now } : {}),
     ...(parts.timeZone === undefined ? {} : { timeZone: parts.timeZone }),
-    ...(parts.stepFiles ? { stepFiles: parts.stepFiles } : {}),
+    stepFiles,
     ...(parts.codeRunner ? { codeRunner: parts.codeRunner } : {}),
     ...(parts.stepDataDays === undefined ? {} : { stepDataDays: parts.stepDataDays }),
     ...(parts.pruneBatch ? { pruneBatch: parts.pruneBatch } : {})
@@ -130,13 +141,20 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
       workflows: published.map((workflow) => workflow.id)
     });
     const entries: WorkflowListEntry[] = [];
-    for (const { id, assetId, name, description, revisionId, definition } of published) {
+    for (const { id, assetId, name, description, revisionId, definition, files } of published) {
       const reasons = definition.ok
-        ? await workflowStartIssues(definition.manifest, {
-            clientInstanceId,
-            principals: stores.apiAccess,
-            registry: operationCalls.registry
-          })
+        ? [
+            ...(await workflowStartIssues(definition.manifest, {
+              clientInstanceId,
+              principals: stores.apiAccess,
+              registry: operationCalls.registry
+            })),
+            // A script that is missing or refused, as a start says it. The files of an asset
+            // came with its published revision, so they cost no further read.
+            ...(files
+              ? workflowStepFileIssues(definition.manifest, files)
+              : await codeStepIssues({ revisionId, manifest: definition.manifest }, stepFiles))
+          ]
         : workflowDefinitionStartIssues(definition.issues);
       const lastRun = last.get(id);
       entries.push({

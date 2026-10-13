@@ -1,4 +1,5 @@
 import {
+  AppError,
   WORKFLOW_STEP_FILES_FOLDER,
   type OperationEffect,
   type WorkflowManifest,
@@ -23,6 +24,12 @@ export const WORKFLOW_CODE_LANGUAGES: Readonly<
 
 /** How large the script of a code step may be, as UTF-8. */
 export const WORKFLOW_CODE_FILE_MAX_BYTES = 256 * 1_024;
+
+/**
+ * How large the step files of one revision of a Workflow may be together, as UTF-8. A revision
+ * holds its files beside its manifest, so this bounds what one revision weighs.
+ */
+export const WORKFLOW_STEP_FILES_MAX_BYTES = 2 * 1_024 * 1_024;
 
 /** How much of each of a script's two streams the step run keeps as its log. */
 export const WORKFLOW_CODE_LOG_MAX_BYTES = 16 * 1_024;
@@ -54,6 +61,10 @@ export const WORKFLOW_CODE_ERRORS = {
   fileMissing: "code_file_missing",
   fileTooLarge: "code_file_too_large",
   fileInvalid: "code_file_invalid",
+  /** A revision holds a step file that no step of its manifest names. Refused at a save. */
+  fileUnused: "code_file_unused",
+  /** The step files of a revision are larger together than a revision may hold. */
+  filesTooLarge: "code_files_too_large",
   /** The instance runs no sandbox, or every attempt to start the container failed. */
   runnerUnavailable: "code_runner_unavailable"
 } as const;
@@ -105,18 +116,16 @@ export interface WorkflowStepFiles {
   }): Promise<Uint8Array | undefined>;
 }
 
-/** A source that has no file: what an instance has until definitions are stored with theirs. */
+/** A source that has no file: what a test of the engine has that hands in none. */
 export const noWorkflowStepFiles: WorkflowStepFiles = {
   readStepFile: () => Promise.resolve(undefined)
 };
 
-/** The script of a code step as text, or why it cannot be run. */
-export async function readCodeFile(
-  files: WorkflowStepFiles,
-  revision: { workflow: string; revisionId: string },
+/** The bytes of a script as text, or why they are no script that can be run. */
+function checkCodeFile(
+  bytes: Uint8Array | undefined,
   file: string
-): Promise<{ source: string } | { code: string; message: string }> {
-  const bytes = await files.readStepFile({ ...revision, path: codeFilePath(file) });
+): { source: string } | { code: string; message: string } {
   if (!bytes) {
     return {
       code: WORKFLOW_CODE_ERRORS.fileMissing,
@@ -139,6 +148,33 @@ export async function readCodeFile(
   }
 }
 
+/** The script of a code step as text, or why it cannot be run. */
+export async function readCodeFile(
+  files: WorkflowStepFiles,
+  revision: { workflow: string; revisionId: string },
+  file: string
+): Promise<{ source: string } | { code: string; message: string }> {
+  return checkCodeFile(await files.readStepFile({ ...revision, path: codeFilePath(file) }), file);
+}
+
+/** One thing that keeps the step files of a revision from being run or stored. */
+export interface WorkflowStepFileIssue {
+  path: string;
+  code: string;
+  message: string;
+}
+
+/** The code steps of a definition, those of its loops among them. */
+function codeStepsOf(steps: readonly WorkflowStep[]): { id: string; file: string }[] {
+  return steps.flatMap((step) =>
+    step.type === "loop"
+      ? codeStepsOf(step.steps)
+      : step.type === "code"
+        ? [{ id: step.id, file: step.file }]
+        : []
+  );
+}
+
 /**
  * What keeps the code steps of a revision from being run, beside what the parser checks: each
  * script exists in the revision's files, is text and is not too large. It is asked when a run
@@ -147,20 +183,98 @@ export async function readCodeFile(
 export async function codeStepIssues(
   revision: { revisionId: string; manifest: Pick<WorkflowManifest, "id" | "steps"> },
   files: WorkflowStepFiles
-): Promise<{ path: string; code: string; message: string }[]> {
-  const issues: { path: string; code: string; message: string }[] = [];
-  const walk = async (steps: readonly WorkflowStep[]): Promise<void> => {
-    for (const step of steps) {
-      if (step.type === "loop") await walk(step.steps);
-      if (step.type !== "code") continue;
-      const read = await readCodeFile(
-        files,
-        { workflow: revision.manifest.id, revisionId: revision.revisionId },
-        step.file
-      );
-      if ("code" in read) issues.push({ path: `steps.${step.id}.file`, ...read });
-    }
-  };
-  await walk(revision.manifest.steps);
+): Promise<WorkflowStepFileIssue[]> {
+  const issues: WorkflowStepFileIssue[] = [];
+  for (const step of codeStepsOf(revision.manifest.steps)) {
+    const read = await readCodeFile(
+      files,
+      { workflow: revision.manifest.id, revisionId: revision.revisionId },
+      step.file
+    );
+    if ("code" in read) issues.push({ path: `steps.${step.id}.file`, ...read });
+  }
   return issues;
+}
+
+/** One step file as a revision holds it: its path in the Workflow's folder and its text. */
+export interface WorkflowStepFile {
+  /** Such as `steps/check.py`. */
+  path: string;
+  content: string;
+}
+
+/** The bytes of one of a revision's step files, or nothing where it holds none of that path. */
+export function stepFileBytes(
+  files: readonly WorkflowStepFile[],
+  path: string
+): Uint8Array | undefined {
+  const file = files.find((candidate) => candidate.path === path);
+  return file === undefined ? undefined : new TextEncoder().encode(file.content);
+}
+
+/**
+ * What keeps a manifest and the step files saved with it from being one revision. Of the
+ * steps it asks what `codeStepIssues` asks of a stored revision, under the same codes: each
+ * script is there, is text and is not too large. Of the files it asks what only a save can
+ * refuse: a path that is no script in the step files folder, a path given twice, a file no
+ * step names, and files that are too large together. Empty for a revision that can be stored.
+ */
+export function workflowStepFileIssues(
+  manifest: Pick<WorkflowManifest, "steps">,
+  files: readonly WorkflowStepFile[]
+): WorkflowStepFileIssue[] {
+  const issues: WorkflowStepFileIssue[] = [];
+  const steps = codeStepsOf(manifest.steps);
+  const named = new Set(steps.map((step) => codeFilePath(step.file)));
+  const seen = new Set<string>();
+  const folder = `${WORKFLOW_STEP_FILES_FOLDER}/`;
+  files.forEach(({ path }, position) => {
+    const at = `files[${position}].path`;
+    const file = path.startsWith(folder) ? path.slice(folder.length) : undefined;
+    const refusal =
+      file === undefined
+        ? `'${path}' is no file in '${folder}': a Workflow holds its step files there and nowhere else`
+        : codeFileIssue(file);
+    if (refusal !== undefined) {
+      issues.push({ path: at, code: WORKFLOW_CODE_ERRORS.fileInvalid, message: refusal });
+    } else if (seen.has(path)) {
+      issues.push({
+        path: at,
+        code: WORKFLOW_CODE_ERRORS.fileInvalid,
+        message: `The file '${path}' is given twice`
+      });
+    } else if (!named.has(path)) {
+      issues.push({
+        path: at,
+        code: WORKFLOW_CODE_ERRORS.fileUnused,
+        message: `No step of the definition names the file '${path}'`
+      });
+    }
+    seen.add(path);
+  });
+  for (const step of steps) {
+    const read = checkCodeFile(stepFileBytes(files, codeFilePath(step.file)), step.file);
+    if ("code" in read) issues.push({ path: `steps.${step.id}.file`, ...read });
+  }
+  const bytes = files.reduce((sum, file) => sum + Buffer.byteLength(file.content, "utf8"), 0);
+  if (bytes > WORKFLOW_STEP_FILES_MAX_BYTES) {
+    issues.push({
+      path: "files",
+      code: WORKFLOW_CODE_ERRORS.filesTooLarge,
+      message: `The step files have ${bytes} bytes together. A Workflow holds at most ${WORKFLOW_STEP_FILES_MAX_BYTES} bytes of them`
+    });
+  }
+  return issues;
+}
+
+/** The refusal of step files that cannot be run, for a save, a publish and a start alike. */
+export function workflowStepFilesRefusal(
+  workflow: string,
+  issues: readonly WorkflowStepFileIssue[]
+): AppError {
+  return new AppError(
+    "VALIDATION_FAILED",
+    `The definition of the Workflow '${workflow}' cannot be run: ${issues[0]?.message ?? ""}`,
+    { reason: issues[0]?.code ?? "definition_invalid", issues: [...issues] }
+  );
 }

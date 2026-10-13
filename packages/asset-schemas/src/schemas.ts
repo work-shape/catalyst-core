@@ -181,10 +181,12 @@ export const WORKFLOW_NAME_RULE =
   "A Workflow id starts with a lowercase letter and holds lowercase letters, digits, '_' and '-', at most 63 characters";
 
 /**
- * What a revision of a Workflow holds as its config: the id the asset is addressed by, and
- * `workflow.yaml` as an object under `manifest`. This is the shape alone, which every stored
- * revision keeps whatever a later engine accepts. Whether the engine of the instance runs the
- * manifest is asked of its own parser when a revision is saved and when one is published.
+ * What a revision of a Workflow holds as its config: the id the asset is addressed by,
+ * `workflow.yaml` as an object under `manifest`, and the files of its `steps/` folder under
+ * `files`, each with its path in the Workflow's folder and its text. This is the shape alone,
+ * which every stored revision keeps whatever a later engine accepts. Whether the engine of the
+ * instance runs the manifest and takes the files is asked of the engine when a revision is
+ * saved and when one is published.
  */
 export const workflowConfigSchema = z.strictObject({
   name: z.string(),
@@ -192,7 +194,8 @@ export const workflowConfigSchema = z.strictObject({
     id: z.string(),
     name: z.string().min(1),
     description: z.string().optional()
-  })
+  }),
+  files: z.array(z.strictObject({ path: z.string(), content: z.string() })).optional()
 });
 
 export type WorkflowAssetConfig = z.infer<typeof workflowConfigSchema>;

@@ -39,8 +39,14 @@ export {
   WORKFLOW_CODE_LANGUAGES,
   WORKFLOW_CODE_LOG_MAX_BYTES,
   WORKFLOW_CODE_STEP_EFFECT,
+  WORKFLOW_STEP_FILES_MAX_BYTES,
   codeStepIssues,
   noWorkflowStepFiles,
+  stepFileBytes,
+  workflowStepFileIssues,
+  workflowStepFilesRefusal,
+  type WorkflowStepFile,
+  type WorkflowStepFileIssue,
   type WorkflowStepFiles
 } from "./code-step";
 export {

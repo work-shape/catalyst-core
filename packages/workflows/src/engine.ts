@@ -29,7 +29,12 @@ import {
   type WorkflowStepRunRef,
   type WorkflowStepRunView
 } from "@vivd-catalyst/core";
-import { codeStepIssues, noWorkflowStepFiles, type WorkflowStepFiles } from "./code-step";
+import {
+  codeStepIssues,
+  noWorkflowStepFiles,
+  workflowStepFilesRefusal,
+  type WorkflowStepFiles
+} from "./code-step";
 import {
   WORKFLOW_STEP_DATA_DAYS,
   createWorkflowDataPruning,
@@ -689,13 +694,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       }
       const prepared = await prepareStart(published, input.input);
       const scripts = await codeStepIssues(published, stepFiles);
-      if (scripts.length > 0) {
-        throw new AppError(
-          "VALIDATION_FAILED",
-          `The definition of the Workflow '${published.manifest.id}' cannot be run: ${scripts[0]?.message ?? ""}`,
-          { reason: scripts[0]?.code ?? "definition_invalid", issues: scripts }
-        );
-      }
+      if (scripts.length > 0) throw workflowStepFilesRefusal(published.manifest.id, scripts);
       const { startedBy } = input;
       const run = await stores.transaction((tx) =>
         openRun(tx, prepared, {

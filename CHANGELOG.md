@@ -26,6 +26,18 @@ contain breaking changes; a patch version does not.
   with a price above zero for the entry's model and for the model of every binding on it. The
   adapter fixes the endpoint; the profile, the key's IAM policy, Bedrock's data retention and
   invocation logging decide the rest and are the operator's to set, see the configuration docs.
+- **Step files of a Workflow:** the config of a Workflow asset takes `files` beside `name` and
+  `manifest`: the scripts of its `code` steps, each `{ path, content }` with a path such as
+  `steps/check.py`. One `assets.put` saves them with the manifest as one revision, `assets.get`
+  answers them with the config to whoever may read the definition, and a run reads the script
+  of the revision it was started on, whatever is published after. A script is at most 256 KiB
+  and the files of one revision 2 MiB together. A save and a publish are refused with the
+  reason `code_file_missing` for a script the manifest names and the save does not bring,
+  `code_file_unused` for a file no step names, `code_file_invalid` for a path outside `steps/`,
+  one with `..`, one given twice or one that is no `.py`, `.js` or `.mjs`, and
+  `code_file_too_large` or `code_files_too_large` for the sizes. `workflows.list` shows a
+  published Workflow without its script as not runnable with `code_file_missing`. A Workflow
+  with a code step that was published before has no script: save it again with its files.
 - **Workflow code steps:** a step of the type `code` runs one script of the Workflow's
   `steps/` folder on the step's input. The script is Python (`.py`) or JavaScript (`.js`,
   `.mjs`), at most 256 KiB, and runs in a fresh container of the runner image, started by the
