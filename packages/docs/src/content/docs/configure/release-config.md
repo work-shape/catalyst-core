@@ -668,6 +668,64 @@ with their account, so it follows them across devices. A conversation that alrea
 what its latest run used. A user who never picked anything follows the agent's configured model
 and effort, so a change to those defaults still reaches them.
 
+### Embedding models
+
+Knowledge Bases with semantic search turn their passages and every search query into vectors.
+The model that does this is a model binding of kind `embedding`:
+
+```yaml
+modelBindings:
+  - id: knowledgeEmbedding
+    providerId: azure-eu
+    kind: embedding
+    model: acme-text-embedding-3-large
+    dimensions: 1536
+knowledge:
+  defaultEmbeddingBinding: knowledgeEmbedding
+usage:
+  costs:
+    customer:
+      models:
+        - providerId: azure-eu
+          model: acme-text-embedding-3-large
+          uncachedInputPricePerMillionTokens: 0.12
+          cachedInputPricePerMillionTokens: 0
+          outputPricePerMillionTokens: 0
+```
+
+- `kind: embedding` marks the binding. A binding without `kind` is a chat binding, as before.
+- `dimensions` is the length of every vector, and is required. The `openai-compatible` adapter
+  sends it to the model, which shortens its vectors to that length. It is at most 16,000; stay
+  at or below 2,000 where a Knowledge Base may later need an approximate index.
+- The binding uses the key of its provider entry and brings none of its own. On Azure OpenAI the
+  entry's v1 endpoint serves both chat and embeddings, and `model` is the name of the embedding
+  deployment.
+- Every binding of kind `embedding` is approved for Knowledge Bases on the instance.
+  `knowledge.defaultEmbeddingBinding` names the one a Knowledge Base uses unless it names
+  another. Without it the instance offers no semantic search; keyword and structured Knowledge
+  Bases work all the same and call no model.
+- An embedding binding is never offered to agents and answers no chat call: an agent cannot
+  pick it, and conversation titles and guardrails cannot name it.
+- An embedding call is admitted and recorded like every other model call, with no output tokens,
+  the purpose `knowledge_embedding` for ingestion and re-index or `knowledge_query` for a search,
+  and the provider entry, its region and the binding. Its cost comes from the rate card's
+  uncached input price; under a spend budget the model needs a row there.
+
+Startup stops, naming the binding, when:
+
+- an embedding binding's provider entry has a region other than `eu`. Embeddings send the text of
+  documents and queries to their provider; only an EU entry, or a provider that keeps data
+  inside the instance such as `deterministic`, is approved for them;
+- an embedding binding has no `dimensions`, or sets `agentSelectable: true`;
+- a chat binding sets `dimensions`;
+- its provider does not embed. `openai-compatible` and `deterministic` embed; `google-vertex` and
+  `aws-bedrock` do not;
+- `knowledge.defaultEmbeddingBinding` names no binding of kind `embedding`;
+- a guardrail or conversation title generation names an embedding binding.
+
+The `deterministic` provider embeds with vectors made from a hash of each text: the same text
+gives the same vector, and nearness of meaning is not modelled. It is for tests and development.
+
 ## Mail
 
 An instance has no mail until `infrastructure.mail` names a provider. With mail, the login panel

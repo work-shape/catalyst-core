@@ -28,6 +28,17 @@ contain breaking changes; a patch version does not.
   ignores the table `guardrail_hits` and the stored guardrails, and it does not read
   `guardrails`: roll back with the config that still has `approvalChecks`, or the instance runs
   no checks.
+- **Embedding models:** a model binding of `kind: embedding` with `dimensions` turns text into
+  vectors for Knowledge Bases, and `knowledge.defaultEmbeddingBinding` names the default. The
+  gateway's `embed` is the one path for an embedding call, admitted, retried and settled like a
+  chat call, with the usage purpose `knowledge_embedding` or `knowledge_query` and no output
+  tokens. `openai-compatible` posts to `<baseUrl>/embeddings` (Azure OpenAI's v1 endpoint
+  included) and `deterministic` returns vectors from a hash of the text. Startup stops on an
+  embedding binding whose entry has a region other than `eu`, one without `dimensions` or with
+  `agentSelectable: true`, one on a provider that does not embed, a default that names no
+  embedding binding, and a guardrail or conversation title generation that names one.
+  Nothing calls `embed` yet; Knowledge Base ingestion and search follow. Existing config is
+  unchanged: a binding without `kind` is a chat binding.
 - **Skills that ship with the platform:** the guide to the platform (`platform-guide`) and, with
   Workflows on, `workflow-authoring` are stored skills of origin `release`. The API process
   writes them at start: a changed one gets a revision in History, one a release no longer ships
