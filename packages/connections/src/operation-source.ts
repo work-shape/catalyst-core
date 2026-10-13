@@ -175,6 +175,12 @@ function definitionOf(
     // A read of a customer's system is recorded, every time.
     ...(operation.effect === "reading" ? { recordsEveryCall: true as const } : {}),
     ...(operation.policy === undefined ? {} : { defaultPolicy: operation.policy }),
+    // The outside system is handed the key of the call and carries out one call per key.
+    ...(operation.effect === "changing" &&
+    operation.idempotencyKeyHeader !== undefined &&
+    connection.type?.carriesIdempotencyKey === true
+      ? { repeatsUnderKey: true as const }
+      : {}),
     action: null,
     authorize: (_input, context) => authorizeCall(connection, operation, context),
     scope: null,

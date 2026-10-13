@@ -54,7 +54,8 @@ export async function createOperationRun(
       updatedAt: startedAt
     })
     // The key is taken. A failed run of the same call is handed out again, as its next attempt,
-    // only where it is a read or failed before its implementation started. Every other holder
+    // only where it is a read, failed before its implementation started, or was interrupted
+    // and its operation is one that is called again under its key. Every other holder
     // of the key leaves this statement without a row: a changing call that failed or was
     // interrupted may have changed something, and running it again would repeat it.
     .onConflictDoUpdate({
@@ -78,7 +79,14 @@ export async function createOperationRun(
         eq(operationRuns.status, "failed"),
         eq(operationRuns.operation, run.operation),
         eq(operationRuns.inputHash, run.inputHash),
-        or(eq(operationRuns.effect, "reading"), sql`${operationRuns.error}->>'unexecuted' = 'true'`)
+        or(
+          eq(operationRuns.effect, "reading"),
+          sql`${operationRuns.error}->>'unexecuted' = 'true'`,
+          // An operation that is called again under the key of a call that was cut off.
+          run.takesInterrupted
+            ? sql`${operationRuns.error}->>'code' = ${INTERRUPTED_RUN_ERROR.code}`
+            : undefined
+        )
       )
     })
     .returning();

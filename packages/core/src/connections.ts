@@ -93,6 +93,13 @@ export interface ConnectionOperationConfig {
   /** The fingerprint of the accepted descriptor. A discovery that differs stops the operation. */
   schemaFingerprint?: string;
   /**
+   * The request header that carries the idempotency key of a changing call to the outside
+   * system, such as `Idempotency-Key`. Whoever names it says that the outside system carries
+   * out one call per key. A call of the operation that was interrupted is then made again
+   * under its key; without it such a call is never made a second time.
+   */
+  idempotencyKeyHeader?: string;
+  /**
    * How the outside system pages this reading operation. A Workflow step that names
    * `paginate` takes it. Reserved: the schema of a definition refuses it with
    * `not_supported_yet` until the slice that brings paging reads it.
@@ -380,6 +387,12 @@ export interface ConnectorContext {
    * `undefined` for a Connection without authentication.
    */
   credentialFor(target: EgressGrant): ConnectionCredential | undefined;
+  /**
+   * The idempotency key of a changing call and the request header the operation's entry names
+   * for it. A type that sets `carriesIdempotencyKey` sends it with the call, to the origin the
+   * Connection was configured for and to no other.
+   */
+  idempotencyKey?: { header: string; value: string };
   /** Ends when the call is cancelled or its deadline passes. */
   signal: AbortSignal;
 }
@@ -406,6 +419,11 @@ interface ConnectorTypeBase {
    * of the type's typed settings; the value is never a setting.
    */
   credentialHeaderName?(settings: JsonObject): string | undefined;
+  /**
+   * The type sends `idempotencyKey` of its context with a call. Only an operation of such a
+   * type is called again under the key of an interrupted call.
+   */
+  carriesIdempotencyKey?: true;
   /** A bounded check of reachability and authentication. It changes nothing outside. */
   test(context: ConnectorContext): Promise<{ status: ConnectorTestStatus }>;
   execute(operation: string, input: JsonValue, context: ConnectorContext): Promise<JsonValue>;

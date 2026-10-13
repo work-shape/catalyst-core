@@ -64,11 +64,14 @@ const traceOf = (
   operationRunId: OperationRunId | undefined
 ): OperationStepTrace => ({ call, ...(operationRunId ? { operationRunId } : {}) });
 
-/** The step failure of a first call whose outcome nobody will ever know. */
+/**
+ * The step failure of a first call that was cut off where nothing rules out that a second one
+ * would change something twice: its operation is not one that is called again under its key.
+ */
 const interruptedFailure = (operation: string, trace: OperationStepTrace) =>
   new OperationStepFailure(
     "operation_interrupted",
-    `The call of '${operation}' was interrupted and its outcome is not known. Check what it changed before the Workflow is started again`,
+    `The call of '${operation}' was cut off, so it may or may not have taken effect: check what it changed before the Workflow is started again, and to have such a call made again by itself, name the header that carries its key to the outside system ('idempotencyKeyHeader' on the operation of the Connection)`,
     trace
   );
 
@@ -125,14 +128,21 @@ function pause(ms: number, signal: AbortSignal): Promise<void> {
  * and it has no outcome yet. That attempt's worker was stopped, lost its lease or died; the
  * call may still be running in its process. The step run is given the id of that Operation
  * Run at once. The wait ends when the call has an outcome, which the call below then answers
- * again, or `waitMs` after the call started: then nobody will ever write its outcome, the
- * Operation Run is ended as interrupted and the step fails as `operation_interrupted`. The
- * outside system is never called a second time, under this key or another.
+ * again, or once the call has had the time its operation gives a call (and `waitMs` at most),
+ * counted from its start: then nobody will ever write its outcome, and the Operation Run is
+ * ended as interrupted.
+ *
+ * What follows depends on the operation. One that is called again under its key
+ * (`repeatsUnderKey`) is: the call below takes the interrupted run and makes the call a
+ * second time under the same key, which whatever carries it out answers without a second
+ * change. Every other operation is never called a second time, under this key or another,
+ * and the step fails as `operation_interrupted`.
  */
 async function awaitFirstCall(input: {
   calls: WorkflowOperationCalls;
   run: WorkflowRun;
   operation: string;
+  definition: Pick<OperationDefinition, "timeoutMs" | "repeatsUnderKey">;
   idempotencyKey: string;
   actor: AuthenticatedIdentity;
   made: WorkflowStepRunCall;
@@ -142,6 +152,8 @@ async function awaitFirstCall(input: {
 }): Promise<void> {
   const { runs } = input.calls.deps;
   const { clientInstanceId } = input.run;
+  // A call that runs longer than its operation lets a call run was cut off with its process.
+  const waitMs = Math.min(input.wait.waitMs, input.definition.timeoutMs);
   let pollMs = input.wait.pollMs;
   for (;;) {
     const first = await runs.findByIdempotencyKey({
@@ -152,10 +164,11 @@ async function awaitFirstCall(input: {
     if (first?.status !== "running") return;
     await input.noteOperationRun(first.id);
     const since = Date.parse(first.startedAt ?? first.createdAt);
-    const left = since + input.wait.waitMs - input.wait.now().getTime();
+    const left = since + waitMs - input.wait.now().getTime();
     if (left <= 0) {
       // Ended only where it still runs: a call that ended in this moment is answered again.
       if (await runs.markInterrupted({ clientInstanceId, id: first.id })) {
+        if (input.definition.repeatsUnderKey) return;
         throw interruptedFailure(input.operation, traceOf(input.made, first.id));
       }
       continue;
@@ -168,7 +181,8 @@ async function awaitFirstCall(input: {
 /**
  * Calls the operation of one step run as the run's principal. A changing call carries the
  * key of the step run, so an attempt that runs the step again changes nothing twice: it is
- * answered with what the first call answered.
+ * answered with what the first call answered, and where the first call was cut off it is made
+ * again only if its operation is one that is called again under its key.
  *
  * A reading call ends with the attempt: a worker that stops cuts it, and the next attempt
  * reads again. A changing call is never cut by its worker, because a call that was cut may
@@ -233,7 +247,7 @@ export async function callStepOperation(input: {
     ...(changing ? { idempotencyKey } : {})
   };
   if (changing) {
-    await awaitFirstCall({ ...input, idempotencyKey, made });
+    await awaitFirstCall({ ...input, definition, idempotencyKey, made });
   }
   const { approvals: _notHeld, ...deps } = calls.deps;
   let outcome;

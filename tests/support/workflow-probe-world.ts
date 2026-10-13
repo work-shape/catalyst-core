@@ -38,11 +38,18 @@ const STARTED_WITHIN_MS = 120_000;
 const execFileAsync = promisify(execFile);
 const callSchema = z.object({ params: z.object({ name: z.string() }) });
 
-/** The tools of the outside system: two that read and one that changes. */
+/** The header the outside system reads the key of a changing call from. */
+const KEY_HEADER = "Idempotency-Key";
+
+/**
+ * The tools of the outside system: two that read and two that change. `charge` is declared
+ * with the header that carries its key; `charge_unkeyed` is the same call without it.
+ */
 const TOOLS = [
   { name: "slow_read", effect: "reading" },
   { name: "echo", effect: "reading" },
-  { name: "charge", effect: "changing" }
+  { name: "charge", effect: "changing", idempotencyKeyHeader: KEY_HEADER },
+  { name: "charge_unkeyed", effect: "changing" }
 ] as const;
 type ToolName = (typeof TOOLS)[number]["name"];
 
@@ -62,6 +69,8 @@ export interface ProbeWorld {
   api: TestInstance;
   /** How often the outside system was asked to run a tool. */
   arrivals(name: ToolName): number;
+  /** The key each call of a tool arrived with, in order. `undefined` for a call without one. */
+  keys(name: ToolName): (string | undefined)[];
   /** The next call of the tool gets no answer until `release`. */
   hold(name: ToolName): void;
   /** Answers every held call, where somebody still listens. */
@@ -90,7 +99,7 @@ export async function openProbeWorld(): Promise<{ world: ProbeWorld; worker: Pro
   };
   try {
     const key = generateTestSecret();
-    const counts = new Map<string, number>();
+    const arrived = new Map<string, (string | undefined)[]>();
     const holding = new Set<string>();
     const held: { request: McpTestRequest; response: ServerResponse }[] = [];
     const answer = (request: McpTestRequest, response: ServerResponse) => {
@@ -106,7 +115,11 @@ export async function openProbeWorld(): Promise<{ world: ProbeWorld; worker: Pro
       intercept(request, response) {
         if (request.rpc !== "tools/call") return false;
         const { name } = callSchema.parse(request.body).params;
-        counts.set(name, (counts.get(name) ?? 0) + 1);
+        const key = request.headers[KEY_HEADER.toLowerCase()];
+        arrived.set(name, [
+          ...(arrived.get(name) ?? []),
+          typeof key === "string" ? key : undefined
+        ]);
         if (!holding.delete(name)) return false;
         held.push({ request, response });
         return true;
@@ -140,7 +153,7 @@ export async function openProbeWorld(): Promise<{ world: ProbeWorld; worker: Pro
           settings: { url: `http://127.0.0.1:${outside.port}/mcp` },
           authScheme: "bearer",
           secret: "OUTSIDE_MCP_KEY",
-          operations: TOOLS.map(({ name, effect }) => ({ name, effect, exposure: ["workflow"] }))
+          operations: TOOLS.map((tool) => ({ ...tool, exposure: ["workflow"] }))
         }
       },
       // A Workflow has nobody to confirm a changing call.
@@ -202,7 +215,8 @@ export async function openProbeWorld(): Promise<{ world: ProbeWorld; worker: Pro
     let started = 0;
     const world: ProbeWorld = {
       api,
-      arrivals: (name) => counts.get(name) ?? 0,
+      arrivals: (name) => arrived.get(name)?.length ?? 0,
+      keys: (name) => arrived.get(name) ?? [],
       hold(name) {
         holding.add(name);
       },

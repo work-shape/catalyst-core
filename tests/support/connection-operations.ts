@@ -163,6 +163,8 @@ interface ExecutedCall {
   operation: string;
   input: JsonValue;
   secret: string | undefined;
+  /** The key of the call and the header for it, where the type was handed them. */
+  idempotencyKey?: { header: string; value: string };
 }
 
 interface InvokeOptions {
@@ -241,13 +243,15 @@ export async function fixtureOn<Instance extends AccessInstance>(
     target: (settings: Record<string, JsonValue>) =>
       egressTargetOfUrl(settingsSchema.parse(settings).url),
     test: () => Promise.resolve({ status: "ready" as const }),
+    carriesIdempotencyKey: true as const,
     execute(operation: string, input: JsonValue, context: ConnectorContext) {
       sequence.push("execute");
       handed.push(context.credentialFor(context.target)?.secret);
       executed.push({
         operation,
         input,
-        secret: context.credentialFor(context.target)?.secret
+        secret: context.credentialFor(context.target)?.secret,
+        ...(context.idempotencyKey ? { idempotencyKey: context.idempotencyKey } : {})
       });
       return behave(operation, input, context);
     },

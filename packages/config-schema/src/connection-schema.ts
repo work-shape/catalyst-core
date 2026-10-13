@@ -177,10 +177,18 @@ export const connectionNameSchema = z
  * stored and ignored, a limit would be believed and not kept.
  */
 function refuseReservedFields(
-  operation: { paging?: unknown; limits?: unknown },
+  operation: { paging?: unknown; limits?: unknown; effect: string; idempotencyKeyHeader?: string },
   context: z.RefinementCtx,
   path: (string | number)[]
 ): void {
+  // A reading call carries no key: it is made again as it is.
+  if (operation.idempotencyKeyHeader !== undefined && operation.effect !== "changing") {
+    context.addIssue({
+      code: "custom",
+      path: [...path, "idempotencyKeyHeader"],
+      message: "Only a changing operation can name a header for its idempotency key"
+    });
+  }
   for (const field of ["paging", "limits"] as const) {
     if (operation[field] !== undefined) {
       context.addIssue({
@@ -191,6 +199,34 @@ function refuseReservedFields(
     }
   }
 }
+
+/**
+ * The names a request is routed, framed or authenticated by. A key sent under one of them
+ * would stand in the place of what the request needs. In lower case.
+ */
+const HEADERS_NO_KEY_IS_SENT_UNDER = new Set([
+  "authorization",
+  "proxy-authorization",
+  "cookie",
+  "host",
+  "content-length",
+  "content-type",
+  "accept",
+  "connection",
+  "transfer-encoding",
+  "mcp-session-id",
+  "mcp-protocol-version"
+]);
+
+/** The request header that carries the idempotency key of a changing call, by its name. */
+const idempotencyKeyHeaderSchema = z
+  .string()
+  .regex(/^[A-Za-z][A-Za-z0-9-]{0,63}$/u, {
+    message: "A header name starts with a letter and holds letters, digits and hyphens, 64 at most"
+  })
+  .refine((name) => !HEADERS_NO_KEY_IS_SENT_UNDER.has(name.toLowerCase()), {
+    message: "This header is the request's own and carries no idempotency key"
+  });
 
 const connectionOperationSchema = z
   .object({
@@ -207,6 +243,8 @@ const connectionOperationSchema = z
     enabled: z.boolean().default(true),
     policy: z.enum(["deny", "approval"]).optional(),
     schemaFingerprint: z.string().min(1).max(200).optional(),
+    /** The header that carries the idempotency key of a changing call to the outside system. */
+    idempotencyKeyHeader: idempotencyKeyHeaderSchema.optional(),
     /** How the outside system pages a reading operation. */
     paging: operationPagingSchema.optional(),
     /** How many calls toward the outside system run at once and start per period. */
@@ -289,6 +327,8 @@ const releaseConnectionOperationSchema = z
     /** Only tightens: `deny` on any operation, `approval` on a changing one. */
     policy: z.enum(["deny", "approval"]).optional(),
     schemaFingerprint: z.string().min(1).max(200).optional(),
+    /** The header that carries the idempotency key of a changing call to the outside system. */
+    idempotencyKeyHeader: idempotencyKeyHeaderSchema.optional(),
     /** How the outside system pages a reading operation. */
     paging: operationPagingSchema.optional(),
     /** How many calls toward the outside system run at once and start per period. */

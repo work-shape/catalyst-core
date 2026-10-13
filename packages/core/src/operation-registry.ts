@@ -40,6 +40,11 @@ export interface OperationExecutionContext {
   origin: OperationOrigin;
   workspaceId?: CollaborationWorkspaceId;
   correlationId: string;
+  /**
+   * The idempotency key of the call, where it has one. An operation that sets
+   * `repeatsUnderKey` hands it to whatever carries the call out.
+   */
+  idempotencyKey?: string;
   /** What only the live call has. Empty for a call that is executed after an approval. */
   runtime: OperationCallRuntime;
   /** The actor's rights, for an operation whose rule is more than one action. */
@@ -161,6 +166,16 @@ interface OperationDefinitionBase<Input, Output> {
    */
   streams?: true;
   changeClass?: OperationChangeClass;
+  /**
+   * Set on a changing operation whose call may be made again under the key of a call that was
+   * interrupted: what carries the call out is handed the key (`idempotencyKey` of the
+   * execution context) and carries out one call per key, so a second call under it changes
+   * nothing more. An interrupted run of such an operation is run again under its key, where
+   * every other interrupted changing call is never made a second time. An operation of a
+   * Connection sets it where its entry names the header that carries the key to the outside
+   * system.
+   */
+  repeatsUnderKey?: true;
   /** The release's own policy value. Without one the instance default of the effect applies. */
   defaultPolicy?: PolicyValue;
   /**

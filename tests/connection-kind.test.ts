@@ -229,6 +229,27 @@ describe("the definition of a Connection", () => {
     expect(withPolicy("changing", "confirm")).toHaveLength(1);
   });
 
+  it("accepts a header for the idempotency key on a changing operation, and no header of the request itself", () => {
+    const withHeader = (effect: string, idempotencyKeyHeader: string) =>
+      issuesOf(
+        connection("outside", {
+          operations: [{ name: "write", effect, exposure: [], idempotencyKeyHeader }]
+        })
+      );
+    expect(withHeader("changing", "Idempotency-Key")).toEqual([]);
+    expect(withHeader("reading", "Idempotency-Key")).toEqual([
+      {
+        path: "operations.0.idempotencyKeyHeader",
+        message: "Only a changing operation can name a header for its idempotency key"
+      }
+    ]);
+    for (const own of ["Authorization", "content-type", "Mcp-Session-Id", "a header"]) {
+      expect(withHeader("changing", own)).toMatchObject([
+        { path: "operations.0.idempotencyKeyHeader" }
+      ]);
+    }
+  });
+
   it("refuses an operation without an effect, a doubled operation and too many of them", () => {
     expect(
       issuesOf(connection("outside", { operations: [{ name: "echo", exposure: ["agent"] }] }))

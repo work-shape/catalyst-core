@@ -502,6 +502,7 @@ export async function executeAdmitted(
       origin: call.origin,
       workspaceId: call.workspaceId,
       correlationId: call.correlationId,
+      ...(run.idempotencyKey === undefined ? {} : { idempotencyKey: run.idempotencyKey }),
       runtime: context.runtime,
       access,
       audit: auditForRun(deps.audit, run.id, call.correlationId)

@@ -192,6 +192,8 @@ interface SessionState {
   tooLarge: string;
   /** Ends every pending request of the session. */
   abort: AbortController;
+  /** The request that is on its way is the call of a tool, which carries the call's key. */
+  callingTool: boolean;
 }
 
 function fail(state: SessionState, reason: ConnectionCallReason, message?: string): Error {
@@ -470,6 +472,16 @@ function pinnedFetch(
         if (MCP_TRANSPORT_HEADER_NAMES.has(lower)) throw fail(state, "connection_not_configured");
         headers[lower] = value;
       }
+      // The key of a changing call travels with the request of that call, to the Connection's
+      // own origin alone. It never stands under a header of the transport or of the credential.
+      const key = state.callingTool && own ? context.idempotencyKey : undefined;
+      if (key !== undefined) {
+        const lower = key.header.toLowerCase();
+        if (MCP_TRANSPORT_HEADER_NAMES.has(lower) || lower in headers) {
+          throw fail(state, "connection_not_configured");
+        }
+        headers[lower] = key.value;
+      }
 
       // Another origin gets a socket for this one request, and so does the Connection's own
       // where the pool has no room. It is an agent of this file either way, never the
@@ -576,7 +588,8 @@ export async function withMcpSession<Result>(
     message: undefined,
     remainingBytes: bounds.maxResponseBytes,
     tooLarge: bounds.tooLarge,
-    abort: new AbortController()
+    abort: new AbortController(),
+    callingTool: false
   };
   const deadline = AbortSignal.any([context.signal, AbortSignal.timeout(bounds.timeoutMs)]);
   const onDeadline = () => state.abort.abort();
@@ -622,11 +635,17 @@ export async function withMcpSession<Result>(
         };
       },
       async callTool(name, toolInput) {
-        const result = await client.request(
-          { method: "tools/call", params: { name, arguments: toolInput } },
-          toolResultSchema,
-          options
-        );
+        state.callingTool = true;
+        let result;
+        try {
+          result = await client.request(
+            { method: "tools/call", params: { name, arguments: toolInput } },
+            toolResultSchema,
+            options
+          );
+        } finally {
+          state.callingTool = false;
+        }
         return {
           content: result.content ?? [],
           structuredContent: result.structuredContent,

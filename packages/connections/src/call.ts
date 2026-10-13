@@ -23,7 +23,7 @@ import {
   type ConnectionOperationSourceDeps,
   type StoredConnection
 } from "./connection-reads";
-import { openConnectorContext } from "./connector-context";
+import { openConnectorContext, type OpenConnectorContextInput } from "./connector-context";
 import { compileJsonSchema } from "./json-schema";
 import { jsonOfCheckedValue, outsideSchemaChecker } from "./schema-check";
 
@@ -593,6 +593,31 @@ function inSentence(error: unknown, named: Named): unknown {
 }
 
 /**
+ * The key of a changing call and the header the operation's entry names for it, as the type
+ * is handed them. Nothing where the call has no key, the entry names no header, or the type
+ * sends none.
+ */
+function idempotencyKeyOf(
+  found: Callable,
+  target: ConnectionCallTarget,
+  key: string | undefined
+): Pick<OpenConnectorContextInput, "idempotencyKey"> {
+  const operation = found.connection.config.operations.find(
+    (candidate) => candidate.name === target.operationName
+  );
+  const header = operation?.idempotencyKeyHeader;
+  if (
+    key === undefined ||
+    header === undefined ||
+    operation?.effect !== "changing" ||
+    found.type.carriesIdempotencyKey !== true
+  ) {
+    return {};
+  }
+  return { idempotencyKey: { header, value: key } };
+}
+
+/**
  * Executes one call. The caller is `runOperation`, which has authorized the actor on the
  * Connection, resolved the policy and written the run. Answers the result of the Connector
  * type once it passed the size bound, the search for the credential and the output schema.
@@ -603,7 +628,7 @@ export async function callConnectionOperation(
   slots: ConnectionCallSlots,
   target: ConnectionCallTarget,
   input: unknown,
-  context: Pick<OperationExecutionContext, "runtime">
+  context: Pick<OperationExecutionContext, "runtime" | "idempotencyKey">
 ): Promise<JsonValue> {
   const named: Named = {};
   try {
@@ -618,7 +643,7 @@ async function call(
   slots: ConnectionCallSlots,
   target: ConnectionCallTarget,
   input: unknown,
-  context: Pick<OperationExecutionContext, "runtime">,
+  context: Pick<OperationExecutionContext, "runtime" | "idempotencyKey">,
   /** Receives what a sentence says of the Connection the call was authorized on, once read. */
   named: Named
 ): Promise<JsonValue> {
@@ -663,7 +688,8 @@ async function call(
         },
         egress: deps.egress,
         credentials: deps.credentials ?? NO_CREDENTIALS,
-        signal: deadline.signal
+        signal: deadline.signal,
+        ...idempotencyKeyOf(found, target, context.idempotencyKey)
       });
       opening.catch(() => undefined);
       const connectorContext: ConnectorContext = await Promise.race([opening, aborted.promise]);
