@@ -6,10 +6,12 @@ export { demoOperations } from "../policy";
 export {
   SEED_EMAIL_SUFFIX,
   apps,
+  builder,
   checkQuestions,
   connectionCheckQuestions,
   heldSkillChange,
   people,
+  workflowCheckQuestions,
   workspace,
   type CheckReason
 } from "./company";

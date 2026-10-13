@@ -481,12 +481,30 @@ describe("starting a Workflow that cannot run", () => {
       reason: "not_supported_yet",
       issues: [{ code: "not_supported_yet", path: "steps[1].type" }]
     });
-    await t.expectRefused(
+    const wrongType = await t.expectRefused(
       t.root.id,
       "workflows.start",
       { params: { workflow: "notify-clients" }, payload: { input: { note: 7 } } },
       { status: 422, code: "VALIDATION_FAILED" }
     );
+    // The start form puts an issue under the field its path names.
+    expect(wrongType.details).toMatchObject({
+      reason: "input_invalid",
+      issues: [{ path: ["note"], message: "must be string" }]
+    });
+    // A text the store cannot hold is the caller's to mend, not a failure of the instance.
+    for (const note of ["a\u0000b", "a\udc00b"]) {
+      const unstorable = await t.expectRefused(
+        t.root.id,
+        "workflows.start",
+        { params: { workflow: "notify-clients" }, payload: { input: { note } } },
+        { status: 422, code: "VALIDATION_FAILED" }
+      );
+      expect(unstorable.details).toMatchObject({
+        reason: "input_invalid",
+        issues: [{ path: ["note"] }]
+      });
+    }
 
     await t.stores.apiAccess.updateServicePrincipal({
       clientInstanceId,

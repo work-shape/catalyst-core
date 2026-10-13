@@ -147,7 +147,7 @@ export const dataStores = defineTranslations({
       "Dieser Speicher hat 80 Prozent seiner Größengrenze erreicht oder überschritten. Über der Grenze nimmt er keine neuen Zeilen an und beantwortet weiterhin Lesezugriffe.",
     "dataStores.nextMigration": "Nächste Migration",
     "dataStores.notReachable": "Die Tabellen erscheinen, sobald der Speicher bereit ist.",
-    "dataStores.refused": "Sie dürfen diesen Speicher nicht lesen.",
+    "dataStores.refused": "Du darfst diesen Speicher nicht lesen.",
     "dataStores.rowEstimate": "etwa 1 Zeile",
     "dataStores.rowEstimateHint": "Die Schätzung der Datenbank, keine Zählung.",
     "dataStores.rowEstimates": "etwa {count} Zeilen",
@@ -166,7 +166,7 @@ export const dataStores = defineTranslations({
       "In gespeicherter Reihenfolge: Diese Tabelle hat keinen Schlüssel. Eine Änderung kann eine Zeile verschieben, eine Seite zeigt sie dann doppelt oder gar nicht.",
     "dataStores.rowsRange": "Zeilen {from} bis {to}.",
     "dataStores.rowsRangeOne": "Zeile {from}.",
-    "dataStores.rowsRefused": "Sie dürfen die Zeilen dieses Speichers nicht lesen.",
+    "dataStores.rowsRefused": "Du darfst die Zeilen dieses Speichers nicht lesen.",
     "dataStores.rowsTable": "Tabelle",
     "dataStores.rowsTitle": "Zeilen",
     "dataStores.rowsToStart": "Zum Anfang",
@@ -210,19 +210,19 @@ export const dataStores = defineTranslations({
     "dataStores.usedByEmpty":
       "Keine veröffentlichte App und kein veröffentlichter Workflow verwendet diesen Speicher.",
     "dataStores.usedByFailed": "Was diesen Speicher verwendet, konnte nicht geladen werden.",
-    "dataStores.usedByHidden": "und {count} weitere, die Sie nicht sehen können",
+    "dataStores.usedByHidden": "und {count} weitere, die du nicht sehen kannst",
     "dataStores.usedByHiddenOnly":
-      "{count} Apps oder Workflows, die Sie nicht sehen können, verwenden diesen Speicher.",
+      "{count} Apps oder Workflows, die du nicht sehen kannst, verwenden diesen Speicher.",
     "dataStores.usedByHiddenOnlyOne":
-      "1 App oder Workflow, den Sie nicht sehen können, verwendet diesen Speicher.",
-    "dataStores.usedByRefused": "Sie dürfen nicht sehen, was diesen Speicher verwendet.",
+      "1 App oder Workflow, den du nicht sehen kannst, verwendet diesen Speicher.",
+    "dataStores.usedByRefused": "Du darfst nicht sehen, was diesen Speicher verwendet.",
     "dataStores.usedByTitle": "Verwendet von",
     "dataStores.usedByTruncated":
       "Die Instanz hat mehr veröffentlichte Apps oder Workflows, als ein Lesezugriff durchsieht. Diese Liste kann unvollständig sein.",
     "dataStores.usedByWorkflow": "Workflow",
     "dataStores.valueFailed": "Der Wert konnte nicht geladen werden.",
     "dataStores.valueGone":
-      "Die Zeile gibt es nicht mehr: Sie wurde entfernt, oder ihr Schlüssel oder ihr Platz hat sich geändert. Gehen Sie zum Anfang der Tabelle zurück.",
+      "Die Zeile gibt es nicht mehr: Sie wurde entfernt, oder ihr Schlüssel oder ihr Platz hat sich geändert. Geh zum Anfang der Tabelle zurück.",
     "dataStores.valueLength": "{count} Zeichen",
     "dataStores.valueNull": "null",
     "dataStores.valueOf": "Der ganze Wert einer Zeile von {table}.",

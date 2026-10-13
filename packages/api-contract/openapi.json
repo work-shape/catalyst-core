@@ -1584,6 +1584,15 @@
               "type": "string",
               "minLength": 1
             }
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 35
+            }
           }
         ],
         "responses": {
@@ -12713,6 +12722,13 @@
                               ]
                             }
                           },
+                          "inputs": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
                           "actions": {
                             "type": "array",
                             "items": {
@@ -17222,6 +17238,12 @@
           },
           "interfacePath": {
             "type": "string"
+          },
+          "heldBackHosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -17231,7 +17253,8 @@
           "number",
           "pageSessionId",
           "revision",
-          "interfacePath"
+          "interfacePath",
+          "heldBackHosts"
         ]
       },
       "AppPreviewRequest": {

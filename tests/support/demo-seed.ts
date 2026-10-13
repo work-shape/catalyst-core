@@ -34,6 +34,7 @@ import {
   people,
   seedDemo,
   workspace,
+  workflowCheckQuestions,
   type CheckReason,
   type SeedReport
 } from "@vivd-catalyst/demo/seed";
@@ -340,6 +341,7 @@ const NOTHING_CREATED = {
   agents: 0,
   skills: 0,
   "grant rows": 0,
+  "builder assets": 0,
   "approval requests": 0,
   "connection grant rows": 0,
   workspaces: 0,
@@ -376,7 +378,9 @@ const reasonOf = (action: ReturnType<typeof checkAsset>[number]): CheckReason =>
 export async function expectCheckAnswers(
   state: InstanceState,
   questions: readonly (
-    (typeof checkQuestions)[number] | (typeof connectionCheckQuestions)[number]
+    | (typeof checkQuestions)[number]
+    | (typeof connectionCheckQuestions)[number]
+    | (typeof workflowCheckQuestions)[number]
   )[] = checkQuestions
 ): Promise<void> {
   // The tab takes the kinds and the actions of each from the instance's registry.

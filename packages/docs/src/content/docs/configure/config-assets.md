@@ -161,9 +161,9 @@ Two boolean release-config settings decide what the chat shows of its agents.
 `ui.showAgentName` is `true` by default and puts the selected agent's name
 beside its icon on the start page; with `false` the start page shows the icon
 alone. In a conversation the chat always shows the icon alone, which opens the
-selector when the pointer is on it. `ui.showAgentDescriptions` is `false` by
-default; with `true` the selector lists each description, and otherwise, or
-without a description, only the display name.
+selector when the pointer is on it. `ui.showAgentDescriptions` is `true` by
+default and lists each description in the selector; with `false`, or for an
+agent without a description, the selector shows only the display name.
 
 The **Agents** page, the row under New chat in the main rail, shows every agent
 a person may use in the open workspace as a card: the display name, the

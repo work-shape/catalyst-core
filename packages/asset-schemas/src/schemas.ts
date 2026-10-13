@@ -217,7 +217,9 @@ const skillConfigObjectSchema = z.object({
       {
         message: `Skill frontmatter holds at most ${SKILL_FRONTMATTER_MAX_BYTES} characters as JSON, nested at most ${SKILL_FRONTMATTER_MAX_DEPTH} levels`
       }
-    )
+    ),
+  origin: z.literal("release").optional(),
+  icon: z.string().min(1).optional()
 });
 
 export const skillConfigSchema = skillConfigObjectSchema.superRefine((skill, context) => {
@@ -249,7 +251,8 @@ export const skillConfigSchema = skillConfigObjectSchema.superRefine((skill, con
  * The frontmatter of a `SKILL.md`. `description` is required. `name` may be left to the folder
  * and `title` to the content; `summary` and `starters` are read as the config holds them.
  * Every other key is kept as it is and never refused: the public skill convention has keys of
- * its own, such as `license` and `metadata`, and a library may add more.
+ * its own, such as `license` and `metadata`, and a library may add more. A skill file is the
+ * instance's own: what only a shipped skill carries, `origin` and `icon`, is no field of it.
  */
 export const skillFileFrontmatterSchema = z.looseObject({
   name: skillNameSchema.optional(),

@@ -48,15 +48,25 @@ export interface ConversationOffer {
    */
   subject?: ConversationSubject;
   toolNames: readonly string[];
-  skills: readonly ShippedSkill[];
+  /**
+   * The skills that ship with the platform and are offered here, by name. They are stored
+   * skills like any other and read from the store: a skill a release no longer ships is
+   * offered nowhere.
+   */
+  skillNames: readonly string[];
 }
 
-/** A skill that ships with the platform's code. It is no asset and nobody edits it. */
+/**
+ * A skill that ships with the platform's code. When the API process starts, the release seed
+ * stores it as a read-only skill of origin `release`, and a later release replaces it.
+ */
 export interface ShippedSkill {
   name: string;
   title: string;
   description: string;
   content: string;
+  /** The key of the interface's icon registry that marks the skill in lists. */
+  icon: string;
 }
 
 export interface ConversationOfferSource {

@@ -17,6 +17,8 @@ export interface BuildAssetStart {
   name: string;
   /** The name people read. */
   title: string;
+  /** The definition a copy starts from. A new asset without it starts empty. */
+  copyOf?: Record<string, unknown>;
 }
 
 /** Where an asset page stands in the frame. The page's body hands it to its `Page`. */
@@ -74,9 +76,10 @@ interface BuildKindBase {
   avatar?: AvatarKind;
   /**
    * What a row says of an asset where the kind tells more than its icon and the asset's id: its
-   * own mark, and the line under the title. A row without a line shows the title alone.
+   * own mark, where it has one, and the line under the title. A row without a line shows the
+   * title alone.
    */
-  row?(asset: BuildAssetRow): { leading: ReactNode; description?: string };
+  row?(asset: BuildAssetRow): { leading?: ReactNode; description?: string };
   /** What a row says after the asset's id, on the same line: such as the asset's description. */
   rowText?(asset: BuildAssetRow): string | undefined;
   /** The row's badges, such as the default marker. */
@@ -104,6 +107,12 @@ export interface BuildAssetKind extends BuildKindBase {
   missingText: TranslationKey;
   /** The body of the asset page, for an existing asset and for a new one. */
   Editor: ComponentType<BuildAssetEditorProps>;
+  /**
+   * The name people read of an asset that ships with the platform, and nothing for one of the
+   * instance's own. Nobody changes or deletes a shipped asset here, because a release replaces
+   * it: a person who may create one of the kind copies it and edits the copy.
+   */
+  shippedTitle?(asset: BuildAsset): string | undefined;
 }
 
 /** What the frame hands a page that shows one asset and changes nothing of it. */

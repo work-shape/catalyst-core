@@ -26,6 +26,7 @@ import { AssetWorkflow } from "../asset-workflow";
 import { ConversationWorkflow } from "../conversations/conversation-workflow";
 import type { ChatServerOptions } from "../types";
 import { APP_ACTIONS, appConfigOf } from "./app-kind";
+import { appOutsideHosts } from "./app-outside-hosts";
 
 /** What `apps.create_from_page` is called with. */
 export interface CreateAppFromPageInput {
@@ -339,6 +340,13 @@ export class AppWorkflow {
     if (!fileSet || !contentKey) {
       throw new AppError("NOT_FOUND", "App is not available");
     }
+    const outsideHosts = await appOutsideHosts(this.options.stores.pages, {
+      clientInstanceId: this.options.clientInstanceId,
+      assetId: asset.id,
+      view: input.mode,
+      shown: fileSet,
+      publishedFileSetId: asset.publishedFileSetId
+    });
     const expiresAt = Math.floor(Date.now() / 1000) + APP_CONTENT_TOKEN_TTL_SECONDS;
     const pageSessionId = randomUUID();
     const token = mintAppContentToken(contentKey, this.options.clientInstanceId, {
@@ -361,7 +369,8 @@ export class AppWorkflow {
         workspaceId: asCollaborationWorkspaceId(asset.scope.workspaceId),
         app: asset.name,
         mode: input.mode
-      })
+      }),
+      heldBackHosts: outsideHosts.heldBack
     };
   }
 

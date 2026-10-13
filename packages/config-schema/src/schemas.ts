@@ -663,8 +663,9 @@ export const uiConfigSchema = z
     // The start page names the agent beside its icon; when false it shows the
     // icon alone, as a conversation always does.
     showAgentName: z.boolean().default(true),
-    // When true the agent list shows each agent's description under its name.
-    showAgentDescriptions: z.boolean().default(false),
+    // The agent list shows each agent's description under its name, so a person sees what
+    // each agent does before choosing it. False lists the names alone.
+    showAgentDescriptions: z.boolean().default(true),
     /** Legacy switch of the module `resources`; use `modules.resources.enabled`. */
     resources: z.object({ enabled: z.boolean().optional() }).default({}),
     accentColor: z.string().min(1).default(defaultLightUiTheme.accentColor),
@@ -676,7 +677,7 @@ export const uiConfigSchema = z
     title: "Workshape Catalyst",
     welcomeMessage: "How can I help?",
     showAgentName: true,
-    showAgentDescriptions: false,
+    showAgentDescriptions: true,
     resources: {},
     accentColor: defaultLightUiTheme.accentColor,
     logoInvertOnDark: false,
