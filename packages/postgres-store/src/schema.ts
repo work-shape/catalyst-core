@@ -20,7 +20,7 @@ export * from "./schema/connections";
 export * from "./schema/workflowRuns";
 export * from "./schema/dataStores";
 import { productUsers, userIdentities } from "./schema/users";
-import { servicePrincipals, apiCredentials } from "./schema/apiAccess";
+import { servicePrincipals, apiCredentials, apiConnectCodes } from "./schema/apiAccess";
 import { conversations, messages, modelProviderContinuations } from "./schema/conversations";
 import { agentRuns, agentRunObservations, runStartCommands } from "./schema/agentRuns";
 import {
@@ -56,6 +56,7 @@ export const schema = {
   userIdentities,
   servicePrincipals,
   apiCredentials,
+  apiConnectCodes,
   conversations,
   messages,
   modelProviderContinuations,

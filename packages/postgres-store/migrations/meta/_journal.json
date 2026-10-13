@@ -498,6 +498,27 @@
       "when": 1791883714424,
       "tag": "0070_conversation_subject",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1791908486272,
+      "tag": "0071_personal_api_keys",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1791908495213,
+      "tag": "0072_personal_api_keys_validate",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1791908496142,
+      "tag": "0073_personal_api_keys_indexes",
+      "breakpoints": true
     }
   ]
 }

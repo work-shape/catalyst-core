@@ -7,6 +7,28 @@ contain breaking changes; a patch version does not.
 
 ### Added
 
+- **Personal API keys and `catalyst login`:** the module `personalApiKeys` (off by default)
+  lets a person issue keys that act as themself, in Settings, API keys, or by confirming the
+  code `catalyst login` prints; the CLI collects the key itself and saves it in
+  `~/.config/catalyst/credentials.json` with mode 600. A key has a name, scopes
+  (`agent.write` or `agent.write:kai-`; reading, writing, deleting and publishing actions
+  only), and an expiry of at most a year. Every call acts as the key's owner with the owner's
+  rights of that moment, intersected with the key's scopes, so a removed grant or a disabled
+  owner narrows or stops the key at once; a refusal by the key reads `FORBIDDEN` with the
+  reason `outside_key_scope`. Audit names the owner and the key (`credentialId`,
+  `delegatedActor.kind: "api_key"`). Whoever holds `api_access.manage` lists and revokes
+  every person's keys. A key cannot issue keys or confirm codes. A working copy may name its
+  Namespace in `catalyst.yaml` (`namespace: kai-`); its push names it, and its pull, diff
+  and list read only the assets the key may read, without the instance overview. Operations:
+  `me.api_keys.list|create|revoke`, `me.connect_codes.get|confirm`,
+  `connect_codes.start|redeem` (public), `personal_api_keys.list|revoke`. **Operators:**
+  migrations `0071_personal_api_keys` (expand: `api_credentials.owner_user_id`, the owner
+  check and foreign key `NOT VALID`, table `api_connect_codes`),
+  `0072_personal_api_keys_validate` and `0073_personal_api_keys_indexes` (concurrent) run
+  before the new release; the previous release runs on them unchanged, as it writes only
+  service principal keys. Rolling back the release leaves personal keys stored and unusable.
+  Turn the module on with `modules.personalApiKeys.enabled: true`.
+
 - **Data Stores, the reads of a store's page:** `data_stores.list` (`GET /api/v1/data-stores`)
   lists the stores a caller may read with the size, the number of tables and the estimate of
   rows of the last measurement (migration `0069_data_store_table_counts` adds the two columns;

@@ -156,6 +156,7 @@ export async function createClientInstanceApp(
       secrets: execution.infrastructure.secrets,
       clientInstanceId,
       userStore: store,
+      personalApiKeys: execution.modules.isEnabled("personalApiKeys"),
       allowedOrigins: input.allowedOrigins
     });
   const serverOptions: ChatServerOptions = {

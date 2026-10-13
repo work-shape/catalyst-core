@@ -1,3 +1,4 @@
+import { credentialOrigin, readStoredCredential } from "./credentials";
 import { readConfigCliEnv, type ConfigCliEnv } from "./env";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
@@ -13,7 +14,8 @@ import { ConfigApiError, createConfigApi, type ConfigApi } from "./api";
 import {
   canonicalizeSkillConfig,
   serializeAgentYaml,
-  serializeSkillMarkdown
+  serializeSkillMarkdown,
+  type AssetProvenance
 } from "./serialization";
 import {
   MANIFEST_FILENAME,
@@ -25,6 +27,7 @@ import {
   writeStateFile,
   type DeletedAssetBaseline,
   type InstanceBaseline,
+  type ResolvedInstance,
   type WorkingCopyBundle
 } from "./working-copy";
 
@@ -97,6 +100,17 @@ export interface RemoteAsset {
 type FetchedAsset = RemoteAsset & AssetDefinition;
 
 type LocalAsset = { key: string; name: string; contents: string } & AssetDefinition;
+
+/**
+ * The instance's config version and default agent. Only a reader of every agent and skill may
+ * read them, so a working copy of one Namespace reads neither and knows only its assets.
+ */
+export async function readInstanceOverview(
+  api: ConfigApi,
+  instance: ResolvedInstance
+): Promise<{ version?: number; defaultAgentName?: string }> {
+  return instance.namespace === undefined ? api.getOverview() : {};
+}
 
 export async function listRemoteAssets(api: ConfigApi): Promise<Map<string, RemoteAsset>> {
   const assets = new Map<string, RemoteAsset>();
@@ -265,7 +279,7 @@ export function assetContents(asset: AssetDefinition): string {
 export async function replaceSkillPackage(
   skillFilePath: string,
   skill: SkillConfig,
-  provenance: { instance: string; version: number }
+  provenance: AssetProvenance
 ): Promise<void> {
   const targetDirectory = dirname(skillFilePath);
   const parentDirectory = dirname(targetDirectory);
@@ -316,7 +330,7 @@ export async function replaceSkillPackage(
 async function writeSkillPackage(
   directory: string,
   skill: SkillConfig,
-  provenance: { instance: string; version: number }
+  provenance: AssetProvenance
 ): Promise<void> {
   await mkdir(directory, { recursive: true });
   await writeFile(
@@ -356,11 +370,17 @@ function commandEnv(options: ConfigCommandOptions): ConfigCliEnv {
   return readConfigCliEnv(options.env);
 }
 
+/**
+ * A client of the instance, signed in with `CATALYST_API_KEY` where it is set and otherwise
+ * with the key `catalyst login` saved for the instance's origin.
+ */
 export async function connectApi(url: string, options: ConfigCommandOptions) {
-  const apiKey = commandEnv(options).CATALYST_API_KEY;
+  const apiKey =
+    commandEnv(options).CATALYST_API_KEY ||
+    (await readStoredCredential(commandEnv(options), url))?.apiKey;
   if (!apiKey) {
     throw new Error(
-      "Missing CLI credentials. Set CATALYST_API_KEY to a key created under Administration, API Access."
+      `Not logged in to ${credentialOrigin(url)}. Run 'catalyst login --instance ${url}', or set CATALYST_API_KEY to a key provisioned for automation.`
     );
   }
   return createConfigApi({

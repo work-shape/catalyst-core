@@ -141,7 +141,11 @@ function emittedNames(sources: readonly string[]): Set<string> {
         : ts.isPropertyAccessExpression(receiver)
           ? receiver.name.text
           : undefined;
-      if (callee.name.text === "record" && receiverName === "auditRecorder")
+      // `auditRecorder.record`, or `context.audit.record` inside an operation's run.
+      if (
+        callee.name.text === "record" &&
+        (receiverName === "auditRecorder" || receiverName === "audit")
+      )
         return [{ index: 0, path: ["type"] }];
       if (callee.name.text === "appendAuditEvent") return [{ index: 0, path: ["type"] }];
     }

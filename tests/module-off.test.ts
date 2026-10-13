@@ -440,7 +440,8 @@ describe("a module that is off", () => {
       ["connections", false, "modules.connections.enabled"],
       ["workflows", false, "modules.workflows.enabled"],
       ["dataStores", false, "modules.dataStores.enabled"],
-      ["knowledge", false, "modules.knowledge.enabled"]
+      ["knowledge", false, "modules.knowledge.enabled"],
+      ["personalApiKeys", false, "modules.personalApiKeys.enabled"]
     ]);
     expect(items[0]).toMatchObject({
       shipped: true,

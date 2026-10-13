@@ -7,6 +7,7 @@ import {
 } from "@vivd-catalyst/asset-schemas";
 import { AppError } from "./errors";
 import { operationDenialError } from "./operation-denial";
+import { personalApiKeyCovers, personalApiKeyNamesAction } from "./personal-api-keys";
 import {
   isAuthenticatedServicePrincipal,
   type AuthenticatedIdentity,
@@ -125,7 +126,11 @@ export type AccessSource = "role" | "legacy" | "legacy_ref" | "grant" | "members
 
 export type AccessDecision =
   | { allowed: true; source: AccessSource }
-  | { allowed: false; reason: "no_grant" | "denied" | "unknown_action" | "holder_inactive" };
+  | {
+      allowed: false;
+      /** `outside_key_scope`: the holder has the right, and the personal key of the call does not cover it. */
+      reason: "no_grant" | "denied" | "unknown_action" | "holder_inactive" | "outside_key_scope";
+    };
 
 export interface PersistedAccess {
   holderActive: boolean;
@@ -467,10 +472,27 @@ export function evaluateAccess(input: {
   return { allowed: false, reason: "unknown_action" };
 }
 
-/** The synchronous answers for one holder over one load of the persisted state. */
-export function createActorAccess(holder: AccessHolder, persisted: PersistedAccess): ActorAccess {
-  const authorize = (action: string, resource?: AccessResource) =>
-    evaluateAccess({ holder, persisted, action, resource });
+/**
+ * The synchronous answers for one holder over one load of the persisted state. With the scopes
+ * of a personal key, a right is allowed where the holder has it and a scope covers it: removing
+ * the holder's right narrows the key on its next call.
+ */
+export function createActorAccess(
+  holder: AccessHolder,
+  persisted: PersistedAccess,
+  keyScopes?: readonly string[]
+): ActorAccess {
+  const authorize = (action: string, resource?: AccessResource): AccessDecision => {
+    const decision = evaluateAccess({ holder, persisted, action, resource });
+    if (!decision.allowed || keyScopes === undefined || decision.source === "legacy_ref") {
+      // A reference names a tool the holder may use, which a key neither widens nor narrows.
+      return decision;
+    }
+    const legacyActions = isPermission(action) ? LEGACY_PERMISSION_ACTIONS[action] : undefined;
+    return personalApiKeyCovers(keyScopes, action, resource, legacyActions)
+      ? decision
+      : { allowed: false, reason: "outside_key_scope" };
+  };
   return {
     authorize,
     require(action, resource) {
@@ -481,6 +503,7 @@ export function createActorAccess(holder: AccessHolder, persisted: PersistedAcce
     },
     holdsGrantAt: (action, scopeKinds) =>
       persisted.holderActive &&
+      (keyScopes === undefined || personalApiKeyNamesAction(keyScopes, action)) &&
       persisted.grants.some(
         (grant) =>
           grant.action === action &&
@@ -505,7 +528,11 @@ export function createAuthorizer(accessStore?: AccessStore): Authorizer {
             holder: { kind: holder.kind, id: holder.id }
           })
         : { holderActive: true, grants: [] };
-      return createActorAccess(holder, persisted);
+      return createActorAccess(
+        holder,
+        persisted,
+        isAuthenticatedServicePrincipal(actor) ? undefined : actor.keyScopes
+      );
     }
   };
 }

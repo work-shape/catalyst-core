@@ -10,7 +10,8 @@ import {
 
 export interface AssetProvenance {
   instance: string;
-  version: number;
+  /** The instance's config version; a working copy of one Namespace does not read it. */
+  version?: number;
 }
 
 const yamlDumpOptions: yaml.DumpOptions = {
@@ -114,7 +115,7 @@ export function serializeSkillPackageForDisplay(input: unknown): string {
 function provenanceComments(provenance: AssetProvenance): string {
   const instance = provenance.instance.replaceAll(/[\r\n]+/gu, " ");
   return (
-    `# Pulled from ${instance} (config version ${provenance.version}).\n` +
+    `# Pulled from ${instance}${provenance.version === undefined ? "" : ` (config version ${provenance.version})`}.\n` +
     "# Local edits are NOT live until 'catalyst config push'.\n"
   );
 }

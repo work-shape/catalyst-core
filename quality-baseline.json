@@ -250,7 +250,7 @@
       "target": "lint",
       "rule": "import-x/no-relative-packages",
       "scope": "tests",
-      "count": 154,
+      "count": 150,
       "owner": "CB-2"
     },
     {
@@ -579,7 +579,7 @@
       "target": "operations",
       "rule": "plain-changing",
       "scope": "identity",
-      "count": 2,
+      "count": 4,
       "owner": "CONV-1"
     },
     {
