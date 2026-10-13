@@ -123,6 +123,29 @@ describe("the lifecycle and the representation of an asset kind", () => {
     );
   });
 
+  it("says how a kind that holds files keeps them, and the App keeps a repository", () => {
+    const base = {
+      kind: "notice",
+      plural: "notices",
+      schema: noticeSchema,
+      nameRule: { pattern: /^[a-z]+$/u, maxLength: 10, description: "letters" },
+      actions: { read: "app.read", write: "app.write", delete: "app.delete" },
+      validate: () => [],
+      summarize: (notice: { name: string; text: string }) => ({
+        name: notice.name,
+        title: notice.text
+      })
+    };
+    const files = { representation: "files", manifestFile: "notice.yaml" } as const;
+    expect(defineAssetKind(base).content).toBeUndefined();
+    expect(defineAssetKind({ ...base, ...files }).content).toBe("file_set");
+    expect(defineAssetKind({ ...base, ...files, content: "repository" }).content).toBe(
+      "repository"
+    );
+    expect(() => defineAssetKind({ ...base, content: "repository" })).toThrow("holds no files");
+    expect(createAppAssetKind().content).toBe("repository");
+  });
+
   it("answers the active revision of an active kind and the published one of a kind with a draft", () => {
     const active = { lifecycle: "active" } as const;
     const drafted = { lifecycle: "draft_published" } as const;

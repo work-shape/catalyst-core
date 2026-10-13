@@ -133,6 +133,9 @@ export function createAppAssetKind(): WorkflowAssetKind {
       lifecycle: "draft_published",
       representation: "files",
       manifestFile: PAGE_MANIFEST_FILE,
+      // The files of an App are a repository. Until its writes commit to it, a revision
+      // holds a file set as before; one that has a commit holds both.
+      content: "repository",
       owners: ["workspace"],
       validate: () => [],
       // Asked for the Apps a write adds or changes only: a stored App that names a Connection

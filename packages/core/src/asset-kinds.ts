@@ -56,6 +56,11 @@ export type AssetLifecycle = "active" | "draft_published";
 
 /** What a revision holds: its config alone, or a config with an immutable file set. */
 export type AssetRepresentation = "config" | "files";
+/**
+ * Where the files of a revision of a `files` kind are kept: as a file set, or as a commit of
+ * the repository of the asset, with the ledger of its bundles.
+ */
+export type AssetContent = "file_set" | "repository";
 
 /** What a validator may look up besides the definitions it checks. */
 export interface AssetValidationContext {
@@ -94,6 +99,8 @@ export interface AssetKindDefinition<Definition, Kind extends string = string> {
   representation?: AssetRepresentation;
   /** The file of a `files` kind that holds its manifest, such as `app.yaml`. */
   manifestFile?: string;
+  /** How a `files` kind keeps the files of a revision. `file_set` when left out. */
+  content?: AssetContent;
   /** Who may own an asset of the kind. The instance alone when left out. */
   owners?: readonly AssetScope["kind"][];
   /**
@@ -149,6 +156,8 @@ export interface RegisteredAssetKind<Kind extends string = string> {
   readonly actions: Readonly<AssetKindActions>;
   readonly lifecycle: AssetLifecycle;
   readonly representation: AssetRepresentation;
+  /** Set for a `files` kind alone. */
+  readonly content?: AssetContent;
   readonly manifestFile?: string;
   readonly owners: readonly AssetScope["kind"][];
   /** Reads definitions: the schema first, then the name rule. The checks follow on the reading. */
@@ -197,6 +206,12 @@ export function defineAssetKind<Definition, Kind extends string>(
       `Asset kind '${definition.kind}' holds files and names no manifest file`
     );
   }
+  if (definition.content !== undefined && representation !== "files") {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `Asset kind '${definition.kind}' names how its files are kept and holds no files`
+    );
+  }
   const nameRule = Object.freeze({ ...definition.nameRule });
   return Object.freeze({
     kind: definition.kind,
@@ -206,6 +221,7 @@ export function defineAssetKind<Definition, Kind extends string>(
     lifecycle,
     representation,
     ...(definition.manifestFile === undefined ? {} : { manifestFile: definition.manifestFile }),
+    ...(representation === "files" ? { content: definition.content ?? "file_set" } : {}),
     owners: Object.freeze([...(definition.owners ?? ["instance"])]),
     read(inputs: readonly unknown[]): AssetKindReading {
       const accepted: Definition[] = [];
