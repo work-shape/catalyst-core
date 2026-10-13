@@ -110,7 +110,8 @@ export function findAssetSetIssues(
           assetKind: kind.kind,
           ...(refused.name === undefined ? {} : { assetName: refused.name }),
           index: refused.index,
-          path: issue.path ?? []
+          path: issue.path ?? [],
+          ...(issue.code === undefined ? {} : { code: issue.code })
         });
       }
     }

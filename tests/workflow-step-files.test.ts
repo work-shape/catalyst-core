@@ -234,13 +234,6 @@ describe("the step files of a Workflow asset", () => {
     }
     // One path twice.
     expect((await refusal([good, good])).reason).toBe("code_file_invalid");
-    // A content the store cannot hold as text: a NUL character, and half of a surrogate pair.
-    for (const content of ["a\u0000b", "a\ud800b"]) {
-      expect(await refusal([{ ...good, content }]), JSON.stringify(content)).toMatchObject({
-        reason: "code_file_invalid",
-        issues: [{ code: "code_file_invalid", path: "files[0].content" }]
-      });
-    }
     // A script over the size of one file.
     const large = "#".repeat(WORKFLOW_CODE_FILE_MAX_BYTES + 1);
     expect(await refusal([{ ...good, content: large }])).toMatchObject({
@@ -258,6 +251,84 @@ describe("the step files of a Workflow asset", () => {
       )
     ).toMatchObject({ reason: "code_files_too_large", issues: [{ path: "files" }] });
 
+    expect(await t.stores.configAssets.getConfigAsset({ clientInstanceId, ...address })).toBe(
+      undefined
+    );
+  });
+
+  it("are refused with the definition for a text or a key the store cannot hold, at a check and at a save", async () => {
+    const { t, save } = await ready();
+    const good = { path: "steps/double.py", content: script(2) };
+    const config = (manifest: Record<string, unknown>, files: readonly StepFile[] = [good]) => ({
+      name: WORKFLOW,
+      manifest,
+      files
+    });
+    const steps = definition().steps;
+    // A NUL character and half of a surrogate pair, each where the schema asks nothing of it.
+    const cases: [string, ReturnType<typeof config>, string[]][] = [
+      ["name", config({ ...definition(), name: "Dou\u0000ble" }), ["manifest", "name"]],
+      [
+        "description",
+        config({ ...definition(), description: "a\ud800b" }),
+        ["manifest", "description"]
+      ],
+      [
+        "step name",
+        config({ ...definition(), steps: [{ ...steps[0], name: "x\udc00" }, ...steps.slice(1)] }),
+        ["manifest", "steps", "0", "name"]
+      ],
+      [
+        "schema text",
+        config({ ...definition(), inputs: { type: "object", description: "a\u0000b" } }),
+        ["manifest", "inputs", "description"]
+      ],
+      [
+        "key",
+        config({ ...definition(), inputs: { type: "object", properties: { "a\u0000b": {} } } }),
+        ["manifest", "inputs", "properties"]
+      ],
+      [
+        "file content",
+        config(definition(), [{ ...good, content: "a\u0000b" }]),
+        ["files", "0", "content"]
+      ],
+      [
+        "file path",
+        config(definition(["double.py", "a\u0000.py"]), [
+          good,
+          { path: "steps/a\u0000.py", content: "" }
+        ]),
+        ["files", "1", "path"]
+      ]
+    ];
+    // A check answers each part of a path as text, a refused save an index as a number.
+    const issuesSchema = z.array(
+      z.object({
+        code: z.string().optional(),
+        path: z.array(z.union([z.string(), z.number()])).transform((path) => path.map(String))
+      })
+    );
+    for (const [title, sent, path] of cases) {
+      const checked = await t.call(t.admin.id, "assets.validate", {
+        params: { kind: WORKFLOW_ASSET_KIND },
+        payload: { config: sent }
+      });
+      expect(checked.statusCode, `${title}: ${checked.body.slice(0, 300)}`).toBe(200);
+      const told = z.object({ valid: z.boolean(), issues: issuesSchema }).parse(checked.json());
+      expect(told.valid, title).toBe(false);
+      expect(told.issues, title).toContainEqual({ code: "text_not_storable", path });
+
+      const saved = await save(sent.files, null, sent.manifest);
+      expect(saved.statusCode, `${title}: ${saved.body.slice(0, 300)}`).toBe(422);
+      const { details } = errorSchema.parse(saved.json()).error;
+      expect(z.object({ issues: issuesSchema }).parse(details).issues, title).toContainEqual({
+        code: "text_not_storable",
+        path
+      });
+      // Nothing of the refusal carries the text into what is stored with its run.
+      expect(saved.body, title).not.toMatch(/\\u0000|\\ud800|\\udc00/u);
+    }
     expect(await t.stores.configAssets.getConfigAsset({ clientInstanceId, ...address })).toBe(
       undefined
     );

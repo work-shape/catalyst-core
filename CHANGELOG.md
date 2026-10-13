@@ -2039,6 +2039,11 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   `assets.put`, or on `assets.*`, that matches the Workflow of a conversation now holds for
   the agent's `platform.assets.put` too: `deny` refuses the save and `approval` holds it for
   the Inbox, as the API does. Before, only a setting on `platform.assets.put` itself did.
+- **Assets, a text the store cannot hold:** a definition with a NUL character or half of a
+  surrogate pair in any text or key is refused by `assets.validate` and by a save of any kind
+  with an issue of the code `text_not_storable` at the path of the value (for a key, at the
+  object that has it), where a save answered an internal error. The content of a step file
+  of a Workflow is answered the same way, no longer as `code_file_invalid`.
 - **Connections, schemas of an outside system:** a JSON Schema that an MCP server lists for a
   tool can no longer hold the API process. Such a schema is compiled, and an input or a result
   checked by it, in a worker thread: 2 threads per process, a check of at most 2 seconds, 500
