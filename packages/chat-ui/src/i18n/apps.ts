@@ -99,6 +99,7 @@ export const apps = defineTranslations({
     "apps.failedFileSet": "The app could not be loaded: the files of this revision are missing.",
     "apps.failedKit":
       "The app could not be loaded: this instance does not have the kit version it was built with.",
+    "apps.heldBackHosts": "This draft cannot call {hosts} until it is published.",
     "apps.linkCopied": "Link copied",
     "apps.linkBody":
       "The current draft of this app is replaced by this page as it is now. The published version does not change until someone publishes the draft.",
@@ -276,6 +277,7 @@ export const apps = defineTranslations({
       "Die App konnte nicht geladen werden: Die Dateien dieser Revision fehlen.",
     "apps.failedKit":
       "Die App konnte nicht geladen werden: Diese Instanz hat die Kit-Version nicht, mit der sie gebaut wurde.",
+    "apps.heldBackHosts": "Dieser Entwurf kann {hosts} erst aufrufen, wenn er veröffentlicht ist.",
     "apps.linkCopied": "Link kopiert",
     "apps.linkBody":
       "Der aktuelle Entwurf dieser App wird durch diese Page ersetzt, so wie sie jetzt ist. Die veröffentlichte Version ändert sich erst, wenn jemand den Entwurf veröffentlicht.",
