@@ -144,7 +144,17 @@ export const CONNECTION_CALL_REASONS = {
    */
   schema_check_timeout: "TIMEOUT",
   /** No check by the outside system's schema could be made: none was free, or its thread ended. */
-  schema_check_unavailable: "CONFLICT"
+  schema_check_unavailable: "CONFLICT",
+  /**
+   * The stored schema of the operation is over a bound of a schema an outside system may
+   * give: its size, its depth, its `$ref`, its regular expressions or the length of one. The
+   * operation is not called until the outside system lists a schema within the bounds.
+   */
+  schema_too_large: "CONFLICT",
+  schema_too_deep: "CONFLICT",
+  schema_too_many_refs: "CONFLICT",
+  schema_too_many_patterns: "CONFLICT",
+  schema_pattern_too_long: "CONFLICT"
 } as const satisfies Record<string, AppErrorCode>;
 
 export type ConnectionCallReason = keyof typeof CONNECTION_CALL_REASONS;
@@ -167,7 +177,14 @@ const CONNECTION_CALL_MESSAGES: Record<ConnectionCallReason, string> = {
   upstream_error: "the outside system reported a failure",
   connection_busy: "too many calls of the Connection are running",
   schema_check_timeout: "the check against the operation's schema took too long and was stopped",
-  schema_check_unavailable: "the check against the operation's schema could not be made now"
+  schema_check_unavailable: "the check against the operation's schema could not be made now",
+  schema_too_large: "the operation's schema is larger than the platform takes",
+  schema_too_deep: "the operation's schema is nested deeper than the platform takes",
+  schema_too_many_refs: "the operation's schema holds more references than the platform takes",
+  schema_too_many_patterns:
+    "the operation's schema holds more regular expressions than the platform takes",
+  schema_pattern_too_long:
+    "a regular expression of the operation's schema is longer than the platform takes"
 };
 
 /**
@@ -204,6 +221,15 @@ export const CONNECTION_NAME_IN_SENTENCE_MAX_LENGTH = 80;
  * operation where the call knows it. No entry holds a host, a port, a reason code, the value
  * of a credential or text an outside system sent.
  */
+/**
+ * The sentence of an operation whose stored description is over a limit. The limits are those
+ * of `connections/src/json-schema.ts`; a test holds the two together.
+ */
+const overLimit =
+  (limit: string) =>
+  (c: string): string =>
+    `This action of ${c} cannot be used because its description is over a limit of the platform: ${limit}. Trying again will not help until the outside system describes the action within the limit. An administrator can check the action under ${WHERE}.`;
+
 const CONNECTION_CALL_SENTENCES: Record<
   ConnectionCallReason,
   (c: string, effect: ConnectionOperationEffect | undefined) => string
@@ -248,7 +274,12 @@ const CONNECTION_CALL_SENTENCES: Record<
   schema_check_unavailable: (c, effect) =>
     effect === "reading"
       ? `This action of ${c} could not be checked against its description right now. Try again in a moment.`
-      : `This action of ${c} could not be checked against its description right now. If the action changes something, the change may have happened, so check before trying again.`
+      : `This action of ${c} could not be checked against its description right now. If the action changes something, the change may have happened, so check before trying again.`,
+  schema_too_large: overLimit("it may take at most 256 KiB and 20,000 parts"),
+  schema_too_deep: overLimit("it may be nested at most 64 levels deep"),
+  schema_too_many_refs: overLimit("it may hold at most 200 references"),
+  schema_too_many_patterns: overLimit("it may hold at most 100 text patterns"),
+  schema_pattern_too_long: overLimit("a text pattern may have at most 1,000 characters")
 };
 
 /** The display name as one word group of a sentence: one line, no control character, bounded. */

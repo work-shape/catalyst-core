@@ -497,6 +497,71 @@ describe("a call of an operation an outside system described", () => {
     ).toMatchObject({ reason: "output_invalid" });
   });
 
+  // Fails without the change: a catalog stored before the bounds of `$ref` and expressions
+  // existed made its operation `unknown` without a word, and a call answered NOT_FOUND
+  // "does not offer this action", as if the outside system had dropped it.
+  it("says which limit a stored schema is over, in the status and in the call", async () => {
+    const fields = (count: number, field: JsonObject) =>
+      Object.fromEntries(
+        Array.from({ length: count }, (_unused, index) => [`field_${index}`, field])
+      );
+    const stored: [string, JsonObject, string][] = [
+      [
+        "schema_too_many_patterns",
+        {
+          type: "object",
+          properties: fields(OUTSIDE_SCHEMA_MAX_PATTERNS + 1, { type: "string", pattern: "^a$" })
+        },
+        `at most ${OUTSIDE_SCHEMA_MAX_PATTERNS} text patterns`
+      ],
+      [
+        "schema_too_many_refs",
+        {
+          $defs: { text: { type: "string" } },
+          type: "object",
+          properties: fields(OUTSIDE_SCHEMA_MAX_REFS + 1, { $ref: "#/$defs/text" })
+        },
+        `at most ${OUTSIDE_SCHEMA_MAX_REFS} references`
+      ],
+      [
+        "schema_pattern_too_long",
+        {
+          type: "object",
+          properties: {
+            text: { type: "string", pattern: "a".repeat(OUTSIDE_SCHEMA_PATTERN_MAX_CHARS + 1) }
+          }
+        },
+        `at most ${OUTSIDE_SCHEMA_PATTERN_MAX_CHARS.toLocaleString("en-US")} characters`
+      ]
+    ];
+    for (const [reason, inputSchema, limit] of stored) {
+      // Every one of them compiled and was callable before the bound existed.
+      expect(compileJsonSchema(inputSchema).ok, reason).toBe(true);
+      const t = await outsideConnection({ ...slow, inputSchema, outputSchema: { type: "object" } });
+
+      // The operation keeps its entry and its description, and the status names the bound.
+      const response = await t.expectOk(t.root.id, "connections.get", {
+        params: { name: "outside" }
+      });
+      expect(response.json()).toMatchObject({
+        operations: [
+          {
+            name: "lookup",
+            status: "unknown",
+            description: "Looks a customer up.",
+            schemaRefusal: reason
+          }
+        ]
+      });
+
+      const failed = await t.failure(t.invoke(t.kai, "connection.outside.lookup", {}));
+      expect(failed).toMatchObject({ code: "CONFLICT", reason });
+      expect(failed.message, reason).toContain("over a limit of the platform");
+      expect(failed.message, reason).toContain(limit);
+      expect(t.executed).toEqual([]);
+    }
+  });
+
   it("names the field of an input that does not fit, and calls nothing a thread cannot compile", async () => {
     const t = await outsideConnection({
       ...slow,

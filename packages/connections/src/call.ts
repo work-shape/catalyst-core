@@ -531,7 +531,7 @@ function callable(
     (candidate) => candidate.name === target.operationName
   );
   if (!operation) throw connectionCallError("operation_unknown");
-  const { status, descriptor } = connectionOperationStatus({
+  const { status, descriptor, schemaRefusal } = connectionOperationStatus({
     type: connection.type,
     operation,
     catalog: connection.catalog
@@ -542,8 +542,10 @@ function callable(
     case "needs_review":
       throw connectionCallError("operation_needs_review");
     case "awaiting_discovery":
-    case "unknown":
       throw connectionCallError("operation_unknown");
+    case "unknown":
+      // A stored schema over a bound is said by the bound, not as an operation that is gone.
+      throw connectionCallError(schemaRefusal ?? "operation_unknown");
     case "ready":
       if (!descriptor) throw connectionCallError("operation_unknown");
       return { connection, type: connection.type, descriptor };

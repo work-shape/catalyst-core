@@ -15,7 +15,8 @@ import { z } from "zod";
 import {
   compileJsonSchema,
   isJsonSchemaWithinBounds,
-  measureOutsideJsonSchema
+  measureOutsideJsonSchema,
+  type OutsideSchemaBoundRefusal
 } from "./json-schema";
 
 // What a discovery leaves behind and what it makes callable. Pure: nothing here reads or
@@ -188,18 +189,6 @@ function schemasCompile(descriptor: ConnectorOperationDescriptor): boolean {
 }
 
 /**
- * Whether both schemas of a descriptor an outside system wrote are within the bounds of such
- * a schema. Nothing is compiled here: that happens in a worker thread, at the discovery that
- * stored the descriptor and again at a call (`schema-check.ts`).
- */
-function schemasWithinOutsideBounds(descriptor: ConnectorOperationDescriptor): boolean {
-  return (
-    measureOutsideJsonSchema(descriptor.inputSchema).ok &&
-    (descriptor.outputSchema === undefined || measureOutsideJsonSchema(descriptor.outputSchema).ok)
-  );
-}
-
-/**
  * Whether the operations of a type are described by an outside system: a type without a
  * catalog of its own reads them at a discovery. Their schemas are untrusted and are compiled
  * and checked in a worker thread only.
@@ -218,6 +207,28 @@ export interface ConnectionOperationState {
   descriptor?: ConnectorOperationDescriptor;
   /** The fingerprint that was read, where it is not the accepted one. */
   discoveredFingerprint?: string;
+  /**
+   * With `unknown`, for an operation an outside system described: the bound its stored schema
+   * is over, by the code a discovery records for it. A catalog stored before a bound existed
+   * can hold such a schema. The operation keeps its descriptor, and a call of it answers with
+   * this code.
+   */
+  schemaRefusal?: OutsideSchemaLimitRefusal;
+}
+
+/** A bound of size or count a stored schema of an outside system can be over. */
+export type OutsideSchemaLimitRefusal = Exclude<OutsideSchemaBoundRefusal, "schema_uncompilable">;
+
+/** The first bound a schema of the descriptor is over, or nothing. */
+function outsideBoundRefusal(
+  descriptor: ConnectorOperationDescriptor
+): OutsideSchemaBoundRefusal | undefined {
+  for (const schema of [descriptor.inputSchema, descriptor.outputSchema]) {
+    if (schema === undefined) continue;
+    const measured = measureOutsideJsonSchema(schema);
+    if (!measured.ok) return measured.refusal;
+  }
+  return undefined;
 }
 
 /**
@@ -263,8 +274,11 @@ export function connectionOperationStatus(input: {
   if (accepted !== fingerprint) {
     return { status: "needs_review", descriptor, discoveredFingerprint: fingerprint };
   }
-  const checkable = describedByOutsideSystem(type)
-    ? schemasWithinOutsideBounds(descriptor)
-    : schemasCompile(descriptor);
-  return checkable ? { status: "ready", descriptor } : { status: "unknown" };
+  if (!describedByOutsideSystem(type)) {
+    return schemasCompile(descriptor) ? { status: "ready", descriptor } : { status: "unknown" };
+  }
+  const refusal = outsideBoundRefusal(descriptor);
+  if (refusal === undefined) return { status: "ready", descriptor };
+  if (refusal === "schema_uncompilable") return { status: "unknown" };
+  return { status: "unknown", descriptor, schemaRefusal: refusal };
 }

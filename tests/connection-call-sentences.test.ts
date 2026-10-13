@@ -37,7 +37,12 @@ const REASONS: ConnectionCallReason[] = [
   "upstream_error",
   "connection_busy",
   "schema_check_timeout",
-  "schema_check_unavailable"
+  "schema_check_unavailable",
+  "schema_too_large",
+  "schema_too_deep",
+  "schema_too_many_refs",
+  "schema_too_many_patterns",
+  "schema_pattern_too_long"
 ];
 
 /** What a caller can do next, as each sentence has to say it. */

@@ -1786,7 +1786,7 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   compiled schemas per thread. A check that passes the deadline stops its thread, and the call
   is refused with the new reason `schema_check_timeout` (`TIMEOUT`); a check no thread takes
   within 5 seconds, or whose thread ends, is refused with `schema_check_unavailable`
-  (`CONFLICT`). That makes seventeen reasons in `details.reason`. A schema whose check passed
+  (`CONFLICT`). A schema whose check passed
   the deadline is refused for 30 seconds without a new check. A discovery also leaves out a
   tool whose schema holds more than 200 `$ref`, more than 100 regular expressions or one longer
   than 1,000 characters, beside the bounds of size and depth it had, and names why on the
@@ -1794,7 +1794,13 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   `schemaRefusedCount`): `schema_too_large`, `schema_too_deep`, `schema_too_many_refs`,
   `schema_too_many_patterns`, `schema_pattern_too_long`, `schema_uncompilable` or
   `schema_check_timeout`. The schemas of a Connector type's own catalog, such as `postgres`,
-  are checked as before. **Operators:** nothing to set. The package `@vivd-catalyst/connections`
+  are checked as before. **On upgrade:** an operation of an `mcp` Connection whose stored
+  schema is over one of these bounds (200 `$ref`, 100 regular expressions, 1,000 characters
+  per expression, 256 KiB, 20,000 nodes, 64 levels) stops being callable. It keeps its entry
+  with the status `unknown` and the code of the bound as `schemaRefusal`, and a call answers
+  `CONFLICT` with that code as its reason and a sentence that names the limit, which brings
+  the reasons to twenty-two. It is callable again once the server lists a schema within the
+  bounds. **Operators:** nothing to set. The package `@vivd-catalyst/connections`
   now ships `dist/json-schema.js`, the file the threads run, beside `dist/index.js`; a build
   that bundles the package into one file must keep it beside the bundle.
 - **Chat, attachments:** a file added to a message no longer stays on "Queued" while the

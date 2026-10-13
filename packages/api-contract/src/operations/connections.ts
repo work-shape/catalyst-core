@@ -47,7 +47,12 @@ export const connectionOperationDetailSchema = z.object({
   /** As the outside system or the release describes it. Untrusted text, shown as text. */
   description: z.string().max(CONNECTION_OPERATION_DESCRIPTION_MAX_CHARS).optional(),
   /** Only with status `needs_review`: the fingerprint to accept in the Connection's config. */
-  discoveredFingerprint: z.string().optional()
+  discoveredFingerprint: z.string().optional(),
+  /**
+   * Only with status `unknown`: the stored schema of the operation is over a bound of the
+   * platform, named by its code, such as `schema_too_many_patterns`.
+   */
+  schemaRefusal: z.string().optional()
 });
 
 export const connectionDetailSchema = z.object({

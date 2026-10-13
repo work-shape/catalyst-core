@@ -3076,6 +3076,9 @@
                           },
                           "discoveredFingerprint": {
                             "type": "string"
+                          },
+                          "schemaRefusal": {
+                            "type": "string"
                           }
                         },
                         "required": [

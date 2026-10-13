@@ -43,6 +43,8 @@ export interface ConnectionOperationView {
   status: ConnectionOperationStatus;
   description?: string;
   discoveredFingerprint?: string;
+  /** Only with status `unknown`: the bound the operation's stored schema is over. */
+  schemaRefusal?: string;
 }
 
 export interface ConnectionView {
@@ -123,7 +125,8 @@ function operationsOf(connection: StoredConnection): ConnectionOperationView[] {
       ...(description === undefined
         ? {}
         : { description: description.slice(0, CONNECTION_DESCRIPTION_MAX_CHARS) }),
-      ...(fingerprint === undefined ? {} : { discoveredFingerprint: fingerprint })
+      ...(fingerprint === undefined ? {} : { discoveredFingerprint: fingerprint }),
+      ...(state.schemaRefusal === undefined ? {} : { schemaRefusal: state.schemaRefusal })
     };
   });
 }
