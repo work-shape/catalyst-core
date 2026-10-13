@@ -213,11 +213,21 @@ export function stepFileBytes(
 }
 
 /**
+ * Whether a text can be stored as it is: it holds no NUL character and no half of a surrogate
+ * pair. A revision is stored as JSON, which holds neither, and no script of the runner image
+ * is written with one.
+ */
+function isStorableText(content: string): boolean {
+  return !content.includes("\u0000") && !/\p{Surrogate}/u.test(content);
+}
+
+/**
  * What keeps a manifest and the step files saved with it from being one revision. Of the
  * steps it asks what `codeStepIssues` asks of a stored revision, under the same codes: each
  * script is there, is text and is not too large. Of the files it asks what only a save can
  * refuse: a path that is no script in the step files folder, a path given twice, a file no
- * step names, and files that are too large together. Empty for a revision that can be stored.
+ * step names, a content that is no text a revision can hold, and files that are too large
+ * together. Empty for a revision that can be stored.
  */
 export function workflowStepFileIssues(
   manifest: Pick<WorkflowManifest, "steps">,
@@ -228,7 +238,7 @@ export function workflowStepFileIssues(
   const named = new Set(steps.map((step) => codeFilePath(step.file)));
   const seen = new Set<string>();
   const folder = `${WORKFLOW_STEP_FILES_FOLDER}/`;
-  files.forEach(({ path }, position) => {
+  files.forEach(({ path, content }, position) => {
     const at = `files[${position}].path`;
     const file = path.startsWith(folder) ? path.slice(folder.length) : undefined;
     const refusal =
@@ -251,6 +261,13 @@ export function workflowStepFileIssues(
       });
     }
     seen.add(path);
+    if (!isStorableText(content)) {
+      issues.push({
+        path: `files[${position}].content`,
+        code: WORKFLOW_CODE_ERRORS.fileInvalid,
+        message: `The file '${path}' is no text a Workflow can hold: it has a NUL character or half of a surrogate pair in it`
+      });
+    }
   });
   for (const step of steps) {
     const read = checkCodeFile(stepFileBytes(files, codeFilePath(step.file)), step.file);

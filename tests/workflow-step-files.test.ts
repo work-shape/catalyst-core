@@ -234,6 +234,13 @@ describe("the step files of a Workflow asset", () => {
     }
     // One path twice.
     expect((await refusal([good, good])).reason).toBe("code_file_invalid");
+    // A content the store cannot hold as text: a NUL character, and half of a surrogate pair.
+    for (const content of ["a\u0000b", "a\ud800b"]) {
+      expect(await refusal([{ ...good, content }]), JSON.stringify(content)).toMatchObject({
+        reason: "code_file_invalid",
+        issues: [{ code: "code_file_invalid", path: "files[0].content" }]
+      });
+    }
     // A script over the size of one file.
     const large = "#".repeat(WORKFLOW_CODE_FILE_MAX_BYTES + 1);
     expect(await refusal([{ ...good, content: large }])).toMatchObject({
