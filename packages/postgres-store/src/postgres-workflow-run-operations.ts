@@ -5,6 +5,7 @@ import {
   type JsonObject,
   type JsonValue,
   type WorkflowBodyCounts,
+  type WorkflowCodeOutcome,
   type WorkflowLastRun,
   type WorkflowLoopCounts,
   type WorkflowManifest,
@@ -12,6 +13,7 @@ import {
   type WorkflowRun,
   type WorkflowRunsStore,
   type WorkflowRunView,
+  type WorkflowStagedCode,
   type WorkflowStepRun,
   type WorkflowStepRunId,
   type WorkflowStepRunView
@@ -37,6 +39,11 @@ const {
 const {
   input: _stepInput,
   output: _stepOutput,
+  // The script and the input of a code step, its raw outcome and its log are read where
+  // they are needed and not with every step run.
+  staged: _stepStaged,
+  codeOutcome: _stepCodeOutcome,
+  log: _stepLog,
   ...stepRunColumns
 } = getTableColumns(workflowStepRuns);
 
@@ -87,7 +94,9 @@ function mapRun(row: Omit<RunRow, "input" | "output" | "definition">): WorkflowR
   };
 }
 
-function mapStepRun(row: Omit<StepRunRow, "input" | "output">): WorkflowStepRun {
+function mapStepRun(
+  row: Omit<StepRunRow, "input" | "output" | "staged" | "codeOutcome" | "log">
+): WorkflowStepRun {
   return {
     id: row.id,
     clientInstanceId: row.clientInstanceId,
@@ -388,6 +397,56 @@ export async function markWorkflowLoopWaiting(
     .where(and(stepRunIs(ref), eq(workflowStepRuns.status, "running")));
 }
 
+export async function stageWorkflowCodeStep(
+  db: PostgresConnection,
+  ref: Input<"stageCodeStep">
+): Promise<void> {
+  await db
+    .update(workflowStepRuns)
+    .set({ status: "waiting", staged: ref.staged, codeOutcome: null })
+    .where(and(stepRunIs(ref), eq(workflowStepRuns.status, "running")));
+}
+
+export async function readWorkflowStagedCode(
+  db: PostgresConnection,
+  ref: Input<"readStagedCode">
+): Promise<WorkflowStagedCode | undefined> {
+  const [row] = await db
+    .select({ staged: workflowStepRuns.staged })
+    .from(workflowStepRuns)
+    .where(and(stepRunIs(ref), eq(workflowStepRuns.status, "waiting")));
+  return row?.staged ?? undefined;
+}
+
+export async function recordWorkflowCodeOutcome(
+  db: PostgresConnection,
+  ref: Input<"recordCodeOutcome">
+): Promise<boolean> {
+  const recorded = await db
+    .update(workflowStepRuns)
+    .set({ staged: null, codeOutcome: ref.outcome, log: ref.log })
+    .where(
+      and(
+        stepRunIs(ref),
+        eq(workflowStepRuns.status, "waiting"),
+        sql`${workflowStepRuns.staged} is not null`
+      )
+    )
+    .returning({ id: workflowStepRuns.id });
+  return recorded.length > 0;
+}
+
+export async function readWorkflowCodeOutcome(
+  db: PostgresConnection,
+  ref: Input<"readCodeOutcome">
+): Promise<WorkflowCodeOutcome | undefined> {
+  const [row] = await db
+    .select({ outcome: workflowStepRuns.codeOutcome })
+    .from(workflowStepRuns)
+    .where(stepRunIs(ref));
+  return row?.outcome ?? undefined;
+}
+
 export async function noteWorkflowStepRunOperation(
   db: PostgresConnection,
   ref: Input<"noteStepRunOperation">
@@ -422,7 +481,7 @@ export async function listWorkflowStepRuns(
 ): Promise<WorkflowStepRunView[]> {
   const { filter } = input;
   const rows = await db
-    .select({ ...stepRunColumns, preview: stepPreview })
+    .select({ ...stepRunColumns, preview: stepPreview, log: workflowStepRuns.log })
     .from(workflowStepRuns)
     .where(
       and(
@@ -452,6 +511,7 @@ export async function listWorkflowStepRuns(
     return {
       ...mapStepRun(row),
       ...mapPreview(row.preview),
+      ...(row.log === null ? {} : { log: row.log }),
       ...(loop ? { loop } : {}),
       ...(bodyCounts ? { bodyCounts } : {})
     };

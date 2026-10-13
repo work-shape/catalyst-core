@@ -21,7 +21,10 @@ import type {
   ServicePrincipalId,
   UserId,
   WorkflowManifest,
+  WorkflowCodeOutcome,
   WorkflowRunError,
+  WorkflowStagedCode,
+  WorkflowStepRunLog,
   WorkflowRunId,
   WorkflowRunMode,
   WorkflowRunStatus,
@@ -124,6 +127,11 @@ export const workflowStepRuns = pgTable(
     // Of an operation step: what its operation does and the name of what it belongs to.
     effect: text("effect").$type<OperationEffect>(),
     source: text("source"),
+    // Of a code step: what its container is given while it waits for the sandbox, how its
+    // script ended before the engine has read that, and what the script wrote beside its result.
+    staged: jsonb("staged").$type<WorkflowStagedCode>(),
+    codeOutcome: jsonb("code_outcome").$type<WorkflowCodeOutcome>(),
+    log: jsonb("log").$type<WorkflowStepRunLog>(),
     error: jsonb("error").$type<WorkflowRunError>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     startedAt: timestamp("started_at", { withTimezone: true }),

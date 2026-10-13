@@ -1,12 +1,10 @@
 import {
   AppError,
   WORKFLOW_LOOP_MAX_CONCURRENCY,
-  WORKFLOW_RUN_JOB_KINDS,
   asUserId,
   auditActorFromIdentity,
   createPlatformId,
   defineJobHandler,
-  defineJobKind,
   isAuthenticatedServicePrincipal,
   isWorkflowRunEnded,
   subjectDedupeKey,
@@ -18,6 +16,7 @@ import {
   type PlatformStores,
   type RegisteredJobHandler,
   type StorePage,
+  type WorkflowCodeOutcome,
   type WorkflowLastRun,
   type WorkflowLoopOutput,
   type WorkflowRun,
@@ -30,26 +29,20 @@ import {
   type WorkflowStepRunRef,
   type WorkflowStepRunView
 } from "@vivd-catalyst/core";
-import { z } from "zod";
+import { codeStepIssues, noWorkflowStepFiles, type WorkflowStepFiles } from "./code-step";
 import { indexWorkflowSteps, type WorkflowStepIndex } from "./definition";
 import type { WorkflowDefinitionSource, WorkflowDefinitionSummary } from "./definition-source";
-import {
-  WORKFLOW_RUN_LIMITS,
-  WORKFLOW_STEP_JOB_BACKOFF_BASE_MS,
-  WORKFLOW_STEP_JOB_BACKOFF_MAX_MS,
-  WORKFLOW_STEP_JOB_LEASE_MS,
-  WORKFLOW_STEP_JOB_MAX_ATTEMPTS,
-  WORKFLOW_STEP_JOB_SLOTS,
-  type WorkflowRunLimits
-} from "./limits";
+import { WORKFLOW_RUN_LIMITS, WORKFLOW_STEP_JOB_SLOTS, type WorkflowRunLimits } from "./limits";
 import type { WorkflowOperationCalls } from "./operation-step";
 import { itemLabelOf } from "./references";
 import { principalActor } from "./run-identity";
 import { withEveryBodyStep } from "./run-view";
+import { createBlockEnds } from "./run-blocks";
 import { createStartCheck, type PreparedStart } from "./run-start";
 import { createScheduleTrigger } from "./schedule-trigger";
+import { workflowCodeJobKind, workflowStepJobKind } from "./step-job";
 import { createScheduledStart, type RunOrigin } from "./scheduled-start";
-import { createStepExecutor, type StepEnd } from "./step-execution";
+import { createStepExecutor, type StepEnd, type WorkflowCodeRunner } from "./step-execution";
 
 // The engine of Workflow Runs. A run is a row, each step it reaches is a step run, and each
 // step run is executed by one job of the shared executor. A step ends in the transaction
@@ -60,16 +53,6 @@ import { createStepExecutor, type StepEnd } from "./step-execution";
 // so a worker that starts after another died executes the step run that was open and starts
 // nothing that has a step run. The run keeps the definition it started on, and nothing waits
 // in a process: the wait before another attempt and the run's own deadline are stored times.
-
-/** The job that executes one step run. Its payload names the step run and nothing else. */
-export const workflowStepJobKind = defineJobKind({
-  kind: WORKFLOW_RUN_JOB_KINDS.executeStep,
-  payloadSchema: z.strictObject({ stepRunId: z.string().min(1) }),
-  maxAttempts: WORKFLOW_STEP_JOB_MAX_ATTEMPTS,
-  backoff: { baseMs: WORKFLOW_STEP_JOB_BACKOFF_BASE_MS, maxMs: WORKFLOW_STEP_JOB_BACKOFF_MAX_MS },
-  leaseMs: WORKFLOW_STEP_JOB_LEASE_MS,
-  concurrency: {}
-});
 
 export interface WorkflowEngineOptions {
   clientInstanceId: ClientInstanceId;
@@ -83,6 +66,13 @@ export interface WorkflowEngineOptions {
   now?: () => Date;
   /** The time zone the cron expressions of `schedule` triggers are read in. UTC when left out. */
   timeZone?: string;
+  /** Where the script of a code step is read. Without it no Workflow has a script. */
+  stepFiles?: WorkflowStepFiles;
+  /**
+   * Set where the instance runs a command worker with a sandbox: the scripts of code steps
+   * are run there. Without it a code step fails at once instead of waiting for nobody.
+   */
+  codeRunner?: WorkflowCodeRunner;
 }
 
 export interface StartWorkflowRunInput {
@@ -141,7 +131,17 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
   const limits: WorkflowRunLimits = { ...WORKFLOW_RUN_LIMITS, ...options.limits };
   const now = options.now ?? (() => new Date());
 
-  const executor = createStepExecutor({ clientInstanceId, stores, operationCalls, limits, now });
+  const { cancelWaiting, insideEndedBlock } = createBlockEnds({ clientInstanceId, now });
+  const stepFiles = options.stepFiles ?? noWorkflowStepFiles;
+  const executor = createStepExecutor({
+    clientInstanceId,
+    stores,
+    operationCalls,
+    limits,
+    now,
+    stepFiles,
+    ...(options.codeRunner ? { codeRunner: options.codeRunner } : {})
+  });
 
   /**
    * Ends a run that has not ended, with every step run that still waits for its turn. A
@@ -168,49 +168,6 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     if (!ended) return false;
     await cancelWaiting(tx, run);
     return true;
-  }
-
-  /**
-   * Cancels the step runs that wait for their turn, with their jobs: all of a run, or those
-   * inside one block, which a path that starts with the block's names. A step run that is
-   * running is left to its attempt, which records how its call went.
-   */
-  async function cancelWaiting(
-    tx: PlatformStores,
-    run: WorkflowRun,
-    block?: WorkflowStepRun
-  ): Promise<void> {
-    const finishedAt = now().toISOString();
-    for (const open of await tx.workflowRuns.listOpenStepRuns({ clientInstanceId, id: run.id })) {
-      if (open.status === "running") continue;
-      if (block && !open.key.startsWith(`${block.key}[`)) continue;
-      await tx.workflowRuns.endStepRun({
-        clientInstanceId,
-        id: open.id,
-        status: "cancelled",
-        finishedAt
-      });
-      await tx.jobs.withdraw(workflowStepJobKind, {
-        clientInstanceId,
-        dedupeKey: subjectDedupeKey(workflowStepJobKind.kind, open.id)
-      });
-    }
-  }
-
-  /**
-   * Whether a block around a step run has ended: a loop that stopped at a failed item, or one
-   * that was cancelled with what is around it. What ends inside such a block is recorded and
-   * carries nothing on: no next step of its item, no next item, nothing after the block.
-   */
-  async function insideEndedBlock(tx: PlatformStores, stepRun: WorkflowStepRun): Promise<boolean> {
-    let around = stepRun.containerStepRunId;
-    while (around !== undefined) {
-      const block = await tx.workflowRuns.getStepRun({ clientInstanceId, id: around });
-      if (!block) return false;
-      if (block.status !== "waiting" && block.status !== "running") return true;
-      around = block.containerStepRunId;
-    }
-    return false;
   }
 
   /** Ends a run the engine ends itself, and writes that it ended. Never a value of the run. */
@@ -443,7 +400,9 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
   async function claim(
     control: JobControl,
     ref: WorkflowStepRunRef
-  ): Promise<{ run: WorkflowRun; stepRun: WorkflowStepRun } | undefined> {
+  ): Promise<
+    { run: WorkflowRun; stepRun: WorkflowStepRun; afterCode?: WorkflowCodeOutcome } | undefined
+  > {
     return control.transaction(async (tx) => {
       const found = await tx.workflowRuns.getStepRun(ref);
       if (!found) return undefined;
@@ -451,7 +410,15 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       // Read again behind the lock: a cancel may have ended it in between.
       const stepRun = await tx.workflowRuns.getStepRun(ref);
       if (!run || !stepRun) return undefined;
-      if (stepRun.status !== "queued" && stepRun.status !== "running") return undefined;
+      // A code step waits while the command worker runs its script, and is taken up again
+      // when the script has ended. Nothing else that waits is executed by a step job.
+      const afterCode =
+        stepRun.status === "waiting" && stepRun.stepType === "code"
+          ? await tx.workflowRuns.readCodeOutcome(ref)
+          : undefined;
+      if (stepRun.status !== "queued" && stepRun.status !== "running" && !afterCode) {
+        return undefined;
+      }
       const moment = now();
       const finishedAt = moment.toISOString();
       const ended = isWorkflowRunEnded(run.status);
@@ -485,7 +452,11 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         startedAt: finishedAt
       });
       // The first step of a run starts it: the trigger step hands that moment on.
-      return { run: { ...run, startedAt: run.startedAt ?? finishedAt }, stepRun };
+      return {
+        run: { ...run, startedAt: run.startedAt ?? finishedAt },
+        stepRun,
+        ...(afterCode ? { afterCode } : {})
+      };
     });
   }
 
@@ -509,6 +480,27 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       const { kind: _kind, systemic, ...failure } = end;
       await tx.workflowRuns.endStepRun({ ...ref, status: "failed", finishedAt, ...failure });
       if (live) await failStep(tx, run, index, stepRun, end.error, systemic);
+      return;
+    }
+    if (end.kind === "code") {
+      if (!live) {
+        await tx.workflowRuns.endStepRun({ ...ref, status: "cancelled", finishedAt });
+        return;
+      }
+      // The step run waits with its script and its input, and the command worker has the
+      // job of running them: both in this transaction, so neither is there without the other.
+      await tx.workflowRuns.stageCodeStep({ ...ref, staged: end.staged });
+      await tx.jobs.enqueue(
+        workflowCodeJobKind,
+        { stepRunId: stepRun.id },
+        {
+          clientInstanceId,
+          subject: stepRun.id,
+          dedupeKey: subjectDedupeKey(workflowCodeJobKind.kind, stepRun.id),
+          concurrencyKey: run.id,
+          correlationId: run.correlationId
+        }
+      );
       return;
     }
     if (end.kind === "loop") {
@@ -550,7 +542,12 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       });
       if (!definition) return;
       const index = indexWorkflowSteps(definition);
-      const end = await executor.execute({ ...claimed, definition, index, signal: control.signal });
+      const attempt = { ...claimed, definition, index, signal: control.signal };
+      // A code step whose script has ended is finished from what the script left; every
+      // other step, and a code step before its script ran, is executed.
+      const end = claimed.afterCode
+        ? executor.finishCode(attempt, claimed.afterCode)
+        : await executor.execute(attempt);
       // A worker that stops, or that lost its lease, ends no step: what its cut attempt
       // answered is no outcome of the step. The step run stays as it is and the next attempt
       // takes it up, which reads again or is answered what a changing call answered.
@@ -663,6 +660,14 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
         );
       }
       const prepared = await prepareStart(published, input.input);
+      const scripts = await codeStepIssues(published, stepFiles);
+      if (scripts.length > 0) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          `The definition of the Workflow '${published.manifest.id}' cannot be run: ${scripts[0]?.message ?? ""}`,
+          { reason: scripts[0]?.code ?? "definition_invalid", issues: scripts }
+        );
+      }
       const { startedBy } = input;
       const run = await stores.transaction((tx) =>
         openRun(tx, prepared, {

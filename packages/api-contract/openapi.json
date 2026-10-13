@@ -11634,6 +11634,25 @@
                           "source": {
                             "type": "string"
                           },
+                          "log": {
+                            "type": "object",
+                            "properties": {
+                              "stdout": {
+                                "type": "string"
+                              },
+                              "stderr": {
+                                "type": "string"
+                              },
+                              "truncated": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "stdout",
+                              "stderr",
+                              "truncated"
+                            ]
+                          },
                           "status": {
                             "type": "string",
                             "enum": [

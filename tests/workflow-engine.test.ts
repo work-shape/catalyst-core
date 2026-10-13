@@ -474,7 +474,7 @@ describe("starting a Workflow that cannot run", () => {
     const invalid = await t.expectRefused(
       t.root.id,
       "workflows.start",
-      { params: { workflow: "with-code-step" }, payload: {} },
+      { params: { workflow: "with-agent-step" }, payload: {} },
       { status: 422, code: "VALIDATION_FAILED" }
     );
     expect(invalid.details).toMatchObject({

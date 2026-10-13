@@ -5,19 +5,36 @@ import {
   workflowDatasetReferenceSchema,
   workflowStepIdempotencyKey,
   type ClientInstanceId,
+  type JsonObject,
   type JsonValue,
   type OperationRunId,
   type PlatformStores,
+  type WorkflowCodeOutcome,
   type WorkflowManifest,
   type WorkflowRun,
   type WorkflowRunError,
+  type WorkflowStagedCode,
+  type WorkflowStep,
   type WorkflowStepRun,
   type WorkflowStepRunCall,
   type WorkflowStepRunEnd,
   type WorkflowTriggerOutput
 } from "@vivd-catalyst/core";
+import {
+  WORKFLOW_CODE_ERRORS,
+  WORKFLOW_CODE_STEP_EFFECT,
+  codeFileIssue,
+  codeLanguageOf,
+  readCodeFile,
+  type WorkflowStepFiles
+} from "./code-step";
 import type { WorkflowStepIndex } from "./definition";
-import { holdsBrokenDatasetReference, jsonBytes } from "./json";
+import {
+  holdsBrokenDatasetReference,
+  holdsDatasetReference,
+  jsonBytes,
+  namesDatasetType
+} from "./json";
 import {
   WORKFLOW_STEP_JOB_BACKOFF_BASE_MS,
   WORKFLOW_STEP_JOB_BACKOFF_MAX_MS,
@@ -48,7 +65,15 @@ export type StepEnd =
       systemic: boolean;
     }
   /** A loop read its list. Its items are run by step runs of their own. */
-  | { kind: "loop"; items: JsonValue[] };
+  | { kind: "loop"; items: JsonValue[] }
+  /** A code step has its script and its input. The command worker runs it in the sandbox. */
+  | { kind: "code"; staged: WorkflowStagedCode };
+
+/** What the instance has to run the scripts of code steps with. */
+export interface WorkflowCodeRunner {
+  /** After this long a script is stopped and its step fails. */
+  timeoutSeconds: number;
+}
 
 export interface StepExecutorOptions {
   clientInstanceId: ClientInstanceId;
@@ -56,6 +81,10 @@ export interface StepExecutorOptions {
   operationCalls: WorkflowOperationCalls;
   limits: WorkflowRunLimits;
   now(): Date;
+  /** Where the script of a code step is read. */
+  stepFiles: WorkflowStepFiles;
+  /** Missing where the instance runs no sandbox: a code step then fails without waiting. */
+  codeRunner?: WorkflowCodeRunner;
 }
 
 /** What one attempt of a step is given: its run, the run's definition and the attempt's end. */
@@ -69,6 +98,99 @@ export interface StepAttempt {
 
 export function createStepExecutor(options: StepExecutorOptions) {
   const { clientInstanceId, stores, operationCalls, limits, now } = options;
+
+  /** Fails a step whose value does not fit a schema its definition declares. */
+  function fitsSchema(schema: JsonObject, value: JsonValue, code: string, what: string): void {
+    const compiled = compileJsonSchema(schema);
+    const [issue] = compiled.ok ? compiled.validate(value) : [];
+    if (compiled.ok && !issue) return;
+    throw new WorkflowStepFailure(
+      code,
+      issue
+        ? `${what} at '/${issue.path.join("/")}': ${issue.message}`
+        : `${what}: the schema cannot be checked`
+    );
+  }
+
+  /**
+   * What a code step does before its script runs: its input from the steps before it, checked
+   * against the schema it declares, and its script from the files of the run's revision. The
+   * script is not run here: this process does not reach the sandbox.
+   */
+  async function stageCode(
+    attempt: StepAttempt,
+    step: Extract<WorkflowStep, { type: "code" }>
+  ): Promise<StepEnd> {
+    const { run, stepRun, index } = attempt;
+    if (namesDatasetType(step.inputSchema) || namesDatasetType(step.outputSchema)) {
+      throw notSupportedFailure("a dataset as the input or the output of a code step");
+    }
+    const input = await resolveInput(
+      { store: stores.workflowRuns, index, run, stepRun },
+      step.input
+    );
+    withinStepData(input, "The input of the step");
+    if (holdsDatasetReference(input)) {
+      throw notSupportedFailure("a dataset as the input of a code step");
+    }
+    fitsSchema(
+      step.inputSchema,
+      input,
+      WORKFLOW_CODE_ERRORS.inputInvalid,
+      "The input does not fit the step's inputSchema"
+    );
+    if (!options.codeRunner) {
+      throw new WorkflowStepFailure(
+        WORKFLOW_CODE_ERRORS.runnerUnavailable,
+        "This instance runs no sandbox, so it runs no code step: Execution Workspaces are off or have no sandbox"
+      );
+    }
+    const file = codeFileIssue(step.file);
+    if (file) throw new WorkflowStepFailure(WORKFLOW_CODE_ERRORS.fileInvalid, file);
+    const read = await readCodeFile(
+      options.stepFiles,
+      { workflow: run.workflow, revisionId: run.definitionRevisionId },
+      step.file
+    );
+    if ("code" in read) throw new WorkflowStepFailure(read.code, read.message);
+    return {
+      kind: "code",
+      staged: {
+        language: codeLanguageOf(step.file)?.language ?? "",
+        file: step.file,
+        source: read.source,
+        input,
+        timeoutSeconds: options.codeRunner.timeoutSeconds
+      }
+    };
+  }
+
+  /**
+   * How a code step ends once its script has: with the result where it fits the schema the
+   * step declares and the size every step output may have, and failed otherwise.
+   */
+  function finishCode(attempt: StepAttempt, outcome: WorkflowCodeOutcome): StepEnd {
+    const step = attempt.index.get(attempt.stepRun.stepId)?.step;
+    const call: WorkflowStepRunCall = { effect: WORKFLOW_CODE_STEP_EFFECT };
+    if (outcome.kind === "failed") {
+      return { kind: "failed", error: outcome.error, systemic: false, call };
+    }
+    try {
+      withinStepData(outcome.value, "The result of the script");
+      if (step?.type === "code") {
+        fitsSchema(
+          step.outputSchema,
+          outcome.value,
+          WORKFLOW_CODE_ERRORS.outputInvalid,
+          "The result does not fit the step's outputSchema"
+        );
+      }
+    } catch (error) {
+      if (!(error instanceof WorkflowStepFailure)) throw error;
+      return { kind: "failed", error: error.toRunError(), systemic: false, call };
+    }
+    return { kind: "done", output: outcome.value, call };
+  }
 
   function withinStepData(value: JsonValue, what: string): void {
     if (jsonBytes(value) > limits.stepDataMaxBytes) {
@@ -172,6 +294,8 @@ export function createStepExecutor(options: StepExecutorOptions) {
           withinStepData(items, "The list of the loop");
           return { kind: "loop", items };
         }
+        case "code":
+          return await stageCode(attempt, step);
         case "output": {
           const output = await resolveInput(scope, step.input);
           withinStepData(output, "The result of the run");
@@ -254,5 +378,5 @@ export function createStepExecutor(options: StepExecutorOptions) {
     }
   }
 
-  return { execute, knownCallEnd };
+  return { execute, finishCode, knownCallEnd };
 }

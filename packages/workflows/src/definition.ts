@@ -19,8 +19,14 @@ import {
 } from "@vivd-catalyst/core";
 import { JSON_SCHEMA, YAMLException, load } from "js-yaml";
 import { z } from "zod";
+import { codeFileIssue } from "./code-step";
 import { parseCron } from "./cron";
-import { holdsBrokenDatasetReference, jsonObjectSchema, jsonValueSchema } from "./json";
+import {
+  holdsBrokenDatasetReference,
+  jsonObjectSchema,
+  jsonValueSchema,
+  namesDatasetType
+} from "./json";
 import {
   WORKFLOW_DEFINITION_MAX_STEPS,
   WORKFLOW_MANIFEST_MAX_BYTES,
@@ -36,6 +42,7 @@ export const WORKFLOW_EXECUTED_STEP_TYPES = [
   "trigger",
   "operation",
   "loop",
+  "code",
   "output"
 ] as const satisfies readonly WorkflowStepType[];
 
@@ -214,6 +221,15 @@ function unsupportedIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[
           if (step[field] !== undefined) issues.push(notSupported(`${at}.${field}`, `'${field}'`));
         }
       }
+      if (step.type === "code") {
+        // A code step is handed JSON and returns JSON. Datasets come with the slice that
+        // keeps them, and a script is not handed one before.
+        for (const field of ["inputSchema", "outputSchema"] as const) {
+          if (namesDatasetType(step[field])) {
+            issues.push(notSupported(`${at}.${field}`, "a dataset in the schema of a code step"));
+          }
+        }
+      }
       if (step.type === "loop") {
         // `collect` returns a dataset, and this engine keeps none.
         if (step.collect !== undefined) issues.push(notSupported(`${at}.collect`, "'collect'"));
@@ -299,6 +315,10 @@ function structuralIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[]
     }
   });
   for (const [id, { step, sequence }] of index) {
+    if (step.type === "code") {
+      const file = codeFileIssue(step.file);
+      if (file) issues.push({ path: `steps.${id}.file`, message: file });
+    }
     if (step.type === "trigger") {
       for (const trigger of step.triggers) {
         if (trigger.kind === "schedule" && !parseCron(trigger.cron)) {

@@ -111,6 +111,11 @@ export const workflowStepRunSchema = z.object({
   /** On the step run of an operation step: what its operation does and what it belongs to. */
   effect: z.enum(["reading", "changing"]).optional(),
   source: z.string().optional(),
+  /**
+   * On the step run of a code step that ran: what its script wrote to its output and error
+   * streams beside its result, each cut to 16 KiB.
+   */
+  log: z.object({ stdout: z.string(), stderr: z.string(), truncated: z.boolean() }).optional(),
   status: stepRunStatusSchema,
   attempt: z.number().int().min(0),
   /** The Operation Run of the call an operation step made. */

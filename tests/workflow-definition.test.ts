@@ -221,8 +221,8 @@ describe("the definitions a folder holds", () => {
     const code = {
       id: "check",
       name: "Check",
-      type: "code",
-      file: "check.py",
+      type: "agent",
+      instructions: "check.md",
       input: {},
       inputSchema: { type: "object" },
       outputSchema: { type: "object" }

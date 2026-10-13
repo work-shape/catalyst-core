@@ -1,4 +1,5 @@
 import { WORKFLOW_ASSET_KIND, WORKFLOW_RUN_JOB_KINDS, defineModule } from "@vivd-catalyst/core";
+import { WORKFLOW_CODE_JOB_KIND } from "./step-job";
 
 /** The operations of the API that belong to the module. Each is off where the module is. */
 export const WORKFLOW_OPERATION_IDS = [
@@ -19,8 +20,29 @@ export const workflowsModule = defineModule({
   name: "workflows",
   operations: WORKFLOW_OPERATION_IDS,
   kinds: [WORKFLOW_ASSET_KIND],
-  jobKinds: [WORKFLOW_RUN_JOB_KINDS.executeStep, WORKFLOW_RUN_JOB_KINDS.fireSchedule]
+  jobKinds: [
+    WORKFLOW_RUN_JOB_KINDS.executeStep,
+    WORKFLOW_RUN_JOB_KINDS.fireSchedule,
+    WORKFLOW_CODE_JOB_KIND
+  ],
+  // The scripts of code steps run in the sandbox, which the command worker alone reaches.
+  commandWorkerJobKinds: [WORKFLOW_CODE_JOB_KIND]
 });
+
+export { createCodeStepJobs, type CodeStepJobsOptions } from "./code-job";
+export { createCodeSandbox } from "./code-sandbox";
+export {
+  WORKFLOW_CODE_ERRORS,
+  WORKFLOW_CODE_FILE_MAX_BYTES,
+  WORKFLOW_CODE_LANGUAGES,
+  WORKFLOW_CODE_LOG_MAX_BYTES,
+  WORKFLOW_CODE_STEP_EFFECT,
+  codeStepIssues,
+  noWorkflowStepFiles,
+  type WorkflowStepFiles
+} from "./code-step";
+export { WORKFLOW_CODE_JOB_KIND, workflowCodeJobKind } from "./step-job";
+export type { WorkflowCodeRunner } from "./step-execution";
 
 export { lastDueWithin, nextDueAfter, parseCron } from "./cron";
 export {
@@ -41,11 +63,11 @@ export {
 } from "./definition-source";
 export {
   createWorkflowEngine,
-  workflowStepJobKind,
   type StartWorkflowRunInput,
   type WorkflowEngine,
   type WorkflowEngineOptions
 } from "./engine";
+export { workflowStepJobKind } from "./step-job";
 export * from "./limits";
 export { workflowScheduleJobKind } from "./schedule-trigger";
 export { secretOperationSteps, type WorkflowOperationCalls } from "./operation-step";

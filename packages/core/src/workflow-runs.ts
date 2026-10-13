@@ -182,7 +182,40 @@ export type WorkflowStepRunView = WorkflowStepRun &
     outputPreview?: WorkflowOutputPreview;
     /** On the step run of a loop step alone. */
     loop?: WorkflowLoopCounts;
+    /** On the step run of a code step that ran: what its script wrote beside its result. */
+    log?: WorkflowStepRunLog;
   };
+
+/**
+ * What the script of a code step wrote to its output and error streams, each cut to a bound.
+ * It is shown on the run page to whoever may read the run, and it is never written to the
+ * audit: a script prints what its author made it print.
+ */
+export interface WorkflowStepRunLog {
+  stdout: string;
+  stderr: string;
+  /** Whether either stream held more than was kept. */
+  truncated: boolean;
+}
+
+/**
+ * A code step as it waits for the sandbox: the script and the input its container is given,
+ * and nothing else. The step run keeps it from the moment the engine hands the step to the
+ * command worker until the script has ended.
+ */
+export interface WorkflowStagedCode {
+  /** The language of the runner image the script is run in. */
+  language: string;
+  /** The path of the script in the Workflow's step files folder. */
+  file: string;
+  source: string;
+  input: JsonObject;
+  timeoutSeconds: number;
+}
+
+/** How the script of a code step ended, before the engine has checked what it returned. */
+export type WorkflowCodeOutcome =
+  { kind: "output"; value: JsonValue } | { kind: "failed"; error: WorkflowRunError };
 
 /** Names one run of one instance. */
 export interface WorkflowRunRef {
@@ -291,6 +324,23 @@ export interface WorkflowRunsStore {
    * soon as it is known and before the call has an outcome.
    */
   noteStepRunOperation(ref: WorkflowStepRunRef & { operationRunId: OperationRunId }): Promise<void>;
+  /**
+   * Moves a running code step run to `waiting` and keeps what its container is given. From
+   * then on the command worker has the step, and the engine takes it up when the script ended.
+   */
+  stageCodeStep(ref: WorkflowStepRunRef & { staged: WorkflowStagedCode }): Promise<void>;
+  /** What a waiting code step run's container is given. Nothing once it has an outcome. */
+  readStagedCode(ref: WorkflowStepRunRef): Promise<WorkflowStagedCode | undefined>;
+  /**
+   * Keeps how the script of a waiting code step run ended, with its log, and drops the script
+   * and the input. Answers whether the step run was waiting for it: one that a cancel ended
+   * keeps nothing.
+   */
+  recordCodeOutcome(
+    ref: WorkflowStepRunRef & { outcome: WorkflowCodeOutcome; log: WorkflowStepRunLog }
+  ): Promise<boolean>;
+  /** How the script of a code step run ended, where it has. */
+  readCodeOutcome(ref: WorkflowStepRunRef): Promise<WorkflowCodeOutcome | undefined>;
   /** The step runs of a run that have not ended. */
   listOpenStepRuns(ref: WorkflowRunRef): Promise<WorkflowStepRun[]>;
   /**

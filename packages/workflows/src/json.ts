@@ -1,5 +1,6 @@
 import {
   WORKFLOW_DATASET_KEY,
+  WORKFLOW_DATASET_TYPE,
   workflowDatasetReferenceSchema,
   type JsonObject,
   type JsonValue
@@ -36,4 +37,20 @@ export function holdsBrokenDatasetReference(value: JsonValue): boolean {
     return !workflowDatasetReferenceSchema.safeParse(value).success;
   }
   return Object.values(value).some(holdsBrokenDatasetReference);
+}
+
+/** Whether a value holds a reference to a dataset anywhere. */
+export function holdsDatasetReference(value: JsonValue): boolean {
+  if (value === null || typeof value !== "object") return false;
+  if (Array.isArray(value)) return value.some(holdsDatasetReference);
+  return (
+    Object.hasOwn(value, WORKFLOW_DATASET_KEY) || Object.values(value).some(holdsDatasetReference)
+  );
+}
+
+/** Whether a step schema names the type `dataset` for itself or for one of its fields. */
+export function namesDatasetType(schema: JsonValue): boolean {
+  if (schema === null || typeof schema !== "object") return false;
+  if (Array.isArray(schema)) return schema.some(namesDatasetType);
+  return schema.type === WORKFLOW_DATASET_TYPE || Object.values(schema).some(namesDatasetType);
 }
