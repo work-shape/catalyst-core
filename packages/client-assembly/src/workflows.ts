@@ -49,6 +49,11 @@ export interface InstanceWorkflows {
    * has none queued. Nothing where the module is off.
    */
   planSchedules(): Promise<{ workflow: string; dueAt: string }[]>;
+  /**
+   * The same for one Workflow, for whoever publishes its definition or takes it back. Nothing
+   * where the module is off or the Workflow has no schedule.
+   */
+  planSchedule(workflow: string): Promise<{ workflow: string; dueAt: string } | undefined>;
 }
 
 /**
@@ -60,7 +65,8 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
     return {
       routes: [createWorkflowRoutes(undefined)],
       jobHandlers: [],
-      planSchedules: () => Promise.resolve([])
+      planSchedules: () => Promise.resolve([]),
+      planSchedule: () => Promise.resolve(undefined)
     };
   }
   const engine = createWorkflowEngine({
@@ -75,7 +81,8 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
   return {
     routes: [createWorkflowRoutes(engine)],
     jobHandlers: engine.jobHandlers,
-    planSchedules: engine.planSchedules
+    planSchedules: engine.planSchedules,
+    planSchedule: engine.planSchedule
   };
 }
 
@@ -84,13 +91,16 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
  * process that starts plans the schedules of what is published, so a Workflow whose job was
  * lost, or that was published while no process ran, has its next due time queued.
  */
-export const assembleWorkflows: ModuleSeam = ({ modules, clientInstanceId, stores }) => ({
+export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceId, stores }) => ({
   async start({ operationCalls }) {
+    const { timeZone } = config.clientInstance;
     const workflows = createInstanceWorkflows({
       modules,
       clientInstanceId,
       stores,
-      operationCalls
+      operationCalls,
+      // The instance's time zone: the schedules of its Workflows are read on its clock.
+      ...(timeZone === undefined ? {} : { timeZone })
     });
     await workflows.planSchedules();
     return { routes: workflows.routes, jobHandlers: workflows.jobHandlers };

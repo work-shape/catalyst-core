@@ -24,10 +24,16 @@ contain breaking changes; a patch version does not.
   invocation logging decide the rest and are the operator's to set, see the configuration docs.
 - **Workflow schedules:** a published Workflow with a `schedule` trigger starts its runs by
   itself. The trigger names a cron expression of five fields (minute, hour, day of month,
-  month, day of week; numbers, ranges, steps and lists), read in UTC. One job per Workflow
+  month, day of week; numbers, ranges, steps and lists), read on the clock of the instance's
+  time zone: release config `clientInstance.timeZone`, an IANA name such as `Europe/Berlin`,
+  UTC when left out, refused when it is no time zone. On the day the clock is set forward, a
+  time that day skips runs once at the first minute after the gap; on the day it is set back,
+  a time shown twice runs once, the first time. One job per Workflow
   waits for the next due time on the job executor and starts the run of that time; a due time
   starts one run, whichever worker fires it and however often. Times that came due while the
-  instance was down start one run, for the latest of them. A due time that meets the open run
+  instance was down start one run, for the latest of them. A job that was claimed is due
+  whatever the clock of its process says, and the job of the next due time exists when it
+  ends, also when all its attempts failed. A due time that meets the open run
   of an earlier one starts nothing and is audited as `workflow_run.tick_skipped` with the
   reason `overlap`, as is one whose Workflow cannot be started (`principal_inactive`,
   `input_invalid`, `operation_secret`). A scheduled run gets no input, has the trigger
@@ -43,7 +49,9 @@ contain breaking changes; a patch version does not.
   once, so more than four items go at once only with more than one worker. `onItemFailure`
   holds as before: a loop that continues counts its failed items and ends `done`; a loop that
   stops fails at the first failed item, starts no item after that failure is written, and
-  cancels what it had started and not yet run. A cancel starts no further item. The run's
+  cancels what it had started and not yet run. That holds inside a loop that continues: the
+  stopped loop's items in flight end and start nothing, no step after it runs for that item,
+  and the outer loop counts the item as failed and goes on. A cancel starts no further item. The run's
   limit of step runs binds as before: the loop starts no item past it. A refusal by the
   instance's policy (`POLICY_DENIED`) stops a loop that continues, as a refusal of the
   principal does: the run fails with that reason and is not audited as a success. A refused
