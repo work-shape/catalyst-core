@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   APP_ASSET_KIND,
   type AppAction,
+  type AppFromPageResponse,
   type AppMode,
   type AppPreviewResponse,
   type Asset,
@@ -150,6 +151,34 @@ export function useAppActions(app: string, enabled: boolean): AppActionsRead {
     : { status: "loading" };
 }
 
+/** The App a Page was saved as, where the reader may write it. */
+export type AppFromPage = NonNullable<AppFromPageResponse["app"]>;
+
+/** An App the reader may write and could put a Page into, with the Page it is updated from. */
+export type AppLinkCandidate = NonNullable<AppFromPageResponse["candidate"]>;
+
+/**
+ * The App a Page was saved as, where the reader may write it: one request when the surface of
+ * the Page opens, and one more after each write to an App. `settled` once the instance
+ * answered or the asking failed, which leaves the Page without an App to update.
+ */
+export function useAppFromPage(
+  conversationId: string,
+  pageId: string,
+  enabled: boolean
+): { app: AppFromPage | undefined; settled: boolean } {
+  const { client } = useWorkspaceApiClient();
+  const keys = useAppKeys();
+  const query = useQuery({
+    queryKey: [...keys, "from-page", conversationId, pageId],
+    queryFn: ({ signal }) =>
+      client.apps.get_from_page({ params: { conversationId, pageId }, signal }),
+    enabled,
+    retry: retryUnlessGone
+  });
+  return { app: query.data?.app ?? undefined, settled: enabled && !query.isPending };
+}
+
 /** The source files of one revision as its Files side asked for them. */
 interface AppFilesRead {
   record: Asset | undefined;
@@ -214,6 +243,24 @@ export interface AppWrites {
     id: string;
     name: string;
   }): Promise<{ name: string }>;
+  /**
+   * Writes the newest revision of the Page an App was saved from as the App's next draft
+   * revision. Refused where the draft is not at `expectedRevision` any more.
+   */
+  updateFromPage(input: {
+    conversationId: string;
+    pageId: string;
+    app: string;
+    expectedRevision: number;
+    /** Also writes an App that is not this Page's, and makes it this Page's. */
+    link?: boolean;
+  }): Promise<unknown>;
+  /** The App with this id, where the reader may write it and so put the Page into it. */
+  linkCandidate(input: {
+    conversationId: string;
+    pageId: string;
+    app: string;
+  }): Promise<AppLinkCandidate | undefined>;
   /** Makes the revision with this number the published one. */
   publish(app: string, revision: number): Promise<unknown>;
   /** Puts the draft back on the published revision. */
@@ -237,6 +284,26 @@ export function useAppWrites(workspaceId: string | undefined): AppWrites {
         return made(
           client.apps.create_from_page({
             body: { conversationId, pageId, name: id, title: name, workspaceId }
+          })
+        ).finally(changed);
+      },
+      linkCandidate: async ({ conversationId, pageId, app }) =>
+        (await client.apps.get_from_page({ params: { conversationId, pageId }, query: { app } }))
+          .candidate ?? undefined,
+      updateFromPage: ({ conversationId, pageId, app, expectedRevision, link }) => {
+        if (workspaceId === undefined) {
+          return Promise.reject(new Error("An App belongs to a workspace"));
+        }
+        return made(
+          client.apps.update_from_page({
+            params: { app },
+            body: {
+              conversationId,
+              pageId,
+              workspaceId,
+              expectedRevision,
+              ...(link ? { link: true } : {})
+            }
           })
         ).finally(changed);
       },

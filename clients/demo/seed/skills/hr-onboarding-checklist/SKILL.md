@@ -2,6 +2,7 @@
 name: hr-onboarding-checklist
 title: Onboarding-Checkliste
 description: Nutzen, wenn jemand Neues fragt, was in den ersten Wochen ansteht.
+summary: Weiß, was in den ersten Wochen für neue Kolleginnen und Kollegen ansteht.
 ---
 
 # Onboarding-Checkliste

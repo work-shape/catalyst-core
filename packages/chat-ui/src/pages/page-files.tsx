@@ -2,18 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft } from "lucide-react";
 import { useState } from "react";
 import { ApiError, type PageSourceFileEntryResponse } from "@vivd-catalyst/api-client";
-import {
-  Badge,
-  Button,
-  cn,
-  CodeBlock,
-  EmptyState,
-  List,
-  ListRow,
-  SkeletonList
-} from "@vivd-catalyst/ui";
+import { Badge, Button, cn, EmptyState, List, ListRow, SkeletonList } from "@vivd-catalyst/ui";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { useTranslation } from "../i18n";
+import { StoredFileView } from "../stored-file-view";
 
 type SourceFile = Pick<PageSourceFileEntryResponse, "path" | "sha256">;
 
@@ -176,6 +168,12 @@ export function PageFilesView({
       </EmptyState>
     );
   }
+  const backToList = (
+    <Button variant="ghost" size="sm" onClick={onShowList}>
+      <ChevronLeft aria-hidden="true" />
+      {t("pages.showFileList")}
+    </Button>
+  );
   return (
     <div className="@container h-full min-h-0">
       <div className="grid h-full min-h-0 grid-cols-1 grid-rows-1 @lg:grid-cols-[14rem_minmax(0,1fr)]">
@@ -206,27 +204,29 @@ export function PageFilesView({
           </List>
         </nav>
         <div className={cn("min-h-0 min-w-0 flex-col @lg:flex", listShown ? "hidden" : "flex")}>
-          <div className="flex shrink-0 items-center gap-2 border-b bg-card px-2 py-1 @lg:hidden">
-            <Button variant="ghost" size="sm" onClick={onShowList}>
-              <ChevronLeft aria-hidden="true" />
-              {t("pages.showFileList")}
-            </Button>
-            <span className="min-w-0 truncate font-mono text-caption text-muted-foreground">
-              {open}
-            </span>
-          </div>
           {content.status === "ready" ? (
-            <CodeBlock
-              className="min-h-0 flex-1 rounded-none border-0"
-              label={open}
-              code={content.text}
+            <StoredFileView
+              className="min-h-0 flex-1"
+              path={open}
+              text={content.text}
+              leading={<span className="shrink-0 @lg:hidden">{backToList}</span>}
             />
-          ) : content.status === "loading" ? (
-            <SkeletonList rows={6} className="p-4" />
           ) : (
-            <EmptyState layout="inline" className="p-4">
-              {t(content.status === "not-text" ? "pages.fileNotText" : "pages.filesFailed")}
-            </EmptyState>
+            <>
+              <div className="flex shrink-0 items-center gap-2 border-b bg-card px-2 py-1 @lg:hidden">
+                {backToList}
+                <span className="min-w-0 truncate font-mono text-caption text-muted-foreground">
+                  {open}
+                </span>
+              </div>
+              {content.status === "loading" ? (
+                <SkeletonList rows={6} className="p-4" />
+              ) : (
+                <EmptyState layout="inline" className="p-4">
+                  {t(content.status === "not-text" ? "pages.fileNotText" : "pages.filesFailed")}
+                </EmptyState>
+              )}
+            </>
           )}
         </div>
       </div>

@@ -9,7 +9,7 @@ import {
   type NodeProps,
   type ReactFlowState
 } from "@xyflow/react";
-import { createContext, use, useLayoutEffect, useState } from "react";
+import { createContext, Fragment, use, useLayoutEffect, useState } from "react";
 import { Button } from "../actions/button";
 import { cn } from "../cn";
 import { Progress, type ProgressPart } from "../feedback/progress";
@@ -23,7 +23,8 @@ import { flowHandleClassName, FlowNode, flowStatusPresentations } from "./flow-n
 import type { FlowDirection, FlowEdgeState, FlowGraphGroup, FlowGraphNode } from "./flow-types";
 
 /** Below this zoom a node shows its icon and title only. */
-const FLOW_COMPACT_ZOOM = 0.6;
+/** Below this zoom a node is its icon and title: the rest could not be read. */
+export const FLOW_COMPACT_ZOOM = 0.6;
 
 /** The states of the edges that meet one node, by where they meet it. */
 export interface NodeEnds {
@@ -205,6 +206,25 @@ function GroupNode({ id, data }: NodeProps<GroupRfNode>) {
   const headRef = useReportedSize(id, GROUP_LINE);
   const { item, ends, box } = data;
   const counts = item.counts;
+  const words = [
+    item.countsLabel === undefined
+      ? undefined
+      : {
+          key: "counts",
+          node: <span className="font-medium text-foreground">{item.countsLabel}</span>
+        },
+    item.failedLabel === undefined
+      ? undefined
+      : {
+          key: "failed",
+          node: (
+            <span data-slot="flow-failed" className="font-medium text-destructive">
+              {item.failedLabel}
+            </span>
+          )
+        },
+    item.note === undefined ? undefined : { key: "note", node: item.note }
+  ].filter((word) => word !== undefined);
   const parts: ProgressPart[] =
     counts === undefined
       ? []
@@ -224,18 +244,19 @@ function GroupNode({ id, data }: NodeProps<GroupRfNode>) {
       title={item.title}
       summary={item.summary}
       progress={
-        counts === undefined && item.note === undefined ? undefined : (
+        counts === undefined && words.length === 0 ? undefined : (
           <>
             {counts === undefined ? null : (
               <Progress size="sm" label={item.title} max={counts.total} parts={parts} />
             )}
-            {item.countsLabel === undefined && item.note === undefined ? null : (
+            {words.length === 0 ? null : (
               <p className="text-caption text-muted-foreground">
-                {item.countsLabel === undefined ? null : (
-                  <span className="font-medium text-foreground">{item.countsLabel}</span>
-                )}
-                {item.countsLabel !== undefined && item.note !== undefined ? " · " : null}
-                {item.note}
+                {words.map((word, index) => (
+                  <Fragment key={word.key}>
+                    {index === 0 ? null : " · "}
+                    {word.node}
+                  </Fragment>
+                ))}
               </p>
             )}
           </>

@@ -19,7 +19,7 @@ const WIDE = { width: 1280, height: 800 };
 const namespacePath = `${apiBaseUrl}/api/v1/instance/access/namespaces`;
 const grantsPath = `${apiBaseUrl}/api/v1/instance/access/grants`;
 const agentPath = (name: string) => `${apiBaseUrl}/api/v1/assets/agent/${name}`;
-/** The reads Build made before it worked on the asset operations: the whole set of assets. */
+/** The reads Studio made before it worked on the asset operations: the whole set of assets. */
 const WHOLE_SET_READ = /\/api\/v1\/instance\/config\/(?:assets|export)(?:\?|$)/u;
 
 async function signInViaApi(page: Page, user: { email: string; password: string }): Promise<void> {
@@ -148,7 +148,7 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
     });
     expect(first.ok()).toBe(true);
 
-    // The holder has a Build row and sees the agents of the Namespace, nothing else.
+    // The holder has a Studio row and sees the agents of the Namespace, nothing else.
     const wholeSetReads: string[] = [];
     page.on("request", (request) => {
       if (WHOLE_SET_READ.test(request.url())) {
@@ -158,12 +158,12 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
     await signInViaApi(page, holder);
     await page.setViewportSize(WIDE);
     await page.goto("/");
-    await page.getByRole("button", { name: "Build", exact: true }).click();
+    await page.getByRole("button", { name: "Studio", exact: true }).click();
     await expect(page).toHaveURL(/\/build\/agents$/u);
     await expect(agentList(page).getByRole("link")).toHaveCount(1);
     await expect(agentList(page).getByRole("link", { name: /Kai First/u })).toContainText("Kai");
     await expect(page.getByText("Research Assistant")).toHaveCount(0);
-    await expect(page.getByRole("navigation", { name: "Kinds in Build" })).toHaveCount(0);
+    await expect(page.getByRole("navigation", { name: "Kinds in Studio" })).toHaveCount(0);
 
     // A new agent is named in the Namespace: the dialog says what the id will be.
     await page.getByRole("button", { name: "New agent", exact: true }).click();
@@ -293,28 +293,28 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
   }
 });
 
-test("a user with no right on an agent or a skill has no Build row and is told so at its address", async ({
+test("a user with no right on an agent or a skill has no Studio row and is told so at its address", async ({
   page,
   accessState: _accessState
 }) => {
   await signInViaApi(page, normalUser);
   await page.goto("/");
   await expect(page.getByPlaceholder("Message")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Build", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Studio", exact: true })).toHaveCount(0);
 
   await page.goto("/build");
-  await expect(page.getByRole("region", { name: "Build" })).toContainText(
-    "Build is not available to you."
+  await expect(page.getByRole("region", { name: "Studio" })).toContainText(
+    "Studio is not available to you."
   );
   await expect(page).toHaveURL(/\/build$/u);
   await page.goto("/build/agents/research_assistant");
-  await expect(page.getByRole("region", { name: "Build" })).toContainText(
-    "Build is not available to you."
+  await expect(page.getByRole("region", { name: "Studio" })).toContainText(
+    "Studio is not available to you."
   );
   await expect(page.getByRole("heading", { name: "Research Assistant" })).toHaveCount(0);
 });
 
-test("the old Config address leads into Build, and the account menu names the instance and its release", async ({
+test("the old Config address leads into Studio, and the account menu names the instance and its release", async ({
   page
 }) => {
   await signInViaApi(page, superadminUser);
@@ -355,7 +355,7 @@ async function putSkill(admin: Page, name: string, text: string): Promise<void> 
       config: {
         name,
         title: "Reload Probe",
-        description: "A probe of the Build tests.",
+        description: "A probe of the Studio tests.",
         content: text
       }
     }
@@ -551,7 +551,7 @@ test("an agent's availability and the default agent are changed by the asset ope
         name,
         displayName: "Placement Probe",
         modelProviderId: "local",
-        instructions: "A probe of the Build tests.",
+        instructions: "A probe of the Studio tests.",
         toolNames: []
       }
     }
@@ -683,7 +683,7 @@ test("a long history comes a page at a time", async ({ page }) => {
 
 for (const locale of ["en", "de"] as const) {
   for (const mode of ["light", "dark"] as const) {
-    test(`Build keeps inside the window at both widths (${locale}, ${mode})`, async ({ page }) => {
+    test(`Studio keeps inside the window at both widths (${locale}, ${mode})`, async ({ page }) => {
       await page.addInitScript((chosen) => {
         window.localStorage.setItem("vivd-catalyst:locale", chosen);
       }, locale);
@@ -691,8 +691,8 @@ for (const locale of ["en", "de"] as const) {
       await signInViaApi(page, superadminUser);
       const words =
         locale === "en"
-          ? { agents: "Agents", sections: "Sections of this page", history: "History" }
-          : { agents: "Agenten", sections: "Abschnitte dieser Seite", history: "Verlauf" };
+          ? { agents: "Agents", sections: "On this page", history: "History" }
+          : { agents: "Agenten", sections: "Auf dieser Seite", history: "Verlauf" };
 
       for (const size of [WIDE, NARROW]) {
         await page.setViewportSize(size);
@@ -713,8 +713,13 @@ for (const locale of ["en", "de"] as const) {
 
         await page.goto("/build/agents/research_assistant");
         await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-        // Beside the content while there is room for it, a choice above the content otherwise.
-        await expect(page.locator(`[aria-label="${words.sections}"]:visible`)).toHaveCount(1);
+        // Links beside the content while there is room for it, a choice above it otherwise.
+        const outline = page.getByRole("navigation", { name: words.sections });
+        await expect(outline).toBeVisible();
+        await expect(outline.getByRole("link").first()).toBeVisible({
+          visible: size === WIDE
+        });
+        await expect(outline.getByRole("combobox")).toBeVisible({ visible: size === NARROW });
         await expectNoSidewaysScroll(page);
 
         await page.getByRole("button", { name: words.history, exact: true }).click();

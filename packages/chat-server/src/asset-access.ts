@@ -111,13 +111,29 @@ export function mayOpenAssetFileSet(
 }
 
 const issuesDetailsSchema = z.object({
-  issues: z.array(z.object({ message: z.string(), path: z.array(z.unknown()).optional() }))
+  issues: z.array(
+    z.object({
+      message: z.string(),
+      // A kind's own parser names a place as one text, such as `steps[1].type`.
+      path: z.union([z.string(), z.array(z.union([z.string(), z.number()]))]).optional(),
+      code: z.string().optional()
+    })
+  )
 });
 
-/** The issues an error carries, or its message where it carries none. */
+/**
+ * The issues an error carries, each with its place and its code where the check that found
+ * it names them, or the error's message where it carries none.
+ */
 export function errorIssues(error: AppError): AssetSetIssue[] {
   const details = issuesDetailsSchema.safeParse(error.details);
   return details.success && details.data.issues.length > 0
-    ? details.data.issues.map(({ message }) => ({ message }))
+    ? details.data.issues.map(({ message, path, code }) => ({
+        message,
+        ...(path === undefined || path === "" || path.length === 0
+          ? {}
+          : { path: typeof path === "string" ? [path] : path }),
+        ...(code === undefined ? {} : { code })
+      }))
     : [{ message: error.message }];
 }

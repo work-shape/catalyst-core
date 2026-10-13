@@ -30,7 +30,10 @@ export const conversations = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
     retainedUntil: timestamp("retained_until", { withTimezone: true }).notNull(),
-    deletedAt: timestamp("deleted_at", { withTimezone: true })
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    // The asset the conversation is about, by kind and name. Both null on every other one.
+    subjectKind: text("subject_kind"),
+    subjectName: text("subject_name")
   },
   (table) => [
     index("conversations_retention_expiry_idx").on(

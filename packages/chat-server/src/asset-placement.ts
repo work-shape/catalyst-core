@@ -23,7 +23,7 @@ import {
   requireAssetKindModuleOn
 } from "./asset-write-rules";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
-import type { ChatServerOptions } from "./types";
+import type { AssetWorkflowOptions } from "./types";
 
 /**
  * Where an asset stands on the instance beside its content: whether it is the default of its
@@ -56,7 +56,7 @@ interface SetAssetAvailabilityInput {
 }
 
 export async function authorizeAssetPlacement(
-  options: ChatServerOptions,
+  options: AssetWorkflowOptions,
   access: ActorAccess,
   input: { kind: string; name: string | null }
 ): Promise<OperationAuthorization> {
@@ -72,7 +72,7 @@ export async function authorizeAssetPlacement(
 
 /** Makes one asset the instance's default of its kind, or leaves the instance without one. */
 export async function setAssetDefault(
-  options: ChatServerOptions,
+  options: AssetWorkflowOptions,
   call: AssetCall,
   input: SetAssetDefaultInput
 ): Promise<{ version: number }> {
@@ -109,7 +109,7 @@ export async function setAssetDefault(
 
 /** Sets the workspaces one asset is offered in. The next run that starts reads them. */
 export async function setAssetAvailability(
-  options: ChatServerOptions,
+  options: AssetWorkflowOptions,
   call: AssetCall,
   input: SetAssetAvailabilityInput
 ): Promise<AgentAvailability> {
@@ -189,7 +189,7 @@ export interface AssetWarning {
  * default, which every workspace offers.
  */
 export async function initialAgentPlacement(
-  options: ChatServerOptions,
+  options: AssetWorkflowOptions,
   call: AssetCall,
   kind: WorkflowAssetKind,
   input: { name: string; creates: boolean; setsDefault: boolean; availableIn?: AvailableIn }
@@ -239,7 +239,7 @@ export async function initialAgentPlacement(
 
 /** The workspace of that id, where the caller is a person who is one of its members. */
 async function memberWorkspace(
-  options: ChatServerOptions,
+  options: AssetWorkflowOptions,
   call: AssetCall,
   workspaceId: string | undefined
 ): Promise<CollaborationWorkspace | undefined> {
@@ -257,7 +257,7 @@ async function memberWorkspace(
 }
 
 /** A kind of a module that is off does not exist here, whatever the store still holds. */
-function kindOf(options: ChatServerOptions, kind: string): WorkflowAssetKind {
+function kindOf(options: AssetWorkflowOptions, kind: string): WorkflowAssetKind {
   requireAssetKindModuleOn(options.modules, kind);
   return options.configAssets.kinds.require(kind);
 }
@@ -267,7 +267,7 @@ function kindOf(options: ChatServerOptions, kind: string): WorkflowAssetKind {
  * the name now: a call that waited for an approval runs against what is stored then.
  */
 async function requireExpectedAsset(
-  options: ChatServerOptions,
+  options: AssetWorkflowOptions,
   kind: WorkflowAssetKind,
   input: SetAssetDefaultInput
 ): Promise<void> {
@@ -288,7 +288,7 @@ async function requireExpectedAsset(
 
 /** The right once more, on what the store holds when the call runs. */
 async function requirePlacementRight(
-  options: ChatServerOptions,
+  options: AssetWorkflowOptions,
   call: AssetCall,
   input: { kind: string; name: string | null }
 ): Promise<void> {
@@ -305,7 +305,7 @@ async function requirePlacementRight(
  * default or an availability: the id of a row another owner holds is no part of it.
  */
 async function namedResource(
-  options: ChatServerOptions,
+  options: AssetWorkflowOptions,
   kind: WorkflowAssetKind,
   name: string | null
 ): Promise<AccessResource | undefined> {

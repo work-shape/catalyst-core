@@ -72,6 +72,13 @@ export interface DataStoreRecord {
   /** What the last measurement found. Missing before the first. */
   sizeBytes?: number;
   sizeMeasuredAt?: ISODateString;
+  /**
+   * How many tables the store's schema `public` held at the last measurement, and how many
+   * rows the database's planner estimated in all of them: an estimate, not a count. Missing
+   * before the first measurement that read them.
+   */
+  tableCount?: number;
+  rowEstimate?: number;
   failure?: DataStoreFailure;
   /** What the last job of the store found open on the server. Empty where nothing is. */
   conditions: DataStoreCondition[];

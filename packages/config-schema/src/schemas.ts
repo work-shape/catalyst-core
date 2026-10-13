@@ -846,6 +846,12 @@ export const clientInstanceConfigSchema = z.object({
        * one `audit.pruned` event with the count.
        */
       auditDays: z.number().int().positive().max(3650).default(365),
+      /**
+       * For how many days after a Workflow Run ended the inputs and outputs of its steps, and
+       * its own input and result, are kept. The job `workflow_run.prune_data` removes them
+       * once a day. The run and its step runs stay, with status, times and error codes.
+       */
+      workflowStepDataDays: z.number().int().positive().max(3650).default(30),
       allowUserDelete: z.boolean().default(true)
     })
     .default({
@@ -853,6 +859,7 @@ export const clientInstanceConfigSchema = z.object({
       expireConversations: true,
       extendOnActivity: true,
       auditDays: 365,
+      workflowStepDataDays: 30,
       allowUserDelete: true
     }),
   infrastructure: infrastructureConfigSchema,

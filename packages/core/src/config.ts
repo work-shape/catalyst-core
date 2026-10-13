@@ -1,10 +1,16 @@
 import {
+  AGENT_STARTERS_MAX,
   REASONING_EFFORTS,
+  SKILL_ORIGINS,
   SKILL_RESOURCE_MEDIA_TYPES,
+  SKILL_STARTERS_MAX,
+  SKILL_SUMMARY_MAX_LENGTH,
   type AgentConfig,
   type AgentInitialPromptConfig,
   type ReasoningEffortConfig,
   type SkillConfig,
+  type SkillOrigin,
+  type SkillStarterConfig,
   type SkillResourceConfig,
   type SkillResourceMediaType
 } from "@vivd-catalyst/asset-schemas";
@@ -229,12 +235,18 @@ export interface AgentSkillChangesPolicy {
 }
 
 export {
+  AGENT_STARTERS_MAX,
   REASONING_EFFORTS,
+  SKILL_ORIGINS,
   SKILL_RESOURCE_MEDIA_TYPES,
+  SKILL_STARTERS_MAX,
+  SKILL_SUMMARY_MAX_LENGTH,
   type AgentConfig,
   type AgentInitialPromptConfig,
   type ReasoningEffortConfig,
   type SkillConfig,
+  type SkillOrigin,
+  type SkillStarterConfig,
   type SkillResourceConfig,
   type SkillResourceMediaType
 };

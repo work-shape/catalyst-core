@@ -1,5 +1,6 @@
 import { access } from "./access";
 import { administration } from "./administration";
+import { agents } from "./agents";
 import { apiAccess } from "./api-access";
 import { approvals } from "./approvals";
 import { apps } from "./apps";
@@ -10,6 +11,7 @@ import { common } from "./common";
 import { configAssets } from "./config-assets";
 import { connections } from "./connections";
 import { conversation } from "./conversation";
+import { dataStores } from "./data-stores";
 import { files } from "./files";
 import { inbox } from "./inbox";
 import { navigation } from "./navigation";
@@ -18,6 +20,7 @@ import { pages } from "./pages";
 import { settings } from "./settings";
 import { signIn } from "./sign-in";
 import { tools } from "./tools";
+import { workflows } from "./workflows";
 import { workspace } from "./workspace";
 import { combineTranslations } from "./translation-area";
 
@@ -28,6 +31,7 @@ import { combineTranslations } from "./translation-area";
 export const translations = combineTranslations(common)
   .and(access)
   .and(administration)
+  .and(agents)
   .and(apiAccess)
   .and(approvals)
   .and(apps)
@@ -37,6 +41,7 @@ export const translations = combineTranslations(common)
   .and(configAssets)
   .and(connections)
   .and(conversation)
+  .and(dataStores)
   .and(files)
   .and(inbox)
   .and(navigation)
@@ -45,6 +50,7 @@ export const translations = combineTranslations(common)
   .and(settings)
   .and(signIn)
   .and(tools)
+  .and(workflows)
   .and(workspace).messages;
 
 export type TranslationKey = keyof (typeof translations)["en"];

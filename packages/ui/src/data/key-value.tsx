@@ -1,9 +1,8 @@
-import { Check, Copy } from "lucide-react";
 import { useEffect, useId, useRef, useState, type HTMLAttributes, type ReactNode } from "react";
 import { Button } from "../actions/button";
-import { IconButton } from "../actions/icon-button";
 import { cn } from "../cn";
 import { useUiLabels } from "../ui-root";
+import { CopyButton } from "./copy-button";
 
 /** `inline` puts the label beside the value; `stacked` puts it above. */
 export type KeyValueLayout = "inline" | "stacked";
@@ -30,9 +29,6 @@ export interface KeyValueProps extends HTMLAttributes<HTMLDivElement> {
   /** Shows a long value on three lines with a control that unfolds it. */
   foldable?: boolean;
 }
-
-/** How long the copy button says that it copied. */
-const COPIED_MS = 2000;
 
 /** One labelled value, inside a `KeyValueList`. The value is the children. */
 export function KeyValue({
@@ -63,7 +59,9 @@ export function KeyValue({
           >
             {children}
           </div>
-          {copyValue === undefined ? null : <CopyButton value={copyValue} />}
+          {copyValue === undefined ? null : (
+            <CopyButton value={copyValue} component="KeyValue" className="-my-1" />
+          )}
         </div>
         {fold.long ? (
           <FoldToggle folded={fold.folded} controls={valueId} onToggle={fold.toggle} />
@@ -94,35 +92,6 @@ function FoldToggle({
     >
       {folded ? labels.showMore : labels.showLess}
     </Button>
-  );
-}
-
-function CopyButton({ value }: { value: string }) {
-  const labels = useUiLabels("KeyValue");
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    if (!copied) {
-      return;
-    }
-    const timeout = setTimeout(() => setCopied(false), COPIED_MS);
-    return () => clearTimeout(timeout);
-  }, [copied]);
-
-  return (
-    <IconButton
-      size="sm"
-      className="-my-1"
-      label={copied ? labels.copied : labels.copy}
-      onClick={() => {
-        navigator.clipboard.writeText(value).then(
-          () => setCopied(true),
-          () => setCopied(false)
-        );
-      }}
-    >
-      {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-    </IconButton>
   );
 }
 

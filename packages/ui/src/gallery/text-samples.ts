@@ -43,7 +43,6 @@ export interface SampleGalleryText {
   assetBannerTitle: string;
   assetBanner: string;
   assetBannerAction: string;
-  assetSections: string;
   assetOverview: string;
   assetOverviewDescription: string;
   assetNameHint: string;
@@ -105,12 +104,12 @@ export const sampleGalleryText: Record<"en" | "de", SampleGalleryText> = {
     sections: "Sections of the UI library",
     sectionsReview: "Review",
     sectionSamples: "Sample pages",
-    sampleBuildList: "Build list",
+    sampleBuildList: "Studio list",
     sampleAssetPage: "Asset page",
     sampleSettingsForm: "Settings form",
     sampleNote:
       "Three pages built from the library alone. They show fixed sample data and change nothing.",
-    buildKinds: "Build",
+    buildKinds: "Studio",
     buildAgents: "Agents",
     buildSkills: "Skills",
     buildConnections: "Connections",
@@ -146,7 +145,6 @@ export const sampleGalleryText: Record<"en" | "de", SampleGalleryText> = {
     assetBannerTitle: "Publishing re-indexes 214 documents",
     assetBanner: "Search keeps answering from the published index until the new one is ready.",
     assetBannerAction: "Show changes",
-    assetSections: "Sections of this knowledge base",
     assetOverview: "Overview",
     assetOverviewDescription: "The name and what this knowledge base holds.",
     assetNameHint: "Agents and builders see this name.",
@@ -206,12 +204,12 @@ export const sampleGalleryText: Record<"en" | "de", SampleGalleryText> = {
     sections: "Abschnitte der UI-Bibliothek",
     sectionsReview: "Prüfung",
     sectionSamples: "Beispielseiten",
-    sampleBuildList: "Bauen-Liste",
+    sampleBuildList: "Studio-Liste",
     sampleAssetPage: "Asset-Seite",
     sampleSettingsForm: "Einstellungsformular",
     sampleNote:
       "Drei Seiten, nur aus der Bibliothek gebaut. Sie zeigen feste Beispieldaten und ändern nichts.",
-    buildKinds: "Bauen",
+    buildKinds: "Studio",
     buildAgents: "Agenten",
     buildSkills: "Skills",
     buildConnections: "Verbindungen",
@@ -248,7 +246,6 @@ export const sampleGalleryText: Record<"en" | "de", SampleGalleryText> = {
     assetBanner:
       "Die Suche antwortet weiter aus dem veröffentlichten Index, bis der neue fertig ist.",
     assetBannerAction: "Änderungen zeigen",
-    assetSections: "Abschnitte dieser Wissensbasis",
     assetOverview: "Überblick",
     assetOverviewDescription: "Der Name und was diese Wissensbasis enthält.",
     assetNameHint: "Agenten und Builder sehen diesen Namen.",

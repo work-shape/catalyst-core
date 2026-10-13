@@ -394,6 +394,51 @@ describe("who writes a service principal's grant row", () => {
       await listed(t.admin.id, { holderKind: "service_principal", holderId: principal.id })
     ).toEqual([]);
   });
+
+  it("lists one principal's rows and one Connection's holders, a person's row beside a principal's", async () => {
+    const s = await setup();
+    const { t, principal } = s;
+    const crm = await t.seed("crm", forWorkflows);
+    const erp = await t.seed("erp", forWorkflows);
+    const onCrm = await s.grantTo(crm);
+    const onErp = await s.grantTo(erp);
+    const kaiOnCrm = await t.grant(t.kai.id, "connection.use", { assetId: crm });
+    const listed = async (userId: string, query: Record<string, string>) =>
+      grantSchema
+        .array()
+        .parse((await t.expectOk(userId, "permissions.list", { query })).json().items)
+        .map((row) => row.id)
+        .sort();
+
+    // The principal's page: every row the principal holds.
+    expect(
+      await listed(t.root.id, { holderKind: "service_principal", holderId: principal.id })
+    ).toEqual([onCrm, onErp].sort());
+    // The Connection's page: who holds a right on this one Connection, of either kind.
+    const holdersOfCrm = { scopeKind: "asset", scopeId: crm };
+    expect(await listed(t.root.id, holdersOfCrm)).toEqual([onCrm, kaiOnCrm].sort());
+    expect(await listed(t.root.id, { scopeKind: "asset", scopeId: erp })).toEqual([onErp]);
+
+    // Who is not shown service principals is shown the person and nothing of the principal.
+    expect(await listed(t.admin.id, holdersOfCrm)).toEqual([kaiOnCrm]);
+    // The same answer for a Connection only a principal holds, for one nobody holds and for
+    // one that does not exist: the list does not say which of the three it is.
+    const nobody = await t.seed("empty", forWorkflows);
+    for (const scopeId of [erp, nobody, "asset_unknown"]) {
+      const answer = await t.expectOk(t.admin.id, "permissions.list", {
+        query: { scopeKind: "asset", scopeId }
+      });
+      expect(answer.statusCode, scopeId).toBe(200);
+      expect(answer.json(), scopeId).toEqual({ items: [] });
+    }
+    // And for a principal that exists and one that does not.
+    for (const holderId of [principal.id, "sp_unknown"]) {
+      const answer = await t.expectOk(t.admin.id, "permissions.list", {
+        query: { holderKind: "service_principal", holderId }
+      });
+      expect(answer.json(), holderId).toEqual({ items: [] });
+    }
+  });
 });
 
 describe("what a service principal's grant row may give", () => {

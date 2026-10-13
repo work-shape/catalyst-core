@@ -137,16 +137,16 @@ export const approvals = defineTranslations({
     approvalRevisionMessageIntro:
       "Bitte überarbeite diesen Änderungsvorschlag und reiche die überarbeitete Fassung als neuen Vorschlag ein.",
     approvalRevisionMessageIntroNewSkill:
-      "Bitte überarbeite den Vorschlag für die neue Fähigkeit „{skill}“ ({skillName}) und reiche die überarbeitete Fassung als neuen Vorschlag ein.",
+      "Bitte überarbeite den Vorschlag für den neuen Skill „{skill}“ ({skillName}) und reiche die überarbeitete Fassung als neuen Vorschlag ein.",
     approvalRevisionMessageIntroSkill:
-      "Bitte überarbeite den Vorschlag für die Fähigkeit „{skill}“ ({skillName}) und reiche die überarbeitete Fassung als neuen Vorschlag ein.",
+      "Bitte überarbeite den Vorschlag für den Skill „{skill}“ ({skillName}) und reiche die überarbeitete Fassung als neuen Vorschlag ein.",
     approvalRevisionMessageMoreLines: "… ({count} weitere geänderte Zeilen)",
     approvalRevisionMessageProposal: "Ursprünglicher Vorschlag: {summary}",
     approvalRevisionMessageReadFirst:
-      "Lies vorher selbst den aktuellen Text der Fähigkeit mit read_skill, bevor du etwas vorschlägst.",
+      "Lies vorher selbst den aktuellen Text des Skills mit read_skill, bevor du etwas vorschlägst.",
     approvalRevisionMessageTargetNewResource: "Neue Referenz: {name}",
     approvalRevisionMessageTargetResource: "Betrifft: Referenz {name}",
-    approvalRevisionMessageTargetRoot: "Betrifft: Anweisungen der Fähigkeit",
+    approvalRevisionMessageTargetRoot: "Betrifft: Anweisungen des Skills",
     approvalRevisionStartFailed:
       "Die Überarbeitung konnte nicht gestartet werden. Deine Nachricht steht im Eingabefeld; sende sie, um zu starten.",
     approvalStatusApproved: "Übernommen",
@@ -166,11 +166,11 @@ export const approvals = defineTranslations({
     skillChangeAdded: "Neu hinzugefügt",
     skillChangeAfter: "Neu",
     skillChangeBefore: "Bisher",
-    skillChangeConcerns: "Fähigkeit: {skill}",
+    skillChangeConcerns: "Skill: {skill}",
     skillChangeInResource: "in der Referenz „{name}“",
     skillChangeInSection: "im Abschnitt „{heading}“",
     skillChangeNewResource: "Neue Referenz",
-    skillChangeNewSkill: "Neue Fähigkeit",
+    skillChangeNewSkill: "Neuer Skill",
     skillChangeShowContent: "Inhalt anzeigen"
   }
 });

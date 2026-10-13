@@ -1,6 +1,5 @@
 import {
   AppError,
-  WORKFLOW_LOOP_MAX_CONCURRENCY,
   asUserId,
   auditActorFromIdentity,
   createPlatformId,
@@ -11,6 +10,7 @@ import {
   type AuthenticatedIdentity,
   type ClientInstanceId,
   type JobControl,
+  type JobSchedule,
   type JsonValue,
   type OperationRunId,
   type PlatformStores,
@@ -29,14 +29,25 @@ import {
   type WorkflowStepRunRef,
   type WorkflowStepRunView
 } from "@vivd-catalyst/core";
-import { codeStepIssues, noWorkflowStepFiles, type WorkflowStepFiles } from "./code-step";
+import {
+  codeStepIssues,
+  noWorkflowStepFiles,
+  workflowStepFilesRefusal,
+  type WorkflowStepFiles
+} from "./code-step";
+import {
+  WORKFLOW_STEP_DATA_DAYS,
+  createWorkflowDataPruning,
+  type WorkflowDataPruning,
+  type WorkflowDataPruningOptions
+} from "./data-pruning";
 import { indexWorkflowSteps, type WorkflowStepIndex } from "./definition";
 import type { WorkflowDefinitionSource, WorkflowDefinitionSummary } from "./definition-source";
 import { WORKFLOW_RUN_LIMITS, WORKFLOW_STEP_JOB_SLOTS, type WorkflowRunLimits } from "./limits";
 import type { WorkflowOperationCalls } from "./operation-step";
 import { itemLabelOf } from "./references";
 import { principalActor } from "./run-identity";
-import { withEveryBodyStep } from "./run-view";
+import { loopConcurrencyOf, withEveryBodyStep } from "./run-view";
 import { createBlockEnds } from "./run-blocks";
 import { createStartCheck, type PreparedStart } from "./run-start";
 import { createScheduleTrigger } from "./schedule-trigger";
@@ -73,6 +84,10 @@ export interface WorkflowEngineOptions {
    * are run there. Without it a code step fails at once instead of waiting for nobody.
    */
   codeRunner?: WorkflowCodeRunner;
+  /** For how many days after its end a run keeps its values. The release's default when left out. */
+  stepDataDays?: number;
+  /** Batch sizes of the job that removes run data, below the release's own, for a test. */
+  pruneBatch?: WorkflowDataPruningOptions["batch"];
 }
 
 export interface StartWorkflowRunInput {
@@ -119,6 +134,10 @@ export interface WorkflowEngine {
   planSchedule(workflow: string): Promise<{ workflow: string; dueAt: string } | undefined>;
   /** What the job worker of the process serves for the engine. */
   jobHandlers: readonly RegisteredJobHandler[];
+  /** What the job worker runs again and again: the job that removes old run data, daily. */
+  jobSchedules: readonly JobSchedule[];
+  /** Removes the values of the runs that are due, as the daily job does. */
+  pruneRunData: WorkflowDataPruning["prune"];
 }
 
 /** Where a new step run stands in its run: its path, and its place in the tree of the run. */
@@ -331,10 +350,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     const loop = index.get(loopRun.stepId)?.step;
     const first = loop?.type === "loop" ? loop.steps[0] : undefined;
     // A definition nothing checked may name more than a loop may run at once.
-    const width =
-      loop?.type === "loop"
-        ? Math.min(Math.max(1, loop.concurrency ?? 1), WORKFLOW_LOOP_MAX_CONCURRENCY)
-        : 1;
+    const width = loop?.type === "loop" ? loopConcurrencyOf(loop) : 1;
     const total = (await tx.workflowRuns.countLoopItems(loopRef)) ?? 0;
     let started = await tx.workflowRuns.countLoopItemsStarted(loopRef);
     let going = (await tx.workflowRuns.readLoopCounts(loopRef))?.running ?? 0;
@@ -542,7 +558,14 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       });
       if (!definition) return;
       const index = indexWorkflowSteps(definition);
-      const attempt = { ...claimed, definition, index, signal: control.signal };
+      const attempt = {
+        ...claimed,
+        // The step run was read before this attempt was written on it.
+        stepRun: { ...claimed.stepRun, attempt: control.attempt },
+        definition,
+        index,
+        signal: control.signal
+      };
       // A code step whose script has ended is finished from what the script left; every
       // other step, and a code step before its script ran, is executed.
       const end = claimed.afterCode
@@ -641,8 +664,18 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     prepare: createScheduledStart({ clientInstanceId, prepareStart, openRun })
   });
 
+  const pruning = createWorkflowDataPruning({
+    clientInstanceId,
+    stores,
+    stepDataDays: options.stepDataDays ?? WORKFLOW_STEP_DATA_DAYS,
+    ...(options.pruneBatch ? { batch: options.pruneBatch } : {}),
+    now
+  });
+
   return {
-    jobHandlers: [stepHandler, schedule.handler],
+    jobHandlers: [stepHandler, schedule.handler, pruning.handler],
+    jobSchedules: [pruning.schedule],
+    pruneRunData: pruning.prune,
     planSchedules: schedule.plan,
     planSchedule: schedule.planOne,
 
@@ -661,13 +694,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       }
       const prepared = await prepareStart(published, input.input);
       const scripts = await codeStepIssues(published, stepFiles);
-      if (scripts.length > 0) {
-        throw new AppError(
-          "VALIDATION_FAILED",
-          `The definition of the Workflow '${published.manifest.id}' cannot be run: ${scripts[0]?.message ?? ""}`,
-          { reason: scripts[0]?.code ?? "definition_invalid", issues: scripts }
-        );
-      }
+      if (scripts.length > 0) throw workflowStepFilesRefusal(published.manifest.id, scripts);
       const { startedBy } = input;
       const run = await stores.transaction((tx) =>
         openRun(tx, prepared, {

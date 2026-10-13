@@ -41,7 +41,8 @@ export function groupConversationResources(
 
 export function resolveResourcesPanelOpen(input: {
   preference: ResourcesPanelPreference | undefined;
-  desktop: boolean;
+  /** Whether the card can stand beside the conversation; without a preference it opens only then. */
+  roomBeside: boolean;
   hasResources: boolean;
 }): boolean {
   if (!input.hasResources) {
@@ -50,7 +51,7 @@ export function resolveResourcesPanelOpen(input: {
   if (input.preference) {
     return input.preference === "open";
   }
-  return input.desktop;
+  return input.roomBeside;
 }
 
 export function formatStructuredDataValue(

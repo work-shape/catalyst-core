@@ -36,6 +36,7 @@
   },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts",
+    "probes": "node scripts/probes.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

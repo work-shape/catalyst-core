@@ -98,7 +98,8 @@ test("a member's proposal waits in the reviewer's Inbox, is rejected there and c
   const reviewerEntries = reviewerRail.getByRole("button", {
     name: /^(New chat|Chat|Inbox, 1 to decide)$/u
   });
-  await expect(reviewerEntries).toHaveCount(2);
+  // The third is the plus on the "Recent" heading, named as the row it repeats.
+  await expect(reviewerEntries).toHaveCount(3);
   await expect(reviewerEntries.nth(0)).toHaveAccessibleName("New chat");
   await expect(reviewerEntries.nth(1)).toHaveAccessibleName("Inbox, 1 to decide");
   await expect(reviewerEntries.nth(1)).toContainText("1");
@@ -585,7 +586,7 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
     await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
     await page.reload();
     await expect(headline).toHaveText(
-      `E2E Superadmin möchte die Fähigkeit „${HELD_TITLE}“ im Namespace ${HELD_NAMESPACE} anlegen.`
+      `E2E Superadmin möchte den Skill „${HELD_TITLE}“ im Namespace ${HELD_NAMESPACE} anlegen.`
     );
     await page.evaluate(() => window.localStorage.removeItem("vivd-catalyst:locale"));
     await page.reload();

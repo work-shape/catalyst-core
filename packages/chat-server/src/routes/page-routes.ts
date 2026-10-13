@@ -24,6 +24,7 @@ import {
   appContentDestinationAllowed,
   appContentHeaders,
   appContentPath,
+  appContentView,
   checkAppContentToken,
   composePageShell,
   createAppContentViewerChecks,
@@ -32,6 +33,7 @@ import {
   isHtmlContentType,
   mintAppContentToken
 } from "../app-content";
+import { appOutsideHosts } from "../apps/app-outside-hosts";
 import { mayOpenAssetFileSet } from "../asset-access";
 import { ConversationWorkflow } from "../conversations/conversation-workflow";
 import type { Route } from "../http/route";
@@ -263,9 +265,24 @@ export function registerPageRoutes(route: Route, options: ResolvedChatServerOpti
       return send(reply, file.contentType, cacheControl, Buffer.from(bytes));
     }
     // An HTML file is answered as the shell that holds it, never as it is stored. The policy
-    // of this answer names the one script of the shell's frame.
+    // of this answer names the one script of the shell's frame and the outside hosts it may
+    // connect to: of an App's, never one that a draft added before it was published.
     const shell = composePageShell(new TextDecoder().decode(bytes));
-    void reply.headers(appContentHeaders(frameAncestors, shell.pageScriptHash));
+    const outsideHosts = fileSet.asset
+      ? await appOutsideHosts(options.stores.pages, {
+          clientInstanceId: options.clientInstanceId,
+          assetId: fileSet.asset.id,
+          view: appContentView(checked.claims.mode, fileSet.asset),
+          shown: fileSet,
+          publishedFileSetId: fileSet.asset.publishedFileSetId
+        })
+      : undefined;
+    void reply.headers(
+      appContentHeaders(frameAncestors, {
+        pageScriptHash: shell.pageScriptHash,
+        outsideHosts: outsideHosts?.allowed ?? []
+      })
+    );
     return send(reply, file.contentType, cacheControl, shell.document);
   });
 }

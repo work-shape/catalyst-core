@@ -1,5 +1,5 @@
 import { KeyRound, Pencil, Plus, ShieldCheck } from "lucide-react";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import type {
   ApiCredential,
   ApiCredentialScope,
@@ -49,6 +49,10 @@ import { useTranslation } from "../i18n";
 export interface ApiAccessPanelInput {
   canMutate: boolean;
   principals: ServicePrincipalDetail[];
+  /** The principal the page opens on, where its address names one. */
+  initialPrincipalId?: string;
+  /** What the chosen principal may use, shown under its keys. */
+  renderRights?(detail: ServicePrincipalDetail): ReactNode;
   revealedCredential?: {
     secret: string;
     credentialName: string;
@@ -74,6 +78,8 @@ export interface ApiAccessPanelInput {
 export function ApiAccessPanel({
   canMutate,
   principals,
+  initialPrincipalId,
+  renderRights,
   revealedCredential,
   loading,
   mutating,
@@ -85,7 +91,7 @@ export function ApiAccessPanel({
   onClearRevealedCredential
 }: ApiAccessPanelInput) {
   const { t } = useTranslation();
-  const [selectedPrincipalId, setSelectedPrincipalId] = useState<string>();
+  const [selectedPrincipalId, setSelectedPrincipalId] = useState(initialPrincipalId);
   const [principalDialog, setPrincipalDialog] = useState<"create" | "edit">();
   const [credentialDialogOpen, setCredentialDialogOpen] = useState(false);
   const [credentialToRevoke, setCredentialToRevoke] = useState<ApiCredential>();
@@ -95,6 +101,8 @@ export function ApiAccessPanel({
     principals.find(({ principal }) => principal.id === selectedPrincipalId) ?? principals[0];
 
   useEffect(() => {
+    // Until the list is read there is no first principal to fall back to: the one named in
+    // the address stays chosen.
     if (selectedPrincipal && selectedPrincipalId !== selectedPrincipal.principal.id) {
       setSelectedPrincipalId(selectedPrincipal.principal.id);
     }
@@ -202,6 +210,7 @@ export function ApiAccessPanel({
               onEdit={() => setPrincipalDialog("edit")}
               onCreateCredential={() => setCredentialDialogOpen(true)}
               onRevokeCredential={setCredentialToRevoke}
+              rights={renderRights?.(selectedPrincipal)}
             />
           ) : null}
         </div>
@@ -292,7 +301,8 @@ function PrincipalDetail({
   canMutate,
   onEdit,
   onCreateCredential,
-  onRevokeCredential
+  onRevokeCredential,
+  rights
 }: {
   detail: ServicePrincipalDetail;
   mutating: boolean;
@@ -300,6 +310,7 @@ function PrincipalDetail({
   onEdit(): void;
   onCreateCredential(): void;
   onRevokeCredential(credential: ApiCredential): void;
+  rights?: ReactNode;
 }) {
   const { t, locale } = useTranslation();
   const { principal, credentials } = detail;
@@ -423,6 +434,7 @@ function PrincipalDetail({
             </Table>
           )}
         </div>
+        {rights}
       </CardContent>
     </Card>
   );

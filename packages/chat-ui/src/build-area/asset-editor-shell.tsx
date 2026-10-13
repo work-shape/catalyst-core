@@ -2,14 +2,16 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import {
   Banner,
   FormNotice,
+  KeyValue,
+  KeyValueList,
   Page,
   PageFooter,
   PageHeader,
+  PageOutline,
   SaveBar,
   Section,
   SegmentedControl,
-  SegmentedControlItem,
-  SubRail
+  SegmentedControlItem
 } from "@vivd-catalyst/ui";
 import { DocsReference } from "../docs-links";
 import { useTranslation } from "../i18n";
@@ -21,15 +23,18 @@ import { scrollToSection } from "./build-scroll";
 
 type AssetLanguage = keyof LocalizedPair;
 
-/** One section of an asset page: an entry of the index and the fields under its heading. */
+/** One section of an asset page: an entry of the outline and the fields under its heading. */
 export interface AssetSection {
-  /** The anchor the index scrolls to. */
+  /** The anchor the outline scrolls to. */
   id: string;
   label: string;
   description?: string;
-  /** How many things the section holds, in the index and after the heading. */
+  /** How many things the section holds, in the outline and after the heading. */
   count?: number;
-  /** The field a refusal names that belongs here: a refused save scrolls to this section. */
+  /**
+   * The field a refusal names that belongs here: a refused save scrolls to this section and
+   * the outline marks it.
+   */
   refusalField?: BuildRefusalField;
   body: ReactNode;
 }
@@ -86,13 +91,28 @@ export function usePageShown(page: BuildPageSlot, what: string): void {
 }
 
 /**
- * The page of one asset, the same for every kind: the head with the way back, the name and
- * the id, the index of the sections, the one language switch, what a refused save says, and
- * the save bar that shows with the first change. A kind hands it its sections.
+ * An asset's technical id, read-only and with a copy button: the first thing in the first
+ * section of its page. The head is one row and names the asset only.
+ */
+export function AssetIdentifier({ name }: { name: string }) {
+  const { t } = useTranslation();
+  return (
+    <KeyValueList layout="stacked" data-asset-identifier="">
+      <KeyValue label={t("build.identifier")} copyValue={name}>
+        <code className="font-mono text-code break-all">{name}</code>
+      </KeyValue>
+    </KeyValueList>
+  );
+}
+
+/**
+ * The page of one asset, the same for every kind: the head with the way back and the name,
+ * the id at the top of the first section, the outline of the sections, the one language
+ * switch, what a refused save says, and the save bar that shows with the first change. A kind
+ * hands it its sections.
  */
 export function AssetEditorShell({
   frame,
-  kindLabel,
   title,
   badges,
   headActions,
@@ -105,8 +125,6 @@ export function AssetEditorShell({
 }: {
   /** What the frame handed the kind's page. */
   frame: BuildAssetEditorProps;
-  /** The kind in the singular, before the id. */
-  kindLabel: string;
   title: string;
   badges?: ReactNode;
   /** Actions of the kind before the frame's own, such as making an agent the default. */
@@ -163,20 +181,13 @@ export function AssetEditorShell({
   return (
     <Page
       ref={page.ref}
+      width="narrow"
       header={
         <PageHeader
           variant="detail"
           back={back}
           title={title}
           state={badges}
-          description={
-            <span className="flex min-w-0 items-center gap-2">
-              <span>{kindLabel}</span>
-              <code className="min-w-0 truncate text-code" title={identifier}>
-                {identifier}
-              </code>
-            </span>
-          }
           secondaryActions={
             <>
               {headActions}
@@ -185,30 +196,27 @@ export function AssetEditorShell({
           }
         />
       }
-      subRail={
+      outline={
         sections.length > 1 ? (
-          <SubRail
-            mode="anchors"
+          <PageOutline
             belowHeader
-            label={t("build.sections")}
-            groups={[
-              {
-                id: "sections",
-                items: sections.map((section) => ({
-                  id: section.id,
-                  label: section.label,
-                  count: section.count
-                }))
-              }
-            ]}
+            items={sections.map((section) => ({
+              id: section.id,
+              label: section.label,
+              count: section.count,
+              invalid:
+                section.refusalField !== undefined &&
+                refusalsOf(outcome, section.refusalField).length > 0
+            }))}
           />
-        ) : undefined
+        ) : // One section needs no outline. The content stays where it is on every asset page.
+        null
       }
     >
       {page.above}
       <form
         ref={formRef}
-        // The first line of the content starts where the first item of the index does.
+        // The first line of the content starts where the outline does.
         className="grid min-w-0 content-start pt-5"
         noValidate={!canWrite}
         onSubmit={submit}
@@ -256,14 +264,16 @@ export function AssetEditorShell({
           </div>
         ) : null}
         <AssetLanguageProvider value={language}>
-          {sections.map((section) => (
+          {sections.map((section, index) => (
             <Section
               key={section.id}
               id={section.id}
+              layout="stacked"
               title={section.label}
               description={section.description}
               count={section.count}
             >
+              {index === 0 && identifier ? <AssetIdentifier name={identifier} /> : null}
               {section.body}
             </Section>
           ))}

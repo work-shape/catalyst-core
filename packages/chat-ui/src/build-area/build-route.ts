@@ -1,6 +1,9 @@
 import { createContext, useContext } from "react";
 import type { WorkspaceRoute } from "../routes";
 
+/** The path segment of Agents in Build. */
+export const AGENTS_BUILD_PATH = "agents";
+
 /** Where the reader is inside the Build area: a kind's list, or one asset of it. */
 export interface BuildLocation {
   /** The kind's path segment. Absent at `/build`. */

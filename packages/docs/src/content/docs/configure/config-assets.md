@@ -8,7 +8,7 @@ Agents, skills, and the default agent are **config assets**: they live in the cl
 This gives config assets a different lifecycle than release config:
 
 - **Release config** (`app.yaml`) ships with a deployment and owns infrastructure: auth, model providers and bindings, usage budgets, tool enablement, workspaces.
-- **Config assets** change at runtime — in [Build](/configure/build/) or with a `catalyst config push` — and apply to new conversations immediately, without a deployment. A running conversation keeps the agent snapshot it started with.
+- **Config assets** change at runtime — in [Studio](/configure/build/) or with a `catalyst config push` — and apply to new conversations immediately, without a deployment. A running conversation keeps the agent snapshot it started with.
 
 Skill content is read on demand by the `read_skill` tool, so edits are visible to reads after the edit even within an already-running conversation; the agent's system prompt, model selection, and tool list remain on the run's snapshot. A skill is one atomic package: its required `SKILL.md` root may include selectively readable UTF-8 text resources. The root read returns a compact resource manifest, and a second `read_skill` call can load one exact listed path.
 
@@ -63,6 +63,34 @@ skills/support_review/
 
 The CLI recursively includes `.md`, `.txt`, `.json`, `.yaml`, and `.yml` resources below each matched skill directory. It validates them as UTF-8 text, includes them in pull/diff/push, and rejects unsupported files instead of silently dropping them. Resource paths are normalized relative paths; absolute paths, traversal, duplicate paths, and a second `SKILL.md` resource are invalid. Binary assets do not belong in config assets.
 
+The front matter of `SKILL.md` holds `title`, `description` and, optionally, `name`, `summary` and `starters`. The two texts have different readers:
+
+- `description` is for the agent. It says when to use the skill.
+- `summary` is for people. It is one sentence on one line, at most 120 characters, that says what an agent with the skill knows how to do, such as "Knows how to write short, easy sentences in German and English." The agent editor and the Skills list show it under the title. A skill without a summary shows its title alone.
+
+A skill is instructions the agent follows. It adds no tools, so a summary never names something only a tool can do.
+
+`starters` are first requests the empty chat offers under the composer for an agent that has the skill. A skill carries at most two:
+
+```yaml
+starters:
+  - title:
+      en: Check an invoice
+      de: Rechnung prüfen
+    hint:
+      en: Required details and tax rate
+      de: Pflichtangaben und Steuersatz
+    prompt:
+      en: "Check this invoice for the required details and the right tax rate:"
+      de: "Prüfe diese Rechnung auf Pflichtangaben und den richtigen Steuersatz:"
+    tools:
+      - workspace.read_file
+```
+
+- `title` and the optional `hint` are one line of at most 60 characters each. `prompt` is the text that fills the composer when the starter is chosen. Nothing is sent until the person sends it. Each of the three is one text or one text per language (`en`, `de`).
+- `tools` is optional. A starter shows only for an agent that holds every tool it names, so it never offers what the agent cannot do.
+- The chat shows at most four starters for an agent, the skills in the order the agent lists them. An agent whose skills carry none shows the empty chat as before.
+
 The server URL can come from a named `catalyst.yaml` instance or directly from `--instance https://catalyst.example.com`. Authentication is environment-only for now:
 
 ```sh
@@ -107,7 +135,18 @@ selector when the pointer is on it. `ui.showAgentDescriptions` is `false` by
 default; with `true` the selector lists each description, and otherwise, or
 without a description, only the display name.
 
-People with the `config_assets.write` permission, or with a grant in a Namespace, edit assets in [Build](/configure/build/). The module `assetManagement` turns that on, and release config decides how much of an agent is interactively editable:
+The **Agents** page, the row under New chat in the main rail, shows every agent
+a person may use in the open workspace as a card: the display name, the
+description, the first three starter prompts and **Start chat**. Start chat
+opens a new conversation with that agent selected, and a starter prompt opens
+one with its text in the composer. The card always shows the description,
+whatever `ui.showAgentDescriptions` says, and it marks the workspace's default
+agent. A person who may read agents in Studio also finds **Edit in Studio** on
+each card. A person who may create one finds **New agent** in the page head: it
+opens the list of agents in Studio with the dialog that starts an agent, when
+`allowAgentCreation` is on and the person holds the right to write one.
+
+People with the `config_assets.write` permission, or with a grant in a Namespace, edit assets in [Studio](/configure/build/). The module `assetManagement` turns that on, and release config decides how much of an agent is interactively editable:
 
 ```yaml
 modules:
@@ -146,17 +185,17 @@ modelReasoningEfforts:
 ```
 
 - Every id must be a binding agents may use (`agentSelectable` not `false` in release config); anything else is a validation error when the list is saved or pushed. The binding-level `userSelectable` key has no effect. The agent's own `modelBindingId` is always available and need not be listed.
-- Build shows the models in the agent's **Model** section: **Default model** picks `modelBindingId`, and a tick per model under **Models people can choose in chat** fills this list. The default is always offered and has no tick of its own. Changing the default leaves the other ticks as they are, so tick the previous default to keep offering it.
+- Studio shows the models in the agent's **Model** section: **Default model** picks `modelBindingId`, and a tick per model under **Models people can choose in chat** fills this list. The default is always offered and has no tick of its own. Changing the default leaves the other ticks as they are, so tick the previous default to keep offering it.
 - The composer shows a model picker with the agent's own model first, followed by the list. With an empty list there is no model to choose; the picker then appears only if the agent's own model offers a choice of reasoning effort, see [what the model picker shows](/configure/release-config/#what-the-model-picker-shows). Switching the agent updates the options and falls back to the new agent's own model when it does not offer the current pick.
 - The server rejects a run that requests a model the resolved agent does not offer.
 - An id whose binding is later removed or set to `agentSelectable: false` is ignored instead of failing the agent. It stays in the stored config until the list is next changed.
 - Reasoning effort is set per model. `reasoningEffort` is the effort of the agent's own model. `modelReasoningEfforts` maps a listed binding id to the effort for runs where a user picked that model; without an entry the binding's own default applies. The agent's `reasoningEffort` is never applied to a model the user picked instead. Every key must be in `userSelectableModelBindingIds`; anything else is a validation error.
-- In Build each model in use (the default and the ticked ones) has its own reasoning-effort select. When the default changes, each effort stays with its model.
+- In Studio each model in use (the default and the ticked ones) has its own reasoning-effort select. When the default changes, each effort stays with its model.
 - The CLI omits both keys from the agent YAML when they are empty.
 
 Set `enabled: true`, leave `editableAgentFields` empty, and set all interactive mutation flags (including `allowSkillEditing`) to `false` for a readable, release-controlled Config tab. Agents, complete skill packages, and revision history remain inspectable while create, save, delete, default-change, and restore controls are hidden. Enabling skill editing later exposes the same atomic package through a root/reference editor; no storage migration is required.
 
-Optimistic concurrency protects both surfaces, per asset: a save in Build carries the revision the page loaded, and a save after somebody else's write of the same asset shows a notice that names who saved first and when, with "Load the newer version" and "Open history", instead of overwriting. A save of another asset never blocks it.
+Optimistic concurrency protects both surfaces, per asset: a save in Studio carries the revision the page loaded, and a save after somebody else's write of the same asset shows a notice that names who saved first and when, with "Load the newer version" and "Open history", instead of overwriting. A save of another asset never blocks it.
 
 ## Agent skill changes
 
@@ -263,7 +302,13 @@ A write moves the draft and nothing else. The revision the members of the App's 
 
 `assets.get` reads one revision of an App: `revision` is `draft` (the default), `published` or a revision number, and `contentRevision` in the answer names the revision that is shown, while `revision` stays the number of the draft that a write names. With `files=true` the answer carries the source files of that revision in the order of their paths, each with `path`, `contentType`, `sha256`, `bytes` and its content as `text` where the bytes are UTF-8 text and as `base64` otherwise, so the files of an answer can be put again as they are. One answer carries at most 8 MiB of files (`ASSET_GET_FILES_MAX_BYTES`); for a larger set it carries the index without contents and `filesOmitted: true`. The published revision needs `app.read`; the draft and a numbered revision need `app.write` or `app.publish`. A read that names no revision answers the draft to whoever may read it. Everybody else who holds `app.read` or `app.use` is answered the published view: the published revision's config, `revision`, `contentRevision` and `publishedRevision` all naming that revision, and no `draftRevision`. `assets.list` shows a holder of `app.use` alone the same view of every published App, with the title it was published under, and no App that has only a draft. Through `app.use` no files are read. `assets.revisions.list` holds every draft and needs `app.write` or `app.publish`. `published` before the first publish answers `404` with `not_published`, an unknown number `revision_unknown`, and a revision whose files are not stored `revision_files_removed`. For a kind without files `files=true` answers `422` with `no_files`, and any `revision` but `draft` answers `no_draft`.
 
-`apps.create_from_page` (`POST /api/v1/apps`) saves the newest revision of a Page as an App with a draft. It copies the files, so the App stays when the conversation of the Page is deleted. The source files become the first commit of the App's git repository, and the audit event `app.created` names the asset, the revision and the commit. The commit is made by the workspace command worker with the git of the runner image: on a runner image older than the release the call is refused with `409` and `details.reason` `runner_image_outdated`, and without a worker with `commit_unavailable`. `apps.preview` (`POST /api/v1/apps/{app}/preview`) answers the address a frame loads, for the mode `published` or `draft`, and `interfacePath`, the path of the App in the interface. `assets.delete` removes an App with its revisions and its files; its Operation Runs and audit events stay.
+`apps.create_from_page` (`POST /api/v1/apps`) saves the newest revision of a Page as an App with a draft. It copies the files, so the App stays when the conversation of the Page is deleted. The source files become the first commit of the App's git repository, and the audit event `app.created` names the asset, the revision and the commit. The commit is made by the workspace command worker with the git of the runner image: on a runner image older than the release the call is refused with `409` and `details.reason` `runner_image_outdated`, and without a worker with `commit_unavailable`. The revision records the Page as its `origin`: `{ "kind": "page", "conversationId", "pageId", "fileSetNumber" }`. The Page an App is updated from is the one its newest revision with such an origin names.
+
+`apps.update_from_page` (`POST /api/v1/apps/{app}/update-from-page`) writes the newest revision of that Page as the next draft revision of the App. It needs `app.write` on the App and read access to the Page, and it names `expectedRevision`, the draft revision the caller last read. Nothing is published, and the App keeps its title. The update is the next commit of the App's repository, made as the commit of a save is and refused as one is. An App that is updated from another Page or from none answers `409` with `details.reason: "app_not_from_page"`; that includes every App saved before a release with this operation. With `"link": true` such an App is written too and is this Page's from then on; the audit event `config_asset.updated` of that write carries `pageLinked: true`. A draft that moved since answers `412 REVISION_CONFLICT`, and a call with the new number replaces it.
+
+`apps.get_from_page` (`GET /api/v1/conversations/{conversationId}/pages/{pageId}/app`) answers the App of a Page, or `null`: among the Apps updated from the Page that the caller may write, the one the caller wrote from it last, and otherwise the one created first. `draftFromPage` is `false` where the draft was last written another way than from this Page. With `?app=<id>` the answer also carries `candidate`: that App where the caller may write it, with `page` saying whether it is updated from `none`, `this` Page, an `other_page` of the conversation or one of an `other_conversation`; `null` otherwise. In the interface the header of a Page with an App offers Update app in place of Save as app, and Save as app under the id of an App the reader may write offers to update that App from the Page.
+
+`apps.preview` (`POST /api/v1/apps/{app}/preview`) answers the address a frame loads, for the mode `published` or `draft`, and `interfacePath`, the path of the App in the interface. `assets.delete` removes an App with its revisions and its files; its Operation Runs and audit events stay.
 
 The address `apps.preview` answers is the credential of the frame it is loaded in: the sandboxed frame has no origin and cannot send the session, so whoever holds the address is served its files. The address names the person it was made for and one file set, is valid for one hour, and that person's right is asked again at most every 30 seconds. A browser keeps a file no longer than the address is valid. Treat the address as a secret of that person and do not pass it on; share the App by its path in the interface (`interfacePath`).
 

@@ -27,12 +27,13 @@ const MAX_TARBALL_BYTES = 300_000;
 // are released, and the limit has room for one more. A version repeats the chart engine and
 // React byte for byte, about 258 kB packed, so sharing those between versions is the way to
 // stop the growth before the limit moves again. postgres-store ships its migrations with one
-// schema snapshot each, about 9 kB packed per migration.
+// schema snapshot each, about 9 kB packed per migration; 69 migrations are 620 kB. chat-ui grew
+// past 1 MB with the Workflow, Data Store, Agents and rights pages.
 const MAX_TARBALL_BYTES_BY_DIR = {
-  "chat-ui": 1_000_000,
+  "chat-ui": 1_200_000,
   ui: 500_000,
   "chat-server": 2_000_000,
-  "postgres-store": 600_000
+  "postgres-store": 800_000
 };
 const FORBIDDEN_FILES = [
   [/\.map$/u, "source map"],

@@ -284,12 +284,35 @@ describe("workspace rail frame", () => {
   });
 });
 
-describe("workspace rail Build row and Settings gear", () => {
-  it("shows Build above the account row only to a viewer who may open it", () => {
+describe("workspace rail Studio row and Settings gear", () => {
+  it("offers New chat at the end of the Recent heading, and not in the collapsed strip", () => {
+    const markup = renderRail();
+    const heading = markup.slice(markup.indexOf("data-nav-group-label"));
+    const action = heading.slice(0, heading.indexOf("</div>"));
+
+    // The heading names the group; the button beside it is named for what it does.
+    expect(action).toMatch(/<span id="[^"]+"[^>]*>Recent<\/span>/u);
+    expect(action).toMatch(/<button[^>]*aria-label="New chat"/u);
+    // It keeps its room while it is unseen, shows for the pointer and the keyboard, and
+    // always where nothing hovers.
+    expect(action).toContain("opacity-0");
+    expect(action).toContain("group-hover/nav-group:opacity-100");
+    expect(action).toContain("focus-within:opacity-100");
+    expect(action).toContain("[@media(hover:none)]:opacity-100");
+
+    expect(renderRail(undefined, undefined, [], {}, "de")).toMatch(
+      /data-nav-group-action=""[^>]*><button[^>]*aria-label="Neuer Chat"/u
+    );
+    expect(renderRail(undefined, undefined, [], { collapsed: true })).not.toContain(
+      "data-nav-group-action"
+    );
+  });
+
+  it("shows Studio above the account row only to a viewer who may open it", () => {
     expect(renderRail()).not.toContain("lucide-blocks");
 
     const markup = renderRail(undefined, undefined, [], { canViewBuild: true, view: "build" });
-    expect(markup).toMatch(/<button[^>]*aria-current="true"[^>]*>(?:(?!<\/button>).)*Build/u);
+    expect(markup).toMatch(/<button[^>]*aria-current="true"[^>]*>(?:(?!<\/button>).)*Studio/u);
   });
 
   it("offers the gear to a viewer with an administration page and marks it on Settings", () => {

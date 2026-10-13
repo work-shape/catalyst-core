@@ -1,0 +1,208 @@
+import { Workflow } from "lucide-react";
+import { useId, useMemo } from "react";
+import {
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  EmptyState,
+  Page,
+  PageHeader,
+  SkeletonList
+} from "@vivd-catalyst/ui";
+import { formatUpdated } from "../build-area/build-model";
+import { formatDateTime } from "../control-plane/locale-format";
+import { useTranslation } from "../i18n";
+import { RouteLink } from "../route-link";
+import { useWorkflowList, type WorkflowList } from "./workflow-data";
+import type { WorkflowListItem } from "./workflow-views";
+import { LoadError, RunStateBadge, WorkflowsFrame, type OpenRoute } from "./workflows-frame";
+import { useWorkflowsHost } from "./workflows-host";
+
+/** The Workflows of the open workspace, as far as the reader may read them. */
+export function WorkflowsPage() {
+  const host = useWorkflowsHost();
+  const list = useWorkflowList(host?.workspace?.id);
+  const rows = list.rows;
+  // The ages are counted from when the list last arrived.
+  const now = useMemo(() => new Date(), [rows]);
+  if (!host?.workspace) {
+    return null;
+  }
+  return (
+    <WorkflowsPageView
+      workspaceId={host.workspace.id}
+      list={list}
+      now={now}
+      onOpenRoute={host.showRoute}
+    />
+  );
+}
+
+/** The list of Workflows as it stands for a given list. */
+export function WorkflowsPageView({
+  workspaceId,
+  list,
+  now,
+  onOpenRoute
+}: {
+  workspaceId: string;
+  list: WorkflowList;
+  now: Date;
+  onOpenRoute: OpenRoute;
+}) {
+  const { t } = useTranslation();
+  const rows = list.rows;
+  return (
+    <WorkflowsFrame label={t("workflows.title")} testId="workflows-area">
+      <Page>
+        <PageHeader title={t("workflows.title")} description={t("workflows.description")} />
+        {list.failed ? (
+          <div className="mb-4">
+            <LoadError onRetry={list.retry}>{t("workflows.listFailed")}</LoadError>
+          </div>
+        ) : null}
+        {rows === undefined ? (
+          list.failed ? null : (
+            <SkeletonList rows={4} />
+          )
+        ) : rows.length === 0 ? (
+          <EmptyState icon={<Workflow aria-hidden="true" />}>
+            {t("workflows.emptyReadOnly")}
+          </EmptyState>
+        ) : (
+          <div className="grid min-w-0 gap-4">
+            <ul
+              aria-label={t("workflows.title")}
+              className="grid grid-cols-1 gap-4 @2xl:grid-cols-2"
+            >
+              {rows.map((workflow) => (
+                <li key={workflow.id} className="flex min-w-0">
+                  <WorkflowCard
+                    workflow={workflow}
+                    workspaceId={workspaceId}
+                    now={now}
+                    onOpenRoute={onOpenRoute}
+                  />
+                </li>
+              ))}
+            </ul>
+            {list.hasMore ? (
+              <Button
+                variant="outline"
+                className="justify-self-start"
+                loading={list.loadingMore}
+                onClick={list.loadMore}
+              >
+                {t("workflows.showMore")}
+              </Button>
+            ) : null}
+          </div>
+        )}
+      </Page>
+    </WorkflowsFrame>
+  );
+}
+
+/**
+ * Whether the card warns that the Workflow cannot be started. One that has no start by hand
+ * runs on its schedule or for another Workflow: that is how it is built, not a fault, so a
+ * refusal for that alone is no warning here. Its page says it where a start is offered.
+ */
+function cannotStart(workflow: WorkflowListItem): boolean {
+  return workflow.refusedFor.some((issue) => issue.code !== "no_manual_trigger");
+}
+
+/**
+ * One Workflow, as the Agents and Apps pages show theirs: what it is called and what it does,
+ * how its latest run ended and when, and the ways into it. The state of the run stands beside
+ * the words "Last run", so it is not read as the state of the Workflow.
+ */
+function WorkflowCard({
+  workflow,
+  workspaceId,
+  now,
+  onOpenRoute
+}: {
+  workflow: WorkflowListItem;
+  workspaceId: string;
+  now: Date;
+  onOpenRoute: OpenRoute;
+}) {
+  const { locale, t } = useTranslation();
+  const titleId = useId();
+  const { lastRun } = workflow;
+  const address = { collaborationWorkspaceId: workspaceId, workflow: workflow.id };
+  return (
+    <Card padding="md" className="flex w-full min-w-0 flex-col">
+      <CardHeader>
+        <div className="flex min-w-0 items-center gap-3">
+          <Avatar kind="workflow" name={workflow.name} />
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <CardTitle id={titleId} className="min-w-0 break-words">
+              {workflow.name}
+            </CardTitle>
+            {cannotStart(workflow) ? (
+              <Badge tone="warning" size="sm">
+                {t("workflows.notRunnable.badge")}
+              </Badge>
+            ) : null}
+          </div>
+        </div>
+        {workflow.description ? (
+          <p className="text-body text-muted-foreground">{workflow.description}</p>
+        ) : null}
+      </CardHeader>
+      <CardContent>
+        <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-caption text-muted-foreground">
+          {lastRun === undefined ? (
+            t("workflows.noRunsPlain")
+          ) : (
+            <>
+              <span>{t("workflows.lastRun")}</span>
+              <RunStateBadge status={lastRun.status} />
+              {lastRun.startedAt === undefined ? null : (
+                <time
+                  dateTime={lastRun.startedAt}
+                  title={formatDateTime(lastRun.startedAt, locale)}
+                >
+                  {formatUpdated(lastRun.startedAt, now, locale)}
+                </time>
+              )}
+            </>
+          )}
+        </p>
+      </CardContent>
+      {/* A Workflow without a published revision has nothing a reader could open. */}
+      {workflow.published ? (
+        <CardFooter>
+          <RouteLink
+            route={{ kind: "workflow", ...address }}
+            variant="primary"
+            describedBy={titleId}
+            onOpen={onOpenRoute}
+          >
+            {t("workflows.open")}
+          </RouteLink>
+          {/* A Workflow that ran has runs to look through. */}
+          {lastRun === undefined ? null : (
+            <div className="ml-auto flex items-center gap-1">
+              <RouteLink
+                route={{ kind: "workflow-runs", ...address }}
+                variant="link"
+                describedBy={titleId}
+                onOpen={onOpenRoute}
+              >
+                {t("workflows.sectionRuns")}
+              </RouteLink>
+            </div>
+          )}
+        </CardFooter>
+      ) : null}
+    </Card>
+  );
+}

@@ -9,6 +9,7 @@ import {
   createAssistantToolCallsMetadata,
   createToolResultMetadata
 } from "@vivd-catalyst/core";
+import { genericIcons } from "@vivd-catalyst/ui";
 import { toUiMessages } from "../packages/chat-ui/src/assistant/assistant-ui-adapter";
 import {
   WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE,
@@ -93,14 +94,14 @@ describe("chat UI artifact download cards", () => {
         artifacts
       }
     });
-    expect(artifacts.map((artifact) => getArtifactFileType(artifact).badge)).toEqual([
-      "PPT",
-      "PDF",
-      "DOC",
-      "XLS",
-      "CSV",
-      "IMG",
-      "ZIP"
+    expect(artifacts.map((artifact) => getArtifactFileType(artifact).id)).toEqual([
+      "presentation",
+      "pdf",
+      "document",
+      "spreadsheet",
+      "csv",
+      "image",
+      "archive"
     ]);
     expect(JSON.stringify(artifactPart)).not.toContain("scratch/");
     expect(JSON.stringify(artifactPart)).not.toContain("workspacePath");
@@ -468,29 +469,86 @@ describe("chat UI artifact download cards", () => {
     expect(markup).not.toContain("document.preview_page_image");
   });
 
-  it("classifies artifact badge types without proprietary assets", () => {
-    expectBadge(
+  it("classifies artifact file types without proprietary assets", () => {
+    expectFileType(
       "slides.pptx",
       "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-      "PPT"
+      "presentation"
     );
-    expectBadge("report.pdf", "application/pdf", "PDF");
-    expectBadge(
+    expectFileType("report.pdf", "application/pdf", "pdf");
+    expectFileType(
       "letter.docx",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "DOC"
+      "document"
     );
-    expectBadge(
+    expectFileType(
       "workbook.xlsx",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "XLS"
+      "spreadsheet"
     );
-    expectBadge("table.csv", "text/csv", "CSV");
-    expectBadge("plot.webp", "image/webp", "IMG");
-    expectBadge("exports.zip", "application/zip", "ZIP");
-    expectBadge("notes.md", "text/markdown", "MD");
-    expectBadge("notes.txt", "text/plain", "DOC");
-    expectBadge("unknown.bin", "application/octet-stream", "FILE");
+    expectFileType("table.csv", "text/csv", "csv");
+    expectFileType("plot.webp", "image/webp", "image");
+    expectFileType("exports.zip", "application/zip", "archive");
+    expectFileType("notes.md", "text/markdown", "markdown");
+    expectFileType("notes.txt", "text/plain", "text");
+    expectFileType("unknown.bin", "application/octet-stream", "file");
+  });
+
+  it("reads a file's type from its name first, then its media type, then its kind", () => {
+    const type = (file: { filename?: string; mimeType?: string; kind?: string }) =>
+      getArtifactFileType({ artifactId: "art_file", ...file });
+
+    expect(type({ filename: "Buchungen_September.xlsx" }).icon).toBe("spreadsheet");
+    expect(type({ filename: "export.CSV" }).icon).toBe("spreadsheet");
+    expect(type({ filename: "bundle.tar.gz" }).icon).toBe("archive");
+    expect(type({ filename: "upload", mimeType: "application/vnd.ms-excel" }).id).toBe(
+      "spreadsheet"
+    );
+    expect(type({ filename: "upload", mimeType: "text/csv; charset=utf-8" }).id).toBe("csv");
+    expect(type({ filename: "upload", mimeType: "application/msword" }).id).toBe("document");
+    expect(type({ filename: "upload", mimeType: "image/svg+xml" }).id).toBe("image");
+    // The name decides over the media type, and a word inside the name decides nothing.
+    expect(type({ filename: "table.csv", mimeType: "text/plain" }).id).toBe("csv");
+    expect(type({ filename: "pdf-summary.docx" }).id).toBe("document");
+    expect(type({ filename: "image-list.xlsx", mimeType: "image/png" }).id).toBe("spreadsheet");
+    expect(type({ kind: "document.pdf" }).id).toBe("pdf");
+    expect(type({ kind: "document.word" }).id).toBe("document");
+    expect(type({ kind: "spreadsheet.workbook" }).id).toBe("spreadsheet");
+  });
+
+  it("gives a file of no known type the generic icon", () => {
+    for (const file of [
+      {},
+      { filename: "model.step" },
+      { filename: "clip.mov", mimeType: "video/quicktime" }
+    ]) {
+      expect(getArtifactFileType({ artifactId: "art_file", ...file })).toMatchObject({
+        id: "file",
+        icon: "file"
+      });
+    }
+  });
+
+  it("names an icon of the library's registry for every type", () => {
+    const names = [
+      "a.pdf",
+      "a.pptx",
+      "a.docx",
+      "a.csv",
+      "a.xlsx",
+      "a.png",
+      "a.zip",
+      "a.md",
+      "a.txt"
+    ];
+    const types = [...names, "a.bin"].map((filename) =>
+      getArtifactFileType({ artifactId: "art_file", filename })
+    );
+
+    expect(new Set(types.map((type) => type.id)).size).toBe(types.length);
+    for (const type of types) {
+      expect(Object.keys(genericIcons)).toContain(type.icon);
+    }
   });
 
   it("marks first-pass previewable artifact types", () => {
@@ -561,14 +619,14 @@ describe("chat UI artifact download cards", () => {
   });
 });
 
-function expectBadge(filename: string, mimeType: string, badge: string): void {
+function expectFileType(filename: string, mimeType: string, id: string): void {
   expect(
     getArtifactFileType({
       artifactId: `art_${filename.replaceAll(/[^a-z0-9]/giu, "_")}`,
       filename,
       mimeType
-    }).badge
-  ).toBe(badge);
+    }).id
+  ).toBe(id);
 }
 
 function expectPreviewKind(

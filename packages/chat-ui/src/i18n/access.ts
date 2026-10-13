@@ -95,10 +95,38 @@ export const access = defineTranslations({
     "access.actionOnSkill": "{action} skills",
     "access.actionOnConnection": "{action} connections",
     "access.actionReadConnectionDescription":
-      "See the connection and its status in Build. Never its credentials.",
+      "See the connection and its status in Studio. Never its credentials.",
     "access.actionUseConnectionDescription":
       "Let agents this person builds or runs call the outside system through it.",
     "access.actionUse": "Use",
+    "access.actionPublish": "Publish",
+    "access.actionOnWorkflow": "{action} workflows",
+    "access.actionReadWorkflowDescription": "See the Workflow, its steps and its runs.",
+    "access.actionUseWorkflowDescription":
+      "Start the Workflow. It then runs with the Workflow's own rights, not with this person's, so it can read and change what the person cannot.",
+    "access.actionWriteWorkflowDescription":
+      "Change the draft of the Workflow. A draft does not run until it is published.",
+    "access.actionPublishWorkflowDescription": "Make a draft the version that runs.",
+    "access.actionPublishWorkflowNote":
+      "Not enough on its own today: publishing a Workflow also needs the superadmin role and the right to manage API access. For anyone else this right changes nothing yet.",
+    "access.scopeWorkflow": "Workflow {name}",
+    "access.scopeInNamespaceWorkflowDescription":
+      "Every Workflow whose name starts with the prefix, future ones included.",
+    "access.scopeOnWorkflow": "On one Workflow",
+    "access.scopeOnWorkflowDescription": "One existing Workflow.",
+    "access.grantWorkflow": "Workflow",
+    "access.chooseWorkflow": "Choose a Workflow",
+    "access.noWorkflows": "This instance has no Workflow yet.",
+    "access.workflowsLoadFailed": "The Workflows could not be loaded.",
+    "access.noAssets": "This instance has none of this kind yet.",
+    "access.grantRightNotOffered":
+      "This right cannot be given in a Namespace or on one asset. Reload the page and choose one of the actions it offers.",
+    "access.grantModuleOff":
+      "The module of this kind is switched off on this instance, so it has no rights to give. Reload the page.",
+    "access.grantMissingManageRight":
+      "Your account lacks the right to manage users, so it cannot give or remove rights.",
+    "access.grantHolderIsSuperadmin":
+      "This person is a superadmin. Only a superadmin can give a superadmin a right or remove one.",
     "access.kindConnection": "Connections",
     "access.kindApp": "Apps",
     "access.kindWorkflow": "Workflows",
@@ -126,7 +154,7 @@ export const access = defineTranslations({
     "access.revokeFailed": "The right could not be revoked.",
     "access.grantDialogTitle": "New right",
     "access.grantDialogDescription":
-      "Gives one person a right in one place: a Namespace, a single agent or skill, or a shared workspace. Rights on the whole instance are set on the Users page.",
+      "Gives one person a right in one place: a Namespace, a single asset, or a shared workspace. Rights on the whole instance are set on the Users page.",
     "access.choosePerson": "Choose a person",
     "access.usersLoadFailed": "The users could not be loaded.",
     "access.grantKind": "Kind",
@@ -153,7 +181,8 @@ export const access = defineTranslations({
     "access.grantUserBeingDeleted": "User account is being deleted",
     "access.grantUnknownHolder": "This user no longer exists.",
     "access.grantUnknownNamespace": "This Namespace is no longer registered.",
-    "access.grantAssetGone": "This asset no longer exists or is of another kind.",
+    "access.grantAssetGone":
+      "This asset no longer exists, or the action cannot be given at this place. Reload the page and choose again.",
     "access.grantPartlyWritten": "{written} of {total} rows were written before this.",
 
     "access.checkDescription":
@@ -269,12 +298,12 @@ export const access = defineTranslations({
     "access.namespaceInUseOther": "{count} Rechte nennen diesen Namespace. Entziehe sie zuerst.",
     "access.namespaceDeleteTitle": "Namespace {prefix} löschen?",
     "access.namespaceDeleteDescription":
-      "Das Präfix wird wieder frei. Agenten und Fähigkeiten mit diesem Präfix bleiben unverändert und sind nicht mehr durch seine Werkzeug- und Modelllisten begrenzt.",
+      "Das Präfix wird wieder frei. Agenten und Skills mit diesem Präfix bleiben unverändert und sind nicht mehr durch seine Werkzeug- und Modelllisten begrenzt.",
     "access.namespaceDeleteFailed": "Der Namespace konnte nicht gelöscht werden.",
     "access.namespaceCreateTitle": "Neuer Namespace",
     "access.namespaceEditTitle": "Namespace {prefix} bearbeiten",
     "access.namespaceDialogDescription":
-      "Agenten und Fähigkeiten, deren Name mit dem Präfix beginnt, gehören zum Namespace.",
+      "Agenten und Skills, deren Name mit dem Präfix beginnt, gehören zum Namespace.",
     "access.namespacePrefixHint":
       "Kleingeschriebene Wörter, mit Bindestrichen verbunden, am Ende ein Bindestrich, zum Beispiel kai-. Es lässt sich später nicht ändern.",
     "access.namespacePrefixFixed": "Ein Präfix lässt sich nicht ändern.",
@@ -321,7 +350,7 @@ export const access = defineTranslations({
     "access.effectDeny": "Verweigern",
     "access.scopeNamespace": "Namespace {prefix}",
     "access.scopeAgent": "Agent {name}",
-    "access.scopeSkill": "Fähigkeit {name}",
+    "access.scopeSkill": "Skill {name}",
     "access.scopeAssetGone": "Asset existiert nicht mehr",
     "access.scopeAssetGoneHint":
       "Diese Verweigerung bleibt, bis du sie aufhebst. Sie gilt wieder, sobald ein Asset mit diesem Namen angelegt wird.",
@@ -330,15 +359,43 @@ export const access = defineTranslations({
     "access.actionWrite": "Schreiben",
     "access.actionDelete": "Löschen",
     "access.kindAgent": "Agenten",
-    "access.kindSkill": "Fähigkeiten",
+    "access.kindSkill": "Skills",
     "access.actionOnAgent": "Agenten: {action}",
-    "access.actionOnSkill": "Fähigkeiten: {action}",
+    "access.actionOnSkill": "Skills: {action}",
     "access.actionOnConnection": "Verbindungen: {action}",
     "access.actionReadConnectionDescription":
-      "Die Verbindung und ihren Status in Bauen sehen. Nie ihre Zugangsdaten.",
+      "Die Verbindung und ihren Status im Studio sehen. Nie ihre Zugangsdaten.",
     "access.actionUseConnectionDescription":
       "Agenten, die diese Person baut oder ausführt, dürfen das externe System darüber aufrufen.",
     "access.actionUse": "Nutzen",
+    "access.actionPublish": "Veröffentlichen",
+    "access.actionOnWorkflow": "Workflows: {action}",
+    "access.actionReadWorkflowDescription": "Den Workflow, seine Schritte und seine Läufe sehen.",
+    "access.actionUseWorkflowDescription":
+      "Den Workflow starten. Er läuft dann mit den eigenen Rechten des Workflows, nicht mit denen dieser Person, und kann deshalb lesen und ändern, was die Person nicht darf.",
+    "access.actionWriteWorkflowDescription":
+      "Den Entwurf des Workflows ändern. Ein Entwurf läuft erst, wenn er veröffentlicht ist.",
+    "access.actionPublishWorkflowDescription": "Einen Entwurf zu der Version machen, die läuft.",
+    "access.actionPublishWorkflowNote":
+      "Reicht heute allein nicht: Einen Workflow zu veröffentlichen braucht zusätzlich die Superadmin-Rolle und das Recht, den API-Zugriff zu verwalten. Für alle anderen ändert dieses Recht noch nichts.",
+    "access.scopeWorkflow": "Workflow {name}",
+    "access.scopeInNamespaceWorkflowDescription":
+      "Jeder Workflow, dessen Name mit dem Präfix beginnt, auch künftige.",
+    "access.scopeOnWorkflow": "An einem Workflow",
+    "access.scopeOnWorkflowDescription": "Ein vorhandener Workflow.",
+    "access.grantWorkflow": "Workflow",
+    "access.chooseWorkflow": "Workflow wählen",
+    "access.noWorkflows": "Auf dieser Instanz gibt es noch keinen Workflow.",
+    "access.workflowsLoadFailed": "Die Workflows konnten nicht geladen werden.",
+    "access.noAssets": "Auf dieser Instanz gibt es davon noch nichts.",
+    "access.grantRightNotOffered":
+      "Dieses Recht lässt sich nicht in einem Namespace oder an einem einzelnen Asset vergeben. Lade die Seite neu und wähle eine der angebotenen Aktionen.",
+    "access.grantModuleOff":
+      "Das Modul dieser Art ist auf dieser Instanz abgeschaltet und hat deshalb keine Rechte zu vergeben. Lade die Seite neu.",
+    "access.grantMissingManageRight":
+      "Deinem Konto fehlt das Recht, Benutzer zu verwalten. Deshalb kann es keine Rechte vergeben oder entziehen.",
+    "access.grantHolderIsSuperadmin":
+      "Diese Person ist Superadmin. Nur ein Superadmin kann einem Superadmin ein Recht geben oder entziehen.",
     "access.kindConnection": "Verbindungen",
     "access.kindApp": "Apps",
     "access.kindWorkflow": "Workflows",
@@ -366,7 +423,7 @@ export const access = defineTranslations({
     "access.revokeFailed": "Das Recht konnte nicht entzogen werden.",
     "access.grantDialogTitle": "Neues Recht",
     "access.grantDialogDescription":
-      "Gibt einer Person ein Recht an einem Ort: in einem Namespace, an einem einzelnen Agenten oder einer Fähigkeit, oder in einem geteilten Arbeitsbereich. Rechte für die ganze Instanz setzt du auf der Seite Benutzer.",
+      "Gibt einer Person ein Recht an einem Ort: in einem Namespace, an einem einzelnen Asset oder in einem geteilten Arbeitsbereich. Rechte für die ganze Instanz setzt du auf der Seite Benutzer.",
     "access.choosePerson": "Person wählen",
     "access.usersLoadFailed": "Die Benutzer konnten nicht geladen werden.",
     "access.grantKind": "Art",
@@ -374,11 +431,11 @@ export const access = defineTranslations({
     "access.grantScopeKind": "Wo",
     "access.scopeInNamespace": "In einem Namespace",
     "access.scopeInNamespaceDescription":
-      "Jeder Agent oder jede Fähigkeit, deren Name mit dem Präfix beginnt, auch künftige.",
+      "Jeder Agent oder Skill, dessen Name mit dem Präfix beginnt, auch künftige.",
     "access.scopeInNamespaceConnectionDescription":
       "Jede Verbindung, deren Name mit dem Präfix beginnt, auch künftige.",
     "access.scopeOnAsset": "An einem Asset",
-    "access.scopeOnAssetDescription": "Ein vorhandener Agent oder eine vorhandene Fähigkeit.",
+    "access.scopeOnAssetDescription": "Ein vorhandener Agent oder Skill.",
     "access.chooseNamespace": "Namespace wählen",
     "access.chooseAsset": "Asset wählen",
     "access.grantNamespace": "Namespace",
@@ -393,7 +450,8 @@ export const access = defineTranslations({
     "access.grantUserBeingDeleted": "Das Benutzerkonto wird gerade gelöscht",
     "access.grantUnknownHolder": "Diesen Benutzer gibt es nicht mehr.",
     "access.grantUnknownNamespace": "Dieser Namespace ist nicht mehr registriert.",
-    "access.grantAssetGone": "Dieses Asset gibt es nicht mehr oder es ist von anderer Art.",
+    "access.grantAssetGone":
+      "Dieses Asset gibt es nicht mehr, oder die Aktion lässt sich an diesem Ort nicht vergeben. Lade die Seite neu und wähle erneut.",
     "access.grantPartlyWritten": "Davor wurden {written} von {total} Zeilen geschrieben.",
 
     "access.checkDescription":
@@ -433,15 +491,15 @@ export const access = defineTranslations({
       "Keine Rolle, kein einzelnes Recht und kein vergebenes Recht deckt das ab.",
 
     "access.namespacesIntro":
-      "Ein Namespace ist ein Namenspräfix wie kai-. Agenten und Fähigkeiten, deren Name damit beginnt, gehören dazu, und eine Person kann darin Rechte bekommen.",
+      "Ein Namespace ist ein Namenspräfix wie kai-. Agenten und Skills, deren Name damit beginnt, gehören dazu, und eine Person kann darin Rechte bekommen.",
     "access.referencesForbidden":
       "Deinem Konto fehlt das Recht config_assets.read. Deshalb werden die Werkzeuge, Modelle und Assets der Instanz hier nicht angezeigt.",
     "access.lockUnknown":
       "Die Agenten mit diesem Präfix konnten nicht gezählt werden. Falls es welche gibt, gilt das für sie.",
     "access.lockAgentsOne": "{count} Agent hat dieses Präfix bereits.",
     "access.lockAgentsOther": "{count} Agenten haben dieses Präfix bereits.",
-    "access.lockAssetsOne": "{count} Agent oder Fähigkeit hat dieses Präfix bereits.",
-    "access.lockAssetsOther": "{count} Agenten und Fähigkeiten haben dieses Präfix bereits.",
+    "access.lockAssetsOne": "{count} Agent oder Skill hat dieses Präfix bereits.",
+    "access.lockAssetsOther": "{count} Agenten und Skills haben dieses Präfix bereits.",
     "access.lockTools":
       "Leere Werkzeugliste: Niemand kann hier mehr einen Agenten anlegen oder ändern, der ein Werkzeug nennt, auch ein Instanzadministrator und der Release-Abgleich nicht.",
     "access.lockModels":
@@ -461,11 +519,11 @@ export const access = defineTranslations({
     "access.checkNameInvalid": "Ein Name ist ein Wort ohne Leerzeichen.",
     "access.checkNameInvalidAgent": "Ein Agentenname ist ein Wort ohne Leerzeichen.",
     "access.checkNameInvalidSkill":
-      "Der Name einer Fähigkeit beginnt mit einem Buchstaben und besteht nur aus Buchstaben, Ziffern, Punkten, Bindestrichen und Unterstrichen.",
+      "Der Name eines Skills beginnt mit einem Buchstaben und besteht nur aus Buchstaben, Ziffern, Punkten, Bindestrichen und Unterstrichen.",
     "access.checkGrantsFailed":
       "Die Rechte konnten nicht geladen werden. Verweigerungen an einzelnen Assets lassen sich deshalb nicht berücksichtigen. Es wird kein Ergebnis angezeigt.",
     "access.checkAssetsFailed":
-      "Die Agenten und Fähigkeiten konnten nicht geladen werden. Zeilen an einzelnen Assets lassen sich diesem Namen deshalb nicht zuordnen. Es wird kein Ergebnis angezeigt.",
+      "Die Agenten und Skills konnten nicht geladen werden. Zeilen an einzelnen Assets lassen sich diesem Namen deshalb nicht zuordnen. Es wird kein Ergebnis angezeigt.",
     "access.checkAssetsForbidden":
       "Deinem Konto fehlt das Recht config_assets.read. Zeilen an einzelnen Assets lassen sich diesem Namen deshalb nicht zuordnen. Es wird kein Ergebnis angezeigt.",
     "access.checkRightOnlyAgent":
@@ -480,7 +538,7 @@ export const access = defineTranslations({
       "Modelle: keines erlaubt. Den Agenten kann nur speichern, wer das Recht hat, Modelle zu verwalten, und nur ohne Modell.",
     "access.checkModelsListed": "Modelle: Der Agent nennt eines von {list}.",
     "access.checkReadThroughGrant":
-      "Lesen ist über ein vergebenes Recht erlaubt: Die Person kann dieses Asset öffnen. Die Übersicht aller Agenten und Fähigkeiten und der Export brauchen das instanzweite Leserecht.",
+      "Lesen ist über ein vergebenes Recht erlaubt: Die Person kann dieses Asset öffnen. Die Übersicht aller Agenten und Skills und der Export brauchen das instanzweite Leserecht.",
     "access.checkDenyNote":
       "Eine Verweigerung an einem Asset nimmt keine instanzweiten Rechte: Damit kann eine Person das Asset weiterhin exportieren oder einen Agenten als Standard festlegen."
   }

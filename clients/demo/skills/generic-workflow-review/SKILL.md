@@ -1,6 +1,19 @@
 ---
 title: Generic Workflow Review
 description: Use when the user asks to review workflow details, identify missing information, or plan next checks.
+summary: Knows how to review a workflow, find what is missing and plan the next checks.
+starters:
+  - title:
+      de: Workflow prüfen
+      en: Review a workflow
+    hint:
+      de: Was fehlt und was als Nächstes zu prüfen ist
+      en: What is missing and what to check next
+    prompt:
+      de: Prüfe die Beispielinformationen des Workflows. Sag mir, was fehlt und was ich als Nächstes prüfen sollte.
+      en: Review the demo information of the workflow. Tell me what is missing and what I should check next.
+    tools:
+      - demo.workflow_summary
 ---
 
 # Generic Workflow Review

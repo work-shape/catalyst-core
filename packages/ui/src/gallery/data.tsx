@@ -2,7 +2,8 @@ import { Ellipsis, FileText, Search, SearchX } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../actions/button";
 import { IconButton } from "../actions/icon-button";
-import { CodeBlock } from "../data/code-block";
+import { CodeBlock, type CodeToken } from "../data/code-block";
+import { CodeFile } from "../data/code-file";
 import { FilterBar } from "../data/filter-bar";
 import { KeyValue, KeyValueList, type KeyValueLayout } from "../data/key-value";
 import { List, ListRow, type ListRowSize } from "../data/list-row";
@@ -43,6 +44,30 @@ const codeSample = [
   "}",
   ""
 ].join("\n");
+
+/** The keys of a small YAML text in a token colour, the way a highlighter hands them in. */
+function sampleTokens(code: string): CodeToken[][] {
+  return code.split("\n").map((line) => {
+    const colon = line.indexOf(":");
+    return colon < 0
+      ? [{ text: line }]
+      : [{ text: line.slice(0, colon), color: "var(--info)" }, { text: line.slice(colon) }];
+  });
+}
+
+function CodeFileSample({ name, code }: { name: string; code: string }) {
+  const [wrap, setWrap] = useState(false);
+  return (
+    <CodeFile
+      className="h-40 w-full rounded-md border"
+      name={name}
+      code={code}
+      tokens={sampleTokens(code)}
+      wrap={wrap}
+      onWrapChange={setWrap}
+    />
+  );
+}
 
 /** A result as a run keeps it: more lines than a preview shows. */
 const jsonSample = JSON.stringify(
@@ -489,7 +514,7 @@ export const dataGallery: GalleryGroup = {
     },
     {
       name: "CodeBlock",
-      components: ["CodeBlock"],
+      components: ["CodeBlock", "CodeFile"],
       render: (text) => (
         <div className="grid items-start gap-6 sm:grid-cols-2">
           <Samples label={text.codeWhole}>
@@ -509,6 +534,12 @@ export const dataGallery: GalleryGroup = {
           </Samples>
           <Samples label={text.codeCutNumbered}>
             <CodeBlock label={text.codeFileName} code={codeSample} maxLines={4} />
+          </Samples>
+          <Samples label={text.codeWrapped}>
+            <CodeBlock className="w-full" label={text.codeFileName} code={codeSample} wrap />
+          </Samples>
+          <Samples label={text.codeAsFile}>
+            <CodeFileSample name={text.codeConfigName} code={text.codeSample} />
           </Samples>
         </div>
       )

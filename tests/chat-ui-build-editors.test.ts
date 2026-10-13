@@ -2,7 +2,6 @@ import { createElement, createRef, type ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 import type { ConfigAssetReferences, LocaleCode } from "@vivd-catalyst/api-client";
 import {
-  AgentAvailabilityEditor,
   AgentEditor,
   agentConfigToForm,
   AssetEditorShell,
@@ -362,7 +361,7 @@ describe("agent page", () => {
     expect(agentPage({ canManageAgentModels: true })).toContain('href="#model"');
   });
 
-  it("lists the sections in an index, with how many things each one holds", () => {
+  it("lists the sections in the page's outline, with how many things each one holds", () => {
     const markup = agentPage({
       config: {
         toolNames: ["read_skill", "show_view"],
@@ -371,7 +370,7 @@ describe("agent page", () => {
       },
       canManageAgentModels: true
     });
-    const index = /<nav aria-label="Sections of this page".*?<\/nav>/u.exec(markup)?.[0] ?? "";
+    const index = /<nav aria-label="On this page".*?<\/nav>/u.exec(markup)?.[0] ?? "";
     const entries = [...index.matchAll(/<a href="#([^"]*)"[^>]*>(.*?)<\/a>/gu)].map(
       ([, id, body = ""]) =>
         `${id}: ${body
@@ -388,7 +387,9 @@ describe("agent page", () => {
       "tools: Tools 2",
       "prompts: Starter prompts 0"
     ]);
-    // Every entry of the index leads to a section of the page.
+    // The sections are no list of pages: nothing of the kinds' rail is on the page.
+    expect(markup).not.toContain("data-sub-rail");
+    // Every entry of the outline leads to a section of the page.
     for (const id of ["overview", "instructions", "model", "skills", "tools", "prompts"]) {
       expect(section(markup, id)).not.toBe("");
     }
@@ -416,6 +417,19 @@ describe("agent page", () => {
     expect(skillsOf([])).not.toContain("Choose skills");
     expect(skillsOf([])).not.toContain('aria-label="Remove"');
     expect(section(agentPage(), "skills")).toContain("No skills chosen.");
+  });
+
+  it("gives each skill of an agent its icon: the generic one unless a release ships the skill", () => {
+    const skills = section(
+      agentPage({
+        config: { skillNames: ["tax-review", "gone_skill"], toolNames: ["read_skill"] }
+      }),
+      "skills"
+    );
+
+    expect(skills.match(/data-skill-icon="generic"/gu)).toHaveLength(2);
+    expect(skills).not.toContain("data-file-type");
+    expect(skills).toMatch(/<span aria-hidden="true" data-skill-icon="generic"/u);
   });
 
   it("offers to make the agent the default only where the frame hands the way", () => {
@@ -516,7 +530,10 @@ describe("save bar", () => {
     // A new asset has nothing to go back to and no count of changes.
     expect(started).not.toContain("Discard");
     expect(started).not.toMatch(/\d+ changes?/u);
-    expect(started).toContain('title="tax-assistant">tax-assistant</code>');
+    // The id stands once, in the first section with a copy button, and not in the head.
+    expect(started.match(/>tax-assistant<\/code>/gu)).toHaveLength(1);
+    expect(started.indexOf("data-asset-identifier")).toBeGreaterThan(started.indexOf("</header>"));
+    expect(started).toMatch(/data-asset-identifier[^]*?<button[^>]*aria-label="Copy"/u);
     expect(inputOf(started, "Display name")).toContain('value="Tax assistant"');
   });
 
@@ -540,7 +557,11 @@ describe("save bar", () => {
     expect(existing).not.toContain('type="submit"');
     expect(existing).toContain("Add reference");
     expect(started).toMatch(/<button[^>]*type="submit"[^>]*>Create skill<\/button>/u);
-    expect(started).toContain('<h1 class="min-w-0 break-words outline-none text-title">Tax review');
+    // The head is one row: a long name is cut and says itself whole in a tooltip.
+    expect(started).toContain(
+      '<h1 class="min-w-0 truncate outline-none text-title" title="Tax review">Tax review'
+    );
+    expect(started).toMatch(/<header data-variant="detail"[^>]* class="[^"]*\bmd:flex-nowrap\b/u);
   });
 });
 
@@ -560,7 +581,6 @@ describe("refused save", () => {
     render(
       createElement(AssetEditorShell, {
         frame: frame({ asset: storedAsset("agent", agentBase), ...input }),
-        kindLabel: "Agent",
         title: "Assistant",
         sections: [
           { id: "details", label: "Details", body: createElement("p", null, "Fields") },
@@ -587,6 +607,20 @@ describe("refused save", () => {
     expect(markup.match(/The tool documents\.read is not allowed/gu)).toHaveLength(1);
     expect(markup.match(/data-field-refusal/gu)).toHaveLength(1);
     expect(section(markup, "details")).not.toContain("data-field-refusal");
+  });
+
+  it("marks the section a refusal names in the page's outline, and no other", () => {
+    const linkTo = (markup: string, id: string) =>
+      new RegExp(`<a href="#${id}"[^>]*>.*?</a>`, "u").exec(markup)?.[0] ?? "";
+    const refused = page(outcome);
+
+    expect(linkTo(refused, "tools")).toContain('data-invalid=""');
+    expect(linkTo(refused, "tools")).toContain("Has an error");
+    expect(linkTo(refused, "details")).not.toContain("data-invalid");
+    expect(refused.match(/<a [^>]*data-invalid=""/gu)).toHaveLength(1);
+    // The line that stands in for the outline on a phone names one section: it is marked too.
+    expect(refused).toMatch(/<\/select>.*<span data-invalid=""/u);
+    expect(page({ ok: true })).not.toContain("data-invalid");
   });
 
   it("says a refusal that names no field after the sections, as the instance said it", () => {
@@ -629,7 +663,6 @@ describe("refused save", () => {
       render(
         createElement(AssetEditorShell, {
           frame: frame({ asset: storedAsset("agent", agentBase) }),
-          kindLabel: "Agent",
           title: "Assistant",
           sections: [{ id: "details", label: "Details", body: null }],
           control: { changes, submit: saved, discard: noop },
@@ -693,86 +726,5 @@ describe("skill page", () => {
     expect(inputOf(markup, "Title")).not.toContain('disabled=""');
     // The index counts the files of the package: the instructions and one reference.
     expect(markup).toMatch(/<a href="#instructions"[^>]*>.*?>2<\/span><\/a>/u);
-  });
-});
-
-describe("agent availability", () => {
-  const workspaces = [
-    { id: "ws_sales", name: "Sales", createdAt: "2026-06-27T00:00:00.000Z" },
-    { id: "ws_legal", name: "Legal", createdAt: "2026-06-27T00:00:00.000Z" }
-  ];
-  const stored = async () => undefined;
-
-  it("offers personal and shared workspaces for a selectively available agent", () => {
-    const markup = render(
-      createElement(AgentAvailabilityEditor, {
-        availability: {
-          mode: "selected",
-          personalWorkspaces: true,
-          collaborationWorkspaceIds: ["ws_legal"]
-        },
-        isDefault: false,
-        workspaces,
-        mutating: false,
-        onSave: stored
-      })
-    );
-
-    expect(markup).toContain("Available in");
-    expect(markup).toContain("Personal workspaces");
-    expect(markup).toContain("Sales");
-    expect(markup).toContain("Legal");
-    expect(markup).not.toContain("ws_legal");
-    expect(markup.match(/type="checkbox"[^>]*checked=""/g)).toHaveLength(2);
-    expect(markup).toContain("Save availability");
-    expect(markup).not.toContain("not available in any workspace");
-  });
-
-  it("locks the default agent to all workspaces and explains why", () => {
-    const markup = render(
-      createElement(AgentAvailabilityEditor, {
-        availability: { mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] },
-        isDefault: true,
-        workspaces,
-        mutating: false,
-        onSave: stored
-      })
-    );
-
-    expect(markup).toMatch(/<div role="radiogroup"[^>]*data-disabled=""/u);
-    expect(markup).toContain('disabled=""');
-    expect(markup).toContain("The default agent is always available in all workspaces.");
-    expect(markup).not.toContain("Save availability");
-  });
-
-  it("warns that an agent without any selection is hidden", () => {
-    const markup = render(
-      createElement(AgentAvailabilityEditor, {
-        availability: undefined,
-        isDefault: false,
-        workspaces: [],
-        mutating: false,
-        onSave: stored
-      })
-    );
-
-    expect(markup).toContain("There are no shared workspaces yet.");
-    expect(markup).toContain("this agent is not available in any workspace");
-  });
-
-  it("says why the shared workspaces could not be listed", () => {
-    const markup = render(
-      createElement(AgentAvailabilityEditor, {
-        availability: undefined,
-        isDefault: false,
-        workspaces: [],
-        workspacesError: "The workspaces could not be read.",
-        mutating: false,
-        onSave: stored
-      })
-    );
-
-    expect(markup).toContain("The workspaces could not be read.");
-    expect(markup).not.toContain("There are no shared workspaces yet.");
   });
 });

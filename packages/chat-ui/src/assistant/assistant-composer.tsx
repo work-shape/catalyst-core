@@ -1,11 +1,13 @@
 import { ComposerPrimitive, useAuiState, useComposer } from "@assistant-ui/react";
-import { AlertCircle, CheckCircle2, Paperclip, RotateCcw, Send, Square, X } from "lucide-react";
+import { AlertCircle, Paperclip, RotateCcw, Send, Square, X } from "lucide-react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { DraftAttachment } from "@vivd-catalyst/api-client";
 import { Button, cn, scrollEdgeFadeStyle, Spinner, useScrollEdgeFade } from "@vivd-catalyst/ui";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
 import { AttachmentPreview } from "../attachment-preview";
+import { resolveFileType } from "../file-type";
+import { FileTypeIcon } from "../file-type-icon";
 import { ContextIndicator } from "./context-indicator";
 import { useComposerFocusRequest } from "./composer-focus-request";
 import { ModelPicker } from "./model-picker";
@@ -342,6 +344,7 @@ type AttachmentChipStatus = DraftAttachment["status"] | LocalUploadingAttachment
 interface AttachmentChipItem {
   id: string;
   filename: string;
+  mimeType?: string;
   byteSize: number;
   status: AttachmentChipStatus;
   removable: boolean;
@@ -369,6 +372,7 @@ function DraftAttachmentList({
     ...localUploadingAttachments.map((attachment) => ({
       id: attachment.id,
       filename: attachment.filename,
+      mimeType: attachment.mimeType,
       byteSize: attachment.byteSize,
       status: attachment.status,
       removable: false,
@@ -377,6 +381,7 @@ function DraftAttachmentList({
     ...attachments.map((attachment) => ({
       id: attachment.id,
       filename: attachment.filename,
+      mimeType: attachment.mimeType,
       byteSize: attachment.byteSize,
       status: attachment.status,
       removable: true,
@@ -461,6 +466,7 @@ function DraftAttachmentList({
             <AttachmentChip
               key={item.id}
               filename={item.filename}
+              mimeType={item.mimeType}
               byteSize={item.byteSize}
               status={item.status}
               onRemove={item.removable ? () => onRemoveAttachment(item.id) : undefined}
@@ -493,12 +499,14 @@ function attachmentFadeMask(overflow: { above: boolean; below: boolean }): strin
 
 function AttachmentChip({
   filename,
+  mimeType,
   byteSize,
   status,
   onRemove,
   onRetry
 }: {
   filename: string;
+  mimeType?: string;
   byteSize: number;
   status: AttachmentChipStatus;
   onRemove?: () => void;
@@ -508,29 +516,40 @@ function AttachmentChip({
   const failed = status === "failed" || status === "unsupported";
   const pending = status === "uploading" || status === "queued" || status === "preprocessing";
 
+  const fileType = resolveFileType({ filename, mimeType });
+
   return (
     <span
       className={cn(
-        "flex min-w-0 items-center gap-2 rounded-md border bg-background px-2 py-1 text-xs",
-        failed ? "border-destructive/40 text-destructive" : "border-border text-foreground"
+        "flex min-w-0 items-center gap-2.5 rounded-lg border bg-muted/45 py-1.5 pr-2 pl-2.5",
+        failed ? "border-destructive/40" : "border-border"
       )}
       title={filename}
     >
-      {failed ? (
-        <AlertCircle size={14} className="shrink-0" aria-hidden="true" />
-      ) : pending ? (
-        <Spinner size="xs" className="shrink-0" />
-      ) : (
-        <CheckCircle2
-          size={14}
-          className="shrink-0 text-emerald-600 dark:text-emerald-400"
-          aria-hidden="true"
-        />
-      )}
-      <span className="min-w-0 flex-1 truncate">{filename}</span>
-      <span className="sr-only">{attachmentStatusLabel(status, t)}</span>
-      <span className="shrink-0 text-muted-foreground">
-        {pending ? attachmentStatusLabel(status, t) : formatFileSize(byteSize)}
+      <FileTypeIcon type={fileType} className="size-7" />
+      <span className="grid min-w-0 flex-1">
+        <span className="truncate text-label text-foreground">{filename}</span>
+        {/* The second line says what the file is and how large, or where its upload stands. */}
+        <span
+          className={cn(
+            "flex min-w-0 items-center gap-1 text-caption",
+            failed ? "text-destructive" : "text-muted-foreground"
+          )}
+        >
+          {failed ? (
+            <AlertCircle size={12} className="shrink-0" aria-hidden="true" />
+          ) : pending ? (
+            <Spinner size="xs" className="shrink-0" />
+          ) : null}
+          <span className="truncate">
+            {failed || pending
+              ? attachmentStatusLabel(status, t)
+              : `${t(fileType.labelKey)} · ${formatFileSize(byteSize)}`}
+          </span>
+          {failed || pending ? null : (
+            <span className="sr-only">{attachmentStatusLabel(status, t)}</span>
+          )}
+        </span>
       </span>
       {onRetry ? (
         <button

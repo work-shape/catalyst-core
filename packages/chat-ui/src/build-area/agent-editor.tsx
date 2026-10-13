@@ -17,6 +17,7 @@ import {
   PickerButton,
   RadioGroup,
   Select,
+  SkillIcon,
   Switch,
   Textarea
 } from "@vivd-catalyst/ui";
@@ -49,11 +50,12 @@ import { refusalsOf } from "./build-refusals";
 import { AppToolsGroup, isAppToolName, type AppToolsRead } from "../apps/app-tools-group";
 import { isConnectionToolName, type ConnectionToolChoice } from "./connection-tools";
 import { ConnectionToolsGroup } from "./connection-tools-group";
+import type { SkillFacts } from "./skill-facts";
 
 /** The skills an agent can be given, as far as the instance was asked for them. */
 export interface SkillChoice {
   /** The skills that match what the reader typed, a page of them. */
-  options: readonly { name: string; title: string }[];
+  options: readonly ({ name: string; title: string } & SkillFacts)[];
   /** The reader typed into the search: the instance is asked for the skills that match. */
   onSearch(text: string): void;
 }
@@ -125,7 +127,7 @@ export function AgentEditor({
     }
     return answer;
   };
-  const skillTitles = new Map(skillChoice.options.map((skill) => [skill.name, skill.title]));
+  const skillsByName = new Map(skillChoice.options.map((skill) => [skill.name, skill]));
 
   const sections: AssetSection[] = [
     {
@@ -261,6 +263,7 @@ export function AgentEditor({
               {form.skillNames.map((name) => (
                 <li key={name}>
                   <Chip
+                    leading={<SkillIcon icon={skillsByName.get(name)?.icon} size="sm" />}
                     onRemove={
                       canEdit("skillNames")
                         ? () =>
@@ -270,7 +273,7 @@ export function AgentEditor({
                         : undefined
                     }
                   >
-                    {skillTitles.get(name) ?? name}
+                    {skillsByName.get(name)?.title || name}
                   </Chip>
                 </li>
               ))}
@@ -281,12 +284,19 @@ export function AgentEditor({
               <Picker
                 multiple
                 search
+                wrapDescriptions
+                className="w-120"
                 label={t("build.chooseSkills")}
+                note={t("build.skillsNote")}
                 onSearchChange={skillChoice.onSearch}
+                // A skill without a summary shows its title alone. Its id is never shown and
+                // is still found by the search.
                 options={skillChoice.options.map((skill) => ({
                   value: skill.name,
                   label: skill.title || skill.name,
-                  description: skill.name
+                  description: skill.summary,
+                  keywords: skill.name,
+                  leading: <SkillIcon icon={skill.icon} />
                 }))}
                 value={form.skillNames}
                 onValueChange={(skillNames) => update({ skillNames })}
@@ -375,7 +385,6 @@ export function AgentEditor({
         ...frame,
         canWrite: canWrite && (editableAgentFields.length > 0 || canManageAgentModels)
       }}
-      kindLabel={t("configAgent")}
       title={
         form.displayName[locale].trim() ||
         form.displayName[locale === "de" ? "en" : "de"].trim() ||

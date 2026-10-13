@@ -87,7 +87,7 @@ They are two different things. A **workspace** is where people work and what the
 <rect class="box" x="150" y="304" width="245" height="74" rx="8"/>
 <rect class="box" x="405" y="304" width="245" height="74" rx="8"/>
 <text x="164" y="328" class="small">Settings &gt; Instance &gt; Access,</text>
-<text x="164" y="346" class="small">and in Build beside each name.</text>
+<text x="164" y="346" class="small">and in Studio beside each name.</text>
 <text x="419" y="328" class="small">The workspace switcher, and the</text>
 <text x="419" y="346" class="small">settings of the workspace.</text>
 <text x="8" y="412" class="small-strong">What it does not do</text>
@@ -146,9 +146,9 @@ Each agent has a setting named **Available in**. It lists the workspaces whose m
 - **All workspaces**: every workspace of the instance, personal ones and future ones included.
 - **Selected workspaces**: the Personal Workspaces, chosen Shared Workspaces, or both. With nothing ticked the agent is hidden everywhere.
 
-A new agent starts in the workspace it was made in. Mara opens Build while she works in Tax team, or asks the Build Agent in a conversation there, and her new `tax-travel-costs` can be chosen in Tax team and nowhere else. An agent made in a personal workspace, pushed with the CLI, or written through the API without a workspace starts hidden everywhere, and the answer says so. A person with the instance-wide right may choose **All workspaces** in the dialog that starts the agent.
+A new agent starts in the workspace it was made in. Mara opens Studio while she works in Tax team, or asks the Build Agent in a conversation there, and her new `tax-travel-costs` can be chosen in Tax team and nowhere else. An agent made in a personal workspace, pushed with the CLI, or written through the API without a workspace starts hidden everywhere, and the answer says so. A person with the instance-wide right may choose **All workspaces** in the dialog that starts the agent.
 
-To offer an agent in more workspaces, or to show a hidden one, somebody opens it in Build, goes to **Available in** and chooses **All workspaces**, or **Selected workspaces** with the workspaces ticked. That somebody needs "Edit agent configuration" for the whole instance. Mara's grant in `tax-` does not show her this section, so she cannot do it herself.
+To offer an agent in more workspaces, or to show a hidden one, somebody opens it in Studio, goes to **Available in** and chooses **All workspaces**, or **Selected workspaces** with the workspaces ticked. That somebody needs "Edit agent configuration" for the whole instance. Mara's grant in `tax-` does not show her this section, so she cannot do it herself.
 
 Two exceptions. The default agent of the instance is always available everywhere, so the first agent of an instance starts there. And an agent that arrives through a release push starts in all workspaces, and hidden when the same push deletes an agent that was limited to selected workspaces, because that is a rename and the new name must not reach more people than the old one did.
 
@@ -216,7 +216,7 @@ A reading action only knows `allow` and `deny`. Nobody approves a read.
 
 The instance ships with `allow` for reading and `confirm` for changing. The operator of the instance changes that in [release config](/configure/release-config/#operation-policy).
 
-Example: an instance sets changing actions to `approval`. Mara saves `tax-vat-helper`. Build says "This change waits for an approval. Nothing was changed yet and your text is still here." An administrator approves it in the Inbox. The instance then checks the call once more and saves the agent as Mara.
+Example: an instance sets changing actions to `approval`. Mara saves `tax-vat-helper`. Studio says "This change waits for an approval. Nothing was changed yet and your text is still here." An administrator approves it in the Inbox. The instance then checks the call once more and saves the agent as Mara.
 
 ## Roles and single rights
 
@@ -325,9 +325,9 @@ A company has a tax team. Its agents are named `tax-vat-helper` and `tax-year-en
 
 1. An administrator registers the Namespace `tax-` with the display name "Tax team".
 2. The administrator grants Mara read and write on agents in `tax-`.
-3. Mara opens **Build**. She sees the two tax agents and can change them. She does not see `hr-onboarding` or `helpdesk`.
+3. Mara opens **Studio**. She sees the two tax agents and can change them. She does not see `hr-onboarding` or `helpdesk`.
 4. Mara creates `tax-travel-costs`. The name starts with the prefix, so her grant covers it at once.
-5. Jonas from the same team gets a grant on one asset instead, read on `tax-year-end`. He sees **Build** with a list of agents that holds this one agent and nothing else. It opens read-only.
+5. Jonas from the same team gets a grant on one asset instead, read on `tax-year-end`. He sees **Studio** with a list of agents that holds this one agent and nothing else. It opens read-only.
 
 ### Rules for a prefix
 
@@ -465,14 +465,14 @@ Three things about the order are worth knowing.
 
 Not every part of the product is on the full path yet.
 
-- **All 12 steps:** every tool call of an agent. Reading, saving, deleting and reverting agents and skills in Build and through the asset API, and the release push. Writing or revoking a grant, and creating, changing or deleting a Namespace. Creating, changing and deleting a user, and changing a user's sign-in identities, password or invitation. Creating and changing a Service Principal, and creating and revoking an API key. The retry of a background job.
+- **All 12 steps:** every tool call of an agent. Reading, saving, deleting and reverting agents and skills in Studio and through the asset API, and the release push. Writing or revoking a grant, and creating, changing or deleting a Namespace. Creating, changing and deleting a user, and changing a user's sign-in identities, password or invitation. Creating and changing a Service Principal, and creating and revoking an API key. The retry of a background job.
 - **Steps 1 to 4, a simpler input check and step 7:** everything else, for example conversations, workspaces, the lists of grants and Namespaces, the default agent, the **Available in** setting, usage and the audit log. These calls are refused the same way for a missing sign-in, module, scope or right. They have no policy step, cannot wait for an approval and leave no Operation Run.
 
 ### Approvals
 
 When the policy says `approval`, the action stops before it changes anything.
 
-- The caller receives `202` and a reference to the waiting call. In Build the page says that the change waits and keeps your text.
+- The caller receives `202` and a reference to the waiting call. In Studio the page says that the change waits and keeps your text.
 - The call appears in the **Inbox** of everybody who may decide it, as an "Operation call". That is every person with "Approve skill changes".
 - **Approve** queues the call. The instance checks it again and then runs it once, as the person who made it. If that check fails, the call is refused although it was approved. The record names the approver.
 - **Decline** ends it. The caller's record shows `DECLINED` and the approver's comment. The caller can also withdraw a waiting call.
@@ -520,7 +520,7 @@ Mara has the role User and two grants: read and write on agents in `tax-`. The i
 <figure class="docs-diagram docs-diagram-wide">
 <svg viewBox="0 0 660 424" role="img" aria-labelledby="rights-fig-4-title rights-fig-4-desc">
 <title id="rights-fig-4-title">Mara saves an agent of the tax team</title>
-<desc id="rights-fig-4-desc">A sequence between Mara, the Build area, the instance and its records. Mara saves the agent tax-vat-helper. The instance checks the sign-in, the module, the right through her Namespace grant, the policy and the tool list, then records the Operation Run and answers that the agent was saved.</desc>
+<desc id="rights-fig-4-desc">A sequence between Mara, the Studio area, the instance and its records. Mara saves the agent tax-vat-helper. The instance checks the sign-in, the module, the right through her Namespace grant, the policy and the tool list, then records the Operation Run and answers that the agent was saved.</desc>
 <defs><marker id="rights-arrow-4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0 0 10 5 0 10z"/></marker></defs>
 <path class="lifeline" d="M62 48 L62 416"/>
 <path class="lifeline" d="M196 48 L196 416"/>
@@ -529,7 +529,7 @@ Mara has the role User and two grants: read and write on agents in `tax-`. The i
 <rect class="box" x="6" y="14" width="112" height="34" rx="6"/>
 <text x="62" y="36" class="strong" text-anchor="middle">Mara</text>
 <rect class="box" x="140" y="14" width="112" height="34" rx="6"/>
-<text x="196" y="36" class="strong" text-anchor="middle">Build</text>
+<text x="196" y="36" class="strong" text-anchor="middle">Studio</text>
 <rect class="box" x="280" y="14" width="112" height="34" rx="6"/>
 <text x="336" y="36" class="strong" text-anchor="middle">Instance</text>
 <rect class="box" x="542" y="14" width="112" height="34" rx="6"/>
@@ -558,7 +558,7 @@ Now she tries the same on `hr-onboarding`, which a colleague sent her as a link.
 
 1. Sign-in: yes. Module: on.
 2. Right `agent.read` on `hr-onboarding`: her grant covers names that start with `tax-`. This one does not. Nothing else covers it.
-3. The instance answers `403 FORBIDDEN`. Build says "You may not read this asset."
+3. The instance answers `403 FORBIDDEN`. Studio says "You may not read this asset."
 4. The refused call is on the Operations page with the status "Denied".
 
 ## Give a colleague the right to edit the agents of one team
@@ -578,7 +578,7 @@ You need "Manage users" yourself. Open **Settings > Instance > Access**.
 | Namespace, or Asset | The Namespace `tax-`, or the one agent | Only registered Namespaces are offered. If the list is empty, register one first. |
 | Effect | Allow or Deny | Allow gives the ticked actions there. Deny refuses them there and beats every allow and every role. For this task choose Allow. |
 
-Press **Create grant**. Under the default policy the grant works at once. On an instance that sends changes to an approval, it works once the approval is given. Your colleague sees **Build** in the main rail the next time the interface loads, with the agents of `tax-`. If these grants are all they hold, they see nothing else.
+Press **Create grant**. Under the default policy the grant works at once. On an instance that sends changes to an approval, it works once the approval is given. Your colleague sees **Studio** in the main rail the next time the interface loads, with the agents of `tax-`. If these grants are all they hold, they see nothing else.
 
 Three things to know afterwards.
 

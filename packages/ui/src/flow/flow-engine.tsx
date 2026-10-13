@@ -22,6 +22,7 @@ import { SidePanelPlacementContext } from "../overlays/side-panel";
 import { FlowControls, type FlowControlsSearch } from "./flow-controls";
 import {
   EngineContext,
+  FLOW_COMPACT_ZOOM,
   edgeTypes,
   nodeTypes,
   type EngineContextValue,
@@ -36,15 +37,38 @@ import {
   panIntoView,
   type FlowInsets,
   type FlowLayout,
-  type FlowSize
+  type FlowSize,
+  type FlowViewport
 } from "./flow-layout";
 import { FlowMinimap, type FlowBox, type FlowMinimapItem } from "./flow-minimap";
 import type { FlowDirection, FlowGraph, FlowStatus } from "./flow-types";
 
 const MIN_ZOOM = 0.2;
+const HIDE_ATTRIBUTION = { hideAttribution: true };
 const MAX_ZOOM = 2;
-/** How long the view takes to move to a node, in milliseconds. Nothing moves under reduced motion. */
-const PAN_DURATION = 200;
+/** How far a press may drag the view, in pixels, and still be a press and no move. */
+const MOVE_SLACK = 3;
+/** How long the view takes to move where the token of an opening surface cannot be read. */
+const PAN_DURATION_FALLBACK = 200;
+
+/**
+ * How long the view takes to move, in milliseconds: the library's duration of a surface that
+ * opens, so the canvas makes room at the pace its panel arrives. Nothing moves under reduced
+ * motion.
+ */
+function panDuration(): number {
+  if (prefersReducedMotion()) {
+    return 0;
+  }
+  const token = getComputedStyle(document.documentElement)
+    .getPropertyValue("--duration-open")
+    .trim();
+  const value = Number.parseFloat(token);
+  if (!Number.isFinite(value)) {
+    return PAN_DURATION_FALLBACK;
+  }
+  return token.endsWith("ms") ? value : value * 1000;
+}
 
 export interface FlowEngineProps {
   graph: FlowGraph;
@@ -127,6 +151,8 @@ function Engine({
   const [opened, setOpened] = useState(false);
   /** The reader moved the view: the canvas no longer fits it by itself. */
   const movedRef = useRef(false);
+  /** Where the view stood when the reader last pressed on the canvas. */
+  const pressedRef = useRef<FlowViewport>(undefined);
   const keyboardRef = useRef(false);
 
   const report = useCallback((id: string, next: FlowSize) => {
@@ -138,21 +164,49 @@ function Engine({
       return new Map(current).set(id, next);
     });
   }, []);
-  const toggle = useCallback((id: string) => {
-    setCollapsed((current) => {
-      const next = new Set(current);
-      if (!next.delete(id)) {
-        next.add(id);
+  /** The group the reader just folded or unfolded, and where its corner stood in the canvas. */
+  const heldRef = useRef<{ id: string; x: number; y: number }>(undefined);
+  const boxesRef = useRef<FlowLayout["boxes"]>(undefined);
+  const toggle = useCallback(
+    (id: string) => {
+      // Folding changes the layout around the group. The group stays where the reader pressed
+      // it, and the view is no longer fitted by itself: the reader arranged it.
+      const box = boxesRef.current?.get(id);
+      if (box) {
+        const view = flow.getViewport();
+        heldRef.current = { id, x: box.x * view.zoom + view.x, y: box.y * view.zoom + view.y };
+        movedRef.current = true;
       }
-      return next;
-    });
-  }, []);
+      setCollapsed((current) => {
+        const next = new Set(current);
+        if (!next.delete(id)) {
+          next.add(id);
+        }
+        return next;
+      });
+    },
+    [flow]
+  );
 
   const layout = useMemo(
     () => layoutFlow({ graph, direction, sizes, collapsed }),
     [graph, direction, sizes, collapsed]
   );
   const ready = layout.order.every((id) => sizes.has(id));
+  useLayoutEffect(() => {
+    boxesRef.current = layout.boxes;
+    const held = heldRef.current;
+    const box = held === undefined ? undefined : layout.boxes.get(held.id);
+    if (held === undefined || !box || !ready) {
+      return;
+    }
+    const view = flow.getViewport();
+    const x = held.x - box.x * view.zoom;
+    const y = held.y - box.y * view.zoom;
+    if (x !== view.x || y !== view.y) {
+      settled(flow.setViewport({ x, y, zoom: view.zoom }, { duration: 0 }));
+    }
+  }, [layout, ready, flow]);
 
   const { nodes, edges } = useMemo(() => {
     const groups = new Map((graph.groups ?? []).map((group) => [group.id, group]));
@@ -223,67 +277,95 @@ function Engine({
   const chromeInsets = useMemo<FlowInsets>(
     () =>
       narrow
-        ? { top: 16, right: 16, bottom: controls ? 64 : 16, left: 16 }
+        ? { top: 16, right: 16, bottom: controls ? 72 : 16, left: 16 }
         : { top: 32, right: 32, bottom: controls || minimap ? 76 : 32, left: 32 },
     [narrow, controls, minimap]
   );
 
-  const fit = useCallback(
-    (animate: boolean) => {
-      settled(
-        flow.setViewport(fitFlowViewport(layout.bounds, size, chromeInsets, direction, MIN_ZOOM), {
-          duration: animate && !prefersReducedMotion() ? PAN_DURATION : 0
-        })
-      );
-    },
-    [flow, layout.bounds, size, chromeInsets, direction]
-  );
+  /** What the panel covers of the canvas, in pixels from its right and from its bottom edge. */
+  const panelCover = useCallback((): { right: number; bottom: number } => {
+    const panelElement = rootRef.current?.querySelector<HTMLElement>('[data-slot="side-panel"]');
+    if (!panelElement) {
+      return { right: 0, bottom: 0 };
+    }
+    return panelElement.dataset.placement === "sheet"
+      ? { right: 0, bottom: panelElement.offsetHeight }
+      : { right: Math.max(0, size.width - panelElement.offsetLeft), bottom: 0 };
+  }, [size]);
 
   /** The part of the canvas no panel covers, in pixels of the canvas. */
   const freeArea = useCallback((): FlowBox => {
-    const root = rootRef.current;
-    const panelElement = root?.querySelector<HTMLElement>('[data-slot="side-panel"]');
     const margin = narrow ? 16 : 24;
-    const free = {
+    const cover = panelCover();
+    return {
       x: margin,
       y: margin,
-      width: size.width - 2 * margin,
-      height: size.height - 2 * margin
+      width: size.width - cover.right - 2 * margin,
+      height: size.height - cover.bottom - 2 * margin
     };
-    if (!root || !panelElement) {
-      return free;
-    }
-    if (panelElement.dataset.placement === "sheet") {
-      return { ...free, height: size.height - panelElement.offsetHeight - 2 * margin };
-    }
-    return { ...free, width: panelElement.offsetLeft - 2 * margin };
-  }, [narrow, size]);
+  }, [narrow, size, panelCover]);
+
+  /** The view moved by the least distance that shows the node, or the view itself. */
+  const showing = useCallback(
+    (view: FlowViewport, id: string): FlowViewport => {
+      const box = layout.boxes.get(id);
+      if (!box) {
+        return view;
+      }
+      const move = panIntoView(
+        {
+          x: box.x * view.zoom + view.x,
+          y: box.y * view.zoom + view.y,
+          width: box.width * view.zoom,
+          height: box.height * view.zoom
+        },
+        freeArea()
+      );
+      return { x: view.x + move.x, y: view.y + move.y, zoom: view.zoom };
+    },
+    [layout.boxes, freeArea]
+  );
+
+  /**
+   * Fits the graph into what the panel leaves free, so an open panel covers no step of a graph
+   * that fits beside it. Where the graph is too large for that, `shown` is the node the view
+   * keeps clear of the panel.
+   */
+  const fit = useCallback(
+    (animate: boolean, shown?: string) => {
+      const cover = panelCover();
+      const fitted = fitFlowViewport(
+        layout.bounds,
+        size,
+        {
+          ...chromeInsets,
+          right: chromeInsets.right + cover.right,
+          bottom: Math.max(chromeInsets.bottom, cover.bottom + chromeInsets.top)
+        },
+        direction,
+        MIN_ZOOM,
+        FLOW_COMPACT_ZOOM
+      );
+      settled(
+        flow.setViewport(shown === undefined ? fitted : showing(fitted, shown), {
+          duration: animate ? panDuration() : 0
+        })
+      );
+    },
+    [flow, layout.bounds, size, chromeInsets, direction, panelCover, showing]
+  );
 
   /** Moves the view by the least distance that shows the node, and not at all when it shows. */
   const reveal = useCallback(
     (id: string, animate: boolean) => {
-      const box = layout.boxes.get(id);
-      if (!box) {
-        return;
-      }
       const view = flow.getViewport();
-      const shown = {
-        x: box.x * view.zoom + view.x,
-        y: box.y * view.zoom + view.y,
-        width: box.width * view.zoom,
-        height: box.height * view.zoom
-      };
-      const move = panIntoView(shown, freeArea());
-      if (move.x !== 0 || move.y !== 0) {
-        settled(
-          flow.setViewport(
-            { x: view.x + move.x, y: view.y + move.y, zoom: view.zoom },
-            { duration: animate && !prefersReducedMotion() ? PAN_DURATION : 0 }
-          )
-        );
+      const next = showing(view, id);
+      if (next.x !== view.x || next.y !== view.y) {
+        heldRef.current = undefined;
+        settled(flow.setViewport(next, { duration: animate ? panDuration() : 0 }));
       }
     },
-    [flow, layout.boxes, freeArea]
+    [flow, showing]
   );
 
   // Opening fits the whole graph. So does a change of the canvas' size or direction, until the
@@ -300,15 +382,14 @@ function Engine({
     if (!ready || movedRef.current) {
       return;
     }
-    fitRef.current(false);
     // What is selected when the canvas opens is shown clear of its panel.
-    if (selectedRef.current !== undefined) {
-      revealRef.current(selectedRef.current, false);
-    }
+    fitRef.current(false, selectedRef.current);
     setOpened(true);
   }, [ready, size.width, size.height, direction]);
 
-  // Selecting never zooms. It pans when the selected node would stand under the panel.
+  // A panel that opens or closes is given room: until the reader moves the view, the graph is
+  // fitted again into what is free, so the panel covers no step. After that selecting never
+  // zooms, and pans only when the selected node would stand under the panel.
   const previousSelected = useRef(selectedId);
   useEffect(() => {
     const previous = previousSelected.current;
@@ -318,11 +399,18 @@ function Engine({
     }
     const root = rootRef.current;
     if (selectedId !== undefined) {
-      revealRef.current(selectedId, true);
+      if (movedRef.current) {
+        revealRef.current(selectedId, true);
+      } else {
+        fitRef.current(true, selectedId);
+      }
       if (keyboardRef.current) {
         root?.querySelector<HTMLElement>('[data-slot="side-panel"]')?.focus();
       }
       return;
+    }
+    if (!movedRef.current) {
+      fitRef.current(true);
     }
     // The panel closed with the focus in it: the focus returns to the node it was about.
     const active = root?.ownerDocument.activeElement;
@@ -372,6 +460,7 @@ function Engine({
     }
     setFound(next);
     movedRef.current = true;
+    heldRef.current = undefined;
     const view = flow.getViewport();
     // A match is shown large enough to read, in the middle of what is free.
     const zoom = Math.max(view.zoom, 1);
@@ -383,7 +472,7 @@ function Engine({
           y: free.y + free.height / 2 - (box.y + box.height / 2) * zoom,
           zoom
         },
-        { duration: prefersReducedMotion() ? 0 : PAN_DURATION }
+        { duration: panDuration() }
       )
     );
   };
@@ -464,7 +553,9 @@ function Engine({
           zoomOnScroll={false}
           panOnScroll={!embedded}
           preventScrolling={!embedded}
-          proOptions={{ hideAttribution: true }}
+          // The canvas shows no mark of the library it is drawn with: its MIT licence asks for
+          // none on the page.
+          proOptions={HIDE_ATTRIBUTION}
           // With a handler a node takes pointer events, which its own controls need.
           onNodeClick={noNodeClick}
           onPaneClick={() => {
@@ -473,9 +564,21 @@ function Engine({
               onSelect?.(undefined);
             }
           }}
-          onMoveStart={(event) => {
-            if (event) {
+          // A press on a step begins a move that goes nowhere. The view counts as the
+          // reader's own once it has left where the press found it.
+          onMoveStart={(event, view) => {
+            pressedRef.current = event ? view : undefined;
+          }}
+          onMove={(event, view) => {
+            const pressed = pressedRef.current;
+            if (
+              event &&
+              pressed &&
+              (view.zoom !== pressed.zoom ||
+                Math.abs(view.x - pressed.x) + Math.abs(view.y - pressed.y) > MOVE_SLACK)
+            ) {
               movedRef.current = true;
+              heldRef.current = undefined;
             }
           }}
         >
@@ -485,16 +588,27 @@ function Engine({
             size={1.5}
             color="color-mix(in srgb, var(--foreground) 16%, transparent)"
           />
+          {narrow && controls ? (
+            // A narrow canvas has no free corner: a graph taller than it would pass under the
+            // controls. They stand on a strip of their own, which the graph ends above.
+            <div
+              aria-hidden="true"
+              data-slot="flow-strip"
+              className="absolute inset-x-0 bottom-0 z-4 h-15 border-t bg-background"
+            />
+          ) : null}
         </ReactFlow>
         {controls && !(narrow && panelShown) ? (
           <EngineControls
             narrow={narrow}
             onFit={() => {
               movedRef.current = false;
+              heldRef.current = undefined;
               fit(true);
             }}
             onMoved={() => {
               movedRef.current = true;
+              heldRef.current = undefined;
             }}
             search={
               narrow || searchLabel === undefined
@@ -541,7 +655,7 @@ function EngineControls({
 }) {
   const flow = useReactFlow();
   const zoom = useStore(zoomSelector);
-  const duration = () => (prefersReducedMotion() ? 0 : PAN_DURATION);
+  const duration = panDuration;
   return (
     <FlowControls
       className={cn("absolute z-10", narrow ? "bottom-3 left-3" : "bottom-4 left-4")}

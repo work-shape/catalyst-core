@@ -167,9 +167,11 @@ test("an admin removes a tool of a module that is off from an agent and saves", 
     await expect(stale).toContainText(
       "Not available: the module Documents is off. Remove it to save."
     );
-    const toolCount = page.locator('select[aria-label="Sections of this page"] option', {
-      hasText: "Tools"
-    });
+    const toolCount = page
+      .getByRole("navigation", { name: "On this page" })
+      .locator("select option", {
+        hasText: "Tools"
+      });
     await expect(toolCount).toHaveText("Tools (1)");
 
     await stale.getByRole("button", { name: "Remove" }).click();

@@ -70,6 +70,7 @@ export function registerAccessRoutes(route: Route, options: ChatServerOptions): 
       holderId: query.holderId,
       action: query.action,
       scopeKind: query.scopeKind,
+      scopeId: query.scopeId,
       page: paging
     });
     const view = await workflow.grantViewContext(user, grants);

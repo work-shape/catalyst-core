@@ -1,27 +1,17 @@
-import {
-  cloneElement,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type MouseEvent,
-  type ReactElement,
-  type ReactNode,
-  type RefObject
-} from "react";
+import { cloneElement, type ReactElement, type ReactNode } from "react";
 import { cn } from "../cn";
 import { Select } from "../forms/select";
 import type { CountBadgeTone } from "../status/count-badge";
 import { NavGroup, NavItem } from "./nav-item";
 
 export interface SubRailItem {
-  /** In `routes` mode the route's own id; in `anchors` mode the id of the element to scroll to. */
+  /** The route's own id. */
   id: string;
   label: string;
   icon?: ReactNode;
   count?: number;
   countTone?: CountBadgeTone;
-  /** `routes` mode: the caller's link to this route. Without it the item is a button. */
+  /** The caller's link to this route. Without it the item is a button. */
   link?: ReactElement;
 }
 
@@ -37,7 +27,11 @@ export interface SubRailGroup {
   items: readonly SubRailItem[];
 }
 
-interface SubRailBaseProps {
+/**
+ * Every item is a page: the caller's links navigate and the rail shows where the reader is. It
+ * has no way to scroll within a page. The sections of one page are a `PageOutline`.
+ */
+export interface SubRailProps {
   /** Names the navigation, and the select that replaces it where the page lacks the room. */
   label: string;
   groups: readonly SubRailGroup[];
@@ -46,25 +40,17 @@ interface SubRailBaseProps {
   /** The page has a sticky detail header: the rail stays below it. */
   belowHeader?: boolean;
   className?: string;
-}
-
-export interface SubRailRoutesProps extends SubRailBaseProps {
-  /** Each item is a page. The caller's links navigate; the rail shows where the reader is. */
-  mode: "routes";
+  /**
+   * The name of the area these pages belong to, such as Settings. It heads the rail on the
+   * page's title line, level with the open page's name. Above the content it stands over the
+   * select: beside the control that floats over a narrow window, or under the page's top room.
+   */
+  title?: string;
   /** The id of the open route. */
   value: string;
   /** An item without a link, or the select, was chosen: the caller navigates to this route. */
   onValueChange(id: string): void;
 }
-
-export interface SubRailAnchorsProps extends SubRailBaseProps {
-  /** Each item is a section of this page. The rail scrolls to it and follows the scrolling. */
-  mode: "anchors";
-  /** The section at the top of the view changed. */
-  onValueChange?(id: string): void;
-}
-
-export type SubRailProps = SubRailRoutesProps | SubRailAnchorsProps;
 
 /**
  * Grouped navigation inside a page, 14rem wide and built from `NavItem`. It stands beside the
@@ -73,38 +59,35 @@ export type SubRailProps = SubRailRoutesProps | SubRailAnchorsProps;
  *
  * Beside the content it is pinned where it starts, so it stands still while the content scrolls.
  * A rail longer than the scroll area scrolls on its own.
+ *
+ * Its first line is on the page's title line. Above the content it keeps the page's top room
+ * over itself, less what a floating control already takes; once the page scrolls, the select
+ * is pinned at the top edge or under that control, and the room is gone.
  */
-export function SubRail(props: SubRailProps) {
-  const { label, groups, scope, belowHeader = false, className } = props;
-  const rootRef = useRef<HTMLDivElement>(null);
-  const railRef = useRef<HTMLElement>(null);
-  const ids = groups.flatMap((group) => group.items.map((item) => item.id));
-  const anchors = useAnchorTracking({
-    enabled: props.mode === "anchors",
-    ids,
-    rootRef,
-    railRef,
-    onChange: props.mode === "anchors" ? props.onValueChange : undefined
-  });
-  const value = props.mode === "routes" ? props.value : anchors.value;
-  const choose = props.mode === "routes" ? props.onValueChange : anchors.scrollTo;
+export function SubRail({
+  label,
+  title,
+  groups,
+  scope,
+  belowHeader = false,
+  className,
+  value,
+  onValueChange: choose
+}: SubRailProps) {
   const openGroupScope = groups.find((group) =>
     group.items.some((item) => item.id === value)
   )?.scope;
 
   return (
     <div
-      ref={rootRef}
-      data-mode={props.mode}
+      data-sub-rail=""
       className={cn(
-        "grid w-full shrink-0 gap-3 self-start bg-background py-2",
+        // The select that names the routes stays in view while the page scrolls.
+        "sticky grid w-full shrink-0 gap-3 self-start bg-background py-2",
         // Beside the content the rail scrolls on its own when it is longer than the scroll area.
         // That clips what leaves its box, so the box is a step larger on each side than the
         // rail it shows and a focus ring keeps its room.
         "@subrail/page:-mx-1 @subrail/page:w-[calc(var(--layout-subrail)+var(--spacing)*2)] @subrail/page:overflow-y-auto @subrail/page:px-1 @subrail/page:pb-1",
-        // A select that names sections scrolls away with the page: pinned, it would stand in
-        // the way of the page's own sticky head. A select that names routes stays.
-        props.mode === "anchors" ? "@subrail/page:sticky" : "sticky",
         // Under a head the rail keeps a step of room, at rest and while it is pinned: its first
         // item would otherwise touch the head's line.
         // A head with a second line is taller than the offset: the rail then goes under it.
@@ -112,15 +95,37 @@ export function SubRail(props: SubRailProps) {
         // rail never travels. Under a head it is pinned directly below the pinned head.
         belowHeader
           ? "top-(--layout-header) z-[calc(var(--layer-sticky-header)-1)] @subrail/page:max-h-[calc(100cqh-var(--layout-header))] @subrail/page:pt-4"
-          : "top-(--layout-page-inset) z-(--layer-sticky-header) @subrail/page:top-[calc(var(--layout-page-inset)+var(--spacing)*5)] @subrail/page:-mt-1 @subrail/page:max-h-[calc(100cqh-var(--layout-page-inset)-var(--spacing)*5)] @subrail/page:pt-1",
+          : [
+              "z-(--layer-sticky-header) @subrail/page:top-[calc(var(--layout-page-inset)+var(--layout-page-top)-var(--spacing))] @subrail/page:-mt-1 @subrail/page:max-h-[calc(100cqh-var(--layout-page-inset)-var(--layout-page-top)+var(--spacing))] @subrail/page:pt-1",
+              // Above the content: the page's top room that no floating control takes yet.
+              "[--subrail-room:max(0rem,var(--layout-page-top)_-_var(--layout-page-inset))]",
+              title === undefined
+                ? // The room is over the select at rest and scrolls away, down to the rail's
+                  // own step of padding.
+                  "top-[calc(var(--layout-page-inset)+var(--spacing)*2-max(var(--spacing)*2,var(--subrail-room)))] pt-[max(var(--spacing)*2,var(--subrail-room))]"
+                : // The title's line is as high as the floating control's band, or a control
+                  // high without one. The rail starts at the top edge, so the title stands in
+                  // that band; pinned, the band stays and the room and a bare title line go.
+                  "top-[calc(var(--layout-page-inset)-var(--subrail-room)-var(--subrail-title))] -mt-(--layout-page-inset) pt-(--subrail-room) [--subrail-title:max(var(--layout-page-inset),var(--spacing)_*_9)]"
+            ],
         // The pinned select keeps what floats over the page's top clear: the content leaves
-        // under the select, not between the floating controls.
-        props.mode === "routes" &&
-          !belowHeader &&
+        // under the select, not between the floating controls. A title's line does the same.
+        !belowHeader &&
+          title === undefined &&
           "before:absolute before:inset-x-0 before:bottom-full before:h-(--layout-page-inset) before:bg-background @subrail/page:before:hidden",
         className
       )}
     >
+      {title === undefined ? null : (
+        // No heading: the page's own name is its first heading, and the area's landmark and
+        // this navigation are named by the caller.
+        <p
+          data-subrail-title=""
+          className="flex h-(--subrail-title) min-w-0 items-center ps-(--layout-page-head-start) text-title-lg @subrail/page:h-9 @subrail/page:ps-2"
+        >
+          <span className="truncate">{title}</span>
+        </p>
+      )}
       {scope}
       {openGroupScope === undefined ? null : (
         <div className="min-w-0 @subrail/page:hidden">{openGroupScope}</div>
@@ -143,7 +148,7 @@ export function SubRail(props: SubRailProps) {
           )
         )}
       </Select>
-      <nav ref={railRef} aria-label={label} className="hidden gap-4 @subrail/page:grid">
+      <nav aria-label={label} className="hidden gap-4 @subrail/page:grid">
         {groups.map((group) => (
           <NavGroup key={group.id} label={group.label}>
             {group.scope === undefined ? null : (
@@ -153,7 +158,6 @@ export function SubRail(props: SubRailProps) {
               <SubRailNavItem
                 key={item.id}
                 item={item}
-                mode={props.mode}
                 selected={item.id === value}
                 onChoose={choose}
               />
@@ -175,12 +179,10 @@ function SubRailOption({ item }: { item: SubRailItem }) {
 
 function SubRailNavItem({
   item,
-  mode,
   selected,
   onChoose
 }: {
   item: SubRailItem;
-  mode: SubRailProps["mode"];
   selected: boolean;
   onChoose(id: string): void;
 }) {
@@ -190,19 +192,6 @@ function SubRailNavItem({
     countTone: item.countTone ?? "muted",
     selected
   };
-  if (mode === "anchors") {
-    const followAnchor = (event: MouseEvent) => {
-      event.preventDefault();
-      onChoose(item.id);
-    };
-    return (
-      <NavItem {...shared} asChild aria-current={selected ? "location" : undefined}>
-        <a href={`#${item.id}`} onClick={followAnchor}>
-          {item.label}
-        </a>
-      </NavItem>
-    );
-  }
   if (item.link) {
     return (
       <NavItem {...shared} asChild>
@@ -215,145 +204,4 @@ function SubRailNavItem({
       {item.label}
     </NavItem>
   );
-}
-
-interface AnchorMeasure {
-  /** The vertical position, in the viewport, that a section has reached when it is "current". */
-  line: number;
-  targets: { id: string; element: HTMLElement }[];
-}
-
-/**
- * `anchors` mode: which section is at the top of the view, and scrolling to one. The line the
- * sections are measured against is the rail's own top edge while it stands beside the content.
- * The select that stands in for the rail scrolls away with the page, so there the line is the
- * top of what scrolls, lowered by the sticky head the rail was told of.
- */
-function useAnchorTracking({
-  enabled,
-  ids,
-  rootRef,
-  railRef,
-  onChange
-}: {
-  enabled: boolean;
-  ids: readonly string[];
-  rootRef: RefObject<HTMLDivElement | null>;
-  railRef: RefObject<HTMLElement | null>;
-  onChange?(id: string): void;
-}): { value: string; scrollTo(id: string): void } {
-  const [value, setValue] = useState(ids[0] ?? "");
-  const valueRef = useRef(value);
-  const ownScrollRef = useRef<{ scroller: Element; top: number } | undefined>(undefined);
-  const onChangeRef = useRef(onChange);
-  // The ids as one string, so a new array with the same ids does not restart the tracking.
-  const idsKey = ids.join("\n");
-
-  useEffect(() => {
-    onChangeRef.current = onChange;
-  }, [onChange]);
-
-  const select = useCallback((id: string) => {
-    if (valueRef.current === id) {
-      return;
-    }
-    valueRef.current = id;
-    setValue(id);
-    onChangeRef.current?.(id);
-  }, []);
-
-  const measure = useCallback((): AnchorMeasure | undefined => {
-    const root = rootRef.current;
-    const rail = railRef.current;
-    if (!root || !rail) {
-      return undefined;
-    }
-    const rect = root.getBoundingClientRect();
-    const narrow = getComputedStyle(rail).display === "none";
-    const targets = idsKey.split("\n").flatMap((id) => {
-      const element = findById(root, id);
-      return element ? [{ id, element }] : [];
-    });
-    if (!narrow) {
-      return { line: rect.top, targets };
-    }
-    // The rail's `top` is the height of the head it stays below, or nothing.
-    const below = Number.parseFloat(getComputedStyle(root).top);
-    const scrollerTop = scrollParent(root).getBoundingClientRect().top;
-    return { line: Math.max(scrollerTop, 0) + (Number.isFinite(below) ? below : 0), targets };
-  }, [idsKey, rootRef, railRef]);
-
-  useEffect(() => {
-    if (!enabled) {
-      return;
-    }
-    const follow = () => {
-      const measured = measure();
-      const first = measured?.targets[0];
-      if (!measured || !first) {
-        return;
-      }
-      const last = measured.targets[measured.targets.length - 1] ?? first;
-      const scroller = scrollParent(first.element);
-      // Where the rail itself scrolled to, its choice stands: a section near the end cannot reach the line.
-      const own = ownScrollRef.current;
-      if (own?.scroller === scroller && own.top === scroller.scrollTop) {
-        return;
-      }
-      ownScrollRef.current = undefined;
-      const atEnd =
-        scroller.scrollTop > 0 &&
-        scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1;
-      const passed = measured.targets.filter(
-        (target) => target.element.getBoundingClientRect().top <= measured.line + 1
-      );
-      select(atEnd ? last.id : (passed[passed.length - 1] ?? first).id);
-    };
-    follow();
-    // Scroll events do not bubble; capturing on the document hears every scrolling ancestor.
-    document.addEventListener("scroll", follow, { capture: true, passive: true });
-    window.addEventListener("resize", follow);
-    return () => {
-      document.removeEventListener("scroll", follow, { capture: true });
-      window.removeEventListener("resize", follow);
-    };
-  }, [enabled, measure, select]);
-
-  const scrollTo = (id: string) => {
-    const measured = measure();
-    const target = measured?.targets.find((candidate) => candidate.id === id);
-    if (!measured || !target) {
-      return;
-    }
-    const scroller = scrollParent(target.element);
-    scroller.scrollBy({
-      top: target.element.getBoundingClientRect().top - measured.line,
-      behavior: "instant"
-    });
-    ownScrollRef.current = { scroller, top: scroller.scrollTop };
-    select(id);
-  };
-
-  return { value, scrollTo };
-}
-
-/** The element with `id` in the document or shadow root that `from` lives in. */
-function findById(from: HTMLElement, id: string): HTMLElement | null {
-  const rootNode = from.getRootNode();
-  return rootNode instanceof Document || rootNode instanceof ShadowRoot
-    ? rootNode.getElementById(id)
-    : null;
-}
-
-function scrollParent(element: HTMLElement): Element {
-  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
-    const overflowY = getComputedStyle(parent).overflowY;
-    if (
-      (overflowY === "auto" || overflowY === "scroll") &&
-      parent.scrollHeight > parent.clientHeight
-    ) {
-      return parent;
-    }
-  }
-  return element.ownerDocument.scrollingElement ?? element.ownerDocument.documentElement;
 }

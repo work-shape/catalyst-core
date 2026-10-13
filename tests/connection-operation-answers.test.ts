@@ -317,6 +317,7 @@ describe("the Connection routes", () => {
         {
           name: "crm",
           title: "Connection crm",
+          connectorType: "test",
           tools: [
             {
               toolName: "connection.crm.echo",

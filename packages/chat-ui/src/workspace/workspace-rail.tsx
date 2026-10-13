@@ -1,4 +1,4 @@
-import { Blocks, PanelLeft, Search, Settings, SquarePen } from "lucide-react";
+import { Blocks, PanelLeft, Plus, Search, Settings, SquarePen } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
 import type { ConversationListItem, SafeConfig } from "@vivd-catalyst/api-client";
 import {
@@ -12,6 +12,7 @@ import {
   Skeleton,
   useSidebarCollapsed
 } from "@vivd-catalyst/ui";
+import type { RailApp } from "../apps/rail-apps";
 import { ConversationButton } from "../conversation/conversation-button";
 import { useTranslation } from "../i18n";
 import { ClientBrandingLogo, clientBrandingFrom } from "./client-branding";
@@ -51,8 +52,20 @@ interface WorkspaceRailProps {
   canViewBuild?: boolean;
   /** Present for a person who may decide requests or has made one: the Inbox row shows. */
   inbox?: RailSectionsGiven["inbox"];
+  /** The session has workspaces: the Agents row shows. */
+  agents?: boolean;
   /** The Apps module is on: the Apps row shows. */
   apps?: boolean;
+  /** The Workflows area is open to the person: the Workflows row shows. */
+  workflows?: boolean;
+  /**
+   * The published Apps the person may open, most recently used first and bounded by the
+   * caller. They stand under the Apps row, which opens the page with every App.
+   */
+  publishedApps?: readonly RailApp[];
+  /** The App on screen: its row is the current one in place of the Apps row. */
+  openAppName?: string;
+  onOpenApp?: (app: string) => void;
   view: WorkspaceView;
   deletingConversation: boolean;
   canMoveConversation: boolean;
@@ -74,15 +87,17 @@ interface WorkspaceRailProps {
 
 /**
  * The frame's navigation: the workspace selector with search and collapse, New chat, the
- * section rows, the workspace's conversations under "Recent", which load page by page as a
+ * section rows with the published Apps under theirs, the workspace's conversations under "Recent", which load page by page as a
  * person scrolls, and a footer with the account menu and the settings. Collapsed it is a strip of icons; under
  * 768 px it is a drawer.
  */
 export function WorkspaceRail(props: WorkspaceRailProps) {
   const { t } = useTranslation();
   const sections = shownRailSections(props.sections ?? railSections, {
+    agents: props.agents,
     inbox: props.inbox,
-    apps: props.apps
+    apps: props.apps,
+    workflows: props.workflows
   });
 
   return (
@@ -104,6 +119,9 @@ function RailHeader({
   collaborationWorkspaceSelector,
   sections,
   inbox,
+  publishedApps = [],
+  openAppName,
+  onOpenApp,
   view,
   collapsed,
   onToggleCollapsed,
@@ -143,13 +161,17 @@ function RailHeader({
       {t("nav.newChat")}
     </NavItem>
   );
-  const sectionRows = sections.map((section) => {
+  // The Apps under their row, as the conversations stand under "Recent": the strip of icons
+  // has no room for a list. An App that is listed and open is the current row itself.
+  const appRows = iconsOnly ? [] : publishedApps;
+  const listedAppOpen = appRows.some((app) => app.name === openAppName);
+  const sectionRows = sections.flatMap((section) => {
     const count = section.count?.({ inbox }) ?? 0;
-    return (
+    const row = (
       <NavItem
         key={section.id}
         icon={<section.icon aria-hidden="true" />}
-        selected={view === section.view}
+        selected={view === section.view && !(section.id === "apps" && listedAppOpen)}
         count={count > 0 ? count : undefined}
         aria-label={count > 0 && section.countLabel ? t(section.countLabel, { count }) : undefined}
         onClick={() => onViewChange(section.view)}
@@ -157,6 +179,25 @@ function RailHeader({
         {t(section.label)}
       </NavItem>
     );
+    if (section.id !== "apps" || appRows.length === 0) {
+      return [row];
+    }
+    return [
+      row,
+      <NavGroup key="published-apps" aria-label={t("nav.publishedApps")} data-testid="rail-apps">
+        {appRows.map((app) => (
+          <NavItem
+            key={app.name}
+            // The label starts where the labels of the section rows start.
+            className="pl-8"
+            selected={app.name === openAppName}
+            onClick={() => onOpenApp?.(app.name)}
+          >
+            {app.title}
+          </NavItem>
+        ))}
+      </NavGroup>
+    ];
   });
 
   // New chat and the sections are one group of rows, in the strip as in the open rail: the
@@ -220,6 +261,7 @@ function RecentConversations({
   deletingConversation,
   canMoveConversation,
   onLoadMoreConversations,
+  onCreateConversation,
   onSelectConversation,
   onReloadConversations,
   onRenameConversation,
@@ -235,7 +277,15 @@ function RecentConversations({
   const recent = recentConversations(conversations, openConversation);
 
   return (
-    <NavGroup label={t("nav.recent")}>
+    <NavGroup
+      label={t("nav.recent")}
+      // The same start as the "New chat" row, where the pointer is when a person reads the list.
+      labelAction={
+        <IconButton size="sm" label={t("nav.newChat")} onClick={onCreateConversation}>
+          <Plus aria-hidden="true" />
+        </IconButton>
+      }
+    >
       {recent.length > 0 ? (
         recent.map((conversation) => (
           <ConversationButton

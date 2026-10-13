@@ -27,7 +27,7 @@ import {
   type PlannedItem,
   type ReadyItem
 } from "./asset-sync-refusals";
-import type { ChatServerOptions } from "./types";
+import type { AssetWorkflowOptions } from "./types";
 
 // The items of a batch before anything is written: what each is by its own input, the row it
 // names, and every right its caller needs for it.
@@ -39,7 +39,7 @@ import type { ChatServerOptions } from "./types";
  * without the rights learns nothing else.
  */
 export async function authorizeItems(
-  options: ChatServerOptions,
+  options: AssetWorkflowOptions,
   access: ActorAccess,
   input: AssetSyncInput
 ): Promise<PlannedItem[]> {
@@ -147,7 +147,7 @@ export function replacedRefusal(entry: ReadyItem): ItemRefusal | undefined {
  * checks of the validated definitions stay where they are and decide again.
  */
 async function requireFurtherRights(
-  options: ChatServerOptions,
+  options: AssetWorkflowOptions,
   access: ActorAccess,
   input: AssetSyncInput,
   planned: PlannedItem[]
@@ -238,7 +238,7 @@ export function leftByItems(
 }
 
 /** What each item is by its own input: a registered kind, a name, inside a named prefix, once. */
-function planItems(options: ChatServerOptions, input: AssetSyncInput): PlannedItem[] {
+function planItems(options: AssetWorkflowOptions, input: AssetSyncInput): PlannedItem[] {
   const seen = new Set<string>();
   return input.items.map((item, index): PlannedItem => {
     requireAssetKindModuleOn(options.modules, item.kind);

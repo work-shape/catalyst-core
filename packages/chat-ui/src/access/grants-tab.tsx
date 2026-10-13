@@ -27,6 +27,7 @@ import {
   Picker,
   PickerButton,
   RadioGroup,
+  RegistryIcon,
   SkeletonList,
   Tooltip,
   TooltipContent,
@@ -38,6 +39,7 @@ import { useTranslation, type TranslationContextValue, type TranslationKey } fro
 import {
   GRANT_KINDS,
   accessWriteFailure,
+  grantAction,
   emptyGrantForm,
   grantRequests,
   grantScopeKinds,
@@ -51,11 +53,19 @@ import {
   type GrantForm,
   type GrantGroup,
   type GrantKind,
-  type GrantScopeKind,
   type GrantVerb,
   type GrantWriteResult,
   type LoadFailure
 } from "./access-model";
+import {
+  kindLabelKeys,
+  kindWords,
+  rightAllowNoteKeys,
+  rightSentenceKeys,
+  scopeChoice,
+  verbLabelKeys,
+  wordsOfKind
+} from "./grant-words";
 
 /** From this many entries on, a picker of the grant dialog shows its search field. */
 const PICKER_SEARCH_FROM_COUNT = 8;
@@ -70,66 +80,8 @@ const GRANT_COLUMNS = "@xl:grid-cols-[minmax(0,4fr)_minmax(0,4fr)_minmax(0,6fr)_
 
 type Translate = TranslationContextValue["t"];
 
-export const verbLabelKeys: Record<GrantVerb, TranslationKey> = {
-  read: "access.actionRead",
-  use: "access.actionUse",
-  write: "access.actionWrite",
-  delete: "access.actionDelete"
-};
-
-/**
- * The name of every asset kind an instance can register, in the plural. A kind added to the
- * platform gets its entry here: a test holds the registry of an instance against this list.
- */
-const kindLabelKeys = {
-  agent: "access.kindAgent",
-  skill: "access.kindSkill",
-  connection: "access.kindConnection",
-  app: "access.kindApp",
-  workflow: "access.kindWorkflow"
-} as const satisfies Record<GrantKind, TranslationKey> & Record<string, TranslationKey>;
-
-/** The label of a registered asset kind; nothing for a kind this interface has no name for. */
-export function assetKindLabelKey(kind: string): TranslationKey | undefined {
-  return Object.entries(kindLabelKeys).find(([known]) => known === kind)?.[1];
-}
-
-const actionOnKindKeys: Record<GrantKind, TranslationKey> = {
-  agent: "access.actionOnAgent",
-  skill: "access.actionOnSkill",
-  connection: "access.actionOnConnection"
-};
-
-/** What an action of a Connection allows, as the dialog says it under the action. */
-const connectionVerbDescriptionKeys: Partial<Record<GrantVerb, TranslationKey>> = {
-  read: "access.actionReadConnectionDescription",
-  use: "access.actionUseConnectionDescription"
-};
-
-/** The places a grant applies at, as the dialog offers them for one kind. */
-const scopeChoiceKeys: Record<
-  GrantScopeKind,
-  (kind: GrantKind) => { label: TranslationKey; description: TranslationKey }
-> = {
-  namespace: (kind) => ({
-    label: "access.scopeInNamespace",
-    description:
-      kind === "connection"
-        ? "access.scopeInNamespaceConnectionDescription"
-        : "access.scopeInNamespaceDescription"
-  }),
-  asset: (kind) =>
-    kind === "connection"
-      ? { label: "access.scopeOnConnection", description: "access.scopeOnConnectionDescription" }
-      : { label: "access.scopeOnAsset", description: "access.scopeOnAssetDescription" },
-  workspace: () => ({
-    label: "access.scopeInWorkspace",
-    description: "access.scopeInWorkspaceDescription"
-  })
-};
-
-/** What a picker of the grant dialog chooses from, such as the Connections of the instance. */
-interface GrantChoices {
+/** What a picker of the grant dialog chooses from, such as the Workflows of the instance. */
+export interface GrantChoices {
   /** Absent while the choices load and when they could not be loaded. */
   items: readonly { id: string; name: string; description?: string }[] | undefined;
   failed: boolean;
@@ -141,7 +93,7 @@ function actionLabel(action: string, t: Translate): string {
   if (!parts) {
     return action;
   }
-  return t(actionOnKindKeys[parts.kind], { action: t(verbLabelKeys[parts.verb]) });
+  return t(kindWords[parts.kind].actionOnKind, { action: t(verbLabelKeys[parts.verb]) });
 }
 
 /** What one row says, with its effect in words: "Denied: Write agents". */
@@ -175,13 +127,8 @@ function scopeLabel(
   if (asset?.name === undefined) {
     return t("access.scopeAssetById", { id: grant.scopeId ?? "" });
   }
-  return asset.kind === "agent"
-    ? t("access.scopeAgent", { name: asset.name })
-    : asset.kind === "skill"
-      ? t("access.scopeSkill", { name: asset.name })
-      : asset.kind === "connection"
-        ? t("access.scopeConnection", { name: asset.name })
-        : asset.name;
+  const words = wordsOfKind(asset.kind);
+  return words ? t(words.scopeAsset, { name: asset.name }) : asset.name;
 }
 
 export interface GrantsTabProps {
@@ -198,10 +145,11 @@ export interface GrantsTabProps {
   /** `forbidden` when the caller may not read the agents and skills of the instance. */
   assetsFailure: LoadFailure | undefined;
   /**
-   * The Connections of the instance. Absent while the instance has no Connections: the dialog
-   * then offers agents and skills only.
+   * The assets of every further kind the instance has, such as its Connections and its
+   * Workflows, by kind. A kind without an entry is not offered: the instance has no such kind
+   * while its module is off. Agents and skills are always offered.
    */
-  connections?: GrantChoices;
+  kindAssets?: Partial<Record<GrantKind, GrantChoices>>;
   /** The Shared Workspaces, for a grant on what a workspace owns and to name such a row. */
   workspaces?: GrantChoices;
   /**
@@ -222,7 +170,7 @@ export function GrantsTab({
   namespaces,
   assets,
   assetsFailure,
-  connections,
+  kindAssets,
   workspaces,
   onGrant,
   onRevoke
@@ -313,7 +261,7 @@ export function GrantsTab({
           namespaces={namespaces}
           assets={assets}
           assetsFailure={assetsFailure}
-          connections={connections}
+          kindAssets={kindAssets}
           workspaces={workspaces}
           onGrant={(requests) =>
             onGrant(requests).then((result) => {
@@ -501,7 +449,11 @@ const failureKeys: Partial<Record<AccessWriteFailure, TranslationKey>> = {
   userBeingDeleted: "access.grantUserBeingDeleted",
   unknownHolder: "access.grantUnknownHolder",
   unknownNamespace: "access.grantUnknownNamespace",
-  assetGone: "access.grantAssetGone"
+  assetGone: "access.grantAssetGone",
+  rightNotOffered: "access.grantRightNotOffered",
+  moduleOff: "access.grantModuleOff",
+  missingManageRight: "access.grantMissingManageRight",
+  holderIsSuperadmin: "access.grantHolderIsSuperadmin"
 };
 
 /** The sentence for a grant that stopped at one row, with how many rows were written before. */
@@ -514,13 +466,18 @@ function grantFailureText(error: unknown, t: Translate): string {
     : sentence;
 }
 
+/** Agents and skills: the two kinds every instance has, read with the agent configuration. */
+function isConfigAssetKind(kind: GrantKind): kind is "agent" | "skill" {
+  return kind === "agent" || kind === "skill";
+}
+
 function GrantDialog({
   users,
   usersFailed,
   namespaces,
   assets,
   assetsFailure,
-  connections,
+  kindAssets,
   workspaces,
   onGrant,
   onClose
@@ -531,7 +488,7 @@ function GrantDialog({
   | "namespaces"
   | "assets"
   | "assetsFailure"
-  | "connections"
+  | "kindAssets"
   | "workspaces"
   | "onGrant"
 > & { onClose(): void }) {
@@ -546,33 +503,38 @@ function GrantDialog({
 
   const holders = grantableUsers(users ?? []);
   const holder = holders.find((user) => user.id === form.holderId);
-  // A Connection is offered while the instance has Connections at all.
-  const kinds = GRANT_KINDS.filter((kind) => kind !== "connection" || connections !== undefined);
-  const ofConnection = form.kind === "connection";
-  // What the asset picker chooses from: the Connections, or the agents or skills.
-  const kindAssets = ofConnection
-    ? (connections?.items ?? [])
-    : (assets ?? []).flatMap((candidate) =>
-        candidate.kind === form.kind && candidate.id !== undefined
-          ? [{ id: candidate.id, name: candidate.name }]
-          : []
+  const kinds = GRANT_KINDS.filter(
+    (kind) => isConfigAssetKind(kind) || kindAssets?.[kind] !== undefined
+  );
+  const words = kindWords[form.kind];
+  // What the asset picker chooses from: the agents or skills, or the assets of a further kind.
+  const choices: GrantChoices = isConfigAssetKind(form.kind)
+    ? {
+        items: assets?.flatMap((candidate) =>
+          candidate.kind === form.kind && candidate.id !== undefined
+            ? [{ id: candidate.id, name: candidate.name }]
+            : []
+        ),
+        failed: assetsFailure !== undefined
+      }
+    : (kindAssets?.[form.kind] ?? { items: undefined, failed: false });
+  const kindItems = choices.items ?? [];
+  const assetsError = !choices.failed
+    ? undefined
+    : t(
+        isConfigAssetKind(form.kind) && assetsFailure === "forbidden"
+          ? "access.referencesForbidden"
+          : words.assetsLoadFailed
       );
-  const assetsLoaded = ofConnection ? connections?.items !== undefined : assets !== undefined;
-  const assetsError = ofConnection
-    ? connections?.failed
-      ? t("access.connectionsLoadFailed")
-      : undefined
-    : assetsFailure === undefined
-      ? undefined
-      : t(
-          assetsFailure === "forbidden"
-            ? "access.referencesForbidden"
-            : "access.referencesLoadFailed"
-        );
-  const asset = kindAssets.find((candidate) => candidate.id === form.assetId);
-  const verbDescription = (verb: GrantVerb): string | undefined => {
-    const key = ofConnection ? connectionVerbDescriptionKeys[verb] : undefined;
-    return key === undefined ? undefined : t(key);
+  const asset = kindItems.find((candidate) => candidate.id === form.assetId);
+  const kindIcon = <RegistryIcon name={form.kind} className="size-4 text-muted-foreground" />;
+  /** The sentence under a right, with what else the right needs where an allow alone does nothing. */
+  const rightDescription = (verb: GrantVerb): string | undefined => {
+    const action = grantAction(form.kind, verb);
+    const sentence = action && rightSentenceKeys[action];
+    const note = action && form.effect === "allow" ? rightAllowNoteKeys[action] : undefined;
+    const parts = [sentence, note].flatMap((key) => (key === undefined ? [] : [t(key)]));
+    return parts.length === 0 ? undefined : parts.join(" ");
   };
   const workspace = workspaces?.items?.find((candidate) => candidate.id === form.workspaceId);
   const requests = grantRequests(form);
@@ -654,7 +616,7 @@ function GrantDialog({
             <Checkbox
               key={verb}
               label={t(verbLabelKeys[verb])}
-              description={verbDescription(verb)}
+              description={rightDescription(verb)}
               checked={form.verbs.includes(verb)}
               onCheckedChange={(checked) =>
                 change({
@@ -669,7 +631,7 @@ function GrantDialog({
         <RadioGroup
           label={t("access.grantScopeKind")}
           options={grantScopeKinds(form.kind).map((scopeKind) => {
-            const keys = scopeChoiceKeys[scopeKind](form.kind);
+            const keys = scopeChoice(scopeKind, form.kind);
             return { value: scopeKind, label: t(keys.label), description: t(keys.description) };
           })}
           value={form.scopeKind}
@@ -726,32 +688,30 @@ function GrantDialog({
           </Field>
         ) : (
           <Field
-            label={t(ofConnection ? "access.grantConnection" : "access.grantAsset")}
+            label={t(words.assetField)}
             required
             error={assetsError}
-            hint={
-              ofConnection && connections?.items?.length === 0
-                ? t("access.noConnections")
-                : undefined
-            }
+            hint={choices.items?.length === 0 ? t(words.noAssets) : undefined}
           >
             <Picker
-              search={kindAssets.length >= PICKER_SEARCH_FROM_COUNT}
-              options={kindAssets.map((candidate) => ({
+              search={kindItems.length >= PICKER_SEARCH_FROM_COUNT}
+              // What an asset says of itself is what tells two of them apart: shown in full.
+              wrapDescriptions
+              options={kindItems.map((candidate) => ({
                 value: candidate.id,
                 label: candidate.name,
-                ...("description" in candidate && candidate.description
-                  ? { description: candidate.description }
-                  : {})
+                leading: kindIcon,
+                ...(candidate.description ? { description: candidate.description } : {})
               }))}
               value={form.assetId}
               onValueChange={(assetId) => change({ assetId })}
             >
               <PickerButton
-                label={t(ofConnection ? "access.grantConnection" : "access.grantAsset")}
-                placeholder={t(ofConnection ? "access.chooseConnection" : "access.chooseAsset")}
+                label={t(words.assetField)}
+                placeholder={t(words.chooseAsset)}
                 value={asset?.name}
-                disabled={!assetsLoaded || (ofConnection && kindAssets.length === 0)}
+                leading={asset ? kindIcon : undefined}
+                disabled={kindItems.length === 0}
               />
             </Picker>
           </Field>

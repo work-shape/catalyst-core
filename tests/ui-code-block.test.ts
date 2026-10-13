@@ -1,7 +1,14 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { CodeBlock, UiRoot, uiLabelsDe, type CodeBlockProps } from "@vivd-catalyst/ui";
+import {
+  CodeBlock,
+  CodeFile,
+  UiRoot,
+  uiLabelsDe,
+  type CodeBlockProps,
+  type CodeFileProps
+} from "@vivd-catalyst/ui";
 
 // CodeBlock shows the text of a file, read-only. Every test here fails without the component:
 // the library did not export it.
@@ -120,5 +127,96 @@ describe("CodeBlock", () => {
       [1, "a\n"],
       [2, "b\n"]
     ]);
+  });
+
+  // Colours and wrapping. Each test below fails without them: the props did not exist, every
+  // line was one text node and a long line could only scroll.
+  const textOf = (markup: string) => markup.replace(/<[^>]*>/gu, "");
+
+  it("draws the runs of a line in their colours and changes no character of the text", () => {
+    const markup = renderInRoot({
+      code: "name: a\nplain\n",
+      tokens: [
+        [{ text: "name", color: "var(--info)", darkColor: "var(--success)" }, { text: ": a" }],
+        [{ text: "plain" }]
+      ]
+    });
+
+    expect(markup).toContain(
+      '<span class="text-(color:--code-token) dark:text-(color:--code-token-dark)" style="--code-token:var(--info);--code-token-dark:var(--success)">name</span>: a\n'
+    );
+    expect(textOf(/<pre[^>]*>([\s\S]*)<\/pre>/u.exec(markup)?.[1] ?? "")).toBe("name: a\nplain\n");
+    // A run without a colour is text of the line, not an element.
+    expect(markup.match(/<span class="text-/gu)).toHaveLength(1);
+  });
+
+  it("draws a line plain when its runs spell something else, so the stored text always shows", () => {
+    const markup = renderInRoot({
+      code: "stored\nsecond",
+      tokens: [[{ text: "other", color: "var(--info)" }]]
+    });
+
+    expect(linesOf(markup)).toEqual([
+      [1, "stored\n"],
+      [2, "second\n"]
+    ]);
+  });
+
+  it("scrolls a long line sideways unless it is told to wrap, and numbers a wrapped line once", () => {
+    const scrolling = renderInRoot({ code: "a\nb" });
+    const wrapped = renderInRoot({ code: "a\nb", wrap: true });
+
+    expect(scrolling).toContain('<pre class="py-2 [counter-reset:code-line] w-max min-w-full">');
+    expect(scrolling).toContain("before:sticky");
+    expect(wrapped).toContain(
+      '<pre class="py-2 [counter-reset:code-line] w-full wrap-anywhere whitespace-pre-wrap">'
+    );
+    // The number is drawn beside the first row of its line and takes no room in the text.
+    expect(wrapped).toContain("before:absolute");
+    expect(wrapped).toContain("pl-12");
+    expect(wrapped).not.toContain("before:sticky");
+    expect(textOf(wrapped)).toBe("a\nb\n");
+  });
+});
+
+describe("CodeFile", () => {
+  const renderFile = (props: Partial<CodeFileProps> = {}) =>
+    renderToStaticMarkup(
+      createElement(
+        UiRoot,
+        { mode: "light", labels: uiLabelsDe },
+        createElement(CodeFile, {
+          name: "app.yaml",
+          code: "name: a\n",
+          wrap: false,
+          onWrapChange: () => undefined,
+          ...props
+        })
+      )
+    );
+
+  it("heads the text with its name, a labelled switch for wrapping and a copy button", () => {
+    const markup = renderFile();
+    const toggle = /<button[^>]*role="switch"[^>]*>/u.exec(markup)?.[0] ?? "";
+    const toggleId = /\sid="([^"]+)"/u.exec(toggle)?.[1];
+
+    expect(toggle).toContain('aria-checked="false"');
+    expect(markup).toContain(`<label for="${toggleId}"`);
+    expect(markup).toContain(`>${uiLabelsDe.wrapLines}</label>`);
+    expect(markup).toContain(`aria-label="${uiLabelsDe.copy}"`);
+    expect(markup).toMatch(/role="region" aria-label="app\.yaml" tabindex="0"/u);
+    expect(markup).toContain("w-max min-w-full");
+  });
+
+  it("wraps the text while the switch is on", () => {
+    const markup = renderFile({ wrap: true });
+
+    expect(/<button[^>]*role="switch"[^>]*>/u.exec(markup)?.[0]).toContain('aria-checked="true"');
+    expect(markup).toContain("whitespace-pre-wrap");
+  });
+
+  it("shows a note beside the name only when there is one", () => {
+    expect(renderFile()).not.toContain("code-file-note");
+    expect(renderFile({ note: "Zu groß" })).toMatch(/data-slot="code-file-note"[^>]*>Zu groß</u);
   });
 });

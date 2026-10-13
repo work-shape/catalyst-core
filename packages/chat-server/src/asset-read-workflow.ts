@@ -22,7 +22,7 @@ import { accessResource, decide, type AssetCall } from "./asset-access";
 import { readSourceFiles, type AssetFileOutput } from "./asset-files";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
 import { notFound, requireActive, type AssetAddress, type AssetTarget } from "./asset-target";
-import type { ChatServerOptions } from "./types";
+import type { AssetWorkflowOptions } from "./types";
 
 /** How many assets a list reads where its caller names no page. */
 const DEFAULT_ASSET_LIST_LIMIT = 51;
@@ -39,10 +39,10 @@ export interface AssetReadHost {
  * its history. Every call addresses one scope and stays in it, as the writes do.
  */
 export class AssetReadWorkflow {
-  private readonly options: ChatServerOptions;
+  private readonly options: AssetWorkflowOptions;
   private readonly host: AssetReadHost;
 
-  constructor(options: ChatServerOptions, host: AssetReadHost) {
+  constructor(options: AssetWorkflowOptions, host: AssetReadHost) {
     this.options = options;
     this.host = host;
   }
@@ -70,7 +70,22 @@ export class AssetReadWorkflow {
         kind: kind.kind,
         scope,
         namePrefix: input.prefix,
-        nameContains: input.text,
+        ...(input.text === undefined
+          ? {}
+          : {
+              text: {
+                contains: input.text,
+                // The title of the revision the caller is shown, as the summary below is.
+                titleOf: (asset, revisions) =>
+                  summarizeAsset(
+                    kind,
+                    asset.name,
+                    reads(accessResource(asset.kind, asset.name, asset.scope, asset.id))
+                      ? revisions.active
+                      : revisions.published
+                  ).title
+              }
+            }),
         afterName: typeof after === "string" ? after : undefined,
         limit: page?.limit ?? DEFAULT_ASSET_LIST_LIMIT,
         readable: (asset) => {

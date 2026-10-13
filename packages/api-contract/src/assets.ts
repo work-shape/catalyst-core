@@ -108,7 +108,12 @@ export const assetSummarySchema = z.object({
   isDefault: isDefaultSchema,
   /**
    * What the kind says of the asset beside its name, by the kind's own keys: a Connection
-   * names its `connectorType`, its `origin` and whether it is `enabled`.
+   * names its `connectorType`, its `origin`, whether it is `enabled` and, where it has one, its
+   * `service`, which picks its icon. A skill names its
+   * `origin`, who ships it: `instance` for a skill of the instance's own, `release` for one a
+   * release ships. It names its `summary`, the sentence for people, where it has one. A skill
+   * a release ships also names its `icon`, a key of the interface's icon registry; no other
+   * skill names an icon.
    */
   attributes: z.record(z.string(), z.union([z.string(), z.boolean()])).optional(),
   updatedAt: timestampSchema
@@ -168,7 +173,7 @@ export const assetWarningSchema = z.object({ code: z.string(), message: z.string
 export const listAssetsQuerySchema = z.object({
   /** Only names that start with this text, such as a Namespace prefix. */
   prefix: nameText(z.string().min(1).max(200)).optional(),
-  /** Only names that contain this text, whatever the case. */
+  /** Only assets whose name or title contains this text, whatever the case. */
   text: nameText(z.string().min(1).max(200)).optional(),
   workspaceId: workspaceIdSchema
 });
@@ -327,7 +332,9 @@ export const validateAssetRequestSchema = z.object({
 
 export const assetValidationIssueSchema = z.object({
   message: z.string(),
-  path: z.array(z.string()).optional()
+  path: z.array(z.string()).optional(),
+  /** The fixed code of the check that found the issue, such as `not_supported_yet`. */
+  code: z.string().optional()
 });
 
 export const validateAssetResponseSchema = z.object({

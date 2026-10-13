@@ -55,11 +55,14 @@ export interface SegmentedControlItemProps extends Omit<
   value: string;
   /** A plain count after the label, such as how many rows the view holds. */
   count?: number;
+  /** The count in full where it is above 99: the number is what the segment says. */
+  exactCount?: boolean;
 }
 
 export function SegmentedControlItem({
   className,
   count,
+  exactCount = false,
   children,
   ...props
 }: SegmentedControlItemProps) {
@@ -72,7 +75,7 @@ export function SegmentedControlItem({
       {...props}
     >
       {children}
-      {count === undefined ? null : <CountBadge count={count} tone="muted" />}
+      {count === undefined ? null : <CountBadge count={count} exact={exactCount} tone="muted" />}
     </RadioGroup.Item>
   );
 }

@@ -10,6 +10,7 @@ import { FlowMinimap, type FlowMinimapItem } from "../flow/flow-minimap";
 import { FlowHandle, FlowNode } from "../flow/flow-node";
 import type { FlowEdgeState, FlowGraph, FlowStatus } from "../flow/flow-types";
 import { SidePanel } from "../overlays/side-panel";
+import { IconTile } from "../status/icon-tile";
 import { RegistryIcon } from "../status/registry-icon";
 import { useUiLabels } from "../ui-root";
 import { Samples, type GalleryEntry, type GalleryGroup } from "./entry";
@@ -73,9 +74,9 @@ function SelectableCanvas({
             <SidePanel
               open
               leading={
-                <span className="grid size-7 shrink-0 place-items-center rounded-md bg-secondary [&_svg]:size-4">
+                <IconTile>
                   <RegistryIcon name={selected.icon} />
-                </span>
+                </IconTile>
               }
               eyebrow={selected.eyebrow}
               title={selected.title}
@@ -531,9 +532,9 @@ export function SidePanelSamples({ text }: { text: GalleryText }) {
         open={open}
         mode={mode}
         leading={
-          <span className="grid size-7 shrink-0 place-items-center rounded-md bg-secondary [&_svg]:size-4">
+          <IconTile>
             <RegistryIcon name="database" />
-          </span>
+          </IconTile>
         }
         eyebrow={text.flowKindRead}
         title={text.flowLoadTitle}

@@ -1,12 +1,36 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ConnectionDetail, ConnectionTestResult } from "@vivd-catalyst/api-client";
-import { usePlatformContextQuery } from "../api/workspace-queries";
+import { loadFailure } from "../access/access-model";
+import { useAssetGrantsQuery } from "../access/access-queries";
+import {
+  principalHref,
+  resourceHolders,
+  type ResourceHolder
+} from "../access/principal-grants-model";
+import {
+  usePlatformContextQuery,
+  useServicePrincipalsQuery,
+  useWorkspaceUsersQuery
+} from "../api/workspace-queries";
+import { canManageApiAccess, canManageUsers } from "../control-plane/governance";
+import { workspaceRoutePath } from "../routes";
 import { useSettingsPage } from "../settings/settings-page-context";
 import { apiErrorCode } from "../workspace-utils";
 import { instanceSentence, PendingApprovalError } from "./build-refusals";
 
 /** The action that lets a person test a Connection. */
 const CONNECTION_WRITE_ACTION = "connection.write";
+
+/** The action that lets a person or a service principal call a Connection's operations. */
+const CONNECTION_USE_ACTION = "connection.use";
+
+/** Who was given one Connection by itself, as its page asked for it. */
+export type ConnectionHoldersRead =
+  /** The reader is not shown who holds rights: the page has no such section. */
+  | { status: "hidden" }
+  | { status: "loading" }
+  | { status: "failed"; retry(): void }
+  | { status: "ready"; holders: ResourceHolder[] };
 
 /** What the instance says of one Connection beyond its revision, as its page asked for it. */
 export type ConnectionDetailRead =
@@ -38,6 +62,13 @@ export interface ConnectionSource {
   useDetail(name: string): ConnectionDetailRead;
   /** A hook: the test of this page. */
   useTest(name: string): { run: ConnectionTestRun; start(): void };
+  /**
+   * A hook: the people and service principals with a right to use this one Connection. A
+   * service principal is among them for a reader who is shown service principals.
+   */
+  useHolders(assetId: string): ConnectionHoldersRead;
+  /** Where a service principal is read. */
+  principalHref(principalId: string): string;
 }
 
 /**
@@ -45,8 +76,12 @@ export interface ConnectionSource {
  * `connections.test` runs the test.
  */
 export function useConnectionSource(): ConnectionSource {
-  const { apiBaseUrl, authScope, client } = useSettingsPage();
+  const { apiBaseUrl, authScope, client, user } = useSettingsPage();
+  const api = { apiBaseUrl, authScope, client };
   const calls = client.connections;
+  // The rows are read by who manages users; the names of principals by who manages API access.
+  const seesHolders = canManageUsers(user);
+  const seesPrincipals = seesHolders && canManageApiAccess(user);
   const queryClient = useQueryClient();
   const context = usePlatformContextQuery({ apiBaseUrl, authScope, client, enabled: true });
   const detailKey = (name: string) => ["connection-detail", apiBaseUrl, authScope, name];
@@ -78,6 +113,38 @@ export function useConnectionSource(): ConnectionSource {
       }
       return { status: "loading" };
     },
+    useHolders(assetId) {
+      const grants = useAssetGrantsQuery({
+        ...api,
+        assetId,
+        action: CONNECTION_USE_ACTION,
+        enabled: seesHolders
+      });
+      const users = useWorkspaceUsersQuery({ ...api, enabled: seesHolders });
+      const principals = useServicePrincipalsQuery({ ...api, enabled: seesPrincipals });
+      const failure = loadFailure(grants.error);
+      if (!seesHolders || failure === "forbidden") {
+        return { status: "hidden" };
+      }
+      if (grants.data) {
+        return {
+          status: "ready",
+          holders: resourceHolders(grants.data, {
+            action: CONNECTION_USE_ACTION,
+            users: users.data ?? [],
+            principals: principals.data ?? []
+          })
+        };
+      }
+      return failure === "failed" && !grants.isFetching
+        ? { status: "failed", retry: () => void grants.refetch().catch(() => undefined) }
+        : { status: "loading" };
+    },
+    principalHref: (principalId) =>
+      principalHref(
+        workspaceRoutePath({ kind: "settings", group: "instance", page: "api-access" }),
+        principalId
+      ),
     useTest(name) {
       const test = useMutation({
         mutationFn: async () => {

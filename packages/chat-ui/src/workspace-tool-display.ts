@@ -2,10 +2,11 @@ export interface ToolDetailSection {
   label: string;
   value: string;
   /**
-   * `text` is a sentence for a person and is shown wrapped, in the text face. Left out, the
-   * value is data and is shown as it is, in a code box.
+   * `text` is a sentence for a person and is shown wrapped, in the text face. `name` is one
+   * technical name and is shown on one line in the code face. Left out, the value is data and
+   * is shown as it is, in a code box.
    */
-  kind?: "text";
+  kind?: "text" | "name";
 }
 
 export interface WorkspaceToolDisplayProjection {

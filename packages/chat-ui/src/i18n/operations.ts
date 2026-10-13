@@ -254,26 +254,26 @@ export const operations = defineTranslations({
     "operations.callAssetChangeIn":
       "{actor} möchte {kind} „{title}“ im Namespace {namespace} ändern.",
     "operations.callAssetChange": "{actor} möchte {kind} „{title}“ ändern.",
-    "operations.callAssetKindSkill": "die Fähigkeit",
+    "operations.callAssetKindSkill": "den Skill",
     "operations.callAssetKindAgent": "den Agenten",
     "operations.callAssetKindConnection": "die Connection",
     "operations.callAssetKindOther": "das Asset",
     "operations.callAssetEffect":
       "Wenn du freigibst, wird das als {actor} gespeichert. Wenn du ablehnst, ändert sich nichts.",
     "operations.callWhySkillRule":
-      "Braucht eine Entscheidung, weil diese Instanz neue und geänderte Fähigkeiten zur Freigabe vorlegt.",
+      "Braucht eine Entscheidung, weil diese Instanz neue und geänderte Skills zur Freigabe vorlegt.",
     "operations.callWhyPolicyFloor":
       "Braucht eine Entscheidung, weil diese Aktion oder die Operation der Verbindung, die sie aufruft, immer eine Freigabe verlangt. Das lässt sich in dieser Instanz nicht abschalten.",
     "operations.callSkillEffectNew":
-      "Wenn du freigibst, wird die Fähigkeit gespeichert. Wenn du ablehnst, ändert sich nichts.",
+      "Wenn du freigibst, wird der Skill gespeichert. Wenn du ablehnst, ändert sich nichts.",
     "operations.callSkillEffectChange":
       "Wenn du freigibst, wird die Änderung gespeichert. Wenn du ablehnst, ändert sich nichts.",
     "operations.callSkillTitle": "Titel",
     "operations.callSkillDescription": "Beschreibung",
     "operations.callSkillRemovedResources": "Entfernte Referenzen",
-    "operations.callSkillSameText": "Der Text der Fähigkeit bleibt, wie er ist.",
+    "operations.callSkillSameText": "Der Text des Skills bleibt, wie er ist.",
     "operations.callSkillBeforeWithheld":
-      "Du darfst diese Fähigkeit in ihrem jetzigen Stand nicht lesen. Deshalb steht hier nur der neue Text, und nichts wird verglichen.",
+      "Du darfst diesen Skill in seinem jetzigen Stand nicht lesen. Deshalb steht hier nur der neue Text, und nichts wird verglichen.",
     "operations.callDetails": "Technische Details",
     "operations.callFullInput": "Vollständige Eingabe",
     "operations.callCalledBy": "Aufgerufen von",

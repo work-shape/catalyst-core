@@ -1,7 +1,8 @@
 import { appInterfacePath, type AppMode } from "@vivd-catalyst/api-client";
 
 /** The areas of the interface: what a route shows. */
-export type WorkspaceRouteView = "chat" | "apps" | "settings" | "inbox" | "build" | "ui-library";
+export type WorkspaceRouteView =
+  "chat" | "agents" | "apps" | "workflows" | "settings" | "inbox" | "build" | "ui-library";
 
 /**
  * `collaboration-workspace-root` and `legacy-conversation` are unresolved chat
@@ -13,6 +14,8 @@ export type WorkspaceRoute =
   | { kind: "legacy-conversation"; conversationId: string }
   | { kind: "new-conversation"; collaborationWorkspaceId: string }
   | { kind: "conversation"; collaborationWorkspaceId: string; conversationId: string }
+  /** The agents a person may use in one workspace. */
+  | { kind: "agents"; collaborationWorkspaceId: string }
   /** The Apps of one workspace. */
   | { kind: "apps"; collaborationWorkspaceId: string }
   /**
@@ -22,6 +25,17 @@ export type WorkspaceRoute =
   | { kind: "app"; collaborationWorkspaceId: string; app: string; appPath?: string }
   /** The draft of one App, for whoever may write it. */
   | { kind: "app-edit"; collaborationWorkspaceId: string; app: string }
+  /** The Workflows of one workspace. */
+  | { kind: "workflows"; collaborationWorkspaceId: string }
+  /**
+   * One Workflow on its canvas. `opened` is the way into the Workflows its steps start, as
+   * their ids joined by slashes: the last one is the Workflow that is shown.
+   */
+  | { kind: "workflow"; collaborationWorkspaceId: string; workflow: string; opened?: string }
+  /** Every run of one Workflow. */
+  | { kind: "workflow-runs"; collaborationWorkspaceId: string; workflow: string }
+  /** One run of a Workflow with its steps. */
+  | { kind: "workflow-run"; collaborationWorkspaceId: string; workflow: string; run: string }
   /** One page of the Settings area. The Settings catalog knows the groups and the pages. */
   | { kind: "settings"; group: string; page: string }
   /**
@@ -40,7 +54,9 @@ export type WorkspaceRoute =
   /** The Inbox with one item open beside the lists. */
   | { kind: "inbox-item"; itemId: string }
   /** The gallery of the shared UI library. Administrators reach it by address; nothing links to it. */
-  | { kind: "ui-library" };
+  | { kind: "ui-library" }
+  /** The Workflow screens on sample data, beside the UI library and for the same readers. */
+  | { kind: "workflow-samples" };
 
 /** One address of an area: a path pattern, with `$name` for a segment that is read. A last
  * segment `$` alone reads everything after it, as the router's `_splat`. */
@@ -94,6 +110,10 @@ export const areaRoutes: readonly AreaRoute[] = [
     ]
   },
   {
+    area: "agents",
+    paths: [{ path: "/w/$collaborationWorkspaceId/agents", route: "agents" }]
+  },
+  {
     area: "apps",
     paths: [
       { path: "/w/$collaborationWorkspaceId/apps", route: "apps" },
@@ -101,6 +121,16 @@ export const areaRoutes: readonly AreaRoute[] = [
       { path: appPattern("draft"), route: "app-edit" },
       { path: appPattern("published"), route: "app" },
       { path: `${appPattern("published")}/$`, route: "app" }
+    ]
+  },
+  {
+    area: "workflows",
+    paths: [
+      { path: "/w/$collaborationWorkspaceId/workflows", route: "workflows" },
+      { path: "/w/$collaborationWorkspaceId/workflows/$workflow", route: "workflow" },
+      { path: "/w/$collaborationWorkspaceId/workflows/$workflow/open/$", route: "workflow" },
+      { path: "/w/$collaborationWorkspaceId/workflows/$workflow/runs", route: "workflow-runs" },
+      { path: "/w/$collaborationWorkspaceId/workflows/$workflow/runs/$run", route: "workflow-run" }
     ]
   },
   {
@@ -132,7 +162,13 @@ export const areaRoutes: readonly AreaRoute[] = [
       { path: "/admin/config", redirectTo: "/build" }
     ]
   },
-  { area: "ui-library", paths: [{ path: "/ui-library", route: "ui-library" }] }
+  {
+    area: "ui-library",
+    paths: [
+      { path: "/ui-library", route: "ui-library" },
+      { path: "/ui-library/workflows", route: "workflow-samples" }
+    ]
+  }
 ];
 
 /** Every address of the table, in the order of its rows. */
@@ -175,7 +211,12 @@ export function workspaceRouteNavigation(route: WorkspaceRoute): {
   to: string;
   params?: Record<string, string>;
 } {
-  const splat = route.kind === "app" ? appSplat(route.appPath) : undefined;
+  const splat =
+    route.kind === "app"
+      ? appSplat(route.appPath)
+      : route.kind === "workflow"
+        ? route.opened || undefined
+        : undefined;
   const to =
     areaRoutePaths().find(
       (candidate) =>
@@ -184,7 +225,7 @@ export function workspaceRouteNavigation(route: WorkspaceRoute): {
   const { kind: _kind, ...fields } = route;
   const params: Record<string, string> = {};
   for (const [name, value] of Object.entries(fields)) {
-    if (name !== "appPath" && typeof value === "string") {
+    if (name !== "appPath" && name !== "opened" && typeof value === "string") {
       params[name] = value;
     }
   }
@@ -234,6 +275,7 @@ function routeOf(
     case "build":
     case "inbox":
     case "ui-library":
+    case "workflow-samples":
       return { kind };
     case "inbox-item":
       return itemId ? { kind, itemId } : undefined;
@@ -246,8 +288,27 @@ function routeOf(
         ? { kind, assetKind: params.assetKind, name: params.name }
         : undefined;
     case "new-conversation":
+    case "agents":
     case "apps":
+    case "workflows":
       return collaborationWorkspaceId ? { kind, collaborationWorkspaceId } : undefined;
+    case "workflow":
+      return collaborationWorkspaceId && params.workflow
+        ? {
+            kind,
+            collaborationWorkspaceId,
+            workflow: params.workflow,
+            ...(params[SPLAT] ? { opened: params[SPLAT] } : {})
+          }
+        : undefined;
+    case "workflow-runs":
+      return collaborationWorkspaceId && params.workflow
+        ? { kind, collaborationWorkspaceId, workflow: params.workflow }
+        : undefined;
+    case "workflow-run":
+      return collaborationWorkspaceId && params.workflow && params.run
+        ? { kind, collaborationWorkspaceId, workflow: params.workflow, run: params.run }
+        : undefined;
     case "app-edit":
       return collaborationWorkspaceId && params.app
         ? { kind, collaborationWorkspaceId, app: params.app }

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import {
   AGENT_TOOL_ACTION_PREFIX,
   AppError,
+  POLICY_VALUES,
   callerCanConfirm,
   isAppError,
   isToolOperationAnswer,
@@ -45,7 +46,9 @@ import {
   type PolicySource,
   type PolicyInput,
   type PolicyResolution,
-  type ToolExecutionResult
+  type PolicyValue,
+  type ToolExecutionResult,
+  type ConversationId
 } from "@vivd-catalyst/core";
 import { z } from "zod";
 import { failureLogFields } from "./tool-failure-log";
@@ -92,10 +95,14 @@ export interface RunOperationDeps {
   /** Which modules are on. An operation or a tool of a module that is off does not exist. */
   modules?: ModuleSnapshot;
   /**
-   * The tools an agent's definition lists. An agent calls nothing else. Without it this
-   * process serves no agent and refuses every call of one.
+   * The tools an agent may call: those its definition lists, and in a conversation about an
+   * asset the tools the server binds to that subject. An agent calls nothing else. Without it
+   * this process serves no agent and refuses every call of one.
    */
-  agentToolNames?(agentName: string): readonly string[] | Promise<readonly string[]>;
+  agentToolNames?(
+    agentName: string,
+    conversationId?: ConversationId
+  ): readonly string[] | Promise<readonly string[]>;
   /**
    * Whether a person is a member of a workspace now. Asked before a call that waited for an
    * approval is executed in a workspace, for an agent's call and for an operation whose right
@@ -154,6 +161,8 @@ export interface RunContext {
    * completes. Before-events are never held: a guardrail is asked for every call.
    */
   unrecorded?: { start: NewOperationRun; heldAfterEvents: (() => Promise<unknown>)[] };
+  /** Set once a later call took the run over: this call emits no further event of it. */
+  overtaken?: boolean;
   now(): Date;
   emit(
     name: PlatformEventName,
@@ -223,6 +232,7 @@ export function createRunContext(
             phase
           }
         );
+      if (context.overtaken) return Promise.resolve("allow");
       if (phase === "after" && context.unrecorded) {
         context.unrecorded.heldAfterEvents.push(send);
         return Promise.resolve("allow");
@@ -256,8 +266,8 @@ export async function authorizeOrigin(
   if (call.origin.kind !== "agent") {
     return { allowed: true };
   }
-  const { agentName, toolName } = call.origin;
-  const listed = (await deps.agentToolNames?.(agentName)) ?? [];
+  const { agentName, toolName, conversationId } = call.origin;
+  const listed = (await deps.agentToolNames?.(agentName, conversationId)) ?? [];
   return toolName === definition.name && listed.includes(toolName)
     ? { allowed: true }
     : { allowed: false, action: `${AGENT_TOOL_ACTION_PREFIX}${toolName}`, reason: "no_grant" };
@@ -291,8 +301,12 @@ async function policyInputOf(
   context: Pick<RunContext, "definition" | "call" | "resource" | "deps">
 ): Promise<PolicyInput> {
   const { definition, call, resource, deps } = context;
+  const callFloor = await definition.policyFloorOf?.(call.origin);
   return {
-    definition,
+    definition:
+      callFloor === undefined
+        ? definition
+        : { ...definition, policyFloor: stricterPolicy(callFloor, definition.policyFloor) },
     origin: call.origin,
     instanceDefaults: deps.policy.instanceDefaults,
     centralSettings: await deps.policy.centralSettings(),
@@ -305,6 +319,12 @@ async function policyInputOf(
     // No surface can hold a call for its actor's confirmation before OP-3.
     canPause: false
   };
+}
+
+function stricterPolicy(left: PolicyValue, right: PolicyValue | undefined): PolicyValue {
+  return right !== undefined && POLICY_VALUES.indexOf(right) > POLICY_VALUES.indexOf(left)
+    ? right
+    : left;
 }
 
 /**
@@ -360,16 +380,24 @@ export async function endRun(context: RunContext, ended: OperationRunEnd): Promi
   const finished = await deps.runs.finish({
     clientInstanceId: deps.clientInstanceId,
     id: run.id,
+    attempt: run.attempt,
     end: ended
   });
-  if (!finished) {
-    // Something else ended the run meanwhile, such as the sweep for interrupted runs.
-    deps.logger.warn(
-      { operationRunId: run.id, operation: definition.name, status: ended.status },
-      "Operation run was no longer running when its call ended"
-    );
+  if (finished) return finished;
+  const current = await deps.runs.get({ clientInstanceId: deps.clientInstanceId, id: run.id });
+  if (current && current.attempt !== run.attempt) {
+    // A later call took the run under its key while this one was still on its way: this
+    // process was held up past its time. The run is that call's to end, and this one says
+    // nothing more of it: no outcome and no event.
+    context.overtaken = true;
+    return current;
   }
-  return finished ?? run;
+  // Something else ended the run meanwhile, such as the sweep for interrupted runs.
+  deps.logger.warn(
+    { operationRunId: run.id, operation: definition.name, status: ended.status },
+    "Operation run was no longer running when its call ended"
+  );
+  return run;
 }
 
 /**
@@ -502,6 +530,7 @@ export async function executeAdmitted(
       origin: call.origin,
       workspaceId: call.workspaceId,
       correlationId: call.correlationId,
+      ...(run.idempotencyKey === undefined ? {} : { idempotencyKey: run.idempotencyKey }),
       runtime: context.runtime,
       access,
       audit: auditForRun(deps.audit, run.id, call.correlationId)

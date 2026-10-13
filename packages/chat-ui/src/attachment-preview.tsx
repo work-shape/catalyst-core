@@ -1,9 +1,11 @@
 import { AttachmentPrimitive, useAuiState } from "@assistant-ui/react";
-import { ImageIcon, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn, Spinner } from "@vivd-catalyst/ui";
 import { managedFileIdFromUrl, useAttachmentContentContext } from "./attachment-content";
 import { useOpenConversationFile } from "./conversation-file-presentation";
+import { resolveFileType } from "./file-type";
+import { FileTypeIcon } from "./file-type-icon";
 import { useTranslation } from "./i18n";
 
 /** `row` renders the file as a full-width list entry inside a grouped attachment card. */
@@ -63,7 +65,7 @@ export function AttachmentPreview({
             />
           ) : (
             <div className="flex min-h-20 items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
-              <ImageIcon size={16} aria-hidden="true" />
+              <FileTypeIcon type={resolveFileType({ kind: "image" })} />
               <span className="min-w-0 truncate">
                 <AttachmentPrimitive.Name />
               </span>
@@ -81,9 +83,28 @@ export function AttachmentPreview({
   }
 
   const row = variant === "row";
+  const fileType = resolveFileType({ filename: attachment.name, mimeType: attachment.contentType });
   const fileClassName = cn(
-    "items-center gap-1.5 rounded-md text-xs text-muted-foreground",
-    row ? "flex w-full px-2 py-1.5 text-left" : "inline-flex max-w-full bg-muted/45 px-2 py-1"
+    "items-center gap-2.5 rounded-lg text-left",
+    row ? "flex w-full px-2 py-1.5" : "inline-flex max-w-full bg-muted/45 py-1.5 pr-3 pl-2.5"
+  );
+  // The icon keeps its box while the file opens, so the name does not move.
+  const fileContents = (
+    <>
+      {opening ? (
+        <span className="grid size-7 shrink-0 place-items-center">
+          <Spinner size="sm" />
+        </span>
+      ) : (
+        <FileTypeIcon type={fileType} className="size-7" />
+      )}
+      <span className="grid min-w-0">
+        <span className="truncate text-label text-foreground">
+          <AttachmentPrimitive.Name />
+        </span>
+        <span className="truncate text-caption text-muted-foreground">{t(fileType.labelKey)}</span>
+      </span>
+    </>
   );
 
   return (
@@ -96,7 +117,7 @@ export function AttachmentPreview({
           className={cn(
             fileClassName,
             "cursor-pointer transition-colors",
-            "hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
+            "hover:bg-muted focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
           )}
           title={t("openArtifactPreview", { filename })}
           aria-label={t("openArtifactPreview", { filename })}
@@ -104,22 +125,10 @@ export function AttachmentPreview({
           disabled={opening}
           onClick={() => void openPreview()}
         >
-          {opening ? (
-            <Spinner size="sm" />
-          ) : (
-            <AttachmentPrimitive.unstable_Thumb className="shrink-0 font-mono text-[0.65rem] uppercase leading-none text-muted-foreground" />
-          )}
-          <span className="min-w-0 truncate">
-            <AttachmentPrimitive.Name />
-          </span>
+          {fileContents}
         </button>
       ) : (
-        <div className={fileClassName}>
-          <AttachmentPrimitive.unstable_Thumb className="shrink-0 font-mono text-[0.65rem] uppercase leading-none text-muted-foreground" />
-          <span className="min-w-0 truncate">
-            <AttachmentPrimitive.Name />
-          </span>
-        </div>
+        <div className={fileClassName}>{fileContents}</div>
       )}
       <RemoveAttachmentButton removable={removable} />
     </AttachmentPrimitive.Root>

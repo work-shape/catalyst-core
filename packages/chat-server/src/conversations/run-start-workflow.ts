@@ -325,7 +325,8 @@ export class RunStartWorkflow {
       );
       const conversation = await this.conversations.createConversation(user, context, {
         title: command.title ?? createConversationTitle(command.text),
-        collaborationWorkspaceId: command.collaborationWorkspaceId
+        collaborationWorkspaceId: command.collaborationWorkspaceId,
+        ...(command.subject ? { subject: command.subject } : {})
       });
       const started = await this.startMessageRun(conversation.id, user, context, {
         ...command,

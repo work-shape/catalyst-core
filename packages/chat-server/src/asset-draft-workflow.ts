@@ -6,8 +6,10 @@ import {
   isAppError,
   isAuthenticatedServicePrincipal,
   type AssetRepoWrite,
+  type ConfigAssetRevisionOrigin,
   type ConfigAssetStore,
-  type FileSet
+  type FileSet,
+  type JsonObject
 } from "@vivd-catalyst/core";
 import type { AssetCall } from "./asset-access";
 import type { AssetWarning } from "./asset-placement";
@@ -35,7 +37,7 @@ import {
 } from "./asset-target";
 import { loadStoredAssets, requireMatchingConfigName } from "./asset-write-rules";
 import { assertScopeCanOwn } from "./config-asset-writer";
-import type { ChatServerOptions } from "./types";
+import type { AssetWorkflowOptions } from "./types";
 
 /** What the writes below use of the workflow of every asset. */
 export interface AssetWorkflowHost {
@@ -50,10 +52,15 @@ export interface AssetWorkflowHost {
       audit: "config_asset.updated";
       fileSet?: { assetId: string; fileSetId: FileSet["id"] };
       repository?: AssetRepoWrite;
+      origin?: ConfigAssetRevisionOrigin;
+      pageLink?: () => Promise<boolean>;
     }
   ): Promise<{ version: number; revision: number; warnings: AssetWarning[] }>;
   authorizeEditing(call: AssetCall, surface: "put"): Promise<void>;
 }
+
+/** The Page revision a file set was read from, as the revision that copies it records it. */
+export type PageRevisionOrigin = Extract<ConfigAssetRevisionOrigin, { kind: "page" }>;
 
 /**
  * What an asset has whose kind keeps a draft beside the published revision, or whose revisions
@@ -62,10 +69,10 @@ export interface AssetWorkflowHost {
  * call; the checks of the asset set stay those of every write.
  */
 export class AssetDraftWorkflow {
-  private readonly options: ChatServerOptions;
+  private readonly options: AssetWorkflowOptions;
   private readonly host: AssetWorkflowHost;
 
-  constructor(options: ChatServerOptions, host: AssetWorkflowHost) {
+  constructor(options: AssetWorkflowOptions, host: AssetWorkflowHost) {
     this.options = options;
     this.host = host;
   }
@@ -145,6 +152,8 @@ export class AssetDraftWorkflow {
       expectedRevision: number | null;
       /** Starts the repository of a new asset, with the one line its first commit carries. */
       firstCommit?: string;
+      origin?: ConfigAssetRevisionOrigin;
+      pageLink?: () => Promise<boolean>;
     }
   ) {
     const target = await this.host.target(address);
@@ -154,7 +163,9 @@ export class AssetDraftWorkflow {
         expectedRevision: write.expectedRevision,
         audit: "config_asset.updated",
         fileSet: { assetId: write.assetId, fileSetId: write.fileSet.id },
-        ...(repository ? { repository } : {})
+        ...(repository ? { repository } : {}),
+        ...(write.origin ? { origin: write.origin } : {}),
+        ...(write.pageLink ? { pageLink: write.pageLink } : {})
       });
       return {
         written: {
@@ -211,13 +222,74 @@ export class AssetDraftWorkflow {
    * Creates an asset of a `files` kind from a file set that is stored already, such as the
    * revision of a Page: the files are copied below the asset's own prefix, as they are, and
    * the revision that names the copy is the draft. Nothing is published. Where the files of
-   * the kind are a repository, the copy is its first commit.
+   * the kind are a repository, the copy is its first commit. The revision records the Page,
+   * which is how `replaceFromFileSet` knows the asset again.
    */
   async createFromFileSet(
     call: AssetCall,
     address: AssetAddress,
-    input: { source: FileSet; config: Record<string, unknown>; firstCommit: string }
+    input: {
+      source: FileSet;
+      config: Record<string, unknown>;
+      origin: PageRevisionOrigin;
+      firstCommit: string;
+    }
   ) {
+    const target = await this.requireFilesWrite(call, address);
+    requireFreeName(target);
+    requireMatchingConfigName(input.config, address.name);
+    const assetId = createPlatformId("cfga");
+    const { written, commit } = await this.writeCopy(call, address, {
+      assetId,
+      source: input.source,
+      config: input.config,
+      expectedRevision: null,
+      origin: input.origin,
+      firstCommit: input.firstCommit
+    });
+    return { ...written, id: assetId, commit };
+  }
+
+  /**
+   * Writes the revision of a Page as the next draft revision of an asset, from a copy of its
+   * files. The published revision stays where it is. The asset's Page is the one its newest
+   * revision with a Page names. An asset of another Page, or of none, is written only with
+   * `link`, and is that Page's asset from then on. A draft at another revision than the caller
+   * read is not written either way.
+   */
+  async replaceFromFileSet(
+    call: AssetCall,
+    address: AssetAddress,
+    input: {
+      source: FileSet;
+      /** The config of the new revision, from the config of the draft it replaces. */
+      configOf(current: JsonObject): Record<string, unknown>;
+      expectedRevision: number;
+      origin: PageRevisionOrigin;
+      /** Whether an asset that is not this Page's may be made this Page's by the write. */
+      link: boolean;
+    }
+  ) {
+    const target = await this.requireFilesWrite(call, address);
+    requireOwnScope(target, call.access);
+    const asset = requireActive(target);
+    // Asked twice: here, so a refused write copies no file, and under the lock of the write,
+    // where no other write can give the asset another Page any more.
+    await this.linksPage(target, asset.id, input);
+    await requireExpectedRevision(this.options, call, target, input.expectedRevision);
+    const { written } = await this.writeCopy(call, address, {
+      assetId: asset.id,
+      source: input.source,
+      config: input.configOf(asset.config),
+      expectedRevision: input.expectedRevision,
+      origin: input.origin,
+      pageLink: () => this.linksPage(target, asset.id, input)
+    });
+    return { ...written, id: asset.id };
+  }
+
+  /** The target of a write from a stored file set, for a caller who may write it. */
+  private async requireFilesWrite(call: AssetCall, address: AssetAddress): Promise<AssetTarget> {
     const target = await this.host.target(address);
     const { kind } = target;
     call.access.require(kind.actions.write, target.resource);
@@ -228,24 +300,66 @@ export class AssetDraftWorkflow {
       });
     }
     await this.requireOwner(target);
-    requireFreeName(target);
-    requireMatchingConfigName(input.config, address.name);
-    const assetId = createPlatformId("cfga");
+    return target;
+  }
+
+  /**
+   * Whether the write makes the asset the Page's: `false` for an asset that is the Page's
+   * already. An asset of another Page, or of none, is refused unless the write says `link`.
+   */
+  private async linksPage(
+    target: AssetTarget,
+    assetId: string,
+    write: { origin: PageRevisionOrigin; link: boolean }
+  ): Promise<boolean> {
+    const { kind, name } = target;
+    const current = await this.options.configAssets.store.getConfigAssetPageOrigin({
+      clientInstanceId: this.options.clientInstanceId,
+      assetId
+    });
+    if (current?.pageId === write.origin.pageId) {
+      return false;
+    }
+    if (!write.link) {
+      throw new AppError(
+        "CONFLICT",
+        `The ${kind.kind} '${name}' is not updated from this Page. Send 'link' to make it so`,
+        { reason: `${kind.kind}_not_from_page`, kind: kind.kind, name }
+      );
+    }
+    return true;
+  }
+
+  /** Copies a stored file set below the asset and makes the copy its draft revision. */
+  private async writeCopy(
+    call: AssetCall,
+    address: AssetAddress,
+    write: {
+      assetId: string;
+      source: FileSet;
+      config: Record<string, unknown>;
+      expectedRevision: number | null;
+      origin: PageRevisionOrigin;
+      firstCommit?: string;
+      pageLink?: () => Promise<boolean>;
+    }
+  ) {
     const fileSet = await copyFileSetToAsset(this.options, {
-      source: input.source,
-      assetId,
+      source: write.source,
+      assetId: write.assetId,
       ...(isAuthenticatedServicePrincipal(call.actor)
         ? {}
         : { createdByUserId: asUserId(getSubjectUserId(call.actor)) })
     });
-    const { written, commit } = await this.writeFilesRevision(call, address, {
-      assetId,
+    return this.writeFilesRevision(call, address, {
+      assetId: write.assetId,
       fileSet,
-      config: input.config,
-      expectedRevision: null,
-      firstCommit: input.firstCommit
+      config: write.config,
+      expectedRevision: write.expectedRevision,
+      origin: write.origin,
+      ...(write.firstCommit === undefined ? {} : { firstCommit: write.firstCommit }),
+      ...(write.pageLink ? { pageLink: write.pageLink } : {})
     });
-    return { ...written, id: assetId, commit };
   }
 
   /**

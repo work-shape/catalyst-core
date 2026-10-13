@@ -63,7 +63,7 @@ import {
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
 
 export type { AssetSyncInput } from "./asset-sync-refusals";
-import type { ChatServerOptions } from "./types";
+import type { AssetWorkflowOptions } from "./types";
 
 /** What the store says of each asset a batch was stale for, under its lock. */
 const conflictsSchema = z.object({
@@ -95,7 +95,7 @@ const conflictsSchema = z.object({
  * exempt from in this call is listed at `isReleaseSync`.
  */
 export async function syncAssets(
-  options: ChatServerOptions,
+  options: AssetWorkflowOptions,
   call: AssetCall,
   input: AssetSyncInput
 ) {
@@ -110,7 +110,7 @@ export async function syncAssets(
  * its lock is left out, which decides nothing but a write that arrives in the same moment.
  */
 export async function checkAssetSync(
-  options: ChatServerOptions,
+  options: AssetWorkflowOptions,
   call: AssetCall,
   input: AssetSyncInput
 ): Promise<{ valid: true }> {
@@ -133,7 +133,7 @@ interface CheckedBatch {
 }
 
 async function checkBatch(
-  options: ChatServerOptions,
+  options: AssetWorkflowOptions,
   call: AssetCall,
   input: AssetSyncInput,
   purpose: "apply" | "check"
@@ -342,7 +342,7 @@ async function checkBatch(
   };
 }
 
-async function applyBatch(options: ChatServerOptions, call: AssetCall, checked: CheckedBatch) {
+async function applyBatch(options: AssetWorkflowOptions, call: AssetCall, checked: CheckedBatch) {
   const { planned, ready, storedDefault, defaultChange, mutations } = checked;
   const byKey = new Map(ready.map((entry) => [assetKey(entry.kind.kind, entry.name), entry]));
   const result = await applyValidatedConfigAssetMutations(options, {
@@ -461,7 +461,7 @@ async function applyBatch(options: ChatServerOptions, call: AssetCall, checked: 
 
 /** The agents a batch wrote that no workspace shows afterwards, as its answer names them. */
 async function hiddenAgentNamesOf(
-  options: ChatServerOptions,
+  options: AssetWorkflowOptions,
   written: readonly ReadyItem[]
 ): Promise<{ hiddenAgentNames?: string[] }> {
   const names = written
@@ -481,7 +481,7 @@ async function hiddenAgentNamesOf(
  * error, which names each item by its index.
  */
 export async function authorizeAssetSync(
-  options: ChatServerOptions,
+  options: AssetWorkflowOptions,
   actor: AuthenticatedIdentity,
   access: ActorAccess,
   input: AssetSyncInput
@@ -494,7 +494,7 @@ export async function authorizeAssetSync(
  * carries, so a setting narrowed to a kind or to a Namespace applies to the batch.
  */
 export async function assetSyncPolicyTargets(
-  options: ChatServerOptions,
+  options: AssetWorkflowOptions,
   input: AssetSyncInput
 ): Promise<PolicyTarget[]> {
   const namespaces = await options.stores.access.listNamespaceRecords({

@@ -554,6 +554,8 @@ export interface AccessAdministrationStore extends AccessStore {
     holderId?: string;
     action?: string;
     scopeKind?: PermissionGrant["scopeKind"];
+    /** The asset or the workspace the rows name. */
+    scopeId?: string;
     /** Leaves out the rows whose holder is a user with the superadmin role. */
     excludeSuperadminHolders?: boolean;
     /** Leaves out the rows whose holder is a service principal. */

@@ -1,0 +1,1 @@
+ALTER TABLE "workflow_runs" ADD COLUMN "data_pruned_at" timestamp with time zone;

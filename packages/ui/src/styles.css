@@ -133,9 +133,9 @@
   --text-code--line-height: 1.5rem;
   --text-code--font-weight: 400;
 
-  /* Layout measures that only Page, PageHeader, Section, SubRail, Sidebar and SurfaceFrame
-     apply. `split-min` is what each side of a split keeps: the conversation and the surface
-     beside it. */
+  /* Layout measures that only Page, PageHeader, Section, SubRail, PageOutline, Sidebar and
+     SurfaceFrame apply. `split-min` is what each side of a split keeps: the conversation and
+     the surface beside it. */
   --layout-header: 4rem;
   --layout-gutter: 1.5rem;
   /* The height of what floats over the top of a page's scroll area, such as the button that
@@ -143,6 +143,14 @@
      pinned SubRail or detail PageHeader stays clear of it. An area sets it on its scroll area
      only where such a control is on the page: no page keeps room for a control it does not show. */
   --layout-page-inset: 0rem;
+  /* The room above a page's title line: the first line of a page, which holds its name and
+     primary action. Page applies it, so every page's name starts at the same height and none
+     starts at the window's edge. A SubRail heads its column with the area's name on that line.
+     A page under a detail PageHeader gets none: that head is pinned and is the top band from
+     the start. In a narrow window, where the
+     button that opens the sidebar floats above the page, the room is one step under that
+     button. Feature code sets no top padding of its own. */
+  --layout-page-top: 3.5rem;
   /* A detail PageHeader beside a floating control instead of below it: the area sets
      `--layout-page-head-inset` to nothing, so the head starts at the top edge, and
      `--layout-page-head-start` to the room the control takes, so the head's first row starts
@@ -157,6 +165,7 @@
   --layout-sidebar: 17.5rem;
   --layout-sidebar-collapsed: 3rem;
   --layout-subrail: 14rem;
+  --layout-outline: 11.25rem;
   --layout-content-narrow: 44rem;
   --layout-content: 64rem;
   --layout-split-min: 23.75rem;
@@ -167,6 +176,10 @@
   /* The room a Page needs to keep a SubRail beside its content: the rail, one gutter and the
      40rem the content keeps. Below it the SubRail is a Select above the content. */
   --container-subrail: 55.5rem;
+  /* The room a Page needs to keep a PageOutline beside its content: the outline, one gutter,
+     the 40rem the content keeps and the page's own gutters. Below it the outline is one line
+     above the content. */
+  --container-outline: 55.75rem;
 
   /* Layer order. Dialog uses the browser's top layer and needs no entry. */
   --layer-sidebar-edge: 20;
@@ -179,6 +192,28 @@
   --duration-color: 150ms;
   --duration-open: 200ms;
   --duration-close: 180ms;
+  /* How a part moves that changes its place: quickly away, slowly to rest. */
+  --ease-move: cubic-bezier(0.2, 0, 0, 1);
+
+  /* A panel at the right edge of its area comes in from that edge and leaves to it, in the
+     time an overlay takes. `--panel-shift` is how far that is when it is more than the
+     panel's own width, as for a card that stands a gap away from the edge. What stands
+     beside the panel moves with `moveFrom`, over the same time and curve. Use them behind
+     `motion-safe:`; `useExit` holds a leaving panel for as long as `panel-out` takes. */
+  --animate-panel-in: panel-in var(--duration-open) var(--ease-move);
+  --animate-panel-out: panel-out var(--duration-close) var(--ease-move) forwards;
+
+  @keyframes panel-in {
+    from {
+      transform: translateX(var(--panel-shift, 100%));
+    }
+  }
+
+  @keyframes panel-out {
+    to {
+      transform: translateX(var(--panel-shift, 100%));
+    }
+  }
 
   /* A loading layout stays unseen this long, then fades in. An answer that comes sooner shows
      no loading state at all: a stand-in that is replaced at once reads as a flicker. */
@@ -205,6 +240,7 @@
   :root,
   :host {
     --layout-gutter: 1rem;
+    --layout-page-top: 1.5rem;
     --layout-page-end: 4rem;
     --layout-composer-max: calc(1.5rem * 6 + 0.625rem);
   }

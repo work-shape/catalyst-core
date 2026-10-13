@@ -1,4 +1,8 @@
 import {
+  getConfigAssetPageOrigin as getPostgresConfigAssetPageOrigin,
+  listConfigAssetsFromPage as listPostgresConfigAssetsFromPage
+} from "../postgres-config-asset-origins";
+import {
   AppError,
   type ConfigAssetRecord,
   type ConfigAssetRevisionRecord,
@@ -10,12 +14,15 @@ import {
   getConfigAsset as getPostgresConfigAsset,
   getConfigAssetState as getPostgresConfigAssetState,
   listActiveConfigAssets as listActivePostgresConfigAssets,
-  listConfigAssetPage as listPostgresConfigAssetPage,
   listConfigAssetsByKey as listPostgresConfigAssetsByKey,
   listPublishedConfigAssets as listPublishedPostgresConfigAssets,
-  getConfigAssetRevision as getPostgresConfigAssetRevision,
   listConfigAssetRevisions as listPostgresConfigAssetRevisions
 } from "../postgres-config-asset-operations";
+import { listConfigAssetPage as listPostgresConfigAssetPage } from "../postgres-config-asset-page";
+import {
+  getConfigAssetRevision as getPostgresConfigAssetRevision,
+  getConfigAssetRevisionById as getPostgresConfigAssetRevisionById
+} from "../postgres-config-asset-revisions";
 import {
   listAgentAvailability as listPostgresAgentAvailability,
   setAgentAvailability as setPostgresAgentAvailability
@@ -82,7 +89,10 @@ export function createPostgresConfigAssetsStore(
     ): Promise<ConfigAssetRevisionRecord | undefined> {
       return getPostgresConfigAssetRevision(db, input);
     },
+    getConfigAssetRevisionById: (input) => getPostgresConfigAssetRevisionById(db, input),
     listConfigAssetsByKey: (input) => listPostgresConfigAssetsByKey(db, input),
+    listConfigAssetsFromPage: (input) => listPostgresConfigAssetsFromPage(db, input),
+    getConfigAssetPageOrigin: (input) => getPostgresConfigAssetPageOrigin(db, input),
     applyConfigAssetMutations: (input) => applyPostgresConfigAssetMutations(db, input),
     publishConfigAssetRevision: (input) => publishPostgresConfigAssetRevision(db, input),
     discardConfigAssetDraft: (input) => discardPostgresConfigAssetDraft(db, input),

@@ -223,35 +223,35 @@ describe("Resources panel model", () => {
     expect(
       resolveResourcesPanelOpen({
         preference: undefined,
-        desktop: true,
+        roomBeside: true,
         hasResources: true
       })
     ).toBe(true);
     expect(
       resolveResourcesPanelOpen({
         preference: "open",
-        desktop: true,
+        roomBeside: true,
         hasResources: false
       })
     ).toBe(false);
     expect(
       resolveResourcesPanelOpen({
         preference: "open",
-        desktop: true,
+        roomBeside: true,
         hasResources: true
       })
     ).toBe(true);
     expect(
       resolveResourcesPanelOpen({
         preference: "closed",
-        desktop: true,
+        roomBeside: true,
         hasResources: true
       })
     ).toBe(false);
     expect(
       resolveResourcesPanelOpen({
         preference: undefined,
-        desktop: false,
+        roomBeside: false,
         hasResources: true
       })
     ).toBe(false);
@@ -295,6 +295,15 @@ describe("Resources panel rendering", () => {
     expect(markup).toMatch(/Analysen[\s\S]*?>2</u);
     expect(markup).toMatch(/Erstellte Dateien[\s\S]*?>1</u);
     expect(markup).toMatch(/Hochgeladene Dateien[\s\S]*?>1</u);
+  });
+
+  it("shows a file row's type as the registry's icon, with no tile of its own", () => {
+    const markup = renderResourcesPanel(resources);
+
+    // The icon repeats the name beside it, so a screen reader skips it.
+    expect(markup.match(/aria-hidden="true" data-file-type="pdf"/gu)).toHaveLength(2);
+    expect(markup).not.toContain(">PDF<");
+    expect(markup).not.toMatch(/bg-red-\d/u);
   });
 
   it("heads the structured data with the label the client words for itself", () => {

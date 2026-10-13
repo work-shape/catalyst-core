@@ -88,7 +88,9 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
         attributes: {
           connectorType: connection.connectorType,
           origin: connection.origin,
-          enabled: connection.enabled
+          enabled: connection.enabled,
+          // Only picks the icon a list shows.
+          ...(connection.service === undefined ? {} : { service: connection.service })
         }
       })
     }),

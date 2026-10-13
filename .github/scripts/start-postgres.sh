@@ -43,9 +43,15 @@ done
 [[ -n $image ]] \
   || fail "no registry served postgres 17.6 in three rounds: ${registries[*]}; the reason each gave is above"
 
+# Room for three test files side by side: a hosted runner has four cores, Vitest leaves one
+# free, and vitest.config.ts runs no more files than the server has connections for. Postgres's
+# default of 100 has room for two. The number is connectionsForWorkers(3) of
+# scripts/test-postgres-capacity.mjs: 3 * (40 + 1) + 3.
+max_connections=126
+
 docker run --detach --name "$name" \
   --env "POSTGRES_USER=$user" --env "POSTGRES_PASSWORD=$password" --env "POSTGRES_DB=$database" \
-  --publish "$port:5432" "$image" >/dev/null
+  --publish "$port:5432" "$image" -c "max_connections=$max_connections" >/dev/null
 
 # Over TCP: the server that runs the first-start scripts listens on the socket only, and the
 # database is ready when the one after it answers on the port.

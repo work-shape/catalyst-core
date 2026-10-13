@@ -17,6 +17,7 @@ export const assistant = defineTranslations({
     conversationLoadFailed: "The conversation could not be loaded.",
     conversationStillRunning: "Wait for the current response to finish",
     editMessage: "Edit message",
+    chatStarters: "Suggestions to start with",
     genericWelcome: "How can I help?",
     instanceNotConfigured: "This instance isn't configured yet. No agents have been published.",
     loadingConversation: "Loading conversation",
@@ -82,6 +83,7 @@ export const assistant = defineTranslations({
     conversationStillRunning: "Warte, bis die aktuelle Antwort fertig ist",
     conversationLoadFailed: "Die Unterhaltung konnte nicht geladen werden.",
     editMessage: "Nachricht bearbeiten",
+    chatStarters: "Vorschläge für den Einstieg",
     genericWelcome: "Wie kann ich helfen?",
     instanceNotConfigured:
       "Diese Instanz ist noch nicht konfiguriert. Es wurden noch keine Agenten veröffentlicht.",

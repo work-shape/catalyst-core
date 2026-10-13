@@ -4,6 +4,16 @@ import { localeCodeSchema, reasoningEffortSchema } from "./configuration";
 
 export const conversationVisibilitySchema = z.enum(["workspace", "private"]);
 
+/**
+ * The asset a conversation is about, such as `{ kind: "workflow", name: "month-end" }`. The
+ * agent of such a conversation is given the tools that read, check and save a draft of that
+ * asset, bound to it by the server.
+ */
+export const conversationSubjectSchema = z.object({
+  kind: z.string().min(1).max(64),
+  name: z.string().min(1).max(200)
+});
+
 export const conversationSchema = z.object({
   id: z.string(),
   clientInstanceId: z.string(),
@@ -16,7 +26,9 @@ export const conversationSchema = z.object({
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
   retainedUntil: timestampSchema,
-  deletedAt: timestampSchema.optional()
+  deletedAt: timestampSchema.optional(),
+  /** The asset the conversation is about. Missing on a conversation about none. */
+  subject: conversationSubjectSchema.optional()
 });
 
 export const moveConversationRequestSchema = z.object({
@@ -356,7 +368,12 @@ export type ArtifactPreviewResponse = z.infer<typeof artifactPreviewResponseSche
 export const createConversationRequestSchema = z.object({
   title: z.string().min(1).optional(),
   collaborationWorkspaceId: z.string().min(1).optional(),
-  locale: localeCodeSchema.optional()
+  locale: localeCodeSchema.optional(),
+  /**
+   * The asset the conversation is about. The caller holds the read right on it; a subject the
+   * caller may not read and one that does not exist are refused alike.
+   */
+  subject: conversationSubjectSchema.optional()
 });
 
 export const renameConversationRequestSchema = z.object({

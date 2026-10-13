@@ -1,3 +1,4 @@
+export { Breadcrumb, type BreadcrumbItem, type BreadcrumbProps } from "./breadcrumb";
 export {
   DocsAddressProvider,
   DocsLink,
@@ -6,6 +7,7 @@ export {
   type DocsAddressProviderProps,
   type DocsLinkProps
 } from "./docs-link";
+export { PageOutline, type PageOutlineItem, type PageOutlineProps } from "./page-outline";
 export { NavGroup, NavItem, type NavGroupProps, type NavItemProps } from "./nav-item";
 export { useSidebarCollapsed } from "./sidebar-collapsed";
 export {
@@ -17,14 +19,7 @@ export {
 } from "./segmented-control";
 export { Sidebar, type SidebarProps } from "./sidebar";
 export { SkipLink, type SkipLinkProps } from "./skip-link";
-export {
-  SubRail,
-  type SubRailAnchorsProps,
-  type SubRailGroup,
-  type SubRailItem,
-  type SubRailProps,
-  type SubRailRoutesProps
-} from "./sub-rail";
+export { SubRail, type SubRailGroup, type SubRailItem, type SubRailProps } from "./sub-rail";
 export {
   Tabs,
   TabsContent,

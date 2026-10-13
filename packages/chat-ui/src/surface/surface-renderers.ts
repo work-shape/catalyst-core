@@ -7,6 +7,8 @@ import type { Surface, SurfaceKind, SurfaceOf } from "./surface";
 /** What a renderer gives the frame: the content and the actions of its kind. */
 interface SurfaceRendering {
   actions?: ReactNode;
+  /** An icon of what the surface shows. The frame draws it before the title. */
+  titleIcon?: ReactNode;
   content: ReactNode;
   /** The content reaches the edges of the frame and lays out its own height. */
   flush?: boolean;
@@ -18,7 +20,7 @@ export type SurfaceRenderers = {
 };
 
 function renderPrepared(surface: SurfaceOf<"tool_display" | "file_preview">): SurfaceRendering {
-  return { actions: surface.headerActions, content: surface.node };
+  return { actions: surface.headerActions, titleIcon: surface.titleIcon, content: surface.node };
 }
 
 /** The renderers of the kinds that exist today. */

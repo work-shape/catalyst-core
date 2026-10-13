@@ -116,7 +116,10 @@ export function mapConversation(row: ConversationRow | undefined): Conversation 
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     retainedUntil: row.retainedUntil.toISOString(),
-    deletedAt: row.deletedAt?.toISOString()
+    deletedAt: row.deletedAt?.toISOString(),
+    ...(row.subjectKind === null || row.subjectName === null
+      ? {}
+      : { subject: { kind: row.subjectKind, name: row.subjectName } })
   };
 }
 
@@ -663,6 +666,7 @@ export function mapConfigAsset(
     config: revision.config,
     ...(revision.fileSetId ? { fileSetId: revision.fileSetId } : {}),
     ...(revision.commit && revision.tree ? { commit: revision.commit, tree: revision.tree } : {}),
+    ...(revision.origin ? { revisionOrigin: revision.origin } : {}),
     ...(row.publishedRevisionId ? { publishedRevisionId: row.publishedRevisionId } : {}),
     ...(published
       ? {

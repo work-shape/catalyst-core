@@ -8,6 +8,7 @@ import {
   type AuthenticatedIdentity,
   type ActorAccess,
   type ConfigAssetMutation,
+  type ConfigAssetRevisionOrigin,
   type ConfigAssetStore,
   type AssetRepoWrite,
   type FileSet,
@@ -79,10 +80,10 @@ import { initialAgentPlacement, type AvailableIn } from "./asset-placement";
 import { AssetReadWorkflow, scopeOf } from "./asset-read-workflow";
 import { requirePrecondition, revisionConflictOf } from "./asset-revision";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
-import type { ChatServerOptions } from "./types";
+import type { AssetWorkflowOptions } from "./types";
 
 type MutationBatch = Omit<
-  Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0],
+  Parameters<typeof applyValidatedConfigAssetMutations>[1],
   "clientInstanceId" | "actor"
 >;
 /**
@@ -91,13 +92,13 @@ type MutationBatch = Omit<
  * included, never reads or writes what a workspace owns, and the other way round.
  */
 export class AssetWorkflow {
-  private readonly options: ChatServerOptions;
+  private readonly options: AssetWorkflowOptions;
   /** The writes of a kind with a draft or with files. */
   readonly drafts: AssetDraftWorkflow;
   /** The list, the asset, one revision of it and its history. */
   readonly reads: AssetReadWorkflow;
 
-  constructor(options: ChatServerOptions) {
+  constructor(options: AssetWorkflowOptions) {
     this.options = options;
     this.reads = new AssetReadWorkflow(options, {
       target: (address) => this.target(address),
@@ -473,9 +474,10 @@ export class AssetWorkflow {
       (ofDefinition.length > 0 ? ofDefinition : await this.writeIssues(call, view.set, found));
     return {
       valid: issues.length === 0,
-      issues: issues.map(({ message, path }) => ({
+      issues: issues.map(({ message, path, code }) => ({
         message,
-        ...(path === undefined || path.length === 0 ? {} : { path: path.map(String) })
+        ...(path === undefined || path.length === 0 ? {} : { path: path.map(String) }),
+        ...(code === undefined ? {} : { code })
       }))
     };
   }
@@ -527,6 +529,13 @@ export class AssetWorkflow {
       repository?: AssetRepoWrite;
       /** Where a new agent starts, as its caller asked. */
       availableIn?: AvailableIn;
+      /** Where the revision came from, where it is not written as it stands. */
+      origin?: ConfigAssetRevisionOrigin;
+      /**
+       * Asked under the lock of the write: whether the write makes the asset the asset of the
+       * Page its origin names. It refuses the write by throwing.
+       */
+      pageLink?: () => Promise<boolean>;
     }
   ) {
     const { kind, name } = target;
@@ -586,11 +595,21 @@ export class AssetWorkflow {
       setsDefault,
       ...(write.availableIn === undefined ? {} : { availableIn: write.availableIn })
     });
+    let pageLinked = false;
+    const { pageLink } = write;
     const result = await this.apply(call, target, {
+      ...(pageLink
+        ? {
+            underLock: async () => {
+              pageLinked = await pageLink();
+            }
+          }
+        : {}),
       baseRevisions: { [assetKey(kind.kind, name)]: write.expectedRevision },
       // The default is set for the first asset only, so the instance has none before.
       ...(setsDefault ? { baseDefaultAgentName: null } : {}),
       ...placement,
+      ...(write.origin ? { origin: write.origin } : {}),
       mutations
     });
     // The revision this write was given. The asset is not read again: by now another write
@@ -599,7 +618,15 @@ export class AssetWorkflow {
     const revision = allocatedRevision(result, kind.kind, name);
     await recordCommitted(this.options, call, [
       () =>
-        this.record(call, write.audit, { kind: kind.kind, name, revision, version: result.version })
+        this.record(call, write.audit, {
+          kind: kind.kind,
+          name,
+          revision,
+          version: result.version,
+          // A revision that copies a Page names it: the trail says where the content came from.
+          ...(write.origin?.kind === "page" ? { pageId: write.origin.pageId } : {}),
+          ...(pageLinked ? { pageLinked: true } : {})
+        })
     ]);
     return { version: result.version, revision, warnings };
   }

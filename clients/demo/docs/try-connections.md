@@ -2,7 +2,7 @@
 
 A walk through the sample business system and its Connection, from a fresh start to a refusal and a stopped server. It takes about ten minutes after the first build. What the pieces are is described in the [README](../README.md#the-sample-business-system-and-its-connection).
 
-The labels below are the English ones. In German the same places read: Bauen > Verbindungen, Verbindung testen, Einstellungen > Operationen, Alle Aufrufe, Erledigt, Verweigert, and for the states of the Connection Netzwerk gesperrt and Nicht erreichbar.
+The labels below are the English ones. In German the same places read: Studio > Verbindungen, Verbindung testen, Einstellungen > Operationen, Alle Aufrufe, Erledigt, Verweigert, and for the states of the Connection Netzwerk gesperrt and Nicht erreichbar.
 
 ## Start
 
@@ -32,13 +32,13 @@ Open `http://127.0.0.1:5173`. Every seeded person signs in with the password of 
 | Person | Address | On the Connection |
 | --- | --- | --- |
 | Mara Lindqvist | `mara.lindqvist@nordlicht-beratung.test` | Admin: holds every right by her role. Use her for the pages below. |
-| Sven Olsen | `sven.olsen@nordlicht-beratung.test` | May see and use it: Build > Connections lists it, and his questions are answered. |
-| Tobias Keller | `tobias.keller@nordlicht-beratung.test` | May use it only: his questions are answered, and Build shows him no Connections. |
+| Sven Olsen | `sven.olsen@nordlicht-beratung.test` | May see and use it: Studio > Connections lists it, and his questions are answered. |
+| Tobias Keller | `tobias.keller@nordlicht-beratung.test` | May use it only: his questions are answered, and Studio shows him no Connections. |
 | Elif Aydin | `elif.aydin@nordlicht-beratung.test` | No right: the agent tells her that it may not read the business data. |
 
 ## Look at the Connection
 
-1. Open **Build > Connections**. Two rows are there, both of type `mcp` and enabled: "Sample business", which this walk follows, and "Sample accounting", which a Workflow reads and no agent.
+1. Open **Studio > Connections**. Two rows are there, both of type `mcp` and enabled: "Sample business", which this walk follows, and "Sample accounting", which a Workflow reads and no agent.
 2. Open it. The page shows the status Ready, the credential as set with its version and never its value, and six operations. Each one is reading, ready and callable by Agents and Apps. "Used by" names the Workflow Assistant.
 3. Press **Test connection**. The status reads "Ready" with the time of the test.
 4. Open **Settings** (the gear at the bottom of the sidebar) and there **Operations** under Instance. The test is the newest run in the list, `connections.test`, with Mara's name. Choose **All calls** to see the agent's reading calls as well.
