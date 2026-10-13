@@ -5,10 +5,10 @@ import type { BedrockContentBlock } from "./bedrock-wire";
 // Protects a call from a request Bedrock refuses whole over one document. AWS states no size
 // of one PDF for `InvokeModel`; 4.5 MB is what its Converse API takes for one document, the
 // smallest limit AWS states for a document on Bedrock. A larger one is refused here.
-export const BEDROCK_DOCUMENT_MAX_BYTES = 4_500_000;
+const BEDROCK_DOCUMENT_MAX_BYTES = 4_500_000;
 // Protects a call from a request Bedrock refuses whole over its pages: Claude on Bedrock reads
 // at most 100 PDF pages in one request.
-export const BEDROCK_DOCUMENT_MAX_PAGES = 100;
+const BEDROCK_DOCUMENT_MAX_PAGES = 100;
 
 type DocumentPart = Extract<Exclude<ModelMessage["content"], string>[number], { type: "document" }>;
 

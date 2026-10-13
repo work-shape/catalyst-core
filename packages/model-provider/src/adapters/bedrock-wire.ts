@@ -62,7 +62,7 @@ export interface BedrockUsage {
 }
 
 /** A block of an answer. `type` is open: a block type of a later release is passed over. */
-export interface BedrockResponseBlock {
+interface BedrockResponseBlock {
   type?: string;
   text?: string;
   id?: string;
