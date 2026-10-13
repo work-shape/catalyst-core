@@ -45,3 +45,5 @@ export {
   workspaceRoutePath
 } from "../routes";
 export { railSections, shownRailSections } from "../workspace/rail-sections";
+export { WorkspaceRail } from "../workspace/workspace-rail";
+export { parseAppOpens, railApps, RAIL_APPS_LIMIT, withAppOpen, type RailApp } from "./rail-apps";

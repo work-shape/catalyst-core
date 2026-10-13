@@ -364,6 +364,13 @@ contain breaking changes; a patch version does not.
 - **Database:** migration `0065_asset_repo_commit_request` adds the columns `request` and
   `result` to `asset_repo_bundles`: what a pending save commits, without bytes, and how its
   commit ended. **Rollback:** an earlier release ignores them.
+- **Published Apps in the rail:** under the "Apps" row the main rail lists the published Apps
+  of the open workspace that the person may open, at most five. The App this person opened last
+  in this browser stands first; Apps never opened follow by their latest change. A row opens
+  the App, and the "Apps" row opens the page with every App as before. The collapsed rail shows
+  nothing more, and there is no block without the Apps module or for a person without a
+  published App. The rail reads the first page of the Apps list, so in a workspace with more
+  than fifty Apps it chooses among those fifty.
 - **New chat from the Recent heading:** the "Recent" heading of the main rail has a small plus
   at its right end that starts a new chat as the "New chat" row does. It shows while the pointer
   is over the Recent section or the keyboard is on it, and always on a screen without hover.

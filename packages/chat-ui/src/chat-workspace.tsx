@@ -17,6 +17,7 @@ import { AppsArea, isAppsRoute } from "./apps/apps-area";
 import { AppsHostProvider, type AppsHost } from "./apps/apps-host";
 import { WorkflowsArea, isWorkflowsRoute } from "./workflows/workflows-area";
 import { WorkflowsHostProvider } from "./workflows/workflows-host";
+import { useRailApps } from "./apps/rail-apps";
 import { InboxArea } from "./inbox";
 import { LoginPanel } from "./login-panel";
 import { operationRunHref, operationRunsHref } from "./operations/operations-model";
@@ -165,6 +166,14 @@ function ChatWorkspaceContent({
   // An address of the Workflows shows nothing until the instance has said whether the area is
   // there for this person: the model leads a closed one to the chat.
   const workflowsRoute = isWorkflowsRoute(model.route.route) ? model.route.route : undefined;
+  // The published Apps of the open workspace, under the Apps row of the rail.
+  const railAppsWorkspaceId = model.collaborationWorkspace.activeCollaborationWorkspaceId;
+  const railApps = useRailApps({
+    enabled: model.apps.enabled,
+    userId: model.auth.user?.id,
+    workspaceId: railAppsWorkspaceId,
+    openApp: appsRoute?.kind === "app" ? appsRoute.app : undefined
+  });
   const chatCovered =
     surfaceCovering && (inboxRoute ? inboxRoute.kind === "inbox-item" : displayPanel.open);
   const resourcesShown =
@@ -402,6 +411,18 @@ function ChatWorkspaceContent({
             agents={rail.agents}
             apps={rail.apps}
             workflows={rail.workflows}
+            publishedApps={railApps}
+            openAppName={appsRoute?.kind === "app" ? appsRoute.app : undefined}
+            onOpenApp={(app) => {
+              if (railAppsWorkspaceId) {
+                closeDrawer();
+                model.route.showRoute({
+                  kind: "app",
+                  collaborationWorkspaceId: railAppsWorkspaceId,
+                  app
+                });
+              }
+            }}
             view={rail.view}
             deletingConversation={rail.deletingConversation}
             canMoveConversation={rail.canMoveConversation}
