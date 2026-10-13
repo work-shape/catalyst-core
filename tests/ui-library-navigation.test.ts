@@ -457,9 +457,7 @@ describe("navigation, page structure and data components", () => {
     // The name is cut last and says itself whole in a tooltip.
     expect(head).toMatch(/<h1[^>]*class="[^"]*truncate[^"]*"[^>]*title="NAME"[^>]*>NAME<\/h1>/u);
     expect(head).toMatch(/data-slot="page-header-description"[^>]*>ABOUT</u);
-    // The chips give way before the name does.
     expect(head).toMatch(/shrink-\[1000000000000\][^>]*><div[^>]*data-slot="page-header-chips"/u);
-    // A list head keeps the description under the name.
     const list = render(createElement(PageHeader, { title: "NAME", description: "ABOUT" }));
     expect(list).not.toContain("page-header-description");
     expect(list).toMatch(/<\/h1><\/div><div[^>]*>ABOUT<\/div>/u);

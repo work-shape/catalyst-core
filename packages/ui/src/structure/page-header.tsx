@@ -1,10 +1,12 @@
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type HTMLAttributes,
   type MouseEventHandler,
-  type ReactNode
+  type ReactNode,
+  type RefObject
 } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "../actions/button";
@@ -55,12 +57,51 @@ export interface PageHeaderProps extends Omit<HTMLAttributes<HTMLElement>, "titl
 const CHIPS_GIVE_WAY = "shrink-[1000000000000]";
 const BACK_GIVES_WAY = "has-[[data-slot=page-header-back]]:shrink-[1000000]";
 
-// A part that gives way is shown whole or not at all. The outer box counts as nothing in the
-// least width of its row and may be any width up to its content's. In the inner box what does
-// not fit goes to a second line, and only the first line shows.
-const WHOLE_OR_GONE_OUTER = "grid min-w-0 grid-cols-[minmax(0,max-content)]";
-const WHOLE_OR_GONE_INNER =
-  "flex min-w-0 flex-wrap overflow-hidden before:h-full before:w-0 before:content-['']";
+// A box that counts as nothing in the least width of its row and may be any width up to its
+// content's.
+const NO_LEAST_WIDTH = "grid min-w-0 grid-cols-[minmax(0,max-content)]";
+
+/**
+ * Whether the row of a detail head has no room for the text of its way back beside the whole
+ * name. The text leaves whole as soon as it would be cut, so the arrow stands alone with no
+ * gap where the text was, and returns when the row has room for it after the name.
+ */
+function useBackTextGone(): [RefObject<HTMLDivElement | null>, boolean] {
+  const row = useRef<HTMLDivElement>(null);
+  const [gone, setGone] = useState(false);
+  const was = useRef(false);
+  // The text's width, known while it shows.
+  const width = useRef(0);
+  useLayoutEffect(() => {
+    const node = row.current;
+    const text = node?.querySelector<HTMLElement>("[data-slot=page-header-back-text]");
+    const name = node?.querySelector<HTMLElement>("h1, h2");
+    const slot = text?.parentElement;
+    if (!node || !text || !name || !slot || typeof ResizeObserver === "undefined") {
+      return undefined;
+    }
+    const measure = () => {
+      if (!was.current) {
+        width.current = text.getBoundingClientRect().width;
+      }
+      const cut = name.scrollWidth > name.clientWidth;
+      // The chips and the description give the room after the name before the text asks for it.
+      const free = node.getBoundingClientRect().right - name.getBoundingClientRect().right;
+      const next = was.current
+        ? cut || free < width.current + 1
+        : cut || slot.getBoundingClientRect().width < width.current - 0.5;
+      was.current = next;
+      setGone(next);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    for (const observed of [node, name, slot]) {
+      observer.observe(observed);
+    }
+    return () => observer.disconnect();
+  });
+  return [row, gone];
+}
 
 /**
  * The head of a page. Its slots have one order on every page: back or breadcrumb, name, scope
@@ -83,6 +124,7 @@ export function PageHeader({
 }: PageHeaderProps) {
   const Heading = headingLevel === 1 ? "h1" : "h2";
   const detail = variant === "detail";
+  const [row, backTextGone] = useBackTextGone();
   const hasActions =
     secondaryActions !== undefined || primaryAction !== undefined || overflow !== undefined;
   const actions = hasActions ? (
@@ -107,7 +149,11 @@ export function PageHeader({
         {/* Beside a floating control the row starts after it, at rest and pinned alike. Its
             least width is the way back without its text and the whole name: the actions wrap
             under a narrow head only when they do not fit beside that. */}
-        <div className="flex min-w-0 flex-1 basis-[min-content] items-center gap-2 ps-(--layout-page-head-start)">
+        <div
+          ref={row}
+          data-back-text-gone={backTextGone ? "" : undefined}
+          className="group/page-header-row flex min-w-0 flex-1 basis-[min-content] items-center gap-2 ps-(--layout-page-head-start)"
+        >
           {back === undefined ? null : (
             // Where the actions wrapped, the way back stays on the first row: at the middle of
             // the head's least height, level with a control that floats beside the head. The
@@ -129,11 +175,13 @@ export function PageHeader({
             {title}
           </Heading>
           {scope === undefined && state === undefined ? null : (
-            // The pseudo-element that opens the first line takes one gap: the box starts a gap early.
-            <div className={cn(WHOLE_OR_GONE_OUTER, CHIPS_GIVE_WAY, "-ms-2")}>
+            // A chip is shown whole or not at all: one that does not fit goes to a second line,
+            // and only the first line shows. The pseudo-element that opens the first line takes
+            // one gap, so the box starts a gap early.
+            <div className={cn(NO_LEAST_WIDTH, CHIPS_GIVE_WAY, "-ms-2")}>
               <div
                 data-slot="page-header-chips"
-                className={cn(WHOLE_OR_GONE_INNER, "h-control-sm items-center gap-x-2")}
+                className="flex h-control-sm min-w-0 flex-wrap items-center gap-x-2 overflow-hidden before:h-full before:w-0 before:content-['']"
               >
                 {scope}
                 {state}
@@ -202,9 +250,14 @@ export function PageHeaderBack(props: PageHeaderBackProps) {
   const content = (
     <>
       <ArrowLeft aria-hidden="true" />
-      <span className={WHOLE_OR_GONE_OUTER}>
-        <span className={cn(WHOLE_OR_GONE_INNER, "h-[1lh]")}>
-          <span className="ps-2">{props.children}</span>
+      <span
+        className={cn(
+          NO_LEAST_WIDTH,
+          "overflow-hidden group-data-back-text-gone/page-header-row:hidden"
+        )}
+      >
+        <span data-slot="page-header-back-text" className="w-max ps-2">
+          {props.children}
         </span>
       </span>
     </>
