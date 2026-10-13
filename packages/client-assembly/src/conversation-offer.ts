@@ -1,11 +1,9 @@
 import { createPlatformAssetCalls, type AssetWorkflowOptions } from "@vivd-catalyst/chat-server";
 import {
   SUBJECT_TOOL_PREFIX,
-  WORKFLOW_ASSET_KIND,
   type ConversationOfferSource,
   type ModuleSnapshot,
-  type PlatformStores,
-  type ShippedSkill
+  type PlatformStores
 } from "@vivd-catalyst/core";
 import {
   PLATFORM_ASSET_TOOL_NAMES,
@@ -17,8 +15,7 @@ import {
   type PlatformAssetBinding
 } from "@vivd-catalyst/tool-execution";
 import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
-import { workflowAuthoringSkill, workflowsModule } from "@vivd-catalyst/workflows";
-import { platformSkill } from "./platform-skill";
+import { offeredSkillNames } from "./shipped-skills";
 
 // What a conversation is offered beyond its agent's definition. Every conversation: the tools
 // that find, open, read and save an asset of the platform and the skill that says how the
@@ -35,16 +32,6 @@ interface ConversationOfferInput {
   hasTool(toolName: string): boolean;
 }
 
-/** The kinds the platform ships a skill for. */
-const SHIPPED_SKILL_KINDS = [WORKFLOW_ASSET_KIND];
-
-/** The skills the platform ships for the assets of one kind. */
-function subjectSkillsOf(kind: string, modules: ModuleSnapshot): ShippedSkill[] {
-  return kind === WORKFLOW_ASSET_KIND && modules.isEnabled(workflowsModule.name)
-    ? [workflowAuthoringSkill]
-    : [];
-}
-
 function createConversationOffer(input: ConversationOfferInput): ConversationOfferSource {
   return {
     async offerOf({ clientInstanceId, conversationId }) {
@@ -54,25 +41,18 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
       );
       if (!conversation) return undefined;
       const { subject } = conversation;
-      // A skill nobody can read is not listed: it would promise what no tool answers. A
-      // conversation about an asset is offered the skills of its kind, one about none yet
-      // those of every kind, since the agent may open any.
-      const skills = input.hasTool(READ_SKILL_TOOL)
-        ? [
-            platformSkill,
-            ...(subject
-              ? subjectSkillsOf(subject.kind, input.modules)
-              : SHIPPED_SKILL_KINDS.flatMap((kind) => subjectSkillsOf(kind, input.modules)))
-          ]
+      // A skill nobody can read is not listed: it would promise what no tool answers.
+      const skillNames = input.hasTool(READ_SKILL_TOOL)
+        ? offeredSkillNames(subject, input.modules)
         : [];
       return {
         ...(subject ? { subject } : {}),
         toolNames: [
           ...PLATFORM_DISCOVERY_TOOL_NAMES,
           ...PLATFORM_ASSET_TOOL_NAMES,
-          ...(skills.length > 0 ? [READ_SKILL_TOOL] : [])
+          ...(skillNames.length > 0 ? [READ_SKILL_TOOL] : [])
         ].filter((toolName) => input.hasTool(toolName)),
-        skills
+        skillNames
       };
     }
   };

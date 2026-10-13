@@ -51,7 +51,7 @@ import { CreateUserFields, MaskedPasswordInput } from "./user-administration-fie
 import { Field, FormNotice, StatusBadge, UserAvatar } from "./user-administration-primitives";
 import { UserPermissionOverview } from "./user-permission-overview";
 import { useTranslation } from "../i18n";
-import { formatDateTime } from "./locale-format";
+import { formatMomentShort } from "./locale-format";
 
 interface UserAdministrationPanelProps {
   users: AdministeredUser[];
@@ -357,7 +357,7 @@ export function UserAdministrationPanel({
                     </TableCell>
                     <TableCell className="px-4 whitespace-nowrap text-muted-foreground">
                       {user.lastAuthenticatedAt
-                        ? formatDateTime(user.lastAuthenticatedAt, locale)
+                        ? formatMomentShort(user.lastAuthenticatedAt, locale)
                         : t("settings.never")}
                     </TableCell>
                     <TableCell className="px-4 text-muted-foreground">

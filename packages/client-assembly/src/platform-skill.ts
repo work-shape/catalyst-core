@@ -6,9 +6,10 @@ import {
 } from "@vivd-catalyst/tool-execution";
 
 // The skill every agent is offered in every conversation: how the platform it runs on works,
-// what each kind of thing on it is for, and how to find one. It ships with the platform and is
-// no asset. What exists on one instance and what the person may do there, the agent asks the
-// tools: this text names no module that is on and no right that is held.
+// what each kind of thing on it is for, and how to find one. It ships with the platform: the
+// release seed stores it as a read-only skill. What exists on one instance and what the person
+// may do there, the agent asks the tools: this text names no module that is on and no right
+// that is held.
 
 const PLATFORM_SKILL_NAME = "platform-guide";
 
@@ -63,5 +64,6 @@ export const platformSkill: ShippedSkill = {
   title: "How this platform works",
   description:
     "The kinds of things on this platform (agents, skills, Workflows, Apps, Pages, Data Stores, Knowledge Bases, Connections), what each is for, which to build for a request, how to find them and the files of other conversations, and what you may change. Read it when the user asks what exists or what can be built, names something on the platform or a file from another chat, or asks you to build an app, a tool or an automation.",
-  content
+  content,
+  icon: "guide"
 };

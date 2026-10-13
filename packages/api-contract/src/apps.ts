@@ -132,7 +132,13 @@ export const appPreviewRequestSchema = z.object({ mode: appModeSchema }).strict(
 export const appPreviewSchema = pagePreviewSchema.extend({
   /** The number of the asset revision shown. */
   revision: z.number().int().positive(),
-  interfacePath: z.string()
+  interfacePath: z.string(),
+  /**
+   * The outside hosts the shown revision's manifest lists that its frame may not connect to:
+   * those a draft adds to what is published, until it is published. Always empty for the
+   * published view.
+   */
+  heldBackHosts: z.array(z.string())
 });
 
 export type AppPreviewResponse = z.infer<typeof appPreviewSchema>;

@@ -24,7 +24,11 @@ export function WorkflowRunsPage({ workflow }: { workflow: string }) {
   const read = useWorkflow(workspaceId, workflow);
   const runs = useWorkflowRuns(workflow, RUNS_PAGE_SIZE);
   const runsAvailable = useRunsAvailable();
-  const start = useStartRun({ workflow, name: read.workflow?.name });
+  const start = useStartRun({
+    workflow,
+    name: read.workflow?.name,
+    form: read.workflow?.startForm
+  });
   const rows = runs.rows;
   // The durations of runs that are going are counted from when the list last arrived.
   const now = useMemo(() => new Date(), [rows]);

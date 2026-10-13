@@ -39,7 +39,7 @@ import {
 } from "@vivd-catalyst/core";
 import { runOperation, type OperationOutcome } from "@vivd-catalyst/tool-execution";
 import { z } from "zod";
-import { checkAppContentToken } from "../app-content";
+import { appContentView, checkAppContentToken } from "../app-content";
 import { mayOpenAssetFileSet } from "../asset-access";
 import { ConversationWorkflow } from "../conversations/conversation-workflow";
 import type { ResolvedChatServerOptions } from "../types";
@@ -221,27 +221,16 @@ export class AppActionCalls {
       throw sessionInvalid();
     }
     const resource = appResourceOf(asset);
-    // The view is the one the address was minted for. The file set does not say it: right after
-    // a publish or a discarded draft the draft and the published revision are one file set.
-    // An address that asked for the published view counts as that only while its file set is
-    // still what is published, and an address that names no view is taken as a draft.
-    const published =
-      checked.claims.mode === "published" &&
-      asset.publishedRevisionId !== undefined &&
-      asset.revisionIds.includes(asset.publishedRevisionId);
+    // The view is the one the address was minted for, as far as its file set still holds it.
+    const view = appContentView(checked.claims.mode, asset);
     return {
       ...shared,
-      mode: published ? "published" : "draft",
+      mode: view,
       appName: asset.name,
       workspaceId: resource.workspaceId,
-      host: appRevisionHost(
-        asset.name,
-        resource,
-        published ? "published" : "draft",
-        shared.dataStores
-      ),
+      host: appRevisionHost(asset.name, resource, view, shared.dataStores),
       revisionId:
-        published && asset.publishedRevisionId !== undefined
+        view === "published" && asset.publishedRevisionId !== undefined
           ? asset.publishedRevisionId
           : (asset.revisionIds.at(-1) ?? asset.activeRevisionId)
     };

@@ -207,7 +207,7 @@ test("a builder reads the actions of a draft, tests a reading one and finds its 
     /** Opens the Actions side of a draft: the third side beside Preview and Files. */
     const openActions = async (id: string) => {
       await page.goto(draftPath(id));
-      await draft.getByRole("radio", { name: /^(Actions|Aktionen)$/u }).click();
+      await draft.getByRole("tab", { name: /^(Actions|Aktionen)$/u }).click();
       await expect(actions).toBeVisible();
     };
 
@@ -438,9 +438,9 @@ test("a builder reads the actions of a draft, tests a reading one and finds its 
     // the same list, twice over.
     await openActions(appId);
     for (const side of ["Preview", "Files"]) {
-      await draft.getByRole("radio", { name: side }).click();
+      await draft.getByRole("tab", { name: side }).click();
       await expect(actions).toHaveCount(0);
-      await draft.getByRole("radio", { name: "Actions" }).click();
+      await draft.getByRole("tab", { name: "Actions" }).click();
       await expect(row("load-rows")).toContainText("Can be tested");
     }
 
@@ -491,7 +491,7 @@ test("a builder reads the actions of a draft, tests a reading one and finds its 
     await expect(memberPage.getByTestId("app-edit")).toContainText(
       "The draft of this app is not available to you."
     );
-    await expect(memberPage.getByRole("radio")).toHaveCount(0);
+    await expect(memberPage.getByRole("tab")).toHaveCount(0);
     await expect(memberPage.getByRole("button", { name: /^Test/u })).toHaveCount(0);
 
     // The run stays after its App is deleted, and says so with the App's id.

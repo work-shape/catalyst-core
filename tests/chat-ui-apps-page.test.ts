@@ -168,15 +168,16 @@ describe("the Apps page", () => {
     expect(markup).toContain("Draft only");
   });
 
-  it("tells a builder how an App comes to be, with the way into the chat and two starts", () => {
+  it("tells a builder how an App comes to be, with the way into the chat and two examples", () => {
     const markup = render(appsPage([], ALL));
 
     expect(markup).toContain(
       "No apps in this workspace yet. Describe a tool in chat and the agent builds it as a page; save it as an app so everyone here can use it."
     );
     expect(markup).toContain(">Build an app in chat</button>");
-    expect(markup).toContain("A form that computes…");
-    expect(markup).toContain("A dashboard for…");
+    expect(markup).toContain('aria-label="Examples to start with"');
+    expect(markup).toContain("Fee calculator from hours and rate");
+    expect(markup).toContain("Leave request for the team");
   });
 
   it("tells everybody else who can add one, without an action", () => {
@@ -184,7 +185,7 @@ describe("the Apps page", () => {
 
     expect(markup).toContain("No apps yet. A builder of this workspace can add one.");
     expect(markup).not.toContain("Build an app in chat");
-    expect(markup).not.toContain("A form that computes…");
+    expect(markup).not.toContain("Fee calculator from hours and rate");
   });
 
   it("offers the next page while the instance holds more, and the way to ask again", () => {

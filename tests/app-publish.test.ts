@@ -250,6 +250,54 @@ describe("an App with a draft and a published revision", () => {
     expect((await t.open(unopened.url)).status).toBe(404);
   });
 
+  it("connects a draft only to the outside hosts its published revision lists, and a new App's draft to none", async () => {
+    const connects = (policy: string) => /connect-src ([^;]*)/u.exec(policy)?.[1];
+    const write = async (hosts: string[]) => {
+      const response = await t.putApp(
+        t.admin.id,
+        "rates",
+        appFiles("rates", { externalHosts: hosts })
+      );
+      expectStatus(response, 200);
+      return fileWriteSchema.parse(response.json()).revision;
+    };
+
+    // Nothing is published, so nobody has looked at any host the draft lists.
+    const first = await write(["api.example.com"]);
+    const fresh = await shown(t.admin.id, "rates", "draft");
+    expect(fresh.heldBackHosts).toEqual(["api.example.com"]);
+    expect(connects(fresh.document.policy)).toBe("'none'");
+
+    // The publish dialog names the host: from here on the published revision connects to it,
+    // and so does a draft that is that revision.
+    expectStatus(await t.publish(t.admin.id, "rates", first), 200);
+    const live = await shown(t.kai.id, "rates", "published");
+    expect(live.heldBackHosts).toEqual([]);
+    expect(connects(live.document.policy)).toBe("https://api.example.com");
+    expect(connects((await shown(t.admin.id, "rates", "draft")).document.policy)).toBe(
+      "https://api.example.com"
+    );
+
+    // An agent adds a host to the draft. A stored manifest is the build's answer and is read
+    // again: an entry that is no host name never reaches the policy.
+    const second = await write(["api.example.com", "collect.example.net", "x.test; script-src *"]);
+    const draft = await shown(t.admin.id, "rates", "draft");
+    expect(draft.heldBackHosts).toEqual(["collect.example.net"]);
+    expect(connects(draft.document.policy)).toBe("https://api.example.com");
+    expect(draft.document.policy).not.toContain("script-src *");
+    expect(connects((await shown(t.kai.id, "rates", "published")).document.policy)).toBe(
+      "https://api.example.com"
+    );
+
+    // The host takes effect with the publish.
+    expectStatus(await t.publish(t.admin.id, "rates", second), 200);
+    const published = await shown(t.kai.id, "rates", "published");
+    expect(connects(published.document.policy)).toBe(
+      "https://api.example.com https://collect.example.net"
+    );
+    expect((await shown(t.admin.id, "rates", "draft")).heldBackHosts).toEqual([]);
+  });
+
   it("refuses a publish to a writer without the publish right, with a session and with a key that holds write alone", async () => {
     await created("pricing", "one");
     const grant = await t.stores.access.createGrant({

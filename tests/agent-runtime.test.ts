@@ -1516,7 +1516,7 @@ describe("local agent runtime", () => {
               ? {
                   subject: { kind: "workflow", name: "month-end" },
                   toolNames: ["platform.assets.get", "platform.assets.put"],
-                  skills: []
+                  skillNames: []
                 }
               : undefined;
           }

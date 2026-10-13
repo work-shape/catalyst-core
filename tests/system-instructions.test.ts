@@ -58,12 +58,11 @@ describe("system instructions", () => {
   });
 
   it("tells the agent the subject of a conversation with only the tools and skills it is offered", () => {
-    const skill = { name: "workflow-authoring", title: "Workflows", description: "", content: "" };
     const content = createSystemInstructions("Use customer workflow rules.", "en", {
       subject: {
         subject: { kind: "data_store", name: "visit-log" },
         toolNames: ["platform.assets.get", "read_skill"],
-        skills: [skill]
+        skillNames: ["workflow-authoring"]
       }
     });
 

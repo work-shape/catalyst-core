@@ -19,7 +19,7 @@ export const CATALYST_INTERNAL_AGENT_PROMPT = [
 ].join("\n");
 
 /** What a conversation about an asset is offered. */
-type SubjectOffer = Pick<ConversationOffer, "toolNames" | "skills"> & {
+type SubjectOffer = Pick<ConversationOffer, "toolNames" | "skillNames"> & {
   subject: ConversationSubject;
 };
 
@@ -88,7 +88,7 @@ export function createSystemInstructions(
  * names only the tools and the skills this conversation is offered. When an agent opens an
  * asset and how is said by the tool that opens one and by the platform's skill, not here.
  */
-function createSubjectContext({ subject, toolNames, skills }: SubjectOffer): string {
+function createSubjectContext({ subject, toolNames, skillNames }: SubjectOffer): string {
   const kind = subject.kind.replaceAll("_", " ");
   const offered = (tool: string) => toolNames.includes(`${SUBJECT_TOOL_PREFIX}${tool}`);
   const lines = [
@@ -105,9 +105,9 @@ function createSubjectContext({ subject, toolNames, skills }: SubjectOffer): str
       `${SUBJECT_TOOL_PREFIX}put saves your change as a draft. A draft runs nowhere until a person publishes it; say so after a save.`
     );
   }
-  if (skills.length > 0 && toolNames.includes("read_skill")) {
+  if (skillNames.length > 0 && toolNames.includes("read_skill")) {
     lines.push(
-      `Before you change it, call read_skill for ${skills.map((skill) => `'${skill.name}'`).join(", ")}.`
+      `Before you change it, call read_skill for ${skillNames.map((name) => `'${name}'`).join(", ")}.`
     );
   }
   return lines.join("\n");
