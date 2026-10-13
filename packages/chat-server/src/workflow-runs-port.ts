@@ -1,5 +1,6 @@
 import type {
   AuthenticatedIdentity,
+  JsonObject,
   OperationRunId,
   StorePage,
   WorkflowLastRun,
@@ -59,5 +60,7 @@ export interface WorkflowListEntry {
   runnable: boolean;
   /** Why not, under the codes the refusal of the start carries. Empty where `runnable`. */
   reasons: { code: string; message: string; path?: string }[];
+  /** The published revision's `inputs`, where its definition could be read. */
+  inputs?: JsonObject;
   lastRun?: WorkflowLastRun;
 }

@@ -74,8 +74,8 @@ function runsSource(client: WorkflowsClient): WorkflowRunsSource {
       });
       return { items: page.items.map(toWorkflowStepRun), nextCursor: page.nextCursor };
     },
-    start: async (workflow) =>
-      toWorkflowRun(done(await client.workflows.start({ params: { workflow }, body: {} }))),
+    start: async (workflow, input) =>
+      toWorkflowRun(done(await client.workflows.start({ params: { workflow }, body: { input } }))),
     cancel: async (runId) =>
       toWorkflowRun(done(await client.workflows.cancel_run({ params: { runId } })))
   };

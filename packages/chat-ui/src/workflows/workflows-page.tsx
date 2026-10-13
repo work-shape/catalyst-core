@@ -1,5 +1,5 @@
-import { Workflow } from "lucide-react";
-import { useId, useMemo } from "react";
+import { Play, Workflow } from "lucide-react";
+import { useId, useMemo, useState } from "react";
 import {
   Avatar,
   Badge,
@@ -18,7 +18,9 @@ import { formatUpdated } from "../build-area/build-model";
 import { formatDateTime } from "../control-plane/locale-format";
 import { useTranslation } from "../i18n";
 import { RouteLink } from "../route-link";
-import { useWorkflowList, type WorkflowList } from "./workflow-data";
+import { useStartRun } from "./start-run";
+import { useRunsAvailable, useWorkflowList, type WorkflowList } from "./workflow-data";
+import { startOffered } from "./workflow-model";
 import type { WorkflowListItem } from "./workflow-views";
 import { LoadError, RunStateBadge, WorkflowsFrame, type OpenRoute } from "./workflows-frame";
 import { useWorkflowsHost } from "./workflows-host";
@@ -27,6 +29,14 @@ import { useWorkflowsHost } from "./workflows-host";
 export function WorkflowsPage() {
   const host = useWorkflowsHost();
   const list = useWorkflowList(host?.workspace?.id);
+  const runsAvailable = useRunsAvailable();
+  // The Workflow whose start is asked for from its card.
+  const [starting, setStarting] = useState<WorkflowListItem>();
+  const start = useStartRun({
+    workflow: starting?.id ?? "",
+    name: starting?.name,
+    form: starting?.startForm
+  });
   const rows = list.rows;
   // The ages are counted from when the list last arrived.
   const now = useMemo(() => new Date(), [rows]);
@@ -34,12 +44,20 @@ export function WorkflowsPage() {
     return null;
   }
   return (
-    <WorkflowsPageView
-      workspaceId={host.workspace.id}
-      list={list}
-      now={now}
-      onOpenRoute={host.showRoute}
-    />
+    <>
+      <WorkflowsPageView
+        workspaceId={host.workspace.id}
+        list={list}
+        now={now}
+        runsAvailable={runsAvailable}
+        onOpenRoute={host.showRoute}
+        onStart={(workflow) => {
+          setStarting(workflow);
+          start.open();
+        }}
+      />
+      {start.dialog}
+    </>
   );
 }
 
@@ -48,12 +66,17 @@ export function WorkflowsPageView({
   workspaceId,
   list,
   now,
-  onOpenRoute
+  runsAvailable,
+  onOpenRoute,
+  onStart
 }: {
   workspaceId: string;
   list: WorkflowList;
   now: Date;
+  /** The instance runs Workflows: a card offers a start where the reader may make one. */
+  runsAvailable: boolean;
   onOpenRoute: OpenRoute;
+  onStart(workflow: WorkflowListItem): void;
 }) {
   const { t } = useTranslation();
   const rows = list.rows;
@@ -86,7 +109,9 @@ export function WorkflowsPageView({
                     workflow={workflow}
                     workspaceId={workspaceId}
                     now={now}
+                    canStart={runsAvailable && startOffered(workflow)}
                     onOpenRoute={onOpenRoute}
+                    onStart={() => onStart(workflow)}
                   />
                 </li>
               ))}
@@ -126,12 +151,16 @@ function WorkflowCard({
   workflow,
   workspaceId,
   now,
-  onOpenRoute
+  canStart,
+  onOpenRoute,
+  onStart
 }: {
   workflow: WorkflowListItem;
   workspaceId: string;
   now: Date;
+  canStart: boolean;
   onOpenRoute: OpenRoute;
+  onStart(): void;
 }) {
   const { locale, t } = useTranslation();
   const titleId = useId();
@@ -188,6 +217,12 @@ function WorkflowCard({
           >
             {t("workflows.open")}
           </RouteLink>
+          {canStart ? (
+            <Button variant="outline" aria-describedby={titleId} onClick={onStart}>
+              <Play aria-hidden="true" />
+              {t("workflows.startNow")}
+            </Button>
+          ) : null}
           {/* A Workflow that ran has runs to look through. */}
           {lastRun === undefined ? null : (
             <div className="ml-auto flex items-center gap-1">

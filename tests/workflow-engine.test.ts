@@ -481,12 +481,17 @@ describe("starting a Workflow that cannot run", () => {
       reason: "not_supported_yet",
       issues: [{ code: "not_supported_yet", path: "steps[1].type" }]
     });
-    await t.expectRefused(
+    const wrongType = await t.expectRefused(
       t.root.id,
       "workflows.start",
       { params: { workflow: "notify-clients" }, payload: { input: { note: 7 } } },
       { status: 422, code: "VALIDATION_FAILED" }
     );
+    // The start form puts an issue under the field its path names.
+    expect(wrongType.details).toMatchObject({
+      reason: "input_invalid",
+      issues: [{ path: ["note"], message: "must be string" }]
+    });
 
     await t.stores.apiAccess.updateServicePrincipal({
       clientInstanceId,
