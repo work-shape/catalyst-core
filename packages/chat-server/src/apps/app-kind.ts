@@ -2,15 +2,27 @@ import { APP_ASSET_KIND } from "@vivd-catalyst/api-contract";
 
 export { APP_ASSET_KIND };
 
-import { PAGE_MANIFEST_FILE, compiledActionsOf } from "@vivd-catalyst/app-build";
+import {
+  PAGE_MANIFEST_FILE,
+  compiledActionsOf,
+  declaredDataStoresOf
+} from "@vivd-catalyst/app-build";
 import {
   CONNECTION_ASSET_KIND,
+  DATA_STORE_ACTIONS,
+  DATA_STORE_ASSET_KIND,
+  dataStoreRefusalError,
   defineAssetKind,
+  type ActorAccess,
+  type AssetScope,
   type AssetValidationIssue,
-  type JsonObject
+  type ClientInstanceId,
+  type JsonObject,
+  type PlatformStores
 } from "@vivd-catalyst/core";
 import { z } from "zod";
 import { readDefinitionName, type WorkflowAssetKind } from "../asset-kinds/shared";
+import { unlistedDataStore } from "./action-kinds";
 
 /** The id of an App: what its manifest calls `id`. Unique on the instance. */
 export const APP_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/u;
@@ -72,26 +84,39 @@ const connectionOperationsSchema = z.object({
 });
 
 /**
- * What a manifest names that the instance does not hold, one issue per name: a Connection, an
- * operation a Connection does not accept, and an action that says it reads where the
- * operation it stands for changes something. The build knows no Connection, so this is where
- * an action is held against the operation it names.
+ * What a manifest names that the instance does not hold, one issue per name: a Connection, a
+ * Data Store, an operation a Connection does not accept, and an action that says it reads
+ * where the operation it stands for changes something. The build knows no Connection and no
+ * Data Store, so this is where a manifest is held against what it names. A definition is read
+ * against the assets its writer may read, so a store the writer may not read is none here.
  */
 function findAppReferenceIssues(
   config: unknown,
-  connections: readonly unknown[]
+  connections: readonly unknown[],
+  dataStores: readonly unknown[]
 ): AssetValidationIssue[] {
   const known = new Map(
     connections.map((connection) => [readDefinitionName(connection), connection])
   );
-  const issues: AssetValidationIssue[] = appConnectionNames(config)
-    .filter((name) => !known.has(name))
-    .map((name) => ({
-      message: `The manifest names the Connection '${name}', which does not exist on this instance`,
-      path: ["manifest", "connections"]
-    }));
   const manifest = manifestOfConfigSchema.safeParse(config);
+  const stores = new Set(dataStores.map(readDefinitionName));
+  const issues: AssetValidationIssue[] = [
+    ...appConnectionNames(config)
+      .filter((name) => !known.has(name))
+      .map((name) => ({
+        message: `The manifest names the Connection '${name}', which does not exist on this instance`,
+        path: ["manifest", "connections"]
+      })),
+    ...(manifest.success ? declaredDataStoresOf(manifest.data.manifest) : [])
+      .filter(({ name }) => !stores.has(name))
+      .map(({ name }) => ({
+        message: `The manifest names the Data Store '${name}', which does not exist on this instance`,
+        path: ["manifest", "dataStores"]
+      }))
+  ];
   for (const action of manifest.success ? compiledActionsOf(manifest.data.manifest) : []) {
+    // A statement on a Data Store names nothing but its store, which is held above.
+    if (action.kind !== "connection") continue;
     const connection = connectionOperationsSchema.safeParse(known.get(action.connection));
     // A Connection that is missing is named above, once.
     if (!connection.success) continue;
@@ -111,6 +136,78 @@ function findAppReferenceIssues(
     }
   }
   return issues;
+}
+
+/** The right on a Data Store an `sql` action of each effect uses. */
+const STORE_RIGHT_OF_EFFECT = {
+  reading: DATA_STORE_ACTIONS.read,
+  changing: DATA_STORE_ACTIONS.insert
+} as const;
+
+/**
+ * What a publish of an App answers for. The right to a Data Store is checked on the App and
+ * not of each person who uses it (data-stores-and-knowledge-bases.md, Scope): whoever may use
+ * the published App reads and adds what its `sql` actions read and add. So the publish is
+ * where the right is asked, of the publisher: `data_store.read` on a listed store the
+ * revision's reading actions reach and `data_store.insert` on one its changing actions reach.
+ * Nothing is written for it: the published pointer of the App is the record, and a call of a
+ * published action is admitted by it.
+ *
+ * The publish is refused as well for a store the App cannot reach as its users will: one that
+ * is not published, was deleted or belongs to another workspace, and one below the migration
+ * level the manifest asks for. Two point reads per listed store, in the transaction of the
+ * publish.
+ */
+async function requireDataStores(input: {
+  clientInstanceId: ClientInstanceId;
+  access: ActorAccess;
+  scope: AssetScope;
+  config: JsonObject;
+  stores: PlatformStores;
+}): Promise<void> {
+  const { clientInstanceId, access, scope, stores } = input;
+  const listed = declaredDataStoresOf(input.config.manifest);
+  const actions = compiledActionsOf(input.config.manifest).flatMap((action) =>
+    action.kind === "sql" ? [action] : []
+  );
+  for (const action of actions) {
+    const unlisted = unlistedDataStore(listed, action);
+    if (unlisted) throw unlisted;
+  }
+  for (const { name, minSchema } of listed) {
+    const asset = await stores.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: DATA_STORE_ASSET_KIND,
+      name
+    });
+    const record =
+      asset?.status === "active" && asset.publishedRevisionId !== undefined
+        ? await stores.dataStores.getDataStore({ clientInstanceId, id: asset.id })
+        : undefined;
+    const inScope =
+      asset?.scope.kind !== "workspace" ||
+      (scope.kind === "workspace" && asset.scope.workspaceId === scope.workspaceId);
+    if (!record || record.status === "retired" || !inScope) {
+      throw dataStoreRefusalError("data_store_unavailable", name);
+    }
+    if (minSchema !== undefined && record.level < minSchema) {
+      throw dataStoreRefusalError("data_store_below_min_schema", name, {
+        minSchema,
+        level: record.level
+      });
+    }
+    const resource = {
+      kind: DATA_STORE_ASSET_KIND,
+      assetId: record.id,
+      name,
+      ...(asset?.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
+    };
+    for (const action of actions) {
+      if (action.dataStore === name) {
+        access.require(STORE_RIGHT_OF_EFFECT[action.effect], resource);
+      }
+    }
+  }
 }
 
 /**
@@ -145,7 +242,11 @@ export function createAppAssetKind(): WorkflowAssetKind {
         apps
           .filter((app) => context.changes(APP_ASSET_KIND, app.name))
           .flatMap((app) =>
-            findAppReferenceIssues(app, context.definitions(CONNECTION_ASSET_KIND))
+            findAppReferenceIssues(
+              app,
+              context.definitions(CONNECTION_ASSET_KIND),
+              context.definitions(DATA_STORE_ASSET_KIND)
+            )
           ),
       summarize: (app) => ({
         name: app.name,
@@ -159,6 +260,7 @@ export function createAppAssetKind(): WorkflowAssetKind {
     missingUpsertRight: () => undefined,
     assertInteractiveUpsertAllowed: () => undefined,
     assertInteractiveDeleteAllowed: () => undefined,
+    onPublish: requireDataStores,
     // A write from files reads the name people see from the manifest. A manifest that names
     // none keeps the one the App was made with.
     configOfFiles: ({ name, manifest, current }) =>

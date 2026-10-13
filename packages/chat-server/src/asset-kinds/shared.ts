@@ -1,6 +1,8 @@
 import type {
   ActorAccess,
+  AssetScope,
   AuthenticatedIdentity,
+  ClientInstanceId,
   ConfigAssetKind,
   JsonObject,
   Namespace,
@@ -108,7 +110,12 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
    * transaction that moves it. A throw refuses the publish and leaves the pointer where it was.
    */
   onPublish?(input: {
+    clientInstanceId: ClientInstanceId;
+    /** What the caller of the publish may do: a kind asks it for what the revision reaches. */
+    access: ActorAccess;
     assetId: string;
+    /** The owner of the asset: what it names of other assets is read in this scope. */
+    scope: AssetScope;
     revision: number;
     config: JsonObject;
     /** The config that was published until this publish, where one was. */

@@ -361,7 +361,7 @@ describe("a call a frame makes through the interface", () => {
       clientInstanceId,
       store: t.stores.configAssets,
       modules: { isEnabled: () => true },
-      connectionTools: createConnectionToolSource(t.sourceDeps)
+      targetTools: createConnectionToolSource(t.sourceDeps)
     });
     // `save` stands for an operation agents are not exposed to, and `missing` for nothing.
     expect(

@@ -1,10 +1,16 @@
 import { vi } from "vitest";
 import { z } from "zod";
+import type { PageBuildOutcome } from "@vivd-catalyst/app-build";
 import { buildPage } from "@vivd-catalyst/app-build/build";
 import { storePageFileSet } from "@vivd-catalyst/chat-server";
 import { asConversationId, type OperationRun, type RateLimiter } from "@vivd-catalyst/core";
 import { clientInstanceId, errorSchema } from "./access-instance";
-import { expectStatus, setupAppInstance, type AppFile } from "./app-instance";
+import {
+  expectStatus,
+  setupAppInstance,
+  type AppFile,
+  type AppInstanceOptions
+} from "./app-instance";
 import { fixtureOn, operationOf } from "./connection-operations";
 import { pageFiles } from "./page-build";
 
@@ -94,17 +100,29 @@ function frameOf(preview: unknown): Frame {
   return { pageSessionId, proof: { fileSetId, token } };
 }
 
-const instance = (further: { rateLimiter?: RateLimiter }) =>
+/** What a test adds to the instance: a limiter of its own, and what a further module brings. */
+export interface AppActionsOptions extends Pick<AppInstanceOptions, "furtherKinds" | "modules"> {
+  /** What the real build answered, changed: a build is a sandboxed process that is not trusted. */
+  tamper?(built: PageBuildOutcome): PageBuildOutcome;
+  rateLimiter?: RateLimiter;
+  server?: AppInstanceOptions["server"];
+}
+
+const instance = (further: AppActionsOptions) =>
   fixtureOn((options) =>
     setupAppInstance({
-      modules: options.modules,
-      furtherKinds: options.furtherKinds,
+      modules: { ...options.modules, ...further.modules },
+      furtherKinds: [...(options.furtherKinds ?? []), ...(further.furtherKinds ?? [])],
       server: (stores, config) => ({
         ...options.server?.(stores, config),
-        ...(further.rateLimiter ? { rateLimiter: further.rateLimiter } : {})
+        ...(further.rateLimiter ? { rateLimiter: further.rateLimiter } : {}),
+        ...further.server?.(stores, config)
       }),
       // The real build, in this process: it compiles the action files into the manifest.
-      build: ({ files, signal }) => buildPage({ files, signal })
+      build: async ({ files, signal }) => {
+        const built = await buildPage({ files, signal });
+        return further.tamper?.(built) ?? built;
+      }
     })
   );
 type Base = Awaited<ReturnType<typeof instance>>;
@@ -115,8 +133,11 @@ interface AppActionHelpers {
   /** The asset id of the Connection `crm`. */
   crm: string;
   openApp(userId: string, mode: "draft" | "published", app?: string): Promise<Frame>;
-  /** A Page with the same actions in a conversation of `userId`, and its frame for them. */
-  openPage(userId: string): Promise<Frame & { pageId: string }>;
+  /**
+   * A Page in a conversation of `userId`, and its frame: with the actions of the App `orders`
+   * unless the test brings the Page's files.
+   */
+  openPage(userId: string, source?: AppFile[]): Promise<Frame & { pageId: string }>;
   callAction(
     userId: string,
     frame: Frame,
@@ -153,7 +174,7 @@ export type AppActionsInstance = Base & AppActionHelpers;
  * of a frame. `kai` is a member of the App's workspace and holds nothing else.
  */
 export async function setupAppActions(
-  further: { rateLimiter?: RateLimiter } = {}
+  further: AppActionsOptions = {}
 ): Promise<AppActionsInstance> {
   const t = await instance(further);
 
@@ -186,18 +207,13 @@ export async function setupAppActions(
     expectStatus(response, 200);
     return frameOf(response.json());
   };
-  /** A Page with the same actions in a conversation of `userId`, and its frame for them. */
-  const openPage = async (userId: string) => {
+  const openPage = async (userId: string, source = appSource("page", "orders-page")) => {
     const created = await t.expectOk(userId, "conversations.create", {
       payload: { title: "Orders" }
     });
     const conversation = z.object({ id: z.string() }).parse(created.json());
     const sourceFiles = pageFiles(
-      Object.fromEntries(
-        appSource("page", "orders-page").flatMap((file) =>
-          "text" in file ? [[file.path, file.text]] : []
-        )
-      )
+      Object.fromEntries(source.flatMap((file) => ("text" in file ? [[file.path, file.text]] : [])))
     );
     const built = await buildPage({ files: sourceFiles });
     if (built.status !== "built") throw new Error(JSON.stringify(built.errors));

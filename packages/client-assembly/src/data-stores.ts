@@ -33,7 +33,8 @@ function workflowAssetKind(dataStores: DataStores): WorkflowAssetKind {
     manifestOfFiles: (files) => dataStores.readFiles(files),
     // The definition the files were read into is the whole config of the revision.
     configOfFiles: ({ manifest }) => manifest,
-    onPublish: ({ stores, ...published }) => dataStores.publish(stores, published),
+    onPublish: ({ stores, assetId, revision, config }) =>
+      dataStores.publish(stores, { assetId, revision, config }),
     onRemove: ({ stores, assetId }) => dataStores.retire(stores, assetId)
   };
 }

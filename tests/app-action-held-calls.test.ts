@@ -283,7 +283,7 @@ describe("a frame's call when the App changes around it", () => {
       clientInstanceId,
       store: t.stores.configAssets,
       modules: { isEnabled: () => true },
-      connectionTools: createConnectionToolSource(t.sourceDeps)
+      targetTools: createConnectionToolSource(t.sourceDeps)
     });
     // The tool an agent's call is made with names the revision it was read from, and the
     // runner puts it into the origin of the call.
@@ -480,7 +480,7 @@ describe("a frame's call when the App changes around it", () => {
       clientInstanceId,
       store: t.stores.configAssets,
       modules: { isEnabled: () => true },
-      connectionTools: createConnectionToolSource(t.sourceDeps),
+      targetTools: createConnectionToolSource(t.sourceDeps),
       logger: { warn },
       maxApps: 1
     });

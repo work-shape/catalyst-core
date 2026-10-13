@@ -1,20 +1,18 @@
 import { APP_ASSET_KIND, type AppActionPermission } from "@vivd-catalyst/api-contract";
 import {
   appActionInputAsZod,
-  applyAppActionMapping,
   compiledActionsOf,
+  declaredDataStoresOf,
   type CompiledAppAction
 } from "@vivd-catalyst/app-build";
 import {
   APP_ACTION_OPERATION_PREFIX,
   AppError,
-  CONNECTION_ASSET_KIND,
   POLICY_VALUES,
   appActionOperationName,
   asCollaborationWorkspaceId,
-  connectionCallError,
-  connectionOperationName,
   liveRevisionId,
+  moduleOffError,
   parseAppActionOperationName,
   resolvePolicy,
   type CentralPolicySetting,
@@ -37,15 +35,18 @@ import {
 } from "@vivd-catalyst/core";
 import { z } from "zod";
 import { decide } from "../asset-access";
+import { appActionBinding, type AppActionOwner } from "./action-kinds";
 import { APP_ACTIONS } from "./app-kind";
 
 // A named action of an App as an operation of the platform. The action stands for one
-// operation of one Connection. Its definition wraps that operation's own definition, as the
-// Connections' source built it: the caller's right on the Connection, the exposure to the
-// caller's surface, the egress check, the credential and the connector are that definition's
-// and are reached through it, never around it. What the action adds is the right on the App,
-// the check of its parameters, the mapping of them into the operation's input, and a policy
-// that is never looser than the operation's.
+// operation of the registry, which its kind names (`action-kinds.ts`): an operation of a
+// Connection, or the query of a Data Store. Its definition wraps that operation's own
+// definition: what guards the operation, such as a Connection's exposure, egress check and
+// credential or a store's read-only transaction and app role, is that definition's and is
+// reached through it, never around it. Whose right on it is asked is the kind's to say. What
+// the action adds is the right on the App, the
+// check of its parameters, the making of the operation's input from them, and a policy that
+// is never looser than the operation's.
 
 /** The module that brings Apps and their actions. */
 const APPS_MODULE = "apps";
@@ -75,8 +76,10 @@ export const APP_ACTION_TOOL_DESCRIPTION_MAX_CHARS = 2000;
 
 /** What a definition of an action is built with: where its operation and the policy are read. */
 export interface AppActionEnvironment {
-  /** Resolves the Connection operation an action stands for. */
+  /** Resolves the operation an action stands for. */
   registry: Pick<OperationRegistry, "resolve" | "resolveMany">;
+  /** Says whether the module that brings an action's operation is on. */
+  modules: Pick<ModuleSnapshot, "isEnabled">;
   policy: {
     instanceDefaults: PolicyDefaults;
     centralSettings(): readonly CentralPolicySetting[] | Promise<readonly CentralPolicySetting[]>;
@@ -84,15 +87,18 @@ export interface AppActionEnvironment {
 }
 
 /** The Page or the revision of an App an action belongs to. */
-export interface AppActionHost {
+export interface AppActionHost extends AppActionOwner {
   /**
    * The operation one action runs as: `app.<id>.<action>` for an App, and
    * `page_action.<page id>.<action>` for a Page of a conversation, which is no App whatever
    * id its manifest names.
    */
   operationName(action: string): string;
-  /** What the run names as touched. A Page is no asset and names none. */
-  resource: OperationResource | undefined;
+  /**
+   * The revision is the published one of its App: what its publisher answered for at the
+   * publish holds for everybody who may use it. A draft and a Page were never published.
+   */
+  published: boolean;
   /** Whether the caller may use this Page or this revision of the App. Asked first. */
   authorize(
     context: OperationAuthorizeContext
@@ -102,8 +108,8 @@ export interface AppActionHost {
 export interface AppActionDefinition {
   definition: OperationDefinition;
   /**
-   * The Connection operation the action stands for exists and is not stronger than the action
-   * says. A call of an action that is not callable is recorded and refused with the reason.
+   * The operation the action stands for is there for it: its module is on, and its kind
+   * admits it. A call of an action that is not callable is recorded and refused with the reason.
    */
   callable: boolean;
 }
@@ -115,107 +121,94 @@ function strictest(left: PolicyValue, right: PolicyValue | undefined): PolicyVal
 }
 
 /**
- * What the Connection operation's own policy asks, as a value: its declared default or the
- * instance default, and every central setting that names it. Read as its caller's own
- * confirmation would count, so the value is the one that was set and not what a surface
- * makes of it.
+ * What the policy of the operation an action stands for asks, as a value: its declared
+ * default or the instance default, and every central setting that names it. Read as its
+ * caller's own confirmation would count, so the value is the one that was set and not what a
+ * surface makes of it.
  */
 async function targetPolicy(
   environment: AppActionEnvironment,
   target: OperationDefinition,
-  workspaceId: string | undefined
+  scope: { workspaceId: string | undefined; assetKind: string }
 ): Promise<PolicyValue> {
   return resolvePolicy({
     definition: target,
     origin: { kind: "user" },
     instanceDefaults: environment.policy.instanceDefaults,
     centralSettings: await environment.policy.centralSettings(),
-    targets: [{ workspaceId, assetKind: CONNECTION_ASSET_KIND }],
+    targets: [scope],
     callerCanConfirm: true,
     canPause: true
   }).value;
 }
 
-/** The caller's right on the Connection operation, by that operation's own rule. */
-function authorizeTarget(
-  target: OperationDefinition,
-  context: OperationAuthorizeContext
-): OperationAuthorization | Promise<OperationAuthorization> {
-  const resource = target.resource(undefined);
-  if (target.action !== null) {
-    const decision = context.access.authorize(target.action, resource);
-    return decision.allowed
-      ? { allowed: true }
-      : { allowed: false, action: target.action, reason: decision.reason };
-  }
-  return target.authorize(undefined, { ...context, resource });
-}
-
 /**
  * The operation `app.<id>.<action>`. Its call is one Operation Run. The run names the action
- * and, in its origin, the Connection and the operation by name. Nothing of the input and
- * nothing of the result is written anywhere but where the call path keeps the answer of a
- * changing call for its `Idempotency-Key`.
+ * and, in its origin, what the action reached by name. Nothing of the input and nothing of
+ * the result is written anywhere but where the call path keeps the answer of a changing call
+ * for its `Idempotency-Key`.
  */
 export async function appActionDefinition(
   environment: AppActionEnvironment,
   host: AppActionHost,
   action: CompiledAppAction
 ): Promise<AppActionDefinition> {
-  const target = await environment.registry.resolve(
-    connectionOperationName(action.connection, action.operation)
-  );
-  // The build cannot know the Connection: an action that calls itself reading and stands for
-  // an operation that changes would run a change without an `Idempotency-Key` and outside the
-  // safe mode of a draft. It is refused before the operation is reached.
-  const weaker = target?.effect === "changing" && action.effect === "reading";
+  const binding = appActionBinding(action);
+  const offModule =
+    binding.module !== undefined && !environment.modules.isEnabled(binding.module)
+      ? binding.module
+      : undefined;
+  const target =
+    offModule === undefined ? await environment.registry.resolve(binding.operation) : undefined;
+  const admitted =
+    offModule === undefined ? binding.admit(target, host) : { refusal: moduleOffError(offModule) };
   const floor = target
-    ? strictest(await targetPolicy(environment, target, host.resource?.workspaceId), action.policy)
+    ? strictest(
+        await targetPolicy(environment, target, {
+          workspaceId: host.resource?.workspaceId,
+          assetKind: binding.assetKind
+        }),
+        action.policy
+      )
     : action.policy;
   const parameters = appActionInputAsZod(action.input.schema);
   const definition: OperationDefinition = {
     name: host.operationName(action.name),
     effect: action.effect,
-    // A read of a customer's system is recorded, every time.
+    // A read of a customer's system or of a customer's rows is recorded, every time.
     ...(action.effect === "reading" ? { recordsEveryCall: true as const } : {}),
     ...(floor === undefined || floor === "allow" ? {} : { policyFloor: floor }),
     action: null,
     async authorize(_input, context) {
+      // A module that is off refuses its operations before the caller's rights are known.
+      if (offModule !== undefined) throw moduleOffError(offModule);
       const own = await host.authorize(context);
       if (!own.allowed || !target) return own;
-      return authorizeTarget(target, context);
+      return binding.authorize(target, context, host);
     },
     scope: null,
     auth: "user",
     inputSchema: parameters,
-    // The result is checked inside the Connection's call, where a failure has its reason.
+    // The result is checked inside the operation's own call, where a failure has its reason.
     outputSchema: z.unknown(),
     resource: () => host.resource,
     module: APPS_MODULE,
     timeoutMs: target?.timeoutMs ?? APP_ACTION_DEFAULT_TIMEOUT_MS,
     async execute(input, context) {
-      if (!target) {
-        throw connectionCallError("operation_unknown");
-      }
-      if (weaker) {
-        throw new AppError(
-          "CONFLICT",
-          `The action '${action.name}' is declared reading and the operation it calls changes something. Declare the action changing.`,
-          { reason: "action_effect_too_weak" },
-          { exposeMessage: true }
-        );
+      if ("refusal" in admitted) {
+        throw admitted.refusal;
       }
       // The schema of an operation an outside system described is checked in a worker thread.
-      const mapped = await target.inputSchema.safeParseAsync(
-        applyAppActionMapping(action.input.mapping, parameters.parse(input))
+      const mapped = await admitted.operation.inputSchema.safeParseAsync(
+        binding.inputOf(parameters.parse(input))
       );
       if (!mapped.success) {
-        throw connectionCallError("input_invalid");
+        throw binding.inputRefusal();
       }
-      return target.execute(mapped.data, context);
+      return admitted.operation.execute(mapped.data, context);
     }
   };
-  return { definition, callable: target !== undefined && !weaker };
+  return { definition, callable: !("refusal" in admitted) };
 }
 
 /**
@@ -245,17 +238,18 @@ export async function appActionPermission(
 
 /**
  * An environment for one request that builds the definitions of several actions, such as the
- * `can` map of a frame. It reads each Connection the actions name once, whatever the number
- * of actions and of operations they stand for, and the central settings once. Each Connection
- * is two point reads, so a manifest whose actions name `c` Connections costs `2c` reads and
- * one of the settings. An operation that was not read here does not exist to it.
+ * `can` map of a frame. It reads each Connection and each Data Store the actions name once,
+ * whatever the number of actions and of operations they stand for, and the central settings
+ * once. Each of them is two point reads, so a manifest whose actions name `c` Connections and
+ * stores costs `2c` reads and one of the settings. An operation that was not read here does
+ * not exist to it.
  */
 export async function preloadedEnvironment(
   environment: AppActionEnvironment,
-  actions: readonly Pick<CompiledAppAction, "connection" | "operation">[]
+  actions: readonly CompiledAppAction[]
 ): Promise<AppActionEnvironment> {
   const targets = await environment.registry.resolveMany(
-    actions.map((action) => connectionOperationName(action.connection, action.operation))
+    actions.map((action) => appActionBinding(action).operation)
   );
   let settings: Promise<readonly CentralPolicySetting[]> | undefined;
   return {
@@ -271,6 +265,7 @@ export async function preloadedEnvironment(
           )
         )
     },
+    modules: environment.modules,
     policy: {
       instanceDefaults: environment.policy.instanceDefaults,
       centralSettings: () => (settings ??= Promise.resolve(environment.policy.centralSettings()))
@@ -281,7 +276,6 @@ export async function preloadedEnvironment(
 export interface AppActionSourceDeps extends AppActionEnvironment {
   clientInstanceId: ClientInstanceId;
   store: Pick<ConfigAssetStore, "getConfigAsset" | "listPublishedConfigAssets">;
-  modules: Pick<ModuleSnapshot, "isEnabled">;
   /** `APP_ACTION_LIST_MAX_APPS` unless a test of the limit sets a smaller one. */
   listMaxApps?: number;
 }
@@ -369,11 +363,15 @@ export function authorizePublishedApp(
 export function appRevisionHost(
   appName: string,
   resource: OperationResource,
-  view: "published" | "draft"
+  view: "published" | "draft",
+  /** The Data Stores the manifest of the revision lists (`declaredDataStoresOf`). */
+  dataStores: readonly DataStoreReference[]
 ): AppActionHost {
   return {
     operationName: (action) => appActionOperationName(appName, action),
     resource,
+    dataStores,
+    published: view === "published",
     authorize: (context) =>
       view === "published"
         ? authorizePublishedApp(context, resource)
@@ -399,7 +397,12 @@ function publishedApp(asset: ConfigAssetRecord | undefined): PublishedApp | unde
   });
   return {
     host: {
-      ...appRevisionHost(asset.name, resource, "published"),
+      ...appRevisionHost(
+        asset.name,
+        resource,
+        "published",
+        declaredDataStoresOf(asset.publishedConfig.manifest)
+      ),
       authorize(context) {
         requirePublishedRevision(context.origin, revisionId);
         return authorizePublishedApp(context, resource);
@@ -478,15 +481,18 @@ export interface AppActionToolSourceDeps {
   logger?: Pick<Logger, "warn">;
   /** `APP_ACTION_TOOL_MAX_APPS` unless a test of the limit sets a smaller one. */
   maxApps?: number;
-  /** The Connections' own tool source: it says which operations an agent may carry now. */
-  connectionTools: DataToolSource;
+  /**
+   * The tool sources of what actions stand for, the Connections' and the Data Stores': they
+   * say which operations are callable now, and for a Connection's whether agents reach them.
+   */
+  targetTools: DataToolSource;
 }
 
 /**
  * The named actions an agent lists, as tools. An action is described where its App is
- * published and the Connection operation it stands for is callable now and exposed to
- * agents, which the Connections' own tool source says. One query for the Apps the list
- * names, at most `APP_ACTION_TOOL_MAX_APPS` of them, and one read of the Connections.
+ * published and the operation it stands for is callable now, which that operation's own tool
+ * source says: for a Connection's, that agents are exposed to it too. One query for the Apps
+ * the list names, at most `APP_ACTION_TOOL_MAX_APPS` of them, and one read of their targets.
  */
 export function createAppActionToolSource(deps: AppActionToolSourceDeps): DataToolSource {
   const { clientInstanceId, store } = deps;
@@ -532,30 +538,26 @@ export function createAppActionToolSource(deps: AppActionToolSourceDeps): DataTo
         return app && action ? [{ name: entry.name, app, action }] : [];
       });
       if (found.length === 0) return [];
+      const bound = found.map((entry) => ({ ...entry, binding: appActionBinding(entry.action) }));
       const carried = new Map(
         (
-          await deps.connectionTools.describe(
-            [
-              ...new Set(
-                found.map(({ action }) =>
-                  connectionOperationName(action.connection, action.operation)
-                )
-              )
-            ],
+          await deps.targetTools.describe(
+            [...new Set(bound.map(({ binding }) => binding.operation))],
             scope
           )
         ).map((tool) => [tool.name, tool])
       );
       const tools: DataToolDescriptor[] = [];
-      for (const { name, app, action } of found) {
-        const target = carried.get(connectionOperationName(action.connection, action.operation));
+      for (const { name, app, action, binding } of bound) {
+        const target = carried.get(binding.operation);
         // An action that says it reads and stands for a changing operation is no tool.
         if (!target || (target.effect === "changing" && action.effect === "reading")) continue;
         tools.push({
           name,
-          description: (
-            action.description ?? `The action '${action.name}' of the App '${app.title}'.`
-          ).slice(0, APP_ACTION_TOOL_DESCRIPTION_MAX_CHARS),
+          description: (action.description ?? binding.describe(app.title)).slice(
+            0,
+            APP_ACTION_TOOL_DESCRIPTION_MAX_CHARS
+          ),
           inputJsonSchema: action.input.schema,
           effect: action.effect,
           // What a call of the tool is pinned to while it waits for an approval.
@@ -567,7 +569,7 @@ export function createAppActionToolSource(deps: AppActionToolSourceDeps): DataTo
   };
 }
 
-/** Two tool sources as one. Each is asked for the names it knows. */
+/** Several tool sources as one. Each is asked for the names it knows. */
 export function combineDataToolSources(...sources: readonly DataToolSource[]): DataToolSource {
   return {
     async describe(toolNames, scope) {

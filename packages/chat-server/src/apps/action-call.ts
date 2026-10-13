@@ -9,6 +9,7 @@ import {
 import {
   compiledActionsOf,
   declaredConnectionsOf,
+  declaredDataStoresOf,
   type CompiledAppAction
 } from "@vivd-catalyst/app-build";
 import {
@@ -28,6 +29,7 @@ import {
   pageActionOperationName,
   type ActorAccess,
   type AppActionRefusal,
+  type AppCallTarget,
   type AuthenticatedIdentity,
   type AuthenticatedUser,
   type CollaborationWorkspaceId,
@@ -50,6 +52,7 @@ import {
   type AppActionEnvironment,
   type AppActionHost
 } from "./action-source";
+import { appActionBinding } from "./action-kinds";
 
 // A call a frame makes through the bridge. The frame holds no credential: it posts a message
 // to the interface, and the interface makes the call here with the viewer's own session. So
@@ -135,6 +138,7 @@ export class AppActionCalls {
     // a Connection operation (`guardAppOrigin`), which a direct call below goes through.
     this.environment = {
       registry: options.operationCalls.registry,
+      modules: options.modules,
       policy: options.operationCalls.deps.policy
     };
   }
@@ -178,6 +182,7 @@ export class AppActionCalls {
       access: caller.access,
       pageSessionId: proof.pageSessionId,
       actions: compiledActionsOf(fileSet.manifest),
+      dataStores: declaredDataStoresOf(fileSet.manifest),
       connections: declaredConnectionsOf(fileSet.manifest)
     };
     if (!fileSet.asset) {
@@ -195,6 +200,8 @@ export class AppActionCalls {
           // text of whoever wrote the Page and could be the name of a published App.
           operationName: (action) => pageActionOperationName(pageId, action),
           resource: undefined,
+          dataStores: shared.dataStores,
+          published: false,
           // The conversation was checked for this caller just now, and a Page runs reads
           // only, which never wait for anybody, so nothing asks again later.
           authorize: () => ({ allowed: true })
@@ -227,7 +234,12 @@ export class AppActionCalls {
       mode: published ? "published" : "draft",
       appName: asset.name,
       workspaceId: resource.workspaceId,
-      host: appRevisionHost(asset.name, resource, published ? "published" : "draft"),
+      host: appRevisionHost(
+        asset.name,
+        resource,
+        published ? "published" : "draft",
+        shared.dataStores
+      ),
       revisionId:
         published && asset.publishedRevisionId !== undefined
           ? asset.publishedRevisionId
@@ -236,9 +248,10 @@ export class AppActionCalls {
   }
 
   /**
-   * What each action of the shown manifest would come to for the viewer. Each Connection the
-   * actions name is read once, in two point reads, and the central settings once: a manifest
-   * of 100 actions on one Connection costs three reads, not 200. No outside system is called.
+   * What each action of the shown manifest would come to for the viewer. Each Connection and
+   * each Data Store the actions name is read once, in two point reads, and the central settings
+   * once: a manifest of 100 actions on one Connection costs three reads, not 200. No outside
+   * system and no store's database is called.
    */
   async can(session: FrameSession): Promise<Record<string, AppActionPermission>> {
     return appActionPermissions(
@@ -261,7 +274,13 @@ export class AppActionCalls {
     }
     this.requireOutsideSafeMode(session, action.effect);
     const { definition } = await appActionDefinition(this.environment, session.host, action);
-    return this.run(session, definition, input, appOrigin(session, action.name, action), call);
+    return this.run(
+      session,
+      definition,
+      input,
+      appOrigin(session, action.name, appActionBinding(action).target),
+      call
+    );
   }
 
   /**
@@ -460,7 +479,8 @@ export class AppActionCalls {
       denial.kind !== "forbidden" ||
       denial.action !== CONNECTION_ACTIONS.use ||
       origin.kind !== "app" ||
-      !origin.target
+      !origin.target ||
+      !("connection" in origin.target)
     ) {
       return {};
     }
@@ -490,7 +510,7 @@ export class AppActionCalls {
 function appOrigin(
   shown: ShownRevision,
   actionName: string,
-  target: { connection: string; operation: string }
+  target: AppCallTarget
 ): Extract<OperationOrigin, { kind: "app" }> {
   return {
     kind: "app",
@@ -499,7 +519,7 @@ function appOrigin(
     actionName,
     pageSessionId: shown.pageSessionId,
     ...(shown.conversationId === undefined ? {} : { conversationId: shown.conversationId }),
-    target: { connection: target.connection, operation: target.operation }
+    target
   };
 }
 
@@ -523,7 +543,7 @@ export async function appActionPermissions(
             await appActionDefinition(environment, shown.host, action),
             {
               actor: shown.viewer,
-              origin: appOrigin(shown, action.name, action),
+              origin: appOrigin(shown, action.name, appActionBinding(action).target),
               workspaceId: shown.workspaceId,
               correlationId: "",
               access: shown.access,

@@ -385,37 +385,48 @@ const DATA_STORE_REFUSALS = {
   /** A Page of a conversation is no App: only an App's manifest binds a store. */
   data_store_needs_app: "CONFLICT",
   /** The store is below the migration level the App's manifest asks for. */
-  data_store_below_min_schema: "CONFLICT"
+  data_store_below_min_schema: "CONFLICT",
+  /** An action reaches a store the manifest of its App does not list. */
+  data_store_not_listed: "VALIDATION_FAILED"
 } as const satisfies Record<string, AppErrorCode>;
 
 export type DataStoreRefusal = keyof typeof DATA_STORE_REFUSALS;
 
+/** What a refusal names beside the store: the two levels, or the action that reaches it. */
+interface DataStoreRefusalFacts {
+  minSchema?: number;
+  level?: number;
+  action?: string;
+}
+
 const DATA_STORE_REFUSAL_SENTENCES: Record<
   DataStoreRefusal,
-  (store: string, levels: { minSchema?: number; level?: number }) => string
+  (store: string, about: DataStoreRefusalFacts) => string
 > = {
   data_store_unavailable: (store) =>
     `The Data Store '${store}' is not available: no published Data Store of that name is in the App's workspace or on the instance. It may have been deleted.`,
   data_store_needs_app: (store) =>
     `A Page of a conversation cannot reach the Data Store '${store}': a Data Store is bound by the manifest of an App. Save the Page as an App.`,
   data_store_below_min_schema: (store, { minSchema, level }) =>
-    `The App needs the Data Store '${store}' at migration level ${minSchema} (minSchema) and the store is at level ${level}. Publish the store's migrations first.`
+    `The App needs the Data Store '${store}' at migration level ${minSchema} (minSchema) and the store is at level ${level}. Publish the store's migrations first.`,
+  data_store_not_listed: (store, { action }) =>
+    `The action '${action}' reaches the Data Store '${store}', which the manifest of its App does not list under 'dataStores'. An App reaches what its manifest names and nothing else.`
 };
 
 /**
  * The error of an App that cannot reach a Data Store. It carries the reason, the store's name
- * as the manifest wrote it and, for a store below its level, the two levels. Nothing of a
- * statement, a value or a row.
+ * as the manifest wrote it and, where the refusal is about them, the two levels or the name of
+ * the action. Nothing of a statement, a value or a row.
  */
 export function dataStoreRefusalError(
   reason: DataStoreRefusal,
   store: string,
-  levels: { minSchema?: number; level?: number } = {}
+  about: DataStoreRefusalFacts = {}
 ): AppError {
   return new AppError(
     DATA_STORE_REFUSALS[reason],
-    DATA_STORE_REFUSAL_SENTENCES[reason](store, levels),
-    { reason, dataStore: store, ...levels },
+    DATA_STORE_REFUSAL_SENTENCES[reason](store, about),
+    { reason, dataStore: store, ...about },
     { exposeMessage: true }
   );
 }

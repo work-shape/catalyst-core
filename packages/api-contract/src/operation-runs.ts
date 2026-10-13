@@ -23,8 +23,16 @@ export const operationRunOriginSchema = z.discriminatedUnion("kind", [
     actionName: z.string(),
     pageSessionId: z.string(),
     conversationId: z.string().optional(),
-    /** The Connection and its operation the call reached, by name. No input and no result. */
-    target: z.object({ connection: z.string(), operation: z.string() }).optional()
+    /**
+     * What the call reached, by name: a Connection and its operation, or the Data Store a
+     * statement read. No input and no result.
+     */
+    target: z
+      .union([
+        z.object({ connection: z.string(), operation: z.string() }),
+        z.object({ dataStore: z.string() })
+      ])
+      .optional()
   }),
   z.object({ kind: z.literal("workflow"), workflowRunId: z.string(), stepRunId: z.string() }),
   z.object({ kind: z.literal("schedule"), scheduleId: z.string() })

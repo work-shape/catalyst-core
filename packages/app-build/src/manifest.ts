@@ -90,16 +90,38 @@ export type PageManifest = z.infer<typeof pageManifestSchema>;
  * The manifest as a build writes it: the author's, with the entry and the pages it derived and
  * with the actions as they were compiled from their files.
  */
-export const builtPageManifestSchema = pageManifestSchema.extend({
-  actions: z.array(compiledAppActionSchema).max(MANIFEST_MAX_LIST_ENTRIES).optional(),
-  entry: z.string().refine((value) => fileSetPathIssue(value) === undefined, {
-    message: "a path of a built file"
-  }),
-  pages: z
-    .array(z.strictObject({ path: z.string().min(1).max(512) }))
-    .max(1000)
-    .optional()
-});
+export const builtPageManifestSchema = pageManifestSchema
+  .extend({
+    actions: z.array(compiledAppActionSchema).max(MANIFEST_MAX_LIST_ENTRIES).optional(),
+    entry: z.string().refine((value) => fileSetPathIssue(value) === undefined, {
+      message: "a path of a built file"
+    }),
+    pages: z
+      .array(z.strictObject({ path: z.string().min(1).max(512) }))
+      .max(1000)
+      .optional()
+  })
+  // A build is not trusted to have checked this: an action reaches what the manifest lists.
+  .superRefine((manifest, context) => {
+    const stores = new Set((manifest.dataStores ?? []).map((store) => store.name));
+    const connections = new Set(manifest.connections ?? []);
+    for (const action of manifest.actions ?? []) {
+      const reached =
+        action.kind === "sql"
+          ? { listed: stores.has(action.dataStore), what: `Data Store '${action.dataStore}'` }
+          : {
+              listed: connections.has(action.connection),
+              what: `Connection '${action.connection}'`
+            };
+      if (!reached.listed) {
+        context.addIssue({
+          code: "custom",
+          path: ["actions"],
+          message: `the action '${action.name}' reaches the ${reached.what}, which '${action.kind === "sql" ? "dataStores" : "connections"}' does not list`
+        });
+      }
+    }
+  });
 
 export type BuiltPageManifest = z.infer<typeof builtPageManifestSchema>;
 

@@ -9,6 +9,7 @@ import {
   operationDenialError,
   resolvePolicy,
   connectionCallReasonOf,
+  dataStoreRefusalOf,
   toErrorEnvelope,
   unknownToJsonValue,
   type AccessDecision,
@@ -651,7 +652,7 @@ export async function failRun(
   // internal error and no provider text reaches the run, the audit row or the caller.
   const { statusCode, error: safe } = toErrorEnvelope(error, call.correlationId);
   // The reason is one of a fixed list, so it is kept where the envelope drops the details.
-  const reason = connectionCallReasonOf(error);
+  const reason = connectionCallReasonOf(error) ?? dataStoreRefusalOf(error);
   if (statusCode >= 500) {
     deps.logger.error(
       {

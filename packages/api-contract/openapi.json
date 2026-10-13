@@ -21571,18 +21571,33 @@
                 "type": "string"
               },
               "target": {
-                "type": "object",
-                "properties": {
-                  "connection": {
-                    "type": "string"
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "connection": {
+                        "type": "string"
+                      },
+                      "operation": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "connection",
+                      "operation"
+                    ]
                   },
-                  "operation": {
-                    "type": "string"
+                  {
+                    "type": "object",
+                    "properties": {
+                      "dataStore": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "dataStore"
+                    ]
                   }
-                },
-                "required": [
-                  "connection",
-                  "operation"
                 ]
               }
             },

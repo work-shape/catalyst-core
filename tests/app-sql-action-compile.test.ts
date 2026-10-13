@@ -7,7 +7,7 @@ import {
   type CompiledAppAction,
   type PageBuildResult
 } from "@vivd-catalyst/app-build";
-import { buildPage } from "@vivd-catalyst/app-build/build";
+import { buildPage, builtPageManifestSchema } from "@vivd-catalyst/app-build/build";
 import { POSTGRES_QUERY_TEXT_MAX_CHARS } from "@vivd-catalyst/postgres-connector";
 import { pageFiles } from "./support/page-build";
 
@@ -513,6 +513,31 @@ describe("the statement files of a Page", () => {
         line: undefined,
         message: expect.stringContaining("lists the Data Store 'findings' twice")
       }
+    ]);
+  });
+
+  it("reads no built manifest whose action reaches a store or a Connection the manifest does not list", async () => {
+    const built = await page(
+      { ...listed(), connections: ["crm"] },
+      {
+        "actions/list.sql": "select 1",
+        "actions/load.action.yaml": "connection: crm\noperation: list\neffect: reading\n"
+      }
+    );
+    if (built.status !== "built") throw new Error(JSON.stringify(built.errors));
+    const { dataStores, connections, ...rest } = built.manifest;
+
+    expect(builtPageManifestSchema.safeParse(built.manifest).success).toBe(true);
+    const messagesOf = (manifest: unknown) =>
+      builtPageManifestSchema.safeParse(manifest).error?.issues.map(({ message }) => message);
+    expect(messagesOf({ ...rest, connections })).toEqual([
+      "the action 'list' reaches the Data Store 'findings', which 'dataStores' does not list"
+    ]);
+    expect(messagesOf({ ...rest, connections, dataStores: [{ name: "other" }] })).toEqual([
+      "the action 'list' reaches the Data Store 'findings', which 'dataStores' does not list"
+    ]);
+    expect(messagesOf({ ...rest, dataStores })).toEqual([
+      "the action 'load' reaches the Connection 'crm', which 'connections' does not list"
     ]);
   });
 

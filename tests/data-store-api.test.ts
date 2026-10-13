@@ -370,6 +370,75 @@ describe("a Data Store on an assembled instance", () => {
     ]);
   });
 
+  it("refuses a person without a right on the store its rows over HTTP with the right named, whatever the request says of where it comes from", async () => {
+    const person = (id: string, roles: string[]) => ({
+      id,
+      externalUserId: id,
+      displayLabel: id,
+      roles,
+      permissionRefs: []
+    });
+    const instance = await start(true, undefined, {
+      enabled: true,
+      users: [person("user-1", ["user", "admin", "superadmin"]), person("member-1", ["user"])]
+    });
+    await publishStore(instance);
+    await overHttp(instance, "data_stores.insert", {
+      payload: { table: "findings", rows: [finding] },
+      headers: { "idempotency-key": "seed" }
+    });
+    const asMember = { "x-dev-user-id": "member-1" };
+    // What a frame of an App would be if a request could say so: the origin of a call is
+    // made by the server from the route it arrived on, and a request names none.
+    const origin = {
+      kind: "app",
+      appName: "findings",
+      appRevisionId: "cfgr_forged",
+      actionName: "list_findings",
+      pageSessionId: "page_forged",
+      target: { dataStore: "findings" }
+    };
+    const sql = "select client_id from findings";
+
+    const attempts = [
+      await overHttp(instance, "data_stores.query", { payload: { sql }, headers: asMember }),
+      await overHttp(instance, "data_stores.query", {
+        payload: { sql },
+        headers: { ...asMember, "x-operation-origin": JSON.stringify(origin), origin: "app" }
+      }),
+      await overHttp(instance, "data_stores.query", {
+        payload: { sql, origin },
+        headers: asMember
+      }),
+      await overHttp(instance, "data_stores.insert", {
+        payload: { table: "findings", rows: [finding] },
+        headers: { ...asMember, "idempotency-key": "member-insert" }
+      })
+    ];
+
+    for (const [index, attempt] of attempts.entries()) {
+      expect(attempt.statusCode, String(index)).toBeGreaterThanOrEqual(400);
+      expect(attempt.body, String(index)).not.toContain("client-secret-7");
+    }
+    expect(attempts.map((attempt) => attempt.json<ErrorBody>().error.details)).toMatchObject([
+      { action: "data_store.read" },
+      { action: "data_store.read" },
+      {},
+      { action: "data_store.insert" }
+    ]);
+    const runs = (await instance.stores.operationRuns.list({ clientInstanceId })).filter(
+      (run) => run.actor.label === "member-1"
+    );
+    expect(runs.map((run) => [run.status, run.origin.kind])).toEqual(
+      runs.map(() => ["denied", "user"])
+    );
+    expect(runs.length).toBeGreaterThanOrEqual(3);
+    const counted = await overHttp(instance, "data_stores.query", {
+      payload: { sql: "select count(*)::integer as count from findings" }
+    });
+    expect(counted.json()).toMatchObject({ rows: [{ count: 1 }] });
+  });
+
   it("never runs a changing operation through a reading route", async () => {
     const instance = await start(true);
     await publishStore(instance);

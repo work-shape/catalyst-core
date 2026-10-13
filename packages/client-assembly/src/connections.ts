@@ -101,7 +101,8 @@ export function withConnections(
         store: parts.stores.configAssets,
         modules: parts.modules,
         logger: parts.logger,
-        connectionTools: connections.toolSource
+        // What an action may stand for: an operation of a Connection, or one of a module's Asset.
+        targetTools: combineDataToolSources(connections.toolSource, ...moduleToolSources)
       }),
       ...moduleToolSources
     )

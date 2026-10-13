@@ -74,7 +74,12 @@ type Answer = ReturnType<TestInstance["call"]>;
  * test started and removes every database and role a store of the test made.
  */
 export function useDataStoreInstance(): {
-  start(dataStores: boolean, changing?: PolicyValue): Promise<DataStoreInstance>;
+  start(
+    dataStores: boolean,
+    changing?: PolicyValue,
+    /** Who may sign in, where a test needs more than the administrator. */
+    developmentAuth?: unknown
+  ): Promise<DataStoreInstance>;
   /** Closes the processes of every instance the test started. */
   close(): Promise<unknown>;
   put(world: DataStoreInstance, storeFiles?: StoreFiles, expectedRevision?: number | null): Answer;
@@ -116,10 +121,14 @@ export function useDataStoreInstance(): {
    * on that call path where nothing else names a value; the API keeps the default, so the
    * store of the test is written and published whatever the test asks about.
    */
-  async function start(dataStores: boolean, changing?: PolicyValue): Promise<DataStoreInstance> {
+  async function start(
+    dataStores: boolean,
+    changing?: PolicyValue,
+    developmentAuth?: unknown
+  ): Promise<DataStoreInstance> {
     const root = await mkdtemp(join(tmpdir(), "data-store-test-"));
     roots.push(root);
-    const base = createTestConfig();
+    const base = createTestConfig(developmentAuth === undefined ? {} : { developmentAuth });
     const settings = {
       ...base,
       modules: { assetManagement: { enabled: true }, dataStores: { enabled: dataStores } },
