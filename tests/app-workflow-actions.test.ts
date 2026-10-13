@@ -243,7 +243,7 @@ describe("an App that starts a Workflow", () => {
     });
   });
 
-  it("follows no run of a Workflow the App does not start, and none of another viewer's frame", async () => {
+  it("follows no run of a Workflow the App does not start, none of another viewer's frame, and none another viewer started", async () => {
     const other = await t.call(t.root.id, "workflows.start", {
       params: { workflow: OTHER_WORKFLOW },
       payload: {},
@@ -269,6 +269,8 @@ describe("an App that starts a Workflow", () => {
     );
     // Another person's frame is no proof for kai.
     expectStatus(await readRun(t.kai.id, rootFrame, started.result.id), 404);
+    // The root may read kai's run outside, and still its frame follows only the root's own.
+    expectStatus(await readRun(t.root.id, rootFrame, started.result.id), 404);
     expectStatus(await readRun(t.kai.id, kaiFrame, "wfr_none"), 404);
   });
 

@@ -344,8 +344,9 @@ export class AppActionCalls {
   /**
    * A Workflow Run that a `workflow` action of the shown manifest started, read with the
    * viewer's rights by `workflows.get_run`: whoever started a run reads it. A run of a
-   * Workflow that no action of the manifest starts is answered as one that does not exist,
-   * so a frame follows what it started and reads nothing else.
+   * Workflow that no action of the manifest starts, or one another person started, is
+   * answered as one that does not exist, also to a viewer who may read every run: a frame
+   * follows what its viewer started and reads nothing else.
    */
   async workflowRun(
     session: FrameSession,
@@ -376,7 +377,11 @@ export class AppActionCalls {
       });
     }
     const run = result.status === "done" ? workflowRunSchema.safeParse(result.output) : undefined;
-    if (!run?.success || !started.has(run.data.workflow)) throw none();
+    if (!run?.success) throw none();
+    const { workflow, startedBy } = run.data;
+    if (!started.has(workflow) || startedBy.kind !== "user" || startedBy.id !== session.viewer.id) {
+      throw none();
+    }
     return appWorkflowRunOf(run.data);
   }
 
