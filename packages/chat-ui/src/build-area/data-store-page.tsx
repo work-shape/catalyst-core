@@ -53,6 +53,9 @@ type DataStoreTable = DataStoreSchema["tables"][number];
 /** With this many tables or fewer, every table shows its columns without a click. */
 const TABLES_OPEN_AT_MOST = 3;
 
+/** How long a column's default may be before its cell cuts it, in characters. */
+const DEFAULT_WIDTH = 24;
+
 /** A member of the definition that is a text, or nothing. */
 function textOf(config: Record<string, unknown>, key: string): string | undefined {
   const value = config[key];
@@ -386,10 +389,13 @@ function DataStoreTables({ store, source }: { store: string; source: DataStoreSo
   );
 }
 
-/** How many rows the database's planner estimates. It has no estimate before its first count. */
+/**
+ * How many rows the database's planner estimates. Before its first count of a table it has no
+ * estimate and answers none or zero, whatever the table holds, so the row then names none.
+ */
 function RowEstimate({ table }: { table: DataStoreTable }) {
   const { locale, t } = useTranslation();
-  if (table.rowEstimate < 0) {
+  if (table.rowEstimate < 1) {
     return null;
   }
   const count = Math.round(table.rowEstimate);
@@ -435,8 +441,17 @@ function DataStoreColumns({ table }: { table: DataStoreTable }) {
             <TableCell>
               {t(column.nullable ? "dataStores.columnNullableYes" : "dataStores.columnNullableNo")}
             </TableCell>
-            <TableCell truncate={column.default === undefined ? undefined : 24}>
-              {column.default ?? ""}
+            <TableCell
+              title={column.default}
+              truncate={
+                column.default !== undefined && column.default.length > DEFAULT_WIDTH
+                  ? DEFAULT_WIDTH
+                  : undefined
+              }
+            >
+              {column.default === undefined ? null : (
+                <code className="font-mono text-code">{column.default}</code>
+              )}
             </TableCell>
           </TableRow>
         ))}

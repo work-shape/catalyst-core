@@ -86,7 +86,7 @@ const schema: DataStoreSchema = {
     },
     {
       name: "pages",
-      rowEstimate: -1,
+      rowEstimate: 0,
       columns: [
         { name: "path", type: "text", nativeType: "text", nullable: false, primaryKey: true }
       ]
@@ -316,7 +316,7 @@ describe("Data Stores in Build", () => {
       expect(page, said).toContain(said);
     }
     // The planner has no estimate for a table it never counted: the row names none.
-    expect(page).not.toContain("about -1");
+    expect(page).not.toContain("about 0");
 
     expect(page).toContain('data-data-store-rows="visits"');
     expect(page).toContain("/pricing");
