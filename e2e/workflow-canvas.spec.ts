@@ -41,8 +41,8 @@ test("a Workflow opens with all of its drawing in view: the loop, the two paths 
       )
       .map((part) => part.id)
   ).toEqual([]);
-  // The library's mark of the canvas it draws with stays on the page.
-  await expect(canvas.locator(".react-flow__attribution")).toBeVisible();
+  // The canvas carries no mark of the library it is drawn with.
+  await expect(canvas.locator(".react-flow__attribution")).toHaveCount(0);
 });
 
 test("a Workflow a step opens has its own address: Back leads one level up and the start is the child's", async ({
@@ -250,14 +250,12 @@ test("on a phone the Workflow runs top to bottom and a step opens as a sheet", a
     })
     .toBe(true);
 
-  // The controls and the canvas library's mark stand on a strip the graph ends above, so
-  // neither covers a step of a Workflow taller than the screen.
+  // The controls stand on a strip the graph ends above, so they cover no step of a Workflow
+  // taller than the screen.
   const strip = await boxOf(canvas.locator('[data-slot="flow-strip"]'));
-  for (const part of ['[data-slot="flow-controls"]', ".react-flow__attribution"]) {
-    const box = await boxOf(canvas.locator(part));
-    expect(box.top).toBeGreaterThanOrEqual(strip.top);
-    expect(box.bottom).toBeLessThanOrEqual(strip.bottom + 1);
-  }
+  const controls = await boxOf(canvas.locator('[data-slot="flow-controls"]'));
+  expect(controls.top).toBeGreaterThanOrEqual(strip.top);
+  expect(controls.bottom).toBeLessThanOrEqual(strip.bottom + 1);
 
   // A Workflow too wide to be read at the phone's width opens whole.
   const large = await openSample(page, "quarter-close");

@@ -44,6 +44,7 @@ import { FlowMinimap, type FlowBox, type FlowMinimapItem } from "./flow-minimap"
 import type { FlowDirection, FlowGraph, FlowStatus } from "./flow-types";
 
 const MIN_ZOOM = 0.2;
+const HIDE_ATTRIBUTION = { hideAttribution: true };
 const MAX_ZOOM = 2;
 /** How far a press may drag the view, in pixels, and still be a press and no move. */
 const MOVE_SLACK = 3;
@@ -552,11 +553,9 @@ function Engine({
           zoomOnScroll={false}
           panOnScroll={!embedded}
           preventScrolling={!embedded}
-          // The library's own mark stays on the canvas, where nothing else stands: between the
-          // controls at the left and the minimap and the panel at the right. A narrow canvas
-          // has no minimap, so the mark stands in that corner, on the strip of the controls.
-          attributionPosition={narrow ? "bottom-right" : "bottom-center"}
-          className="[--xy-attribution-background-color:transparent]"
+          // The canvas shows no mark of the library it is drawn with: its MIT licence asks for
+          // none on the page.
+          proOptions={HIDE_ATTRIBUTION}
           // With a handler a node takes pointer events, which its own controls need.
           onNodeClick={noNodeClick}
           onPaneClick={() => {
