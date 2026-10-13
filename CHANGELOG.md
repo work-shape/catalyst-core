@@ -2039,6 +2039,11 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   `assets.put`, or on `assets.*`, that matches the Workflow of a conversation now holds for
   the agent's `platform.assets.put` too: `deny` refuses the save and `approval` holds it for
   the Inbox, as the API does. Before, only a setting on `platform.assets.put` itself did.
+- **Workflows, the conversation about one in a shared workspace:** a conversation with a
+  subject is created `private` in a shared workspace, whatever the workspace's default is, and
+  `conversations.move` refuses `visibility: workspace` for it with the reason
+  `subject_conversation_private`. Its transcript holds the definition the agent read, which a
+  member of the workspace without `workflow.read` could open before.
 - **Assets, a text the store cannot hold:** a definition with a NUL character or half of a
   surrogate pair in any text or key is refused by `assets.validate` and by a save of any kind
   with an issue of the code `text_not_storable` at the path of the value (for a key, at the

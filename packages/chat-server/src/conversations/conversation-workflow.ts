@@ -102,7 +102,12 @@ export class ConversationWorkflow {
       collaborationWorkspaceId: workspace.id,
       createdByUserId: subjectUserId,
       createdByExternalUserId: user.externalUserId,
-      visibility: workspace.defaultConversationVisibility,
+      // The transcript of a conversation about an asset holds the asset's definition, and a
+      // member of the workspace need not hold the read right on it: it is its creator's alone.
+      visibility:
+        command.subject && workspace.kind !== "personal"
+          ? "private"
+          : workspace.defaultConversationVisibility,
       title: command.title ?? "New conversation",
       retainedUntil: addDays(
         new Date(),
@@ -169,11 +174,23 @@ export class ConversationWorkflow {
     if (conversation.collaborationWorkspaceId === command.collaborationWorkspaceId) {
       throw new AppError("VALIDATION_FAILED", "Conversation already belongs to this workspace");
     }
+    if (
+      conversation.subject &&
+      destination.kind !== "personal" &&
+      command.visibility === "workspace"
+    ) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "A conversation about an asset stays private: its transcript holds the asset's definition",
+        { reason: "subject_conversation_private" },
+        { exposeMessage: true }
+      );
+    }
     const visibility: ConversationVisibility =
       destination.kind === "personal"
         ? "workspace"
         : (command.visibility ??
-          (conversation.visibility === "private"
+          (conversation.visibility === "private" || conversation.subject
             ? "private"
             : destination.defaultConversationVisibility));
     if (visibility === "private" && conversation.createdByUserId !== getSubjectUserId(user)) {
