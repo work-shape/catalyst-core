@@ -122,6 +122,8 @@ export interface BuildAssetViewProps {
   back: ReactNode;
   /** The open asset, as loaded. */
   asset: BuildAsset;
+  /** The kinds the reader sees in Build, for a page that names an asset of another kind. */
+  kinds: readonly BuildKind[];
 }
 
 /**

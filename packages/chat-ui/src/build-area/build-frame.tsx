@@ -247,6 +247,7 @@ export function BuildFrame({ source }: { source: BuildSource }) {
         kind={entry.kind}
         view={entry.view}
         name={assetName}
+        kinds={kinds.map((kind) => kind.entry)}
         page={{ ref: pageRef, above: loadError, shown: pageShown }}
         back={back}
       />

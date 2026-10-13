@@ -22,6 +22,7 @@ import type {
   BuildAsset,
   BuildAssetKind,
   BuildAssetStart,
+  BuildKind,
   BuildListedKind,
   BuildPageSlot
 } from "./build-asset-kind";
@@ -167,16 +168,18 @@ export function ViewedAssetPage({
   back,
   kind,
   view,
-  name
+  name,
+  kinds
 }: Pick<AssetPageProps, "source" | "page" | "back"> & {
   kind: string;
   view: NonNullable<BuildListedKind["view"]>;
   name: string;
+  kinds: readonly BuildKind[];
 }) {
   const read = source.useAsset(kind, name);
   usePageShown(page, read.status);
   if (read.status === "ready") {
-    return <view.Page page={page} back={back} asset={read.asset} />;
+    return <view.Page page={page} back={back} asset={read.asset} kinds={kinds} />;
   }
   return (
     <UnreadAssetPage
