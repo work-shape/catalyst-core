@@ -695,6 +695,8 @@ function GrantDialog({
           >
             <Picker
               search={kindItems.length >= PICKER_SEARCH_FROM_COUNT}
+              // What an asset says of itself is what tells two of them apart: shown in full.
+              wrapDescriptions
               options={kindItems.map((candidate) => ({
                 value: candidate.id,
                 label: candidate.name,

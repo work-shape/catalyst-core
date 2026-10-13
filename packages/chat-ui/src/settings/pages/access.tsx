@@ -64,9 +64,9 @@ export function AccessPage() {
         {
           items: query?.data?.map((asset) => ({
             id: asset.id,
-            // The display name, with what the asset says of itself under it, else its id.
+            // The display name, with the id the rows list it by and what it says of itself.
             name: asset.title,
-            description: asset.description ?? asset.name
+            description: asset.description ? `${asset.name} · ${asset.description}` : asset.name
           })),
           failed: Boolean(query?.error)
         }
