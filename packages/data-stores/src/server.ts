@@ -3,6 +3,7 @@ import { lookup } from "node:dns/promises";
 import {
   createPostgresExecutor,
   type PostgresExecutor,
+  type PostgresLimits,
   type PostgresTarget
 } from "@vivd-catalyst/postgres-connector";
 import {
@@ -17,6 +18,16 @@ import { DATA_STORE_ROLE_LIMITS } from "./role-limits";
 
 // The Postgres server the stores of an instance live on, and the way to each database on it.
 // Every connection to a store database is one of the bounded pools of the executor.
+
+/**
+ * Lower ceilings for one statement as a store's app role than the connector's own: how long
+ * it runs, and how many rows and bytes it answers. Past the first the statement is cancelled
+ * and its caller reads a timeout; past the others the result ends there and says `truncated`.
+ */
+export type DataStoreStatementLimits = Pick<
+  PostgresLimits,
+  "statementTimeoutMs" | "maxRows" | "maxBytes"
+>;
 
 /** The credential handle of the platform's own role. Every other handle names a store role. */
 const PLATFORM_ROLE_HANDLE = "platform";
@@ -55,6 +66,8 @@ export function createDataStoreServer(input: {
    * release config. A call that finds none free waits and then fails as busy.
    */
   poolMaxConnections: number;
+  /** Read at every statement. Without it the ceilings are the connector's own. */
+  statementLimits?: DataStoreStatementLimits;
 }): DataStoreServer {
   const platform = readDatabaseUrl(input.databaseUrl);
   const base = { host: platform.host, port: platform.port, tls: platform.tls, schemas: [] };
@@ -104,6 +117,7 @@ export function createDataStoreServer(input: {
       credentialHandle: `${record.id}:${role}`,
       // Never more than Postgres lets the role open.
       limits: {
+        ...(role === "app" ? input.statementLimits : {}),
         maxConnections: Math.min(poolMaxConnections, DATA_STORE_ROLE_LIMITS[role].connectionLimit)
       }
     })

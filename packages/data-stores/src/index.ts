@@ -112,7 +112,8 @@ export function createDataStores(input: {
     databaseUrl: input.databaseUrl,
     credentials,
     secretRows: stores.connections,
-    poolMaxConnections: limits.poolMaxConnections
+    poolMaxConnections: limits.poolMaxConnections,
+    ...(limits.statement ? { statementLimits: limits.statement } : {})
   });
   const runtime: DataStoreRuntime = {
     clientInstanceId,

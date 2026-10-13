@@ -3,6 +3,7 @@ import { workflowDatasetReferenceSchema } from "./workflows";
 import { z } from "zod";
 import type { AssetKindActions } from "./asset-kinds";
 import type { DataStoreRecord } from "./data-store-records";
+import { AppError, isAppError, type AppErrorCode } from "./errors";
 import type { ClientInstanceId } from "./ids";
 import type { JsonObject } from "./json";
 
@@ -371,4 +372,61 @@ export interface DataStoreHandle {
 export interface DataStoreCallOptions {
   /** Aborting it cancels the statement on the server. */
   signal?: AbortSignal;
+}
+
+/**
+ * Why a named action of an App cannot reach a Data Store, as `details.reason` of the error
+ * and as the reason the run of a failed call keeps. Each has the error code it is answered
+ * with. Spec: apps-and-pages.md, Named actions; acceptance check 12.
+ */
+const DATA_STORE_REFUSALS = {
+  /** No published store of the name stands where the App may reach it: none, or a deleted one. */
+  data_store_unavailable: "NOT_FOUND",
+  /** A Page of a conversation is no App: only an App's manifest binds a store. */
+  data_store_needs_app: "CONFLICT",
+  /** The store is below the migration level the App's manifest asks for. */
+  data_store_below_min_schema: "CONFLICT"
+} as const satisfies Record<string, AppErrorCode>;
+
+export type DataStoreRefusal = keyof typeof DATA_STORE_REFUSALS;
+
+const DATA_STORE_REFUSAL_SENTENCES: Record<
+  DataStoreRefusal,
+  (store: string, levels: { minSchema?: number; level?: number }) => string
+> = {
+  data_store_unavailable: (store) =>
+    `The Data Store '${store}' is not available: no published Data Store of that name is in the App's workspace or on the instance. It may have been deleted.`,
+  data_store_needs_app: (store) =>
+    `A Page of a conversation cannot reach the Data Store '${store}': a Data Store is bound by the manifest of an App. Save the Page as an App.`,
+  data_store_below_min_schema: (store, { minSchema, level }) =>
+    `The App needs the Data Store '${store}' at migration level ${minSchema} (minSchema) and the store is at level ${level}. Publish the store's migrations first.`
+};
+
+/**
+ * The error of an App that cannot reach a Data Store. It carries the reason, the store's name
+ * as the manifest wrote it and, for a store below its level, the two levels. Nothing of a
+ * statement, a value or a row.
+ */
+export function dataStoreRefusalError(
+  reason: DataStoreRefusal,
+  store: string,
+  levels: { minSchema?: number; level?: number } = {}
+): AppError {
+  return new AppError(
+    DATA_STORE_REFUSALS[reason],
+    DATA_STORE_REFUSAL_SENTENCES[reason](store, levels),
+    { reason, dataStore: store, ...levels },
+    { exposeMessage: true }
+  );
+}
+
+/** The reason of an error made by `dataStoreRefusalError`, and of no other error. */
+export function dataStoreRefusalOf(error: unknown): DataStoreRefusal | undefined {
+  if (!isAppError(error)) return undefined;
+  const { details } = error;
+  if (typeof details !== "object" || details === null || !("reason" in details)) return undefined;
+  const { reason } = details;
+  return Object.keys(DATA_STORE_REFUSALS).find(
+    (known): known is DataStoreRefusal => known === reason
+  );
 }

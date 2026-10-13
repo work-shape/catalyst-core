@@ -7,7 +7,7 @@ import type {
   WorkflowDatasetReference
 } from "@vivd-catalyst/core";
 import type { DataStoreCredentials } from "./credentials";
-import type { DataStoreServer } from "./server";
+import type { DataStoreServer, DataStoreStatementLimits } from "./server";
 
 /** What an operator sets for the stores of an instance, as release config holds it. */
 export interface DataStoreLimits {
@@ -15,6 +15,11 @@ export interface DataStoreLimits {
   sizeLimitBytes: number;
   /** The most connections the platform holds to one store at once. */
   poolMaxConnections: number;
+  /**
+   * Lower ceilings for one statement as a store's app role. Release config names none yet; a
+   * test sets one to meet a ceiling soon.
+   */
+  statement?: DataStoreStatementLimits;
 }
 
 /**
