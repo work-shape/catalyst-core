@@ -37,3 +37,21 @@ export function unknownToJsonValue(value: unknown): JsonValue {
   }
   return String(value);
 }
+
+function withSortedKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withSortedKeys);
+  if (typeof value !== "object" || value === null) return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+      .map(([key, entry]) => [key, withSortedKeys(entry)])
+  );
+}
+
+/**
+ * Whether two values are the same JSON. Object key order carries no meaning: a JSON column may
+ * return keys in another order than they were written in.
+ */
+export function sameJson(left: unknown, right: unknown): boolean {
+  return JSON.stringify(withSortedKeys(left)) === JSON.stringify(withSortedKeys(right));
+}

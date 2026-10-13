@@ -7,6 +7,25 @@ contain breaking changes; a patch version does not.
 
 ### Added
 
+- **Guardrails replace approval checks, and Build lists them:** release config takes
+  `guardrails`, keyed by name, each with `on: approval_request.before_create`, an optional
+  `filter.kind`, a `check` of kind `model_judge` (`modelBindingId`, `instruction`) and
+  `outcome: warn | block`. They run where approval checks ran, with the same judge, timeout and
+  usage purpose `guardrail_judge`. The API seeds them as read-only assets of the kind
+  `guardrail` when it starts; Build > Guardrails lists them with their newest 50 hits for
+  holders of the new right `guardrail.read` (administrators), read through
+  `guardrails.list_hits` (`GET /api/v1/guardrails/:name/hits`). A hit keeps the guardrail, the
+  outcome, its reason, the kind of request and who asked, never the checked content, and is
+  deleted with the audit events (migration `0071_guardrail_hits`). Every write of a guardrail
+  through the asset operations is refused with the reason `guardrail_release_config_only`.
+  **Operators:** `approvalChecks` still loads for this release, each check as the guardrail it
+  became (`id` the name, `appliesTo` the `filter.kind`, `onFail` the `outcome`). A config with
+  both keys stops startup with "'approvalChecks' was replaced by 'guardrails', and the config
+  sets both. Move each approval check into 'guardrails' and remove 'approvalChecks'." The next
+  release refuses `approvalChecks`; move the checks now. **Rollback:** an earlier release
+  ignores the table `guardrail_hits` and the stored guardrails, and it does not read
+  `guardrails`: roll back with the config that still has `approvalChecks`, or the instance runs
+  no checks.
 - **Data Stores, the reads of a store's page:** `data_stores.list` (`GET /api/v1/data-stores`)
   lists the stores a caller may read with the size, the number of tables and the estimate of
   rows of the last measurement (migration `0069_data_store_table_counts` adds the two columns;

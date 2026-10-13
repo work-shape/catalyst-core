@@ -7,19 +7,14 @@ import {
 import {
   REASONING_EFFORTS,
   StoreBackedAuditRecorder,
-  createAssetKindRegistry,
   type AgentConfig,
   type ApprovalRequestHandlerRegistry,
   type StructuredDataPublicationReviewer
 } from "@vivd-catalyst/core";
 import {
   createSkillChangeApprovalHandler,
-  createAgentAssetKind,
-  createAppAssetKind,
-  createConnectionAssetKind,
   createChatServer,
-  createChatServerJobs,
-  createSkillAssetKind
+  createChatServerJobs
 } from "@vivd-catalyst/chat-server";
 import type {
   ChatAttachmentService,
@@ -65,7 +60,9 @@ import { createInstanceModels } from "./capability-models";
 import { createConfigAssetSource } from "./config-asset-source";
 import { createInstanceAgentTools, createInstanceOperationCalls } from "./operation-calls";
 import { createClientInstanceAuth } from "./auth";
-import { createInstanceConnections, seedInstanceConnections, withConnections } from "./connections";
+import { createInstanceConnections, withConnections } from "./connections";
+import { createInstanceAssetKinds } from "./instance-asset-kinds";
+import { seedReleaseAssets } from "./release-seed";
 import { createClientInstanceMail } from "./mail";
 import type {
   ClientInstanceAttachmentHandler,
@@ -141,7 +138,7 @@ export async function createClientInstanceApp(
     modelGateway
   } = execution;
   // Only the API process seeds, before it takes a request. A worker reads what is stored.
-  await seedInstanceConnections(execution);
+  await seedReleaseAssets(execution);
   // A run is a row and a job. The API reads its events from the store; a worker executes it.
   // Where that worker is in this process, the two tell each other and need not poll.
   const inProcess =
@@ -369,16 +366,13 @@ export async function createClientInstanceExecutionAssembly(
   const configAssets: Parameters<typeof createChatServer>[0]["configAssets"] = {
     store: store.configAssets,
     source: assetSource,
-    // Every asset kind of this build. A later kind is one more registration in this list.
-    kinds: createAssetKindRegistry([
-      createAgentAssetKind({ config, validationRefs, validateAgents }),
-      createSkillAssetKind({ config }),
-      ...(connections
-        ? [createConnectionAssetKind({ connectorTypes: connections.connectorTypes })]
-        : []),
-      ...(modules.isEnabled("apps") ? [createAppAssetKind()] : []),
-      ...moduleAssembly.assetKinds
-    ]),
+    kinds: createInstanceAssetKinds({
+      agent: { config, validationRefs, validateAgents },
+      skill: { config },
+      connections,
+      modules,
+      moduleKinds: moduleAssembly.assetKinds
+    }),
     validationRefs
   };
   const approvalRequestHandlers = new Map(input.approvalRequestHandlers ?? []);

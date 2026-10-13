@@ -14,12 +14,15 @@ import {
 } from "./schemas";
 import { withoutRemovedWorkspaceSwitch } from "./removed-workspace-switch";
 import { refuseMovedInfrastructureKeys } from "./moved-infrastructure-keys";
+import { withApprovalChecksAsGuardrails } from "./approval-checks-transition";
 import { invalidConfigError, parseClientInstanceConfig } from "./validation";
 
 export async function loadClientInstanceConfigFromFile(
   path: string
 ): Promise<ClientInstanceConfig> {
-  const raw = await readConfigFileWithExtends(resolve(path), new Set());
+  const raw = withApprovalChecksAsGuardrails(
+    await readConfigFileWithExtends(resolve(path), new Set())
+  );
   refuseMovedInfrastructureKeys(raw);
   const hasInlineUi = hasOwnProperty(raw, "ui");
   const parsed = clientInstanceConfigFileSchema.safeParse(raw);
