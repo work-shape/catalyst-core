@@ -118,6 +118,27 @@ Do not pass the key on the command line or put it in `catalyst.yaml` or `.cataly
 
 The exchange needs `SERVICE_ACCESS_TOKEN_SECRET` set on the server; without it the instance has no API access and the exchange answers 404. The API key is the CLI's only sign-in. A CLI without `CATALYST_API_KEY` stops before it sends a request and names Administration, API Access as the place a key comes from; `CATALYST_SERVER_CREDENTIAL` and `CHAT_SERVER_CREDENTIAL` are not read.
 
+## A skill as a folder of files
+
+Beside `SKILL.md` and its text resources a skill may carry real files below `references/`, `scripts/` and `assets/`: a PDF form, a template, an image, an office file, a script. The asset API writes and reads the whole folder: `assets.put` with `files` (each `{ path, text }` or `{ path, base64 }`, `SKILL.md` among them) and `assets.get` with `files=true`, which answers every file with its hash and its content as it was written.
+
+The config of a skill stays what it was and stays where its text is read from: `content` from `SKILL.md`, and `resources` for every UTF-8 text file with a resource extension outside `scripts/`, at whatever path it lies. Every other file is kept in the file set of the revision, and the config names it in `files`, an index of `path`, `sha256`, `bytes` and `mediaType` without content. So a skill that is text alone has the config it always had, `read_skill` and a proposal of an agent work on it unchanged, and a write of the config alone (a release sync, the interface, an approved proposal) changes the text and leaves the other files of the skill where they are. Reverting to a revision brings its files back with it. What a caller sends as `files` in a config is not read.
+
+A folder is refused with the path and a reason of its own:
+
+| Reason | What is refused |
+| --- | --- |
+| `skill_manifest_missing`, `skill_manifest_invalid` | no `SKILL.md`, or one whose frontmatter does not read |
+| `skill_path_invalid`, `skill_path_duplicate` | a path that escapes the folder or is not normalized, a second `SKILL.md`, two paths that differ in case alone |
+| `skill_file_outside_folders` | a file that is no text resource and lies outside `references/`, `scripts/` and `assets/` |
+| `skill_script_not_text` | a file below `scripts/` that is no UTF-8 text |
+| `skill_file_executable` | a compiled program by its first bytes (ELF, Mach-O, PE), whatever its name |
+| `skill_file_lfs_pointer` | a Git LFS pointer in place of the file |
+| `skill_file_too_large`, `skill_too_many_files`, `skill_too_large` | a file over 2 MiB, more than 500 files, more than 8 MiB in all |
+| `files_unavailable` | a file the config cannot hold, on an instance without a `files` object store |
+
+An instance without a `files` object store holds skills as their text, as before. An agent's proposal stays with instruction text: it creates and changes no file below `scripts/` and no file that is not a text resource. The audit event of a write of a folder names each file by path, hash and size and holds no content. `read_skill` does not list the other files yet, and an agent's workspace does not hold them yet.
+
 ## Interactive editing and field ownership
 
 Agent `name` is the stable technical identifier used by config references and

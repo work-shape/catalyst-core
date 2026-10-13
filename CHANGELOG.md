@@ -17,6 +17,16 @@ contain breaking changes; a patch version does not.
   caller is shown them, and counts the others. `preview_rows` is unchanged. On a store's page
   in Studio a Workflow under "Used by" is a link to its page, as an App is, for a reader the
   Workflows area is open to.
+- **Skills as folders of files:** a skill may carry real files below `references/`, `scripts/`
+  and `assets/` beside `SKILL.md` and its text resources. `assets.put` takes the whole folder
+  as `files` and `assets.get` with `files=true` answers it byte for byte. The config of a skill
+  is unchanged for a skill that is text alone; other files are kept in the file set of the
+  revision and named in the config's `files` index (path, hash, size, media type). A write of
+  the config alone leaves them in place, and a revert brings a revision's files back. Compiled
+  programs, Git LFS pointers, non-text files below `scripts/`, files outside the three folders
+  and files or folders over the limits (2 MiB a file, 500 files, 8 MiB a skill) are refused
+  with their path and a reason. No database migration: a revision from before reads from its
+  config. An agent's proposal no longer creates or changes a resource below `scripts/`.
 - **Claude on Amazon Bedrock:** a model provider `aws-bedrock` beside `openai-compatible` and
   `google-vertex`. It calls Claude through the Bedrock runtime in Frankfurt
   (`eu-central-1`) with a Bedrock API key named by `credentialSecret` (default

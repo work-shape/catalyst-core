@@ -5,9 +5,22 @@ import {
   type ClientInstanceConfig
 } from "@vivd-catalyst/config-schema";
 import { AppError, defineAssetKind, type SkillOrigin } from "@vivd-catalyst/core";
+import {
+  SKILL_MANIFEST_FILE,
+  readSkillFiles,
+  skillFileIndex,
+  skillFileIndexOfConfig,
+  skillFileSetManifest,
+  skillFilesOfConfig,
+  storedFileMatchesConfig,
+  withSkillFileIndex
+} from "../skill-files";
 import type { WorkflowAssetKind } from "./shared";
 
-/** The skill kind: text an agent reads, with its resources. It refers to nothing. */
+/**
+ * The skill kind: text an agent reads, with its resources, and the files of its folder beside
+ * them. It refers to nothing.
+ */
 export function createSkillAssetKind(options: { config: ClientInstanceConfig }): WorkflowAssetKind {
   const assertEditingAllowed = () => {
     if (!options.config.administration.agentConfiguration.allowSkillEditing) {
@@ -40,6 +53,16 @@ export function createSkillAssetKind(options: { config: ClientInstanceConfig }):
     prepareInteractiveUpsert: ({ next }) => next,
     missingUpsertRight: () => undefined,
     assertInteractiveUpsertAllowed: assertEditingAllowed,
-    assertInteractiveDeleteAllowed: assertEditingAllowed
+    assertInteractiveDeleteAllowed: assertEditingAllowed,
+    // A skill is a folder: `SKILL.md`, its text resources, and whatever else it carries.
+    revisionFiles: {
+      manifestFile: SKILL_MANIFEST_FILE,
+      read: readSkillFiles,
+      manifestOf: skillFileSetManifest,
+      indexed: (config, fileSet) => withSkillFileIndex(config, skillFileIndex(fileSet)),
+      withIndexOf: (config, source) => withSkillFileIndex(config, skillFileIndexOfConfig(source)),
+      filesOfConfig: skillFilesOfConfig,
+      matchesConfig: storedFileMatchesConfig
+    }
   };
 }

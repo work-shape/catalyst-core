@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   AppError,
   asUserId,
@@ -19,6 +20,7 @@ import {
   removeUnnamedAssetFileSet,
   removeAssetObjects,
   sourceFileEntries,
+  storeRevisionFiles,
   type AssetFileInput
 } from "./asset-files";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
@@ -34,7 +36,7 @@ import {
   type AssetAddress,
   type AssetTarget
 } from "./asset-target";
-import { loadStoredAssets, requireMatchingConfigName } from "./asset-write-rules";
+import { loadStoredAssets, requireMatchingConfigName, toJsonObject } from "./asset-write-rules";
 import { assertScopeCanOwn } from "./config-asset-writer";
 import type { AssetWorkflowOptions } from "./types";
 
@@ -53,6 +55,8 @@ export interface AssetWorkflowHost {
       repository?: AssetRepoWrite;
       origin?: ConfigAssetRevisionOrigin;
       pageLink?: () => Promise<boolean>;
+      /** The files of the write as its event names them: path, hash and size, no content. */
+      auditFiles?: readonly { path: string; sha256: string; bytes: number }[];
     }
   ): Promise<{ version: number; revision: number; warnings: never[] }>;
   authorizeEditing(call: AssetCall, surface: "put"): Promise<void>;
@@ -126,6 +130,60 @@ export class AssetDraftWorkflow {
       expectedRevision: input.expectedRevision
     });
     return written;
+  }
+
+  /**
+   * The write of a kind whose revision is a config with files beside it, as its whole folder:
+   * the files are read into the config, checked as every write of the config is, and kept in
+   * a file set the revision names. A refused revision leaves no file set. Its caller has
+   * asked the right, the owner and the expected revision.
+   */
+  async putFolder(
+    call: AssetCall,
+    target: AssetTarget,
+    sent: readonly AssetFileInput[],
+    expectedRevision: number | null
+  ) {
+    const { kind, name } = target;
+    const files = decodeAssetFiles(sent);
+    const read = kind.revisionFiles?.read(name, files);
+    if (!read) throw new AppError("INTERNAL", `A ${kind.kind} holds no files`);
+    requireMatchingConfigName(read.config, name);
+    // A new asset's id is made here: its files are stored under it before its row exists.
+    const assetId = target.asset?.id ?? createPlatformId("cfga");
+    const fileSet = await storeRevisionFiles(this.options, {
+      kind,
+      assetId,
+      files,
+      extras: read.extras,
+      ...(isAuthenticatedServicePrincipal(call.actor)
+        ? {}
+        : { createdByUserId: asUserId(getSubjectUserId(call.actor)) })
+    });
+    // What the event of the write says of the files: each by its path and hash, no content.
+    const entries = files
+      .map((file) => ({
+        path: file.path,
+        sha256: createHash("sha256").update(file.bytes).digest("hex"),
+        bytes: file.bytes.byteLength
+      }))
+      .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
+    try {
+      // The config names the files it does not hold, from the rows of the file set.
+      const config = kind.revisionFiles?.indexed(toJsonObject(read.config), fileSet) ?? read.config;
+      const written = await this.host.upsert(call, target, config, {
+        expectedRevision,
+        audit: "config_asset.updated",
+        auditFiles: entries,
+        ...(fileSet ? { fileSet: { assetId, fileSetId: fileSet.id } } : {})
+      });
+      return { ...written, ...(fileSet ? { fileSetId: fileSet.id } : {}), files: entries };
+    } catch (error) {
+      if (fileSet) {
+        await removeUnnamedAssetFileSet(this.options, assetId, fileSet.id).catch(() => undefined);
+      }
+      throw error;
+    }
   }
 
   /**

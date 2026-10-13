@@ -4,6 +4,7 @@ import type {
   AuthenticatedIdentity,
   ClientInstanceId,
   ConfigAssetKind,
+  FileSet,
   JsonObject,
   Namespace,
   PlatformStores,
@@ -105,6 +106,41 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
    * alone. Throws `VALIDATION_FAILED` for files it refuses.
    */
   manifestOfFiles?(files: readonly { path: string; bytes: Uint8Array }[]): JsonObject;
+  /**
+   * Set by a kind whose revision is a config and may hold files beside it: the config stays
+   * the one place its text is read from, and the files the config cannot hold are kept in a
+   * file set the revision names. Such a kind is written as its config or as its whole folder
+   * of files, and is read as either. A write of the config alone leaves the other files of
+   * the asset where they are.
+   */
+  readonly revisionFiles?: {
+    /** The file of the folder that every write of files carries. */
+    manifestFile: string;
+    /**
+     * Reads the folder of one write: the config it makes, and the paths of the files the
+     * config does not hold. Throws `VALIDATION_FAILED` for a set or a file it refuses.
+     */
+    read(
+      name: string,
+      files: readonly { path: string; bytes: Uint8Array }[]
+    ): { config: Record<string, unknown>; extras: string[] };
+    /** What the file set of a revision names as its manifest. */
+    manifestOf(extras: readonly string[]): JsonObject;
+    /**
+     * The config with the index of the files of its file set that it does not hold itself,
+     * and without one where there is none. What a caller sent as the index is not read.
+     */
+    indexed(config: JsonObject, fileSet: FileSet | undefined): JsonObject;
+    /**
+     * The config with the index another config of the asset carries, and without one where
+     * that has none: what a write of the config alone keeps of the revision before it.
+     */
+    withIndexOf(config: JsonObject, source: unknown): JsonObject;
+    /** The files a config holds itself, as a read of the folder answers them. */
+    filesOfConfig(config: unknown): { path: string; bytes: Uint8Array }[];
+    /** Whether stored bytes say what the config says at their path. */
+    matchesConfig(config: unknown, file: { path: string; bytes: Uint8Array }): boolean;
+  };
   /**
    * What a publish does beside moving the published pointer, with `stores` bound to the
    * transaction that moves it. A throw refuses the publish and leaves the pointer where it was.

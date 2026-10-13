@@ -19,7 +19,7 @@ import {
   type StorePage
 } from "@vivd-catalyst/core";
 import { accessResource, decide, type AssetCall } from "./asset-access";
-import { readSourceFiles, type AssetFileOutput } from "./asset-files";
+import { readRevisionFiles, readSourceFiles, type AssetFileOutput } from "./asset-files";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
 import { notFound, requireActive, type AssetAddress, type AssetTarget } from "./asset-target";
 import type { AssetWorkflowOptions } from "./types";
@@ -242,7 +242,7 @@ export class AssetReadWorkflow {
   }> {
     const { kind, name } = target;
     const selector = input.revision ?? "draft";
-    if (input.files && kind.representation !== "files") {
+    if (input.files && kind.representation !== "files" && !kind.revisionFiles) {
       throw new AppError("VALIDATION_FAILED", `A ${kind.kind} holds no files`, {
         reason: "no_files"
       });
@@ -255,7 +255,16 @@ export class AssetReadWorkflow {
           { reason: "no_draft" }
         );
       }
-      return { config: asset.config };
+      return {
+        config: asset.config,
+        ...(input.files
+          ? await readRevisionFiles(this.options, kind, {
+              assetId: asset.id,
+              config: asset.config,
+              ...(asset.fileSetId ? { fileSetId: asset.fileSetId } : {})
+            })
+          : {})
+      };
     }
     const content = await this.revisionOf(target, asset, selector);
     if (!input.files) {
