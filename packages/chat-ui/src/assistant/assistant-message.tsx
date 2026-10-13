@@ -661,7 +661,7 @@ function FilePart() {
     return <ImageFilePart data={url} filename={file.filename} mimeType={mimeType} />;
   }
   return (
-    <div className="my-2 inline-flex max-w-full items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-xs">
+    <div className="chat-message-block my-2 inline-flex max-w-full items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-xs">
       <FileTypeIcon type={resolveFileType({ filename: file.filename, mimeType })} />
       <span className="truncate">{file.filename ?? mimeType ?? t("attachmentFallbackName")}</span>
     </div>
@@ -675,7 +675,7 @@ function ImagePart() {
     return null;
   }
   return (
-    <div className="my-2 overflow-hidden rounded-md border bg-card shadow-xs">
+    <div className="chat-message-block my-2 overflow-hidden rounded-md border bg-card shadow-xs">
       <MessagePartPrimitive.Image
         alt={image.filename ?? t("attachmentImageFallbackAlt")}
         className="max-h-96 w-auto max-w-full object-contain"
@@ -740,7 +740,7 @@ function ImageFilePart({
 
   if (!imageUrl) {
     return (
-      <div className="my-2 inline-flex max-w-full items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-xs">
+      <div className="chat-message-block my-2 inline-flex max-w-full items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-xs">
         <FileTypeIcon type={resolveFileType({ filename, mimeType })} />
         <span className="truncate">{filename ?? mimeType}</span>
       </div>
@@ -748,7 +748,7 @@ function ImageFilePart({
   }
 
   return (
-    <figure className="my-2 grid gap-1 overflow-hidden rounded-md border bg-card p-1 shadow-xs">
+    <figure className="chat-message-block my-2 grid gap-1 overflow-hidden rounded-md border bg-card p-1 shadow-xs">
       <img
         src={imageUrl}
         alt={filename ?? t("attachmentImageFallbackAlt")}
