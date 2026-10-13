@@ -31,7 +31,7 @@ import {
 const KEY_VARIABLE = "DATA_STORE_TEST_KEY";
 export const clientInstanceId = asClientInstanceId("demo-local");
 
-export const files = [
+const files = [
   {
     path: DATA_STORE_MANIFEST_FILE,
     text: "id: findings\nname: Findings\ndescription: What the monthly check of bookings found.\n"
@@ -59,15 +59,34 @@ export const finding: JsonObject = {
   details: { booking: 7 }
 };
 
+/** One instance of a test: its API process, its rows and its call path. */
+export interface DataStoreInstance {
+  api: TestInstance;
+  stores: TestInstance["stores"];
+  execution: ReturnType<typeof getTestExecution>;
+}
+
+type StoreFiles = readonly { path: string; text: string }[];
+type Answer = ReturnType<TestInstance["call"]>;
+
 /**
  * Call it in the `describe` that holds the tests. After each test it closes the instances the
  * test started and removes every database and role a store of the test made.
  */
-export function useDataStoreInstance() {
+export function useDataStoreInstance(): {
+  start(dataStores: boolean, changing?: PolicyValue): Promise<DataStoreInstance>;
+  /** Closes the processes of every instance the test started. */
+  close(): Promise<unknown>;
+  put(world: DataStoreInstance, storeFiles?: StoreFiles, expectedRevision?: number | null): Answer;
+  publish(world: DataStoreInstance, revision: number): Answer;
+  publishStore(world: DataStoreInstance): Promise<DataStoreRecord>;
+  recordOf(world: DataStoreInstance): Promise<DataStoreRecord>;
+  settle(world: DataStoreInstance, level: number): Promise<DataStoreRecord>;
+  person(world: DataStoreInstance, name: string, roles: UserRole[]): Promise<AuthenticatedUser>;
+} {
   const roots: string[] = [];
   const started: TestInstance[] = [];
 
-  /** Closes the processes of every instance the test started. */
   const close = () => Promise.all(started.splice(0).map((instance) => instance.close()));
 
   afterEach(async () => {
@@ -97,7 +116,7 @@ export function useDataStoreInstance() {
    * on that call path where nothing else names a value; the API keeps the default, so the
    * store of the test is written and published whatever the test asks about.
    */
-  async function start(dataStores: boolean, changing?: PolicyValue): Promise<World> {
+  async function start(dataStores: boolean, changing?: PolicyValue): Promise<DataStoreInstance> {
     const root = await mkdtemp(join(tmpdir(), "data-store-test-"));
     roots.push(root);
     const base = createTestConfig();
@@ -134,39 +153,37 @@ export function useDataStoreInstance() {
     return { api, stores: api.stores, execution: getTestExecution(calls) };
   }
 
-  interface World {
-    api: TestInstance;
-    stores: TestInstance["stores"];
-    execution: ReturnType<typeof getTestExecution>;
-  }
-
-  const put = ({ api }: World, storeFiles = files, expectedRevision: number | null = null) =>
+  const put = (
+    { api }: DataStoreInstance,
+    storeFiles = files,
+    expectedRevision: number | null = null
+  ) =>
     api.call("assets.put", {
       params: { kind: DATA_STORE_ASSET_KIND, name: "findings" },
       payload: { files: storeFiles, expectedRevision }
     });
 
-  const publish = ({ api }: World, revision: number) =>
+  const publish = ({ api }: DataStoreInstance, revision: number) =>
     api.call("assets.publish", {
       params: { kind: DATA_STORE_ASSET_KIND, name: "findings" },
       payload: { revision }
     });
 
   /** Writes the folder as revision 1 and publishes it. A refusal fails the test where it happens. */
-  async function publishStore(world: World): Promise<DataStoreRecord> {
+  async function publishStore(world: DataStoreInstance): Promise<DataStoreRecord> {
     expect((await put(world)).statusCode).toBe(200);
     expect((await publish(world, 1)).statusCode).toBe(200);
     return settle(world, 1);
   }
 
-  async function recordOf({ stores }: World): Promise<DataStoreRecord> {
+  async function recordOf({ stores }: DataStoreInstance): Promise<DataStoreRecord> {
     return required(
       await stores.dataStores.findDataStoreByName({ clientInstanceId, name: "findings" })
     );
   }
 
   /** Runs the jobs of the API process until the store is at the level. */
-  function settle(world: World, level: number): Promise<DataStoreRecord> {
+  function settle(world: DataStoreInstance, level: number): Promise<DataStoreRecord> {
     const jobs = getTestJobs(world.api);
     return eventually(async () => {
       await jobs.runDue();
@@ -176,7 +193,7 @@ export function useDataStoreInstance() {
     });
   }
 
-  async function person({ stores }: World, name: string, roles: UserRole[]) {
+  async function person({ stores }: DataStoreInstance, name: string, roles: UserRole[]) {
     const user: AuthenticatedUser = await stores.users.resolveUserIdentity({
       clientInstanceId,
       authSource: "test",
@@ -192,7 +209,3 @@ export function useDataStoreInstance() {
 
   return { start, close, put, publish, publishStore, recordOf, settle, person };
 }
-
-export type DataStoreInstance = Awaited<
-  ReturnType<ReturnType<typeof useDataStoreInstance>["start"]>
->;

@@ -18,7 +18,6 @@ import { runOperation } from "@vivd-catalyst/tool-execution";
 import { eventually, required } from "./support/assertions";
 import {
   clientInstanceId,
-  files,
   finding,
   useDataStoreInstance,
   type DataStoreInstance
@@ -37,8 +36,7 @@ interface ErrorBody {
 }
 
 describe("a Data Store on an assembled instance", () => {
-  const { start, close, put, publish, publishStore, recordOf, settle, person } =
-    useDataStoreInstance();
+  const { start, close, put, publish, publishStore, recordOf, person } = useDataStoreInstance();
 
   function call(
     world: World,

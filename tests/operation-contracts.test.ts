@@ -316,7 +316,7 @@ describe("operation contracts", () => {
             | "holder_not_administrable";
           message?: string;
         }
-      | { kind: "policy"; operation: string }
+      | { kind: "policy"; operation: string; reason?: "approval_unavailable" }
       | { kind: "guardrail"; guardrailId: string; message?: string }
       | { kind: "declined"; by: string; comment?: string }
     >();
