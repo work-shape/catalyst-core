@@ -22275,6 +22275,26 @@
           "workspaceId": {
             "type": "string",
             "minLength": 1
+          },
+          "availableIn": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "all"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "workspaceId": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "workspaceId"
+                ]
+              }
+            ]
           }
         }
       },

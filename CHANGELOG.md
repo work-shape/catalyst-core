@@ -774,6 +774,18 @@ id from config_assets where status = 'deleted')`.
 
 ### Changed
 
+- **New agents start in the workspace they were made in:** an agent created in a Shared
+  Workspace, in Build or by the Build Agent in a conversation there, is available in that
+  workspace only. One created in a Personal Workspace, by `catalyst config push` without the
+  release right, or by `assets.put` without a workspace starts hidden; `assets.put` answers the
+  warning `agent_hidden` and `assets.sync` names the agents in `hiddenAgentNames`. Before, every
+  new agent was available in all workspaces. `assets.put` takes `availableIn` (`"all"` with the
+  right to write agents on the whole instance, or `{ "workspaceId" }`), and the create dialog in
+  Build offers "All workspaces" to that holder. A release push and the first agent of an
+  instance start in all workspaces as before. **Operators:** a script that creates agents
+  through the API and expects them in every workspace passes `availableIn: "all"` or sets the
+  availability after the write.
+
 - **Chat:** the usage consumption on a model card has six steps in place of four: `very_low`,
   `low`, `moderate`, `elevated`, `high` and `very_high`, and its filled steps take a colour that
   goes from cool to warm with the level. The tier still comes from the model's Customer Rate

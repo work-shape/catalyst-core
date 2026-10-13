@@ -32,7 +32,7 @@ import {
   loadStoredAssets,
   impliesDefaultChange,
   accessOfSyncCredential,
-  releaseInitialAvailability,
+  syncInitialAvailability,
   requireInteractiveEditingOn,
   toJsonObject
 } from "./asset-write-rules";
@@ -127,7 +127,6 @@ function withSyncCredential(call: AssetCall): AssetCall {
 interface CheckedBatch {
   planned: PlannedItem[];
   ready: ReadyItem[];
-  releaseSync: boolean;
   storedDefault: string | null;
   defaultChange: { agentName: string | undefined } | undefined;
   mutations: ConfigAssetMutation[];
@@ -337,7 +336,6 @@ async function checkBatch(
   return {
     planned,
     ready: ready(),
-    releaseSync,
     storedDefault,
     defaultChange,
     mutations
@@ -345,7 +343,7 @@ async function checkBatch(
 }
 
 async function applyBatch(options: ChatServerOptions, call: AssetCall, checked: CheckedBatch) {
-  const { planned, ready, releaseSync, storedDefault, defaultChange, mutations } = checked;
+  const { planned, ready, storedDefault, defaultChange, mutations } = checked;
   const byKey = new Map(ready.map((entry) => [assetKey(entry.kind.kind, entry.name), entry]));
   const result = await applyValidatedConfigAssetMutations(options, {
     clientInstanceId: options.clientInstanceId,
@@ -363,7 +361,10 @@ async function applyBatch(options: ChatServerOptions, call: AssetCall, checked: 
       )
     ),
     ...(defaultChange ? { baseDefaultAgentName: storedDefault } : {}),
-    ...releaseInitialAvailability(call.access, "sync"),
+    ...syncInitialAvailability(
+      call.access,
+      storedDefault === null && defaultChange?.agentName !== undefined
+    ),
     mutations
   }).catch(async (error: unknown) => {
     // Another write got between the check above and the store's lock. Nothing was written.
@@ -450,17 +451,15 @@ async function applyBatch(options: ChatServerOptions, call: AssetCall, checked: 
   return {
     version: result.version,
     items,
-    ...(releaseSync
-      ? await hiddenAgentNamesOf(
-          options,
-          ready.filter((entry) => !entry.absent)
-        )
-      : {}),
+    ...(await hiddenAgentNamesOf(
+      options,
+      ready.filter((entry) => !entry.absent)
+    )),
     warnings: []
   };
 }
 
-/** The agents a release wrote that no workspace shows afterwards, as its answer names them. */
+/** The agents a batch wrote that no workspace shows afterwards, as its answer names them. */
 async function hiddenAgentNamesOf(
   options: ChatServerOptions,
   written: readonly ReadyItem[]

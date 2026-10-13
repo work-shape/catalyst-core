@@ -10,6 +10,7 @@ import {
   type FileSet
 } from "@vivd-catalyst/core";
 import type { AssetCall } from "./asset-access";
+import type { AssetWarning } from "./asset-placement";
 import {
   buildAssetFileSet,
   copyFileSetToAsset,
@@ -50,7 +51,7 @@ export interface AssetWorkflowHost {
       fileSet?: { assetId: string; fileSetId: FileSet["id"] };
       repository?: AssetRepoWrite;
     }
-  ): Promise<{ version: number; revision: number; warnings: never[] }>;
+  ): Promise<{ version: number; revision: number; warnings: AssetWarning[] }>;
   authorizeEditing(call: AssetCall, surface: "put"): Promise<void>;
 }
 

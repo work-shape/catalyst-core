@@ -67,7 +67,14 @@ const ALL_NAMESPACES = "";
  * back, History, the delete, the answer to a conflict and every state; what a kind is comes
  * from its registry entry, and what the instance holds from `source`.
  */
-export function BuildFrame({ source }: { source: BuildSource }) {
+export function BuildFrame({
+  source,
+  workspace
+}: {
+  source: BuildSource;
+  /** The shared workspace the reader works in: a new agent starts available there. */
+  workspace?: { id: string; name: string };
+}) {
   const { t } = useTranslation();
   const { location, open, href } = useBuildNavigation();
   const kinds = visibleBuildKinds(useBuildAssetKinds(), source.kinds);
@@ -331,6 +338,14 @@ export function BuildFrame({ source }: { source: BuildSource }) {
           entry={entry}
           namespaces={source.rights.creatableNamespaces(entry.kind)}
           mayNameFreely={source.rights.instanceWrite}
+          startsIn={
+            entry.startsInWorkspace
+              ? {
+                  workspace,
+                  mayChooseAll: source.rights.instanceWrite
+                }
+              : undefined
+          }
           onClose={() => setAsking(false)}
           onStart={(chosen) => {
             setAsking(false);

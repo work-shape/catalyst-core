@@ -692,6 +692,7 @@ export function useWorkspaceChatModel({
     settingsCollaborationWorkspace: collaborationWorkspace.settingsCollaborationWorkspace,
     selectSettingsCollaborationWorkspace:
       collaborationWorkspace.selectSettingsCollaborationWorkspace,
+    activeCollaborationWorkspace: collaborationWorkspace.activeCollaborationWorkspace,
     isAuthenticated,
     route,
     view,

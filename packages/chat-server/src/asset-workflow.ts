@@ -75,6 +75,7 @@ import {
   type AssetAddress,
   type AssetTarget
 } from "./asset-target";
+import { initialAgentPlacement, type AvailableIn } from "./asset-placement";
 import { AssetReadWorkflow, scopeOf } from "./asset-read-workflow";
 import { requirePrecondition, revisionConflictOf } from "./asset-revision";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
@@ -311,6 +312,7 @@ export class AssetWorkflow {
       config?: Record<string, unknown>;
       files?: readonly AssetFileInput[];
       expectedRevision?: number | null;
+      availableIn?: AvailableIn;
     }
   ) {
     const target = await this.target(input);
@@ -336,7 +338,8 @@ export class AssetWorkflow {
     assertStoredWritable(target, "always");
     return this.upsert(call, target, input.config, {
       expectedRevision,
-      audit: "config_asset.updated"
+      audit: "config_asset.updated",
+      ...(input.availableIn === undefined ? {} : { availableIn: input.availableIn })
     });
   }
 
@@ -522,6 +525,8 @@ export class AssetWorkflow {
       fileSet?: { assetId: string; fileSetId: FileSet["id"] };
       /** The commit the revision names, for an asset whose files are a repository. */
       repository?: AssetRepoWrite;
+      /** Where a new agent starts, as its caller asked. */
+      availableIn?: AvailableIn;
     }
   ) {
     const { kind, name } = target;
@@ -575,10 +580,17 @@ export class AssetWorkflow {
     if (setsDefault) {
       mutations.push({ type: "setDefaultAgent", agentName: name });
     }
+    const { warnings, ...placement } = await initialAgentPlacement(this.options, call, kind, {
+      name,
+      creates: target.asset?.status !== "active",
+      setsDefault,
+      ...(write.availableIn === undefined ? {} : { availableIn: write.availableIn })
+    });
     const result = await this.apply(call, target, {
       baseRevisions: { [assetKey(kind.kind, name)]: write.expectedRevision },
       // The default is set for the first asset only, so the instance has none before.
       ...(setsDefault ? { baseDefaultAgentName: null } : {}),
+      ...placement,
       mutations
     });
     // The revision this write was given. The asset is not read again: by now another write
@@ -589,7 +601,7 @@ export class AssetWorkflow {
       () =>
         this.record(call, write.audit, { kind: kind.kind, name, revision, version: result.version })
     ]);
-    return { version: result.version, revision, warnings: [] };
+    return { version: result.version, revision, warnings };
   }
 
   /**

@@ -8,6 +8,7 @@ import {
   type AssetScope,
   type AuditRecorder,
   type AuthenticatedIdentity,
+  type CollaborationWorkspaceId,
   type OperationAuthorization,
   type OperationRunId,
   type ServedFileSetAsset
@@ -28,6 +29,8 @@ export interface AssetCall {
    * none cannot write an asset that has a repository.
    */
   runId?: OperationRunId;
+  /** The workspace the call is made in: the conversation's for a call of an agent. */
+  workspaceId?: CollaborationWorkspaceId;
 }
 
 /** What a right on one asset is decided on: its kind, its name, its id and its owner. */

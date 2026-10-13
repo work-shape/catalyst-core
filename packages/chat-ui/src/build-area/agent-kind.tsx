@@ -33,7 +33,8 @@ export const agentKind: BuildAssetKind = {
   icon: Bot,
   avatar: "agent",
   badges: (asset, t) => (asset.isDefault ? <Badge>{t("configDefaultAgent")}</Badge> : null),
-  Editor: AgentAssetEditor
+  Editor: AgentAssetEditor,
+  startsInWorkspace: true
 };
 
 /** The agent form on the asset page, with what it reads beside the agent and the changes it can make. */

@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import type { ComponentType, ReactNode, Ref } from "react";
 import type { Asset, AssetSummary } from "@vivd-catalyst/api-client";
 import type { AvatarKind } from "@vivd-catalyst/ui";
+import type { AvailableIn } from "../api/asset-writes";
 import type { TranslationKey } from "../i18n";
 import type { BuildWriteOutcome } from "./build-refusals";
 
@@ -17,6 +18,8 @@ export interface BuildAssetStart {
   name: string;
   /** The name people read. */
   title: string;
+  /** Where a new asset of a kind that `startsInWorkspace` starts available. */
+  availableIn?: AvailableIn;
 }
 
 /** Where an asset page stands in the frame. The page's body hands it to its `Page`. */
@@ -97,6 +100,11 @@ export interface BuildAssetKind extends BuildKindBase {
   missingText: TranslationKey;
   /** The body of the asset page, for an existing asset and for a new one. */
   Editor: ComponentType<BuildAssetEditorProps>;
+  /**
+   * A new asset is available in the shared workspace it is made in: the dialog that starts
+   * it says where, and offers every workspace to whoever may change that.
+   */
+  startsInWorkspace?: true;
 }
 
 /** What the frame hands a page that shows one asset and changes nothing of it. */

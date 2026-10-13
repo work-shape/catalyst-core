@@ -172,6 +172,11 @@ test("a Namespace holder builds an agent in the Namespace, is refused, meets a c
     await expect(create.getByText("The full id will be kai-kai_helper.")).toBeVisible();
     await create.getByRole("textbox", { name: /^Id/u }).fill("helper");
     await expect(create.getByText("The full id will be kai-helper.")).toBeVisible();
+    // Made outside a shared workspace by somebody who may not widen it, the agent starts hidden.
+    await expect(
+      create.getByText("Hidden until an instance admin makes it available")
+    ).toBeVisible();
+    await expect(create.getByRole("combobox", { name: "Available in" })).toHaveCount(0);
     await create.getByRole("button", { name: "Continue", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Kai Helper", level: 1 })).toBeVisible();
     await instructions(page).fill("You help Kai.");
@@ -541,6 +546,7 @@ test("an agent's availability and the default agent are changed by the asset ope
   const created = await requestWithOrigin(page, "put", agentPath(name), {
     data: {
       expectedRevision: await assetBaseRevision(page, agentPath(name)),
+      availableIn: "all",
       config: {
         name,
         displayName: "Placement Probe",

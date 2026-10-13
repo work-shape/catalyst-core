@@ -25,6 +25,7 @@ import {
   CONNECTION_KIND,
   createSeedApi,
   hasConnection,
+  offeredNowhere,
   type SeedApi,
   type SeedAppFile
 } from "./api";
@@ -477,11 +478,11 @@ async function seedAssets(
   }
   if (differing.length > 0) await push(options, apiKey, options.assetsDir, differing);
 
-  // A pushed agent is hidden in every workspace until somebody sets where it is offered.
+  // An agent saved or pushed in no workspace starts hidden: the seed offers it everywhere.
   const { assets } = await root.assetsOverview();
   for (const agent of local.agents) {
     const stored = assets.find((asset) => asset.kind === "agent" && asset.name === agent.name);
-    if (stored && !stored.availability) await root.showAgentEverywhere(agent.name);
+    if (stored && offeredNowhere(stored.availability)) await root.showAgentEverywhere(agent.name);
   }
   steps.push({ name: "agents", ...counts.agent });
   steps.push({ name: "skills", ...counts.skill });
