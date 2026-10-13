@@ -5,11 +5,13 @@ on:
     branches: [main]
 permissions:
   contents: read
-# A newer push to the same branch or pull request cancels the run for the older push, on main
-# as well, so only the latest commit of a ref reports a result.
+# A newer push to a pull request cancels the run for the older push, so only its latest commit
+# reports a result. Every run on main finishes: a merge that lands while the previous one is
+# checked must not cancel that check, or a break on main goes unseen. A shared group would still
+# drop a run that waits behind another, so each commit on main is a group of its own.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   check:
     runs-on: ubuntu-latest
