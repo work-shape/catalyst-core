@@ -3,7 +3,9 @@ import {
   AppError,
   isAppError,
   SUBJECT_TOOL_PREFIX,
+  type ConversationId,
   type JsonObject,
+  type PolicyValue,
   type ToolExecutionContext
 } from "@vivd-catalyst/core";
 import { defineTool, toolSuccess, type AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
@@ -85,6 +87,11 @@ export interface PlatformAssetCalls {
     context: ToolExecutionContext,
     input: { config: Record<string, unknown>; expectedRevision: number }
   ): Promise<PlatformAssetWrite>;
+  /**
+   * What an administrator's setting on the operation a save projects asks for the subject of a
+   * conversation, or nothing where no setting matches it. A save is never looser than it.
+   */
+  putPolicyFloor(conversationId: ConversationId): Promise<PolicyValue | undefined>;
   listOperations(
     context: ToolExecutionContext
   ): Promise<{ operations: PlatformCallableOperation[]; truncated: boolean }>;
@@ -121,6 +128,7 @@ export function createPlatformAssetBinding(): PlatformAssetBinding {
       get: (context) => required().get(context),
       validate: (context, config) => required().validate(context, config),
       put: (context, input) => required().put(context, input),
+      putPolicyFloor: (conversationId) => required().putPolicyFloor(conversationId),
       listOperations: (context) => required().listOperations(context)
     }
   };
@@ -243,6 +251,8 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
       // Runs on the agent's own call: a draft save changes nothing that runs. Without a mode
       // the instance default for changes would apply, and an agent cannot wait for a person.
       permission: { mode: "allow" },
+      // A setting on the operation this projects holds for the save of the agent too.
+      policyFloor: ({ conversationId }) => calls.putPolicyFloor(conversationId),
       async execute(input, context) {
         const written = await calls.put(context, input);
         return toolSuccess(written, {

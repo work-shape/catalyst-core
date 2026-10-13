@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import {
   AGENT_TOOL_ACTION_PREFIX,
   AppError,
+  POLICY_VALUES,
   callerCanConfirm,
   isAppError,
   isToolOperationAnswer,
@@ -45,6 +46,7 @@ import {
   type PolicySource,
   type PolicyInput,
   type PolicyResolution,
+  type PolicyValue,
   type ToolExecutionResult,
   type ConversationId
 } from "@vivd-catalyst/core";
@@ -299,8 +301,12 @@ async function policyInputOf(
   context: Pick<RunContext, "definition" | "call" | "resource" | "deps">
 ): Promise<PolicyInput> {
   const { definition, call, resource, deps } = context;
+  const callFloor = await definition.policyFloorOf?.(call.origin);
   return {
-    definition,
+    definition:
+      callFloor === undefined
+        ? definition
+        : { ...definition, policyFloor: stricterPolicy(callFloor, definition.policyFloor) },
     origin: call.origin,
     instanceDefaults: deps.policy.instanceDefaults,
     centralSettings: await deps.policy.centralSettings(),
@@ -313,6 +319,12 @@ async function policyInputOf(
     // No surface can hold a call for its actor's confirmation before OP-3.
     canPause: false
   };
+}
+
+function stricterPolicy(left: PolicyValue, right: PolicyValue | undefined): PolicyValue {
+  return right !== undefined && POLICY_VALUES.indexOf(right) > POLICY_VALUES.indexOf(left)
+    ? right
+    : left;
 }
 
 /**

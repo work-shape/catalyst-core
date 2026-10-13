@@ -6,6 +6,7 @@ import {
   createAuthorizer,
   moduleOffError,
   operationDenialError,
+  resolvePolicy,
   unknownToJsonValue,
   type ActorAccess,
   type AuditRecorder,
@@ -249,6 +250,28 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
         if (refused) return refused;
         throw error;
       }
+    },
+
+    async putPolicyFloor(conversationId) {
+      const policy = options.operationCalls?.deps.policy;
+      const conversation = await options.stores.conversations.getConversation(
+        options.clientInstanceId,
+        conversationId
+      );
+      const subject = conversation?.subject;
+      if (!policy || !subject) return undefined;
+      // Read as the value that was set: the tool's own mode stands where no setting names the
+      // operation, since the instance default for changes is one an agent's call cannot meet.
+      const asked = resolvePolicy({
+        definition: { name: ASSET_WRITE_OPERATION, effect: "changing", defaultPolicy: "allow" },
+        origin: { kind: "user" },
+        instanceDefaults: policy.instanceDefaults,
+        centralSettings: await policy.centralSettings(),
+        targets: await workflow.policyTargets(subject),
+        callerCanConfirm: true,
+        canPause: true
+      });
+      return asked.source === "central_setting" ? asked.value : undefined;
     },
 
     async listOperations(context) {

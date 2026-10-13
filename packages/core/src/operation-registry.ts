@@ -185,6 +185,15 @@ interface OperationDefinitionBase<Input, Output> {
    */
   policyFloor?: PolicyValue;
   /**
+   * A floor of one call, where it depends on where the call came from and not on the operation
+   * alone: a tool an agent is given for the subject of its conversation stands for an operation
+   * on that asset. Asked with the policy, and again before a call that waited is executed. The
+   * stricter of it and `policyFloor` holds.
+   */
+  policyFloorOf?(
+    origin: OperationOrigin
+  ): PolicyValue | undefined | Promise<PolicyValue | undefined>;
+  /**
    * The answer holds a secret that is shown once, such as a new key. The run keeps no output,
    * so a repeated call with the same key answers OUTPUT_NOT_RETAINED and never the secret
    * again. The call is never held for an approval: a held call is executed later, when nobody

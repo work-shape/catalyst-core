@@ -1,8 +1,10 @@
 import { z } from "zod";
 import type {
+  ConversationId,
   JsonObject,
   JsonValue,
   OperationEffect,
+  PolicyValue,
   ToolExecutionErrorCode,
   ToolHandlerResult,
   ToolPermissionPolicy,
@@ -22,6 +24,14 @@ export interface ToolDefinition<TInput = unknown, TOutput = unknown> {
   outputSchema?: z.ZodType<TOutput>;
   inputJsonSchema?: JsonObject;
   permission?: ToolPermissionPolicy;
+  /**
+   * A policy value no call from one conversation is looser than, whatever the tool's own mode
+   * says: a tool that stands for another operation answers here what that operation's policy
+   * asks for what the conversation reaches. Nothing where the conversation adds no floor.
+   */
+  policyFloor?(call: {
+    conversationId: ConversationId;
+  }): PolicyValue | undefined | Promise<PolicyValue | undefined>;
   execute(
     input: TInput,
     context: ToolRuntimeContext

@@ -2035,6 +2035,10 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- **Workflows, the agent's save and a policy on `assets.put`:** a central policy setting on
+  `assets.put`, or on `assets.*`, that matches the Workflow of a conversation now holds for
+  the agent's `platform.assets.put` too: `deny` refuses the save and `approval` holds it for
+  the Inbox, as the API does. Before, only a setting on `platform.assets.put` itself did.
 - **Connections, schemas of an outside system:** a JSON Schema that an MCP server lists for a
   tool can no longer hold the API process. Such a schema is compiled, and an input or a result
   checked by it, in a worker thread: 2 threads per process, a check of at most 2 seconds, 500
