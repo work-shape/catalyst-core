@@ -53,6 +53,13 @@ export async function takeLiveOnceSwitch(
   return { ...(taken ? { taken: mapSwitch(taken) } : {}), cleared };
 }
 
+export function clearStaleLiveOnceSwitches(
+  db: PostgresConnection,
+  input: Input<"clearStale">
+): Promise<LiveOnceSwitch[]> {
+  return clearStale(db, input.clientInstanceId, input.assetId);
+}
+
 /** Deletes the switches of an asset set for a revision that is no longer its draft. */
 async function clearStale(
   db: PostgresConnection,

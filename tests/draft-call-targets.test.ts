@@ -343,6 +343,28 @@ describe("a call made by a draft", () => {
     ]);
   });
 
+  // The draft changed twice and is the earlier revision again: the switch is gone all the same.
+  it("does not bring a switch back with a discarded draft", async () => {
+    const t = await ready();
+    await t.expectOk(t.root.id, "assets.publish", { params: address, payload: { revision: 1 } });
+    await switchOn(t, 1);
+    const { revisionId: switched } = await draftOf(t, "send");
+    const revision = await save(t, 1);
+    await t.expectOk(t.admin.id, "assets.discard_draft", {
+      params: address,
+      payload: { expectedRevision: revision }
+    });
+    expect((await draftOf(t, "send")).revisionId).toBe(switched);
+
+    const call = await stepCall(t);
+    expect(call.result.status).toBe("dry_run");
+    expect(t.executed).toEqual([]);
+    expect((await switchRows(t)).map(({ type }) => type)).toEqual([
+      "live_once.switched_on",
+      "live_once.cleared"
+    ]);
+  });
+
   // A dry run answers its input, and an input that holds a secret is not handed back.
   it("answers a simulated call whose input holds a secret without its input", async () => {
     const t = await ready();

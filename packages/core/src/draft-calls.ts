@@ -39,4 +39,13 @@ export interface LiveOnceSwitchStore {
     revisionId: string;
     part: string;
   }): Promise<{ taken?: LiveOnceSwitch; cleared: LiveOnceSwitch[] }>;
+  /**
+   * Clears every switch of the asset whose revision is no longer its draft, and answers them.
+   * Asked before a discard, which makes an earlier revision the draft again: a switch left
+   * from that revision would otherwise apply once more.
+   */
+  clearStale(input: {
+    clientInstanceId: ClientInstanceId;
+    assetId: string;
+  }): Promise<LiveOnceSwitch[]>;
 }

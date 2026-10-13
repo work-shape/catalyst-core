@@ -466,6 +466,25 @@ export class AssetDraftWorkflow {
     if (asset.revision !== expectedRevision) {
       throw await revisionConflictOf(this.options, call.access, target);
     }
+    if (kind.draftCalls) {
+      // The discard makes the published revision the draft again. A "Run live once" switch
+      // set for it before the draft changed would apply once more, so the switches the draft
+      // left behind are cleared first (ADR-0031).
+      const cleared = await this.options.stores.liveOnceSwitches.clearStale({
+        clientInstanceId: this.options.clientInstanceId,
+        assetId: asset.id
+      });
+      for (const stale of cleared) {
+        await recordAssetEvent(call, "live_once.cleared", {
+          kind: kind.kind,
+          name,
+          revisionId: stale.revisionId,
+          part: stale.part,
+          switchedBy: stale.switchedBy.id,
+          reason: "draft_changed"
+        });
+      }
+    }
     let discarded: { revision: number };
     try {
       discarded = await this.options.configAssets.store.discardConfigAssetDraft({
