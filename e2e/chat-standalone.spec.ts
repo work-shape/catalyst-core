@@ -4110,7 +4110,7 @@ test("the command palette opens from the rail and the keyboard, searches titles 
   await field.fill(`nothing ${stamp}`);
   // The search is limited to the active workspace, and the answer says so.
   await expect(palette.getByRole("status")).toHaveText(
-    `No results for "nothing ${stamp}" in Personal workspace.`
+    `No results for "nothing ${stamp}" in E2E's workspace.`
   );
   await expect(palette.getByRole("option")).toHaveCount(0);
 
