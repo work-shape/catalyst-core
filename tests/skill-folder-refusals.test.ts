@@ -101,6 +101,27 @@ describe("what a skill's folder may not hold", () => {
         { path: "notes/readme.txt", base64: Buffer.from([0xff, 0xfe, 0x41]).toString("base64") }
       ])
     ).toMatchObject({ reason: "skill_file_not_text", path: "notes/readme.txt" });
+    // A file under scripts/ is a script and text, whatever its extension.
+    expect(
+      await refused([
+        { path: "scripts/helper", base64: Buffer.from([0xff, 0xfe, 0x00, 0x41]).toString("base64") }
+      ])
+    ).toMatchObject({ reason: "skill_file_not_text", path: "scripts/helper" });
+    // An absolute path, and two paths that differ in case alone.
+    expect(await refused([{ path: "/etc/passwd", text: "x" }])).toMatchObject({
+      reason: "skill_path_invalid",
+      path: "/etc/passwd"
+    });
+    // A NUL in a path is refused by the contract of the call, before the skill reads it.
+    expect(await refused([{ path: "assets/a\u0000.md", text: "x" }])).toMatchObject({
+      issues: [{ message: "A name must not contain a NUL byte", path: ["files", 1, "path"] }]
+    });
+    expect(
+      await refused([
+        { path: "references/A.md", text: GUIDE },
+        { path: "references/a.md", text: GUIDE }
+      ])
+    ).toMatchObject({ reason: "skill_path_duplicate", path: "references/a.md" });
     expect(await refused([{ path: "docs/SKILL.md", text: SKILL_MD }])).toMatchObject({
       reason: "skill_path_invalid",
       path: "docs/SKILL.md"

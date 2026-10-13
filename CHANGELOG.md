@@ -30,7 +30,7 @@ contain breaking changes; a patch version does not.
   is unchanged for a skill that is text alone; other files are kept in the file set of the
   revision and named in the config's `files` index (path, hash, size, media type). A write of
   the config alone leaves them in place, and a revert brings a revision's files back. Compiled
-  programs, Git LFS pointers, script and text files that are no UTF-8, a `SKILL.md` below the
+  programs, Git LFS pointers, files below `scripts/` and text files that are no UTF-8, a `SKILL.md` below the
   root and files or folders over the limits (2 MiB a file, 500 files, 8 MiB a skill) are refused
   with their path and a reason. No database migration: a revision from before reads from its
   config. An agent's proposal no longer creates or changes a resource below `scripts/`.

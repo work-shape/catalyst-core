@@ -234,10 +234,11 @@ export interface SkillFilesReading {
  * Reads the whole folder of a skill as one write carries it. It refuses the set for a limit
  * and each file for its path, its place and what it is, with the path and a reason of its own.
  *
- * Any normalized relative path is a file of the skill. A file whose extension says script or
- * text is UTF-8. One with the extension of a resource (`.md`, `.txt`, `.json`, `.yaml`,
- * `.yml`) outside `scripts/` is a resource of the config, at whatever path, such as a
- * `reference.md` or a `LICENSE.txt` at the root. Every other file is kept as its bytes.
+ * Any normalized relative path is a file of the skill. A file under `scripts/`, and a file
+ * whose extension says script or text, is UTF-8. One with the extension of a resource (`.md`,
+ * `.txt`, `.json`, `.yaml`, `.yml`) outside `scripts/` is a resource of the config, at
+ * whatever path, such as a `reference.md` or a `LICENSE.txt` at the root. Every other file is
+ * kept as its bytes.
  */
 export function readSkillFiles(name: string, files: readonly SkillFileInput[]): SkillFilesReading {
   if (files.length > SKILL_MAX_FILES) {
@@ -309,12 +310,13 @@ export function readSkillFiles(name: string, files: readonly SkillFileInput[]): 
     const extension = /\.([A-Za-z0-9]+)$/u.exec(path)?.[1]?.toLowerCase();
     if (
       text === undefined &&
-      extension !== undefined &&
-      SKILL_TEXT_EXTENSIONS.includes(extension)
+      (inScripts || (extension !== undefined && SKILL_TEXT_EXTENSIONS.includes(extension)))
     ) {
       throw refusal(
         "skill_file_not_text",
-        `The file '${path}' is no UTF-8 text. A file with the extension '.${extension}' is a script or a text.`,
+        inScripts
+          ? `The file '${path}' is no UTF-8 text. A file under '${SKILL_SCRIPTS_FOLDER}/' is a script, and a script is text.`
+          : `The file '${path}' is no UTF-8 text. A file with the extension '.${extension}' is a script or a text.`,
         { path }
       );
     }
