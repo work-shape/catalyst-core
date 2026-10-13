@@ -107,8 +107,16 @@ export interface ModelUsageEvent extends ModelTokenUsage {
   createdAt: ISODateString;
 }
 
+/**
+ * What an embedding call is for: the chunks of a Knowledge Base at ingestion and re-index, or
+ * the query of a search.
+ */
+export const MODEL_EMBEDDING_PURPOSES = ["knowledge_embedding", "knowledge_query"] as const;
+export type ModelEmbeddingPurpose = (typeof MODEL_EMBEDDING_PURPOSES)[number];
+
 /** What a model call that no agent run made was for. */
-export type ModelSystemPurpose = "conversation_title" | "guardrail_judge" | "document_extraction";
+export type ModelSystemPurpose =
+  "conversation_title" | "guardrail_judge" | "document_extraction" | ModelEmbeddingPurpose;
 
 /** A model call an agent run made. */
 export interface AgentRunModelAttribution {
