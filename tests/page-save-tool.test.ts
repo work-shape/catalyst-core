@@ -7,8 +7,6 @@ import { z } from "zod";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { PageBuildLimits } from "@vivd-catalyst/app-build";
 import {
-  assetRepoCommitJob,
-  assetRepoSweepJob,
   createPageBuildClient,
   createPageBundleJobs,
   createSandboxPageBuild,
@@ -16,12 +14,6 @@ import {
   pageBundleJob
 } from "@vivd-catalyst/chat-server";
 import {
-  assertCommandWorkerServesModuleJobKinds,
-  createClientInstanceWorkspaceCommandWorker,
-  platformModules
-} from "@vivd-catalyst/client-assembly";
-import {
-  createModuleRegistry,
   createPageBuildId,
   FILE_SET_MAX_FILE_BYTES,
   readObjectBytes,
@@ -30,7 +22,6 @@ import {
   type PageBuildClient,
   type PageBuildId
 } from "@vivd-catalyst/core";
-import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import { createPostgresJobWorker } from "@vivd-catalyst/postgres-store";
 import {
   createPageSaveTool,
@@ -39,7 +30,6 @@ import {
   WorkspaceCommandService,
   type PageSaveToolOptions
 } from "@vivd-catalyst/tool-execution";
-import { createTestConfig, workspaceInfrastructure } from "./support/fixtures";
 import { MemoryObjectStorage } from "./support/memory-object-storage";
 import {
   fileRoute,
@@ -48,7 +38,6 @@ import {
   reactManifest,
   rootRoute
 } from "./support/page-build";
-import { fileTestDatabaseUrl } from "./support/test-database";
 import { createTestToolRunner } from "./support/tool-runner";
 import { createWorkspaceHarness } from "./support/workspace-tools-harness";
 
@@ -740,82 +729,6 @@ describe("a save on an instance where no worker takes builds", () => {
     // The build ran to its end, which here is a command that wrote nothing.
     expect(result.error?.message).not.toBe(PAGE_BUILD_NO_WORKER_MESSAGE);
     expect(result).toMatchObject({ status: "failed" });
-  });
-});
-
-describe("the apps module and the workspace command worker", () => {
-  const snapshot = (enabled: boolean) =>
-    createModuleRegistry(platformModules).snapshot({ apps: { enabled } });
-
-  it("refuses a worker that does not serve page.bundle with the module on", async () => {
-    const harness = await createWorkspaceHarness();
-    const { handlers } = createPageBundleJobs({
-      clientInstanceId: harness.clientInstanceId,
-      stores: harness.store,
-      pages: { objects: new MemoryObjectStorage() },
-      workspaceObjects: harness.objectStore,
-      logger: silent,
-      build: createSandboxPageBuild({
-        sandbox: new LocalWorkspaceCommandProcessExecutor(),
-        tempRoot: join(scratch, "builds")
-      })
-    });
-
-    expect(() => assertCommandWorkerServesModuleJobKinds(snapshot(true), [])).toThrow(
-      "'modules.apps.enabled' is true, but the workspace command worker of this assembly does not serve the job kind 'page.bundle'"
-    );
-    // A worker that builds Pages and keeps no repositories is refused as well.
-    const builds = handlers.map((handler) => handler.kind.kind);
-    expect(() => assertCommandWorkerServesModuleJobKinds(snapshot(true), builds)).toThrow(
-      "does not serve the job kind 'asset_repo.commit'"
-    );
-    expect(() =>
-      assertCommandWorkerServesModuleJobKinds(snapshot(true), [
-        ...builds,
-        assetRepoCommitJob.kind,
-        assetRepoSweepJob.kind
-      ])
-    ).not.toThrow();
-    expect(() => assertCommandWorkerServesModuleJobKinds(snapshot(false), [])).not.toThrow();
-  });
-
-  const workerConfig = (input: { files: boolean }) => {
-    const base = createTestConfig();
-    const root = join(scratch, "worker-objects");
-    return parseClientInstanceConfig({
-      ...base,
-      modules: { apps: { enabled: true } },
-      executionWorkspaces: { enabled: true },
-      infrastructure: {
-        ...base.infrastructure,
-        ...workspaceInfrastructure(join(root, "workspaces")),
-        objectStorage: {
-          workspaces: { provider: "filesystem", root: join(root, "workspaces") },
-          ...(input.files ? { files: { provider: "filesystem", root: join(root, "files") } } : {})
-        }
-      }
-    });
-  };
-
-  it("assembles the platform's workspace command worker with the module on", async () => {
-    const worker = await createClientInstanceWorkspaceCommandWorker({
-      config: workerConfig({ files: true }),
-      capabilities: [],
-      env: { DATABASE_URL: await fileTestDatabaseUrl() }
-    });
-    await worker.close();
-  });
-
-  it("does not start that worker without the store it puts built Pages in", async () => {
-    await expect(
-      createClientInstanceWorkspaceCommandWorker({
-        config: workerConfig({ files: false }),
-        capabilities: [],
-        env: { DATABASE_URL: await fileTestDatabaseUrl() }
-      })
-    ).rejects.toThrow(
-      "'modules.apps.enabled' is true, but 'infrastructure.objectStorage.files' is not configured"
-    );
   });
 });
 

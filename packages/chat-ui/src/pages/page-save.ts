@@ -10,7 +10,7 @@ export const PAGE_SAVE_TOOL_NAME = "page.save";
  * What a stored save did to the App the conversation is about, where the Page is that App's:
  * the App's draft revision it wrote, or why it wrote none.
  */
-export type PageSaveApp =
+type PageSaveApp =
   | { title: string; saved: true; revision: number }
   | { title: string; saved: false; message: string };
 
@@ -150,7 +150,7 @@ export function pageBuildingSurface(
 }
 
 /** What a run's saves of Pages may change in the surface slot. */
-export type PageRunSurface = SurfaceOf<"page"> | SurfaceOf<"page_building">;
+type PageRunSurface = SurfaceOf<"page"> | SurfaceOf<"page_building">;
 
 /**
  * What the calls of `page.save` in a run ask of the surface slot, in the order they were made.
