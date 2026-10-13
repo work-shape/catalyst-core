@@ -11,16 +11,6 @@ const contentWidths: Record<PageWidth, string> = {
 };
 
 /**
- * The widest the row of the content and a `PageOutline` grows: the outline stays at the page's
- * right edge, and in a very wide window no further from the content than a list page is wide.
- */
-const outlineRowWidths: Record<PageWidth, string> = {
-  narrow: "max-w-[calc(var(--layout-content)+var(--layout-outline)+var(--layout-gutter)*3)]",
-  default: "max-w-[calc(var(--layout-content)+var(--layout-outline)+var(--layout-gutter)*3)]",
-  wide: "max-w-none"
-};
-
-/**
  * The left column navigates, the right outline scrolls: a page names the other pages of its
  * area in a `SubRail`, or its own sections in a `PageOutline`, not both.
  */
@@ -35,9 +25,9 @@ type PageNavigationProps =
     }
   | {
       /**
-       * A `PageOutline` in its own column right of the content, which starts at the page's left
-       * edge, while the content keeps 40rem. With less room in the page it is a line above the
-       * content.
+       * A `PageOutline` in its own column at the page's right edge while the content keeps 40rem.
+       * The content is centred in the room left of it. With less room in the page the outline is
+       * a line above the content.
        *
        * `null` leaves the column empty and the content where it is: a page of one section has
        * no outline, and something else may take the column.
@@ -101,8 +91,7 @@ export function Page({
         <div
           className={cn(
             "grid min-w-0 gap-x-(--layout-gutter) px-(--layout-gutter) @outline/page:grid-cols-[minmax(0,1fr)_var(--layout-outline)]",
-            header === undefined && "pt-[calc(var(--layout-page-inset)+var(--spacing)*6)]",
-            outlineRowWidths[width]
+            header === undefined && "pt-[calc(var(--layout-page-inset)+var(--spacing)*6)]"
           )}
         >
           {/* Before the content, so the keyboard reaches the outline first and a narrow page
@@ -112,7 +101,7 @@ export function Page({
           </div>
           <div
             className={cn(
-              "min-w-0 pb-(--layout-page-end) @outline/page:col-start-1 @outline/page:row-start-1",
+              "mx-auto w-full min-w-0 pb-(--layout-page-end) @outline/page:col-start-1 @outline/page:row-start-1",
               contentWidths[width]
             )}
           >
