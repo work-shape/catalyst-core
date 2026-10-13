@@ -16,6 +16,8 @@ import {
   applySkillChange,
   assertSkillChangeScope,
   createSkillChangePreview,
+  guardrailFieldOf,
+  guardrailStringsOf,
   skillChangeOperationsSchema,
   skillNameSchema
 } from "@vivd-catalyst/config-schema";
@@ -138,6 +140,25 @@ export function createSkillChangeApprovalHandler(
         }
         throw error;
       }
+    },
+    // The skill as the approval writes it, read by the guardrails on asset writes once more: a
+    // guardrail added since the agent proposed it reads it too.
+    async applyEvents(payload) {
+      const data = validatePayload(payload);
+      const snapshot = await options.configAssets.source.getSnapshot();
+      const current = snapshot.skills.find((candidate) => candidate.name === data.skillName);
+      // A change that no longer applies was found stale before this is asked.
+      const skill = applySkillChange(current, data.operations);
+      return [
+        {
+          name: "asset.before_write",
+          subject: { kind: "skill", name: skill.name },
+          checkable: () => ({
+            name: skill.name,
+            content: guardrailFieldOf(guardrailStringsOf(skill))
+          })
+        }
+      ];
     },
     async isApplied(payload, context) {
       return (

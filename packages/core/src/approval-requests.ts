@@ -4,6 +4,7 @@ import type {
   ApprovalRequestDecision,
   ApprovalRequestStatus
 } from "./approval-request";
+import type { OperationBeforeEvent } from "./guardrails";
 import type { StorePage } from "./paging";
 import type { ClientInstanceId, ConversationId } from "./ids";
 import type { AgentRunWriteFence, AuthenticatedUser } from "./identity";
@@ -91,6 +92,16 @@ export interface ApprovalRequestHandler<TPayload extends JsonObject = JsonObject
    * outcome failed. Takes the stored payload, so it must not require a valid one.
    */
   isApplied?(payload: JsonObject, context: ApprovalRequestContext): Promise<boolean>;
+  /**
+   * The before-events of the change `apply` makes, asked again once the request is approved
+   * and before it is applied: a guardrail that was added since the request was filed reads the
+   * change too. A block there ends the request unapplied with the reason; a hold is answered by
+   * the approval itself.
+   */
+  applyEvents?(
+    payload: TPayload,
+    context: ApprovalRequestContext
+  ): Promise<readonly OperationBeforeEvent[]>;
   apply(
     payload: TPayload,
     approver: AuthenticatedUser,

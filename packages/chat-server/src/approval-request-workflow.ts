@@ -2,7 +2,9 @@ import type { StorePage } from "@vivd-catalyst/core";
 import {
   AppError,
   auditActorFromUser,
+  getSubjectUserId,
   hasAuthScope,
+  operationDenialError,
   type ActorAccess,
   type ApprovalPreviewViewer,
   type ApprovalRequest,
@@ -21,7 +23,7 @@ import {
   type ApprovalTransactionStores,
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
-
+import { guardrailDenial } from "@vivd-catalyst/tool-execution";
 import type { GuardrailRunner } from "./guardrail-runner";
 
 /** Scopes the approval routes require; the view flags use the same ones. */
@@ -243,6 +245,19 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
             ...this.endedPayload(pending)
           };
         }
+        const refusal = await this.guardrailRefusal(handler, payload, pending, user, context);
+        if (refusal) {
+          // Approved, and not applied: the item keeps why, as a held call's refusal does.
+          return {
+            status: "superseded",
+            decision,
+            applyResult: {
+              execution: "refused",
+              error: { code: refusal.code, message: refusal.message }
+            },
+            ...this.endedPayload(pending)
+          };
+        }
         const applyResult = await handler.apply(payload, user, handlerContext);
         return { status: "approved", decision, applyResult };
       }
@@ -315,6 +330,57 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     await this.record(user, context, "approval_request.reverted", updated);
     await this.options.onDecided?.(updated);
     return updated;
+  }
+
+  /**
+   * The refusal of an approved change that a guardrail blocks now, asked about the change as
+   * `apply` would make it. The guardrails read it as the same action asked again: only a block
+   * is kept as a new hit, as its other answers were kept when the request was filed.
+   */
+  private async guardrailRefusal(
+    handler: ApprovalRequestHandler,
+    payload: JsonObject,
+    pending: ApprovalRequest,
+    user: AuthenticatedUser,
+    context: CallContext
+  ): Promise<AppError | undefined> {
+    const { guardrails } = this.options;
+    if (!guardrails || !handler.applyEvents) return undefined;
+    const { origin } = pending;
+    for (const event of await handler.applyEvents(payload, this.handlerContext(pending, context))) {
+      const answers = await guardrails.answer(
+        {
+          event: event.name,
+          subject: event.subject,
+          match:
+            event.name === "operation.before_call"
+              ? { operation: event.subject.name }
+              : {
+                  kind: event.subject.kind,
+                  // The change is the agent's that proposed it, as when it was proposed.
+                  ...(origin ? { origin: "agent", agent: origin.agentName } : {})
+                },
+          fields: event.checkable
+        },
+        {
+          correlationId: context.correlationId,
+          userId: getSubjectUserId(user),
+          ...(origin ? { conversationId: origin.conversationId } : {}),
+          ...(context.deadline ? { deadline: context.deadline } : {}),
+          ...(context.signal ? { signal: context.signal } : {}),
+          repeated: true
+        }
+      );
+      if (answers.some((answer) => answer.outcome === "block")) {
+        return operationDenialError(
+          guardrailDenial(
+            [{ outcome: "block", guardrails: answers, subject: event.subject }],
+            event.name
+          )
+        );
+      }
+    }
+    return undefined;
   }
 
   /**

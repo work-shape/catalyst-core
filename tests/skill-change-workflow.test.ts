@@ -1,4 +1,8 @@
-import { builtInModelCapabilities } from "./support/model-gateway";
+import {
+  builtInModelCapabilities,
+  createScriptedInstanceModelGateway
+} from "./support/model-gateway";
+import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { accessOf } from "./support/access";
 import {
   createTestAssetKinds,
@@ -23,10 +27,12 @@ import {
   agentConfigSchema,
   createSkillChangePreview,
   getModelProviderConfigs,
+  parseClientInstanceConfig,
   type SkillChangeOperation
 } from "@vivd-catalyst/config-schema";
 import {
   ApprovalRequestWorkflow,
+  GuardrailRunner,
   createSkillChangeApprovalHandler
 } from "@vivd-catalyst/chat-server";
 import {
@@ -80,7 +86,7 @@ function json(input: unknown): JsonObject {
   if (!isJsonObject(value)) throw new Error("Expected object");
   return value;
 }
-async function fixture() {
+async function fixture(guardrails?: Record<string, unknown>) {
   const config = createTestConfig({
     tools: [{ name: "read_skill" }, { name: "propose_skill_change" }]
   });
@@ -124,12 +130,32 @@ async function fixture() {
     }
   });
   const onDecided = vi.fn();
+  const guarded = guardrails && parseClientInstanceConfig({ ...createTestConfig(), guardrails });
   const workflow = new ApprovalRequestWorkflow({
     clientInstanceId,
     store: store.approvals,
     handlers: new Map([[handler.kind, handler]]),
     auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit }),
-    onDecided
+    onDecided,
+    ...(guarded
+      ? {
+          guardrails: new GuardrailRunner({
+            clientInstanceId,
+            config: guarded,
+            hits: store.guardrails,
+            // Patterns only: no judge is asked.
+            modelGateway: createScriptedInstanceModelGateway({
+              config: guarded,
+              modelProvider: { complete: vi.fn() },
+              usageGovernance: new ModelUsageGovernance({
+                store: store.usage,
+                budget: {},
+                safeguards: {}
+              })
+            })
+          })
+        }
+      : {})
   });
   const propose = (ops = operations, name = skill.name) =>
     workflow.createRequest(requester, context, {
@@ -246,6 +272,62 @@ describe("skill change approval workflow", () => {
     ).rejects.toMatchObject({
       code: "CONFLICT"
     });
+  });
+  // Fails without the change: the approval applied the skill unread, so a guardrail added after
+  // the agent proposed the change never saw it.
+  it("refuses to apply an approved change a guardrail on asset writes blocks, and says why", async () => {
+    const f = await fixture({
+      no_iban: {
+        displayName: "No IBAN in skills",
+        on: "asset.before_write",
+        filter: { kind: "skill" },
+        check: {
+          kind: "pattern",
+          pattern: "(?i)\\bDE\\d{2}(?:\\s?\\d{4}){4}\\s?\\d{2}\\b",
+          reason: "Skills hold no bank account."
+        },
+        outcome: "block"
+      }
+    });
+    const request = await f.propose([
+      {
+        type: "replace_text",
+        target: "root",
+        oldText: "Check facts.",
+        newText: "Pay to DE89 3704 0044 0532 0130 00."
+      }
+    ]);
+    const decided = await f.approve(request.id);
+    expect(decided).toMatchObject({
+      status: "superseded",
+      decision: { approved: true, decidedBy: reviewer.id },
+      applyResult: {
+        execution: "refused",
+        error: {
+          code: "GUARDRAIL_BLOCKED",
+          message:
+            "Guardrail 'No IBAN in skills' blocked skill 'review': Skills hold no bank account."
+        }
+      }
+    });
+    expect(await f.revisions()).toHaveLength(1);
+    expect(f.onDecided).toHaveBeenLastCalledWith(decided);
+    const [hit, ...more] = await f.store.guardrails.listHits({
+      clientInstanceId,
+      guardrailName: "no_iban",
+      limit: 5
+    });
+    expect(more).toEqual([]);
+    expect(hit).toMatchObject({
+      event: "asset.before_write",
+      outcome: "block",
+      subjectKind: "skill",
+      subjectName: "review"
+    });
+    expect(JSON.stringify(hit)).not.toContain("3704");
+
+    // A change the guardrail lets through is applied.
+    expect(await f.approve((await f.propose()).id)).toMatchObject({ status: "approved" });
   });
   it("approves independent pending changes to different paragraphs in sequence", async () => {
     const f = await fixture();
