@@ -498,6 +498,13 @@
       "when": 1791883714424,
       "tag": "0070_conversation_subject",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1791908117435,
+      "tag": "0071_knowledge_base_states",
+      "breakpoints": true
     }
   ]
 }

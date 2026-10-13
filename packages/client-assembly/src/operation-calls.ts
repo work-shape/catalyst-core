@@ -8,6 +8,7 @@ import {
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import {
   createAuthorizer,
+  knowledgeOperationNamesOf,
   type ApprovalRequestHandlerRegistry,
   type AuditRecorder,
   type Authorizer,
@@ -86,14 +87,17 @@ export function createInstanceOperationCalls(
     },
     async agentToolNames(agentName, conversationId) {
       const assets = await assetSource.getSnapshot();
-      const listed =
-        assets.agents.find((candidate) => candidate.name === agentName)?.toolNames ?? [];
+      const agent = assets.agents.find((candidate) => candidate.name === agentName);
       // The tools the server binds to the subject of a conversation are no part of an agent's
       // definition: the conversation of the call decides whether the agent has them.
       const offer = conversationId
         ? await input.conversationOffer?.offerOf({ clientInstanceId, conversationId })
         : undefined;
-      return conversationToolNames(listed, offer);
+      // The query of each Knowledge Base the agent lists, which its one knowledge tool calls.
+      return [
+        ...(await conversationToolNames(agent?.toolNames ?? [], offer)),
+        ...(agent ? knowledgeOperationNamesOf(agent) : [])
+      ];
     }
   });
   const approvalRequestCreator = new ApprovalRequestWorkflow({

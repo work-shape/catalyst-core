@@ -78,7 +78,12 @@ export function useDataStoreInstance(): {
     dataStores: boolean,
     changing?: PolicyValue,
     /** Who may sign in, where a test needs more than the administrator. */
-    developmentAuth?: unknown
+    developmentAuth?: unknown,
+    /**
+     * The module `knowledge` on beside the Data Stores, with agents that may be created and
+     * given Knowledge Bases.
+     */
+    knowledge?: boolean
   ): Promise<DataStoreInstance>;
   /** Closes the processes of every instance the test started. */
   close(): Promise<unknown>;
@@ -124,14 +129,37 @@ export function useDataStoreInstance(): {
   async function start(
     dataStores: boolean,
     changing?: PolicyValue,
-    developmentAuth?: unknown
+    developmentAuth?: unknown,
+    knowledge = false
   ): Promise<DataStoreInstance> {
     const root = await mkdtemp(join(tmpdir(), "data-store-test-"));
     roots.push(root);
     const base = createTestConfig(developmentAuth === undefined ? {} : { developmentAuth });
     const settings = {
       ...base,
-      modules: { assetManagement: { enabled: true }, dataStores: { enabled: dataStores } },
+      modules: {
+        assetManagement: { enabled: true },
+        dataStores: { enabled: dataStores },
+        ...(knowledge ? { knowledge: { enabled: true } } : {})
+      },
+      ...(knowledge
+        ? {
+            administration: {
+              agentConfiguration: {
+                enabled: true,
+                editableAgentFields: [
+                  "displayName",
+                  "instructions",
+                  "toolNames",
+                  "skillNames",
+                  "knowledgeBases",
+                  "initialPrompts"
+                ],
+                allowAgentCreation: true
+              }
+            }
+          }
+        : {}),
       secretStore: { keys: [{ id: "k1", ref: KEY_VARIABLE }] },
       infrastructure: {
         ...base.infrastructure,

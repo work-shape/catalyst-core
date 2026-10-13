@@ -200,6 +200,12 @@ export const agentConfigSchema = z.object({
   maxSteps: z.number().int().positive().optional(),
   toolNames: z.array(z.string().min(1)).default([]),
   skillNames: z.array(skillNameSchema).default([]),
+  knowledgeBases: z
+    .array(z.string().min(1))
+    .refine((names) => new Set(names).size === names.length, {
+      message: "A Knowledge Base is listed once"
+    })
+    .optional(),
   initialPrompts: z
     .array(
       z.object({

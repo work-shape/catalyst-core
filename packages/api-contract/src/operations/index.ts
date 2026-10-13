@@ -14,6 +14,7 @@ import { credentialOperations } from "./credentials";
 import { governanceOperations } from "./governance";
 import { instanceOperations } from "./instance";
 import { jobOperations } from "./jobs";
+import { knowledgeOperations } from "./knowledge";
 import { operationRunOperations } from "./operations";
 import { pageOperations } from "./pages";
 import { platformOperations } from "./platform";
@@ -40,6 +41,7 @@ export const apiOperations = {
   ...connectionOperations,
   ...workflowOperations,
   ...dataStoreOperations,
+  ...knowledgeOperations,
   ...userOperations,
   ...apiAccessOperations,
   ...accessOperations,

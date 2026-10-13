@@ -188,6 +188,13 @@ export const GRANTABLE_ACTION_SCOPES = {
   // edits the draft and publishing moves the published pointer; making a revision live that
   // names a service principal asks the right over that principal beside it. Deleting and the
   // rows of a run's datasets stay with the role.
+  // A Knowledge Base's rights are granted in a Namespace or on one Knowledge Base: `use`
+  // queries the published revision, `read` shows it and its state, `write` changes the draft
+  // and `publish` makes it live. Deleting stays with the role.
+  "knowledge_base.read": ["namespace", "asset"],
+  "knowledge_base.use": ["namespace", "asset"],
+  "knowledge_base.write": ["namespace", "asset"],
+  "knowledge_base.publish": ["namespace", "asset"],
   "workflow.read": ["namespace", "asset"],
   "workflow.use": ["namespace", "asset"],
   "workflow.write": ["namespace", "asset"],

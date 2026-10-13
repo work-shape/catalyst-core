@@ -11,7 +11,10 @@ import {
   AppError,
   defineAssetKind,
   findNamespaceOfAssetName,
+  KNOWLEDGE_BASE_ASSET_KIND,
   type AgentConfig,
+  type AssetValidationContext,
+  type AssetValidationIssue,
   type AgentEditableField,
   type AgentModelSettingField,
   type Namespace
@@ -46,14 +49,16 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
       // What the schema accepts today: any name that is not empty.
       nameRule: { pattern: /^[\s\S]+$/u, description: "Agent name must not be empty" },
       actions: { read: "agent.read", write: "agent.write", delete: "agent.delete" },
-      validate: (context, agents) =>
-        findAgentReferenceIssues({
+      validate: (context, agents) => [
+        ...findAgentReferenceIssues({
           agents,
           skillNames: context
             .definitions("skill")
             .flatMap((skill) => readDefinitionName(skill) ?? []),
           refs: options.validationRefs
         }).map((message) => ({ message })),
+        ...missingKnowledgeBaseIssues(context, agents)
+      ],
       validateWrite(context, agents) {
         assertSpendBudgetPricingCoverage(options.config, [...agents]);
         return (
@@ -180,4 +185,35 @@ function isAgentModelSettingField(field: string): field is AgentModelSettingFiel
 
 function hasModelBindingList(namespaces: readonly Namespace[], agentName: string): boolean {
   return findNamespaceOfAssetName(namespaces, agentName)?.allowedModelBindingIds !== undefined;
+}
+
+/**
+ * A Knowledge Base an agent lists that the instance does not have. Only an agent the write
+ * adds or changes is asked: a Knowledge Base deleted since stands in the way of no other write.
+ * Where the module `knowledge` is off, the kind is not there and no Knowledge Base is.
+ */
+function missingKnowledgeBaseIssues(
+  context: AssetValidationContext,
+  agents: readonly AgentConfig[]
+): AssetValidationIssue[] {
+  const known = new Set(
+    context
+      .definitions(KNOWLEDGE_BASE_ASSET_KIND)
+      .flatMap((knowledgeBase) => readDefinitionName(knowledgeBase) ?? [])
+  );
+  return agents
+    .filter((agent) => context.changes("agent", agent.name))
+    .flatMap((agent) =>
+      (agent.knowledgeBases ?? []).flatMap((name, index) =>
+        known.has(name)
+          ? []
+          : [
+              {
+                message: `Agent '${agent.name}' lists the Knowledge Base '${name}', which this instance does not have`,
+                path: ["knowledgeBases", index],
+                code: "knowledge_base_unknown"
+              }
+            ]
+      )
+    );
 }

@@ -202,6 +202,7 @@ administration:
       - maxSteps
       - toolNames
       - skillNames
+      - knowledgeBases
       - initialPrompts
     allowAgentCreation: true
     allowAgentDeletion: true

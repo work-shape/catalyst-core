@@ -7,6 +7,29 @@ contain breaking changes; a patch version does not.
 
 ### Added
 
+- **Knowledge Bases on a Data Store (module `knowledge`, off by default, needs `dataStores`):**
+  the asset kind `knowledge_base` with a draft and a published revision. Its definition names
+  a Data Store under `backend: { dataStore: <id> }` and describes at least one of its tables
+  with a sentence; it answers the method `structured` alone. A field of a later slice
+  (`sources`, `indexing`, `search`, `queries`, `filters`, a built-in or external backend, or
+  any field it does not know, such as an answer prompt) is refused with the slice that brings
+  it. Publishing needs `knowledge_base.publish` and `data_store.read` on the store, and checks
+  that every described table can be read; otherwise it is refused with the reason
+  `knowledge_base_needs_attention` and the tables it could not read. `knowledge.<id>.query`
+  (`POST /api/v1/knowledge-bases/:knowledgeBase/query`) runs one read-only statement with bound
+  parameters as the store's app role under the store's timeout, row and byte caps, with the
+  asker's `knowledge_base.use` and no right on the store; every call is one recorded Operation
+  Run, and the audit holds no SQL, parameter or row. `knowledge_bases.get` reads the last
+  check and `knowledge_bases.check` runs it again. An agent lists Knowledge Bases under
+  `knowledgeBases`; however many it lists, it gets one tool, `knowledge.query`, whose
+  description names each published one with its tables. Saving an agent that lists a
+  Knowledge Base the instance does not have is refused. In Studio, Build > Knowledge bases adds
+  one, describes the tables, shows the last check with "Check now" and a test query, and
+  publishes the draft; the agent page has a Knowledge section. Migration
+  `0071_knowledge_base_states` adds the table of the last check. **Operators:** add
+  `knowledgeBases` to `administration.configAssets.editableAgentFields` where people should
+  change it in Studio. Rollback: the previous release ignores the new table and drops an
+  agent's `knowledgeBases` when it reads the agent, so its agents answer without them.
 - **Data Stores, the reads of a store's page:** `data_stores.list` (`GET /api/v1/data-stores`)
   lists the stores a caller may read with the size, the number of tables and the estimate of
   rows of the last measurement (migration `0069_data_store_table_counts` adds the two columns;
@@ -264,7 +287,7 @@ contain breaking changes; a patch version does not.
   1,000 rows and 1 MiB per call, `onConflict: fail | skip`, answers `inserted` and `skipped`)
   needs `data_store.insert`. `load` takes a dataset of a Workflow Run into one table in one
   transaction (at most 100,000 rows and 64 MiB per call; `key` with `onConflict: fail | skip |
-  update`; `replace.by` deletes the rows of the dataset's values and adds the dataset, so a
+update`; `replace.by` deletes the rows of the dataset's values and adds the dataset, so a
   reader never sees the table half replaced); it needs `data_store.insert`, and
   `data_store.execute` as well for `update` and `replace`. Until the datasets of Workflow Runs
   exist it answers `not_supported_yet`. `data_stores.get` (`GET /api/v1/data-stores/:store`,
@@ -2093,7 +2116,7 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   `docker/vivd-client.Dockerfile`, the one `pnpm dev` starts) builds the packages that `core`,
   `config-schema` and `ui` depend on. Before, it built `core` without `asset-schemas`, the
   image built, and the UI container stopped at start with `Cannot find module
-  .../asset-schemas/dist/index.js`. The image build now loads the Vite plugin and fails when
+.../asset-schemas/dist/index.js`. The image build now loads the Vite plugin and fails when
   a package is missing, and `pnpm check:images` builds this image too.
 
 - **Model providers and redirects:** no model adapter follows a redirect any more. A provider

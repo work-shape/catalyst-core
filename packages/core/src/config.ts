@@ -55,6 +55,7 @@ export const AGENT_EDITABLE_FIELDS = [
   "maxSteps",
   "toolNames",
   "skillNames",
+  "knowledgeBases",
   "initialPrompts"
 ] as const;
 export type AgentEditableField = (typeof AGENT_EDITABLE_FIELDS)[number];
