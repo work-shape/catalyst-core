@@ -1,6 +1,7 @@
 // What the worker needs of the command that keeps repositories: its names, limits and the
 // shapes of a request and a result. Nothing here starts git; that is `cli.ts`, which runs in
 // the sandbox only.
+export { assetRepoCommandFile } from "./command-file";
 export {
   ASSET_REPO_BUNDLES_DIRECTORY,
   ASSET_REPO_COMMAND,

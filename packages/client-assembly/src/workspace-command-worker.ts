@@ -16,7 +16,7 @@ import {
   createWorkspaceCommandJobs,
   LocalWorkspaceCommandRunner
 } from "@vivd-catalyst/tool-execution";
-import { pageBundleJob } from "@vivd-catalyst/chat-server";
+import { assetRepoCommitJob, assetRepoSweepJob, pageBundleJob } from "@vivd-catalyst/chat-server";
 import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 import {
   createInstanceInfrastructure,
@@ -34,7 +34,11 @@ import {
   endResolveOnlyRun,
   resolveInstanceModules
 } from "./modules";
-import { createInstancePageBuildJobs, requireFilesStore } from "./pages";
+import {
+  createInstanceAssetRepoJobs,
+  createInstancePageBuildJobs,
+  requireFilesStore
+} from "./pages";
 import { createPlatformStore } from "./store";
 
 export interface CreateClientInstanceWorkspaceCommandWorkerInput {
@@ -49,7 +53,10 @@ export interface CreateClientInstanceWorkspaceCommandWorkerInput {
 
 export interface ClientInstanceWorkspaceCommandWorker {
   readonly config: ClientInstanceConfig;
-  /** The job worker that serves `workspace.command` and, with the `apps` module on, `page.bundle`. */
+  /**
+   * The job worker that serves `workspace.command` and, with the `apps` module on, `page.bundle`
+   * and the commits and the sweep of asset repositories.
+   */
   readonly worker: JobWorker;
   /** Starts the worker and resolves once `stop` has ended its commands. */
   runUntilStopped(): Promise<void>;
@@ -74,7 +81,10 @@ export async function createClientInstanceWorkspaceCommandWorker(
   // The work of a module that this worker has a handler for. It is known before a store is
   // open, so a module that needs more of this worker stops the process here.
   const buildsPages = modules.isEnabled("apps");
-  assertCommandWorkerServesModuleJobKinds(modules, buildsPages ? [pageBundleJob.kind] : []);
+  assertCommandWorkerServesModuleJobKinds(
+    modules,
+    buildsPages ? [pageBundleJob.kind, assetRepoCommitJob.kind, assetRepoSweepJob.kind] : []
+  );
   if (buildsPages) {
     requireFilesStore(config);
   }
@@ -139,13 +149,29 @@ export async function createClientInstanceWorkspaceCommandWorker(
     env,
     logger
   });
+  const assetRepoJobs = await createInstanceAssetRepoJobs({
+    config,
+    modules,
+    infrastructure,
+    clientInstanceId,
+    stores: store,
+    workspaceObjects: byteStore,
+    sandbox: processExecutor,
+    tempRoot: env.WORKSPACE_COMMAND_TEMP_ROOT ?? tmpdir(),
+    logger
+  });
   const worker = createJobWorker({
     stores: store,
     clientInstanceId,
     // The worker id names this process in the log lines of its jobs.
     logger: workerId ? logger.child({ workerId }) : logger,
-    handlers: [...commandJobs.handlers, ...sandboxCheck.handlers, ...pageBuildHandlers],
-    schedules: [...commandJobs.schedules, ...sandboxCheck.schedules]
+    handlers: [
+      ...commandJobs.handlers,
+      ...sandboxCheck.handlers,
+      ...pageBuildHandlers,
+      ...assetRepoJobs.handlers
+    ],
+    schedules: [...commandJobs.schedules, ...sandboxCheck.schedules, ...assetRepoJobs.schedules]
   });
   let stopped: (() => void) | undefined;
   const untilStopped = new Promise<void>((resolve) => {

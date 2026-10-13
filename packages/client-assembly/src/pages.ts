@@ -1,5 +1,8 @@
 import { pageBuildCommandFile } from "@vivd-catalyst/app-build";
+import { assetRepoCommandFile } from "@vivd-catalyst/asset-repo";
 import {
+  createAssetRepoJobs,
+  createSandboxAssetRepo,
   createPageBuildClient,
   createPageBundleJobs,
   PAGE_BUILD_STALE_MS,
@@ -12,6 +15,7 @@ import {
   AppError,
   resolveOptionalSecret,
   type ClientInstanceId,
+  type JobSchedule,
   type Logger,
   type ModuleSnapshot,
   type ObjectStorage,
@@ -158,6 +162,43 @@ export async function createInstancePageBuildJobs(input: {
         : {})
     })
   }).handlers;
+}
+
+/**
+ * The handlers of `asset_repo.commit` and `asset_repo.sweep` and the schedule of the sweep, for
+ * the workspace command worker: the one process that reaches the sandbox, where git runs.
+ * Nothing with the module off.
+ */
+export async function createInstanceAssetRepoJobs(input: {
+  config: ClientInstanceConfig;
+  modules: ModuleSnapshot;
+  infrastructure: InstanceInfrastructure;
+  clientInstanceId: ClientInstanceId;
+  stores: PlatformStores;
+  workspaceObjects: ObjectStorage;
+  sandbox: WorkspaceCommandProcessExecutor;
+  tempRoot: string;
+  logger: Logger;
+}): Promise<{ handlers: RegisteredJobHandler[]; schedules: JobSchedule[] }> {
+  if (!input.modules.isEnabled("apps")) {
+    return { handlers: [], schedules: [] };
+  }
+  return createAssetRepoJobs({
+    clientInstanceId: input.clientInstanceId,
+    stores: input.stores,
+    objects: await createFilesStore(input.config, input.infrastructure.context),
+    workspaceObjects: input.workspaceObjects,
+    logger: input.logger,
+    commit: createSandboxAssetRepo({
+      sandbox: input.sandbox,
+      tempRoot: input.tempRoot,
+      // As for a Page build: the local sandbox has no runner image, so the command is the
+      // script of this checkout and runs the git of the machine.
+      ...(input.config.infrastructure.sandbox?.provider === "local"
+        ? { command: `'${process.execPath}' '${assetRepoCommandFile()}'` }
+        : {})
+    })
+  });
 }
 
 function readPositiveInteger(name: string, raw: string | undefined): number | undefined {

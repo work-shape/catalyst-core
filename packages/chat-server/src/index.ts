@@ -148,6 +148,27 @@ export {
   type SandboxPageBuildInput,
   type SandboxPageBuildOptions
 } from "./page-build-sandbox";
+export {
+  ASSET_REPO_COMMAND_TIMEOUT_MS,
+  createSandboxAssetRepo,
+  type AssetRepoCommitInput,
+  type AssetRepoCommitOutcome,
+  type AssetRepoCommitRunner,
+  type SandboxAssetRepoOptions
+} from "./asset-repo-sandbox";
+export {
+  ASSET_REPO_COMMIT_WAIT_MS,
+  ASSET_REPO_SAVE_MAX_AGE_MS,
+  ASSET_REPO_SWEEP_INTERVAL_MS,
+  assetRepoCommitJob,
+  assetRepoSweepJob,
+  assetRepoSweepSchedule,
+  createAssetRepoCommitClient,
+  createAssetRepoJobs,
+  type AssetRepoCommitClient,
+  type AssetRepoCommitClientOptions,
+  type AssetRepoJobsOptions
+} from "./asset-repo-jobs";
 export type { PageFileInput, StorePageFileSetInput } from "./page-file-sets";
 export { createInProcessRateLimiter } from "./http/rate-limit";
 export { createHttpRuntime } from "./http/runtime";

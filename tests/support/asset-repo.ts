@@ -21,7 +21,7 @@ const run = promisify(execFile);
 let command: Promise<string> | undefined;
 
 /** The command, bundled from the sources as they are now and not from the last build. */
-function assetRepoCommandFromSource(): Promise<string> {
+export function assetRepoCommandFromSource(): Promise<string> {
   command ??= (async () => {
     const outfile = resolve(packageRoot, `.tmp/cli-${process.pid}.mjs`);
     await mkdir(dirname(outfile), { recursive: true });

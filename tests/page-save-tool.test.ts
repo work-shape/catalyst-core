@@ -7,6 +7,8 @@ import { z } from "zod";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { PageBuildLimits } from "@vivd-catalyst/app-build";
 import {
+  assetRepoCommitJob,
+  assetRepoSweepJob,
   createPageBuildClient,
   createPageBundleJobs,
   createSandboxPageBuild,
@@ -724,11 +726,17 @@ describe("the apps module and the workspace command worker", () => {
     expect(() => assertCommandWorkerServesModuleJobKinds(snapshot(true), [])).toThrow(
       "'modules.apps.enabled' is true, but the workspace command worker of this assembly does not serve the job kind 'page.bundle'"
     );
+    // A worker that builds Pages and keeps no repositories is refused as well.
+    const builds = handlers.map((handler) => handler.kind.kind);
+    expect(() => assertCommandWorkerServesModuleJobKinds(snapshot(true), builds)).toThrow(
+      "does not serve the job kind 'asset_repo.commit'"
+    );
     expect(() =>
-      assertCommandWorkerServesModuleJobKinds(
-        snapshot(true),
-        handlers.map((handler) => handler.kind.kind)
-      )
+      assertCommandWorkerServesModuleJobKinds(snapshot(true), [
+        ...builds,
+        assetRepoCommitJob.kind,
+        assetRepoSweepJob.kind
+      ])
     ).not.toThrow();
     expect(() => assertCommandWorkerServesModuleJobKinds(snapshot(false), [])).not.toThrow();
   });

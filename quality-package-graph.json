@@ -15,6 +15,7 @@
   "@vivd-catalyst/chat-server": [
     "@vivd-catalyst/api-contract",
     "@vivd-catalyst/app-build",
+    "@vivd-catalyst/asset-repo",
     "@vivd-catalyst/auth",
     "@vivd-catalyst/config-schema",
     "@vivd-catalyst/core",
@@ -36,6 +37,7 @@
     "@vivd-catalyst/api-client",
     "@vivd-catalyst/api-contract",
     "@vivd-catalyst/app-build",
+    "@vivd-catalyst/asset-repo",
     "@vivd-catalyst/auth",
     "@vivd-catalyst/capability-sdk",
     "@vivd-catalyst/chat-server",

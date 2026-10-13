@@ -401,6 +401,9 @@ importers:
       '@vivd-catalyst/app-build':
         specifier: workspace:*
         version: link:../app-build
+      '@vivd-catalyst/asset-repo':
+        specifier: workspace:*
+        version: link:../asset-repo
       '@vivd-catalyst/auth':
         specifier: workspace:*
         version: link:../auth
@@ -627,6 +630,9 @@ importers:
       '@vivd-catalyst/app-build':
         specifier: workspace:*
         version: link:../app-build
+      '@vivd-catalyst/asset-repo':
+        specifier: workspace:*
+        version: link:../asset-repo
       '@vivd-catalyst/auth':
         specifier: workspace:*
         version: link:../auth

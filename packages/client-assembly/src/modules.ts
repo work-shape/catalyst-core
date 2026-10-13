@@ -76,8 +76,8 @@ const appsModule = defineModule({
   ],
   kinds: ["app"],
   tools: ["page.save"],
-  jobKinds: ["page.bundle"],
-  commandWorkerJobKinds: ["page.bundle"]
+  jobKinds: ["page.bundle", "asset_repo.commit", "asset_repo.sweep"],
+  commandWorkerJobKinds: ["page.bundle", "asset_repo.commit", "asset_repo.sweep"]
 });
 
 /**

@@ -54,6 +54,12 @@ export interface StalePageBuildsInput {
   olderThanMs?: number;
   /** Directories of builds that run in this process. */
   active?: ReadonlySet<string>;
+  /**
+   * The start of the names of the directories and of the command ids to remove, for another
+   * fixed command of the worker that leaves the same. A Page build's when left out.
+   */
+  directoryPrefix?: string;
+  commandIdPrefix?: string;
 }
 
 /**
@@ -66,13 +72,15 @@ export async function removeStalePageBuilds(
 ): Promise<{ directories: number; containers: number }> {
   const olderThanMs = input.olderThanMs ?? PAGE_BUILD_STALE_MS;
   const cutoff = Date.now() - olderThanMs;
+  const directoryPrefix = input.directoryPrefix ?? PAGE_BUILD_DIRECTORY_PREFIX;
+  const idPrefix = input.commandIdPrefix ?? PAGE_BUILD_COMMAND_ID_PREFIX;
   let directories = 0;
   const entries = await readdir(input.tempRoot, { withFileTypes: true }).catch(() => []);
   for (const entry of entries) {
     const directory = join(input.tempRoot, entry.name);
     if (
       !entry.isDirectory() ||
-      !entry.name.startsWith(PAGE_BUILD_DIRECTORY_PREFIX) ||
+      !entry.name.startsWith(directoryPrefix) ||
       input.active?.has(directory)
     ) {
       continue;
@@ -87,7 +95,7 @@ export async function removeStalePageBuilds(
     }
   }
   const containers = await Promise.resolve(
-    input.sandbox.removeLeftovers?.({ idPrefix: PAGE_BUILD_COMMAND_ID_PREFIX, olderThanMs }) ?? 0
+    input.sandbox.removeLeftovers?.({ idPrefix, olderThanMs }) ?? 0
   ).catch(() => 0);
   return { directories, containers };
 }
