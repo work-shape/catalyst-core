@@ -48,6 +48,16 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
     principalId?: string;
   }): Record<string, unknown>;
   /**
+   * What a revert stores of an earlier revision, for a kind whose server decides fields that
+   * an earlier revision may hold differently: those stay as they are now. Without it the
+   * revision is stored as it was.
+   */
+  prepareRevert?(input: {
+    current: unknown;
+    restored: Record<string, unknown>;
+    principalId: string;
+  }): Record<string, unknown>;
+  /**
    * The right an interactive save needs beside the kind's write right and its caller lacks,
    * where there is one. It is asked of what the caller sent, before the policy is asked about
    * the call. `assertInteractiveUpsertAllowed` asks the same of the validated definition.

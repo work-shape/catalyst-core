@@ -106,6 +106,35 @@ function reachChanged(previous: unknown, next: ConnectionConfig): boolean {
 }
 
 /**
+ * What the server decides of a Connection made here. The owner is who created it and stays
+ * so; the handle names the place of its secret and stays with it while it holds one.
+ */
+function withServerFields(
+  current: unknown,
+  next: Record<string, unknown>,
+  principalId: string | undefined
+): Record<string, unknown> {
+  // A handle the caller sent names nothing of this Connection's.
+  const rest = Object.fromEntries(Object.entries(next).filter(([key]) => key !== "secretHandle"));
+  const storedOwner = readDefinitionField(current, "ownerPrincipalId");
+  const storedHandle = readDefinitionField(current, "secretHandle");
+  const owner = typeof storedOwner === "string" ? storedOwner : principalId;
+  const authenticates = typeof next.authScheme === "string" && next.authScheme !== AUTH_SCHEME_NONE;
+  return {
+    ...rest,
+    ...(owner === undefined ? {} : { ownerPrincipalId: owner }),
+    credentialMode: "shared",
+    origin: "runtime",
+    ...(authenticates
+      ? {
+          secretHandle:
+            typeof storedHandle === "string" ? storedHandle : createConnectionSecretHandle()
+        }
+      : {})
+  };
+}
+
+/**
  * The Connection kind: the access to one outside system. Its revision holds settings, accepted
  * operations and a handle of the Secret Store, never a secret. A validated write is live: the
  * kind has no draft. It is no part of the release bundle and offered in no workspace list.
@@ -170,31 +199,19 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
     }),
     holdsInstanceDefault: false,
     hasWorkspaceAvailability: false,
-    // What the server decides of a Connection made here. The owner is who created it and stays
-    // so; the handle names the place of its secret and stays with it while it holds one.
-    prepareInteractiveUpsert({ current, next, principalId }) {
-      // A handle the caller sent names nothing of this Connection's.
-      const rest = Object.fromEntries(
-        Object.entries(next).filter(([key]) => key !== "secretHandle")
-      );
-      const storedOwner = readDefinitionField(current, "ownerPrincipalId");
-      const storedHandle = readDefinitionField(current, "secretHandle");
-      const owner = typeof storedOwner === "string" ? storedOwner : principalId;
-      const authenticates =
-        typeof next.authScheme === "string" && next.authScheme !== AUTH_SCHEME_NONE;
-      return {
-        ...rest,
-        ...(owner === undefined ? {} : { ownerPrincipalId: owner }),
-        credentialMode: "shared",
-        origin: "runtime",
-        ...(authenticates
-          ? {
-              secretHandle:
-                typeof storedHandle === "string" ? storedHandle : createConnectionSecretHandle()
-            }
-          : {})
-      };
-    },
+    prepareInteractiveUpsert: ({ current, next, principalId }) =>
+      withServerFields(current, next, principalId),
+    // An earlier revision may name a handle the Connection no longer has: its secret is stored
+    // under the one the Connection holds now, and a call resolves the handle of the revision.
+    // A revision of release config stays one, and the write refuses it.
+    prepareRevert: ({ current, restored, principalId }) =>
+      readDefinitionField(restored, "origin") === "release"
+        ? restored
+        : withServerFields(
+            current ?? { ownerPrincipalId: readDefinitionField(restored, "ownerPrincipalId") },
+            restored,
+            principalId
+          ),
     missingUpsertRight: () => undefined,
     // Asked before the definition is read: a seeded Connection answers `read_only_origin`
     // also where this build ships no Connector type for what the caller sent.

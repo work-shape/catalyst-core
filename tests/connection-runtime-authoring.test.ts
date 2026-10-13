@@ -83,8 +83,8 @@ async function discovered(instance: TestInstance) {
 /** The stored secret versions of the Connection made here, not those of release config. */
 const secretsOfConnection = () =>
   withTestSql(
-    (sql) => sql<{ version: number; ciphertext: Buffer }[]>`
-      select s.version, s.ciphertext from secrets s
+    (sql) => sql<{ version: number; ciphertext: Buffer; handle: string }[]>`
+      select s.version, s.ciphertext, s.handle from secrets s
       join config_assets a on a.id = s.connection_asset_id
       where a.name = ${NAME} order by s.version`
   );
@@ -224,6 +224,27 @@ describe("a Connection made on the instance", () => {
     // Without a credential the stored key goes.
     await put(instance, definition({ authScheme: "none", settings: { url: `${URL}/v2` } }), 2);
     expect(await secretsOfConnection()).toEqual([]);
+  });
+
+  it("keeps the handle the key is stored under when an earlier revision is restored", async () => {
+    const instance = await start();
+    await put(instance, definition(), null);
+    await put(instance, definition({ authScheme: "none" }), 1);
+    await put(instance, definition(), 2);
+    await setSecret(instance, generateTestSecret(), null);
+    const handleNow = (await secretsOfConnection())[0]?.handle;
+    expect(handleNow).toBeDefined();
+
+    const reverted = await instance.call("assets.revert", {
+      params: { kind: "connection", name: NAME },
+      payload: { revision: 1, expectedRevision: 3 }
+    });
+    expect(reverted.statusCode).toBe(200);
+    const read = await instance.call("assets.get", { params: { kind: "connection", name: NAME } });
+    expect(read.json()).toMatchObject({ config: { secretHandle: handleNow, origin: "runtime" } });
+    const tested = await instance.call("connections.test", { params: { name: NAME } });
+    expect(tested.statusCode).toBe(200);
+    expect((await storedState(instance, NAME)).state?.health).toBe("ok");
   });
 
   it("refuses an address the egress list does not name, and asks for a discovery by hand", async () => {

@@ -548,11 +548,12 @@ export class AssetWorkflow {
     kind.assertStoredWritable?.({ current });
     const setsDefault = setsInitialDefault(stored.set, kind);
     requireInstanceDefaultChange(call.access, kind, setsDefault);
-    // A revert restores what was stored: nothing is adjusted on the way.
+    // A revert restores what was stored: only what the kind's server decides is kept as it is.
+    const principalId = call.actor.id;
     const definition =
       write.operation === "revert"
-        ? config
-        : kind.prepareInteractiveUpsert({ current, next: config, principalId: call.actor.id });
+        ? (kind.prepareRevert?.({ current, restored: config, principalId }) ?? config)
+        : kind.prepareInteractiveUpsert({ current, next: config, principalId });
     /** The set as the write would leave it. */
     const written = (set: AssetSet) => {
       const replaced = withDefinition(set, kind.kind, name, definition);
