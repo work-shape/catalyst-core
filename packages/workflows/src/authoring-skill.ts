@@ -68,9 +68,9 @@ const STEP_REFERENCE: {
     }
   },
   code: {
-    does: `Runs one script of the Workflow's \`${WORKFLOW_STEP_FILES_FOLDER}/\` folder on its input as JSON and returns JSON. A Workflow that is stored as an asset of an instance holds no step files in this release: a save accepts a \`code\` step and the start of a run refuses it. Do not add one unless the person tells you its script exists.`,
+    does: `Runs one script of the Workflow's step files (the folder \`${WORKFLOW_STEP_FILES_FOLDER}/\`) on its input as JSON and returns JSON. The step files of a Workflow are part of its config: where the config you read holds \`files\`, the script of a \`code\` step is one of them, and you add or change it there and send the whole config back. Where the config holds no \`files\`, this instance keeps no step files: do not add a \`code\` step there, and say so to the person. The check and the save tell you what is wrong with a step and its file, each issue with its path and its code.`,
     fields: {
-      file: `The path of the script inside \`${WORKFLOW_STEP_FILES_FOLDER}/\`, written without that folder, such as \`classify.py\`.`,
+      file: `The path of the script among the step files, written without \`${WORKFLOW_STEP_FILES_FOLDER}/\`, such as \`classify.py\`. The file exists in the config's \`files\`.`,
       input: "The mapping onto the script's input. See 'Mappings and references'.",
       inputSchema: "The JSON Schema of the input the script is handed. Required.",
       outputSchema: "The JSON Schema of what the script returns. Required."
@@ -242,7 +242,8 @@ the engine of this release runs, and how to save a change safely.
 
 You are given tools that are bound to the Workflow this conversation is about.
 
-1. Read the definition. You get its \`config\`, which is \`{ name, manifest }\`, the \`revision\` it
+1. Read the definition. You get its \`config\`, which holds \`name\`, \`manifest\` and, where the
+   instance keeps step files, \`files\`; the \`revision\` it
    is at and whether you see the draft or the published revision.
 2. Change the \`manifest\` in your answer to the read, never from memory. Keep everything you
    were not asked to change exactly as it is, the ids of the steps among it.
