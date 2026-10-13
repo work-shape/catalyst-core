@@ -34,6 +34,14 @@ contain breaking changes; a patch version does not.
   with a price above zero for the entry's model and for the model of every binding on it. The
   adapter fixes the endpoint; the profile, the key's IAM policy, Bedrock's data retention and
   invocation logging decide the rest and are the operator's to set, see the configuration docs.
+- **Workflows, editing with the agent from the page:** the page of a Workflow offers "Edit with
+  the agent" to a person who holds `workflow.write` and is shown the draft. It starts a
+  conversation of the open workspace about that Workflow and opens it. Where the draft is not
+  the published revision, a bar on the page says so, and says of a draft that was never
+  published that it is not published. The bar offers Publish to a holder of `workflow.publish`
+  and Discard to a holder of `workflow.write`, each after one question; a refusal of the
+  instance is answered in the question. The page reads the Workflow again each time it is
+  opened, so a draft the agent saved shows on the way back from the conversation.
 - **Step files of a Workflow:** the config of a Workflow asset takes `files` beside `name` and
   `manifest`: the scripts of its `code` steps, each `{ path, content }` with a path such as
   `steps/check.py`. One `assets.put` saves them with the manifest as one revision, `assets.get`
