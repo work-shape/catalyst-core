@@ -43,7 +43,7 @@ export interface ModelToolCall {
   toolName: string;
   input: unknown;
   inputParseError?: {
-    code: "invalid_json";
+    code: "invalid_json" | "invalid_text";
     message: string;
     rawInput?: string;
   };

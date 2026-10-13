@@ -1,6 +1,7 @@
 import {
   AppError,
   WORKFLOW_STEP_FILES_FOLDER,
+  isStorableText,
   type OperationEffect,
   type WorkflowManifest,
   type WorkflowStep
@@ -210,15 +211,6 @@ export function stepFileBytes(
 ): Uint8Array | undefined {
   const file = files.find((candidate) => candidate.path === path);
   return file === undefined ? undefined : new TextEncoder().encode(file.content);
-}
-
-/**
- * Whether a text can be stored as it is: it holds no NUL character and no half of a surrogate
- * pair. A revision is stored as JSON, which holds neither, and no script of the runner image
- * is written with one.
- */
-function isStorableText(content: string): boolean {
-  return !content.includes("\u0000") && !/\p{Surrogate}/u.test(content);
 }
 
 /**
