@@ -407,9 +407,13 @@ export async function runAssetCommand(
   };
   const instanceCommand = INSTANCE_COMMANDS.find((command) => command === noun);
   const [verbName = "", name = "", ...extra] = positionals;
-  if (values.help || (instanceCommand === undefined && verbName === "")) {
+  if (values.help) {
     writeOut(options, assetHelpText);
     return EXIT.done;
+  }
+  if (instanceCommand === undefined && verbName === "") {
+    writeErr(options, `Unknown command '${noun}'.\n\n${assetHelpText}`);
+    return EXIT.usage;
   }
   try {
     if (instanceCommand !== undefined) {

@@ -2407,9 +2407,10 @@ describe("catalyst asset commands against an instance", () => {
       await run("agent", "put", "kai-tax", "--from", "kai-tax.yaml"),
       await run("agent", "put", "kai-tax", "--from", "kai-tax.yaml", "--if-revision", "0"),
       await run("agent", "publish", "kai-tax", "--to", "1"),
-      await run("agent", "erase", "kai-tax")
+      await run("agent", "erase", "kai-tax"),
+      await run("agnet")
     ];
-    expect(usage.map((result) => result.code)).toEqual([2, 2, 2, 2]);
+    expect(usage.map((result) => result.code)).toEqual([2, 2, 2, 2, 2]);
     expect(requests).toHaveLength(sent);
     await writeFile(join(cwd, "broken.yaml"), "name: [kai-tax\n");
     const broken = await run("agent", "validate", "--from", "broken.yaml");
