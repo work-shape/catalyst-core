@@ -4,6 +4,7 @@ import type { Asset } from "@vivd-catalyst/api-client";
 import {
   Badge,
   Button,
+  cn,
   ConfirmDialog,
   Dialog,
   DropdownMenuItem,
@@ -121,6 +122,7 @@ export function AppHeader({
   secondaryActions,
   primaryAction,
   overflow,
+  tabs,
   backHref,
   onBack
 }: {
@@ -130,14 +132,16 @@ export function AppHeader({
   secondaryActions?: ReactNode;
   primaryAction?: ReactNode;
   overflow?: ReactNode;
+  /** The views of the App, as a `TabsList`: a row under the head, whose line ends the head. */
+  tabs?: ReactNode;
   backHref: string;
   onBack(): void;
 }) {
   const { t } = useTranslation();
-  return (
+  const head = (
     <PageHeader
       variant="detail"
-      className="shrink-0"
+      className={cn("shrink-0", tabs !== undefined && "border-b-0")}
       back={
         <PageHeaderBack
           href={backHref}
@@ -158,6 +162,14 @@ export function AppHeader({
       primaryAction={primaryAction}
       overflow={overflow}
     />
+  );
+  return tabs === undefined ? (
+    head
+  ) : (
+    <>
+      {head}
+      <div className="shrink-0 px-(--layout-gutter)">{tabs}</div>
+    </>
   );
 }
 

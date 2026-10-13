@@ -44,14 +44,15 @@ describe("the demo seed on the demo's own config", () => {
 
   it("creates the same company and changes nothing on a second run", () => {
     expect(createdBy(seeded().first)).toEqual({
-      people: 7,
+      people: 8,
       "service principals": 1,
       "API keys": 1,
       "the instance's own agents and skills": 2,
-      namespaces: 3,
+      namespaces: 4,
       agents: 8,
       skills: 7,
-      "grant rows": 16,
+      "grant rows": 25,
+      "builder assets": 2,
       "approval requests": 2,
       "connection grant rows": 3,
       workspaces: 1,

@@ -1,5 +1,7 @@
+import { isStorableText } from "@vivd-catalyst/asset-schemas";
 import { AppError } from "./errors";
 import type { CollaborationWorkspaceId } from "./ids";
+import type { LocaleCode } from "./localization";
 
 /** Who owns an asset: the instance, or one workspace. */
 export type AssetScope =
@@ -25,11 +27,6 @@ const ASSET_TEXT_NOT_STORABLE = "text_not_storable";
 
 /** How many texts of one definition are named before the list ends. */
 const UNSTORABLE_TEXT_ISSUES_MAX = 20;
-
-/** A NUL character or half of a surrogate pair: what a revision, stored as JSON, cannot hold. */
-function isStorableText(text: string): boolean {
-  return !text.includes("\u0000") && !/\p{Surrogate}/u.test(text);
-}
 
 /**
  * Every text and every key of a definition that the store cannot hold, by the path of the
@@ -175,7 +172,11 @@ export interface AssetKindDefinition<Definition, Kind extends string = string> {
     context: AssetValidationContext,
     definitions: readonly Definition[]
   ): AssetValidationIssue[];
-  summarize(definition: Definition): AssetSummary;
+  /**
+   * What a list shows of a definition. A kind whose names and descriptions hold several
+   * languages answers them in `locale`, and in the instance's default without one.
+   */
+  summarize(definition: Definition, locale?: LocaleCode): AssetSummary;
 }
 
 /** A definition the schema or the name rule refused, with its place among those read. */
@@ -219,7 +220,7 @@ export interface RegisteredAssetKind<Kind extends string = string> {
   /** Reads definitions: the schema first, then the name rule. The checks follow on the reading. */
   read(definitions: readonly unknown[]): AssetKindReading;
   /** Throws `VALIDATION_FAILED` for a definition the schema refuses. */
-  summarize(definition: unknown): AssetSummary;
+  summarize(definition: unknown, locale?: LocaleCode): AssetSummary;
 }
 
 const KIND_ID_PATTERN = /^[a-z][a-z0-9]*(_[a-z0-9]+)*$/u;
@@ -314,7 +315,7 @@ export function defineAssetKind<Definition, Kind extends string>(
         validateWrite: (context) => definition.validateWrite?.(context, accepted) ?? []
       };
     },
-    summarize(input: unknown) {
+    summarize(input: unknown, locale?: LocaleCode) {
       const parsed = definition.schema.safeParse(input);
       if (!parsed.success) {
         throw new AppError("VALIDATION_FAILED", `The ${definition.kind} definition is invalid`, {
@@ -324,7 +325,7 @@ export function defineAssetKind<Definition, Kind extends string>(
           }))
         });
       }
-      return definition.summarize(parsed.data);
+      return definition.summarize(parsed.data, locale);
     }
   });
 }

@@ -281,6 +281,7 @@ export type { ConfigAssetWriterOptions } from "./config-asset-writer";
 export { createAgentAssetKind } from "./asset-kinds/agent";
 export type { AgentAssetKindOptions } from "./asset-kinds/agent";
 export { createSkillAssetKind } from "./asset-kinds/skill";
+export { seedShippedSkills } from "./shipped-skill-seed";
 export {
   APP_ACTIONS,
   APP_ASSET_KIND,

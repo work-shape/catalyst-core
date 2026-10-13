@@ -25,6 +25,7 @@ import type {
   WorkflowStartIssue,
   WorkflowView
 } from "./workflow-views";
+import { NO_START_FORM, nameFromId, startFormOf, type StartForm } from "./start-form";
 
 // The mapping from what the instance answers to what a screen shows. A change of the contract
 // is made here and in the source that calls it, and in no screen.
@@ -227,6 +228,8 @@ export interface WorkflowSummaryResource {
   reasons?: readonly WorkflowStartIssue[];
   /** What the caller may do with the Workflow, by the names of the actions. */
   actions?: readonly string[];
+  /** The published revision's `inputs`: the JSON Schema a start's input is checked against. */
+  inputs?: Readonly<Record<string, unknown>>;
   /** The latest run of the Workflow, where it has one. */
   lastRun?: { id: string; status: WorkflowRunStatus; startedAt?: string };
 }
@@ -236,10 +239,15 @@ function startIssues(summary: WorkflowSummaryResource | undefined): WorkflowStar
   return (summary?.reasons ?? []).map(({ code, message }) => ({ code, message }));
 }
 
+/** Whether the caller may start the Workflow, as its entry of the list says. */
+function mayStartOf(summary: WorkflowSummaryResource | undefined): boolean {
+  return summary?.actions?.includes(WORKFLOW_ACTIONS.use) === true;
+}
+
 /**
  * What the list says of a Workflow beside its definition: the published revision's id, why no
- * start is accepted, and whether the reader may start it. A Workflow the list does not name
- * is not the reader's to start.
+ * start is accepted, whether the reader may start it, and the form a start asks. A Workflow
+ * the list does not name is not the reader's to start.
  */
 export function listedOf(summary: WorkflowSummaryResource | undefined): WorkflowListed {
   return {
@@ -247,7 +255,8 @@ export function listedOf(summary: WorkflowSummaryResource | undefined): Workflow
       ? {}
       : { revisionId: summary.definitionRevisionId }),
     refusedFor: startIssues(summary),
-    mayStart: summary?.actions?.includes(WORKFLOW_ACTIONS.use) === true
+    mayStart: mayStartOf(summary),
+    startForm: startFormOf(summary?.inputs)
   };
 }
 
@@ -259,6 +268,11 @@ export interface WorkflowListed {
   refusedFor?: readonly WorkflowStartIssue[];
   /** The reader holds the right to start it. */
   mayStart?: boolean;
+  /**
+   * The form of a start, from the published revision's inputs: the draft's may ask for
+   * other values than a run accepts.
+   */
+  startForm?: StartForm;
 }
 
 /** A Workflow as a row of the list. */
@@ -271,7 +285,11 @@ export function toWorkflowListItem(summary: WorkflowSummaryResource): WorkflowLi
     ...(description ? { description } : {}),
     // The engine lists what has a published definition.
     published: true,
+    // A Workflow without a start by hand is refused for that alone.
+    startsByHand: !(summary.reasons ?? []).some(({ code }) => code === "no_manual_trigger"),
     refusedFor: startIssues(summary),
+    mayStart: mayStartOf(summary),
+    startForm: startFormOf(summary.inputs),
     ...(lastRun === undefined
       ? {}
       : {
@@ -294,12 +312,6 @@ function text(value: unknown): string | undefined {
 
 function records(value: unknown): Record<string, unknown>[] {
   return Array.isArray(value) ? value.filter(isRecord) : [];
-}
-
-/** The id of a step as a name, for a step whose definition gives none. */
-function stepNameFromId(id: string): string {
-  const words = id.replace(/[_-]+/gu, " ").trim();
-  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 interface StepNames {
@@ -325,7 +337,7 @@ function stepSources(input: unknown, known: StepNames): WorkflowStepSource[] {
       const itemName = known.loops.get(step);
       sources.push({ from: "loop_entry", ...(itemName === undefined ? {} : { itemName }) });
     } else {
-      sources.push({ from: "step", name: known.names.get(step) ?? stepNameFromId(step) });
+      sources.push({ from: "step", name: known.names.get(step) ?? nameFromId(step) });
     }
   }
   return sources;
@@ -385,7 +397,7 @@ function readSteps(value: unknown, known: StepNames): WorkflowStepView[] {
     steps.push({
       id,
       kind,
-      name: text(raw.name) ?? stepNameFromId(id),
+      name: text(raw.name) ?? nameFromId(id),
       ...(description === undefined ? {} : { description }),
       ...(kind === "trigger"
         ? {
@@ -424,7 +436,7 @@ function stepNames(value: unknown, names = new Map<string, string>()): Map<strin
   for (const raw of records(value)) {
     const id = text(raw.id);
     if (id !== undefined) {
-      names.set(id, text(raw.name) ?? stepNameFromId(id));
+      names.set(id, text(raw.name) ?? nameFromId(id));
       stepNames(raw.steps, names);
       stepNames(raw.then, names);
       stepNames(raw.else, names);
@@ -439,7 +451,7 @@ function stepNames(value: unknown, names = new Map<string, string>()): Map<strin
 /** One Workflow from its record: the definition is the record's `config`. */
 export function toWorkflow(
   asset: Pick<Asset, "name" | "config" | "publishedRevision">,
-  { revisionId, refusedFor = [], mayStart = false }: WorkflowListed = {},
+  { revisionId, refusedFor = [], mayStart = false, startForm = NO_START_FORM }: WorkflowListed = {},
   /** The asset's own pointers. The instance names a draft only to who may read it. */
   pointers: Pick<Asset, "draftRevision" | "publishedRevision"> = {}
 ): WorkflowView {
@@ -453,7 +465,6 @@ export function toWorkflow(
     triggerId,
     loops: new Map()
   });
-  const inputs = isRecord(definition.inputs) ? definition.inputs : {};
   return {
     id: asset.name,
     name: text(definition.name) ?? asset.name,
@@ -462,9 +473,7 @@ export function toWorkflow(
     ...(revisionId === undefined ? {} : { revisionId }),
     steps,
     startsByHand: steps.some((step) => step.starts?.byHand === true),
-    needsInput:
-      (isRecord(inputs.properties) && Object.keys(inputs.properties).length > 0) ||
-      (Array.isArray(inputs.required) && inputs.required.length > 0),
+    startForm,
     refusedFor,
     mayStart,
     ...(pointers.draftRevision === undefined

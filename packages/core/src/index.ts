@@ -38,3 +38,4 @@ export * from "./object-storage";
 export * from "./paging";
 export * from "./providers";
 export * from "./secrets";
+export * from "./yaml-data";
