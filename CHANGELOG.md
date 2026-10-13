@@ -2098,6 +2098,9 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 - **Hostile YAML and tool-call text:** every YAML file an author or an agent writes
   (`workflow.yaml`, `app.yaml`, App action files, `store.yaml`, `SKILL.md` frontmatter), the
   release config and the CLI working copy are read by one reader. It knows JSON types only:
+- **Chat starters:** a starter of a skill that ships with the platform shows that skill's
+  icon. Every starter showed the generic book, because the agent's starters did not carry the
+  skill's `icon`. A skill of the instance's own keeps the generic book.
   a timestamp, `!!binary` or other YAML-only tag in `store.yaml`, `SKILL.md` frontmatter, the
   release config or an agent file now reads as plain text or is refused, as `workflow.yaml` and
   `app.yaml` already were. A file whose aliases expand past 100,000 values is refused
