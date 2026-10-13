@@ -8,6 +8,7 @@ import {
   IconButton,
   NavGroup,
   NavItem,
+  RegistryIcon,
   Sidebar,
   Skeleton,
   useSidebarCollapsed
@@ -170,7 +171,7 @@ function RailHeader({
     const row = (
       <NavItem
         key={section.id}
-        icon={<section.icon aria-hidden="true" />}
+        icon={<RegistryIcon name={section.icon} />}
         selected={view === section.view && !(section.id === "apps" && listedAppOpen)}
         count={count > 0 ? count : undefined}
         aria-label={count > 0 && section.countLabel ? t(section.countLabel, { count }) : undefined}
