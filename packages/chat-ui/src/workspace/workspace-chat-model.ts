@@ -634,6 +634,19 @@ export function useWorkspaceChatModel({
     routeState.showConversation(activeCollaborationWorkspaceId, conversationId, options);
   }
 
+  /**
+   * A conversation the server just made opens in the workspace the server put it in. The open
+   * workspace is not known yet while the address is still the application root, which is where a
+   * person lands on the first sign-in, and the server places such a conversation in the Personal
+   * Workspace.
+   */
+  function showCreatedConversation(
+    conversation: { id: string; collaborationWorkspaceId: string },
+    options?: { replace?: boolean }
+  ) {
+    routeState.showConversation(conversation.collaborationWorkspaceId, conversation.id, options);
+  }
+
   function goToActiveCollaborationWorkspaceChat(options?: { replace?: boolean }) {
     routeState.goToDefaultChat(activeCollaborationWorkspaceId, options);
   }
@@ -658,7 +671,7 @@ export function useWorkspaceChatModel({
       fromConversationId: undefined,
       toConversationId: conversation.id
     });
-    showConversationInActiveCollaborationWorkspace(conversation.id, {
+    showCreatedConversation(conversation, {
       replace: route.kind === "new-conversation"
     });
     setNotice(undefined);
@@ -965,7 +978,7 @@ export function useWorkspaceChatModel({
 
   function runStarted(response: StartConversationRunResponse) {
     workspaceCache.cacheRunStarted(response);
-    showConversationInActiveCollaborationWorkspace(response.conversation.id, {
+    showCreatedConversation(response.conversation, {
       replace: route.kind === "new-conversation"
     });
     setNotice(undefined);
