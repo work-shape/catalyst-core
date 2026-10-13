@@ -136,13 +136,18 @@ roles' passwords with it, so a restored instance needs the key from the password
 - `verify [KEY]` restores each database of a backup into a scratch database
   `<database>_restore_<timestamp>`, without owners and grants, prints its row counts next to
   the live database's and drops it again. No live database and no role is changed.
-- `recover KEY --replace-database <platform database>` refuses while app containers run and asks
-  for the database name before it changes anything. It creates the roles the server lacks and
-  sets every role as in the backup, except `POSTGRES_USER`, whose password stays the one in the
-  env file. Then it renames each database of the backup to `<database>_replaced_<timestamp>` and
-  creates it again from its dump, with owner, grants and settings. If one fails, every database
-  is put back. A database that the backup does not hold, such as a store made after it, stays as
-  it is. On an empty server the same command restores the whole instance.
+- `recover KEY --replace-database <platform database>` refuses while app containers run or a
+  session is open on a database of the backup, and asks for the database name before it changes
+  anything. It creates the roles the server lacks, without login. Then it renames each database
+  of the backup to `<database>_replaced_<timestamp>` and creates it again from its dump, with
+  owner, grants and settings. Last, in one transaction, it sets every role as in the backup
+  (attributes, passwords, settings, memberships), except `POSTGRES_USER`, whose password stays
+  the one in the env file. If a step fails or the script is stopped, every database is put back
+  and the roles keep their passwords; only the roles it created stay, without login. A database
+  that the backup does not hold, such as a store made after it, stays as it is. On an empty
+  server the same command restores the whole instance. Recover onto a server with the backup's
+  `POSTGRES_USER`: under another one, the backup's comes back as a second superuser with its old
+  password, and a role membership it granted fails the recovery.
 - A `.sql.gz` key restores the platform database as before: into a scratch database, which a
   recovery then swaps in.
 

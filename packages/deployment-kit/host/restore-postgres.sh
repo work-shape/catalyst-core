@@ -232,8 +232,16 @@ timestamp="$(date -u +%Y%m%dt%H%M%Sz)"
 tmp_dir="$(mktemp -d)"
 # Databases this script made and drops again on exit, also after a failure.
 scratch_databases=()
+# Set while a recovery from an archive replaces databases: an exit before it finishes, at any
+# step, puts every database back as it was.
+recovering=""
 
 cleanup() {
+  if [[ -n "$recovering" ]]; then
+    recovering=""
+    echo "The recovery did not finish. Putting back the databases as they were." >&2
+    undo_recovery
+  fi
   rm -rf "$tmp_dir"
   local database
   for database in ${scratch_databases[@]+"${scratch_databases[@]}"}; do
@@ -350,28 +358,55 @@ pg_restore_db() {
   compose exec -T postgres pg_restore -U "$POSTGRES_USER" "$@"
 }
 
-# Applies the roles of the backup: creates the ones the server lacks and sets attributes,
-# passwords, settings and memberships as in the backup. The role this script connects as is
-# left out: its password is the one in the env file.
-apply_globals() {
-  psql_sql postgres "select rolname from pg_catalog.pg_roles" > "$tmp_dir/existing.roles"
-  awk -v skip="$POSTGRES_USER" '
+# Writes one part of the backup's globals.sql for this server. "create": the CREATE ROLE
+# statements of the roles the server lacks. "settings": everything else, which sets
+# attributes, passwords, settings and memberships as in the backup. Both leave out the role
+# this script connects as: its password is the one in the env file.
+globals_part() {
+  awk -v skip="$POSTGRES_USER" -v part="$1" '
+    # The role a CREATE or ALTER ROLE statement names, also when quoted with "" inside.
+    function role_name(rest,   name, i, c) {
+      if (substr(rest, 1, 1) != "\"") {
+        sub(/[ ;].*$/, "", rest)
+        return rest
+      }
+      name = ""
+      for (i = 2; i <= length(rest); i++) {
+        c = substr(rest, i, 1)
+        if (c == "\"") {
+          if (substr(rest, i + 1, 1) != "\"") break
+          i++
+        }
+        name = name c
+      }
+      return name
+    }
     NR == FNR { have[$0] = 1; next }
     /^(CREATE|ALTER) ROLE / {
       rest = $0
       sub(/^(CREATE|ALTER) ROLE /, "", rest)
-      if (substr(rest, 1, 1) == "\"") {
-        role = substr(rest, 2)
-        role = substr(role, 1, index(role, "\"") - 1)
-      } else {
-        role = rest
-        sub(/[ ;].*$/, "", role)
-      }
+      role = role_name(rest)
       if (role == skip) next
-      if ($0 ~ /^CREATE ROLE / && (role in have)) next
+      if ($0 ~ /^CREATE ROLE /) {
+        if (part == "create" && !(role in have)) print
+        next
+      }
     }
-    { print }
-  ' "$tmp_dir/existing.roles" "$archive/globals.sql" | psql_db postgres > /dev/null
+    part == "settings" { print }
+  ' "$tmp_dir/existing.roles" "$archive/globals.sql"
+}
+
+# Puts back every database a failed recovery moved: drops the one it restored and gives the
+# replaced one its name again.
+undo_recovery() {
+  local i
+  for (( i = swapped - 1; i >= 0; i-- )); do
+    # FORCE ends a restore that may still run inside the container after this script was stopped.
+    psql_sql postgres "drop database if exists \"${databases[i]}\" with (force)" || true
+    if database_exists "${replaced[i]}"; then
+      psql_sql postgres "alter database \"${replaced[i]}\" rename to \"${databases[i]}\"" || true
+    fi
+  done
 }
 
 # A backup since OPS-BK-1: a tar archive with globals.sql and one <database>.dump per database.
@@ -384,11 +419,18 @@ restore_archive() {
     echo "The backup holds no globals.sql." >&2
     exit 1
   fi
-  local databases=() file database
+  local file database
+  databases=()
   for file in "$archive"/*.dump; do
     [[ -f "$file" ]] || continue
     database="${file##*/}"
-    databases+=("${database%.dump}")
+    database="${database%.dump}"
+    # The name goes into SQL literals below, as in backup-postgres.sh.
+    if [[ ! "$database" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+      echo "The backup holds a dump of an unsupported database name: $database" >&2
+      exit 1
+    fi
+    databases+=("$database")
   done
   if [[ " ${databases[*]-} " != *" $POSTGRES_DB "* ]]; then
     echo "The backup holds no dump of $POSTGRES_DB." >&2
@@ -426,14 +468,17 @@ restore_archive() {
     exit 0
   fi
 
-  local replaced=() other_databases
+  local other_databases sessions existed=()
+  replaced=()
   echo
   echo "About to replace these databases on $(hostname) with $dump:"
   for database in "${databases[@]}"; do
     replaced+=("$(side_name "$database" replaced)")
     if database_exists "$database"; then
+      existed+=(1)
       echo "  $database (the current one is kept as ${replaced[${#replaced[@]} - 1]})"
     else
+      existed+=("")
       echo "  $database (not on the server)"
     fi
   done
@@ -445,35 +490,43 @@ restore_archive() {
   if [[ -n "$other_databases" ]]; then
     echo "Not in the backup, so left as they are: $(paste -sd ' ' - <<< "$other_databases")"
   fi
+  # A database with a session open cannot be renamed. Stop before anything changes.
+  sessions="$(psql_sql postgres "
+    select datname || ' (' || count(*) || ')' from pg_catalog.pg_stat_activity
+    where datname in ($(printf "'%s'," "${databases[@]}" | sed 's/,$//'))
+      and pid <> pg_catalog.pg_backend_pid()
+    group by datname order by datname")"
+  if [[ -n "$sessions" ]]; then
+    echo "Sessions are still open on: $(paste -sd ' ' - <<< "$sessions"). Close them first; nothing was changed." >&2
+    exit 1
+  fi
   echo "Roles the server lacks are created, and every role is set as in the backup, except $POSTGRES_USER."
+  psql_sql postgres "select rolname from pg_catalog.pg_roles" > "$tmp_dir/existing.roles"
+  globals_part create > "$tmp_dir/create-roles.sql"
+  globals_part settings > "$tmp_dir/set-roles.sql"
   confirm_recovery
 
-  apply_globals
-  # Each database is moved aside and created again from its dump with its owner, grants
-  # and settings. A failure puts back every database moved so far.
-  local index swapped=0
-  undo_recovery() {
-    local i
-    for (( i = swapped - 1; i >= 0; i-- )); do
-      psql_sql postgres "drop database if exists \"${databases[i]}\"" || true
-      if database_exists "${replaced[i]}"; then
-        psql_sql postgres "alter database \"${replaced[i]}\" rename to \"${databases[i]}\"" || true
-      fi
-    done
-  }
+  # The missing roles first, without login or other attributes: the owners and grants in the
+  # dumps name them.
+  psql_db postgres --single-transaction < "$tmp_dir/create-roles.sql" > /dev/null
+  # Each database is moved aside and created again from its dump with its owner, grants and
+  # settings. From here on, a failure at any step puts back every database moved so far.
+  local index
+  swapped=0
+  recovering=1
   for (( index = 0; index < ${#databases[@]}; index++ )); do
     database="${databases[index]}"
     echo "Recovering $database"
-    if database_exists "$database"; then
+    if [[ -n "${existed[index]}" ]]; then
       psql_sql postgres "alter database \"$database\" rename to \"${replaced[index]}\""
     fi
     swapped=$((index + 1))
-    if ! pg_restore_db -d postgres --create --exit-on-error < "$archive/$database.dump"; then
-      echo "Recovering $database failed. Putting back the databases as they were." >&2
-      undo_recovery
-      exit 1
-    fi
+    pg_restore_db -d postgres --create --exit-on-error < "$archive/$database.dump"
   done
+  # The roles last, in one transaction: if it fails, the roles stay as they were and the
+  # databases are put back.
+  psql_db postgres --single-transaction < "$tmp_dir/set-roles.sql" > /dev/null
+  recovering=""
 
   echo "Recovered ${databases[*]} from $dump."
   echo "Start the app again, check it, then drop the old databases when they are no longer needed:"

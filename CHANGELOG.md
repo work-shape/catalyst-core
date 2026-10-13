@@ -2078,10 +2078,12 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   only `POSTGRES_DB`, so no Data Store database and no role was in a nightly or pre-deploy
   backup. A backup is now one tar archive, `<instance>-<database>-<timestamp>[-<label>].tar`,
   with `globals.sql` from `pg_dumpall --globals-only` and a custom-format `pg_dump` of every
-  database the server lists, except the templates, `postgres` and the scratch databases of
-  `restore-postgres.sh`. `restore-postgres.sh` lists, verifies and recovers both the archives
-  and the earlier `.sql.gz` dumps; a recovery from an archive creates the missing roles and
-  replaces every database it holds, and puts them all back if one fails. **Upgrade:** a deploy
+  database the server lists, except the templates, `postgres`, invalid databases and the
+  scratch databases of `restore-postgres.sh`. `restore-postgres.sh` lists, verifies and recovers
+  both the archives and the earlier `.sql.gz` dumps; a recovery from an archive creates the
+  missing roles, replaces every database it holds and then sets the roles as in the backup, and
+  if a step fails or it is stopped, it puts every database back and leaves the roles' passwords
+  as they were. **Upgrade:** a deploy
   of the release installs both scripts; nothing else changes. **Rollback:** the previous
   scripts neither list nor restore a `.tar` backup; restore one with this release's
   `restore-postgres.sh`.
