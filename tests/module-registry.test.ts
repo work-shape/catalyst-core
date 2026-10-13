@@ -344,7 +344,8 @@ describe("the snapshot in a running instance", () => {
       apps: { enabled: true },
       // And it carries one Connection, to the sample business system.
       connections: { enabled: true },
-      workflows: { enabled: false },
+      // And the seed brings a Workflow.
+      workflows: { enabled: true },
       dataStores: { enabled: false },
       knowledge: { enabled: false }
     });

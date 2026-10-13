@@ -13,7 +13,7 @@
     "build:ui": "vite build",
     "config:local-key": "pnpm --filter \"@vivd-catalyst/client-assembly...\" build && node --env-file-if-exists=.env ../../packages/client-assembly/dist/local-key-cli.js --instance http://127.0.0.1:4100",
     "config:diff": "pnpm --filter \"@work-shape/catalyst-cli...\" build && node --env-file-if-exists=.env ../../packages/config-cli/dist/index.js config diff --dir .",
-    "demo:seed": "pnpm --filter \"@work-shape/catalyst-cli...\" build && tsup src/demo-seed.ts --format esm --out-dir dist && node --env-file-if-exists=.env dist/demo-seed.js",
+    "demo:seed": "pnpm --filter \"@vivd-catalyst/client-assembly...\" --filter \"@work-shape/catalyst-cli...\" build && tsup src/demo-seed.ts --format esm --out-dir dist && node --env-file-if-exists=.env dist/demo-seed.js",
     "config:push": "pnpm --filter \"@work-shape/catalyst-cli...\" build && node --env-file-if-exists=.env ../../packages/config-cli/dist/index.js config push --dir .",
     "dev": "node scripts/ensure-local-secrets.mjs && docker compose watch api ui artifact-preview-worker workspace-command-worker sample-mcp",
     "dev:down": "docker compose down",
