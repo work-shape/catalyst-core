@@ -34,8 +34,10 @@ export {
   APP_ACTION_MAX_PARAMETERS,
   appActionInputAsZod,
   applyAppActionMapping,
+  bindSqlActionParameters,
   compiledActionsOf,
   declaredConnectionsOf,
+  declaredDataStoresOf,
   type AppActionInputSchema,
   type CompiledAppAction
 } from "./action-input";

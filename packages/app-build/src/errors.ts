@@ -1,16 +1,22 @@
 /** Why a build refused a file, where the reason has a name a caller can act on. */
-export type PageBuildErrorCode =
-  | "manifest_invalid"
-  | "file_invalid"
-  | "inline_event_handler"
-  | "external_resource"
-  | "import_unavailable"
-  | "syntax"
-  | "routes_invalid"
-  | "action_invalid"
-  | "connection_not_declared"
-  | "cache_not_available"
-  | "output_too_large";
+export const PAGE_BUILD_ERROR_CODES = [
+  "manifest_invalid",
+  "file_invalid",
+  "inline_event_handler",
+  "external_resource",
+  "import_unavailable",
+  "syntax",
+  "routes_invalid",
+  "action_invalid",
+  "connection_not_declared",
+  "data_store_not_declared",
+  "cache_not_available",
+  "sql_target_not_available",
+  "sql_statement_not_allowed",
+  "output_too_large"
+] as const;
+
+export type PageBuildErrorCode = (typeof PAGE_BUILD_ERROR_CODES)[number];
 
 /** One thing the author has to change, with the file and, where known, the place in it. */
 export interface PageBuildError {

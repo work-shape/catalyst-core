@@ -1,10 +1,18 @@
-import { APP_ACTION_NAME_PATTERN, type JsonObject, type JsonValue } from "@vivd-catalyst/core";
+import {
+  APP_ACTION_NAME_PATTERN,
+  DATA_STORE_SCALAR_TYPES,
+  type DataStoreParameter,
+  type DataStoreReference,
+  type JsonObject,
+  type JsonValue
+} from "@vivd-catalyst/core";
 import { z } from "zod";
 
 // A named action as the build compiled it, and what the platform does with one at a call: read
 // the caller's parameters against the action's schema and put them into the input of the
 // operation the action stands for. Nothing here evaluates anything: a parameter is put where
-// its placeholder stood, as the value it is, and no text of an author is run.
+// its placeholder stood, or bound to its position, as the value it is, and no text of an
+// author is run.
 
 /** How many parameters one action takes. */
 export const APP_ACTION_MAX_PARAMETERS = 50;
@@ -24,6 +32,8 @@ const scalarParameter = z.discriminatedUnion("type", [
   z.strictObject({
     type: z.literal("string"),
     description,
+    /** A day as `2026-09-30`, or a moment as `2026-09-30T12:00:00Z`. */
+    format: z.enum(["date", "date-time"]).optional(),
     minLength: z.number().int().min(0).optional(),
     maxLength: z.number().int().min(0).optional(),
     enum: z.array(z.string()).min(1).max(200).optional()
@@ -79,25 +89,72 @@ const jsonValue: z.ZodType<JsonValue> = z.lazy(() =>
 /** The policy values an action may ask for. Each can only tighten what the instance says. */
 export const APP_ACTION_POLICY_VALUES = ["confirm", "approval", "deny"] as const;
 
-/**
- * One named action as the build wrote it into the manifest. `connection` actions are the only
- * kind today: the action stands for one operation of one Connection the manifest lists.
- */
-export const compiledAppActionSchema = z.strictObject({
+/** The types a parameter of a statement is declared with: one value, or a list of one type. */
+const sqlActionParameterType = z.union([
+  z.enum(DATA_STORE_SCALAR_TYPES),
+  z.templateLiteral([z.enum(DATA_STORE_SCALAR_TYPES), "[]"])
+]);
+
+const sqlActionParameter = z.strictObject({ name: parameterName, type: sqlActionParameterType });
+
+/** One parameter of a statement: the name a caller passes it by and its type at the database. */
+export type SqlActionParameter = z.infer<typeof sqlActionParameter>;
+
+const compiledActionBase = {
   name: z.string().regex(APP_ACTION_NAME_PATTERN),
-  kind: z.literal("connection"),
   /** The file of the Page the action was compiled from. */
   file: z.string().min(1).max(512),
-  effect: z.enum(["reading", "changing"]),
   description,
-  policy: z.enum(APP_ACTION_POLICY_VALUES).optional(),
-  connection: z.string().min(1).max(64),
-  operation: z.string().min(1).max(128),
-  input: z.strictObject({
-    schema: appActionInputSchemaSchema,
-    mapping: z.record(z.string(), jsonValue)
+  policy: z.enum(APP_ACTION_POLICY_VALUES).optional()
+};
+
+const sqlActionBase = {
+  ...compiledActionBase,
+  kind: z.literal("sql"),
+  dataStore: z.string().min(1).max(64),
+  /** The parameters a call may pass. Of a reading action in the order of their positions. */
+  parameters: z.array(sqlActionParameter).max(APP_ACTION_MAX_PARAMETERS),
+  input: z.strictObject({ schema: appActionInputSchemaSchema })
+};
+
+/**
+ * One named action as the build wrote it into the manifest, by its kind. A `connection` action
+ * stands for one operation of one Connection the manifest lists. An `sql` action reaches the
+ * Data Store the manifest lists: a reading one is a statement, a changing one is a row of
+ * parameters for one table.
+ */
+export const compiledAppActionSchema = z.union([
+  z.strictObject({
+    ...compiledActionBase,
+    kind: z.literal("connection"),
+    effect: z.enum(["reading", "changing"]),
+    connection: z.string().min(1).max(64),
+    operation: z.string().min(1).max(128),
+    input: z.strictObject({
+      schema: appActionInputSchemaSchema,
+      mapping: z.record(z.string(), jsonValue)
+    })
+  }),
+  z.strictObject({
+    ...sqlActionBase,
+    effect: z.literal("reading"),
+    /** The statement with `$1`, `$2` and so on where the file named a parameter. */
+    statement: z.string().min(1)
+  }),
+  z.strictObject({
+    ...sqlActionBase,
+    effect: z.literal("changing"),
+    /** What the store's insert is told: the table, and the parameter that fills each column. */
+    insert: z.strictObject({
+      table: z.string().min(1).max(63),
+      columns: z
+        .array(z.strictObject({ column: z.string().min(1).max(63), parameter: parameterName }))
+        .min(1)
+        .max(APP_ACTION_MAX_PARAMETERS),
+      onConflict: z.enum(["fail", "skip"])
+    })
   })
-});
+]);
 
 export type CompiledAppAction = z.infer<typeof compiledAppActionSchema>;
 
@@ -113,6 +170,20 @@ export function compiledActionsOf(manifest: unknown): CompiledAppAction[] {
     const action = compiledAppActionSchema.safeParse(entry);
     return action.success ? [action.data] : [];
   });
+}
+
+/** A Data Store as a manifest lists it: its id and the migration level the App needs. */
+export const dataStoreReferenceSchema = z.strictObject({
+  name: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9_-]{0,62}$/u, "lowercase letters, digits, '-' and '_', at most 63"),
+  minSchema: z.number().int().min(1).optional()
+});
+
+/** The Data Stores a stored manifest lists. */
+export function declaredDataStoresOf(manifest: unknown): DataStoreReference[] {
+  const read = z.object({ dataStores: z.array(dataStoreReferenceSchema) }).safeParse(manifest);
+  return read.success ? read.data.dataStores : [];
 }
 
 /** The Connections a stored manifest lists. */
@@ -141,6 +212,8 @@ function scalarAsZod(definition: z.infer<typeof scalarParameter>): z.ZodType {
   switch (definition.type) {
     case "string": {
       if (definition.enum) return z.enum(definition.enum);
+      if (definition.format === "date") return z.iso.date();
+      if (definition.format === "date-time") return z.iso.datetime({ offset: true, local: true });
       let text = z.string();
       if (definition.minLength !== undefined) text = text.min(definition.minLength);
       if (definition.maxLength !== undefined) text = text.max(definition.maxLength);
@@ -212,4 +285,22 @@ export function applyAppActionMapping(mapping: JsonObject, parameters: JsonObjec
     return filled;
   };
   return fillObject(mapping);
+}
+
+const boundValue = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+const boundParameterValue = z.union([boundValue, z.array(boundValue)]);
+
+/**
+ * The values of a call in the order of the statement's positions, each with its declared
+ * type. A parameter the caller left out is bound as no value of that type, so the statement
+ * decides what a missing value means, as in `$1 is null or client_id = $1`.
+ */
+export function bindSqlActionParameters(
+  parameters: readonly SqlActionParameter[],
+  input: JsonObject
+): Extract<DataStoreParameter, { type: unknown }>[] {
+  return parameters.map(({ name, type }) => ({
+    type,
+    value: boundParameterValue.parse((Object.hasOwn(input, name) ? input[name] : undefined) ?? null)
+  }));
 }

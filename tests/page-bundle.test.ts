@@ -58,7 +58,8 @@ function Home() {
           "src/shared/math.ts": "export const double = (value: number): number => value * 2;\n",
           "src/styles.css": ".page { color: red }\n",
           "assets/logo.svg": "<svg xmlns='http://www.w3.org/2000/svg'/>",
-          "actions/list.sql": "select 1",
+          // A file of `actions/` that is no action. A statement file is one, and is declared.
+          "actions/notes.md": "select 1",
           "schemas/list.json": "{}",
           "README.md": "# Demo"
         })

@@ -1,7 +1,7 @@
 import { load, JSON_SCHEMA, YAMLException } from "js-yaml";
 import { fileSetPathIssue } from "@vivd-catalyst/core";
 import { z } from "zod";
-import { compiledAppActionSchema } from "./action-input";
+import { compiledAppActionSchema, dataStoreReferenceSchema } from "./action-input";
 import { RELEASED_KIT_VERSIONS } from "./kit";
 import type { PageBuildError } from "./errors";
 
@@ -9,7 +9,7 @@ import type { PageBuildError } from "./errors";
 export const PAGE_MANIFEST_FILE = "app.yaml";
 /** A manifest is a few lines. One larger than this is refused before it is parsed. */
 export const PAGE_MANIFEST_MAX_BYTES = 64 * 1024;
-/** How many connections, actions or hosts one manifest lists. */
+/** How many connections, Data Stores, actions or hosts one manifest lists. */
 const MANIFEST_MAX_LIST_ENTRIES = 100;
 
 const name = z.string().min(1).max(120);
@@ -64,6 +64,22 @@ export const pageManifestSchema = z.strictObject({
     .refine((value) => /\.html?$/iu.test(value), { message: "an HTML file of the Page" })
     .optional(),
   connections: z.array(identifier).max(MANIFEST_MAX_LIST_ENTRIES).optional(),
+  dataStores: z
+    .array(dataStoreReferenceSchema)
+    .max(MANIFEST_MAX_LIST_ENTRIES)
+    .superRefine((stores, context) => {
+      const seen = new Set<string>();
+      for (const { name: store } of stores) {
+        if (seen.has(store)) {
+          context.addIssue({
+            code: "custom",
+            message: `lists the Data Store '${store}' twice`
+          });
+        }
+        seen.add(store);
+      }
+    })
+    .optional(),
   actions: z.array(actionSchema).max(MANIFEST_MAX_LIST_ENTRIES).optional(),
   externalHosts: z.array(hostName).max(MANIFEST_MAX_LIST_ENTRIES).optional()
 });
@@ -138,7 +154,7 @@ function describeIssue(issue: z.core.$ZodIssue): string {
     const derived = issue.keys.includes("pages")
       ? " 'pages' is derived from the files under src/routes/ and is not written by hand."
       : "";
-    return `Unknown key${issue.keys.length > 1 ? "s" : ""} ${issue.keys.map((key) => `'${key}'`).join(", ")}${where}. A manifest holds id, name, description, icon, kit, entry, connections, actions and externalHosts.${derived}`;
+    return `Unknown key${issue.keys.length > 1 ? "s" : ""} ${issue.keys.map((key) => `'${key}'`).join(", ")}${where}. A manifest holds id, name, description, icon, kit, entry, connections, dataStores, actions and externalHosts.${derived}`;
   }
   const key = issue.path.length > 0 ? `'${issue.path.join(".")}'` : "The manifest";
   return `${key}: ${issue.message}`;

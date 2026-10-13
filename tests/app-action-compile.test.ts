@@ -175,7 +175,7 @@ describe("the action files of a Page", () => {
         message: expect.stringContaining("Say it once, in the file")
       }
     ]);
-    expect(await declared({ file: "actions/list.sql" })).toEqual([
+    expect(await declared({ file: "actions/list.function.ts" })).toEqual([
       {
         file: "app.yaml",
         code: "action_invalid",

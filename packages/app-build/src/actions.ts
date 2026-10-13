@@ -1,4 +1,9 @@
-import { APP_ACTION_NAME_PATTERN, type JsonObject, type JsonValue } from "@vivd-catalyst/core";
+import {
+  APP_ACTION_NAME_PATTERN,
+  DATA_STORE_SCALAR_TYPES,
+  type JsonObject,
+  type JsonValue
+} from "@vivd-catalyst/core";
 import { load, JSON_SCHEMA, YAMLException } from "js-yaml";
 import { z } from "zod";
 import {
@@ -8,21 +13,31 @@ import {
   APP_ACTION_POLICY_VALUES,
   appActionInputSchemaSchema,
   readMappingText,
-  type CompiledAppAction
+  type AppActionInputSchema,
+  type CompiledAppAction,
+  type SqlActionParameter
 } from "./action-input";
 import type { PageBuildError } from "./errors";
 import { PAGE_MANIFEST_FILE, type PageManifest } from "./manifest";
+import {
+  APP_SQL_ACTION_FILE_MAX_BYTES,
+  APP_SQL_ACTION_FILE_SUFFIX,
+  compileSqlStatement
+} from "./sql-action";
 import type { PageFile } from "./types";
 
-// The named actions of a Page: one file `actions/<name>.action.yaml` each. An action says
-// which operation of which Connection it stands for, what the browser may pass, and where each
-// parameter goes in the operation's input. The build reads the file as data and writes the
-// action into the manifest. At a call the platform reads the manifest and nothing else: no
-// file of `actions/` is given to a browser and none is read again.
+// The named actions of a Page: one file of `actions/` each, and the ending of its name says
+// which kind. `<name>.action.yaml` says which operation of which Connection the action stands
+// for, what the browser may pass, and where each parameter goes in the operation's input.
+// `<name>.sql` is a statement on the Data Store of the manifest, with its parameters declared
+// in its header: one that reads, or one that adds a row. The build reads a file as data and writes the action into the
+// manifest. At a call the platform reads the manifest and nothing else: no file of `actions/`
+// is given to a browser and none is read again.
 //
 // The build runs without the instance, so it checks what the files say among themselves. What
-// only the instance knows, whether the Connection exists and what effect its operation was
-// accepted with, is checked when the App is written and again at every call.
+// only the instance knows, whether a Connection or a Data Store exists and what effect an
+// operation was accepted with, is checked when the App is written and published and again at
+// every call.
 
 /** The folder the action files are in. */
 export const APP_ACTIONS_DIRECTORY = "actions/";
@@ -51,12 +66,32 @@ export type CompiledActions =
   | { status: "compiled"; actions: CompiledAppAction[] }
   | { status: "errors"; errors: PageBuildError[] };
 
-/** The name an action file gives its action, or nothing for a file that is no action file. */
-function actionNameOf(path: string): string | undefined {
-  if (!path.startsWith(APP_ACTIONS_DIRECTORY) || !path.endsWith(APP_ACTION_FILE_SUFFIX)) {
-    return undefined;
-  }
-  return path.slice(APP_ACTIONS_DIRECTORY.length, -APP_ACTION_FILE_SUFFIX.length);
+/** The endings an action file has, each with the kind of action it defines. */
+const ACTION_FILE_KINDS = [
+  { suffix: APP_ACTION_FILE_SUFFIX, kind: "connection" },
+  { suffix: APP_SQL_ACTION_FILE_SUFFIX, kind: "sql" }
+] as const;
+
+type ManifestAction = NonNullable<PageManifest["actions"]>[number];
+
+interface ActionFile {
+  file: PageFile;
+  /** The name the file gives its action: its own, without the folder and the ending. */
+  name: string;
+  kind: CompiledAppAction["kind"];
+}
+
+/** A file of `actions/` as an action file, or nothing for a file that is none. */
+function actionFileOf(file: PageFile): ActionFile | undefined {
+  if (!file.path.startsWith(APP_ACTIONS_DIRECTORY)) return undefined;
+  const found = ACTION_FILE_KINDS.find(({ suffix }) => file.path.endsWith(suffix));
+  return (
+    found && {
+      file,
+      name: file.path.slice(APP_ACTIONS_DIRECTORY.length, -found.suffix.length),
+      kind: found.kind
+    }
+  );
 }
 
 /**
@@ -70,9 +105,12 @@ export function compileActions(
   const errors: PageBuildError[] = [];
   const actions: CompiledAppAction[] = [];
   const declared = new Set(manifest.connections ?? []);
+  const entries = new Map((manifest.actions ?? []).map((entry) => [entry.name, entry]));
   const actionFiles = files
-    .filter((file) => actionNameOf(file.path) !== undefined)
-    .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
+    .flatMap((file) => actionFileOf(file) ?? [])
+    .sort((left, right) =>
+      left.file.path < right.file.path ? -1 : left.file.path > right.file.path ? 1 : 0
+    );
 
   if (actionFiles.length > APP_MAX_ACTIONS) {
     return {
@@ -87,8 +125,21 @@ export function compileActions(
     };
   }
 
-  for (const file of actionFiles) {
-    const compiled = compileActionFile(file, actionNameOf(file.path) ?? "", declared);
+  const defined = new Set<string>();
+  for (const { file, name, kind } of actionFiles) {
+    if (defined.has(name)) {
+      errors.push({
+        file: file.path,
+        code: "action_invalid",
+        message: `Two files define the action '${name}'. A name is one action: keep one of the files.`
+      });
+      continue;
+    }
+    defined.add(name);
+    const compiled =
+      kind === "sql"
+        ? compileSqlActionFile(file, name, entries.get(name), manifest)
+        : compileActionFile(file, name, declared);
     if ("errors" in compiled) {
       errors.push(...compiled.errors);
     } else {
@@ -96,14 +147,16 @@ export function compileActions(
     }
   }
   errors.push(
-    ...declarationErrors(manifest, actions, new Set(actionFiles.map(({ path }) => path)))
+    ...declarationErrors(manifest, actions, new Set(actionFiles.map(({ file }) => file.path)))
   );
   return errors.length > 0 ? { status: "errors", errors } : { status: "compiled", actions };
 }
 
 /**
- * What the manifest says about actions, held against the files. The files define the actions;
- * a line under `actions` of the manifest may name one of them and must then say the same.
+ * What the manifest says about actions, held against the files. A file defines its action. A
+ * line under `actions` of the manifest names one of them: for a `connection` action it may,
+ * and must then say the same as the file; for an `sql` action it must, because the statement
+ * says nothing of its effect.
  */
 function declarationErrors(
   manifest: PageManifest,
@@ -122,15 +175,16 @@ function declarationErrors(
         "cache_not_available"
       );
     }
-    if (!file.endsWith(APP_ACTION_FILE_SUFFIX)) {
+    const suffix = ACTION_FILE_KINDS.find((known) => file.endsWith(known.suffix))?.suffix;
+    if (suffix === undefined) {
       fail(
-        `The action '${entry.name}' names '${file}'. An action is a file '${APP_ACTIONS_DIRECTORY}<name>${APP_ACTION_FILE_SUFFIX}' that calls an operation of a Connection; no other kind of action exists yet.`
+        `The action '${entry.name}' names '${file}'. An action is a file '${APP_ACTIONS_DIRECTORY}<name>${APP_ACTION_FILE_SUFFIX}' that calls an operation of a Connection, or a file '${APP_ACTIONS_DIRECTORY}<name>${APP_SQL_ACTION_FILE_SUFFIX}' that reads a Data Store; no other kind of action exists yet.`
       );
       continue;
     }
-    if (file !== `${APP_ACTIONS_DIRECTORY}${entry.name}${APP_ACTION_FILE_SUFFIX}`) {
+    if (file !== `${APP_ACTIONS_DIRECTORY}${entry.name}${suffix}`) {
       fail(
-        `The action '${entry.name}' names '${file}'. Its file is '${APP_ACTIONS_DIRECTORY}${entry.name}${APP_ACTION_FILE_SUFFIX}': an action has the name of its file.`
+        `The action '${entry.name}' names '${file}'. Its file is '${APP_ACTIONS_DIRECTORY}${entry.name}${suffix}': an action has the name of its file.`
       );
       continue;
     }
@@ -141,6 +195,8 @@ function declarationErrors(
       }
       continue;
     }
+    // An `sql` action was compiled from this line, so there is nothing to hold it against.
+    if (action.kind !== "connection" || action.file !== file) continue;
     if (entry.effect !== action.effect) {
       fail(
         `The manifest calls the action '${entry.name}' ${entry.effect} and '${file}' calls it ${action.effect}. Say it once, in the file.`
@@ -158,6 +214,143 @@ function declarationErrors(
     }
   }
   return errors;
+}
+
+/** The part of JSON Schema each declared type of a statement's parameter is. */
+const SQL_PARAMETER_SCHEMAS = {
+  text: { type: "string" },
+  integer: { type: "integer" },
+  number: { type: "number" },
+  boolean: { type: "boolean" },
+  date: { type: "string", format: "date" },
+  timestamp: { type: "string", format: "date-time" }
+} as const;
+
+function sqlParameterSchema(
+  type: SqlActionParameter["type"]
+): AppActionInputSchema["properties"][string] {
+  const scalar = DATA_STORE_SCALAR_TYPES.find((candidate) => candidate === type);
+  if (scalar !== undefined) return SQL_PARAMETER_SCHEMAS[scalar];
+  const items = DATA_STORE_SCALAR_TYPES.find((candidate) => `${candidate}[]` === type);
+  return { type: "array", items: SQL_PARAMETER_SCHEMAS[items ?? "text"] };
+}
+
+/**
+ * Compiles one statement file with the line of the manifest that declares it. What the line
+ * asks for that an `sql` action cannot be yet is refused with the reason, at the manifest.
+ */
+function compileSqlActionFile(
+  file: PageFile,
+  name: string,
+  entry: ManifestAction | undefined,
+  manifest: PageManifest
+): { action: CompiledAppAction } | { errors: PageBuildError[] } {
+  const inFile = (message: string, line?: number): PageBuildError => ({
+    file: file.path,
+    code: "action_invalid",
+    message,
+    ...(line === undefined ? {} : { line })
+  });
+  if (!APP_ACTION_NAME_PATTERN.test(name)) {
+    return {
+      errors: [
+        inFile(
+          `'${name}' cannot be the name of an action. A name has lowercase letters, digits, '-' and '_', at most 63, and the file is '${APP_ACTIONS_DIRECTORY}<name>${APP_SQL_ACTION_FILE_SUFFIX}'.`
+        )
+      ]
+    };
+  }
+  if (entry?.file !== file.path) {
+    return {
+      errors: [
+        inFile(
+          `The statement has no line under 'actions' in ${PAGE_MANIFEST_FILE}. Add '{ name: ${name}, file: ${file.path}, effect: reading }': the manifest says what a statement does.`
+        )
+      ]
+    };
+  }
+  const errors: PageBuildError[] = [];
+  const inManifest = (message: string, code: PageBuildError["code"] = "action_invalid") =>
+    errors.push({ file: PAGE_MANIFEST_FILE, code, message });
+  if (entry.connection !== undefined) {
+    inManifest(
+      `The action '${name}' names the Connection '${entry.connection}'. A statement on a Connection is not available yet: an sql action reads the Data Store the manifest lists. Remove 'connection'.`,
+      "sql_target_not_available"
+    );
+  }
+  const policy = APP_ACTION_POLICY_VALUES.find((value) => value === entry.policy);
+  if (entry.policy !== undefined && policy === undefined) {
+    inManifest(
+      `The action '${name}' asks for the policy '${entry.policy}'. A policy of a manifest tightens what the instance says: it is one of ${APP_ACTION_POLICY_VALUES.join(", ")}.`
+    );
+  }
+  const [store, ...furtherStores] = manifest.dataStores ?? [];
+  if (store === undefined) {
+    inManifest(
+      `The action '${name}' reads a Data Store and the manifest lists no Data Store. Add it under 'dataStores' in ${PAGE_MANIFEST_FILE}: a Page reaches what its manifest names and nothing else.`,
+      "data_store_not_declared"
+    );
+  } else if (furtherStores.length > 0) {
+    inManifest(
+      `The action '${name}' reads a Data Store and the manifest lists ${furtherStores.length + 1}. An action cannot name its Data Store yet, so a manifest with sql actions lists one.`
+    );
+  }
+  if (file.bytes.byteLength > APP_SQL_ACTION_FILE_MAX_BYTES) {
+    errors.push(
+      inFile(
+        `The statement file has ${file.bytes.byteLength} bytes. It has at most ${APP_SQL_ACTION_FILE_MAX_BYTES} (APP_SQL_ACTION_FILE_MAX_BYTES).`
+      )
+    );
+    return { errors };
+  }
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(file.bytes);
+  } catch {
+    errors.push(inFile("The statement file is not UTF-8 text."));
+    return { errors };
+  }
+  const compiled = compileSqlStatement(text, entry.effect);
+  if ("faults" in compiled) {
+    errors.push(
+      ...compiled.faults.map(({ message, line, notAllowed }) => ({
+        ...inFile(message, line),
+        ...(notAllowed ? { code: "sql_statement_not_allowed" as const } : {})
+      }))
+    );
+  }
+  if (errors.length > 0 || "faults" in compiled || store === undefined) {
+    return { errors };
+  }
+  const required = compiled.parameters.filter(({ optional }) => !optional).map(({ name }) => name);
+  return {
+    action: {
+      name,
+      kind: "sql",
+      file: file.path,
+      ...(policy === undefined ? {} : { policy }),
+      dataStore: store.name,
+      ...(compiled.effect === "reading"
+        ? { effect: compiled.effect, statement: compiled.statement }
+        : { effect: compiled.effect, insert: compiled.insert }),
+      parameters: compiled.parameters.map(({ name: parameter, type }) => ({
+        name: parameter,
+        type
+      })),
+      input: {
+        schema: {
+          type: "object",
+          properties: Object.fromEntries(
+            compiled.parameters.map(({ name: parameter, type }) => [
+              parameter,
+              sqlParameterSchema(type)
+            ])
+          ),
+          ...(required.length > 0 ? { required } : {})
+        }
+      }
+    }
+  };
 }
 
 function compileActionFile(

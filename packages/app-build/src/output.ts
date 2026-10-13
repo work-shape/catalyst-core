@@ -3,6 +3,7 @@ import { lstat, open, opendir } from "node:fs/promises";
 import { join } from "node:path";
 import { fileSetPathIssue } from "@vivd-catalyst/core";
 import { z } from "zod";
+import { PAGE_BUILD_ERROR_CODES } from "./errors";
 import {
   DEFAULT_PAGE_BUILD_LIMITS,
   PAGE_BUILD_FILES_DIRECTORY,
@@ -33,21 +34,7 @@ const reportedError = z.strictObject({
   line: z.number().int().min(1).optional(),
   column: z.number().int().min(1).optional(),
   message: z.string().max(PAGE_BUILD_MAX_MESSAGE_CHARS + 3),
-  code: z
-    .enum([
-      "manifest_invalid",
-      "file_invalid",
-      "inline_event_handler",
-      "external_resource",
-      "import_unavailable",
-      "syntax",
-      "routes_invalid",
-      "action_invalid",
-      "connection_not_declared",
-      "cache_not_available",
-      "output_too_large"
-    ])
-    .optional(),
+  code: z.enum(PAGE_BUILD_ERROR_CODES).optional(),
   element: z.string().max(64).optional(),
   attribute: z.string().max(64).optional()
 });
