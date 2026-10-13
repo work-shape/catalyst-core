@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { JsonObject } from "@vivd-catalyst/core";
-import { required } from "./support/assertions";
+import { eventually, required } from "./support/assertions";
 import {
   init,
   manifest,
@@ -206,6 +206,35 @@ describe("a load into a Data Store", () => {
     expect(await count(world, "month = '2026-09' and note = 'old'")).toBe(0);
     // Another month is no row of the dataset's: it stays.
     expect(await count(world, "month = '2026-08'")).toBe(3);
+  });
+
+  it("lets the later of two loads that replace one month at once replace the rows of the earlier", async () => {
+    const world = await store("at-once");
+    await load(world, world.datasets.put("ds_stored", [many(50, { note: "stored" })]));
+    const replace = { key: KEY, replace: { by: ["month"] } };
+    const waiting = async () =>
+      (
+        await db.sql<{ count: number }[]>`
+          select count(*)::integer as count from pg_stat_activity
+          where datname = ${world.record.location.database} and wait_event_type = 'Lock'`
+      )[0]?.count;
+    let later: Promise<unknown> | undefined;
+    // Load B starts once load A has deleted the stored rows and written its first thousand,
+    // and A goes on only when B waits for it.
+    const first = world.datasets.put(
+      "ds_a",
+      [many(1_100, { note: "a" }, 1_000), many(1_400, { note: "a" }, 2_100)],
+      async () => {
+        later = load(world, world.datasets.put("ds_b", [many(10, { note: "b" }, 10_000)]), replace);
+        await eventually(async () => expect(await waiting()).toBe(1));
+      }
+    );
+
+    expect(await load(world, first, replace)).toMatchObject({ inserted: 2_500, deleted: 50 });
+    // B replaced what A stored, and says what it deleted.
+    expect(await later).toMatchObject({ inserted: 10, deleted: 2_500 });
+    expect(await count(world)).toBe(10);
+    expect(await count(world, "note = 'b'")).toBe(10);
   });
 
   it("refuses a dataset that holds one key twice, in one part or in two, and keeps none of its rows", async () => {

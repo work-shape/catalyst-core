@@ -80,6 +80,11 @@ interface LoadStatements {
   fields: readonly (readonly [field: string, column: string])[];
   /** Answers the first row whose key is empty and the first whose key the load holds already. */
   check?: string;
+  /**
+   * Takes, for the rest of the transaction, the lock of each value of `replace.by` the part
+   * holds. It binds the rows and the name of the table.
+   */
+  lock?: string;
   remove?: string;
   write: string;
 }
@@ -156,6 +161,22 @@ function statementsOf(
         where ${own}
       ) as twice)::pg_catalog.int4 as twice`;
   const by = input.replace?.by;
+  // Two loads that replace the rows of one value at once would each delete what was stored
+  // before either and keep the rows of both. So a load holds the value until it is kept or
+  // rolled back, and the next one waits and then deletes what the first stored. The lock is
+  // the database's own and each store has a database of its own; the values are taken in one
+  // order, and a load that waits longer than the app role's statement timeout fails whole.
+  const lock = by
+    ? `
+    select pg_catalog.count(pg_catalog.pg_advisory_xact_lock(held.id)::pg_catalog.text)::pg_catalog.int4 as held
+    from (
+      select distinct pg_catalog.hashtextextended(
+        $2::pg_catalog.text || ' ' || row(${listed(by, "sent")})::pg_catalog.text, 0
+      ) as id
+      from ${sentOf(by)}
+      order by id
+    ) as held`
+    : undefined;
   const remove = by
     ? `
     with gone as (
@@ -194,7 +215,13 @@ function statementsOf(
     select pg_catalog.count(*) filter (where added)::pg_catalog.int4 as inserted,
       pg_catalog.count(*) filter (where not added)::pg_catalog.int4 as updated
     from written`;
-  return { fields, ...(check ? { check } : {}), ...(remove ? { remove } : {}), write };
+  return {
+    fields,
+    ...(check ? { check } : {}),
+    ...(lock ? { lock } : {}),
+    ...(remove ? { remove } : {}),
+    write
+  };
 }
 
 /** One row as its statement reads it: an object of column to value. */
@@ -255,6 +282,7 @@ export const load: StoreVerb = {
     }
     const [table] = await readTables(runtime.server.executor, target, input.table);
     if (!table) throw tableUnknown(input.table);
+    const tableName = table.name;
     // The names and types that go into the statements are the catalog's, never a caller's text.
     const typeOf = new Map(
       table.columns.flatMap((column) =>
@@ -294,7 +322,7 @@ export const load: StoreVerb = {
     /** Checks and writes the rows of one statement, the first of which is row `first` of the dataset. */
     async function writePart(
       sql: PostgresChangeStatements,
-      { check, remove, write }: LoadStatements,
+      { check, lock, remove, write }: LoadStatements,
       rows: readonly string[],
       first: number
     ): Promise<void> {
@@ -315,6 +343,8 @@ export const load: StoreVerb = {
         }
       }
       wrote = true;
+      // Before the statement that deletes: it then sees what a load before this one stored.
+      if (lock) await sql.run(lock, [part, tableName]);
       if (remove) counts.deleted += deletedRow.parse((await sql.run(remove, [part]))[0]).count;
       const written = writtenRow.parse((await sql.run(write, [part]))[0]);
       counts.inserted += written.inserted;
