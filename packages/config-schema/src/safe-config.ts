@@ -28,6 +28,20 @@ export interface SafeConfigViewOptions extends ConfigLocaleInput {
    * reports them. Left out, a binding offers only the efforts it lists itself.
    */
   reasoningEffortsOfBinding?: (bindingId: string) => readonly ReasoningEffortConfig[];
+  /**
+   * The Connections of the instance with the tools an agent can carry. Each agent is told
+   * those its own tools reach. Left out, no agent names a Connection.
+   */
+  connections?: readonly SafeConfigConnection[];
+}
+
+/** One Connection as a conversation names it: what a tool call touched, and its icon. */
+export interface SafeConfigConnection {
+  name: string;
+  title: string;
+  service?: string;
+  connectorType?: string;
+  tools: readonly { toolName: string; effect: "reading" | "changing" }[];
 }
 
 export function createSafeConfigView(
@@ -126,10 +140,31 @@ export function createSafeConfigView(
           config.localization.defaultLocale
         )
       })),
-      starters: agentStarters(agent, assets.skills, locale, config.localization.defaultLocale)
+      starters: agentStarters(agent, assets.skills, locale, config.localization.defaultLocale),
+      connections: agentConnections(agent, options.connections ?? [])
     })),
     ui
   };
+}
+
+/** The Connections an agent's tools reach, each with the tools of it the agent holds. */
+function agentConnections(agent: AgentConfig, connections: readonly SafeConfigConnection[]) {
+  return connections.flatMap(({ name, title, service, connectorType, tools }) => {
+    const held = tools
+      .filter((tool) => agent.toolNames.includes(tool.toolName))
+      .map(({ toolName, effect }) => ({ toolName, effect }));
+    return held.length === 0
+      ? []
+      : [
+          {
+            name,
+            title,
+            ...(service === undefined ? {} : { service }),
+            ...(connectorType === undefined ? {} : { connectorType }),
+            tools: held
+          }
+        ];
+  });
 }
 
 /**

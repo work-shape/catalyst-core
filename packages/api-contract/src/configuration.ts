@@ -196,6 +196,26 @@ export const safeConfigSchema = z.object({
             icon: z.string().optional()
           })
         )
+        .optional(),
+      /**
+       * The Connections the agent's tools reach, each with the tools of it the agent holds.
+       * A conversation says with it what a tool call touched: the Connection's name for
+       * people, its icon and whether the call read or changed. It names no setting, no
+       * operation the agent does not hold and no credential.
+       */
+      connections: z
+        .array(
+          z.object({
+            name: z.string(),
+            title: z.string(),
+            /** The system behind the Connection, where it names one. It only picks an icon. */
+            service: z.string().optional(),
+            connectorType: z.string().optional(),
+            tools: z.array(
+              z.object({ toolName: z.string(), effect: z.enum(["reading", "changing"]) })
+            )
+          })
+        )
         .optional()
     })
   ),

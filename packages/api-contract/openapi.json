@@ -2991,6 +2991,12 @@
                           "title": {
                             "type": "string"
                           },
+                          "service": {
+                            "type": "string"
+                          },
+                          "connectorType": {
+                            "type": "string"
+                          },
                           "tools": {
                             "type": "array",
                             "items": {
@@ -18925,6 +18931,53 @@
                       "prompt"
                     ]
                   }
+                },
+                "connections": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "service": {
+                        "type": "string"
+                      },
+                      "connectorType": {
+                        "type": "string"
+                      },
+                      "tools": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "toolName": {
+                              "type": "string"
+                            },
+                            "effect": {
+                              "type": "string",
+                              "enum": [
+                                "reading",
+                                "changing"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "toolName",
+                            "effect"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "title",
+                      "tools"
+                    ]
+                  }
                 }
               },
               "required": [
@@ -23832,6 +23885,53 @@
                       "skillName",
                       "title",
                       "prompt"
+                    ]
+                  }
+                },
+                "connections": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "service": {
+                        "type": "string"
+                      },
+                      "connectorType": {
+                        "type": "string"
+                      },
+                      "tools": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "toolName": {
+                              "type": "string"
+                            },
+                            "effect": {
+                              "type": "string",
+                              "enum": [
+                                "reading",
+                                "changing"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "toolName",
+                            "effect"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "title",
+                      "tools"
                     ]
                   }
                 }

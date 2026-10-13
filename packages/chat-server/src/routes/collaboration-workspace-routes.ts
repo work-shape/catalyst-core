@@ -1,6 +1,7 @@
 import { paginate, pageScope } from "../http/paging";
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import { createSafeConfigView } from "@vivd-catalyst/config-schema";
+import { agentConnections } from "../agent-connections";
 import {
   AppError,
   asCollaborationWorkspaceId,
@@ -87,7 +88,8 @@ export function registerCollaborationWorkspaceRoutes(
       {
         requestedLocale: resolveRequestLocale(options, request),
         reasoningEffortsOfBinding: (bindingId) =>
-          options.modelGateway.capabilities({ bindingId }).reasoningEfforts
+          options.modelGateway.capabilities({ bindingId }).reasoningEfforts,
+        connections: await agentConnections(options)
       }
     );
     return {

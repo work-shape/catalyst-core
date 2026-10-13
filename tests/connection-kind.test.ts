@@ -485,7 +485,7 @@ describe("a Connection through the asset operations", () => {
 
   it("lists and reads a seeded Connection with its handle and no secret", async () => {
     const t = await setupConnectionInstance();
-    const id = await t.seed("outside", { description: "The outside system." });
+    const id = await t.seed("outside", { description: "The outside system.", service: "ledger" });
     await t.seed("paused", { enabled: false, origin: "runtime", secretHandle: undefined });
     const page = (
       await t.expectOk(t.admin.id, "assets.list", { params: { kind: "connection" } })
@@ -502,8 +502,10 @@ describe("a Connection through the asset operations", () => {
       description: "The outside system.",
       scope: { kind: "instance" },
       revision: 1,
-      attributes: { connectorType: "fixture", origin: "release", enabled: true }
+      // The key of its icon, where it names one.
+      attributes: { connectorType: "fixture", origin: "release", enabled: true, service: "ledger" }
     });
+    expect(page.items[1]?.attributes).not.toHaveProperty("service");
     expect(page.items[1]).toMatchObject({
       attributes: { connectorType: "fixture", origin: "runtime", enabled: false }
     });
@@ -516,7 +518,9 @@ describe("a Connection through the asset operations", () => {
         params: { kind: "connection", name: "outside" }
       })
     ).json<{ config: Record<string, unknown> }>();
-    expect(read.config).toEqual(connection("outside", { description: "The outside system." }));
+    expect(read.config).toEqual(
+      connection("outside", { description: "The outside system.", service: "ledger" })
+    );
     const history = (
       await t.expectOk(t.admin.id, "assets.revisions.list", {
         params: { kind: "connection", name: "outside" }
