@@ -659,10 +659,10 @@ function createCompositeAttachmentService(
       }
       return {
         attachmentCount: deletions.reduce((count, deletion) => count + deletion.attachmentCount, 0),
-        fileObjectKeys: uniqueStrings(deletions.flatMap((deletion) => deletion.fileObjectKeys)),
-        artifactObjectKeys: uniqueStrings(
-          deletions.flatMap((deletion) => deletion.artifactObjectKeys)
-        )
+        fileObjectKeys: [...new Set(deletions.flatMap((deletion) => deletion.fileObjectKeys))],
+        artifactObjectKeys: [
+          ...new Set(deletions.flatMap((deletion) => deletion.artifactObjectKeys))
+        ]
       };
     },
     async deleteOrphanedFileObjects(input) {
@@ -670,7 +670,7 @@ function createCompositeAttachmentService(
       for (const handler of handlers) {
         removed.push(...((await handler.deleteOrphanedFileObjects?.(input)) ?? []));
       }
-      return uniqueStrings(removed);
+      return [...new Set(removed)];
     },
     async adoptLegacyAttachments(input) {
       let adopted = 0;
@@ -771,10 +771,6 @@ function fastModeModelBindingIds(config: ClientInstanceConfig): string[] {
 
 function uniqueById<T extends { id: string }>(records: T[]): T[] {
   return [...new Map(records.map((record) => [record.id, record])).values()];
-}
-
-function uniqueStrings(values: string[]): string[] {
-  return [...new Set(values)];
 }
 
 function uniqueManifestEntries<T extends { kind: string; attachmentId: string }>(
