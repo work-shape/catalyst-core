@@ -26,9 +26,10 @@ export type ConversationListScope = { kind: "viewer"; userId: string } | { kind:
 
 /**
  * The asset a conversation is about, by its kind and its name, such as a Workflow whose draft
- * the agent edits. It is set when the conversation is created and never changed. The server
- * binds the tools that read and save an asset to it: a tool of such a conversation reaches
- * this asset and no other, whatever a model names.
+ * the agent edits. It is set when the conversation is created from the asset's page, and by
+ * the server when the agent's tool first reads or saves another asset in it: one subject at a
+ * time, the last one wins. The tools that check and save a draft reach this asset and no
+ * other, whatever a model names.
  */
 export interface ConversationSubject {
   kind: string;
@@ -37,13 +38,15 @@ export interface ConversationSubject {
 
 /**
  * What the conversations of an instance are offered beyond what their agent's definition
- * lists: the tools the server binds to the subject of a conversation, and the skills the
- * platform ships for an asset of that kind. A conversation without a subject is offered
- * nothing here, and none of `SUBJECT_TOOL_PREFIX` either.
+ * lists: the tools that read and save an asset, and the skills the platform ships for the
+ * assets of its kinds.
  */
 export interface ConversationOffer {
-  /** The asset the conversation is about: what its agent is told before the first turn. */
-  subject: ConversationSubject;
+  /**
+   * The asset the conversation is about when the run starts: what its agent is told before
+   * the first turn. Missing on a conversation about none yet.
+   */
+  subject?: ConversationSubject;
   toolNames: readonly string[];
   skills: readonly ShippedSkill[];
 }
@@ -57,7 +60,7 @@ export interface ShippedSkill {
 }
 
 export interface ConversationOfferSource {
-  /** Nothing where the conversation has no subject, or is gone. */
+  /** Nothing where the conversation is gone. */
   offerOf(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
@@ -65,8 +68,8 @@ export interface ConversationOfferSource {
 }
 
 /**
- * The prefix of the tools the server binds to the subject of a conversation. An agent is
- * offered one only in a conversation that has a subject, whatever its definition lists.
+ * The prefix of the tools that read and save an asset. The server offers them to the agent of
+ * every conversation, whatever its definition lists.
  */
 export const SUBJECT_TOOL_PREFIX = "platform.assets.";
 
@@ -168,6 +171,12 @@ export interface UpdateConversationTitleInput {
   updatedAt: ISODateString;
 }
 
+export interface SetConversationSubjectInput {
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+  subject: ConversationSubject;
+}
+
 export interface ReplaceConversationTitleInput extends UpdateConversationTitleInput {
   /** The title the caller read. Another title by now means someone else wrote one. */
   expectedTitle: string;
@@ -214,6 +223,12 @@ export interface ConversationStore extends ConversationHistoryStore {
    * statement. False when it carries another title or is not active.
    */
   replaceConversationTitle(input: ReplaceConversationTitleInput): Promise<boolean>;
+  /**
+   * Makes `subject` what an active conversation is about, in place of what it was about.
+   * Leaves its time of change alone: a subject is no message. Nothing when the conversation
+   * is not active.
+   */
+  setConversationSubject(input: SetConversationSubjectInput): Promise<Conversation | undefined>;
   /**
    * Deletes an active Conversation. With `inCollaborationWorkspaceId` only while it is in
    * that workspace: one that was moved away meanwhile is answered as not available.

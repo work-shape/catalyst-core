@@ -90,7 +90,8 @@ describe("an agent that writes and edits workspace files", () => {
     const pageObjects = new MemoryObjectStorage();
     const pageSave = createPageSaveTool({
       workspace: service.dependencies,
-      builds: createPageBuildClient({ stores: store, pollIntervalMs: 20 })
+      builds: createPageBuildClient({ stores: store, pollIntervalMs: 20 }),
+      conversations: store.conversations
     });
     const tools = [...createWorkspaceToolDefinitions({ service }), pageSave];
     const granted = [

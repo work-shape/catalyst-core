@@ -102,6 +102,12 @@ export interface FileSetFile {
   contentType: string;
 }
 
+/**
+ * The kind a Page has as the subject of a conversation. A Page is no asset of a kind: it belongs
+ * to its conversation, and `page.save` makes it the subject when it saves a revision of it.
+ */
+export const PAGE_SUBJECT_KIND = "page";
+
 export interface Page {
   id: PageId;
   clientInstanceId: ClientInstanceId;

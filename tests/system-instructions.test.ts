@@ -60,7 +60,7 @@ describe("system instructions", () => {
   it("tells the agent the subject of a conversation with only the tools and skills it is offered", () => {
     const skill = { name: "workflow-authoring", title: "Workflows", description: "", content: "" };
     const content = createSystemInstructions("Use customer workflow rules.", "en", {
-      subject: {
+      offer: {
         subject: { kind: "data_store", name: "visit-log" },
         toolNames: ["platform.assets.get", "read_skill"],
         skills: [skill]
@@ -69,7 +69,7 @@ describe("system instructions", () => {
 
     expect(content).toContain("This conversation is about one data store, named 'visit-log'.");
     expect(content).toContain(
-      "Read it with platform.assets.get before you answer a question about it or change it."
+      "Read it with platform.assets.get, naming no asset, before you answer a question about it or change it."
     );
     expect(content).toContain("call read_skill for 'workflow-authoring'");
     // A conversation that may not save is not told of a save.
@@ -77,5 +77,21 @@ describe("system instructions", () => {
 
     const without = createSystemInstructions("Use customer workflow rules.", "en");
     expect(without).not.toContain("Subject of this conversation:");
+    expect(without).not.toContain("Assets of the platform:");
+  });
+
+  it("tells the agent of a conversation about nothing yet how it starts on an asset", () => {
+    const content = createSystemInstructions("Use customer workflow rules.", "en", {
+      offer: { toolNames: ["platform.assets.get", "platform.assets.put"], skills: [] }
+    });
+
+    expect(content).not.toContain("Subject of this conversation:");
+    expect(content).toContain("Assets of the platform:");
+    expect(content).toContain("read it with platform.assets.get, naming its kind and its name");
+    // Without the read there is no way to start, so nothing is said.
+    const noRead = createSystemInstructions("Use customer workflow rules.", "en", {
+      offer: { toolNames: [], skills: [] }
+    });
+    expect(noRead).not.toContain("Assets of the platform:");
   });
 });

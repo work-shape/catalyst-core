@@ -128,7 +128,8 @@ async function createSaveHarness(
   });
   const tool = createPageSaveTool({
     workspace: service.dependencies,
-    builds: options.builds?.(client) ?? client
+    builds: options.builds?.(client) ?? client,
+    conversations: store.conversations
   });
   const execution = createTestToolRunner({
     registry: new ToolRegistry({ tools: [tool] }),
@@ -173,6 +174,8 @@ async function createSaveHarness(
     ...harness,
     files,
     worker,
+    subject: async () =>
+      (await store.conversations.getConversation(clientInstanceId, conversation.id))?.subject,
     /** Writes files of the workspace as the agent's file tools do: bytes, then the row. */
     async write(folder: string, contents: Record<string, string | { declaredBytes: number }>) {
       for (const [path, content] of Object.entries(contents)) {
@@ -317,6 +320,8 @@ describe("page.save", () => {
 
     expect(first).toMatchObject({ status: "success", output: { number: 1 } });
     expect(first.output?.errors).toBeUndefined();
+    // The saved Page is what the conversation is about from now on; a refused save is none.
+    expect(await harness.subject()).toEqual({ kind: "page", name: "Calculator" });
     const [page] = await harness.store.pages.listPages({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id
@@ -379,6 +384,7 @@ export const Route = createFileRoute("/history")({
       expect.objectContaining({ file: "src/routes/history.tsx", line: 4 })
     ]);
     expect(refused.output?.pageId).toBeUndefined();
+    expect(await harness.subject()).toBeUndefined();
     expect(await harness.fileSets()).toEqual([]);
     expect([...(await everyKey(harness.files))]).toEqual([]);
 

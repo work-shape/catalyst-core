@@ -11,6 +11,7 @@ import {
   type ActorAccess,
   type AuditRecorder,
   type AuthenticatedIdentity,
+  type Conversation,
   type ConversationSubject,
   type JsonObject,
   type OperationAuthorization,
@@ -18,6 +19,7 @@ import {
   type ToolExecutionContext
 } from "@vivd-catalyst/core";
 import {
+  PLATFORM_ASSET_TOOLS,
   platformAssetWriteRefusal,
   type PlatformAssetCalls,
   type PlatformCallableOperation
@@ -30,9 +32,9 @@ import type { AssetWorkflowOptions } from "./types";
 
 // What carries the agent's asset tools out: the workflow of the asset operations of the API,
 // called for the person the agent acts for, on the subject of the conversation the call came
-// from. Nothing of an asset is decided here: the right, the checks of a definition, the
-// revision and the audit rows are the ones a call of `assets.get`, `assets.validate` and
-// `assets.put` has.
+// from. A read that names another asset makes that asset the subject. Nothing of an asset is
+// decided here: the right, the checks of a definition, the revision and the audit rows are the
+// ones a call of `assets.get`, `assets.validate` and `assets.put` has.
 
 /** The module whose switch turns changing assets through `assets.put` on and off. */
 const ASSET_WRITE_OPERATION = "assets.put";
@@ -67,25 +69,14 @@ const subjectUnavailable = () =>
 /**
  * Refuses a conversation about an asset its creator may not read. A kind the instance does
  * not have, an asset that does not exist and one the caller holds no read right on are told
- * the same way, so the refusal says nothing of what is stored.
+ * the same way, so the refusal says nothing of what is stored. An asset of a kind without a
+ * draft, such as an agent, may be a subject: the agent reads it, and its tools save drafts only.
  */
 export async function requireReadableSubject(
   options: AssetWorkflowOptions,
   actor: AuthenticatedIdentity,
   subject: ConversationSubject
 ): Promise<void> {
-  const kind = options.configAssets.kinds.kinds.find(
-    (candidate) => candidate.kind === subject.kind
-  );
-  // The kind says this, not an asset: it tells nothing of what is stored.
-  if (kind && kind.lifecycle !== "draft_published") {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      `A conversation is about an asset that has a draft. An asset of the kind '${subject.kind}' has none: a save of it is live at once`,
-      { reason: "subject_without_draft" },
-      { exposeMessage: true }
-    );
-  }
   let decision: OperationAuthorization;
   try {
     decision = await new AssetWorkflow(options).authorizeRead(
@@ -120,27 +111,60 @@ function jsonSchemaOf(given: JsonObject | undefined, schema: z.ZodType): JsonObj
   }
 }
 
+/** The refusal of a call that names no asset in a conversation about none yet. */
+const withoutSubject = () =>
+  new AppError(
+    "CONFLICT",
+    `This conversation is about no asset yet. Read the one to work on with ${PLATFORM_ASSET_TOOLS.get.name}, naming its kind and its name`,
+    { reason: "conversation_without_subject" },
+    { exposeMessage: true }
+  );
+
+const sameSubject = (left: ConversationSubject, right: ConversationSubject | undefined) =>
+  right !== undefined && left.kind === right.kind && left.name === right.name;
+
 export function createPlatformAssetCalls(options: AssetWorkflowOptions): PlatformAssetCalls {
   const workflow = new AssetWorkflow(options);
 
-  /** The asset the call is bound to, and the call as the asset operations take one. */
-  async function bound(context: ToolExecutionContext): Promise<{
-    subject: ConversationSubject;
-    call: AssetCall;
-  }> {
+  /** The conversation the call came from. */
+  async function conversationOf(context: ToolExecutionContext): Promise<Conversation> {
     const conversationId = context.toolRequest?.conversationId;
     const conversation = conversationId
       ? await options.stores.conversations.getConversation(options.clientInstanceId, conversationId)
       : undefined;
-    const subject = conversation?.subject;
-    if (!subject) {
+    if (!conversation) {
       throw new AppError(
         "CONFLICT",
-        "This conversation is about no asset, so there is none to read or save here",
-        { reason: "conversation_without_subject" },
+        "An asset is read and saved in a conversation, and this call came from none",
+        { reason: "call_without_conversation" },
         { exposeMessage: true }
       );
     }
+    return conversation;
+  }
+
+  /**
+   * Refuses to read an asset into a transcript that others read. A member of a Shared
+   * Workspace need not hold the read right on the asset, so a conversation about one is its
+   * creator's alone, as `createConversation` makes it.
+   */
+  async function requireOwnTranscript(conversation: Conversation): Promise<void> {
+    if (conversation.visibility === "private") return;
+    const workspace = await options.stores.workspaces.getWorkspace(
+      options.clientInstanceId,
+      conversation.collaborationWorkspaceId
+    );
+    if (workspace?.kind === "personal") return;
+    throw new AppError(
+      "CONFLICT",
+      "This conversation is shared with its workspace, and an asset is read only in a conversation of the person's own. Ask the person to start a new conversation, or to open the asset's page and choose Edit with the agent",
+      { reason: "subject_conversation_shared" },
+      { exposeMessage: true }
+    );
+  }
+
+  /** The call as the asset operations take one. */
+  async function callOf(context: ToolExecutionContext): Promise<AssetCall> {
     const runId = context.operationRun?.id;
     // The audit rows of the call carry its run, as those of a call of the API do.
     const audit: AuditRecorder = {
@@ -152,15 +176,22 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
         })
     };
     return {
-      subject,
-      call: {
-        actor: context.user,
-        access: await accessOf(options, context.user),
-        audit,
-        correlationId: context.correlationId,
-        ...(runId ? { runId } : {})
-      }
+      actor: context.user,
+      access: await accessOf(options, context.user),
+      audit,
+      correlationId: context.correlationId,
+      ...(runId ? { runId } : {})
     };
+  }
+
+  /** The asset the conversation is about, and the call as the asset operations take one. */
+  async function bound(context: ToolExecutionContext): Promise<{
+    subject: ConversationSubject;
+    call: AssetCall;
+  }> {
+    const { subject } = await conversationOf(context);
+    if (!subject) throw withoutSubject();
+    return { subject, call: await callOf(context) };
   }
 
   const allowed = (decision: OperationAuthorization): void => {
@@ -184,10 +215,27 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
         };
 
   return {
-    async get(context) {
-      const { subject, call } = await bound(context);
+    async get(context, named) {
+      const conversation = await conversationOf(context);
+      const subject = named ?? conversation.subject;
+      if (!subject) throw withoutSubject();
+      const moves = !sameSubject(subject, conversation.subject);
+      if (moves) {
+        // Another asset is read as one the conversation could have been made about.
+        await requireReadableSubject(options, context.user, subject);
+        await requireOwnTranscript(conversation);
+      }
+      const call = await callOf(context);
       allowed(await workflow.reads.authorizeGet(call.access, subject));
       const read = await workflow.reads.get(call, subject);
+      // Set once the read stood: a refused read leaves the conversation about what it was.
+      if (moves) {
+        await options.stores.conversations.setConversationSubject({
+          clientInstanceId: options.clientInstanceId,
+          conversationId: conversation.id,
+          subject
+        });
+      }
       const published = "publishedRevision" in read ? read.publishedRevision : undefined;
       return {
         kind: read.kind,
@@ -227,11 +275,13 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       const kind = options.configAssets.kinds.kinds.find(
         (candidate) => candidate.kind === subject.kind
       );
+      // A Page is saved with its own tool, and a kind of a module that is off is none here.
+      if (kind === undefined) throw subjectUnavailable();
       // A kind without a draft is live with every write. This tool moves a draft and nothing else.
-      if (kind?.lifecycle !== "draft_published") {
+      if (kind.lifecycle !== "draft_published") {
         throw new AppError(
           "VALIDATION_FAILED",
-          `A ${subject.kind} has no draft: a save of it would be live at once, and this tool saves drafts only`,
+          `An asset of the kind '${subject.kind}' has no draft: a save of it would be live at once, and this tool saves drafts only`,
           { reason: "no_draft" },
           { exposeMessage: true }
         );

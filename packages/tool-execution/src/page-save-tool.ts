@@ -5,6 +5,8 @@ import {
   isAppError,
   normalizePageName,
   PAGE_NAME_MAX_CHARS,
+  PAGE_SUBJECT_KIND,
+  type ConversationStore,
   requireFileSetWithinLimits,
   type PageBuildClient,
   type PageBuildIssue,
@@ -28,6 +30,8 @@ export interface PageSaveToolOptions {
   /** What the workspace tools of the instance work with: the same workspace, the same limits. */
   workspace: WorkspaceToolDependencies;
   builds: PageBuildClient;
+  /** Where a saved Page becomes what its conversation is about. */
+  conversations: Pick<ConversationStore, "setConversationSubject">;
 }
 
 const pageSaveInputSchema = z.object({
@@ -180,6 +184,12 @@ async function savePage(
   if (outcome.status === "errors") {
     return refuse(outcome.errors);
   }
+  // The person sees the Page beside the chat from now on, also when they come back later.
+  await options.conversations.setConversationSubject({
+    clientInstanceId: context.clientInstanceId,
+    conversationId: workspace.value.conversationId,
+    subject: { kind: PAGE_SUBJECT_KIND, name: pageName }
+  });
   return toolSuccess<PageSaveOutput>(
     { pageId: outcome.pageId, number: outcome.number, fileSetId: outcome.fileSetId },
     {
