@@ -24,8 +24,8 @@ import {
 // A Workflow of three steps against the sample MCP server of the demo, through an assembled
 // instance: the Connection is seeded from release config, its catalog is discovered by the
 // job, and the operation step calls the server through the instance's own call path. The
-// assembly builds its engine without a definition until Workflows are stored as assets, so the
-// test builds one over the fixture folders, on the stores and the call path of an assembled
+// assembly reads its definitions from the published Workflow assets; this test builds an engine
+// over the fixture folders instead, on the stores and the call path of an assembled
 // process, and hands its routes to an API process and its handler to a job worker.
 
 const SAMPLE_MONTH = "2026-06";

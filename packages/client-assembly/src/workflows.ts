@@ -1,17 +1,24 @@
 import {
   createWorkflowRoutes,
   type OperationCalls,
-  type RouteRegistration
+  type RouteRegistration,
+  type WorkflowListEntry
 } from "@vivd-catalyst/chat-server";
 import type { RegisteredJobHandler } from "@vivd-catalyst/core";
 import {
   createWorkflowEngine,
-  noWorkflowDefinitions,
+  workflowDefinitionStartIssues,
+  workflowStartIssues,
   workflowsModule,
   type WorkflowDefinitionSource,
   type WorkflowEngineOptions
 } from "@vivd-catalyst/workflows";
 import type { ModuleAssemblyParts, ModuleSeam } from "./module-assembly";
+import {
+  createWorkflowAssetDefinitions,
+  createWorkflowAssetKind,
+  publishedWorkflowsOf
+} from "./workflow-assets";
 
 export { workflowsModule };
 
@@ -23,8 +30,8 @@ export interface InstanceWorkflowsParts extends Pick<
   /** The call path of the process. An operation step calls through it and nothing else. */
   operationCalls: Pick<OperationCalls, "registry" | "deps">;
   /**
-   * Where the published definition of a Workflow is read. Without one the instance knows no
-   * Workflow, which is what it has until Workflows are stored as assets.
+   * Where the published definition of a Workflow is read, in place of the instance's own
+   * source: the published revisions of its Workflow assets. For a test of the engine.
    */
   definitions?: WorkflowDefinitionSource;
   /** Bounds below the release's own, for a test. */
@@ -69,17 +76,64 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
       planSchedule: () => Promise.resolve(undefined)
     };
   }
+  const { clientInstanceId, stores, operationCalls } = parts;
+  const assets = createWorkflowAssetDefinitions({
+    clientInstanceId,
+    configAssets: stores.configAssets
+  });
+  const given = parts.definitions;
   const engine = createWorkflowEngine({
-    clientInstanceId: parts.clientInstanceId,
-    stores: parts.stores,
-    definitions: parts.definitions ?? noWorkflowDefinitions,
-    operationCalls: parts.operationCalls,
+    clientInstanceId,
+    stores,
+    definitions: given ?? assets,
+    operationCalls,
     ...(parts.limits ? { limits: parts.limits } : {}),
     ...(parts.now ? { now: parts.now } : {}),
     ...(parts.timeZone === undefined ? {} : { timeZone: parts.timeZone })
   });
+  /**
+   * The list of the instance: every published Workflow, with what a start by hand of it is
+   * refused for now. One the engine of this release does not run is listed with the engine's
+   * reasons, never left out, so a page says why it cannot be started instead of guessing.
+   */
+  async function listWorkflows(): Promise<WorkflowListEntry[]> {
+    const published = await (given ? publishedWorkflowsOf(given) : assets.published());
+    const last = await stores.workflowRuns.listLastRuns({
+      clientInstanceId,
+      workflows: published.map((workflow) => workflow.id)
+    });
+    const entries: WorkflowListEntry[] = [];
+    for (const { id, assetId, name, description, revisionId, definition } of published) {
+      const reasons = definition.ok
+        ? await workflowStartIssues(definition.manifest, {
+            clientInstanceId,
+            principals: stores.apiAccess,
+            registry: operationCalls.registry
+          })
+        : workflowDefinitionStartIssues(definition.issues);
+      const lastRun = last.get(id);
+      entries.push({
+        id,
+        ...(assetId === undefined ? {} : { assetId }),
+        name,
+        ...(description === undefined ? {} : { description }),
+        definitionRevisionId: revisionId,
+        runnable: reasons.length === 0,
+        reasons,
+        ...(lastRun ? { lastRun } : {})
+      });
+    }
+    return entries;
+  }
   return {
-    routes: [createWorkflowRoutes(engine)],
+    routes: [
+      createWorkflowRoutes({
+        ...engine,
+        listWorkflows,
+        // Definitions a test hands in are no assets: a right on them is decided by name.
+        assetIdOf: (workflow) => (given ? Promise.resolve(undefined) : assets.assetIdOf(workflow))
+      })
+    ],
     jobHandlers: engine.jobHandlers,
     planSchedules: engine.planSchedules,
     planSchedule: engine.planSchedule
@@ -87,11 +141,15 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
 }
 
 /**
- * The seam of the module: the engine is built once the call path of the process exists. A
- * process that starts plans the schedules of what is published, so a Workflow whose job was
- * lost, or that was published while no process ran, has its next due time queued.
+ * The seam of the module. Where it is on, the instance registers the asset kind `workflow`;
+ * the engine is built once the call path of the process exists. A process that starts plans
+ * the schedules of what is published, so a Workflow whose job was lost, or that was published
+ * while no process ran, has its next due time queued.
  */
 export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceId, stores }) => ({
+  ...(modules.isEnabled(workflowsModule.name)
+    ? { assetKinds: [createWorkflowAssetKind({ clientInstanceId, apiAccess: stores.apiAccess })] }
+    : {}),
   async start({ operationCalls }) {
     const { timeZone } = config.clientInstance;
     const workflows = createInstanceWorkflows({

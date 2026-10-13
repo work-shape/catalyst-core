@@ -174,3 +174,25 @@ export const agentConfigSchema = z.object({
     )
     .default([])
 });
+
+/** The id of a Workflow, which is the name of its asset: part of `workflow.<id>.start`. */
+export const WORKFLOW_NAME_PATTERN = /^[a-z][a-z0-9_-]{0,62}$/u;
+export const WORKFLOW_NAME_RULE =
+  "A Workflow id starts with a lowercase letter and holds lowercase letters, digits, '_' and '-', at most 63 characters";
+
+/**
+ * What a revision of a Workflow holds as its config: the id the asset is addressed by, and
+ * `workflow.yaml` as an object under `manifest`. This is the shape alone, which every stored
+ * revision keeps whatever a later engine accepts. Whether the engine of the instance runs the
+ * manifest is asked of its own parser when a revision is saved and when one is published.
+ */
+export const workflowConfigSchema = z.strictObject({
+  name: z.string(),
+  manifest: z.looseObject({
+    id: z.string(),
+    name: z.string().min(1),
+    description: z.string().optional()
+  })
+});
+
+export type WorkflowAssetConfig = z.infer<typeof workflowConfigSchema>;

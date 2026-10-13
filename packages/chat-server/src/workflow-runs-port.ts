@@ -34,8 +34,30 @@ export interface WorkflowRunsPort {
     filter?: WorkflowStepRunFilter;
     page?: StorePage;
   }): Promise<WorkflowStepRunView[]>;
-  /** The Workflows with a published definition, each with its latest run where it has one. */
-  listWorkflows(): Promise<
-    { id: string; name: string; description?: string; lastRun?: WorkflowLastRun }[]
-  >;
+  /**
+   * Every Workflow with a published revision, each with its latest run where it has one and
+   * with what a start by hand of it would be refused for now.
+   */
+  listWorkflows(): Promise<WorkflowListEntry[]>;
+  /**
+   * The id of the asset that holds the Workflow, where one does. A right is decided on it, so
+   * a grant on that one asset opens the calls on its Workflow and on its runs.
+   */
+  assetIdOf(workflow: string): Promise<string | undefined>;
+}
+
+/** One published Workflow as the list of the instance names it. */
+export interface WorkflowListEntry {
+  id: string;
+  /** The id of the asset that holds the Workflow. Decides the right; no part of the answer. */
+  assetId?: string;
+  name: string;
+  description?: string;
+  /** The published revision: what a run started now keeps as its `definitionRevisionId`. */
+  definitionRevisionId: string;
+  /** Whether a start by hand is accepted now. */
+  runnable: boolean;
+  /** Why not, under the codes the refusal of the start carries. Empty where `runnable`. */
+  reasons: { code: string; message: string; path?: string }[];
+  lastRun?: WorkflowLastRun;
 }

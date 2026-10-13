@@ -141,10 +141,31 @@ export const listWorkflowStepRunsQuerySchema = listQuerySchema.extend({
   iteration: z.coerce.number().int().min(0).optional()
 });
 
+/**
+ * One thing a start by hand of a Workflow is refused for, under the code the refusal of the
+ * start carries as its `reason`: a code of the definition (`not_supported_yet`,
+ * `block_depth`, `reference_out_of_scope`, `duplicate_step_id`, `definition_invalid`) or of
+ * the start (`no_manual_trigger`, `inputs_unreadable`, `operation_secret`,
+ * `principal_inactive`). A later engine may name further codes.
+ */
+export const workflowStartIssueSchema = z.object({
+  code: z.string(),
+  /** A sentence of the product. Never a value of a run. */
+  message: z.string(),
+  /** Where in the definition it is, such as `steps.check.type`. */
+  path: z.string().optional()
+});
+
 export const workflowSummarySchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string().optional(),
+  /** The published revision: what a run started now has as its `definitionRevisionId`. */
+  definitionRevisionId: z.string(),
+  /** Whether a start by hand is accepted now, as far as that is known before its input. */
+  runnable: z.boolean(),
+  /** Why not. Empty exactly where `runnable` is true. */
+  reasons: z.array(workflowStartIssueSchema),
   /** The latest run of the Workflow. Missing on one that never ran. */
   lastRun: z
     .object({
@@ -169,7 +190,8 @@ export const workflowOperations = {
     id: "workflows.list",
     method: "GET",
     path: "/api/v1/workflows",
-    summary: "List the published Workflows the caller may read, each with its latest run",
+    summary:
+      "List the published Workflows the caller may read or use, each with its latest run and whether it can be started",
     tag: "Workflows",
     auth: "principal",
     scope: "config_assets:read",

@@ -197,7 +197,11 @@ export {
   skillNameSchema,
   skillResourceConfigSchema,
   skillResourceMediaTypeForPath,
-  skillResourcePathSchema
+  skillResourcePathSchema,
+  WORKFLOW_NAME_PATTERN,
+  WORKFLOW_NAME_RULE,
+  workflowConfigSchema,
+  type WorkflowAssetConfig
 } from "@vivd-catalyst/asset-schemas";
 
 export const modelBindingConfigSchema = z.object({

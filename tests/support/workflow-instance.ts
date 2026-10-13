@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   createInstanceWorkflows,
   createJobWorker,
+  createWorkflowAssetKind,
   resolveInstanceModules,
   type InstanceWorkflows,
   type InstanceWorkflowsParts
@@ -13,6 +14,7 @@ import type {
   JobWorker,
   Logger,
   ModuleSnapshot,
+  PlatformStores,
   RegisteredJobHandler,
   ServicePrincipalRecord,
   WorkflowManifest
@@ -206,8 +208,11 @@ export async function workflowFixture(
   options: {
     moduleOn?: boolean;
     limits?: InstanceWorkflowsParts["limits"];
-    /** In place of the fixture folders. */
-    definitions?: WorkflowDefinitionSource;
+    /**
+     * In place of the fixture folders. `assets` is what an instance has: the kind `workflow`
+     * is registered and the engine reads the published revisions of its assets.
+     */
+    definitions?: WorkflowDefinitionSource | "assets";
     /** The clock of the engine and the time zone of its schedules, for a test of due times. */
     now?: InstanceWorkflowsParts["now"];
     timeZone?: string;
@@ -216,9 +221,23 @@ export async function workflowFixture(
   let workflows: InstanceWorkflows | undefined;
   let modules: ModuleSnapshot | undefined;
   const workers: JobWorker[] = [];
+  const fromAssets = options.definitions === "assets";
+  const given = options.definitions === "assets" ? undefined : options.definitions;
+  // The kind asks the principals of the instance, whose stores exist once it is set up.
+  let principals: PlatformStores["apiAccess"] | undefined;
+  const kind = createWorkflowAssetKind({
+    clientInstanceId,
+    apiAccess: {
+      findServicePrincipalByName(input) {
+        if (!principals) throw new Error("The instance is not set up");
+        return principals.findServicePrincipalByName(input);
+      }
+    }
+  });
   const t = await fixtureOn((connectionOptions) =>
     setupAccessInstance({
       ...connectionOptions,
+      furtherKinds: [...(connectionOptions.furtherKinds ?? []), ...(fromAssets ? [kind] : [])],
       modules: {
         ...connectionOptions.modules,
         ...(options.moduleOn === false ? {} : { workflows: { enabled: true } })
@@ -227,12 +246,13 @@ export async function workflowFixture(
         const server = connectionOptions.server?.(stores, config) ?? {};
         if (!server.operationCalls) throw new Error("The instance built no call path");
         modules = resolveInstanceModules(config, []).snapshot;
+        principals = stores.apiAccess;
         workflows = createInstanceWorkflows({
           modules,
           clientInstanceId,
           stores,
           operationCalls: server.operationCalls,
-          definitions: options.definitions ?? fixtureDefinitions(),
+          ...(fromAssets ? {} : { definitions: given ?? fixtureDefinitions() }),
           ...(options.limits ? { limits: options.limits } : {}),
           ...(options.now ? { now: options.now } : {}),
           ...(options.timeZone === undefined ? {} : { timeZone: options.timeZone })

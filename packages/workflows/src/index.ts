@@ -1,4 +1,4 @@
-import { WORKFLOW_RUN_JOB_KINDS, defineModule } from "@vivd-catalyst/core";
+import { WORKFLOW_ASSET_KIND, WORKFLOW_RUN_JOB_KINDS, defineModule } from "@vivd-catalyst/core";
 
 /** The operations of the API that belong to the module. Each is off where the module is. */
 export const WORKFLOW_OPERATION_IDS = [
@@ -11,12 +11,14 @@ export const WORKFLOW_OPERATION_IDS = [
 ] as const;
 
 /**
- * Workflows: their runs and the engine that executes their steps on the job executor. Where
- * the module is off, no run is started, read or cancelled and no step job is served.
+ * Workflows: their asset kind, their runs and the engine that executes their steps on the job
+ * executor. Where the module is off, the kind is not registered, no run is started, read or
+ * cancelled and no step job is served.
  */
 export const workflowsModule = defineModule({
   name: "workflows",
   operations: WORKFLOW_OPERATION_IDS,
+  kinds: [WORKFLOW_ASSET_KIND],
   jobKinds: [WORKFLOW_RUN_JOB_KINDS.executeStep, WORKFLOW_RUN_JOB_KINDS.fireSchedule]
 });
 
@@ -47,3 +49,8 @@ export {
 export * from "./limits";
 export { workflowScheduleJobKind } from "./schedule-trigger";
 export { secretOperationSteps, type WorkflowOperationCalls } from "./operation-step";
+export {
+  workflowDefinitionStartIssues,
+  workflowStartIssues,
+  type WorkflowStartIssue
+} from "./start-checks";

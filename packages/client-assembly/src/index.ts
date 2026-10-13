@@ -48,6 +48,14 @@ export {
   type InstanceWorkflows,
   type InstanceWorkflowsParts
 } from "./workflows";
+// What a client that brings a Workflow as a file reads it with, as the engine does.
+export { readWorkflowManifest } from "@vivd-catalyst/workflows";
+export {
+  WORKFLOW_LIST_MAX,
+  createWorkflowAssetDefinitions,
+  createWorkflowAssetKind,
+  type PublishedWorkflow
+} from "./workflow-assets";
 export { migrateClientInstanceDatabase } from "./migrate";
 export { createPlatformStore } from "./store";
 export {

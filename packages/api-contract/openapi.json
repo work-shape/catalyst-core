@@ -11754,7 +11754,7 @@
     "/api/v1/workflows": {
       "get": {
         "operationId": "workflows.list",
-        "summary": "List the published Workflows the caller may read, each with its latest run",
+        "summary": "List the published Workflows the caller may read or use, each with its latest run and whether it can be started",
         "tags": [
           "Workflows"
         ],
@@ -11798,6 +11798,33 @@
                           "description": {
                             "type": "string"
                           },
+                          "definitionRevisionId": {
+                            "type": "string"
+                          },
+                          "runnable": {
+                            "type": "boolean"
+                          },
+                          "reasons": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "code": {
+                                  "type": "string"
+                                },
+                                "message": {
+                                  "type": "string"
+                                },
+                                "path": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "code",
+                                "message"
+                              ]
+                            }
+                          },
                           "lastRun": {
                             "type": "object",
                             "properties": {
@@ -11831,7 +11858,10 @@
                         },
                         "required": [
                           "id",
-                          "name"
+                          "name",
+                          "definitionRevisionId",
+                          "runnable",
+                          "reasons"
                         ]
                       }
                     }

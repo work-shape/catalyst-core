@@ -601,10 +601,11 @@ describe("the modules workflows and dataStores", () => {
       ui: []
     };
     expect(knowledgeModule).toEqual({ ...nothing, name: "knowledge" });
-    // The runs of a Workflow and the job that executes their steps. No kind yet.
+    // The kind of a Workflow, its runs and the job that executes their steps.
     expect(workflowsModule).toEqual({
       ...nothing,
       name: "workflows",
+      kinds: [WORKFLOW_ASSET_KIND],
       operations: [
         "workflows.list",
         "workflows.start",
@@ -630,12 +631,12 @@ describe("the modules workflows and dataStores", () => {
     });
     const off = createModuleRegistry(platformModules).snapshot({});
     for (const [contribution, name] of [
-      ["kind", WORKFLOW_ASSET_KIND],
       ["kind", KNOWLEDGE_BASE_ASSET_KIND],
       ["tool", KNOWLEDGE_QUERY_TOOL_NAME]
     ] as const) {
       expect(off.offModuleOf(contribution, name), name).toBeUndefined();
     }
+    expect(off.offModuleOf("kind", WORKFLOW_ASSET_KIND)).toBe("workflows");
     expect(off.offModuleOf("jobKind", WORKFLOW_RUN_JOB_KINDS.executeStep)).toBe("workflows");
     expect(off.offModuleOf("operation", "workflows.start")).toBe("workflows");
     expect(off.offModuleOf("kind", DATA_STORE_ASSET_KIND)).toBe("dataStores");

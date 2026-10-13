@@ -18,7 +18,12 @@ import type { WorkflowRunsPort } from "../workflow-runs-port";
 /** The module these operations belong to. */
 const WORKFLOWS_MODULE = "workflows";
 
-const workflowOf = (name: string): AccessResource => ({ kind: WORKFLOW_ASSET_KIND, name });
+/** What a right on one Workflow is decided on: its name and, where it is stored, its asset. */
+const workflowOf = (name: string, assetId?: string): AccessResource => ({
+  kind: WORKFLOW_ASSET_KIND,
+  name,
+  ...(assetId === undefined ? {} : { assetId })
+});
 
 /**
  * The runs of a Workflow: the start by hand, the reads and the cancel. Each is an operation
@@ -52,7 +57,12 @@ function registerWorkflowRoutes(
     decideOn: (run: WorkflowRunView | undefined, resource: AccessResource) => OperationAuthorization
   ): Promise<OperationAuthorization> {
     const run = await workflows?.readRun(runId);
-    return decideOn(run, run ? workflowOf(run.workflow) : { kind: WORKFLOW_ASSET_KIND });
+    return decideOn(run, run ? await resourceOf(run.workflow) : { kind: WORKFLOW_ASSET_KIND });
+  }
+
+  /** The Workflow of this name as rights are decided on it, with its asset where it has one. */
+  async function resourceOf(workflow: string): Promise<AccessResource> {
+    return workflowOf(workflow, await workflows?.assetIdOf(workflow));
   }
 
   async function runOf(runId: string): Promise<WorkflowRunView> {
@@ -62,19 +72,25 @@ function registerWorkflowRoutes(
   }
 
   route.operation(apiOperations["workflows.list"], {
-    // The list is of what the caller may read: the right is asked of each Workflow below.
+    // The list is of what the caller may be shown: the right is asked of each Workflow below.
     authorize: () => ({ allowed: true }),
     module: WORKFLOWS_MODULE,
+    // The published revision of an asset is shown to whoever reads it or uses it, as a read
+    // of the asset shows it. A Workflow that cannot be started is listed all the same.
     execute: async (_input, { access }) => ({
-      items: (await required().listWorkflows()).filter(
-        (workflow) => decide(access, WORKFLOW_ACTIONS.read, workflowOf(workflow.id)).allowed
-      )
+      items: (await required().listWorkflows())
+        .filter((workflow) =>
+          [WORKFLOW_ACTIONS.read, WORKFLOW_ACTIONS.use].some(
+            (action) => decide(access, action, workflowOf(workflow.id, workflow.assetId)).allowed
+          )
+        )
+        .map(({ assetId: _assetId, ...workflow }) => workflow)
     })
   });
 
   route.operation(apiOperations["workflows.start"], {
-    authorize: (input, { access }) =>
-      decide(access, WORKFLOW_ACTIONS.use, workflowOf(input.workflow)),
+    authorize: async (input, { access }) =>
+      decide(access, WORKFLOW_ACTIONS.use, await resourceOf(input.workflow)),
     resource: workflowResource,
     module: WORKFLOWS_MODULE,
     execute: async (input, context) =>
@@ -90,8 +106,8 @@ function registerWorkflowRoutes(
   });
 
   route.operation(apiOperations["workflows.list_runs"], {
-    authorize: (input, { access }) =>
-      decide(access, WORKFLOW_ACTIONS.read, workflowOf(input.workflow)),
+    authorize: async (input, { access }) =>
+      decide(access, WORKFLOW_ACTIONS.read, await resourceOf(input.workflow)),
     resource: workflowResource,
     module: WORKFLOWS_MODULE,
     execute: async (input, context) =>

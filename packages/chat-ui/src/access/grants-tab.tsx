@@ -85,7 +85,8 @@ const kindLabelKeys = {
   agent: "access.kindAgent",
   skill: "access.kindSkill",
   connection: "access.kindConnection",
-  app: "access.kindApp"
+  app: "access.kindApp",
+  workflow: "access.kindWorkflow"
 } as const satisfies Record<GrantKind, TranslationKey> & Record<string, TranslationKey>;
 
 /** The label of a registered asset kind; nothing for a kind this interface has no name for. */
