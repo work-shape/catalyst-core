@@ -6,6 +6,7 @@ import {
   hasAuthScope,
   isAuthenticatedServicePrincipal,
   type AccessResource,
+  type ActorAccess,
   type AuthenticatedIdentity,
   type OperationAuthorization,
   type OperationResource,
@@ -32,6 +33,12 @@ const workflowOf = (name: string, assetId?: string): AccessResource => ({
   ...(assetId === undefined ? {} : { assetId })
 });
 
+/** What a caller may do with a run, decided on the Workflow of the run or on no Workflow. */
+type RunDecision = (
+  run: WorkflowRunView | undefined,
+  resource: AccessResource
+) => OperationAuthorization;
+
 /**
  * The runs of a Workflow: the start by hand, the reads and the cancel. Each is an operation
  * of the registry and brings its check, because the right is decided on the Workflow the
@@ -56,15 +63,18 @@ function registerWorkflowRoutes(
   }
 
   /**
-   * Decided on the Workflow of the run, or on no Workflow where no run has the id. So a
-   * caller who may not read a run is refused the same way whether or not it exists.
+   * Decided on the Workflow of the run, or on no Workflow where no run has the id. A run whose
+   * Workflow refuses the caller is decided as one that does not exist, so a right or a deny on
+   * one Workflow tells nobody which run ids there are: the caller is refused the same way, or
+   * let through to the same `NOT_FOUND` (`runOf`).
    */
   async function authorizeOnRun(
     runId: string,
-    decideOn: (run: WorkflowRunView | undefined, resource: AccessResource) => OperationAuthorization
+    decideOn: RunDecision
   ): Promise<OperationAuthorization> {
     const run = await workflows?.readRun(runId);
-    return decideOn(run, run ? await resourceOf(run.workflow) : { kind: WORKFLOW_ASSET_KIND });
+    const onRun = run ? decideOn(run, await resourceOf(run.workflow)) : undefined;
+    return onRun?.allowed ? onRun : decideOn(undefined, { kind: WORKFLOW_ASSET_KIND });
   }
 
   /** The Workflow of this name as rights are decided on it, with its asset where it has one. */
@@ -72,11 +82,26 @@ function registerWorkflowRoutes(
     return workflowOf(workflow, await workflows?.assetIdOf(workflow));
   }
 
-  async function runOf(runId: string): Promise<WorkflowRunView> {
+  /** The run, for a caller its Workflow lets through. Any other is told there is none. */
+  async function runOf(runId: string, decideOn: RunDecision): Promise<WorkflowRunView> {
     const run = await required().readRun(runId);
-    if (!run) throw new AppError("NOT_FOUND", "There is no such Workflow Run");
+    if (!run || !decideOn(run, await resourceOf(run.workflow)).allowed) {
+      throw new AppError("NOT_FOUND", "There is no such Workflow Run");
+    }
     return run;
   }
+
+  const mayRead =
+    (access: ActorAccess): RunDecision =>
+    (_run, resource) =>
+      decide(access, WORKFLOW_ACTIONS.read, resource);
+  /** Whoever started the run may end it, and whoever may write its Workflow. */
+  const mayCancel =
+    (access: ActorAccess, actor: AuthenticatedIdentity): RunDecision =>
+    (run, resource) =>
+      run && startedBy(run, actor)
+        ? { allowed: true }
+        : decide(access, WORKFLOW_ACTIONS.write, resource);
 
   route.operation(apiOperations["workflows.list"], {
     // The list is of what the caller may be shown: the right is asked of each Workflow below.
@@ -130,24 +155,18 @@ function registerWorkflowRoutes(
   });
 
   route.operation(apiOperations["workflows.get_run"], {
-    authorize: (input, { access }) =>
-      authorizeOnRun(input.runId, (_run, resource) =>
-        decide(access, WORKFLOW_ACTIONS.read, resource)
-      ),
+    authorize: (input, { access }) => authorizeOnRun(input.runId, mayRead(access)),
     resource: runResource,
     module: WORKFLOWS_MODULE,
-    execute: async (input) => toRunResource(await runOf(input.runId))
+    execute: async (input, { access }) => toRunResource(await runOf(input.runId, mayRead(access)))
   });
 
   route.operation(apiOperations["workflows.list_step_runs"], {
-    authorize: (input, { access }) =>
-      authorizeOnRun(input.runId, (_run, resource) =>
-        decide(access, WORKFLOW_ACTIONS.read, resource)
-      ),
+    authorize: (input, { access }) => authorizeOnRun(input.runId, mayRead(access)),
     resource: runResource,
     module: WORKFLOWS_MODULE,
     execute: async (input, context) => {
-      const run = await runOf(input.runId);
+      const run = await runOf(input.runId, mayRead(context.access));
       const { containerStepRunId, status, iteration } = input;
       const topLevel = input.topLevel === "true";
       if (topLevel && containerStepRunId !== undefined) {
@@ -179,16 +198,11 @@ function registerWorkflowRoutes(
   });
 
   route.operation(apiOperations["workflows.cancel_run"], {
-    // Whoever started the run may end it, and whoever may write its Workflow.
-    authorize: (input, { access, actor }) =>
-      authorizeOnRun(input.runId, (run, resource) =>
-        run && startedBy(run, actor)
-          ? { allowed: true }
-          : decide(access, WORKFLOW_ACTIONS.write, resource)
-      ),
+    authorize: (input, { access, actor }) => authorizeOnRun(input.runId, mayCancel(access, actor)),
     resource: runResource,
     module: WORKFLOWS_MODULE,
     execute: async (input, context) => {
+      await runOf(input.runId, mayCancel(context.access, context.actor));
       const run = await required().cancel({
         runId: input.runId,
         cancelledBy: context.actor,

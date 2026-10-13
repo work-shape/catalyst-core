@@ -109,6 +109,15 @@ contain breaking changes; a patch version does not.
   loop's own step run and its counts and none of its items. It goes with `status` and pages
   like the list, and is refused together with `containerStepRunId`. The reads there were
   answer as before.
+- **Access:** `workflow.read`, `workflow.use`, `workflow.write` and `workflow.publish` can be
+  granted to a person in a Namespace, which covers the Workflows whose names start with its
+  prefix, or on one Workflow, through `POST /api/v1/instance/access/grants`. Before, the call
+  answered `action_not_grantable` and a member reached a Workflow only as an administrator. A
+  grant for the instance or a workspace is refused with `invalid_scope`; `workflow.delete` and
+  `workflow.read_run_data` stay with the administrator role. The Access page lists such a row
+  under the action's name and does not offer the kind in its form yet. A run a caller may not
+  read on its Workflow is answered like a run that does not exist, also under a deny on one
+  Workflow.
 - **Workflow Runs:** with the module `workflows` on, a Workflow is started by hand and runs to
   its end on the job executor. `POST /api/v1/workflows/{workflow}/runs` starts a run
   (`workflow.use`), `GET` on the same path lists the runs of a Workflow, `GET /api/v1/workflows`

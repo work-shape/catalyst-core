@@ -410,16 +410,8 @@ describe("a Workflow stored as an asset", () => {
 
     // The use right on this one Workflow: it is listed, read as published and started. The
     // run acts as the Workflow's principal, so the member needs nothing of the Connection.
-    // AP-10: the grant is written to the store; its administration does not give it yet.
-    await t.stores.access.createGrant({
-      clientInstanceId,
-      holderKind: "user",
-      holderId: t.kai.id,
-      action: "workflow.use",
-      effect: "allow",
-      scopeKind: "asset",
-      scopeId: await t.assetId(WORKFLOW_ASSET_KIND, WORKFLOW),
-      grantedBy: t.admin.id
+    await t.grant(t.kai.id, "workflow.use", {
+      assetId: await t.assetId(WORKFLOW_ASSET_KIND, WORKFLOW)
     });
     expect((await listed(t, t.kai.id)).map((workflow) => [workflow.id, workflow.actions])).toEqual([
       [WORKFLOW, ["workflow.use"]]
@@ -443,15 +435,8 @@ describe("a Workflow stored as an asset", () => {
 
     // A reader is shown the Workflow and told a start is not hers: the entry names the read
     // right alone, and the start is refused with the right it needs.
-    await t.stores.access.createGrant({
-      clientInstanceId,
-      holderKind: "user",
-      holderId: t.lena.id,
-      action: "workflow.read",
-      effect: "allow",
-      scopeKind: "asset",
-      scopeId: await t.assetId(WORKFLOW_ASSET_KIND, WORKFLOW),
-      grantedBy: t.admin.id
+    await t.grant(t.lena.id, "workflow.read", {
+      assetId: await t.assetId(WORKFLOW_ASSET_KIND, WORKFLOW)
     });
     expect((await listed(t, t.lena.id)).map((workflow) => [workflow.id, workflow.actions])).toEqual(
       [[WORKFLOW, ["workflow.read"]]]

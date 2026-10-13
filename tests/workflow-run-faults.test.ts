@@ -561,26 +561,23 @@ describe("a cancel while the worker of a step is gone", () => {
 });
 
 describe("the read of a run the caller is denied", () => {
-  it("answers a run that exists as it answers one that does not, under the only deny there is", async () => {
+  const RUN_CALLS = [
+    "workflows.get_run",
+    "workflows.list_step_runs",
+    "workflows.cancel_run"
+  ] as const;
+  const errorOf = (response: { statusCode: number; json(): unknown }) => {
+    const { error } = z
+      .object({
+        error: z.object({ code: z.string(), details: z.record(z.string(), z.unknown()).optional() })
+      })
+      .parse(response.json());
+    return { status: response.statusCode, code: error.code, details: error.details };
+  };
+
+  it("answers a run that exists as it answers one that does not, under a deny on the instance", async () => {
     const t = await ready();
     const started = await start(t);
-    // A right on a Workflow is held for the instance: it is granted in no Namespace and on
-    // no single asset, as an allow or as a deny. So no deny tells one Workflow from another.
-    await t.createNamespace("notify-");
-    const scoped = await t.call(t.admin.id, "permissions.grant", {
-      payload: {
-        holderKind: "user",
-        holderId: t.kai.id,
-        action: "workflow.read",
-        effect: "deny",
-        scopeKind: "namespace",
-        namespace: "notify-"
-      }
-    });
-    expect(scoped.json()).toMatchObject({
-      error: { code: "VALIDATION_FAILED", details: { reason: "action_not_grantable" } }
-    });
-
     for (const action of ["workflow.read", "workflow.write"]) {
       await t.stores.access.createGrant({
         clientInstanceId,
@@ -592,21 +589,53 @@ describe("the read of a run the caller is denied", () => {
         grantedBy: t.admin.id
       });
     }
-    for (const operation of [
-      "workflows.get_run",
-      "workflows.list_step_runs",
-      "workflows.cancel_run"
-    ] as const) {
-      const existing = await t.call(t.kai.id, operation, { params: { runId: started.id } });
-      const unknown = await t.call(t.kai.id, operation, { params: { runId: "wfr_none" } });
-      const code = (response: typeof existing) =>
-        z.object({ error: z.object({ code: z.string() }) }).parse(response.json()).error.code;
-      expect([operation, existing.statusCode, code(existing)]).toEqual([
+    for (const operation of RUN_CALLS) {
+      const existing = errorOf(
+        await t.call(t.kai.id, operation, { params: { runId: started.id } })
+      );
+      const unknown = errorOf(await t.call(t.kai.id, operation, { params: { runId: "wfr_none" } }));
+      expect([operation, existing.status, existing.code]).toEqual([operation, 403, "FORBIDDEN"]);
+      expect(existing, operation).toEqual(unknown);
+    }
+  });
+
+  // Fails without the decision on no Workflow: a deny on one Workflow answered its runs with
+  // `denied` and every other id with `no_grant` or `NOT_FOUND`, which told which ids are runs.
+  it("answers the same under a deny in a Namespace or on the one Workflow, to a member and to an administrator", async () => {
+    const t = await ready();
+    const started = await start(t);
+    const ops = await t.stores.users.createUser({
+      clientInstanceId,
+      displayLabel: "Ops",
+      roles: ["user", "admin"]
+    });
+    await t.createNamespace("notify-");
+    for (const action of ["workflow.read", "workflow.write"]) {
+      await t.grant(t.kai.id, action, { namespace: "notify-" }, "deny");
+      await t.grant(ops.id, action, { namespace: "notify-" }, "deny");
+    }
+    for (const operation of RUN_CALLS) {
+      // A member holds nothing on any Workflow: both are refused for the missing right.
+      const existing = errorOf(
+        await t.call(t.kai.id, operation, { params: { runId: started.id } })
+      );
+      const unknown = errorOf(await t.call(t.kai.id, operation, { params: { runId: "wfr_none" } }));
+      expect([operation, existing.status, existing.details?.reason]).toEqual([
         operation,
         403,
-        "FORBIDDEN"
+        "no_grant"
       ]);
-      expect([unknown.statusCode, code(unknown)]).toEqual([403, "FORBIDDEN"]);
+      expect(existing, operation).toEqual(unknown);
+      // An administrator reads every other Workflow: both are a run that is not there.
+      const hidden = errorOf(await t.call(ops.id, operation, { params: { runId: started.id } }));
+      const absent = errorOf(await t.call(ops.id, operation, { params: { runId: "wfr_none" } }));
+      expect([operation, hidden.status, hidden.code]).toEqual([operation, 404, "NOT_FOUND"]);
+      expect(hidden, operation).toEqual(absent);
     }
+    // The run is still there for who may read it, and was not cancelled.
+    const read = await t.expectOk(t.root.id, "workflows.get_run", {
+      params: { runId: started.id }
+    });
+    expect(read.json()).not.toHaveProperty("cancelledAt");
   });
 });

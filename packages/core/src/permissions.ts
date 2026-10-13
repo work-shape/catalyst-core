@@ -182,7 +182,16 @@ export const GRANTABLE_ACTION_SCOPES = {
   // a workspace owns. Writing, deleting and approving stay with the role until a slice opens
   // them.
   "connection.read": ["namespace", "asset", "workspace"],
-  "connection.use": ["namespace", "asset", "workspace"]
+  "connection.use": ["namespace", "asset", "workspace"],
+  // A Workflow is the instance's own: its rights are granted in a Namespace or on one Workflow,
+  // and no workspace owns one yet. Reading shows it and its runs, using starts it, writing
+  // edits the draft and publishing moves the published pointer; making a revision live that
+  // names a service principal asks the right over that principal beside it. Deleting and the
+  // rows of a run's datasets stay with the role.
+  "workflow.read": ["namespace", "asset"],
+  "workflow.use": ["namespace", "asset"],
+  "workflow.write": ["namespace", "asset"],
+  "workflow.publish": ["namespace", "asset"]
 } as const satisfies Partial<
   Record<PlatformAction, readonly Exclude<PermissionGrant["scopeKind"], "instance">[]>
 >;
