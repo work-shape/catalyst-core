@@ -31,6 +31,7 @@ import {
   TabsNav,
   TabsTrigger,
   UiRoot,
+  uiLabelsDe,
   uiLabelsEn
 } from "@vivd-catalyst/ui";
 
@@ -585,7 +586,6 @@ describe("the space a page ends with", () => {
 describe("the room above a page's title line", () => {
   const rail = (title?: string) =>
     createElement(SubRail, {
-      mode: "routes",
       title,
       label: "Pages",
       value: "a",
@@ -618,11 +618,9 @@ describe("the room above a page's title line", () => {
           Page,
           {
             header: head,
-            subRail: createElement(SubRail, {
-              mode: "anchors",
+            outline: createElement(PageOutline, {
               belowHeader: true,
-              label: "Sections",
-              groups: [{ id: "g", items: [{ id: "a", label: "A" }] }]
+              items: [{ id: "a", label: "A" }]
             })
           },
           "BODY"
@@ -650,14 +648,14 @@ describe("the room above a page's title line", () => {
     expect(markup).not.toMatch(/<h[1-6][^>]*>(?:<span[^>]*>)?AREA/u);
     // Above the content the name stands in the band of a floating control, after that control.
     expect(title?.[1]).toContain("ps-(--layout-page-head-start)");
-    expect(markup).toMatch(/data-mode="routes" class="[^"]*-mt-\(--layout-page-inset\)/u);
+    expect(markup).toMatch(/data-sub-rail="" class="[^"]*-mt-\(--layout-page-inset\)/u);
   });
 
   it("gives a rail without a name the same room over its select", () => {
     const markup = render(createElement(Page, { subRail: rail() }, "BODY"));
     expect(markup).not.toContain("data-subrail-title");
     expect(markup).toMatch(
-      /data-mode="routes" class="[^"]*pt-\[max\(var\(--spacing\)\*2,var\(--subrail-room\)\)\]/u
+      /data-sub-rail="" class="[^"]*pt-\[max\(var\(--spacing\)\*2,var\(--subrail-room\)\)\]/u
     );
   });
 });
