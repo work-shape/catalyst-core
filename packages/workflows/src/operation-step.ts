@@ -20,6 +20,7 @@ import { runOperation, type RunOperationDeps } from "@vivd-catalyst/tool-executi
 import { z } from "zod";
 import { indexWorkflowSteps } from "./definition";
 import { jsonValueSchema } from "./json";
+import { WORKFLOW_STEP_JOB_MAX_ATTEMPTS } from "./limits";
 import { WorkflowStepFailure, type WorkflowStepFailureOptions } from "./step-failure";
 
 // The call an operation step makes. It takes the one call path, so it is checked, recorded
@@ -92,6 +93,7 @@ function secretOperationRefusal(
 }
 
 const interruptedSchema = z.object({ interrupted: z.literal(true) });
+const failureReasonSchema = z.object({ reason: z.string().regex(/^[a-z_]{1,64}$/u) });
 const refusedRightSchema = z.object({ action: z.string() });
 const heldRunSchema = z.object({
   operationRunId: z.custom<OperationRunId>((value) => typeof value === "string" && value !== "")
@@ -289,13 +291,29 @@ export async function callStepOperation(input: {
         result.reason.kind === "policy" ? { systemic: true } : {}
       );
     }
-    case "failed":
-      // The sentence of the error can quote the outside system. The Operation Run keeps it.
+    case "failed": {
+      // A call that carried its key outside and failed for a reason that passes is made
+      // again by the next attempt of the step's job, which counts it. The last attempt fails
+      // the step like every other failure.
+      if (
+        changing &&
+        definition.repeatsUnderKey &&
+        outcome.run.error?.unexecuted === true &&
+        stepRun.attempt < WORKFLOW_STEP_JOB_MAX_ATTEMPTS
+      ) {
+        throw new Error(`The call of '${operation}' failed for now and is made again`);
+      }
+      // The sentence of the error can quote the outside system, and the Operation Run keeps
+      // it. Its reason is one of a fixed list, such as `upstream_conflict` for a 409.
+      const reason = failureReasonSchema.safeParse(result.error.details);
       throw new OperationStepFailure(
         result.error.code,
-        `The operation '${operation}' failed`,
+        reason.success
+          ? `The operation '${operation}' failed (${reason.data.reason})`
+          : `The operation '${operation}' failed`,
         trace
       );
+    }
     case "expired":
     case "pending_approval":
     case "pending_confirmation":

@@ -570,6 +570,14 @@ describe("the Connector type mcp", () => {
           }
         ],
         [
+          "upstream_conflict",
+          {
+            intercept: answering("tools/call", (_request, response) => {
+              response.writeHead(409, { "content-type": "text/plain" }).end(SERVER_TEXT);
+            })
+          }
+        ],
+        [
           "upstream_rate_limited",
           {
             intercept: answering("tools/call", (_request, response) => {

@@ -538,7 +538,14 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       });
       if (!definition) return;
       const index = indexWorkflowSteps(definition);
-      const attempt = { ...claimed, definition, index, signal: control.signal };
+      const attempt = {
+        ...claimed,
+        // The step run was read before this attempt was written on it.
+        stepRun: { ...claimed.stepRun, attempt: control.attempt },
+        definition,
+        index,
+        signal: control.signal
+      };
       // A code step whose script has ended is finished from what the script left; every
       // other step, and a code step before its script ran, is executed.
       const end = claimed.afterCode

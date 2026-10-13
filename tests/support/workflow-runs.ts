@@ -122,3 +122,53 @@ export const failingFor =
 
 export const writesOf = (t: WorkflowFixture) =>
   t.executed.filter((call) => call.operation === "write").map((call) => call.input);
+
+/** What the Connection of these tests answers: the clients to a read, its input to a write. */
+export const answer = (operation: string, input: JsonValue): JsonValue =>
+  operation === "echo" ? { clients: CLIENTS } : { received: input };
+
+/**
+ * A Connection whose first call of one operation does not answer until the test lets it go.
+ * `entered` resolves when that call is with the outside system.
+ */
+export function holdingFirst(
+  t: WorkflowFixture,
+  held: "echo" | "write",
+  /** Receives what lets the held call go, so the test lets it go when it ends. */
+  hanging: (() => void)[]
+) {
+  let first = true;
+  let entered: () => void = () => undefined;
+  let letGo: () => void = () => undefined;
+  const inCall = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const gate = new Promise<void>((resolve) => {
+    letGo = resolve;
+  });
+  hanging.push(letGo);
+  // A call may take as long as a Connection lets any call take.
+  t.state.limits = { ...t.state.limits, callTimeoutMs: 30_000 };
+  t.setBehaviour((operation, input) => {
+    if (operation !== held || !first) return Promise.resolve(answer(operation, input));
+    first = false;
+    entered();
+    return gate.then(() => answer(operation, input));
+  });
+  return { inCall, letGo };
+}
+
+/** Runs passes of a worker until the held call is with the outside system. */
+export async function reach(t: WorkflowFixture, inCall: Promise<void>) {
+  const worker = t.worker();
+  let there = false;
+  const arrived = inCall.then(() => {
+    there = true;
+  });
+  for (let pass = 0; pass < 20 && !there; pass++) {
+    const running = worker.runDue();
+    await Promise.race([running, arrived]);
+  }
+  if (!there) throw new Error("The held call was not reached");
+  return worker;
+}

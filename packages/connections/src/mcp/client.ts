@@ -206,6 +206,7 @@ function fail(state: SessionState, reason: ConnectionCallReason, message?: strin
 
 function reasonOfStatus(status: number): ConnectionCallReason {
   if (status === 401 || status === 403) return "upstream_unauthorized";
+  if (status === 409) return "upstream_conflict";
   if (status === 429) return "upstream_rate_limited";
   if (status === 502 || status === 503 || status === 504) return "connection_unavailable";
   return "upstream_error";

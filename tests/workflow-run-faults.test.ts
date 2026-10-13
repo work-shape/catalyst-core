@@ -3,13 +3,10 @@ import { z } from "zod";
 import {
   createPlatformId,
   workflowStepIdempotencyKey,
-  type JsonValue,
   type WorkflowManifest
 } from "@vivd-catalyst/core";
 import { parseWorkflowManifest } from "@vivd-catalyst/workflows";
 import { clientInstanceId } from "./support/access-instance";
-import { operationOf } from "./support/connection-operations";
-import { withTestSql } from "./support/test-sql";
 import {
   hangingAt,
   publishedDefinitions,
@@ -20,7 +17,10 @@ import {
 import {
   CLIENTS,
   NOTE,
+  answer,
+  holdingFirst,
   notifyClients,
+  reach,
   readyWorkflows,
   start,
   stepRunsOf,
@@ -45,50 +45,6 @@ const ready = (options: Parameters<typeof workflowFixture>[0] = {}) =>
     open = fixture;
   }, options);
 
-const answer = (operation: string, input: JsonValue): JsonValue =>
-  operation === "echo" ? { clients: CLIENTS } : { received: input };
-
-/**
- * A Connection whose first call of one operation does not answer until the test lets it go.
- * `entered` resolves when that call is with the outside system.
- */
-function holdingFirst(t: WorkflowFixture, held: "echo" | "write") {
-  let first = true;
-  let entered: () => void = () => undefined;
-  let letGo: () => void = () => undefined;
-  const inCall = new Promise<void>((resolve) => {
-    entered = resolve;
-  });
-  const gate = new Promise<void>((resolve) => {
-    letGo = resolve;
-  });
-  hanging.push(letGo);
-  // A call may take as long as a Connection lets any call take.
-  t.state.limits = { ...t.state.limits, callTimeoutMs: 30_000 };
-  t.setBehaviour((operation, input) => {
-    if (operation !== held || !first) return Promise.resolve(answer(operation, input));
-    first = false;
-    entered();
-    return gate.then(() => answer(operation, input));
-  });
-  return { inCall, letGo };
-}
-
-/** Runs passes of a worker until the held call is with the outside system. */
-async function reach(t: WorkflowFixture, inCall: Promise<void>) {
-  const worker = t.worker();
-  let there = false;
-  const arrived = inCall.then(() => {
-    there = true;
-  });
-  for (let pass = 0; pass < 20 && !there; pass++) {
-    const running = worker.runDue();
-    await Promise.race([running, arrived]);
-  }
-  expect(there).toBe(true);
-  return worker;
-}
-
 const twoSteps = [
   {
     id: "confirm",
@@ -102,7 +58,7 @@ const twoSteps = [
 describe("a worker that stops inside a call", () => {
   it("fails nothing: a reading call is made again by the next worker and the run finishes", async () => {
     const t = await ready();
-    const held = holdingFirst(t, "echo");
+    const held = holdingFirst(t, "echo", hanging);
     const started = await start(t);
     const worker = await reach(t, held.inCall);
     await worker.stop();
@@ -129,7 +85,7 @@ describe("a worker that stops inside a call", () => {
 
   it("lets a changing call end, and the next worker is answered what it answered", async () => {
     const t = await ready();
-    const held = holdingFirst(t, "write");
+    const held = holdingFirst(t, "write", hanging);
     const started = await start(t);
     const worker = await reach(t, held.inCall);
     // The stop arrives while the call is with the outside system, which then answers.
@@ -208,64 +164,6 @@ describe("a changing call whose first attempt left no outcome", () => {
       error: { code: "interrupted" }
     });
   });
-
-  // Fails without the change: the call that was cut off was never made again, whatever its
-  // operation said, and the run ended as failed with `operation_interrupted`.
-  it("makes the call again under the same key where the operation names the header that carries it, and the run finishes", async () => {
-    const t = await ready({ limits: { operationOutcomeWaitMs: 400 } });
-    await t.seed("crm", {
-      operations: [
-        operationOf("echo", { exposure: ["workflow"] }),
-        operationOf("write", {
-          effect: "changing",
-          exposure: ["workflow"],
-          idempotencyKeyHeader: "Idempotency-Key"
-        })
-      ]
-    });
-    const held = holdingFirst(t, "write");
-    const started = await start(t);
-    // The first worker is in the call when it dies: it never answers and never gives its
-    // job back. Its lease is ended here, as time ends the lease of a process that is gone.
-    await reach(t, held.inCall);
-    await withTestSql(
-      (sql) => sql`
-        update platform_jobs set lease_expires_at = now() - interval '1 second'
-        where kind like 'workflow%' and status = 'running'`
-    );
-
-    // The next worker finds the lease ended and queues the step again after the wait before a
-    // second attempt, so it is given passes for as long as that takes.
-    const worker = t.worker();
-    let run = await t.finish(started.id, worker, 1).catch(() => undefined);
-    for (const until = Date.now() + 30_000; !run && Date.now() < until;) {
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      run = await t.finish(started.id, worker, 1).catch(() => undefined);
-    }
-    if (!run) throw new Error("The run did not end");
-    expect(run.error).toBeUndefined();
-    expect(run.status).toBe("done");
-    expect(JSON.parse(run.outputPreview?.text ?? "null")).toEqual({ sent: 3, failed: 0 });
-
-    // The first client was sent to twice, under one key and the header the operation names.
-    const first = t.executed.filter(
-      (call) => call.operation === "write" && JSON.stringify(call.input).includes("client-anna")
-    );
-    expect(first).toHaveLength(2);
-    expect(first[0]?.idempotencyKey).toMatchObject({ header: "Idempotency-Key" });
-    expect(first[0]?.idempotencyKey?.value).toMatch(/^workflow_step:/u);
-    expect(first[1]?.idempotencyKey).toEqual(first[0]?.idempotencyKey);
-    // One Operation Run holds both attempts, and each other client was sent to once.
-    const changing = (await t.runs()).filter(
-      (call) => call.origin.kind === "workflow" && call.effect === "changing"
-    );
-    expect(changing.map((call) => [call.status, call.attempt]).sort()).toEqual([
-      ["done", 1],
-      ["done", 1],
-      ["done", 2]
-    ]);
-    expect(writesOf(t)).toHaveLength(4);
-  }, 60_000);
 
   it("waits while the first call may still end, with the id of its Operation Run on the step run", async () => {
     const t = await ready({ limits: { operationOutcomeWaitMs: 1_500 } });

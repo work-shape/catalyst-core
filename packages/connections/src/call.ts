@@ -1,6 +1,7 @@
 import {
   AppError,
   CONNECTION_CALL_REASONS,
+  CONNECTION_TRANSIENT_CALL_REASONS,
   CREDENTIAL_REFUSALS,
   EGRESS_UNRESOLVED,
   connectionCallError,
@@ -555,6 +556,8 @@ function callable(
 /** What a sentence says of the Connection and the operation a call was authorized on. */
 interface Named {
   displayName?: string;
+  /** The call carried its idempotency key to the outside system. */
+  keyed?: boolean;
   /** The effect of the operation, which decides whether a call that timed out is repeated. */
   effect?: ConnectionOperationEffect;
 }
@@ -634,7 +637,23 @@ export async function callConnectionOperation(
   try {
     return await call(deps, slots, target, input, context, named);
   } catch (error) {
-    throw inSentence(error, named);
+    const failure = inSentence(error, named);
+    const reason = connectionCallReasonOf(failure);
+    // The outside system carries out one call per key, so a call that carried its key and
+    // failed for a reason that passes may be made again under the key: the call path runs
+    // such a run again as it does one that changed nothing.
+    if (
+      named.keyed &&
+      failure instanceof AppError &&
+      reason !== undefined &&
+      CONNECTION_TRANSIENT_CALL_REASONS.has(reason)
+    ) {
+      throw new AppError(failure.code, failure.message, failure.details, {
+        exposeMessage: failure.exposeMessage,
+        changedNothing: true
+      });
+    }
+    throw failure;
   }
 }
 
@@ -675,6 +694,8 @@ async function call(
     // of the call: a store that does not answer costs the slot that long and no longer.
     const found = await current(read(), aborted.promise, deadline.signal);
     const { connection, type } = found;
+    const key = idempotencyKeyOf(found, target, context.idempotencyKey);
+    named.keyed = key.idempotencyKey !== undefined;
     let result: JsonValue;
     let secret: string | undefined;
     try {
@@ -689,7 +710,7 @@ async function call(
         egress: deps.egress,
         credentials: deps.credentials ?? NO_CREDENTIALS,
         signal: deadline.signal,
-        ...idempotencyKeyOf(found, target, context.idempotencyKey)
+        ...key
       });
       opening.catch(() => undefined);
       const connectorContext: ConnectorContext = await Promise.race([opening, aborted.promise]);
