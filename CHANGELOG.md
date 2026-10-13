@@ -2039,6 +2039,9 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- **Dialogs:** a dialog closed by its Cancel or close button gives the focus back to what
+  opened it, such as New agent on the Agents page. Only Escape did; the buttons left the focus
+  on the page body.
 - **Agents page:** an agent renamed or changed in Studio shows its new name and description on
   its card and in the agent picker without a reload. A save of an agent, and a change of the
   default agent, now also ask again for the workspaces' lists of agents.

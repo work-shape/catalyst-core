@@ -228,12 +228,22 @@ test("a builder who cancels a new agent stays on the Agents page", async ({
   await expect(dialog).toHaveCount(0);
   expect(page.url()).toBe(agentsUrl);
   await expect(card(page, DEFAULT_AGENT)).toBeVisible();
+  // The focus returns to the button that opened the dialog, whichever way it was left.
+  await expect(newAgent).toBeFocused();
 
   await newAgent.click();
   await expect(dialog).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
   expect(page.url()).toBe(agentsUrl);
+  await expect(newAgent).toBeFocused();
+
+  await newAgent.click();
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(page.url()).toBe(agentsUrl);
+  await expect(newAgent).toBeFocused();
 
   // Continue leads to Studio with the new agent's page, named as typed; nothing is stored
   // before it is created there.
