@@ -623,7 +623,8 @@ describe("the modules workflows and dataStores", () => {
         "data_stores.query",
         "data_stores.insert",
         "data_stores.describe",
-        "data_stores.preview_rows"
+        "data_stores.preview_rows",
+        "data_stores.get"
       ],
       jobKinds: Object.values(DATA_STORE_JOB_KINDS)
     });

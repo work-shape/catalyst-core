@@ -31,6 +31,7 @@ import { createDataStoreOperationSource, createDataStoreToolSource } from "./ope
 import type { DataStoreDatasetReader, DataStoreLimits, DataStoreRuntime } from "./runtime";
 
 export { sizeLimitBytes } from "./definition";
+export { dataStoreStateOperationName } from "./state";
 import { createDataStoreServer } from "./server";
 
 /**
@@ -45,7 +46,8 @@ export const dataStoresModule = defineModule({
     "data_stores.query",
     "data_stores.insert",
     "data_stores.describe",
-    "data_stores.preview_rows"
+    "data_stores.preview_rows",
+    "data_stores.get"
   ],
   jobKinds: Object.values(DATA_STORE_JOB_KINDS)
 });

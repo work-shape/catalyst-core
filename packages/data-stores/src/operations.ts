@@ -37,6 +37,7 @@ import type { DataStoreRuntime } from "./runtime";
 import { asStoreRole } from "./roles";
 import { quoteIdentifier } from "./server";
 import { storeSizeBytes } from "./size";
+import { DATA_STORE_STATE_VERB, stateOperation } from "./state";
 import { reclaim, storeFull, tableUnknown, type PublishedStore, type StoreVerb } from "./verbs";
 import { load } from "./load";
 
@@ -527,11 +528,17 @@ async function readStores(
   };
 }
 
-function parseOperationName(name: string): { store: string; verb: StoreVerb } | undefined {
+/** The store and the last part of a name of the form `data_store.<id>.<part>`. */
+function splitOperationName(name: string): { store: string; part: string } | undefined {
   if (!name.startsWith(DATA_STORE_OPERATION_PREFIX)) return undefined;
-  const [store, verbName, ...rest] = name.slice(DATA_STORE_OPERATION_PREFIX.length).split(".");
-  const verb = VERBS.find((candidate) => candidate.verb === verbName);
-  return store && verb && rest.length === 0 ? { store, verb } : undefined;
+  const [store, part, ...rest] = name.slice(DATA_STORE_OPERATION_PREFIX.length).split(".");
+  return store && part && rest.length === 0 ? { store, part } : undefined;
+}
+
+function parseOperationName(name: string): { store: string; verb: StoreVerb } | undefined {
+  const split = splitOperationName(name);
+  const verb = split && VERBS.find((candidate) => candidate.verb === split.part);
+  return verb ? { store: split.store, verb } : undefined;
 }
 
 /**
@@ -630,6 +637,12 @@ function operationOf(
 export function createDataStoreOperationSource(runtime: DataStoreRuntime): OperationSource {
   return {
     async resolve(name) {
+      const split = splitOperationName(name);
+      if (split?.part === DATA_STORE_STATE_VERB) {
+        // The state of a store is answered from its record, whether its database is there or not.
+        const store = await readStore(runtime, split.store);
+        return store && stateOperation(store, DATA_STORES_MODULE);
+      }
       const parsed = parseOperationName(name);
       const store = parsed && (await readStore(runtime, parsed.store));
       return store ? operationOf(runtime, store, parsed.verb) : undefined;

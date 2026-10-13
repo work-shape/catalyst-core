@@ -5,7 +5,7 @@ import type { DataStoreRuntime } from "./runtime";
 import type { DataStoreServer } from "./server";
 
 /** The share of its size limit from which a store is reported in the log as nearly full. */
-const DATA_STORE_SIZE_WARNING_RATIO = 0.8;
+export const DATA_STORE_SIZE_WARNING_RATIO = 0.8;
 
 /**
  * How many stores one measurement reads. An instance with more measures the first ones by

@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { defineRegisteredOperation, json } from "./define-operation";
 
-// The routes to the rows of one Data Store: four verbs, each with the store's id in its path.
-// A route is no operation of its own. Its call runs as the store's operation
-// `data_store.<id>.<verb>`, the one a Workflow step and an agent call, with that operation's
-// right (`data_store.read`, and `data_store.insert` to add rows), policy, run and audit trail.
+// The routes to one Data Store: four verbs on its rows and the read of its state, each with
+// the store's id in its path. A route is no operation of its own. Its call runs as the store's
+// operation `data_store.<id>.<verb>`, the one a Workflow step and an agent call, with that
+// operation's right (`data_store.read`, and `data_store.insert` to add rows), policy, run and
+// audit trail.
 
 /** How many rows one insert adds at most. */
 const DATA_STORE_INSERT_MAX_ROWS = 1_000;
@@ -87,6 +88,41 @@ const dataStorePreviewQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(DATA_STORE_PREVIEW_MAX_ROWS).optional()
 });
 
+const DATA_STORE_CONDITIONS = [
+  "server_databases_open",
+  "sessions_open",
+  "temp_files_unbounded"
+] as const;
+
+const dataStoreStateResponseSchema = z.object({
+  /** The id of the store's asset. */
+  id: z.string(),
+  /** The id operations and routes name the store by. */
+  name: z.string(),
+  /** `provisioning` until the database of the store is complete. */
+  status: z.enum(["provisioning", "ready"]),
+  /** The number of the last migration the database has applied. */
+  level: z.number().int(),
+  /** The number of the last migration of the published revision. */
+  publishedLevel: z.number().int(),
+  size: z.object({
+    /** What the last measurement found. Missing before the first. */
+    bytes: z.number().int().optional(),
+    measuredAt: z.string().optional(),
+    limitBytes: z.number().int(),
+    /** Whether the store is at 80 percent of its limit or above. */
+    nearLimit: z.boolean()
+  }),
+  /** What the server leaves open around the store, each with what an operator does about it. */
+  conditions: z.array(z.object({ code: z.enum(DATA_STORE_CONDITIONS), message: z.string() })),
+  /** How the last attempt to bring the store to its published revision ended. */
+  lastMigration: z.object({
+    outcome: z.enum(["none", "pending", "applied", "failed"]),
+    migration: z.object({ number: z.number().int(), name: z.string() }).optional(),
+    failure: z.object({ code: z.string(), message: z.string() }).optional()
+  })
+});
+
 const READ = {
   tag: "Data Stores",
   auth: "principal",
@@ -133,6 +169,17 @@ export const dataStoreOperations = {
     path: "/api/v1/data-stores/:store/describe",
     summary: "Read the tables and columns of one Data Store at its migration level",
     response: json(dataStoreSchemaResponseSchema)
+  }),
+  "data_stores.get": defineRegisteredOperation({
+    ...READ,
+    scope: "config_assets:read",
+    id: "data_stores.get",
+    method: "GET",
+    path: "/api/v1/data-stores/:store",
+    summary:
+      "Read the state of one Data Store: its migration level, its size against its limit, what the server leaves open and how its last migration ended",
+    response: json(dataStoreStateResponseSchema),
+    errors: ["NOT_FOUND"]
   }),
   "data_stores.preview_rows": defineRegisteredOperation({
     ...READ,

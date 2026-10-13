@@ -693,6 +693,43 @@ describe("a Data Store on an assembled instance", () => {
     }
   });
 
+  it("answers the state of a store over HTTP to a caller who may read it", async () => {
+    const instance = await start(true);
+    const record = await publishStore(instance);
+    const principal = await person(instance, "reader", ["user"]);
+    const state = () => instance.api.call("data_stores.get", { params: { store: "findings" } });
+
+    const answered = await state();
+    expect(answered.statusCode).toBe(200);
+    expect(answered.json()).toMatchObject({
+      id: record.id,
+      name: "findings",
+      status: "ready",
+      level: 1,
+      publishedLevel: 1,
+      size: { limitBytes: 5 * 1024 ** 3, nearLimit: false },
+      lastMigration: { outcome: "applied", migration: { number: 1, name: "init" } }
+    });
+    // It is the store's own operation, asked the store's own right.
+    const refused = await runOperation(
+      {
+        operation: "data_store.findings.state",
+        effect: "reading",
+        input: {},
+        actor: principal,
+        origin: { kind: "user" },
+        correlationId: "corr_data_store"
+      },
+      instance.execution.operationCalls.deps
+    );
+    expect(refused.result).toMatchObject({
+      status: "denied",
+      reason: { kind: "forbidden", action: DATA_STORE_ACTIONS.read }
+    });
+    const none = await instance.api.call("data_stores.get", { params: { store: "nowhere" } });
+    expect(none.statusCode).toBe(404);
+  });
+
   it("gives back its connections to the stores when the process closes", async () => {
     const instance = await start(true);
     const admin = await person(instance, "user-1", ["user", "admin", "superadmin"]);

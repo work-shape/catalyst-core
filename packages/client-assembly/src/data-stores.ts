@@ -3,12 +3,14 @@ import type { RouteRegistration, WorkflowAssetKind } from "@vivd-catalyst/chat-s
 import { loadSecretKeyring } from "@vivd-catalyst/connections";
 import {
   AppError,
+  DATA_STORE_ACTIONS,
   DATA_STORE_OPERATION_RIGHTS,
   dataStoreOperationName,
   type DataStoreOperationVerb
 } from "@vivd-catalyst/core";
 import {
   createDataStores,
+  dataStoreStateOperationName,
   dataStoresModule,
   sizeLimitBytes,
   type DataStores
@@ -56,6 +58,12 @@ const dataStoreRoutes: RouteRegistration = (routes) => {
   routes.resourceOperation(apiOperations["data_stores.insert"], bind("insert"));
   routes.resourceOperation(apiOperations["data_stores.describe"], bind("describe"));
   routes.resourceOperation(apiOperations["data_stores.preview_rows"], bind("preview_rows"));
+  // The state of a store is its own operation, which reads no row and no database of a store.
+  routes.resourceOperation(apiOperations["data_stores.get"], {
+    target: ({ store }) => ({ operation: dataStoreStateOperationName(store), input: {} }),
+    right: DATA_STORE_ACTIONS.read,
+    notFound: STORE_NOT_AVAILABLE
+  });
 };
 
 /**

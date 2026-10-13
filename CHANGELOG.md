@@ -102,7 +102,12 @@ contain breaking changes; a patch version does not.
   update`; `replace.by` deletes the rows of the dataset's values and adds the dataset, so a
   reader never sees the table half replaced); it needs `data_store.insert`, and
   `data_store.execute` as well for `update` and `replace`. Until the datasets of Workflow Runs
-  exist it answers `not_supported_yet`. Release
+  exist it answers `not_supported_yet`. `data_stores.get` (`GET /api/v1/data-stores/:store`,
+  `data_store.read`, scope `config_assets:read`) answers the state of a store in one read: its
+  migration level and the published one, its size against its limit, each thing the server
+  leaves open with what an operator does about it, and how its last migration ended. `insert`
+  and `load` declare the policy `allow`, so a step of a Workflow Run, which has nobody there to
+  confirm, adds rows as its service principal by that principal's grants. Release
   config `dataStores.sizeLimit` (default `5GB`) is the most one store may hold and
   `dataStores.poolMaxConnections` (default 5) the connections one process holds to one store.
   Migration `0062_data_stores` adds the table `data_stores`, the platform's record of each

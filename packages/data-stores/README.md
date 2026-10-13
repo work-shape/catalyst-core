@@ -52,6 +52,10 @@ Postgres has no limit on what one statement writes. What bounds a runaway statem
 
 **Shared server.** Stores share CPU, memory, disk and connection slots with the platform database. The limits on the roles, the bounded pool per store (`dataStores.poolMaxConnections` of release config, 5 by default), the caps on every result and the size limit are the protection; each limit is a named constant at the top of the module that enforces it.
 
+## The state of a store
+
+`data_store.<id>.state`, which the route `data_stores.get` (`GET /api/v1/data-stores/:store`) runs as, answers in one read what a screen shows of a store: `status`, the migration `level` and the `publishedLevel`, the size of the last measurement against the limit with `nearLimit` from 80 percent, each condition the server leaves open with a sentence that says what an operator does about it, and `lastMigration`: `applied`, `pending`, `failed` with the migration and the code and sentence of its failure, or `none`. It needs `data_store.read` on the store and the scope `config_assets:read`. It reads the platform's record and the published definition and no database of a store, so it answers while a store is being provisioned and while its database is away; it reads no row, so a call that completes leaves no run. The size is the one of the last measurement (`measuredAt`), not of this moment: an insert goes by the size it reads itself.
+
 ## Release config
 
 `dataStores.sizeLimit` (default `5GB`) is the most one store may hold; a store's `sizeLimit` names less and never more. `dataStores.poolMaxConnections` (default 5, at most 10) is the most connections one process holds to one store.
