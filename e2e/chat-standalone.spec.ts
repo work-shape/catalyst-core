@@ -3779,6 +3779,9 @@ test("the usage panel names the caller, the provider and the region of a call in
 });
 
 test("demo chat can run a configured tool widget", async ({ page }) => {
+  // A tool run, the work history and three settings pages: 21 seconds on an ordinary hosted
+  // runner, and over the default of 30 on a slower one.
+  test.setTimeout(60_000);
   await signInViaUi(page, superadminUser);
   const forecastLocation = `Oslo ${Date.now()}`;
   const consoleErrors: string[] = [];
