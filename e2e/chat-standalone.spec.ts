@@ -1192,7 +1192,8 @@ test("links in user messages keep the bubble foreground contrast", async ({ page
   await page.goto("/");
 
   const input = page.getByPlaceholder("Message");
-  await input.fill("[Visible link](https://example.com)");
+  // A link to another host is shown as text; one into the instance stays a link.
+  await input.fill("[Visible link](/settings)");
   await input.press("Enter");
 
   const userMessage = page.getByRole("region", { name: "Chat" }).locator('[data-role="user"]');
