@@ -255,20 +255,34 @@ describe("a loop that stops inside a loop that continues", () => {
 
   it("starts no further part, runs nothing after the stopped loop, and goes on with the next client", async () => {
     const definitions = publishedDefinitions();
-    definitions.publish(nested({ concurrency: 2, onItemFailure: "continue" }, { concurrency: 3 }));
+    // One client at a time: with two, six parts stand for the four step jobs one process
+    // runs at once, and which three go with the failed part is the order of the claim.
+    definitions.publish(nested({ onItemFailure: "continue" }, { concurrency: 3 }));
     const t = await readyWorkflows(
       (fixture) => {
         open = fixture;
       },
       { definitions: definitions.source }
     );
-    // The part `client-1` of the client `client-0` fails; every other call answers.
-    t.setBehaviour((operation, input): Promise<JsonValue> => {
-      if (operation === "echo") return Promise.resolve({ clients: CLIENTS });
+    // The part `client-1` of the client `client-0` fails; every other call answers. It fails
+    // once the two parts started with it have made their calls: a part whose call has not
+    // begun when the loop stops is withdrawn, and which of the three comes first is the
+    // machine's affair, not the engine's.
+    let withIt = 0;
+    t.setBehaviour(async (operation, input): Promise<JsonValue> => {
+      if (operation === "echo") return { clients: CLIENTS };
       const text = JSON.stringify(input);
-      return text.includes('"client":"client-0"') && text.includes('"part":"client-1"')
-        ? Promise.reject(new Error("The outside system is down"))
-        : Promise.resolve({ received: input });
+      if (!text.includes('"client":"client-0"') || !text.includes('"part":"')) {
+        return { received: input };
+      }
+      if (!text.includes('"part":"client-1"')) {
+        withIt += 1;
+        return { received: input };
+      }
+      for (let waited = 0; withIt < 2 && waited < 30_000; waited += 20) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      throw new Error("The outside system is down");
     });
     const run = await t.finish((await start(t)).id, undefined, 600);
 
