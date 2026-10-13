@@ -728,12 +728,34 @@ const policyConfigSchema = z
   .strict()
   .prefault({});
 
+/** Whether a name is a time zone the runtime can read a clock in. */
+function isTimeZoneName(name: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: name });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export const clientInstanceConfigSchema = z.object({
   version: z.literal(1).default(1),
   clientInstance: z.object({
     id: z.string().min(1),
     displayName: z.string().min(1),
-    environment: z.enum(["development", "staging", "production"]).default("development")
+    environment: z.enum(["development", "staging", "production"]).default("development"),
+    /**
+     * The time zone of the instance, as an IANA name such as `Europe/Berlin`. The cron
+     * expressions of scheduled Workflows are read on its clock, its daylight-saving days
+     * included. UTC when left out. A name that is no time zone is refused.
+     */
+    timeZone: z
+      .string()
+      .min(1)
+      .refine(isTimeZoneName, {
+        message: "timeZone is an IANA time zone name such as 'Europe/Berlin', or 'UTC'"
+      })
+      .optional()
   }),
   auth: z
     .object({
