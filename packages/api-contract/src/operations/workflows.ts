@@ -88,7 +88,12 @@ export const workflowRunSchema = z.object({
   finishedAt: timestampSchema.optional(),
   /** The person who cancelled the run. Missing where a service principal did, and on a run nobody cancelled. */
   cancelledBy: z.string().optional(),
-  cancelledAt: timestampSchema.optional()
+  cancelledAt: timestampSchema.optional(),
+  /**
+   * When the values of the run were removed: its input and result, and the inputs and outputs
+   * of its step runs. The run and its step runs stay. Missing while the run has its values.
+   */
+  dataPrunedAt: timestampSchema.optional()
 });
 
 export const workflowStepRunSchema = z.object({

@@ -4,7 +4,7 @@ import {
   type RouteRegistration,
   type WorkflowListEntry
 } from "@vivd-catalyst/chat-server";
-import type { RegisteredJobHandler } from "@vivd-catalyst/core";
+import type { JobSchedule, RegisteredJobHandler } from "@vivd-catalyst/core";
 import {
   createWorkflowEngine,
   workflowDefinitionStartIssues,
@@ -50,6 +50,10 @@ export interface InstanceWorkflowsParts extends Pick<
    * fails at once, as no process would ever run its script.
    */
   codeRunner?: WorkflowEngineOptions["codeRunner"];
+  /** `retention.workflowStepDataDays` of release config. The release's default when left out. */
+  stepDataDays?: number;
+  /** Batch sizes of the job that removes run data, for a test. */
+  pruneBatch?: WorkflowEngineOptions["pruneBatch"];
 }
 
 /** What one process has of Workflows: what its server registers and its job worker serves. */
@@ -59,8 +63,15 @@ export interface InstanceWorkflows {
    * it is off, each call is refused as a call of a module that is off, like every other one.
    */
   routes: readonly RouteRegistration[];
-  /** The handlers of the step job and of the schedule job. None where the module is off. */
+  /**
+   * The handlers of the step job, of the schedule job and of the job that removes old run
+   * data. None where the module is off.
+   */
   jobHandlers: readonly RegisteredJobHandler[];
+  /** The job that removes old run data, daily. None where the module is off. */
+  jobSchedules: readonly JobSchedule[];
+  /** Removes the values of the runs that are due, as the daily job does. */
+  pruneRunData(): Promise<{ runs: number; stepRuns: number; batches: number }>;
   /**
    * Queues the job of the next due time of every published Workflow that has a schedule and
    * has none queued. Nothing where the module is off.
@@ -82,6 +93,8 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
     return {
       routes: [createWorkflowRoutes(undefined)],
       jobHandlers: [],
+      jobSchedules: [],
+      pruneRunData: () => Promise.resolve({ runs: 0, stepRuns: 0, batches: 0 }),
       planSchedules: () => Promise.resolve([]),
       planSchedule: () => Promise.resolve(undefined)
     };
@@ -101,7 +114,9 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
     ...(parts.now ? { now: parts.now } : {}),
     ...(parts.timeZone === undefined ? {} : { timeZone: parts.timeZone }),
     ...(parts.stepFiles ? { stepFiles: parts.stepFiles } : {}),
-    ...(parts.codeRunner ? { codeRunner: parts.codeRunner } : {})
+    ...(parts.codeRunner ? { codeRunner: parts.codeRunner } : {}),
+    ...(parts.stepDataDays === undefined ? {} : { stepDataDays: parts.stepDataDays }),
+    ...(parts.pruneBatch ? { pruneBatch: parts.pruneBatch } : {})
   });
   /**
    * The list of the instance: every published Workflow, with what a start by hand of it is
@@ -147,6 +162,8 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
       })
     ],
     jobHandlers: engine.jobHandlers,
+    jobSchedules: engine.jobSchedules,
+    pruneRunData: () => engine.pruneRunData(),
     planSchedules: engine.planSchedules,
     planSchedule: engine.planSchedule
   };
@@ -182,10 +199,15 @@ export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceI
         // Workspaces or without a sandbox has no such worker, and its engine knows.
         ...(config.executionWorkspaces.enabled && config.infrastructure.sandbox
           ? { codeRunner: { timeoutSeconds: config.workflows.codeSteps.timeoutSeconds } }
-          : {})
+          : {}),
+        stepDataDays: config.retention.workflowStepDataDays
       });
       await workflows.planSchedules();
-      return { routes: workflows.routes, jobHandlers: workflows.jobHandlers };
+      return {
+        routes: workflows.routes,
+        jobHandlers: workflows.jobHandlers,
+        schedules: workflows.jobSchedules
+      };
     }
   };
 };

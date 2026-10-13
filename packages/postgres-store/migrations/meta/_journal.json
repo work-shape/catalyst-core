@@ -470,6 +470,20 @@
       "when": 1791869026314,
       "tag": "0066_workflow_code_steps",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1791877054823,
+      "tag": "0067_workflow_run_data_pruned",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1791877055480,
+      "tag": "0068_workflow_run_data_prune_index",
+      "breakpoints": true
     }
   ]
 }

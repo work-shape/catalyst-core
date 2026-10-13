@@ -1,4 +1,16 @@
-import { and, asc, desc, eq, getTableColumns, inArray, isNull, notInArray, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  getTableColumns,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  notInArray,
+  sql
+} from "drizzle-orm";
 import {
   WORKFLOW_ENDED_STATUSES,
   WORKFLOW_OUTPUT_PREVIEW_MAX_CHARS,
@@ -11,6 +23,7 @@ import {
   type WorkflowManifest,
   type WorkflowOutputPreview,
   type WorkflowRun,
+  type WorkflowRunId,
   type WorkflowRunsStore,
   type WorkflowRunView,
   type WorkflowStagedCode,
@@ -90,7 +103,8 @@ function mapRun(row: Omit<RunRow, "input" | "output" | "definition">): WorkflowR
     ...(row.finishedAt === null ? {} : { finishedAt: row.finishedAt.toISOString() }),
     ...(row.cancelledBy === null ? {} : { cancelledBy: row.cancelledBy }),
     ...(row.cancelledAt === null ? {} : { cancelledAt: row.cancelledAt.toISOString() }),
-    ...(row.scheduledFor === null ? {} : { scheduledFor: row.scheduledFor.toISOString() })
+    ...(row.scheduledFor === null ? {} : { scheduledFor: row.scheduledFor.toISOString() }),
+    ...(row.dataPrunedAt === null ? {} : { dataPrunedAt: row.dataPrunedAt.toISOString() })
   };
 }
 
@@ -571,7 +585,8 @@ async function countWorkflowLoops(
     .select({
       id: workflowStepRuns.id,
       last: sql<string | null>`${workflowStepRuns.input}->>'last'`,
-      total: sql<number>`coalesce(jsonb_array_length(${workflowStepRuns.input}->'items'), 0)::int`
+      // A loop whose list was removed with its run's values kept the length of the list.
+      total: sql<number>`coalesce((${workflowStepRuns.input}->>'total')::int, jsonb_array_length(${workflowStepRuns.input}->'items'), 0)::int`
     })
     .from(workflowStepRuns)
     .where(inArray(workflowStepRuns.id, loopStepRunIds));
@@ -680,4 +695,75 @@ export async function readWorkflowLoopCounts(
     .from(workflowStepRuns)
     .where(stepRunIs(ref));
   return row ? (await countWorkflowLoops(db, [row.id])).get(row.id) : undefined;
+}
+
+export async function listWorkflowRunsWithDataEndedBefore(
+  db: PostgresConnection,
+  input: Input<"listRunsWithDataEndedBefore">
+): Promise<WorkflowRunId[]> {
+  const rows = await db
+    .select({ id: workflowRuns.id })
+    .from(workflowRuns)
+    .where(
+      and(
+        eq(workflowRuns.clientInstanceId, input.clientInstanceId),
+        isNull(workflowRuns.dataPrunedAt),
+        isNotNull(workflowRuns.finishedAt),
+        lt(workflowRuns.finishedAt, new Date(input.endedBefore)),
+        inArray(workflowRuns.status, [...WORKFLOW_ENDED_STATUSES])
+      )
+    )
+    .orderBy(asc(workflowRuns.finishedAt))
+    .limit(input.limit);
+  return rows.map((row) => row.id);
+}
+
+export async function pruneWorkflowStepRunData(
+  db: PostgresConnection,
+  ref: Input<"pruneStepRunData">
+): Promise<number> {
+  // A step run still has a value while it has an output or, a loop, its list. The rows of one
+  // batch are locked for one short statement and no other row of the table is.
+  const due = db
+    .select({ id: workflowStepRuns.id })
+    .from(workflowStepRuns)
+    .where(
+      and(
+        eq(workflowStepRuns.clientInstanceId, ref.clientInstanceId),
+        sql`${workflowStepRuns.runId} = ${ref.id}`,
+        sql`(${workflowStepRuns.output} is not null or ${workflowStepRuns.input} ? 'items')`
+      )
+    )
+    .limit(ref.limit);
+  const pruned = await db
+    .update(workflowStepRuns)
+    .set({
+      output: null,
+      input: sql`case when jsonb_typeof(${workflowStepRuns.input}->'items') = 'array'
+        then jsonb_strip_nulls(jsonb_build_object(
+          'last', ${workflowStepRuns.input}->'last',
+          'total', jsonb_array_length(${workflowStepRuns.input}->'items')))
+        else null end`
+    })
+    .where(inArray(workflowStepRuns.id, due))
+    .returning({ id: workflowStepRuns.id });
+  return pruned.length;
+}
+
+export async function markWorkflowRunDataPruned(
+  db: PostgresConnection,
+  ref: Input<"markRunDataPruned">
+): Promise<boolean> {
+  const pruned = await db
+    .update(workflowRuns)
+    .set({ input: {}, output: null, dataPrunedAt: new Date(ref.prunedAt) })
+    .where(
+      and(
+        runIs(ref),
+        isNull(workflowRuns.dataPrunedAt),
+        inArray(workflowRuns.status, [...WORKFLOW_ENDED_STATUSES])
+      )
+    )
+    .returning({ id: workflowRuns.id });
+  return pruned.length > 0;
 }

@@ -66,7 +66,9 @@ export const runSchema = z.object({
     .optional(),
   outputPreview: z.object({ text: z.string(), truncated: z.boolean() }).optional(),
   cancelledBy: z.string().optional(),
-  cancelledAt: z.string().optional()
+  cancelledAt: z.string().optional(),
+  finishedAt: z.string().optional(),
+  dataPrunedAt: z.string().optional()
 });
 const countsSchema = z.object({
   total: z.number(),
@@ -221,6 +223,9 @@ export async function workflowFixture(
     /** The files of the Workflows' revisions, and what runs the scripts of code steps. */
     stepFiles?: InstanceWorkflowsParts["stepFiles"];
     codeRunner?: InstanceWorkflowsParts["codeRunner"];
+    /** For the job that removes run data: the days a run keeps its values, and batch sizes. */
+    stepDataDays?: number;
+    pruneBatch?: InstanceWorkflowsParts["pruneBatch"];
   } = {}
 ): Promise<WorkflowFixture> {
   let workflows: InstanceWorkflows | undefined;
@@ -264,7 +269,9 @@ export async function workflowFixture(
           ...(options.now ? { now: options.now } : {}),
           ...(options.timeZone === undefined ? {} : { timeZone: options.timeZone }),
           ...(options.stepFiles ? { stepFiles: options.stepFiles } : {}),
-          ...(options.codeRunner ? { codeRunner: options.codeRunner } : {})
+          ...(options.codeRunner ? { codeRunner: options.codeRunner } : {}),
+          ...(options.stepDataDays === undefined ? {} : { stepDataDays: options.stepDataDays }),
+          ...(options.pruneBatch ? { pruneBatch: options.pruneBatch } : {})
         });
         return server;
       },

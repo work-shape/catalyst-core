@@ -24,7 +24,8 @@ export const workflowsModule = defineModule({
     WORKFLOW_RUN_JOB_KINDS.executeStep,
     WORKFLOW_RUN_JOB_KINDS.fireSchedule,
     WORKFLOW_CODE_JOB_KIND,
-    WORKFLOW_CODE_SWEEP_JOB_KIND
+    WORKFLOW_CODE_SWEEP_JOB_KIND,
+    WORKFLOW_RUN_JOB_KINDS.pruneData
   ],
   // The scripts of code steps run in the sandbox, which the command worker alone reaches.
   commandWorkerJobKinds: [WORKFLOW_CODE_JOB_KIND, WORKFLOW_CODE_SWEEP_JOB_KIND]

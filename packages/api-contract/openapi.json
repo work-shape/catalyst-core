@@ -11070,6 +11070,9 @@
                     },
                     "cancelledAt": {
                       "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "dataPrunedAt": {
+                      "$ref": "#/components/schemas/Timestamp"
                     }
                   },
                   "required": [
@@ -11315,6 +11318,9 @@
                       "type": "string"
                     },
                     "cancelledAt": {
+                      "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "dataPrunedAt": {
                       "$ref": "#/components/schemas/Timestamp"
                     }
                   },
@@ -12159,6 +12165,9 @@
                           },
                           "cancelledAt": {
                             "$ref": "#/components/schemas/Timestamp"
+                          },
+                          "dataPrunedAt": {
+                            "$ref": "#/components/schemas/Timestamp"
                           }
                         },
                         "required": [
@@ -12427,6 +12436,9 @@
                       "type": "string"
                     },
                     "cancelledAt": {
+                      "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "dataPrunedAt": {
                       "$ref": "#/components/schemas/Timestamp"
                     }
                   },

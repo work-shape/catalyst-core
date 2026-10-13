@@ -259,10 +259,14 @@ describe("the names of a Workflow", () => {
     expect(WORKFLOW_RUN_JOB_KINDS).toEqual({
       executeStep: "workflow_run.execute_step",
       fireSchedule: "workflow_run.fire_schedule",
+      pruneData: "workflow_run.prune_data",
       deleteDatasets: "workflow_run.delete_datasets"
     });
     expectTypeOf<WorkflowRunJobKind>().toEqualTypeOf<
-      "workflow_run.execute_step" | "workflow_run.fire_schedule" | "workflow_run.delete_datasets"
+      | "workflow_run.execute_step"
+      | "workflow_run.fire_schedule"
+      | "workflow_run.prune_data"
+      | "workflow_run.delete_datasets"
     >();
     expect(WORKFLOW_DOWNLOAD_DATASET_OPERATION).toBe("workflows.download_dataset");
     expect(WORKFLOW_ACTIONS.readRunData).toBe("workflow.read_run_data");
@@ -618,7 +622,8 @@ describe("the modules workflows and dataStores", () => {
         WORKFLOW_RUN_JOB_KINDS.executeStep,
         WORKFLOW_RUN_JOB_KINDS.fireSchedule,
         "workflow_run.run_code",
-        "workflow_run.sweep_code"
+        "workflow_run.sweep_code",
+        WORKFLOW_RUN_JOB_KINDS.pruneData
       ],
       // The script of a code step runs in the sandbox, which the command worker reaches.
       commandWorkerJobKinds: ["workflow_run.run_code", "workflow_run.sweep_code"]

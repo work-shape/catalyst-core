@@ -10,6 +10,7 @@ import {
   type AuthenticatedIdentity,
   type ClientInstanceId,
   type JobControl,
+  type JobSchedule,
   type JsonValue,
   type OperationRunId,
   type PlatformStores,
@@ -29,6 +30,12 @@ import {
   type WorkflowStepRunView
 } from "@vivd-catalyst/core";
 import { codeStepIssues, noWorkflowStepFiles, type WorkflowStepFiles } from "./code-step";
+import {
+  WORKFLOW_STEP_DATA_DAYS,
+  createWorkflowDataPruning,
+  type WorkflowDataPruning,
+  type WorkflowDataPruningOptions
+} from "./data-pruning";
 import { indexWorkflowSteps, type WorkflowStepIndex } from "./definition";
 import type { WorkflowDefinitionSource, WorkflowDefinitionSummary } from "./definition-source";
 import { WORKFLOW_RUN_LIMITS, WORKFLOW_STEP_JOB_SLOTS, type WorkflowRunLimits } from "./limits";
@@ -72,6 +79,10 @@ export interface WorkflowEngineOptions {
    * are run there. Without it a code step fails at once instead of waiting for nobody.
    */
   codeRunner?: WorkflowCodeRunner;
+  /** For how many days after its end a run keeps its values. The release's default when left out. */
+  stepDataDays?: number;
+  /** Batch sizes of the job that removes run data, below the release's own, for a test. */
+  pruneBatch?: WorkflowDataPruningOptions["batch"];
 }
 
 export interface StartWorkflowRunInput {
@@ -118,6 +129,10 @@ export interface WorkflowEngine {
   planSchedule(workflow: string): Promise<{ workflow: string; dueAt: string } | undefined>;
   /** What the job worker of the process serves for the engine. */
   jobHandlers: readonly RegisteredJobHandler[];
+  /** What the job worker runs again and again: the job that removes old run data, daily. */
+  jobSchedules: readonly JobSchedule[];
+  /** Removes the values of the runs that are due, as the daily job does. */
+  pruneRunData: WorkflowDataPruning["prune"];
 }
 
 /** Where a new step run stands in its run: its path, and its place in the tree of the run. */
@@ -644,8 +659,18 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     prepare: createScheduledStart({ clientInstanceId, prepareStart, openRun })
   });
 
+  const pruning = createWorkflowDataPruning({
+    clientInstanceId,
+    stores,
+    stepDataDays: options.stepDataDays ?? WORKFLOW_STEP_DATA_DAYS,
+    ...(options.pruneBatch ? { batch: options.pruneBatch } : {}),
+    now
+  });
+
   return {
-    jobHandlers: [stepHandler, schedule.handler],
+    jobHandlers: [stepHandler, schedule.handler, pruning.handler],
+    jobSchedules: [pruning.schedule],
+    pruneRunData: pruning.prune,
     planSchedules: schedule.plan,
     planSchedule: schedule.planOne,
 

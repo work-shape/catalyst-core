@@ -126,7 +126,7 @@ describe(`a Workflow Run with a loop over ${ITEMS} items`, () => {
           const [row] = await t.sql(
             (sql) => sql<{ count: number }[]>`
               select count(*)::int as count from platform_jobs
-              where kind like 'workflow%' and status = 'running'`
+              where kind = 'workflow_run.execute_step' and status = 'running'`
           );
           mostRunningJobs = Math.max(mostRunningJobs, row?.count ?? 0);
           return ended(await t.run(run.id));
@@ -238,7 +238,57 @@ describe(`a Workflow Run with a loop over ${ITEMS} items`, () => {
         )
       };
 
+      // The job that removes the values of old runs, on this run: the run is made 31 days
+      // old in the database and the tick that waits for tomorrow is made due now.
+      const held = () =>
+        t.sql(async (sql) => {
+          const [row] = await sql<
+            {
+              stepRuns: number;
+              stepRunsWithValues: number;
+              stepRunRowBytes: number;
+              runRowBytes: number;
+              stepRunsRelationBytes: number;
+            }[]
+          >`
+            select
+              (select count(*) from workflow_step_runs s where s.run_id = ${run.id})::int
+                as "stepRuns",
+              (select count(*) from workflow_step_runs s where s.run_id = ${run.id}
+                and (s.output is not null or s.input ? 'items'))::int as "stepRunsWithValues",
+              (select sum(pg_column_size(s.*)) from workflow_step_runs s
+                where s.run_id = ${run.id})::int as "stepRunRowBytes",
+              (select pg_column_size(r.*) from workflow_runs r where r.id = ${run.id})::int
+                as "runRowBytes",
+              pg_total_relation_size('workflow_step_runs')::int as "stepRunsRelationBytes"`;
+          return row;
+        });
+      const beforePrune = await held();
+      await t.sql(async (sql) => {
+        await sql`
+          update workflow_runs set finished_at = finished_at - interval '31 days'
+          where id = ${run.id}`;
+        await sql`
+          update platform_jobs set run_after = now()
+          where kind = 'workflow_run.prune_data' and status = 'queued'`;
+      });
+      const pruneStartedAt = Date.now();
+      await waitFor(
+        async () => (await t.run(run.id)).dataPrunedAt !== undefined,
+        "the values of the run were removed",
+        10 * MINUTE_MS
+      );
+      const pruneMs = Date.now() - pruneStartedAt;
+      const afterPrune = await held();
+      const pruned = await t.run(run.id);
+
       await writeProbeRecord("volume", {
+        prune: {
+          ms: pruneMs,
+          before: beforePrune,
+          after: afterPrune,
+          run: { status: pruned.status, stepRunCount: pruned.stepRunCount }
+        },
         items: ITEMS,
         bounds: {
           loopMaxItems: WORKFLOW_LOOP_MAX_ITEMS,
@@ -265,6 +315,9 @@ describe(`a Workflow Run with a loop over ${ITEMS} items`, () => {
       });
 
       expect(after.error).toBeUndefined();
+      // The values are gone and every record is there.
+      expect(afterPrune).toMatchObject({ stepRuns: ITEMS + 3, stepRunsWithValues: 0 });
+      expect(pruned).toMatchObject({ status: "done", stepRunCount: ITEMS + 3 });
       expect(after).toMatchObject({ status: "done", stepRunCount: ITEMS + 3 });
       expect(loop?.loop).toMatchObject({ total: ITEMS, done: ITEMS, failed: 0 });
       // Each item was read once.
