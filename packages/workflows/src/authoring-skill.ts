@@ -6,6 +6,12 @@ import {
   type ShippedSkill,
   type WorkflowStep
 } from "@vivd-catalyst/core";
+import {
+  WORKFLOW_CODE_ERRORS,
+  WORKFLOW_CODE_FILE_MAX_BYTES,
+  WORKFLOW_CODE_LANGUAGES,
+  WORKFLOW_STEP_FILES_MAX_BYTES
+} from "./code-step";
 import { WORKFLOW_EXECUTED_STEP_TYPES } from "./definition";
 import {
   WORKFLOW_DEFINITION_MAX_STEPS,
@@ -68,9 +74,9 @@ const STEP_REFERENCE: {
     }
   },
   code: {
-    does: `Runs one script of the Workflow's step files (the folder \`${WORKFLOW_STEP_FILES_FOLDER}/\`) on its input as JSON and returns JSON. The step files of a Workflow are part of its config: where the config you read holds \`files\`, the script of a \`code\` step is one of them, and you add or change it there and send the whole config back. Where the config holds no \`files\`, this instance keeps no step files: do not add a \`code\` step there, and say so to the person. The check and the save tell you what is wrong with a step and its file, each issue with its path and its code.`,
+    does: `Runs one script of the Workflow's step files on its input as JSON and returns JSON. The script is one entry of the config's \`files\`, and the step names it. See 'The step files of a code step' for what a file is, what a script is handed and how its issues come back.`,
     fields: {
-      file: `The path of the script among the step files, written without \`${WORKFLOW_STEP_FILES_FOLDER}/\`, such as \`classify.py\`. The file exists in the config's \`files\`.`,
+      file: `The path of the script inside the folder \`${WORKFLOW_STEP_FILES_FOLDER}/\`, written without the folder: \`classify.py\` names the entry of \`files\` whose \`path\` is \`${WORKFLOW_STEP_FILES_FOLDER}/classify.py\`. A step whose file is no entry of \`files\` is refused.`,
       input: "The mapping onto the script's input. See 'Mappings and references'.",
       inputSchema: "The JSON Schema of the input the script is handed. Required.",
       outputSchema: "The JSON Schema of what the script returns. Required."
@@ -223,6 +229,66 @@ function stepReference(): string {
   }).join("\n\n");
 }
 
+/** What the skill says of the step files: made from the rules and the bounds a save checks. */
+function stepFilesReference(): string {
+  const folder = WORKFLOW_STEP_FILES_FOLDER;
+  const endings = Object.keys(WORKFLOW_CODE_LANGUAGES).map((ending) => `\`.${ending}\``);
+  const languages = Object.entries(WORKFLOW_CODE_LANGUAGES)
+    .map(([ending, { command }]) => `\`.${ending}\` with \`${command}\``)
+    .join(", ");
+  const code = WORKFLOW_CODE_ERRORS;
+  return `## The step files of a code step
+
+The scripts of a Workflow are part of its config, beside the manifest:
+
+\`\`\`json
+{
+  "name": "<id of the Workflow>",
+  "manifest": { "...": "the definition, with a step { type: code, file: classify.py, ... }" },
+  "files": [{ "path": "${folder}/classify.py", "content": "<the whole text of the script>" }]
+}
+\`\`\`
+
+- The \`path\` of a file is \`${folder}/\` and then what the step writes under \`file\`. A script
+  may lie in a folder below \`${folder}/\`, such as \`${folder}/checks/total.py\`, which a step
+  names as \`checks/total.py\`. Each part of the path starts with a letter, a digit or \`_\` and
+  holds letters, digits, \`_\`, \`-\` and \`.\`. The path without \`${folder}/\` is at most 200
+  characters long.
+- A script ends in ${endings.join(", ")}: the runner runs ${languages}. No other file is taken:
+  no data file, no note and no module that only another script loads.
+- Every \`code\` step names a file that is in \`files\`, and every file in \`files\` is named by a
+  step. Two steps may name the same file. No path is given twice.
+- \`content\` is the whole script as text. One script is at most ${WORKFLOW_CODE_FILE_MAX_BYTES} bytes as UTF-8, and
+  all files of a Workflow together at most ${WORKFLOW_STEP_FILES_MAX_BYTES} bytes.
+- To add a \`code\` step, add the step to the manifest and its script to \`files\` in the same
+  save. To change a script, change the \`content\` of its file. To remove a \`code\` step, remove
+  its file as well, unless another step names it.
+
+A script runs alone: its container holds this one script and the input, no other step file, no
+network and no credential. The mapped \`input\` of the step is handed to it as JSON on its input
+stream and as the file \`input.json\` in its working directory. Its result is the JSON it writes
+to the file \`output.json\` there or, where it writes no such file, the JSON it prints. The
+input is checked against \`inputSchema\` and the result against \`outputSchema\`. An exit code
+other than 0 fails the step.
+
+What is wrong with the files comes back from the check and from a refused save as issues, each
+with the \`path\` of the value, a \`code\` and a sentence:
+
+- \`${code.fileMissing}\` at \`steps.<step id>.file\`: no entry of \`files\` has the path the step names.
+- \`${code.fileInvalid}\` at \`files[<position>].path\`: the path is not in \`${folder}/\`, is no script
+  of the runner, or is given twice. At \`files[<position>].content\`: the content is no text
+  that can be stored.
+- \`${code.fileUnused}\` at \`files[<position>].path\`: no step names the file.
+- \`${code.fileTooLarge}\` at \`steps.<step id>.file\`: the script is too large.
+- \`${code.filesTooLarge}\` at \`files\`: the files are too large together.
+
+A position counts from 0. A save that is refused stores nothing: the draft is what it was.
+
+A read answers every script whole unless the config is too large for one answer. Such an answer
+says where it was cut. It is no whole config: do not save from it, because the script that was
+cut would be saved cut. Say so to the person.`;
+}
+
 /** The step types the file form holds and this engine does not run. */
 export function workflowStepTypesNotRun(): string[] {
   const executed: readonly string[] = WORKFLOW_EXECUTED_STEP_TYPES;
@@ -242,14 +308,18 @@ the engine of this release runs, and how to save a change safely.
 
 You are given tools that are bound to the Workflow this conversation is about.
 
-1. Read the definition. You get its \`config\`, which holds \`name\`, \`manifest\` and, where the
-   instance keeps step files, \`files\`; the \`revision\` it
-   is at and whether you see the draft or the published revision.
-2. Change the \`manifest\` in your answer to the read, never from memory. Keep everything you
-   were not asked to change exactly as it is, the ids of the steps among it.
+1. Read the definition. You get its \`config\`, the \`revision\` it is at and whether you see the
+   draft or the published revision. The config is \`{ name, manifest, files }\`: \`manifest\` is
+   the definition, and \`files\` is the list of the scripts its \`code\` steps run, each
+   \`{ path, content }\`. A Workflow without a \`code\` step has no \`files\`, or an empty list.
+2. Change the \`manifest\` and the \`files\` in your answer to the read, never from memory. Keep
+   everything you were not asked to change exactly as it is, the ids of the steps and the
+   content of every script among it.
 3. Check the whole config before you save. Each issue names the path of a value and says what
    is wrong with it. Correct it and check again until no issue is left.
-4. Save the config with the revision you read as \`expectedRevision\`. A save moves the draft
+4. Save the whole config, every file with its whole content among it, with the revision you
+   read as \`expectedRevision\`. A save replaces the draft: a file you leave out is gone from
+   it, and a save that leaves out a file a step names is refused. A save moves the draft
    only: it publishes nothing and starts nothing, and the published revision keeps running as
    it is. A person publishes the draft when they have looked at it.
 5. A save that answers a conflict means somebody saved since you read. Read again, make your
@@ -282,6 +352,8 @@ There is no wiring between steps. They run from top to bottom, and a loop holds 
 ## The step types this engine runs
 
 ${stepReference()}
+
+${stepFilesReference()}
 
 ## Mappings and references
 
@@ -333,6 +405,6 @@ export const workflowAuthoringSkill: ShippedSkill = {
   name: WORKFLOW_AUTHORING_SKILL_NAME,
   title: "Writing a Workflow",
   description:
-    "How to read, change, check and save the definition of a Workflow: what a manifest holds, the step types this engine runs, references between steps and what is not run yet. Read it before you change a Workflow.",
+    "How to read, change, check and save the definition of a Workflow: what a manifest holds, the step types this engine runs, the scripts of its code steps, references between steps and what is not run yet. Read it before you change a Workflow.",
   content: content()
 };
