@@ -226,11 +226,20 @@ contain breaking changes; a patch version does not.
   (`bundle_hash_mismatch` otherwise), names the new bundle on the save's pending row and then
   puts its object into the `files` store. `asset_repo.sweep` runs every hour and gives up the
   saves that are still pending after a day, with their objects. A kind of asset says with
-  `content: repository` that its files are a repository; the kind `app` does. No operation
-  starts a commit yet. **Operators:** a worker of this release needs a runner image that has
+  `content: repository` that its files are a repository; the kind `app` does. **Operators:** a worker of this release needs a runner image that has
   `catalyst-asset-repo`: the image of this release, or the capabilities runner image built
   from it. On a `local` sandbox the command runs the git of the machine, 2.47 or later. A
   worker of an earlier release beside this one is refused at its start, as for `page.bundle`.
+- **Apps:** `apps.create_from_page` gives the App a git repository. The source files of the
+  Page are its first commit, revision 1 names the commit and its tree beside its file set, and
+  the audit event `app.created` names the asset, the revision and the commit. A write of such
+  an App with `assets.put` adds a commit on the draft's; an App that was first written with
+  `assets.put` has no repository yet. A call that is refused or fails writes nothing a reader
+  can see. **Operators:** naming a Page as an App now needs the workspace command worker and a
+  runner image of this release. On an older runner image the call is refused with `409`
+  (`details.reason` `runner_image_outdated`) and a message that says the image must be rolled
+  out; without a worker with `commit_unavailable`. Seeded Apps and Apps that exist are not
+  changed, and `assets.discard_draft` moves the draft back as before.
 - **Database:** migration `0061_asset_repo_commit_request` adds the columns `request` and
   `result` to `asset_repo_bundles`: what a pending save commits, without bytes, and how its
   commit ended. **Rollback:** an earlier release ignores them.
