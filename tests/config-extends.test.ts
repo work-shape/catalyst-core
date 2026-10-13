@@ -230,16 +230,15 @@ describe("config file extends", () => {
   it("replaces a base object with a non-record override instead of silently keeping it", async () => {
     const root = await writeFixtures({
       "app.base.yaml": baseConfig.replace("conversationDays: 30", "conversationDays: 7"),
-      // unquoted YAML timestamp parses as a Date, not a mergeable record
+      // An unquoted YAML timestamp reads as text, not a mergeable record.
       "app.yaml": ["extends: ./app.base.yaml", "retention: 2025-01-01", ""].join("\n")
     });
 
-    // The Date replaces the base's retention object entirely; none of the
-    // base's values leak through the merge. (The schema then treats the Date
-    // as an empty object and applies defaults — pre-existing zod behavior
-    // that applies equally to non-extends config files.)
-    const config = await loadClientInstanceConfigFromFile(join(root, "app.yaml"));
-    expect(config.retention.conversationDays).toBe(30);
+    // The text replaces the base's retention object entirely, so none of the base's values
+    // leak through the merge and the schema refuses the text.
+    await expect(loadClientInstanceConfigFromFile(join(root, "app.yaml"))).rejects.toThrow(
+      "retention: Invalid input: expected object, received string"
+    );
   });
 
   it("rejects extends cycles with a clear error", async () => {
