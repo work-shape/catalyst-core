@@ -213,6 +213,15 @@ async function push(
     );
   }
   const app = name ?? "";
+  // The id is the App's name and does not change. A pulled folder whose app.yaml names another
+  // id would otherwise write that manifest into the App it was pulled from. An app.yaml that
+  // does not parse is left to the build, which names the line.
+  const declared = state === undefined ? undefined : declaredIdOf(read.files);
+  if (state !== undefined && declared !== undefined && declared !== state.app) {
+    throw new AppUsageError(
+      `app.yaml names the id '${declared}', and '${directory}' holds the App '${state.app}'. An App keeps its id: set \`id: ${state.app}\` again, or copy the files without ${APP_STATE_FILE} into a new folder to create the App '${declared}'.`
+    );
+  }
   const expectedRevision = state?.revision ?? null;
   if (state !== undefined && state.workspaceId !== target.workspaceId) {
     throw new AppUsageError(
@@ -231,13 +240,17 @@ async function push(
       `It may have been written: run 'catalyst app status ${app}' before pushing again.`
     );
   } catch (error) {
-    if (error instanceof ConfigApiError && error.status === 412) {
+    // A create refused because the id is taken answers 409; a draft that moved answers 412.
+    if (
+      error instanceof ConfigApiError &&
+      (error.status === 412 || (error.status === 409 && expectedRevision === null))
+    ) {
       writeErr(
         options,
         [
           formatRefusal(error),
           expectedRevision === null
-            ? `An App named '${app}' exists already. Pull it into an empty folder and copy your files there.`
+            ? `An App named '${app}' exists already. If it is yours, pull it into an empty folder and copy your files there.`
             : `The draft moved since revision ${expectedRevision} was pulled. Nothing was written. Pull the App into another folder, carry your changes over, and push from there.`
         ].join("\n")
       );
@@ -564,6 +577,15 @@ function appIdOf(files: ReadonlyArray<{ path: string; text?: string }>): string 
     );
   }
   return isRecord(parsed) && typeof parsed.id === "string" ? parsed.id : undefined;
+}
+
+/** The `id` of the folder's app.yaml, or nothing where it names none or does not parse. */
+function declaredIdOf(files: ReadonlyArray<{ path: string; text?: string }>): string | undefined {
+  try {
+    return appIdOf(files);
+  } catch {
+    return undefined;
+  }
 }
 
 function manifestOf(config: unknown): Record<string, unknown> | undefined {

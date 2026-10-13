@@ -211,6 +211,46 @@ describe("catalyst app commands", () => {
     }
   });
 
+  it("pushes a file deleted in the folder as deleted and refuses an app.yaml that names another id", async () => {
+    const t = await setupAppInstance({ explicitCredentials: true, build: passThroughBuild });
+    try {
+      const cwd = await temporaryDirectory();
+      const run = cliAs(t.instance, t.admin.id, cwd);
+      await writeFolder(join(cwd, "offers"), {
+        "app.yaml": manifest(),
+        "index.html": "<p>1</p>",
+        "old.txt": "gone after the next push"
+      });
+      expect((await run("app", "push", "offers", "--workspace", t.workspaceId)).code).toBe(0);
+
+      await rm(join(cwd, "offers", "old.txt"));
+      expect((await run("app", "push", "offers")).code).toBe(0);
+      expect((await run("app", "pull", "offers", "check", "--workspace", t.workspaceId)).code).toBe(
+        0
+      );
+      expect([...(await filesOf(join(cwd, "check"))).keys()].sort()).toEqual([
+        ".catalyst-app.json",
+        "app.yaml",
+        "index.html"
+      ]);
+
+      await writeFile(join(cwd, "check", "app.yaml"), manifest({ id: "other" }));
+      const renamed = await run("app", "push", "check");
+      expect(renamed.code).toBe(2);
+      expect(renamed.err).toContain("app.yaml names the id 'other'");
+      expect(await t.listed("offers")).toMatchObject({ revision: 2 });
+
+      // A folder never pulled that names the id of an App there is told how to go on.
+      await writeFolder(join(cwd, "fresh"), { "app.yaml": manifest(), "index.html": "<p>x</p>" });
+      const taken = await run("app", "push", "fresh", "--workspace", t.workspaceId);
+      expect(taken.code).toBe(1);
+      expect(taken.err).toContain("An App named 'offers' exists already.");
+      expect(await t.listed("offers")).toMatchObject({ revision: 2 });
+    } finally {
+      await t.close();
+    }
+  });
+
   it("shows what a publish makes live and publishes only with --yes or a yes at the terminal", async () => {
     const t = await setupAppInstance({ explicitCredentials: true, build: passThroughBuild });
     try {
