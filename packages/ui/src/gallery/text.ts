@@ -156,6 +156,7 @@ export interface GalleryText
   avatarWorkspace: string;
   avatarAgent: string;
   avatarApp: string;
+  avatarWorkflow: string;
   avatarService: string;
   bannerInfo: string;
   bannerSuccess: string;
@@ -384,6 +385,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     avatarWorkspace: "Workspace",
     avatarAgent: "Agent",
     avatarApp: "App",
+    avatarWorkflow: "Workflow",
     avatarService: "Service principal",
     bannerInfo: "This agent comes from the instance and is read-only here.",
     bannerSuccess: "Your profile was saved.",
@@ -620,6 +622,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     avatarWorkspace: "Workspace",
     avatarAgent: "Agent",
     avatarApp: "App",
+    avatarWorkflow: "Workflow",
     avatarService: "Service principal",
     bannerInfo: "Dieser Agent stammt aus der Instanz und ist hier schreibgeschützt.",
     bannerSuccess: "Dein Profil wurde gespeichert.",

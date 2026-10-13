@@ -561,7 +561,7 @@ test("status and feedback take their colours from the tone tokens in both modes"
     const person = avatars.locator('[data-kind="person"]').nth(2);
     expect((await person.boundingBox())?.width).toBe(32);
     expect(Number.parseFloat(await computed(person, "border-radius"))).toBeGreaterThanOrEqual(16);
-    for (const kind of ["workspace", "agent", "app"]) {
+    for (const kind of ["workspace", "agent", "app", "workflow"]) {
       expect(await computed(avatars.locator(`[data-kind="${kind}"]`).nth(2), "border-radius")).toBe(
         "8px"
       );
