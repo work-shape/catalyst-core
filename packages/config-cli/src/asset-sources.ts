@@ -1,12 +1,11 @@
 import { readFile, stat } from "node:fs/promises";
 import { basename, extname, join, relative, resolve, sep } from "node:path";
-import yaml from "js-yaml";
 import {
   ASSET_PUT_FILES_MAX_BYTES,
   ASSET_SYNC_ITEM_MAX_BYTES,
   FILE_SET_MAX_FILES
 } from "@vivd-catalyst/api-contract";
-import { parseSkillMarkdown } from "@vivd-catalyst/asset-schemas";
+import { loadYamlData, parseSkillMarkdown } from "@vivd-catalyst/asset-schemas";
 import { readSkillResources, walkFiles } from "./working-copy";
 
 // What `--from` names, read as a write of one asset carries it: the definition of a kind whose
@@ -67,7 +66,7 @@ async function parseDefinition(file: string, contents: string): Promise<unknown>
   switch (extname(file).toLowerCase()) {
     case ".yaml":
     case ".yml":
-      return yaml.load(contents);
+      return loadYamlData(contents, file);
     case ".json":
       return JSON.parse(contents);
     default:

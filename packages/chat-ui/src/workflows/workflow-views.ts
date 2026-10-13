@@ -2,6 +2,8 @@
 // screens' own shapes. The data module maps what the instance answers onto these, so no screen
 // reads a type of the API contract.
 
+import type { StartForm } from "./start-form";
+
 /** A Workflow as a row of the list. */
 export interface WorkflowListItem {
   id: string;
@@ -11,8 +13,14 @@ export interface WorkflowListItem {
   published: boolean;
   /** When it was last changed, where the list names it. */
   updatedAt?: string;
+  /** A person may start it, as far as the instance says. */
+  startsByHand: boolean;
   /** Why the instance accepts no start of it now. Empty where it does. */
   refusedFor: readonly WorkflowStartIssue[];
+  /** The reader holds the right to start it. */
+  mayStart: boolean;
+  /** What a start asks for: the fields of the published revision's inputs. */
+  startForm: StartForm;
   /** The latest run, where the instance names it on the list. */
   lastRun?: { id: string; status: WorkflowRunStatus; startedAt?: string };
 }
@@ -92,8 +100,8 @@ export interface WorkflowView {
   steps: readonly WorkflowStepView[];
   /** A person may start it, as far as its definition says. */
   startsByHand: boolean;
-  /** A start has to give values: the definition declares inputs. */
-  needsInput: boolean;
+  /** What a start asks for: the fields of the published revision's inputs. */
+  startForm: StartForm;
   /**
    * Why the instance accepts no start of the Workflow now, as it says it. With one entry the
    * Workflow is shown and cannot be started.

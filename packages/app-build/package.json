@@ -55,11 +55,9 @@
     "@vivd-catalyst/core": "workspace:*",
     "esbuild": "0.28.0",
     "parse5": "7.3.0",
-    "js-yaml": "^4.2.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/js-yaml": "^4.0.9",
     "@types/node": "^24.13.1",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3"

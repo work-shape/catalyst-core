@@ -1,6 +1,6 @@
-import yaml from "js-yaml";
 import type { z } from "zod";
 import { skillFileFrontmatterSchema } from "./schemas";
+import { readYamlData } from "./yaml-data";
 
 /** A skill file that cannot be read as a skill. `details.issues` names each invalid field. */
 export class SkillMarkdownError extends Error {
@@ -28,8 +28,11 @@ export function parseSkillMarkdown(
     throw new SkillMarkdownError(`Skill file '${skillFile}' must start with YAML frontmatter`);
   }
 
-  const frontmatterRaw = yaml.load(match[1] ?? "");
-  const frontmatter = skillFileFrontmatterSchema.safeParse(frontmatterRaw);
+  const frontmatterRaw = readYamlData(match[1] ?? "", skillFile);
+  if (!frontmatterRaw.ok) {
+    throw new SkillMarkdownError(frontmatterRaw.issue.message);
+  }
+  const frontmatter = skillFileFrontmatterSchema.safeParse(frontmatterRaw.value);
   if (!frontmatter.success) {
     throw new SkillMarkdownError(`Skill file '${skillFile}' frontmatter is invalid`, {
       issues: frontmatter.error.issues

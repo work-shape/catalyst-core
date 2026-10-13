@@ -138,6 +138,18 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     ]
   },
   {
+    name: "start-input-refused",
+    reason:
+      "Chromium's own log line: the test publishes a Workflow again with a smaller limit while " +
+      "its start form is open, the instance answers the start with 422, and the form puts the " +
+      "refusal under the field, which the test asserts.",
+    matches: requestAnswered(422),
+    path: /^\/api\/v1\/workflows\/start-form-[0-9a-f]{8}\/runs$/u,
+    tests: [
+      "a member starts a Workflow with inputs from its form and sees the run end; a reader sees no start"
+    ]
+  },
+  {
     name: "grant-already-there",
     reason:
       "Chromium's own log line: the test asks for three grants of which two exist, the " +

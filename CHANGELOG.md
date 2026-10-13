@@ -2100,6 +2100,19 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- **Hostile YAML and tool-call text:** every YAML file an author or an agent writes
+  (`workflow.yaml`, `app.yaml`, App action files, `store.yaml`, `SKILL.md` frontmatter), the
+  release config and the CLI working copy are read by one reader. It knows JSON types only:
+  a timestamp, `!!binary` or other YAML-only tag in `store.yaml`, `SKILL.md` frontmatter, the
+  release config or an agent file now reads as plain text or is refused, as `workflow.yaml` and
+  `app.yaml` already were. A file whose aliases expand past 100,000 values is refused
+  (`'<file>' holds more than 100000 values once its aliases are followed
+  (YAML_DATA_MAX_VALUES).`); before, such a `workflow.yaml` hung its reader. A file with a NUL
+  character or half of a surrogate pair is refused (`'<file>' holds a NUL character or half of a
+  surrogate pair, which cannot be stored.`). A tool call whose arguments hold either is answered
+  to the model as the tool error `invalid_text` and stored with an empty input; before, it ended
+  the whole run with `INTERNAL`. Rollback: none needed, nothing is stored differently.
+
 - **Claude runs with `workspace.preview_images` or `structured_data.publish`:** the input schema
   a model is shown for each of the two had a combinator at its root (`anyOf` over the three
   preview sources, `oneOf` over replace and patch), which Anthropic's Messages format, also on

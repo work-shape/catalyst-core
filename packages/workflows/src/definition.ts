@@ -3,6 +3,7 @@ import {
   WORKFLOW_DATASET_KEY,
   WORKFLOW_ERROR_CODES,
   WORKFLOW_STEP_TYPES,
+  readYamlData,
   workflowBlockIssues,
   workflowInputValueSchema,
   workflowLoopOptionsSchema,
@@ -17,7 +18,6 @@ import {
   type WorkflowStep,
   type WorkflowStepType
 } from "@vivd-catalyst/core";
-import { JSON_SCHEMA, YAMLException, load } from "js-yaml";
 import { z } from "zod";
 import { codeFileIssue } from "./code-step";
 import { parseCron } from "./cron";
@@ -429,20 +429,10 @@ export function readWorkflowManifest(text: string): WorkflowDefinitionResult {
       ]
     };
   }
-  try {
-    return parseWorkflowManifest(load(text, { schema: JSON_SCHEMA }));
-  } catch (error) {
-    // The reader of YAML follows a file as deep as it goes: one deeper than the stack ends
-    // as a file that is refused, like one deeper than a definition may be.
-    if (error instanceof RangeError) {
-      return {
-        ok: false,
-        issues: [{ path: "", message: "workflow.yaml is nested too deeply to be read" }]
-      };
-    }
-    if (!(error instanceof YAMLException)) throw error;
-    return { ok: false, issues: [{ path: "", message: "workflow.yaml is not valid YAML" }] };
-  }
+  const read = readYamlData(text, "workflow.yaml");
+  return read.ok
+    ? parseWorkflowManifest(read.value)
+    : { ok: false, issues: [{ path: "", message: read.issue.message }] };
 }
 
 function canonical(value: JsonValue): JsonValue {
