@@ -13,6 +13,7 @@
     "check:openapi": "pnpm --filter @vivd-catalyst/api-contract check:openapi",
     "generate:openapi": "pnpm --filter @vivd-catalyst/api-contract generate:openapi",
     "check:migrations": "node scripts/migrations/check.mjs",
+    "check:workspace-deps": "node scripts/check-workspace-deps.mjs",
     "db:preflight:collaboration-workspaces": "node scripts/preflight-collaboration-workspaces.mjs",
     "db:generate": "drizzle-kit generate",
     "dev": "pnpm dev:demo",
