@@ -140,10 +140,10 @@ describe("config file extends", () => {
     expect(config.ui.defaultThemeMode).toBe("system");
   });
 
-  it("serves the agent's name as on and the agent descriptions as off unless YAML says otherwise", async () => {
+  it("serves the agent's name and the agent descriptions as on unless YAML says otherwise", async () => {
     const root = await writeFixtures({
       "defaults.yaml": baseConfig,
-      "descriptions.yaml": [baseConfig, "ui:", "  showAgentDescriptions: true", ""].join("\n"),
+      "descriptions.yaml": [baseConfig, "ui:", "  showAgentDescriptions: false", ""].join("\n"),
       "name.yaml": [baseConfig, "ui:", "  showAgentName: false", ""].join("\n")
     });
     // What the config endpoint hands the chat, and the branding it is built from.
@@ -167,15 +167,15 @@ describe("config file extends", () => {
 
     expect(await settings("defaults.yaml")).toEqual({
       showAgentName: true,
-      showAgentDescriptions: false
+      showAgentDescriptions: true
     });
     expect(await settings("descriptions.yaml")).toEqual({
       showAgentName: true,
-      showAgentDescriptions: true
+      showAgentDescriptions: false
     });
     expect(await settings("name.yaml")).toEqual({
       showAgentName: false,
-      showAgentDescriptions: false
+      showAgentDescriptions: true
     });
   });
 

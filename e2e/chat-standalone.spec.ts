@@ -670,7 +670,7 @@ test("without its name the agent chip is an icon that opens the agent list under
   // The test names every option of the picker.
   instanceAgents: _instanceAgents
 }) => {
-  await serveAgentSettings(page, { showAgentName: false });
+  await serveAgentSettings(page, { showAgentName: false, showAgentDescriptions: false });
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
 
@@ -916,7 +916,7 @@ test("a tap opens the agent icon's list and chooses from it", async ({
   const context = await browser.newContext({ baseURL, hasTouch: true });
   await pageErrors.watch(context);
   const page = await context.newPage();
-  await serveAgentSettings(page, { showAgentName: false });
+  await serveAgentSettings(page, { showAgentName: false, showAgentDescriptions: false });
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
 
@@ -1061,7 +1061,7 @@ test("a single agent's icon names it in the list it opens under the pointer", as
 test("a single named agent is a plain label on the start page and an icon in the header", async ({
   page
 }) => {
-  await serveAgentSettings(page, { singleAgent: true });
+  await serveAgentSettings(page, { singleAgent: true, showAgentDescriptions: false });
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
 

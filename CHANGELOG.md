@@ -919,6 +919,9 @@ id from config_assets where status = 'deleted')`.
 
 ### Changed
 
+- **Chat:** the agent list shows each agent's description under its name by default:
+  `ui.showAgentDescriptions` is now `true` unless release config sets it. An instance that
+  wants the names alone sets `ui.showAgentDescriptions: false`.
 - **Chat:** the usage consumption on a model card has six steps in place of four: `very_low`,
   `low`, `moderate`, `elevated`, `high` and `very_high`, and its filled steps take a colour that
   goes from cool to warm with the level. The tier still comes from the model's Customer Rate
