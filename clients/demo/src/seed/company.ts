@@ -305,6 +305,21 @@ export const heldSkillChange: {
     "Eine Diagnose muss niemand nennen. Die Krankmeldung geht an die Teamleitung und an das HR-Team, nicht an das ganze Team."
 };
 
+/**
+ * The service principal the seeded Workflows run as. A run acts with its rights and with
+ * nobody else's: it reads agents and skills and nothing more. `name` is what a definition
+ * names under `runAs`.
+ */
+export const workflowPrincipal = {
+  name: "workflow-demo",
+  displayLabel: "Workflow demo",
+  description: "The Workflows of the demo run as this principal. It reads agents and skills.",
+  permissions: ["config_assets.read"] as const
+};
+
+/** The Workflows of the demo, each a folder under `seed/workflows` with its `workflow.yaml`. */
+export const workflows = ["agent-inventory"] as const;
+
 /** The service principal of the config CLI, the one `catalyst-local-key` creates too. */
 export const cliPrincipal = {
   displayLabel: "Local config CLI",

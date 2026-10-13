@@ -348,8 +348,15 @@ const NOTHING_CREATED = {
 };
 
 /** The second run made nothing, and the instance holds the same rows at the same revisions. */
-export function expectSecondRunChangedNothing(seeded: SeededInstance): void {
-  expect(createdBy(seeded.second)).toEqual(NOTHING_CREATED);
+export function expectSecondRunChangedNothing(
+  seeded: SeededInstance,
+  /** The parts the seed has on this instance beside the ones every instance has. */
+  furtherParts: readonly string[] = []
+): void {
+  expect(createdBy(seeded.second)).toEqual({
+    ...NOTHING_CREATED,
+    ...Object.fromEntries(furtherParts.map((part) => [part, 0]))
+  });
   const { client: _before, ...left } = seeded.before;
   const { client: _after, ...right } = seeded.after;
   expect(right).toEqual(left);

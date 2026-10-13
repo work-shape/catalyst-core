@@ -45,7 +45,7 @@ describe("the demo seed after an interrupted run", () => {
       "Mailed the invitation an earlier run created the person for and did not send."
     );
     expect(seeded().second.steps.find((step) => step.name === "people")?.note).toBeUndefined();
-    expectSecondRunChangedNothing(seeded());
+    expectSecondRunChangedNothing(seeded(), ["workflows"]);
     const mails = await listAll((paging) =>
       seeded().after.client.captured_mail.list({ query: paging })
     );

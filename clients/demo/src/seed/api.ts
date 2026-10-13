@@ -52,6 +52,8 @@ export interface SeedApi {
   effectivePermissions(userId: string): Promise<EffectivePermissions>;
   listServicePrincipals(): Promise<ServicePrincipalDetail[]>;
   createServicePrincipal(input: {
+    /** The stable name a Workflow names under `runAs`. The label as a slug when left out. */
+    name?: string;
     displayLabel: string;
     description: string;
     permissions: ServicePrincipalDetail["principal"]["permissions"];
@@ -77,6 +79,8 @@ export interface SeedApi {
     config: Record<string, unknown> & { name: string },
     expectedRevision?: number
   ): Promise<"done" | "pending_approval">;
+  /** Makes one revision of an asset with a draft the one its users are served. */
+  publishAsset(kind: string, name: string, revision: number): Promise<void>;
   showAgentEverywhere(name: string): Promise<void>;
   listOwnApprovalRequests(): Promise<ApprovalRequestView[]>;
   /** The workspaces the caller is a member of. */
@@ -123,6 +127,10 @@ const APP_KIND = "app";
 /** The module and the asset kind Connections come with. */
 export const CONNECTIONS_MODULE = "connections";
 export const CONNECTION_KIND = "connection";
+
+/** The module and the asset kind Workflows come with. */
+export const WORKFLOWS_MODULE = "workflows";
+export const WORKFLOW_KIND = "workflow";
 
 /** `SeedApi` over the product's client, whose every call is one operation of the catalog. */
 export function createSeedApi(client: ApiClient): SeedApi {
@@ -196,6 +204,9 @@ export function createSeedApi(client: ApiClient): SeedApi {
           body: { config, expectedRevision: expectedRevision ?? null }
         })
       ).status,
+    async publishAsset(kind, name, revision) {
+      completedOutput(await client.assets.publish({ params: { kind, name }, body: { revision } }));
+    },
     async showAgentEverywhere(name) {
       completedOutput(
         await client.assets.set_availability({

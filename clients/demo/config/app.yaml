@@ -55,6 +55,10 @@ modules:
   # its agent and `sample-accounting` for a Workflow, both below.
   connections:
     enabled: true
+  # Workflows: definitions stored as assets, started by hand and run on the job executor. The
+  # seed brings one, `agent-inventory` (seed/workflows).
+  workflows:
+    enabled: true
 # The file area per conversation and the commands an agent runs in it. The commands run in the
 # Docker sandbox, so the Compose files start a workspace command worker and build its runner image.
 executionWorkspaces:

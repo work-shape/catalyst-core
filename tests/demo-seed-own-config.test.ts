@@ -31,7 +31,7 @@ describe("the demo seed on the demo's own config", () => {
     // Every module of the demo is on, so this is every kind the platform brings. A new kind
     // fails here until the interface has a word for it.
     expect(kinds.map((kind) => kind.kind)).toEqual(
-      expect.arrayContaining(["agent", "skill", "connection", "app"])
+      expect.arrayContaining(["agent", "skill", "connection", "app", "workflow"])
     );
     for (const kind of kinds) {
       // A label key is a key of both languages: `tests/i18n.test.ts` holds them level.
@@ -56,7 +56,8 @@ describe("the demo seed on the demo's own config", () => {
       "connection grant rows": 3,
       workspaces: 1,
       "workspace members": 4,
-      apps: 3
+      apps: 3,
+      workflows: 1
     });
     // This config brings the Connection `sample-business`, so the App whose action calls it is
     // stored and published here too. Fails without S3-42: the seed knew no such App.
@@ -65,9 +66,35 @@ describe("the demo seed on the demo's own config", () => {
       publishedRevision: 1,
       title: "Customers"
     });
-    expectSecondRunChangedNothing(seeded());
+    expectSecondRunChangedNothing(seeded(), ["workflows"]);
     // The demo's own agent stays the default, not the first agent of the company.
     expect(seeded().before.defaultAgentName).toBe("workflow_assistant");
+  });
+
+  // Fails on an instance whose engine reads no definition: the list is empty and the start
+  // is refused as a Workflow that does not exist.
+  it("brings a Workflow a person can start, published and run as its own principal", async () => {
+    const { client } = seeded().after;
+    const { items } = await client.workflows.list();
+    expect(items).toMatchObject([
+      { id: "agent-inventory", name: "Agent inventory", runnable: true, reasons: [] }
+    ]);
+    const asset = await client.assets.get({
+      params: { kind: "workflow", name: "agent-inventory" }
+    });
+    expect(asset).toMatchObject({ revision: 1, publishedRevision: 1 });
+    // The page starts it without an input.
+    const started = await client.workflows.start({
+      params: { workflow: "agent-inventory" },
+      body: {}
+    });
+    if (started.status !== "done") throw new Error("The start was held for an approval");
+    expect(started.output).toMatchObject({
+      workflow: "agent-inventory",
+      status: "queued",
+      definitionRevisionId: items[0]?.definitionRevisionId,
+      principal: { name: "workflow-demo" }
+    });
   });
 
   it("lists both models the seed names for the tax Namespace", () => {

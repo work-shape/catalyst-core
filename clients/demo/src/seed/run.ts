@@ -28,6 +28,7 @@ import {
   type SeedApi,
   type SeedAppFile
 } from "./api";
+import { seedWorkflows } from "./workflows";
 import {
   assertLocalDevelopmentHost,
   assertLoopbackAddress,
@@ -172,6 +173,8 @@ export async function seedDemo(options: SeedOptions): Promise<SeedReport> {
   await seedHeldCalls(root, as, steps);
   await seedConnections(root, as, userIds, modules, steps);
   await seedApps(modules, as, instance, steps);
+  const seededWorkflows = await seedWorkflows(root, modules, instance.assetsDir);
+  if (seededWorkflows) steps.push(seededWorkflows);
   return { steps };
 }
 
