@@ -364,7 +364,7 @@ test("an App button starts a published Workflow and shows its output; the draft 
     // A draft starts nothing: the same button says what it would have started.
     const drafted = await write("Visit log draft", 1);
     expect(drafted.ok(), await drafted.text()).toBe(true);
-    await page.goto(`${appPath}/edit`);
+    await page.goto(`/w/${workspaceId}/app-drafts/${appId}`);
     const draft = appIn(page, "app-edit");
     await expect(draft.getByText("Visit log draft")).toBeVisible();
     await draft.getByRole("button", { name: "Log visit" }).click();
