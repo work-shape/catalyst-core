@@ -363,6 +363,7 @@ function ChatWorkspaceContent({
         : undefined,
     showRoute: model.route.showRoute,
     startChat: model.apps.startChat,
+    editWithAgent: model.apps.editWithAgent,
     ...(canViewAudit(model.auth.user)
       ? { operations: { href: operationRunsHref(), runHref: operationRunHref } }
       : {})
