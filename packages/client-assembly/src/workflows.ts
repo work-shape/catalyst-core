@@ -165,6 +165,7 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
         definitionRevisionId: revisionId,
         runnable: reasons.length === 0,
         reasons,
+        ...(definition.ok ? { inputs: definition.manifest.inputs } : {}),
         ...(lastRun ? { lastRun } : {})
       });
     }

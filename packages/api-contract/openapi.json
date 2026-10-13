@@ -12722,6 +12722,13 @@
                               ]
                             }
                           },
+                          "inputs": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
                           "actions": {
                             "type": "array",
                             "items": {

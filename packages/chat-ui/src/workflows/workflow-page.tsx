@@ -52,7 +52,11 @@ export function WorkflowPage({ workflow, opened }: { workflow: string; opened?: 
   const read = useWorkflow(workspaceId, shownId);
   const names = useWorkflowNames(workspaceId, before);
   const runsAvailable = useRunsAvailable();
-  const start = useStartRun({ workflow: shownId, name: read.workflow?.name });
+  const start = useStartRun({
+    workflow: shownId,
+    name: read.workflow?.name,
+    form: read.workflow?.startForm
+  });
   const edit = useEditWithAgent(shownId, read.workflow);
   const draft = useWorkflowDraft(shownId, read.workflow);
 
