@@ -1,6 +1,7 @@
 import { createElement, type ReactNode } from "react";
 import { AppEditSurface, AppEditSurfaceActions } from "../apps/app-edit-surface";
 import { AppPreview } from "../apps/app-preview";
+import { AgentSurface, AgentSurfaceActions } from "../conversation/agent-surface";
 import { InboxItemPanel } from "../inbox/inbox-item-panel";
 import { pageSurfaceRendering } from "../pages/page-surface";
 import {
@@ -70,6 +71,11 @@ export const surfaceRenderers: SurfaceRenderers = {
       workspaceId: surface.workspaceId,
       workflow: surface.workflow
     }),
+    flush: true
+  }),
+  agent: (surface) => ({
+    actions: createElement(AgentSurfaceActions, { agent: surface.agent }),
+    content: createElement(AgentSurface, { key: surface.key, agent: surface.agent }),
     flush: true
   })
 };

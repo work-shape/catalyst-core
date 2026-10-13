@@ -1,5 +1,6 @@
 import { APP_ASSET_KIND } from "@vivd-catalyst/api-client";
 import { SUBJECT_TOOL_PREFIX, WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
+import { AGENT_ASSET_KIND } from "../build-area/build-rights";
 import type { Surface } from "../surface/surface";
 
 // What the calls of a run tell of the asset its conversation is about. The read of an asset
@@ -79,8 +80,8 @@ function subjectSurfaceKey(subject: SubjectAsset): string {
 
 /**
  * The surface of the asset a conversation is about: the canvas of a Workflow, the draft of an
- * App. Nothing for a kind without one: a Page opens through its own card, and the other kinds
- * show nothing beside the chat yet.
+ * App, the saved state of an agent. Nothing for a kind without one: a Page opens through its
+ * own card, and the other kinds show nothing beside the chat yet.
  */
 export function subjectSurface(input: {
   subject: SubjectAsset;
@@ -94,6 +95,9 @@ export function subjectSurface(input: {
   }
   if (subject.kind === APP_ASSET_KIND && workspaceId !== undefined) {
     return { kind: "app_edit", key, title, workspaceId, app: subject.name };
+  }
+  if (subject.kind === AGENT_ASSET_KIND) {
+    return { kind: "agent", key, title, agent: subject.name };
   }
   return undefined;
 }

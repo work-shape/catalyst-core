@@ -264,7 +264,8 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "en"));
 
     // In a plain conversation of the builder's own workspace, the agent's first read of an
-    // asset makes it the subject and opens it beside the chat: the Workflow on its canvas.
+    // asset makes it the subject and opens it beside the chat: the Workflow on its canvas,
+    // then, as the agent turns to it, an agent's saved state.
     // A conversation shared with its workspace is refused the read: the asset would reach
     // every member who reads the conversation.
     const workspaces = workspaceListSchema.parse(
@@ -281,6 +282,16 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     await expect(touched.getByTestId("workflow-canvas")).toBeVisible();
     await shootThemes(page, "workflow-from-chat", async () => {
       await expect(touched.getByText("What the run returns.")).toBeVisible();
+    });
+    await sendToolCall(page, "platform.assets.get", {
+      kind: "agent",
+      name: "research_assistant"
+    });
+    await expect(subject).toHaveAttribute("data-subject-kind", "agent");
+    const studio = page.locator('[data-surface-kind="agent"]').getByTestId("agent-surface");
+    await expect(studio).toBeVisible();
+    await shootThemes(page, "agent-from-chat", async () => {
+      await expect(studio).toBeVisible();
     });
   } finally {
     // Whatever the test left: the member's rows on the Workflow.

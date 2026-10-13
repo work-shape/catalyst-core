@@ -16,6 +16,7 @@ const rendered: Record<Surface["kind"], boolean> = {
   app_view: true,
   app_edit: true,
   workflow_canvas: true,
+  agent: true,
   inbox_item: true
 };
 
@@ -41,8 +42,8 @@ const toolDisplay: Surface = {
 };
 
 describe("surface slot frame", () => {
-  it("declares seven kinds and renders each of them", () => {
-    expect(Object.keys(rendered)).toHaveLength(7);
+  it("declares eight kinds and renders each of them", () => {
+    expect(Object.keys(rendered)).toHaveLength(8);
     expect(Object.values(rendered).every((hasRenderer) => hasRenderer)).toBe(true);
   });
 

@@ -1,7 +1,9 @@
-import { AppWindow, FileText, Workflow } from "lucide-react";
+import { AppWindow, Bot, FileText, Workflow } from "lucide-react";
 import { APP_ASSET_KIND } from "@vivd-catalyst/api-client";
 import { WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
 import { Banner, Button, TextLink } from "@vivd-catalyst/ui";
+import { AGENT_ASSET_KIND } from "../build-area/build-rights";
+import { AGENTS_BUILD_PATH } from "../build-area/build-route";
 import { useTranslation, type TranslationKey } from "../i18n";
 import type { WorkspaceRoute } from "../routes";
 import { routeLink } from "../workflows/workflows-frame";
@@ -17,6 +19,9 @@ function subjectRoute(
   subject: ConversationSubjectView,
   workspaceId: string | undefined
 ): WorkspaceRoute | undefined {
+  if (subject.kind === AGENT_ASSET_KIND) {
+    return { kind: "build-asset", assetKind: AGENTS_BUILD_PATH, name: subject.name };
+  }
   if (workspaceId === undefined) {
     return undefined;
   }
@@ -30,7 +35,8 @@ function subjectRoute(
 
 const SUBJECT_LEADS: Readonly<Record<string, TranslationKey>> = {
   [WORKFLOW_ASSET_KIND]: "conversationSubjectWorkflow",
-  [APP_ASSET_KIND]: "conversationSubjectApp"
+  [APP_ASSET_KIND]: "conversationSubjectApp",
+  [AGENT_ASSET_KIND]: "conversationSubjectAgent"
 };
 
 function SubjectIcon({ kind }: { kind: string }) {
@@ -40,7 +46,7 @@ function SubjectIcon({ kind }: { kind: string }) {
   if (kind === APP_ASSET_KIND) {
     return <AppWindow aria-hidden="true" />;
   }
-  return <FileText aria-hidden="true" />;
+  return kind === AGENT_ASSET_KIND ? <Bot aria-hidden="true" /> : <FileText aria-hidden="true" />;
 }
 
 /**

@@ -22,9 +22,10 @@ const surfaceDefaultWidths: Partial<Record<SurfaceKind, SurfaceDefaultWidth>> = 
   // A Page is laid out like a small application: it gets more room than a document.
   page: { max: 640 },
   // What the agent of the conversation changes is the larger side: a Workflow is a graph to
-  // read across, an App an application of its own.
+  // read across, an App an application of its own. An agent reads like a document.
   workflow_canvas: { share: 0.6, max: 1100 },
-  app_edit: { share: 0.55, max: 960 }
+  app_edit: { share: 0.55, max: 960 },
+  agent: { max: 560 }
 };
 
 /** The width `kind` opens at in a main area of `mainWidth`, before the split minimum applies. */

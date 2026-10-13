@@ -6,8 +6,12 @@ import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { useApp } from "../apps/app-data";
 import { appTitle } from "../apps/app-model";
+import { AGENT_ASSET_KIND } from "../build-area/build-rights";
+import { agentConfigToForm } from "../build-area/asset-form-model";
+import { useTranslation } from "../i18n";
 import { useToolDisplayPanel } from "../tool-display-panel";
 import { useWorkflowNames } from "../workflows/workflow-data";
+import { agentTitle, useAgentAsset } from "./agent-surface";
 import {
   savedDraftCalls,
   subjectReadInRun,
@@ -34,6 +38,7 @@ const FINISHED_RUN_STATES = new Set(["completed", "failed", "cancelled"]);
 
 /** The name people read for the asset a conversation is about, once its record arrived. */
 function useSubjectTitle(subject: SubjectAsset | undefined, workspaceId: string | undefined) {
+  const { locale } = useTranslation();
   const kind = subject?.kind;
   const name = subject?.name ?? "";
   const [workflowTitle] = useWorkflowNames(
@@ -41,11 +46,15 @@ function useSubjectTitle(subject: SubjectAsset | undefined, workspaceId: string 
     kind === WORKFLOW_ASSET_KIND ? [name] : []
   );
   const app = useApp(workspaceId ?? "", name, kind === APP_ASSET_KIND && workspaceId !== undefined);
+  const agent = useAgentAsset(name, kind === AGENT_ASSET_KIND);
   if (kind === WORKFLOW_ASSET_KIND) {
     return workflowTitle ?? name;
   }
   if (kind === APP_ASSET_KIND) {
     return appTitle(app.app, name);
+  }
+  if (kind === AGENT_ASSET_KIND && agent.data) {
+    return agentTitle(agentConfigToForm(agent.data.config), locale, name);
   }
   return name;
 }
