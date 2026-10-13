@@ -95,6 +95,15 @@ export const apps = defineTranslations({
     "apps.empty":
       "No apps in this workspace yet. Describe a tool in chat and the agent builds it as a page; save it as an app so everyone here can use it.",
     "apps.emptyReadOnly": "No apps yet. A builder of this workspace can add one.",
+    "apps.exampleFeeHint": "Hours times rate, with VAT and the total",
+    "apps.exampleFeePrompt":
+      "Build a page that calculates a client's fee from the hours worked and the hourly rate, adds VAT and shows the total.",
+    "apps.exampleFeeTitle": "Fee calculator from hours and rate",
+    "apps.exampleLeaveHint": "Dates, reason and the days left",
+    "apps.exampleLeavePrompt":
+      "Build a page where people of this workspace request leave with the dates and a reason, and see how many days they have left.",
+    "apps.exampleLeaveTitle": "Leave request for the team",
+    "apps.examples": "Examples to start with",
     "apps.failed": "The app could not be loaded.",
     "apps.failedFileSet": "The app could not be loaded: the files of this revision are missing.",
     "apps.failedKit":
@@ -115,11 +124,7 @@ export const apps = defineTranslations({
     "apps.notPublished": "This app has not been published yet.",
     "apps.open": "Open",
     "apps.openDraft": "Open the draft",
-    "apps.presetDashboard": "A dashboard for…",
-    "apps.presetForm": "A form that computes…",
     "apps.previewOf": "App {name}",
-    "apps.promptDashboard": "Build a page with a dashboard for ",
-    "apps.promptForm": "Build a page with a form that computes ",
     "apps.promptStart": "Build a page for this workspace: ",
     "apps.publish": "Publish",
     "apps.publishBody": "Everyone in {workspace} gets revision {number} when they open the app.",
@@ -271,6 +276,15 @@ export const apps = defineTranslations({
       "In diesem Arbeitsbereich gibt es noch keine Apps. Beschreibe im Chat ein Werkzeug, und der Agent baut es als Page; speichere sie als App, damit alle hier sie nutzen können.",
     "apps.emptyReadOnly":
       "Noch keine Apps. Wer in diesem Arbeitsbereich bauen darf, kann eine hinzufügen.",
+    "apps.exampleFeeHint": "Stunden mal Satz, mit Umsatzsteuer und Summe",
+    "apps.exampleFeePrompt":
+      "Baue eine Page, die das Honorar eines Mandanten aus den geleisteten Stunden und dem Stundensatz berechnet, die Umsatzsteuer aufschlägt und die Summe zeigt.",
+    "apps.exampleFeeTitle": "Honorarrechner aus Stunden und Satz",
+    "apps.exampleLeaveHint": "Zeitraum, Grund und verbleibende Tage",
+    "apps.exampleLeavePrompt":
+      "Baue eine Page, in der die Leute dieses Arbeitsbereichs Urlaub mit Zeitraum und Grund beantragen und sehen, wie viele Tage ihnen bleiben.",
+    "apps.exampleLeaveTitle": "Urlaubsantrag fürs Team",
+    "apps.examples": "Beispiele für den Einstieg",
     "apps.failed": "Die App konnte nicht geladen werden.",
     "apps.failedFileSet":
       "Die App konnte nicht geladen werden: Die Dateien dieser Revision fehlen.",
@@ -292,11 +306,7 @@ export const apps = defineTranslations({
     "apps.notPublished": "Diese App wurde noch nicht veröffentlicht.",
     "apps.open": "Öffnen",
     "apps.openDraft": "Entwurf öffnen",
-    "apps.presetDashboard": "Ein Dashboard für …",
-    "apps.presetForm": "Ein Formular, das … berechnet",
     "apps.previewOf": "App {name}",
-    "apps.promptDashboard": "Baue eine Page mit einem Dashboard für ",
-    "apps.promptForm": "Baue eine Page mit einem Formular, das Folgendes berechnet: ",
     "apps.promptStart": "Baue eine Page für diesen Arbeitsbereich: ",
     "apps.publish": "Veröffentlichen",
     "apps.publishBody": "Alle in {workspace} bekommen Revision {number}, wenn sie die App öffnen.",
