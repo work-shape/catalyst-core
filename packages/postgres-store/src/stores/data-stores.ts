@@ -19,6 +19,8 @@ function mapRecord(row: Row): DataStoreRecord {
     sizeLimitBytes: row.sizeLimitBytes,
     ...(row.sizeBytes === null ? {} : { sizeBytes: row.sizeBytes }),
     ...(row.sizeMeasuredAt ? { sizeMeasuredAt: row.sizeMeasuredAt.toISOString() } : {}),
+    ...(row.tableCount === null ? {} : { tableCount: row.tableCount }),
+    ...(row.rowEstimate === null ? {} : { rowEstimate: row.rowEstimate }),
     ...(row.failureCode === null || row.failureMessage === null
       ? {}
       : { failure: { code: row.failureCode, message: row.failureMessage } }),
@@ -46,6 +48,8 @@ function rowOf(record: DataStoreRecord): Row {
     sizeLimitBytes: record.sizeLimitBytes,
     sizeBytes: record.sizeBytes ?? null,
     sizeMeasuredAt: record.sizeMeasuredAt ? new Date(record.sizeMeasuredAt) : null,
+    tableCount: record.tableCount ?? null,
+    rowEstimate: record.rowEstimate ?? null,
     failureCode: record.failure?.code ?? null,
     failureMessage: record.failure?.message ?? null,
     conditions: record.conditions,

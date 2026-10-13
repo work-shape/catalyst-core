@@ -484,6 +484,13 @@
       "when": 1791877055480,
       "tag": "0068_workflow_run_data_prune_index",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1791883668102,
+      "tag": "0069_data_store_table_counts",
+      "breakpoints": true
     }
   ]
 }

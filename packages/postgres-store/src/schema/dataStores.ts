@@ -40,6 +40,8 @@ export const dataStores = pgTable(
     sizeLimitBytes: bigint("size_limit_bytes", { mode: "number" }).notNull(),
     sizeBytes: bigint("size_bytes", { mode: "number" }),
     sizeMeasuredAt: timestamp("size_measured_at", { withTimezone: true }),
+    tableCount: integer("table_count"),
+    rowEstimate: bigint("row_estimate", { mode: "number" }),
     failureCode: text("failure_code"),
     failureMessage: text("failure_message"),
     conditions: jsonb("conditions").$type<DataStoreCondition[]>().notNull(),

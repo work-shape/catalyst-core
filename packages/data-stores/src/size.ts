@@ -35,10 +35,39 @@ export async function storeSizeBytes(
   return Number(sizeRow.parse(measured.rows[0]).bytes);
 }
 
+const tablesRow = z.object({
+  tables: z.number().int(),
+  rows: z.string().regex(/^\d+$/u)
+});
+
+/**
+ * How many tables the schema `public` of a store holds and how many rows the planner
+ * estimates in them, read from the catalog as the platform's own role. It reads no row. A
+ * table the database has not analyzed yet counts as empty.
+ */
+async function storeTables(
+  server: DataStoreServer,
+  database: string,
+  signal: AbortSignal | undefined
+): Promise<{ tableCount: number; rowEstimate: number }> {
+  const read = await server.executor.query({
+    ...server.asPlatform(database),
+    ...(signal ? { signal } : {}),
+    sql: `select pg_catalog.count(*)::pg_catalog.int4 as tables,
+        coalesce(pg_catalog.sum(greatest(c.reltuples, 0)), 0)::pg_catalog.int8::pg_catalog.text as rows
+      from pg_catalog.pg_class c
+      join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public' and c.relkind in ('r', 'p')`
+  });
+  const { tables, rows } = tablesRow.parse(read.rows[0]);
+  return { tableCount: tables, rowEstimate: Number(rows) };
+}
+
 type Transact = <Result>(work: (stores: PlatformStores) => Promise<Result>) => Promise<Result>;
 
 /**
- * Measures one store and writes the size onto its record, as it is now: another write may
+ * Measures one store and writes the size, the number of its tables and the estimate of their
+ * rows onto its record, as it is now: another write may
  * have landed since the caller read it. Answers the record as written, or nothing where the
  * store is gone. Throws where the database cannot be measured.
  */
@@ -50,6 +79,7 @@ export async function recordStoreSize(
 ): Promise<DataStoreRecord | undefined> {
   const { clientInstanceId } = runtime;
   const sizeBytes = await storeSizeBytes(runtime.server, record.location.database, signal);
+  const tables = await storeTables(runtime.server, record.location.database, signal);
   return transaction(async (stores) => {
     const current = await stores.dataStores.getDataStore({
       clientInstanceId,
@@ -58,7 +88,7 @@ export async function recordStoreSize(
     });
     if (!current) return undefined;
     const now = new Date().toISOString();
-    const next = { ...current, sizeBytes, sizeMeasuredAt: now, updatedAt: now };
+    const next = { ...current, sizeBytes, ...tables, sizeMeasuredAt: now, updatedAt: now };
     await stores.dataStores.putDataStore(next);
     return next;
   });
