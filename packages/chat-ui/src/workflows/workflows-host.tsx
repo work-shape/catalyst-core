@@ -27,13 +27,14 @@ export function WorkflowsHostProvider({
   value,
   children
 }: {
-  value: WorkflowsHost;
+  /** Nothing where the Workflows area is not open to the reader. */
+  value: WorkflowsHost | undefined;
   children: ReactNode;
 }) {
   return <WorkflowsHostContext.Provider value={value}>{children}</WorkflowsHostContext.Provider>;
 }
 
-/** The host, or nothing outside a workspace shell. */
+/** The host, or nothing outside a workspace shell and where the area is closed to the reader. */
 export function useWorkflowsHost(): WorkflowsHost | undefined {
   return useContext(WorkflowsHostContext);
 }

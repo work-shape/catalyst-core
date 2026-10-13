@@ -9,12 +9,14 @@ contain breaking changes; a patch version does not.
 
 - **Data Stores, the reads of a store's page:** `data_stores.list` (`GET /api/v1/data-stores`)
   lists the stores a caller may read with the size, the number of tables and the estimate of
-  rows of the last measurement (migration `0067_data_store_table_counts` adds the two columns;
+  rows of the last measurement (migration `0069_data_store_table_counts` adds the two columns;
   absent until measured). `data_stores.rows` pages through one table by keyset on its primary
   key, at most 50 rows a page, values cut at 1,000 characters, and `data_stores.value` reads
   one value whole; a table without a key is paged in physical order and the answer says so.
   `data_stores.used_by` names the published Apps and Workflows that use a store, as far as the
-  caller is shown them, and counts the others. `preview_rows` is unchanged.
+  caller is shown them, and counts the others. `preview_rows` is unchanged. On a store's page
+  in Studio a Workflow under "Used by" is a link to its page, as an App is, for a reader the
+  Workflows area is open to.
 - **Claude on Amazon Bedrock:** a model provider `aws-bedrock` beside `openai-compatible` and
   `google-vertex`. It calls Claude through the Bedrock runtime in Frankfurt
   (`eu-central-1`) with a Bedrock API key named by `credentialSecret` (default

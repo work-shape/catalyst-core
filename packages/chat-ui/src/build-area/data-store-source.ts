@@ -1,8 +1,9 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { ApiClient } from "@vivd-catalyst/api-client";
 import { useAppsHost } from "../apps/apps-host";
-import { workspaceRoutePath } from "../routes";
+import { workspaceRoutePath, type WorkspaceRoute } from "../routes";
 import { useSettingsPage } from "../settings/settings-page-context";
+import { useWorkflowsHost } from "../workflows/workflows-host";
 import { apiErrorCode } from "../workspace-utils";
 import { instanceSentence } from "./build-refusals";
 
@@ -117,19 +118,45 @@ export function useDataStoreSource(): DataStoreSource {
     useUsedBy: (store) =>
       useRead(key("used-by", store), (signal) => calls.used_by({ params: { store }, signal })),
     useUsingPage(workspaceId) {
-      // An App is opened inside a workspace: the store's own, or the one the reader has open.
-      const host = useAppsHost();
-      const collaborationWorkspaceId = workspaceId ?? host?.workspace?.id;
+      // An App and a Workflow are opened inside a workspace: the store's own, or the one the
+      // reader has open.
+      const apps = useAppsHost();
+      const workflows = useWorkflowsHost();
+      const collaborationWorkspaceId =
+        workspaceId ?? apps?.workspace?.id ?? workflows?.workspace?.id;
       return (kind, name) => {
-        // A Workflow has no page in the interface yet, so nothing links to one.
-        if (kind !== "app" || !host?.enabled || collaborationWorkspaceId === undefined) {
-          return undefined;
-        }
-        const route = { kind: "app" as const, collaborationWorkspaceId, app: name };
-        return { href: workspaceRoutePath(route), open: () => host.showRoute(route) };
+        const route = usingPageRoute(kind, name, {
+          collaborationWorkspaceId,
+          apps: apps?.enabled ?? false,
+          workflows: workflows !== undefined
+        });
+        const showRoute = kind === "app" ? apps?.showRoute : workflows?.showRoute;
+        return route && showRoute
+          ? { href: workspaceRoutePath(route), open: () => showRoute(route) }
+          : undefined;
       };
     }
   };
+}
+
+/**
+ * The page of an App or a Workflow that uses a store, or nothing where its reader is shown no
+ * such page: the Apps module is off, the Workflows area is not open to the reader, or no
+ * workspace is.
+ */
+export function usingPageRoute(
+  kind: "app" | "workflow",
+  name: string,
+  shown: { collaborationWorkspaceId: string | undefined; apps: boolean; workflows: boolean }
+): WorkspaceRoute | undefined {
+  const { collaborationWorkspaceId } = shown;
+  if (collaborationWorkspaceId === undefined) return undefined;
+  if (kind === "app") {
+    return shown.apps ? { kind: "app", collaborationWorkspaceId, app: name } : undefined;
+  }
+  return shown.workflows
+    ? { kind: "workflow", collaborationWorkspaceId, workflow: name }
+    : undefined;
 }
 
 /** The reason a refusal of the instance names in its details, read from an unvouched answer. */

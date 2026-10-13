@@ -34,6 +34,7 @@ export type {
   DataStoreUsedBy,
   DataStoreValue
 } from "./data-store-source";
+export { usingPageRoute } from "./data-store-source";
 export { connectionToolsView, type ConnectionToolsRead } from "./connection-tools";
 export { toggleToolName } from "./tool-group";
 export { assetIdFromTitle, resolveBuildPlace, visibleBuildKinds } from "./build-model";

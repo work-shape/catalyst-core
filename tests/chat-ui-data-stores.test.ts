@@ -22,7 +22,8 @@ import {
   type DataStoreSource,
   type DataStoreState,
   type DataStoreUsedBy,
-  type DataStoreValue
+  type DataStoreValue,
+  usingPageRoute
 } from "@vivd-catalyst/chat-ui/build-area";
 import { platformContext } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
@@ -172,7 +173,7 @@ function storeSource(answers: StoreAnswers = {}): DataStoreSource {
     useRowsPage: () => answers.rows ?? ready(visitRows),
     useValue: () => answers.value ?? { status: "loading" },
     useUsedBy: () => answers.usedBy ?? ready(usedBy),
-    // An App has a page in the interface. A Workflow has none yet.
+    // The instance's source decides this by `usingPageRoute`; here only the App has a page.
     useUsingPage: () => (kind, name) =>
       kind === "app" ? { href: `/w/ws_1/apps/${name}`, open: noop } : undefined
   };
@@ -550,6 +551,31 @@ describe("The rows of a Data Store", () => {
 
 describe("What uses a Data Store", () => {
   const address = { kindPath: "data-stores", name: "visit-log" };
+
+  it("leads to the page of an App and of a Workflow only where the reader is shown such pages", () => {
+    const shown = { collaborationWorkspaceId: "ws_1", apps: true, workflows: true };
+    expect(usingPageRoute("app", "visits-board", shown)).toEqual({
+      kind: "app",
+      collaborationWorkspaceId: "ws_1",
+      app: "visits-board"
+    });
+    expect(usingPageRoute("workflow", "nightly-visits", shown)).toEqual({
+      kind: "workflow",
+      collaborationWorkspaceId: "ws_1",
+      workflow: "nightly-visits"
+    });
+    // The Apps module is off, the Workflows area is closed to the reader, or no workspace is open.
+    expect(usingPageRoute("app", "visits-board", { ...shown, apps: false })).toBeUndefined();
+    expect(
+      usingPageRoute("workflow", "nightly-visits", { ...shown, workflows: false })
+    ).toBeUndefined();
+    expect(
+      usingPageRoute("workflow", "nightly-visits", {
+        ...shown,
+        collaborationWorkspaceId: undefined
+      })
+    ).toBeUndefined();
+  });
 
   it("lists the Apps and Workflows that use a store, links the ones that have a page and counts the ones the reader cannot see", () => {
     const page = render(address);
