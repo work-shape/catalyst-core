@@ -1,10 +1,11 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { JsonValue } from "@vivd-catalyst/core";
 import {
+  DockerWorkspaceCommandProcessExecutor,
   LocalWorkspaceCommandProcessExecutor,
   type ProcessResult,
   type WorkspaceCommandProcessExecutor
@@ -62,6 +63,14 @@ const compute = (step: Record<string, unknown> = {}, file = "compute.py") => ({
     }
   ]
 });
+
+/** What a code step's container gets in these tests: little, so a limit is reached fast. */
+const LIMITS = {
+  cpuCount: 1,
+  memoryBytes: 128 * 1024 * 1024,
+  pidsLimit: 64,
+  scratchBytes: 16 * 1024 * 1024
+};
 
 let open: WorkflowFixture | undefined;
 const directories: string[] = [];
@@ -123,9 +132,10 @@ async function ready(options: Options = {}) {
       sandbox: options.sandbox ?? new LocalWorkspaceCommandProcessExecutor(),
       tempRoot,
       slots: 2,
-      limits: { cpuCount: 1, memoryBytes: 256 * 1024 * 1024, pidsLimit: 64 },
+      timeoutSeconds: options.timeoutSeconds ?? 20,
+      limits: LIMITS,
       cancelCheckMs: 50
-    })
+    }).handlers
   ]);
   const begin = async (input: JsonValue = { numbers: [1, 2, 3] }) =>
     runSchema.parse(
@@ -139,7 +149,7 @@ async function ready(options: Options = {}) {
   const run = async (input?: JsonValue) => t.finish((await begin(input)).id, worker);
   const step = async (runId: string) =>
     (await stepRunsOf(t, runId)).find((stepRun) => stepRun.stepId === "add");
-  return { t, worker, begin, run, step, asked, revisionId };
+  return { t, worker, begin, run, step, asked, revisionId, tempRoot };
 }
 
 describe("the definition of a code step", () => {
@@ -442,12 +452,259 @@ print(json.dumps({"sum": sum(data["numbers"])}))
         sandbox: new LocalWorkspaceCommandProcessExecutor(),
         tempRoot: tmpdir(),
         slots: 2,
-        limits: { cpuCount: 1, memoryBytes: 256 * 1024 * 1024, pidsLimit: 64 }
-      })
+        timeoutSeconds: 20,
+        limits: LIMITS
+      }).handlers
     ]);
     const ended = await t.finish(started.id, next);
     expect(ended.status).toBe("done");
     expect(JSON.parse(ended.outputPreview?.text ?? "null")).toEqual({ add: { sum: 6 } });
+  }, 60_000);
+});
+
+// What a script may leave in the place of its result. The worker never opens it: the command
+// that ran the script reads a regular file and nothing else, inside the sandbox and within
+// the script's time limit. Each case names how its step ends.
+const LEFT_BEHIND: [string, string, string][] = [
+  ["a named pipe", `import os\nos.mkfifo("output.json")`, "code_output_missing"],
+  [
+    "a socket",
+    `import socket\nserver = socket.socket(socket.AF_UNIX)\nserver.bind("output.json")`,
+    "code_output_missing"
+  ],
+  ["a directory", `import os\nos.mkdir("output.json")`, "code_output_missing"],
+  [
+    "a link to a file of the host",
+    `import os\nos.symlink("/etc/passwd", "output.json")`,
+    "code_output_missing"
+  ],
+  [
+    "a link to a pipe",
+    `import os\nos.mkfifo("pipe")\nos.symlink("pipe", "output.json")`,
+    "code_output_missing"
+  ],
+  [
+    "a file of 10 GB that holds nothing",
+    `import os\nwith open("output.json", "w") as out:\n    out.write("[")\nos.truncate("output.json", 10 * 1024 * 1024 * 1024)`,
+    "code_output_too_large"
+  ],
+  [
+    "a file another process keeps writing to",
+    `
+import subprocess, sys
+subprocess.Popen(
+    [sys.executable, "-c", "import time\\nwith open('output.json', 'a') as out:\\n    while True:\\n        out.write('1,' * 4096)\\n        out.flush()\\n        time.sleep(0.001)"],
+    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+)
+import time
+time.sleep(1.5)
+`,
+    "code_output_too_large"
+  ]
+];
+
+describe("what a script leaves in the place of its result", () => {
+  it.each(LEFT_BEHIND)(
+    "ends the step for %s without the worker waiting on it",
+    async (_, script, code) => {
+      const { run, step } = await ready({ script, timeoutSeconds: 20 });
+      const before = Date.now();
+      const ended = await run();
+      // Well within the time a script may take: nothing waited for a writer or an end.
+      expect(Date.now() - before).toBeLessThan(15_000);
+      expect(ended.status).toBe("failed");
+      expect(ended.error?.code).toBe(code);
+      expect(await step(ended.id)).toMatchObject({ status: "failed", attempt: 1 });
+    },
+    60_000
+  );
+
+  it("leaves the worker able to run the next steps after five pipes", async () => {
+    const pipe = LEFT_BEHIND[0]?.[1] ?? "";
+    const { run } = await ready({ script: pipe });
+    for (let count = 0; count < 5; count++) {
+      expect((await run()).error?.code).toBe("code_output_missing");
+    }
+    // Nothing of the five is left open in the worker: no file, and no job.
+    const { t, run: again } = await ready({ script: SUM });
+    expect((await again()).status).toBe("done");
+    const jobs = await t.stores.jobs.listOverview({
+      clientInstanceId,
+      filters: { kind: "workflow_run.run_code", statuses: ["running", "queued"] }
+    });
+    expect(jobs).toEqual([]);
+  }, 120_000);
+});
+
+const runnerImage = process.env.CATALYST_RUNNER_IMAGE;
+
+// The same through the job, in a container of the runner image, with what only a container
+// has: a working directory of a stated size, and the engine's own word on memory.
+//   CATALYST_RUNNER_IMAGE=<image> pnpm exec vitest run tests/workflow-code-step.test.ts
+describe.skipIf(!runnerImage)("a code step in a container, through the job", () => {
+  const docker = () => new DockerWorkspaceCommandProcessExecutor({ image: runnerImage ?? "" });
+
+  it.each([
+    ...LEFT_BEHIND,
+    [
+      "a device node, which the container cannot make",
+      `import os, stat\ntry:\n    os.mknod("output.json", stat.S_IFCHR | 0o666, os.makedev(1, 3))\nexcept OSError as error:\n    print(type(error).__name__, flush=True)`,
+      "code_output_not_json"
+    ]
+  ])(
+    "ends the step for %s without the worker waiting on it",
+    async (_, script, code) => {
+      const { run } = await ready({ script, sandbox: docker(), timeoutSeconds: 20 });
+      const before = Date.now();
+      const ended = await run();
+      expect(Date.now() - before).toBeLessThan(15_000);
+      expect(ended.error?.code).toBe(code);
+    },
+    60_000
+  );
+
+  it("gives a script that fills its directory no space left, and writes nothing to the host's disk", async () => {
+    const { t, run, tempRoot } = await ready({
+      sandbox: docker(),
+      timeoutSeconds: 30,
+      script: `
+import os
+written = 0
+try:
+    with open("big.bin", "wb") as out:
+        while written < 10 * 1024 * 1024 * 1024:
+            out.write(b"x" * (1024 * 1024))
+            out.flush()
+            written += 1024 * 1024
+finally:
+    print("written", written // (1024 * 1024), "MiB", flush=True)
+`
+    });
+    const before = Date.now();
+    const ended = await run();
+    // Sixteen MiB are written in a moment: the step does not run to its time limit.
+    expect(Date.now() - before).toBeLessThan(20_000);
+    expect(ended.error).toMatchObject({
+      code: "code_failed",
+      message: "The script ended with the exit code 1"
+    });
+    const [log] = logsOf(
+      await t.call(t.root.id, "workflows.list_step_runs", {
+        params: { runId: ended.id },
+        query: { status: "failed" }
+      })
+    );
+    expect(log?.stderr).toContain("No space left on device");
+    // The directory holds what its size says and no more.
+    const written = Number(/written (\d+) MiB/u.exec(log?.stdout ?? "")?.[1]);
+    expect(written).toBeGreaterThan(8);
+    expect(written).toBeLessThanOrEqual(16);
+    // Nothing of it is on the worker's disk: the directory of the step is gone, and it never
+    // held more than the script and the input.
+    expect(await readdir(tempRoot)).toEqual([]);
+  }, 60_000);
+
+  it("cannot write where the worker put the script, and sees its working directory as memory", async () => {
+    const { run, step } = await ready({
+      sandbox: docker(),
+      script: `
+import json, os
+def writable(path):
+    try:
+        open(os.path.join(path, "probe"), "w").close()
+        return True
+    except OSError:
+        return False
+mounts = {}
+for line in open("/proc/self/mountinfo"):
+    fields = line.split()
+    mounts[fields[4]] = [fields[fields.index("-") + 1], fields[5].split(",")[0]]
+print(json.dumps({
+    "code": [writable("/code"), sorted(os.listdir("/code")), mounts.get("/code")],
+    "workspace": [writable("/workspace"), mounts.get("/workspace"), os.getcwd()],
+}))
+`
+    });
+    const ended = await run();
+    expect(ended.status).toBe("done");
+    const seen = z
+      .object({ code: z.array(z.unknown()), workspace: z.array(z.unknown()) })
+      .parse(JSON.parse((await step(ended.id))?.outputPreview?.text ?? "null"));
+    // What the worker wrote is read-only for the script, whatever file system holds it.
+    expect(seen.code).toEqual([false, ["input.json", "step.py"], [expect.any(String), "ro"]]);
+    expect(seen.workspace).toEqual([true, ["tmpfs", "rw"], "/workspace"]);
+  }, 60_000);
+
+  it("reports a container the engine ended for its memory as code_out_of_memory, and nothing else as that", async () => {
+    const greedy = await ready({
+      sandbox: docker(),
+      script: `data = []\nwhile True:\n    data.append(bytearray(8 * 1024 * 1024))`
+    });
+    expect((await greedy.run()).error?.code).toBe("code_out_of_memory");
+    await greedy.t.instance.close();
+
+    // A script may end with 137 itself, and may kill itself: neither is the engine's doing.
+    const exits = await ready({ sandbox: docker(), script: `import sys\nsys.exit(137)` });
+    expect((await exits.run()).error).toMatchObject({
+      code: "code_failed",
+      message: "The script ended with the exit code 137"
+    });
+    await exits.t.instance.close();
+    const kills = await ready({
+      sandbox: docker(),
+      script: `import os, signal\nos.kill(os.getpid(), signal.SIGKILL)`
+    });
+    expect((await kills.run()).error?.code).toBe("code_failed");
+  }, 120_000);
+});
+
+describe("what a killed command worker left of code steps", () => {
+  it("is removed when a worker starts and on its timer, without another code step", async () => {
+    const swept: { idPrefix: string; olderThanMs: number }[] = [];
+    const sandbox: WorkspaceCommandProcessExecutor = {
+      execute: () => Promise.reject(new Error("No script runs in this test")),
+      removeLeftovers(input) {
+        swept.push(input);
+        return Promise.resolve(1);
+      }
+    };
+    const { t, tempRoot } = await ready({ script: SUM });
+    // The directory of a step whose worker was killed an hour ago, and one of a step that runs.
+    const old = join(tempRoot, "catalyst-code-step-killed");
+    const young = join(tempRoot, "catalyst-code-step-running");
+    const other = join(tempRoot, "something-else");
+    for (const directory of [old, young, other]) await mkdir(directory);
+    const hourAgo = new Date(Date.now() - 60 * 60 * 1_000);
+    await utimes(old, hourAgo, hourAgo);
+    await utimes(other, hourAgo, hourAgo);
+
+    const jobs = createCodeStepJobs({
+      clientInstanceId,
+      stores: t.stores,
+      sandbox,
+      tempRoot,
+      slots: 1,
+      timeoutSeconds: 60,
+      limits: LIMITS
+    });
+    // A script of 60 seconds: what is older than three minutes was left behind.
+    const worker = t.worker(jobs.handlers, jobs.schedules);
+    worker.start();
+    for (let wait = 0; wait < 100 && swept.length === 0; wait++) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    await worker.stop();
+    expect(swept).toEqual([{ idPrefix: "code-step-", olderThanMs: 180_000 }]);
+    expect((await readdir(tempRoot)).sort()).toEqual([
+      "catalyst-code-step-running",
+      "something-else"
+    ]);
+    // It is a schedule of the worker: the next sweep is queued, ten minutes on.
+    const queued = await t.stores.jobs.listOverview({
+      clientInstanceId,
+      filters: { kind: "workflow_run.sweep_code", statuses: ["queued"] }
+    });
+    expect(queued).toHaveLength(1);
   }, 60_000);
 });
 

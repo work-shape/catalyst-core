@@ -11,6 +11,7 @@ import {
 } from "@vivd-catalyst/client-assembly";
 import type {
   JobControl,
+  JobSchedule,
   JobWorker,
   Logger,
   ModuleSnapshot,
@@ -187,7 +188,7 @@ export interface WorkflowFixture extends ConnectionOperationsFixture {
    */
   principal: ServicePrincipalRecord;
   /** A job worker that serves the engine's handlers, or the ones given in their place. */
-  worker(handlers?: readonly RegisteredJobHandler[]): JobWorker;
+  worker(handlers?: readonly RegisteredJobHandler[], schedules?: readonly JobSchedule[]): JobWorker;
   /**
    * Runs what is due until the run has ended. Returns the run as the root reads it. One pass
    * executes one step of a run, so a long loop is given more passes than the 200 a run gets.
@@ -277,11 +278,12 @@ export async function workflowFixture(
   if (!modules || !workflows) throw new Error("The instance did not build its server");
   const served = modules;
   const built = workflows;
-  const worker: WorkflowFixture["worker"] = (handlers) => {
+  const worker: WorkflowFixture["worker"] = (handlers, schedules) => {
     const created = createJobWorker({
       stores: t.stores,
       clientInstanceId,
       handlers: handlers ?? built.jobHandlers,
+      ...(schedules ? { schedules } : {}),
       modules: served,
       logger: silent
     });

@@ -31,23 +31,34 @@ contain breaking changes; a patch version does not.
   `.mjs`), at most 256 KiB, and runs in a fresh container of the runner image, started by the
   workspace command worker: no network, a read-only root, no variable of the platform's
   environment, and one directory that holds the script and `input.json` and nothing else. The
-  input is also the script's input stream. The result is what the script writes to
+  input is also the script's input stream. That directory is memory of a stated size and no
+  disk: the worker's copy of the two files is handed in read-only, so nothing a script writes
+  reaches the worker's disk, and a script that fills the directory reads "No space left on
+  device" and fails as `code_failed`. The result is what the script writes to
   `output.json`, or what it prints where it writes no file: JSON of at most 256 KiB that fits
-  the step's `outputSchema`. What the script prints beside it is kept on the step run as
+  the step's `outputSchema`. The result is read inside the container, within the script's
+  time limit, and only from a regular file: a pipe, a socket, a link, a directory or a file
+  without end in its place is no result, and the worker never opens it. What the script prints beside it is kept on the step run as
   `log`, 16 KiB of each stream, shown with the step run and never audited. A script that
   ends with an exit code fails its step as `code_failed`, one stopped at its time limit as
-  `code_timeout`, one whose container was ended for its memory as `code_out_of_memory`; a
+  `code_timeout`, one whose container the engine ended for its memory as `code_out_of_memory`
+  (Docker's own record of it; a script that exits with 137 or kills itself is `code_failed`); a
   result fails as `code_output_missing`, `code_output_not_json`, `code_output_too_large` or
   `code_output_invalid`, an input as `code_input_invalid`. None of these is run again. A
   container that could not be started is tried three times and then fails the step as
   `code_runner_unavailable`, as does an instance without Execution Workspaces. A code step
   changes nothing outside its container, so a worker that stops in one runs it again, and a
-  cancel of the run stops the container within a second. A definition whose script is missing
+  cancel of the run stops the container within a second. What a killed worker left, a
+  container no process ends and its directory, is removed when a command worker starts and
+  every ten minutes after, once it is older than twice the time limit and a minute. A
+  definition whose script is missing
   from its revision is refused when a run is started (`code_file_missing`,
   `code_file_too_large`), and one that names a dataset in a code step's schema is refused as
   `not_supported_yet`. **Release config** gains `workflows.codeSteps`: `memoryBytes` (512 MiB),
-  `cpuCount` (0.5), `pidsLimit` (64), `timeoutSeconds` (60) and `slots` (4 at once per command
-  worker), apart from the limits of an agent's command under `infrastructure.sandbox`.
+  `cpuCount` (0.5), `pidsLimit` (64), `timeoutSeconds` (60), `slots` (4 at once per command
+  worker) and `scratchBytes` (64 MiB, the working directory; it is part of `memoryBytes` and
+  at most half of it), apart from the limits of an agent's command under
+  `infrastructure.sandbox`.
   **Operators:** the workspace command worker now refuses to start where the sandboxes that
   can run at once need more memory than its host has: its command slots and its Page build
   slots times `infrastructure.sandbox.memoryBytes` (4 GiB unless set), plus the code step slots

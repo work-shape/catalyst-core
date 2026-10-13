@@ -20,7 +20,12 @@ import { createCodeSandbox } from "@vivd-catalyst/workflows";
 //   CATALYST_RUNNER_IMAGE=<image> pnpm exec vitest run tests/workflow-code-sandbox.test.ts
 // On a machine whose Docker engine runs in a VM, the temp directory must be one the VM mounts.
 
-const LIMITS = { cpuCount: 0.5, memoryBytes: 96 * 1024 * 1024, pidsLimit: 32 };
+const LIMITS = {
+  cpuCount: 0.5,
+  memoryBytes: 96 * 1024 * 1024,
+  pidsLimit: 32,
+  scratchBytes: 16 * 1024 * 1024
+};
 
 describe("the command a code step's container is started with", () => {
   const input: WorkspaceCommandProcessInput = {
@@ -52,14 +57,24 @@ describe("the command a code step's container is started with", () => {
     expect(valueOf("--pids-limit")).toBe("32");
   });
 
-  it("has no network, no capability, a read-only root and one mounted path", () => {
+  it("has no network, no capability, a read-only root and one path of the host, read-only", () => {
     expect(valueOf("--network")).toBe("none");
     expect(valueOf("--cap-drop")).toBe("ALL");
     expect(args).toContain("--read-only");
     expect(args.filter((arg) => arg === "--mount")).toHaveLength(1);
-    expect(valueOf("--mount")).toBe("type=bind,source=/tmp/code/run,target=/workspace");
+    expect(valueOf("--mount")).toBe("type=bind,source=/tmp/code/run,target=/code,readonly");
     expect(args).not.toContain("--volume");
     expect(args).not.toContain("-v");
+  });
+
+  it("works in memory of a stated size, so nothing it writes reaches the worker's disk", () => {
+    const memory = args.flatMap((arg, at) => (arg === "--tmpfs" ? [args[at + 1] ?? ""] : []));
+    expect(memory).toContain(
+      `/workspace:rw,nosuid,nodev,size=${String(LIMITS.scratchBytes)},uid=10001,gid=10001`
+    );
+    expect(valueOf("--workdir")).toBe("/workspace");
+    // The engine is asked how the container ended, so the worker removes it and not Docker.
+    expect(args).not.toContain("--rm");
   });
 
   it("is handed no variable of the worker's environment", () => {
@@ -83,6 +98,11 @@ describe("the command a code step's container is started with", () => {
     }).args;
     expect(plain[plain.indexOf("--memory") + 1]).toBe(String(4 * 1024 * 1024 * 1024));
     expect(plain).not.toContain("--memory-swap");
+    // An agent's command writes its workspace, and its container removes itself.
+    expect(plain[plain.indexOf("--mount") + 1]).toBe(
+      "type=bind,source=/tmp/code/run,target=/workspace"
+    );
+    expect(plain).toContain("--rm");
   });
 });
 
@@ -90,7 +110,7 @@ const runnerImage = process.env.CATALYST_RUNNER_IMAGE;
 
 describe.skipIf(!runnerImage)("a code step in a container of the runner image", () => {
   let tempRoot = "";
-  let run: ReturnType<typeof createCodeSandbox>;
+  let run: ReturnType<typeof createCodeSandbox>["run"];
   beforeAll(async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "code-sandbox-test-"));
     // A variable the worker has and no container may see.
@@ -100,7 +120,7 @@ describe.skipIf(!runnerImage)("a code step in a container of the runner image", 
       tempRoot,
       limits: LIMITS,
       outputMaxBytes: 256 * 1024
-    });
+    }).run;
   });
   afterAll(async () => {
     delete process.env.CATALYST_TEST_PLATFORM_SECRET;
@@ -210,7 +230,7 @@ print(json.dumps({
     "files": sorted(os.listdir("/workspace")),
     "input": json.load(open("/workspace/input.json")),
     "mounts": mounts,
-    "writable": {path: writable(path) for path in ("/", "/etc", "/usr", "/home", "/workspace", "/tmp")},
+    "writable": {path: writable(path) for path in ("/", "/etc", "/usr", "/home", "/code", "/workspace", "/tmp")},
     "uid": os.getuid(),
     "socket": os.path.exists("/var/run/docker.sock"),
 }))
@@ -238,17 +258,28 @@ print(json.dumps({
       .map((mount) => mount.at)
       .sort();
     expect(own).toEqual(
-      ["/etc/hostname", "/etc/hosts", "/etc/resolv.conf", "/tmp", "/var/tmp", "/workspace"].sort()
+      [
+        "/code",
+        "/etc/hostname",
+        "/etc/hosts",
+        "/etc/resolv.conf",
+        "/tmp",
+        "/var/tmp",
+        "/workspace"
+      ].sort()
     );
-    expect(seen.mounts.filter((mount) => ["/tmp", "/var/tmp"].includes(mount.at))).toEqual([
-      expect.objectContaining({ type: "tmpfs" }),
-      expect.objectContaining({ type: "tmpfs" })
-    ]);
+    // Everything the script can write is memory; the one path of the host is `/code`.
+    expect(
+      seen.mounts
+        .filter((mount) => ["/tmp", "/var/tmp", "/workspace"].includes(mount.at))
+        .map((mount) => mount.type)
+    ).toEqual(["tmpfs", "tmpfs", "tmpfs"]);
     expect(seen.writable).toEqual({
       "/": false,
       "/etc": false,
       "/usr": false,
       "/home": false,
+      "/code": false,
       "/workspace": true,
       "/tmp": true
     });

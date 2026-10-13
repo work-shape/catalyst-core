@@ -42,6 +42,7 @@ import {
 import { assertSandboxMemoryFitsHost } from "./sandbox-memory";
 import {
   WORKFLOW_CODE_JOB_KIND,
+  WORKFLOW_CODE_SWEEP_JOB_KIND,
   createCodeStepJobs,
   workflowsModule
 } from "@vivd-catalyst/workflows";
@@ -90,7 +91,7 @@ export async function createClientInstanceWorkspaceCommandWorker(
   const runsCodeSteps = modules.isEnabled(workflowsModule.name);
   assertCommandWorkerServesModuleJobKinds(modules, [
     ...(buildsPages ? [pageBundleJob.kind, assetRepoCommitJob.kind, assetRepoSweepJob.kind] : []),
-    ...(runsCodeSteps ? [WORKFLOW_CODE_JOB_KIND] : [])
+    ...(runsCodeSteps ? [WORKFLOW_CODE_JOB_KIND, WORKFLOW_CODE_SWEEP_JOB_KIND] : [])
   ]);
   if (buildsPages) {
     requireFilesStore(config);
@@ -172,20 +173,22 @@ export async function createClientInstanceWorkspaceCommandWorker(
   // The scripts of the code steps of Workflows run in the same sandbox, with limits of their
   // own: this process reaches it, the engine's does not.
   const codeSteps = config.workflows.codeSteps;
-  const codeStepHandlers = runsCodeSteps
+  const codeStepJobs = runsCodeSteps
     ? createCodeStepJobs({
         clientInstanceId,
         stores: store,
         sandbox: processExecutor,
         tempRoot: env.WORKSPACE_COMMAND_TEMP_ROOT ?? tmpdir(),
         slots: codeSteps.slots,
+        timeoutSeconds: codeSteps.timeoutSeconds,
         limits: {
           cpuCount: codeSteps.cpuCount,
           memoryBytes: codeSteps.memoryBytes,
-          pidsLimit: codeSteps.pidsLimit
+          pidsLimit: codeSteps.pidsLimit,
+          scratchBytes: codeSteps.scratchBytes
         }
       })
-    : [];
+    : { handlers: [], schedules: [] };
   const worker = createJobWorker({
     stores: store,
     clientInstanceId,
@@ -196,9 +199,16 @@ export async function createClientInstanceWorkspaceCommandWorker(
       ...sandboxCheck.handlers,
       ...pageBuildHandlers,
       ...assetRepoJobs.handlers,
-      ...codeStepHandlers
+      ...codeStepJobs.handlers
     ],
-    schedules: [...commandJobs.schedules, ...sandboxCheck.schedules, ...assetRepoJobs.schedules]
+    // The sweep of what a killed worker left of code steps is among them: it runs when this
+    // worker starts and on its own timer, whether or not a code step ever runs again.
+    schedules: [
+      ...commandJobs.schedules,
+      ...sandboxCheck.schedules,
+      ...assetRepoJobs.schedules,
+      ...codeStepJobs.schedules
+    ]
   });
   let stopped: (() => void) | undefined;
   const untilStopped = new Promise<void>((resolve) => {

@@ -75,8 +75,26 @@ describe("the defaults of a code step's sandbox", () => {
       memoryBytes: 512 * MIB,
       cpuCount: 0.5,
       pidsLimit: 64,
-      timeoutSeconds: 60
+      timeoutSeconds: 60,
+      scratchBytes: 64 * MIB
     });
+  });
+
+  it("count the working directory as part of the memory, and refuse one the memory cannot hold", () => {
+    // The directory is memory of the container: it is inside `memoryBytes`, so the startup
+    // check has no term for it, and it may take half of that memory at most.
+    expect(
+      config({ codeSteps: { scratchBytes: 256 * MIB } }).workflows.codeSteps.scratchBytes
+    ).toBe(256 * MIB);
+    expect(() => config({ codeSteps: { scratchBytes: 257 * MIB } })).toThrow(/scratchBytes/u);
+    expect(() => config({ codeSteps: { memoryBytes: 64 * MIB } })).toThrow(/scratchBytes/u);
+    expect(() => config({ codeSteps: { scratchBytes: MIB } })).toThrow();
+    const terms = sandboxMemoryTerms({
+      config: config({ codeSteps: { scratchBytes: 128 * MIB } }),
+      modules: modules("workflows"),
+      env: {}
+    });
+    expect(sandboxMemoryNeeded(terms)).toBe(4 * GIB + 4 * 512 * MIB);
   });
 
   it("are raised per release, and refused where they make no sandbox", () => {
