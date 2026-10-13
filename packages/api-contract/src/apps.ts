@@ -131,19 +131,14 @@ export const appActionUnavailableSchema = z.enum([
 
 export type AppActionUnavailable = z.infer<typeof appActionUnavailableSchema>;
 
-/** One named action of a revision, with what a call of it would come to for the caller. */
-export const appActionSchema = z.object({
+/** What every named action of a revision is listed with, whatever its kind. */
+const listedAppAction = {
   name: z.string(),
-  kind: z.literal("connection"),
   effect: z.enum(["reading", "changing"]),
   description: z.string().optional(),
   /** The operation the action is, as an agent lists it: `app.<id>.<action>`. */
   toolName: z.string(),
-  /** The Connection by its name, with its label where the caller may read the Connection. */
-  connection: z.object({ name: z.string(), title: z.string().optional() }),
-  /** The operation of the Connection the action stands for, by its name. */
-  operation: z.string(),
-  /** What the action takes, as JSON Schema. */
+  /** What the action takes: its declared parameters, as JSON Schema. */
   inputSchema: z.record(z.string(), z.unknown()),
   /**
    * What a call of the action would come to for the caller now, by the caller's rights and
@@ -151,10 +146,39 @@ export const appActionSchema = z.object({
    * says, which `view` tells.
    */
   policy: appActionPermissionSchema,
-  unavailable: appActionUnavailableSchema.optional(),
   /** An agent that lists `toolName` carries the action as a tool now. */
   agentTool: z.boolean()
-});
+};
+
+/**
+ * Why a call of an `sql` action cannot reach its Data Store, whoever calls: no published store
+ * of the name is in the App's scope, the manifest does not list it, or its module is off.
+ */
+export const appSqlActionUnavailableSchema = z.enum(["data_store_missing"]);
+
+/**
+ * One named action of a revision, with what a call of it would come to for the caller, by its
+ * kind. A `connection` action names the Connection and the operation of it that it stands
+ * for. An `sql` action names the Data Store its statement reads or adds a row to.
+ */
+export const appActionSchema = z.discriminatedUnion("kind", [
+  z.object({
+    ...listedAppAction,
+    kind: z.literal("connection"),
+    /** The Connection by its name, with its label where the caller may read the Connection. */
+    connection: z.object({ name: z.string(), title: z.string().optional() }),
+    /** The operation of the Connection the action stands for, by its name. */
+    operation: z.string(),
+    unavailable: appActionUnavailableSchema.optional()
+  }),
+  z.object({
+    ...listedAppAction,
+    kind: z.literal("sql"),
+    /** The Data Store by its name, with its title where the caller may read the store. */
+    dataStore: z.object({ name: z.string(), title: z.string().optional() }),
+    unavailable: appSqlActionUnavailableSchema.optional()
+  })
+]);
 
 export type AppAction = z.infer<typeof appActionSchema>;
 

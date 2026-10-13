@@ -290,7 +290,7 @@ export function OperationRunDetail({
       ) : null}
       {app?.target ? (
         <Fact name="origin.target" label={t("operations.fieldTarget")}>
-          {app.target.connection}
+          {app.target.name}
           <span aria-hidden="true" className="text-muted-foreground">
             {" · "}
           </span>

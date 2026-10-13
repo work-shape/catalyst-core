@@ -51,7 +51,8 @@ export const appActionUnavailableKeys: Record<
   connection_disabled: "apps.actionConnectionDisabled",
   operation_missing: "apps.actionOperationMissing",
   operation_disabled: "apps.actionOperationDisabled",
-  not_exposed: "apps.actionNotExposed"
+  not_exposed: "apps.actionNotExposed",
+  data_store_missing: "apps.actionDataStoreMissing"
 };
 
 /**

@@ -123,7 +123,12 @@ function dataStoreKind(dataStores: DataStores): WorkflowAssetKind {
     prepareInteractiveUpsert: ({ next }) => next,
     missingUpsertRight: () => undefined,
     assertInteractiveUpsertAllowed: () => undefined,
-    assertInteractiveDeleteAllowed: () => undefined
+    assertInteractiveDeleteAllowed: () => undefined,
+    manifestOfFiles: (files) => dataStores.readFiles(files),
+    configOfFiles: ({ manifest }) => manifest,
+    onPublish: ({ stores, assetId, revision, config }) =>
+      dataStores.publish(stores, { assetId, revision, config }),
+    onRemove: ({ stores, assetId }) => dataStores.retire(stores, assetId)
   };
 }
 

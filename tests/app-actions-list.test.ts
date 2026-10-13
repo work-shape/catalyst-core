@@ -120,7 +120,7 @@ describe("apps.actions.list", () => {
       // `kai` may not use the Connection, so the call would be refused, and may not read it,
       // so its label is not told.
       expect(actions.load).toMatchObject({ policy: "deny", connection: { name: "crm" } });
-      expect(actions.load?.connection.title).toBeUndefined();
+      expect(actions.load).not.toHaveProperty("connection.title");
       expect(actions.load?.unavailable).toBeUndefined();
     } finally {
       await t.stores.access.deleteGrant({ clientInstanceId, grantId: grant.id });

@@ -15805,78 +15805,153 @@
         ]
       },
       "AppAction": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "kind": {
-            "type": "string",
-            "const": "connection"
-          },
-          "effect": {
-            "type": "string",
-            "enum": [
-              "reading",
-              "changing"
-            ]
-          },
-          "description": {
-            "type": "string"
-          },
-          "toolName": {
-            "type": "string"
-          },
-          "connection": {
+        "oneOf": [
+          {
             "type": "object",
             "properties": {
               "name": {
                 "type": "string"
               },
-              "title": {
+              "effect": {
+                "type": "string",
+                "enum": [
+                  "reading",
+                  "changing"
+                ]
+              },
+              "description": {
                 "type": "string"
+              },
+              "toolName": {
+                "type": "string"
+              },
+              "inputSchema": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              },
+              "policy": {
+                "type": "string",
+                "enum": [
+                  "allow",
+                  "confirm",
+                  "approval",
+                  "deny"
+                ]
+              },
+              "agentTool": {
+                "type": "boolean"
+              },
+              "kind": {
+                "type": "string",
+                "const": "connection"
+              },
+              "connection": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "operation": {
+                "type": "string"
+              },
+              "unavailable": {
+                "$ref": "#/components/schemas/AppActionUnavailable"
               }
             },
             "required": [
-              "name"
+              "name",
+              "effect",
+              "toolName",
+              "inputSchema",
+              "policy",
+              "agentTool",
+              "kind",
+              "connection",
+              "operation"
             ]
           },
-          "operation": {
-            "type": "string"
-          },
-          "inputSchema": {
+          {
             "type": "object",
-            "propertyNames": {
-              "type": "string"
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "effect": {
+                "type": "string",
+                "enum": [
+                  "reading",
+                  "changing"
+                ]
+              },
+              "description": {
+                "type": "string"
+              },
+              "toolName": {
+                "type": "string"
+              },
+              "inputSchema": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              },
+              "policy": {
+                "type": "string",
+                "enum": [
+                  "allow",
+                  "confirm",
+                  "approval",
+                  "deny"
+                ]
+              },
+              "agentTool": {
+                "type": "boolean"
+              },
+              "kind": {
+                "type": "string",
+                "const": "sql"
+              },
+              "dataStore": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "unavailable": {
+                "$ref": "#/components/schemas/AppSqlActionUnavailable"
+              }
             },
-            "additionalProperties": {}
-          },
-          "policy": {
-            "type": "string",
-            "enum": [
-              "allow",
-              "confirm",
-              "approval",
-              "deny"
+            "required": [
+              "name",
+              "effect",
+              "toolName",
+              "inputSchema",
+              "policy",
+              "agentTool",
+              "kind",
+              "dataStore"
             ]
-          },
-          "unavailable": {
-            "$ref": "#/components/schemas/AppActionUnavailable"
-          },
-          "agentTool": {
-            "type": "boolean"
           }
-        },
-        "required": [
-          "name",
-          "kind",
-          "effect",
-          "toolName",
-          "connection",
-          "operation",
-          "inputSchema",
-          "policy",
-          "agentTool"
         ]
       },
       "AppActionCallRequestInput": {
@@ -16124,6 +16199,12 @@
         "required": [
           "fileSetId",
           "token"
+        ]
+      },
+      "AppSqlActionUnavailable": {
+        "type": "string",
+        "enum": [
+          "data_store_missing"
         ]
       },
       "ApprovalCheckResult": {

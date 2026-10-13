@@ -5,11 +5,17 @@ import {
   type AppActions,
   type AppMode
 } from "@vivd-catalyst/api-contract";
-import { compiledActionsOf, type CompiledAppAction } from "@vivd-catalyst/app-build";
+import {
+  compiledActionsOf,
+  declaredDataStoresOf,
+  type CompiledAppAction
+} from "@vivd-catalyst/app-build";
 import {
   AppError,
   CONNECTION_ACTIONS,
   CONNECTION_ASSET_KIND,
+  DATA_STORE_ACTIONS,
+  DATA_STORE_ASSET_KIND,
   appActionOperationName,
   connectionOperationName,
   liveRevisionId,
@@ -17,6 +23,7 @@ import {
   type AuthenticatedIdentity,
   type ConfigAssetRecord,
   type ConnectionExposure,
+  type DataStoreReference,
   type OperationAuthorization
 } from "@vivd-catalyst/core";
 import { z } from "zod";
@@ -24,6 +31,7 @@ import { decide } from "../asset-access";
 import type { ResolvedChatServerOptions } from "../types";
 import { appActionPermissions } from "./action-call";
 import {
+  appActionDefinition,
   appResourceOf,
   appRevisionHost,
   appTitleOf,
@@ -31,6 +39,8 @@ import {
   type AppActionEnvironment
 } from "./action-source";
 import { APP_ACTIONS } from "./app-kind";
+
+type ConnectionAction = Extract<CompiledAppAction, { kind: "connection" }>;
 
 // The named actions of an App as a person reads them: what each reaches, what a call of it
 // would come to for the reader, and why a call cannot reach its operation where it cannot.
@@ -61,6 +71,7 @@ interface ConnectionFacts extends z.infer<typeof connectionFactsSchema> {
 }
 
 const manifestOfConfigSchema = z.object({ manifest: z.unknown() });
+const storeTitleSchema = z.object({ title: z.string() });
 
 /** One revision of an App, as the list reads it. */
 interface ListedRevision {
@@ -70,6 +81,8 @@ interface ListedRevision {
   revisionId: string;
   title: string;
   actions: CompiledAppAction[];
+  /** The Data Stores the manifest of the revision lists. */
+  dataStores: DataStoreReference[];
 }
 
 function listedRevision(asset: ConfigAssetRecord, view: AppMode): ListedRevision | undefined {
@@ -89,12 +102,13 @@ function listedRevision(asset: ConfigAssetRecord, view: AppMode): ListedRevision
     revision: shown.revision,
     revisionId: shown.revisionId,
     title: appTitleOf(shown.config, asset.name),
-    actions: compiledActionsOf(config.data.manifest)
+    actions: compiledActionsOf(config.data.manifest),
+    dataStores: declaredDataStoresOf(config.data.manifest)
   };
 }
 
 function unavailableOf(
-  action: CompiledAppAction,
+  action: ConnectionAction,
   connection: ConnectionFacts | undefined
 ): AppActionUnavailable | undefined {
   if (!connection) return "connection_missing";
@@ -113,6 +127,7 @@ export class AppActionList {
     this.options = options;
     this.environment = {
       registry: options.operationCalls.registry,
+      modules: options.modules,
       policy: options.operationCalls.deps.policy
     };
   }
@@ -168,15 +183,17 @@ export class AppActionList {
         .flatMap((asset) => listedRevision(asset, "published") ?? []);
     }
     const actions = revisions.flatMap((revision) => revision.actions);
-    const [environment, connections, agentTools] = await Promise.all([
+    const [environment, connections, dataStores, agentTools] = await Promise.all([
       preloadedEnvironment(this.environment, actions),
       this.connections(caller.access, actions),
+      this.dataStoreTitles(caller.access, actions),
       this.agentTools(revisions)
     ]);
     const apps: AppActions["apps"] = [];
     for (const revision of revisions) {
       const { asset } = revision;
       const resource = appResourceOf(scoped(asset));
+      const host = appRevisionHost(asset.name, resource, revision.view, revision.dataStores);
       const can = await appActionPermissions(environment, {
         viewer: caller.actor,
         access: caller.access,
@@ -185,7 +202,7 @@ export class AppActionList {
         // The policy's word, for a changing action of a draft too: that a draft carries none
         // out is a fact of the view, which the answer names.
         mode: "published",
-        host: appRevisionHost(asset.name, resource, revision.view),
+        host,
         revisionId: revision.revisionId,
         appName: asset.name,
         workspaceId: resource.workspaceId,
@@ -196,34 +213,52 @@ export class AppActionList {
         title: revision.title,
         view: revision.view,
         revision: revision.revision,
-        actions: revision.actions.map((action): AppAction => {
-          const connection = connections.get(action.connection);
-          const unavailable = unavailableOf(action, connection);
-          const target = agentTools.get(
-            connectionOperationName(action.connection, action.operation)
-          );
-          return {
-            name: action.name,
-            kind: action.kind,
-            effect: action.effect,
-            ...(action.description === undefined ? {} : { description: action.description }),
-            toolName: appActionOperationName(asset.name, action.name),
-            connection: {
-              name: action.connection,
-              ...(connection?.readable ? { title: connection.displayName } : {})
-            },
-            operation: action.operation,
-            inputSchema: action.input.schema,
-            policy: can[action.name] ?? "deny",
-            ...(unavailable === undefined ? {} : { unavailable }),
-            // The rule of the tool source: an action that says it reads and stands for a
-            // changing operation is no tool.
-            agentTool:
-              revision.view === "published" &&
-              target !== undefined &&
-              !(target === "changing" && action.effect === "reading")
-          };
-        })
+        actions: await Promise.all(
+          revision.actions.map(async (action): Promise<AppAction> => {
+            const listed = {
+              name: action.name,
+              effect: action.effect,
+              ...(action.description === undefined ? {} : { description: action.description }),
+              toolName: appActionOperationName(asset.name, action.name),
+              inputSchema: action.input.schema,
+              policy: can[action.name] ?? "deny"
+            };
+            if (action.kind === "sql") {
+              // The rule of a call: the store is listed, published, in the App's scope and
+              // its module is on. The tool source describes the action by the same rule.
+              const { callable } = await appActionDefinition(environment, host, action);
+              const title = dataStores.get(action.dataStore);
+              return {
+                ...listed,
+                kind: action.kind,
+                dataStore: { name: action.dataStore, ...(title === undefined ? {} : { title }) },
+                ...(callable ? {} : { unavailable: "data_store_missing" as const }),
+                agentTool: revision.view === "published" && callable
+              };
+            }
+            const connection = connections.get(action.connection);
+            const unavailable = unavailableOf(action, connection);
+            const target = agentTools.get(
+              connectionOperationName(action.connection, action.operation)
+            );
+            return {
+              ...listed,
+              kind: action.kind,
+              connection: {
+                name: action.connection,
+                ...(connection?.readable ? { title: connection.displayName } : {})
+              },
+              operation: action.operation,
+              ...(unavailable === undefined ? {} : { unavailable }),
+              // The rule of the tool source: an action that says it reads and stands for a
+              // changing operation is no tool.
+              agentTool:
+                revision.view === "published" &&
+                target !== undefined &&
+                !(target === "changing" && action.effect === "reading")
+            };
+          })
+        )
       });
     }
     return { apps, truncated };
@@ -242,7 +277,11 @@ export class AppActionList {
     access: ActorAccess,
     actions: readonly CompiledAppAction[]
   ): Promise<Map<string, ConnectionFacts>> {
-    const names = [...new Set(actions.map((action) => action.connection))];
+    const names = [
+      ...new Set(
+        actions.flatMap((action) => (action.kind === "connection" ? [action.connection] : []))
+      )
+    ];
     const read = await Promise.all(
       names.map(async (name) => {
         const asset = await this.options.stores.configAssets.getConfigAsset({
@@ -258,6 +297,36 @@ export class AppActionList {
           name: asset.name
         }).allowed;
         return [[name, { ...facts.data, readable }] as const];
+      })
+    );
+    return new Map(read.flat());
+  }
+
+  /** The title of each Data Store the actions name that the reader may read, read once. */
+  private async dataStoreTitles(
+    access: ActorAccess,
+    actions: readonly CompiledAppAction[]
+  ): Promise<Map<string, string>> {
+    const names = [
+      ...new Set(actions.flatMap((action) => (action.kind === "sql" ? [action.dataStore] : [])))
+    ];
+    const read = await Promise.all(
+      names.map(async (name) => {
+        const asset = await this.options.stores.configAssets.getConfigAsset({
+          clientInstanceId: this.options.clientInstanceId,
+          kind: DATA_STORE_ASSET_KIND,
+          name
+        });
+        const title = storeTitleSchema.safeParse(asset?.publishedConfig);
+        const readable =
+          asset?.status === "active" &&
+          access.authorize(DATA_STORE_ACTIONS.read, {
+            kind: DATA_STORE_ASSET_KIND,
+            assetId: asset.id,
+            name,
+            ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
+          }).allowed;
+        return readable && title.success ? [[name, title.data.title] as const] : [];
       })
     );
     return new Map(read.flat());

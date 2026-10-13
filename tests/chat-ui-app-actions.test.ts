@@ -41,7 +41,9 @@ const noop = () => undefined;
 const render = (node: ReactNode, locale: "en" | "de" = "en") =>
   renderToStaticMarkup(createElement(TranslationProvider, { locale, children: node }));
 
-function action(overrides: Partial<AppAction> = {}): AppAction {
+type ConnectionAction = Extract<AppAction, { kind: "connection" }>;
+
+function action(overrides: Partial<ConnectionAction> = {}): ConnectionAction {
   return {
     name: "load",
     kind: "connection",
@@ -133,6 +135,38 @@ describe("the Actions side of a draft", () => {
     expect(markup).toContain(">In this draft<");
     // The label people read, never the name the manifest uses for the Connection.
     expect(load).not.toContain(">crm<");
+  });
+
+  it("gives an sql action the same row, with the Data Store where the Connection would be", () => {
+    const { name, effect, toolName, inputSchema, policy, agentTool } = action();
+    const list: AppAction = {
+      name: "list_findings",
+      kind: "sql",
+      effect,
+      toolName,
+      inputSchema,
+      policy,
+      agentTool,
+      dataStore: { name: "findings", title: "Findings of the month" }
+    };
+    const gone: AppAction = {
+      ...list,
+      name: `${name}_gone`,
+      dataStore: { name: "ledger" },
+      unavailable: "data_store_missing"
+    };
+    const markup = actionsView(ready([list, gone]));
+
+    const row = rowOf(markup, "list_findings");
+    expect(row).toContain("Findings of the month");
+    expect(row).toContain(">sql<");
+    expect(row).toContain("Reading");
+    expect(row).toContain('data-policy="allow"');
+    expect(row).toContain("Can be tested");
+    // Without a title the store goes by its name, and a store that is not there says so.
+    expect(rowOf(markup, "load_gone")).toContain("ledger");
+    expect(rowOf(markup, "load_gone")).toContain('data-unavailable="data_store_missing"');
+    expect(rowOf(markup, "load_gone")).toContain("The data store is not available to this app.");
   });
 
   it("says why a call cannot reach its operation, in the row", () => {

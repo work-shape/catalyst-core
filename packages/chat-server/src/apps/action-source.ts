@@ -28,6 +28,7 @@ import {
   type OperationDefinition,
   type OperationOrigin,
   type OperationRegistry,
+  type DataStoreReference,
   type OperationResource,
   type OperationSource,
   type PolicyDefaults,

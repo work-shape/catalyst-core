@@ -15,19 +15,21 @@ export function AppActionEffect({ effect }: { effect: AppAction["effect"] }) {
   );
 }
 
-/** What an action calls: the Connection by the name people read, and its operation. */
-export function AppActionTarget({
-  action
-}: {
-  action: Pick<AppAction, "connection" | "operation">;
-}) {
+/**
+ * What an action reaches: the Connection by the name people read and its operation, or the
+ * Data Store a statement reads or adds a row to.
+ */
+export function AppActionTarget({ action }: { action: AppAction }) {
+  const reached = action.kind === "sql" ? action.dataStore : action.connection;
   return (
     <span className="wrap-anywhere">
-      {action.connection.title ?? action.connection.name}
+      {reached.title ?? reached.name}
       <span aria-hidden="true" className="text-muted-foreground">
         {" · "}
       </span>
-      <code className="font-mono text-code">{action.operation}</code>
+      <code className="font-mono text-code">
+        {action.kind === "sql" ? action.kind : action.operation}
+      </code>
     </span>
   );
 }

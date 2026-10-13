@@ -172,8 +172,11 @@ export interface OperationRunAppFacts {
   /** The number of the revision the call was made in, where the instance still knows it. */
   revision?: number;
   action: string;
-  /** The Connection and the operation the call reached, by name. */
-  target?: { connection: string; operation: string };
+  /**
+   * What the call reached, by name: a Connection and its operation, or a Data Store, whose
+   * operation is the statement the App keeps.
+   */
+  target?: { name: string; operation: string };
 }
 
 /**
@@ -192,7 +195,14 @@ export function operationRunApp(
     deleted: app?.deleted ?? false,
     ...(app?.revision === undefined ? {} : { revision: app.revision }),
     action: origin.actionName,
-    ...(origin.target ? { target: origin.target } : {})
+    ...(origin.target
+      ? {
+          target:
+            "dataStore" in origin.target
+              ? { name: origin.target.dataStore, operation: "sql" }
+              : { name: origin.target.connection, operation: origin.target.operation }
+        }
+      : {})
   };
 }
 
