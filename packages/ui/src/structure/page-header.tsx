@@ -177,8 +177,15 @@ export function PageHeader({
           {scope === undefined && state === undefined ? null : (
             // A chip is shown whole or not at all: one that does not fit goes to a second line,
             // and only the first line shows. The pseudo-element that opens the first line takes
-            // one gap, so the box starts a gap early.
-            <div className={cn(NO_LEAST_WIDTH, CHIPS_GIVE_WAY, "-ms-2")}>
+            // one gap, so the box starts a gap early. The chips go before the way back's text
+            // does, so they stay away while it is gone.
+            <div
+              className={cn(
+                NO_LEAST_WIDTH,
+                CHIPS_GIVE_WAY,
+                "-ms-2 group-data-back-text-gone/page-header-row:hidden"
+              )}
+            >
               <div
                 data-slot="page-header-chips"
                 className="flex h-control-sm min-w-0 flex-wrap items-center gap-x-2 overflow-hidden before:h-full before:w-0 before:content-['']"
