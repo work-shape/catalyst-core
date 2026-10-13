@@ -439,11 +439,11 @@ contain breaking changes; a patch version does not.
   deployment name of its own, as on Azure, sets `label` and `vendor` to get the model's name
   and logo. `GET /config` carries it as `label` on a selectable model, and the config asset
   references carry it on a model binding.
-- **Update app:** an App saved from a Page remembers the Page, and the header of that Page
 - **Update app:** an App remembers the Page it is updated from, and the header of that Page
   offers "Update app" in place of "Save as app" to whoever may write the App. The update writes
   the Page's newest revision as the next draft revision; nothing is published, and the App
-  keeps its title. New operations: `apps.update_from_page`
+  keeps its title. For an App with a repository the update is its next commit, on the commit
+  of the draft it replaces. New operations: `apps.update_from_page`
   (`POST /api/v1/apps/{app}/update-from-page`, `app.write` on the App and read access to the
   Page, `expectedRevision` required, `412 REVISION_CONFLICT` for a draft that moved, `409` with
   `details.reason: "app_not_from_page"` for an App of another Page or of none unless the call
