@@ -216,6 +216,9 @@ export async function workflowFixture(
     /** The clock of the engine and the time zone of its schedules, for a test of due times. */
     now?: InstanceWorkflowsParts["now"];
     timeZone?: string;
+    /** The files of the Workflows' revisions, and what runs the scripts of code steps. */
+    stepFiles?: InstanceWorkflowsParts["stepFiles"];
+    codeRunner?: InstanceWorkflowsParts["codeRunner"];
   } = {}
 ): Promise<WorkflowFixture> {
   let workflows: InstanceWorkflows | undefined;
@@ -255,7 +258,9 @@ export async function workflowFixture(
           ...(fromAssets ? {} : { definitions: given ?? fixtureDefinitions() }),
           ...(options.limits ? { limits: options.limits } : {}),
           ...(options.now ? { now: options.now } : {}),
-          ...(options.timeZone === undefined ? {} : { timeZone: options.timeZone })
+          ...(options.timeZone === undefined ? {} : { timeZone: options.timeZone }),
+          ...(options.stepFiles ? { stepFiles: options.stepFiles } : {}),
+          ...(options.codeRunner ? { codeRunner: options.codeRunner } : {})
         });
         return server;
       },

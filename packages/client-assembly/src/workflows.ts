@@ -40,6 +40,16 @@ export interface InstanceWorkflowsParts extends Pick<
   now?: WorkflowEngineOptions["now"];
   /** The time zone the cron expressions of `schedule` triggers are read in. UTC when left out. */
   timeZone?: string;
+  /**
+   * Where the script of a code step is read: the files of one revision of a Workflow. Whoever
+   * stores definitions fills it. Without it no Workflow has a script.
+   */
+  stepFiles?: WorkflowEngineOptions["stepFiles"];
+  /**
+   * Set where the instance runs a command worker with a sandbox. Without it a code step
+   * fails at once, as no process would ever run its script.
+   */
+  codeRunner?: WorkflowEngineOptions["codeRunner"];
 }
 
 /** What one process has of Workflows: what its server registers and its job worker serves. */
@@ -89,7 +99,9 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
     operationCalls,
     ...(parts.limits ? { limits: parts.limits } : {}),
     ...(parts.now ? { now: parts.now } : {}),
-    ...(parts.timeZone === undefined ? {} : { timeZone: parts.timeZone })
+    ...(parts.timeZone === undefined ? {} : { timeZone: parts.timeZone }),
+    ...(parts.stepFiles ? { stepFiles: parts.stepFiles } : {}),
+    ...(parts.codeRunner ? { codeRunner: parts.codeRunner } : {})
   });
   /**
    * The list of the instance: every published Workflow, with what a start by hand of it is
@@ -158,7 +170,12 @@ export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceI
       stores,
       operationCalls,
       // The instance's time zone: the schedules of its Workflows are read on its clock.
-      ...(timeZone === undefined ? {} : { timeZone })
+      ...(timeZone === undefined ? {} : { timeZone }),
+      // The command worker runs the scripts of code steps. An instance without Execution
+      // Workspaces or without a sandbox has no such worker, and its engine knows.
+      ...(config.executionWorkspaces.enabled && config.infrastructure.sandbox
+        ? { codeRunner: { timeoutSeconds: config.workflows.codeSteps.timeoutSeconds } }
+        : {})
     });
     await workflows.planSchedules();
     return { routes: workflows.routes, jobHandlers: workflows.jobHandlers };

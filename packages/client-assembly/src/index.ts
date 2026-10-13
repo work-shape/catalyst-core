@@ -58,6 +58,12 @@ export {
   createWorkflowAssetKind,
   type PublishedWorkflow
 } from "./workflow-assets";
+export {
+  assertSandboxMemoryFitsHost,
+  sandboxMemoryNeeded,
+  sandboxMemoryTerms,
+  type SandboxMemoryTerm
+} from "./sandbox-memory";
 export { migrateClientInstanceDatabase } from "./migrate";
 export { createPlatformStore } from "./store";
 export {

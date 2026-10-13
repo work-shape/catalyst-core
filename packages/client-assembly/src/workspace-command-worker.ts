@@ -39,6 +39,12 @@ import {
   createInstancePageBuildJobs,
   requireFilesStore
 } from "./pages";
+import { assertSandboxMemoryFitsHost } from "./sandbox-memory";
+import {
+  WORKFLOW_CODE_JOB_KIND,
+  createCodeStepJobs,
+  workflowsModule
+} from "@vivd-catalyst/workflows";
 import { createPlatformStore } from "./store";
 
 export interface CreateClientInstanceWorkspaceCommandWorkerInput {
@@ -81,13 +87,16 @@ export async function createClientInstanceWorkspaceCommandWorker(
   // The work of a module that this worker has a handler for. It is known before a store is
   // open, so a module that needs more of this worker stops the process here.
   const buildsPages = modules.isEnabled("apps");
-  assertCommandWorkerServesModuleJobKinds(
-    modules,
-    buildsPages ? [pageBundleJob.kind, assetRepoCommitJob.kind, assetRepoSweepJob.kind] : []
-  );
+  const runsCodeSteps = modules.isEnabled(workflowsModule.name);
+  assertCommandWorkerServesModuleJobKinds(modules, [
+    ...(buildsPages ? [pageBundleJob.kind, assetRepoCommitJob.kind, assetRepoSweepJob.kind] : []),
+    ...(runsCodeSteps ? [WORKFLOW_CODE_JOB_KIND] : [])
+  ]);
   if (buildsPages) {
     requireFilesStore(config);
   }
+  // Before anything is opened: a host that cannot hold its sandboxes is a config to correct.
+  assertSandboxMemoryFitsHost({ config, modules, env, logger });
   endResolveOnlyRun();
   const infrastructure = await createInstanceInfrastructure({
     config,
@@ -160,6 +169,23 @@ export async function createClientInstanceWorkspaceCommandWorker(
     tempRoot: env.WORKSPACE_COMMAND_TEMP_ROOT ?? tmpdir(),
     logger
   });
+  // The scripts of the code steps of Workflows run in the same sandbox, with limits of their
+  // own: this process reaches it, the engine's does not.
+  const codeSteps = config.workflows.codeSteps;
+  const codeStepHandlers = runsCodeSteps
+    ? createCodeStepJobs({
+        clientInstanceId,
+        stores: store,
+        sandbox: processExecutor,
+        tempRoot: env.WORKSPACE_COMMAND_TEMP_ROOT ?? tmpdir(),
+        slots: codeSteps.slots,
+        limits: {
+          cpuCount: codeSteps.cpuCount,
+          memoryBytes: codeSteps.memoryBytes,
+          pidsLimit: codeSteps.pidsLimit
+        }
+      })
+    : [];
   const worker = createJobWorker({
     stores: store,
     clientInstanceId,
@@ -169,7 +195,8 @@ export async function createClientInstanceWorkspaceCommandWorker(
       ...commandJobs.handlers,
       ...sandboxCheck.handlers,
       ...pageBuildHandlers,
-      ...assetRepoJobs.handlers
+      ...assetRepoJobs.handlers,
+      ...codeStepHandlers
     ],
     schedules: [...commandJobs.schedules, ...sandboxCheck.schedules, ...assetRepoJobs.schedules]
   });

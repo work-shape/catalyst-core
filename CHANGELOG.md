@@ -26,6 +26,37 @@ contain breaking changes; a patch version does not.
   with a price above zero for the entry's model and for the model of every binding on it. The
   adapter fixes the endpoint; the profile, the key's IAM policy, Bedrock's data retention and
   invocation logging decide the rest and are the operator's to set, see the configuration docs.
+- **Workflow code steps:** a step of the type `code` runs one script of the Workflow's
+  `steps/` folder on the step's input. The script is Python (`.py`) or JavaScript (`.js`,
+  `.mjs`), at most 256 KiB, and runs in a fresh container of the runner image, started by the
+  workspace command worker: no network, a read-only root, no variable of the platform's
+  environment, and one directory that holds the script and `input.json` and nothing else. The
+  input is also the script's input stream. The result is what the script writes to
+  `output.json`, or what it prints where it writes no file: JSON of at most 256 KiB that fits
+  the step's `outputSchema`. What the script prints beside it is kept on the step run as
+  `log`, 16 KiB of each stream, shown with the step run and never audited. A script that
+  ends with an exit code fails its step as `code_failed`, one stopped at its time limit as
+  `code_timeout`, one whose container was ended for its memory as `code_out_of_memory`; a
+  result fails as `code_output_missing`, `code_output_not_json`, `code_output_too_large` or
+  `code_output_invalid`, an input as `code_input_invalid`. None of these is run again. A
+  container that could not be started is tried three times and then fails the step as
+  `code_runner_unavailable`, as does an instance without Execution Workspaces. A code step
+  changes nothing outside its container, so a worker that stops in one runs it again, and a
+  cancel of the run stops the container within a second. A definition whose script is missing
+  from its revision is refused when a run is started (`code_file_missing`,
+  `code_file_too_large`), and one that names a dataset in a code step's schema is refused as
+  `not_supported_yet`. **Release config** gains `workflows.codeSteps`: `memoryBytes` (512 MiB),
+  `cpuCount` (0.5), `pidsLimit` (64), `timeoutSeconds` (60) and `slots` (4 at once per command
+  worker), apart from the limits of an agent's command under `infrastructure.sandbox`.
+  **Operators:** the workspace command worker now refuses to start where the sandboxes that
+  can run at once need more memory than its host has: its command slots and its Page build
+  slots times `infrastructure.sandbox.memoryBytes` (4 GiB unless set), plus the code step slots
+  times their memory. The refusal has the reason `sandbox_memory_exceeds_host` and names each
+  term with its two settings. A host of 16 GB with three command slots of 4 GiB, Pages and
+  Workflows on needs 22 GiB and is refused until a slot count or a memory limit is lowered.
+  Where the sandbox is a Docker engine on another host the worker warns and starts.
+  **Migration `0063_workflow_code_steps`** adds three columns to `workflow_step_runs`; the
+  previous release runs on the migrated database.
 - **Workflow schedules:** a published Workflow with a `schedule` trigger starts its runs by
   itself. The trigger names a cron expression of five fields (minute, hour, day of month,
   month, day of week; numbers, ranges, steps and lists), read on the clock of the instance's
@@ -79,12 +110,12 @@ contain breaking changes; a patch version does not.
   service principal its definition names under `runAs` by the principal's `name`, with that
   principal's grants and never the starter's. `workflow.yaml` is an ordered list of steps with
   nested blocks: a file with `wiring`, edges or positions is refused. This release executes
-  the step types `trigger` (manual), `operation`, `loop` and `output`. A definition is checked
+  the step types `trigger` (manual), `operation`, `loop`, `code` and `output`. A definition is checked
   with the contract's block check, and refused with the reason `block_depth` (more than 16
   nested blocks), `reference_out_of_scope`, `duplicate_step_id` or `not_supported_yet`: the
   last for the reserved blocks `condition` and `parallel` and for every field the file form
   holds and this engine does not run (`dataset`, `paginate`, `collect`, the step types
-  `code`, `agent`, `notify` and `workflow`, the trigger `parent`,
+  `agent`, `notify` and `workflow`, the trigger `parent`,
   `labels`, `onFailure`, `retention`, `types`). A loop returns how many of its items ended how
   (`total`, `done`, `failed`) and never what an item returned. With `onItemFailure: continue`
   the loop goes on past a failed item and ends as `done`, and so does its run; without it the
