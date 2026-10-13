@@ -16,9 +16,8 @@ interface RenderedSurfaceSource {
 }
 
 /**
- * Every kind of surface the slot can hold, with the source fields of each. The kinds without a
- * renderer carry none yet: the slice that renders a kind adds its fields here and its renderer
- * to the renderer record. It adds no kind.
+ * Every kind of surface the slot can hold, with the source fields of each. A kind comes with its
+ * renderer in the renderer record.
  */
 interface SurfaceSources {
   tool_display: RenderedSurfaceSource;
@@ -41,7 +40,8 @@ interface SurfaceSources {
   app_view: { app: string; appPath?: string };
   /** The draft revision of an App, for whoever may write it. */
   app_edit: { app: string };
-  workflow_canvas: unknown;
+  /** One Workflow of a workspace on its canvas, as its draft stands, with the bar of the draft. */
+  workflow_canvas: { workspaceId: string; workflow: string };
   /** One item of the Inbox, by its id. The renderer reads the item's live state itself. */
   inbox_item: { itemId: string };
 }

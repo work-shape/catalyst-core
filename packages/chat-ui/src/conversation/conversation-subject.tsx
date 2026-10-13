@@ -1,9 +1,8 @@
-import { Workflow } from "lucide-react";
+import { FileText, Workflow } from "lucide-react";
 import { WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
-import { Banner, TextLink } from "@vivd-catalyst/ui";
-import { useTranslation } from "../i18n";
+import { Banner, Button, TextLink } from "@vivd-catalyst/ui";
+import { useTranslation, type TranslationKey } from "../i18n";
 import type { WorkspaceRoute } from "../routes";
-import { useWorkflowNames } from "../workflows/workflow-data";
 import { routeLink } from "../workflows/workflows-frame";
 
 /** The asset a conversation is about, as the conversation carries it. */
@@ -12,44 +11,74 @@ export interface ConversationSubjectView {
   name: string;
 }
 
+/** The page an asset of a kind leads back to, where the kind has one. */
+function subjectRoute(
+  subject: ConversationSubjectView,
+  workspaceId: string | undefined
+): WorkspaceRoute | undefined {
+  if (workspaceId === undefined) {
+    return undefined;
+  }
+  return subject.kind === WORKFLOW_ASSET_KIND
+    ? { kind: "workflow", collaborationWorkspaceId: workspaceId, workflow: subject.name }
+    : undefined;
+}
+
+const SUBJECT_LEADS: Readonly<Record<string, TranslationKey>> = {
+  [WORKFLOW_ASSET_KIND]: "conversationSubjectWorkflow"
+};
+
+function SubjectIcon({ kind }: { kind: string }) {
+  if (kind === WORKFLOW_ASSET_KIND) {
+    return <Workflow aria-hidden="true" />;
+  }
+  return <FileText aria-hidden="true" />;
+}
+
 /**
  * Says over the composer what the open conversation is about, from its first empty moment on:
  * a conversation opened from the page of a Workflow looks like any new one without it. The
- * name of a Workflow leads back to its page.
+ * name of the asset leads back to its page, and where the asset is not shown beside the
+ * conversation, one button shows it there again.
  */
 export function ConversationSubjectLine({
   subject,
+  title,
   workspaceId,
-  onOpenRoute
+  onOpenRoute,
+  onShow
 }: {
   subject: ConversationSubjectView;
+  /** The name people read for the asset. */
+  title: string;
   workspaceId: string | undefined;
   onOpenRoute(route: WorkspaceRoute): void;
+  /** Shows the asset beside the conversation. Absent while it is shown there. */
+  onShow?: () => void;
 }) {
   const { t } = useTranslation();
-  const isWorkflow = subject.kind === WORKFLOW_ASSET_KIND;
-  const [title] = useWorkflowNames(
-    isWorkflow ? workspaceId : undefined,
-    isWorkflow ? [subject.name] : []
-  );
-  const route: WorkspaceRoute | undefined =
-    isWorkflow && workspaceId !== undefined
-      ? { kind: "workflow", collaborationWorkspaceId: workspaceId, workflow: subject.name }
-      : undefined;
+  const route = subjectRoute(subject, workspaceId);
+  const lead = SUBJECT_LEADS[subject.kind];
   return (
     <Banner
       layout="line"
-      icon={<Workflow aria-hidden="true" />}
+      icon={<SubjectIcon kind={subject.kind} />}
       className="mb-2 px-1"
       data-testid="conversation-subject"
       data-subject-kind={subject.kind}
+      action={
+        onShow === undefined ? undefined : (
+          <Button variant="ghost" size="sm" onClick={onShow}>
+            {t("conversationSubjectShow")}
+          </Button>
+        )
+      }
     >
-      {route === undefined ? (
-        t("conversationSubjectOther", { name: subject.name })
+      {route === undefined || lead === undefined ? (
+        t("conversationSubjectOther", { name: title })
       ) : (
         <>
-          {t("conversationSubjectWorkflow")}{" "}
-          <TextLink {...routeLink(route, onOpenRoute)}>{title ?? subject.name}</TextLink>
+          {t(lead)} <TextLink {...routeLink(route, onOpenRoute)}>{title}</TextLink>
         </>
       )}
     </Banner>

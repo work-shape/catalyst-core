@@ -2,6 +2,10 @@ import { createElement, type ReactNode } from "react";
 import { AppPreview } from "../apps/app-preview";
 import { InboxItemPanel } from "../inbox/inbox-item-panel";
 import { pageSurfaceRendering } from "../pages/page-surface";
+import {
+  WorkflowCanvasSurface,
+  WorkflowSurfaceActions
+} from "../workflows/workflow-canvas-surface";
 import type { Surface, SurfaceKind, SurfaceOf } from "./surface";
 
 /** What a renderer gives the frame: the content and the actions of its kind. */
@@ -47,6 +51,18 @@ export const surfaceRenderers: SurfaceRenderers = {
       app: surface.app,
       mode: "draft",
       name: surface.title
+    }),
+    flush: true
+  }),
+  workflow_canvas: (surface) => ({
+    actions: createElement(WorkflowSurfaceActions, {
+      workspaceId: surface.workspaceId,
+      workflow: surface.workflow
+    }),
+    content: createElement(WorkflowCanvasSurface, {
+      key: surface.key,
+      workspaceId: surface.workspaceId,
+      workflow: surface.workflow
     }),
     flush: true
   })

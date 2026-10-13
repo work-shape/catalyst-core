@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import type {
   ApiClient,
   ApiUser,
@@ -680,21 +680,22 @@ export function useWorkspaceChatModel({
   }
 
   /**
-   * A conversation of the open workspace about one Workflow, opened once the instance made it.
-   * What a conversation is about is set when it is made, so it is made before its first turn.
+   * A conversation of the open workspace about one asset, opened once the instance made it.
+   * What a conversation is about is set when it is made, so it is made before its first turn;
+   * the asset opens beside it as the conversation opens.
    */
-  async function startConversationAboutWorkflow(workflow: string): Promise<void> {
+  async function startConversationAbout(subject: { kind: string; name: string }): Promise<void> {
     if (!activeCollaborationWorkspaceId) {
-      throw new Error("A conversation about a Workflow belongs to a workspace");
+      throw new Error("A conversation about an asset belongs to a workspace");
     }
     const conversation = await client.conversations.create({
       body: {
         locale: activeLocale,
         collaborationWorkspaceId: activeCollaborationWorkspaceId,
-        subject: { kind: WORKFLOW_ASSET_KIND, name: workflow }
+        subject
       }
     });
-    showConversationInActiveCollaborationWorkspace(conversation.id);
+    showCreatedConversation(conversation);
     setNotice(undefined);
     workspaceCache.invalidateConversations();
     chrome.requestComposerFocus();
@@ -861,7 +862,9 @@ export function useWorkspaceChatModel({
   const configuredCompactThresholdTokens =
     selectedModel?.compactThresholdTokens ?? activeAgent?.compactThresholdTokens;
 
-  useEffect(() => {
+  // A layout effect: it runs before the effects of the thread, so the surface of the next
+  // conversation's subject opens after this close and not before it.
+  useLayoutEffect(() => {
     displayPanel.close();
   }, [displayPanel.close, selectedConversationId]);
 
@@ -1173,7 +1176,8 @@ export function useWorkspaceChatModel({
     workflows: {
       access: workflowsOpen,
       rights: workflowRights,
-      editWithAgent: startConversationAboutWorkflow
+      editWithAgent: (workflow) =>
+        startConversationAbout({ kind: WORKFLOW_ASSET_KIND, name: workflow })
     },
     selectedChat: {
       client,

@@ -36,6 +36,7 @@ import {
   projectWorkspaceToolDisplay,
   type ToolDetailSection
 } from "./workspace-tool-display";
+import { assetToolSentence, type AssetToolCall } from "./conversation/asset-tool-lines";
 
 // Whoever renders tool calls outside the thread gives them their subjects with this.
 export { ToolSubjectsProvider } from "./assistant/tool-subjects";
@@ -624,6 +625,10 @@ export function readToolDisplayProjection(input: {
 
 const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
   en: {
+    "platform.assets.get": "Read the asset",
+    "platform.assets.validate": "Check the draft",
+    "platform.assets.put": "Save the draft",
+    "platform.assets.operations": "Look up operations",
     read_skill: "Read instructions",
     show_view: "Widget",
     "structured_data.publish": "Save structured data",
@@ -639,6 +644,10 @@ const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
     "workspace.preview_images": "Preview images"
   },
   de: {
+    "platform.assets.get": "Asset lesen",
+    "platform.assets.validate": "Entwurf prüfen",
+    "platform.assets.put": "Entwurf speichern",
+    "platform.assets.operations": "Operationen nachschlagen",
     read_skill: "Anleitung lesen",
     show_view: "Widget",
     "structured_data.publish": "Strukturierte Daten speichern",
@@ -859,6 +868,7 @@ function ConnectionCallLine({
  */
 export function ToolCallFoldLabel({
   only,
+  last,
   count
 }: {
   /** The group's one tool call, where it holds a single call. */
@@ -868,10 +878,22 @@ export function ToolCallFoldLabel({
     isError?: boolean;
     status?: ToolCallMessagePartProps["status"];
   };
+  /** The group's last tool call. A call on an asset says what it did, with the others counted. */
+  last?: AssetToolCall;
   count: number;
 }) {
   const { t } = useTranslation();
   const subject = useConnectionToolSubject(only?.toolName ?? "");
+  const assetSentence = last === undefined ? undefined : assetToolSentence(last, t);
+  if (assetSentence !== undefined) {
+    return (
+      <span className="min-w-0 truncate" data-testid="tool-call-fold-sentence">
+        {count > 1
+          ? t("assetToolFoldMore", { sentence: assetSentence, count: count - 1 })
+          : assetSentence}
+      </span>
+    );
+  }
   if (!only || !subject) {
     return <>{t(count === 1 ? "toolCallCountSingular" : "toolCallCount", { count })}</>;
   }
