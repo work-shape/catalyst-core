@@ -99,6 +99,8 @@ export interface WorkflowView {
    * Workflow is shown and cannot be started.
    */
   refusedFor: readonly WorkflowStartIssue[];
+  /** The reader holds the right to start this Workflow, as its entry of the list says. */
+  mayStart: boolean;
 }
 
 /** One thing the instance refuses a start for: its code and its own sentence. */

@@ -106,9 +106,7 @@ export function WorkflowRunPage({ workflow, run: runId }: { workflow: string; ru
         read={read}
         now={now}
         canCancel={read.run !== undefined && cancelOffered(read.run, host.viewerId, host.rights)}
-        canRunAgain={
-          definition.workflow !== undefined && startOffered(definition.workflow, host.rights)
-        }
+        canRunAgain={definition.workflow !== undefined && startOffered(definition.workflow)}
         // A run that ended while the cancellation was on its way is not stopping: it reads as
         // what it ended as.
         stopping={(stopping && read.run?.ended !== true) || read.run?.stopping === true}

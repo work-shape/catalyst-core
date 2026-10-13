@@ -217,6 +217,28 @@ test("a failed run opens on the step that failed, and a loop at work lists its f
   await expect(entries.getByRole("listitem")).toHaveCount(3);
 });
 
+test("a reader sees a Workflow and its runs, and no start and no cancel", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const start = page.getByRole("button", { name: "Start now" });
+  // The same pages as one who may start: the control is there to be missed.
+  await openSample(page, "monthly-booking-check");
+  await expect(start).toBeVisible();
+
+  const canvas = await openSample(page, "monthly-booking-check&as=reader");
+  await expect(canvas.locator("[data-flow-id]").first()).toBeVisible();
+  await expect(start).toHaveCount(0);
+
+  await page.getByRole("link", { name: "Runs", exact: true }).click();
+  await expect(page.getByTestId("workflow-runs-page")).toBeVisible();
+  await expect(start).toHaveCount(0);
+
+  await openSample(page, "monthly-booking-check/runs/run-running&as=reader");
+  await expect(page.getByTestId("workflow-run-page")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Cancel run" })).toHaveCount(0);
+  await openSample(page, "monthly-booking-check/runs/run-done&as=reader");
+  await expect(page.getByRole("button", { name: "Run again" })).toHaveCount(0);
+});
+
 test("on a phone the Workflow runs top to bottom and a step opens as a sheet", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
   const canvas = await openSample(page, "monthly-booking-check");

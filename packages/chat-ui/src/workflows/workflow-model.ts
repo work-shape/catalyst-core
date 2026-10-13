@@ -21,24 +21,22 @@ type HeldActions = Pick<PlatformContext, "actions" | "assetActions">;
 export interface WorkflowRights {
   /** Reads some Workflow: the area has something to show. */
   read: boolean;
-  /** The start is offered. The instance decides the call itself. */
-  start: boolean;
   /** Writes every Workflow, which also cancels a run someone else started. */
   write: boolean;
 }
 
 /**
- * The reader's rights on Workflows. The instance names the actions a person holds on all
- * Workflows, and never the right to use one: that is decided on the Workflow at hand. So
- * whoever reads a Workflow is offered its start, and the instance answers whether it is
- * theirs to start; the page says so when it is not.
+ * The reader's rights on Workflows as a whole. Whether one Workflow is theirs to start is not
+ * among them: the list says it of each Workflow.
  */
 export function resolveWorkflowRights(context: HeldActions | undefined): WorkflowRights {
   const onAll = context?.actions ?? [];
-  const read =
-    onAll.includes(WORKFLOW_ACTIONS.read) ||
-    (context?.assetActions ?? []).includes(WORKFLOW_ACTIONS.read);
-  return { read, start: read, write: onAll.includes(WORKFLOW_ACTIONS.write) };
+  return {
+    read:
+      onAll.includes(WORKFLOW_ACTIONS.read) ||
+      (context?.assetActions ?? []).includes(WORKFLOW_ACTIONS.read),
+    write: onAll.includes(WORKFLOW_ACTIONS.write)
+  };
 }
 
 /** Whether the area is there for the reader. `unknown` until the instance has said both. */
@@ -69,15 +67,18 @@ export function workflowsAccess(input: {
 }
 
 /**
- * Whether "Start now" stands on the page of a Workflow: a revision is published, a person may
- * start it, and it takes no input, for which there is no form yet.
+ * Whether "Start now" stands on the page of a Workflow: a revision is published, the reader
+ * holds the right to start this Workflow, and it takes no input, for which there is no form
+ * yet.
  */
 export function startOffered(
-  workflow: Pick<WorkflowView, "published" | "startsByHand" | "needsInput" | "refusedFor">,
-  rights: Pick<WorkflowRights, "start">
+  workflow: Pick<
+    WorkflowView,
+    "published" | "startsByHand" | "needsInput" | "refusedFor" | "mayStart"
+  >
 ): boolean {
   return (
-    rights.start &&
+    workflow.mayStart &&
     workflow.published &&
     workflow.startsByHand &&
     !workflow.needsInput &&

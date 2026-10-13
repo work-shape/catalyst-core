@@ -49,7 +49,12 @@ function withReadings(sample: SampleWorkflow) {
 }
 
 /** The samples as a source, in one language. `now` is the moment the sample runs count from. */
-export function createSampleSource(locale: LocaleCode, now = Date.now()): WorkflowsSource {
+export function createSampleSource(
+  locale: LocaleCode,
+  /** The reader holds the right to start the samples. Off for the view of one who only reads. */
+  mayStart = true,
+  now = Date.now()
+): WorkflowsSource {
   const workflows = sampleWorkflows(locale);
   const held: SampleRun[] = [...sampleRuns(now)];
   let started = 0;
@@ -169,7 +174,7 @@ export function createSampleSource(locale: LocaleCode, now = Date.now()): Workfl
       return Promise.resolve(
         toWorkflow(
           { name: sample.manifest.id, config: withReadings(sample), publishedRevision: 2 },
-          SAMPLE_REVISION
+          { revisionId: SAMPLE_REVISION, mayStart }
         )
       );
     },

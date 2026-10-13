@@ -9,7 +9,7 @@ import {
   type WorkflowRunList
 } from "./workflow-data";
 import { WorkflowHead } from "./workflow-head";
-import { startOffered, type WorkflowRights } from "./workflow-model";
+import { startOffered } from "./workflow-model";
 import type { WorkflowView } from "./workflow-views";
 import { WorkflowsFrame, type OpenRoute } from "./workflows-frame";
 import { useWorkflowsHost } from "./workflows-host";
@@ -38,7 +38,6 @@ export function WorkflowRunsPage({ workflow }: { workflow: string }) {
         workflowId={workflow}
         workflow={read.workflow}
         runs={runs}
-        rights={host.rights}
         runsAvailable={runsAvailable}
         now={now}
         onStart={start.open}
@@ -55,7 +54,6 @@ export function WorkflowRunsPageView({
   workflowId,
   workflow,
   runs,
-  rights,
   runsAvailable,
   now,
   onStart,
@@ -66,7 +64,6 @@ export function WorkflowRunsPageView({
   /** The Workflow, once its record arrived. */
   workflow: WorkflowView | undefined;
   runs: WorkflowRunList;
-  rights: WorkflowRights;
   /** The instance runs Workflows. Without that there is nothing to list. */
   runsAvailable: boolean;
   now: Date;
@@ -74,7 +71,7 @@ export function WorkflowRunsPageView({
   onOpenRoute: OpenRoute;
 }) {
   const { t } = useTranslation();
-  const canStart = runsAvailable && workflow !== undefined && startOffered(workflow, rights);
+  const canStart = runsAvailable && workflow !== undefined && startOffered(workflow);
   const title =
     workflow === undefined
       ? t("workflows.sectionRuns")

@@ -33,7 +33,7 @@ const render = (node: ReactNode, locale: "en" | "de" = "en") =>
 
 const now = new Date("2026-10-12T09:12:00.000Z");
 const noop = () => undefined;
-const READER = { read: true, start: true, write: false };
+const READER = { read: true, write: false };
 
 type RunResource = Parameters<typeof toWorkflowRun>[0];
 type StepRunResource = Parameters<typeof toWorkflowStepRun>[0];
@@ -104,7 +104,10 @@ const definition = {
   ]
 };
 
-const workflow = toWorkflow({ name: "notify-clients", config: definition, publishedRevision: 3 });
+const workflow = toWorkflow(
+  { name: "notify-clients", config: definition, publishedRevision: 3 },
+  { mayStart: true }
+);
 
 function runResource(input: Partial<RunResource> = {}): RunResource {
   return {
@@ -255,7 +258,6 @@ describe("the page of a Workflow", () => {
       workflow?: typeof workflow;
       problem?: "missing" | "unavailable" | "failed";
       runsAvailable?: boolean;
-      rights?: typeof READER;
     } = {}
   ) =>
     createElement(WorkflowPageView, {
@@ -266,7 +268,6 @@ describe("the page of a Workflow", () => {
         problem: input.problem,
         retry: noop
       },
-      rights: input.rights ?? READER,
       runsAvailable: input.runsAvailable ?? true,
       onOpenChild: noop,
       onOpenRoute: noop,
@@ -299,26 +300,35 @@ describe("the page of a Workflow", () => {
   });
 
   it("leaves the start out for a Workflow that asks for input: there is no form yet", () => {
-    const asking = toWorkflow({
-      name: "top-customers",
-      publishedRevision: 1,
-      config: {
-        ...definition,
-        inputs: { type: "object", properties: { limit: { type: "integer" } }, required: ["limit"] }
-      }
-    });
-    expect(startOffered(asking, READER)).toBe(false);
+    const asking = toWorkflow(
+      {
+        name: "top-customers",
+        publishedRevision: 1,
+        config: {
+          ...definition,
+          inputs: {
+            type: "object",
+            properties: { limit: { type: "integer" } },
+            required: ["limit"]
+          }
+        }
+      },
+      { mayStart: true }
+    );
+    expect(startOffered(asking)).toBe(false);
     expect(render(page({ workflow: asking }))).not.toContain(t("workflows.startNow"));
   });
 
-  it("offers the start only where a revision is published and the reader may start", () => {
-    expect(startOffered(workflow, READER)).toBe(true);
-    expect(startOffered(workflow, { ...READER, start: false })).toBe(false);
-    expect(startOffered({ ...workflow, published: false }, READER)).toBe(false);
-    expect(startOffered({ ...workflow, startsByHand: false }, READER)).toBe(false);
-    expect(render(page({ rights: { ...READER, start: false } }))).not.toContain(
-      t("workflows.startNow")
-    );
+  it("offers the start only where a revision is published and the reader may start it", () => {
+    const readOnly = { ...workflow, mayStart: false };
+    expect(startOffered(workflow)).toBe(true);
+    expect(startOffered(readOnly)).toBe(false);
+    expect(startOffered({ ...workflow, published: false })).toBe(false);
+    expect(startOffered({ ...workflow, startsByHand: false })).toBe(false);
+    // A reader sees the Workflow and its drawing, and no start.
+    const markup = render(page({ workflow: readOnly }));
+    expect(markup).toContain(workflow.name);
+    expect(markup).not.toContain(t("workflows.startNow"));
   });
 
   it("shows placeholders while the Workflow loads", () => {
@@ -327,7 +337,6 @@ describe("the page of a Workflow", () => {
         workspaceId: "cw_1",
         workflowId: "notify-clients",
         read: { workflow: undefined, problem: undefined, retry: noop },
-        rights: READER,
         runsAvailable: true,
         onOpenChild: noop,
         onOpenRoute: noop,
@@ -372,7 +381,6 @@ describe("the page of a Workflow", () => {
             }
           }
         ],
-        rights: READER,
         runsAvailable: true,
         onOpenChild: noop,
         onOpenRoute: noop,
@@ -411,7 +419,6 @@ describe("the runs of a Workflow", () => {
       workflowId: "notify-clients",
       workflow,
       runs,
-      rights: READER,
       runsAvailable,
       now,
       onStart: noop,

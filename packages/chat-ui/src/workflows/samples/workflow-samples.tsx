@@ -14,7 +14,8 @@ import { createSampleSource } from "./sample-source";
 // the same right: every state of the screens, also those an instance's own Workflows do not
 // reach, to be looked at, photographed and tested in a browser. The
 // address says what to open: `?at=<workflow>`, `?at=<workflow>/runs`,
-// `?at=<workflow>/runs/<run>`, `?at=<workflow>/open/<child>`, with `lang=de`. Light and dark
+// `?at=<workflow>/runs/<run>`, `?at=<workflow>/open/<child>`, with `lang=de`, and with
+// `as=reader` as one who reads the Workflows and may start and cancel none. Light and dark
 // are the reader's own, as everywhere in the interface.
 
 const WORKSPACE = { id: "samples", name: "Samples" };
@@ -73,11 +74,12 @@ export function WorkflowSamples({
     window.addEventListener("popstate", read);
     return () => window.removeEventListener("popstate", read);
   }, []);
-  const source = useMemo(() => createSampleSource(locale), [locale]);
+  const reader = asked.get("as") === "reader";
+  const source = useMemo(() => createSampleSource(locale, !reader), [locale, reader]);
   const host = useMemo<WorkflowsHost>(
     () => ({
-      rights: { read: true, start: true, write: true },
-      viewerId: SAMPLE_VIEWER_ID,
+      rights: { read: true, write: !reader },
+      viewerId: reader ? "sample-reader" : SAMPLE_VIEWER_ID,
       workspace: WORKSPACE,
       showRoute: (next: WorkspaceRoute, options) => {
         if (!isWorkflowsRoute(next)) {
@@ -94,7 +96,7 @@ export function WorkflowSamples({
         setRoute(next);
       }
     }),
-    []
+    [reader]
   );
   const labels = uiLabelsFor(locale);
   return (

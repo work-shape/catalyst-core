@@ -2,7 +2,7 @@ import type { ApiClient } from "@vivd-catalyst/api-client";
 import { WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
 import { PendingApprovalError } from "../build-area/build-refusals";
 import {
-  startIssues,
+  listedOf,
   toWorkflow,
   toWorkflowListItem,
   toWorkflowRun,
@@ -121,8 +121,7 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
           config: isRecord(manifest) ? manifest : {},
           publishedRevision: summary === undefined ? undefined : asset.publishedRevision
         },
-        summary?.definitionRevisionId,
-        startIssues(summary)
+        listedOf(summary)
       );
     },
     runs: runsSource(client)

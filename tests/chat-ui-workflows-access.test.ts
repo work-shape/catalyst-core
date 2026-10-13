@@ -76,27 +76,20 @@ describe("who is shown the Workflows area", () => {
   });
 });
 
-describe("what a reader of Workflows is offered", () => {
-  it("offers the start to whoever reads a Workflow, and leaves the answer to the instance", () => {
-    // The instance names no right to use among a person's actions: it decides each start.
-    expect(resolveWorkflowRights(reader)).toEqual({ read: true, start: true, write: false });
+describe("what a reader holds on Workflows as a whole", () => {
+  it("names reading and writing, and leaves the start to each Workflow's entry of the list", () => {
+    expect(resolveWorkflowRights(reader)).toEqual({ read: true, write: false });
     expect(resolveWorkflowRights({ actions: [], assetActions: ["workflow.read"] })).toEqual({
       read: true,
-      start: true,
       write: false
     });
+    expect(
+      resolveWorkflowRights({ actions: ["workflow.read", "workflow.write"], assetActions: [] })
+    ).toEqual({ read: true, write: true });
   });
 
-  it("offers no start to a person who reads no Workflow", () => {
-    expect(resolveWorkflowRights({ actions: ["app.read"], assetActions: [] })).toEqual({
-      read: false,
-      start: false,
-      write: false
-    });
-  });
-
-  it("offers nothing before the instance has answered", () => {
-    expect(resolveWorkflowRights(undefined)).toEqual({ read: false, start: false, write: false });
+  it("holds nothing before the instance has answered", () => {
+    expect(resolveWorkflowRights(undefined)).toEqual({ read: false, write: false });
   });
 });
 

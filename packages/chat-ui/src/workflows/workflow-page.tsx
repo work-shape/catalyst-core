@@ -11,7 +11,7 @@ import {
   type WorkflowReadProblem
 } from "./workflow-data";
 import { WorkflowHead } from "./workflow-head";
-import { startOffered, type WorkflowRights } from "./workflow-model";
+import { startOffered } from "./workflow-model";
 import type { WorkflowStartIssue, WorkflowStepView } from "./workflow-views";
 import { LoadError, WorkflowsFrame, type OpenRoute } from "./workflows-frame";
 import { useWorkflowsHost } from "./workflows-host";
@@ -62,7 +62,6 @@ export function WorkflowPage({ workflow, opened }: { workflow: string; opened?: 
         workflowId={shownId}
         read={read}
         trail={before.map((id, depth) => ({ id, name: names[depth], route: routeAt(depth) }))}
-        rights={host.rights}
         runsAvailable={runsAvailable}
         onOpenChild={(step) => {
           if (step.workflow !== undefined) {
@@ -89,7 +88,6 @@ export function WorkflowPageView({
   workflowId,
   read,
   trail = [],
-  rights,
   runsAvailable,
   onOpenChild,
   onOpenRoute,
@@ -101,7 +99,6 @@ export function WorkflowPageView({
   read: Pick<WorkflowRead, "workflow" | "problem" | "retry">;
   /** The Workflows the reader came through, outermost first. Empty on a Workflow's own page. */
   trail?: readonly WorkflowTrailEntry[];
-  rights: WorkflowRights;
   /** The instance runs Workflows: there is a start and a list of runs. */
   runsAvailable: boolean;
   onOpenChild(step: WorkflowStepView): void;
@@ -110,13 +107,13 @@ export function WorkflowPageView({
 }) {
   const { t } = useTranslation();
   const workflow = read.workflow;
-  const canStart = runsAvailable && workflow !== undefined && startOffered(workflow, rights);
+  const canStart = runsAvailable && workflow !== undefined && startOffered(workflow);
   // A start the instance would refuse stands switched off, beside the reasons below.
   const startOff =
     runsAvailable &&
     workflow !== undefined &&
     workflow.refusedFor.length > 0 &&
-    startOffered({ ...workflow, refusedFor: [] }, rights);
+    startOffered({ ...workflow, refusedFor: [] });
   const shown = read;
   return (
     <WorkflowsFrame label={workflow?.name ?? t("workflows.title")} testId="workflow-page" fill>

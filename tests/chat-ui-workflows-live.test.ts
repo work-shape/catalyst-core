@@ -23,7 +23,6 @@ const de = createTranslationContext("de").t;
 const render = (node: ReactNode) =>
   renderToStaticMarkup(createElement(TranslationProvider, { locale: "en", children: node }));
 const noop = () => undefined;
-const READER = { read: true, start: true, write: false };
 
 const run = {
   id: "wfr_1",
@@ -104,6 +103,7 @@ function instance(
               id: "open-invoices",
               name: "Open invoices",
               definitionRevisionId: "rev_1",
+              actions: ["workflow.read"],
               runnable: true,
               reasons: []
             },
@@ -112,6 +112,7 @@ function instance(
               name: " ",
               description: "Closes the month.",
               definitionRevisionId: "rev_7",
+              actions: ["workflow.read", "workflow.use"],
               runnable: false,
               reasons: [NOT_BUILT],
               lastRun: { id: "wfr_0", status: "failed", startedAt: "2026-10-11T09:00:00.000Z" }
@@ -170,10 +171,18 @@ describe("the Workflow screens over the engine of an instance", () => {
       published: true,
       revisionId: "rev_7",
       startsByHand: true,
-      refusedFor: [{ code: "not_supported_yet", message: NOT_BUILT.message }]
+      refusedFor: [{ code: "not_supported_yet", message: NOT_BUILT.message }],
+      mayStart: true
     });
     expect(workflow.steps.map((step) => step.name)).toEqual(["Start", "Write the summary"]);
-    expect(startOffered(workflow, READER)).toBe(false);
+    expect(startOffered(workflow)).toBe(false);
+  });
+
+  it("holds no start for a Workflow whose entry names the read alone", async () => {
+    const { source } = instance();
+    const workflow = await source.getWorkflow("cw_1", "open-invoices", signal);
+    expect(workflow).toMatchObject({ published: true, refusedFor: [], mayStart: false });
+    expect(startOffered(workflow)).toBe(false);
   });
 
   it("reads the runs of a Workflow a page at a time", async () => {
@@ -260,7 +269,7 @@ describe("the Workflow screens over the engine of an instance", () => {
 });
 
 describe("a Workflow the instance accepts no start of", () => {
-  const blocked = (issues: { code: string; message: string }[]) =>
+  const blocked = (issues: { code: string; message: string }[], mayStart = true) =>
     toWorkflow(
       {
         name: "weekly-check",
@@ -270,16 +279,14 @@ describe("a Workflow the instance accepts no start of", () => {
           steps: [{ id: "start", type: "trigger", triggers: [{ kind: "manual" }] }]
         }
       },
-      "rev_1",
-      issues
+      { revisionId: "rev_1", refusedFor: issues, mayStart }
     );
-  const page = (workflow: ReturnType<typeof blocked>, rights = READER) =>
+  const page = (workflow: ReturnType<typeof blocked>) =>
     render(
       createElement(WorkflowPageView, {
         workspaceId: "cw_1",
         workflowId: "weekly-check",
         read: { workflow, problem: undefined, retry: noop },
-        rights,
         runsAvailable: true,
         onOpenChild: noop,
         onOpenRoute: noop,
@@ -289,7 +296,7 @@ describe("a Workflow the instance accepts no start of", () => {
 
   it("is shown with each reason of the instance, and its start is switched off", () => {
     const workflow = blocked([NOT_BUILT]);
-    expect(startOffered(workflow, READER)).toBe(false);
+    expect(startOffered(workflow)).toBe(false);
     const markup = page(workflow);
     expect(markup).toContain("Weekly check");
     expect(markup).toContain(t("workflows.notRunnable.title"));
@@ -307,9 +314,7 @@ describe("a Workflow the instance accepts no start of", () => {
   });
 
   it("shows no start, switched off or not, to a reader who may not start", () => {
-    expect(page(blocked([NOT_BUILT]), { ...READER, start: false })).not.toContain(
-      t("workflows.startNow")
-    );
+    expect(page(blocked([NOT_BUILT], false))).not.toContain(t("workflows.startNow"));
     expect(page(blocked([]))).not.toContain(' disabled=""');
   });
 });

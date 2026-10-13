@@ -149,9 +149,9 @@ contain breaking changes; a patch version does not.
   each Workflow's latest run, the runs, a run and its step runs, the start and the cancel; the
   drawing is the manifest of the Workflow's asset. A Workflow the instance accepts no start of
   is listed as "Cannot start" and opens with the reasons its list entry names, in the
-  instance's words, over a start that is switched off. The start is offered to whoever reads a
-  Workflow, because the instance names no right to use among a person's actions and decides
-  each start itself; the page says so when it refuses. A failed step
+  instance's words, over a start that is switched off. The start is offered where the Workflow's
+  entry of the list names `workflow.use` for the reader; one who only reads sees the Workflow
+  and its runs without it. A failed step
   names the right the account of the Workflow lacks, a run interrupted while a step changed
   data says that the change may or may not have happened and was not repeated, and a run that
   was asked to stop says that it ends when the call that is going has. The sample Workflows

@@ -1,4 +1,5 @@
 import type { Asset } from "@vivd-catalyst/api-client";
+import { WORKFLOW_ACTIONS } from "@vivd-catalyst/core";
 import {
   CONNECTION_OPERATION_PREFIX,
   DATA_STORE_OPERATION_PREFIX,
@@ -224,13 +225,40 @@ export interface WorkflowSummaryResource {
   definitionRevisionId?: string;
   /** Why the instance accepts no start by hand now. Empty where it does. */
   reasons?: readonly WorkflowStartIssue[];
+  /** What the caller may do with the Workflow, by the names of the actions. */
+  actions?: readonly string[];
   /** The latest run of the Workflow, where it has one. */
   lastRun?: { id: string; status: WorkflowRunStatus; startedAt?: string };
 }
 
 /** The reasons of a summary as the screens hold them: the code and the sentence. */
-export function startIssues(summary: WorkflowSummaryResource | undefined): WorkflowStartIssue[] {
+function startIssues(summary: WorkflowSummaryResource | undefined): WorkflowStartIssue[] {
   return (summary?.reasons ?? []).map(({ code, message }) => ({ code, message }));
+}
+
+/**
+ * What the list says of a Workflow beside its definition: the published revision's id, why no
+ * start is accepted, and whether the reader may start it. A Workflow the list does not name
+ * is not the reader's to start.
+ */
+export function listedOf(summary: WorkflowSummaryResource | undefined): WorkflowListed {
+  return {
+    ...(summary?.definitionRevisionId === undefined
+      ? {}
+      : { revisionId: summary.definitionRevisionId }),
+    refusedFor: startIssues(summary),
+    mayStart: summary?.actions?.includes(WORKFLOW_ACTIONS.use) === true
+  };
+}
+
+/** What `listedOf` reads. */
+export interface WorkflowListed {
+  /** The id of the published revision, which a run names as the one it started on. */
+  revisionId?: string;
+  /** Why the instance accepts no start of the Workflow now, as its list says it. */
+  refusedFor?: readonly WorkflowStartIssue[];
+  /** The reader holds the right to start it. */
+  mayStart?: boolean;
 }
 
 /** A Workflow as a row of the list. */
@@ -411,13 +439,7 @@ function stepNames(value: unknown, names = new Map<string, string>()): Map<strin
 /** One Workflow from its record: the definition is the record's `config`. */
 export function toWorkflow(
   asset: Pick<Asset, "name" | "config" | "publishedRevision">,
-  /**
-   * The id of the published revision, which a run names as the one it started on. The list
-   * of Workflows names it.
-   */
-  revisionId?: string,
-  /** Why the instance accepts no start of the Workflow now, as its list says it. */
-  refusedFor: readonly WorkflowStartIssue[] = []
+  { revisionId, refusedFor = [], mayStart = false }: WorkflowListed = {}
 ): WorkflowView {
   const definition = asset.config;
   const description = text(definition.description);
@@ -441,6 +463,7 @@ export function toWorkflow(
     needsInput:
       (isRecord(inputs.properties) && Object.keys(inputs.properties).length > 0) ||
       (Array.isArray(inputs.required) && inputs.required.length > 0),
-    refusedFor
+    refusedFor,
+    mayStart
   };
 }
