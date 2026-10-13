@@ -1,8 +1,8 @@
 import type { ApiClient } from "@vivd-catalyst/api-client";
 import { WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
 import { PendingApprovalError } from "../build-area/build-refusals";
-import { unsupportedByEngine } from "./engine-limits";
 import {
+  startIssues,
   toWorkflow,
   toWorkflowListItem,
   toWorkflowRun,
@@ -105,16 +105,30 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
         nextCursor: undefined
       };
     },
-    // The read names no revision, so the instance answers the view the reader may have: the
-    // published one to whoever only uses the Workflow.
-    getWorkflow: async (workspaceId, workflow, signal) => {
-      const asset = await client.assets.get({
-        params: { kind: WORKFLOW_ASSET_KIND, name: workflow },
-        query: { workspaceId },
-        signal
-      });
-      return toWorkflow(asset, undefined, unsupportedByEngine(asset.config));
+    // The definition is the Workflow's asset; whether the instance starts it, and the id of
+    // its published revision, are on its entry of the list. A Workflow the list does not name
+    // has no published revision.
+    getWorkflow: async (_workspaceId, workflow, signal) => {
+      const [asset, { items }] = await Promise.all([
+        client.assets.get({ params: { kind: WORKFLOW_ASSET_KIND, name: workflow }, signal }),
+        client.workflows.list({ signal })
+      ]);
+      const summary = items.find((entry) => entry.id === workflow);
+      const { manifest } = asset.config;
+      return toWorkflow(
+        {
+          name: asset.name,
+          config: isRecord(manifest) ? manifest : {},
+          publishedRevision: summary === undefined ? undefined : asset.publishedRevision
+        },
+        summary?.definitionRevisionId,
+        startIssues(summary)
+      );
     },
     runs: runsSource(client)
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

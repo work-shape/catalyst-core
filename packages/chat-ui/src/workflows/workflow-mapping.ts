@@ -21,7 +21,7 @@ import type {
   WorkflowStepRunView,
   WorkflowStepSource,
   WorkflowStepView,
-  WorkflowUnsupported,
+  WorkflowStartIssue,
   WorkflowView
 } from "./workflow-views";
 
@@ -220,8 +220,17 @@ export interface WorkflowSummaryResource {
   id: string;
   name: string;
   description?: string;
+  /** The id of the published revision: what a run started now names as its own. */
+  definitionRevisionId?: string;
+  /** Why the instance accepts no start by hand now. Empty where it does. */
+  reasons?: readonly WorkflowStartIssue[];
   /** The latest run of the Workflow, where it has one. */
   lastRun?: { id: string; status: WorkflowRunStatus; startedAt?: string };
+}
+
+/** The reasons of a summary as the screens hold them: the code and the sentence. */
+export function startIssues(summary: WorkflowSummaryResource | undefined): WorkflowStartIssue[] {
+  return (summary?.reasons ?? []).map(({ code, message }) => ({ code, message }));
 }
 
 /** A Workflow as a row of the list. */
@@ -234,6 +243,7 @@ export function toWorkflowListItem(summary: WorkflowSummaryResource): WorkflowLi
     ...(description ? { description } : {}),
     // The engine lists what has a published definition.
     published: true,
+    refusedFor: startIssues(summary),
     ...(lastRun === undefined
       ? {}
       : {
@@ -402,12 +412,12 @@ function stepNames(value: unknown, names = new Map<string, string>()): Map<strin
 export function toWorkflow(
   asset: Pick<Asset, "name" | "config" | "publishedRevision">,
   /**
-   * The id of the published revision, which a run names as the one it started on. The read of
-   * an asset answers the revision's number and not its id, so the instance cannot give it yet.
+   * The id of the published revision, which a run names as the one it started on. The list
+   * of Workflows names it.
    */
   revisionId?: string,
-  /** What the engine of the instance does not run of this definition. See `engine-limits`. */
-  unsupported: readonly WorkflowUnsupported[] = []
+  /** Why the instance accepts no start of the Workflow now, as its list says it. */
+  refusedFor: readonly WorkflowStartIssue[] = []
 ): WorkflowView {
   const definition = asset.config;
   const description = text(definition.description);
@@ -431,6 +441,6 @@ export function toWorkflow(
     needsInput:
       (isRecord(inputs.properties) && Object.keys(inputs.properties).length > 0) ||
       (Array.isArray(inputs.required) && inputs.required.length > 0),
-    unsupported
+    refusedFor
   };
 }

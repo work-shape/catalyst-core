@@ -11,6 +11,8 @@ export interface WorkflowListItem {
   published: boolean;
   /** When it was last changed, where the list names it. */
   updatedAt?: string;
+  /** Why the instance accepts no start of it now. Empty where it does. */
+  refusedFor: readonly WorkflowStartIssue[];
   /** The latest run, where the instance names it on the list. */
   lastRun?: { id: string; status: WorkflowRunStatus; startedAt?: string };
 }
@@ -93,20 +95,17 @@ export interface WorkflowView {
   /** A start has to give values: the definition declares inputs. */
   needsInput: boolean;
   /**
-   * What the Workflow holds that the engine of the instance does not run yet. With one entry
-   * the Workflow is shown and cannot be started.
+   * Why the instance accepts no start of the Workflow now, as it says it. With one entry the
+   * Workflow is shown and cannot be started.
    */
-  unsupported: readonly WorkflowUnsupported[];
+  refusedFor: readonly WorkflowStartIssue[];
 }
 
-/**
- * One thing of a definition the engine does not run yet, with the names it concerns: the steps
- * of a kind it does not run, a start on a schedule or another start that is not by hand, the
- * loops that collect or work on several entries at once, and the fields it does not read.
- */
-export interface WorkflowUnsupported {
-  what: "steps" | "schedule" | "trigger" | "collect" | "concurrency" | "fields";
-  names: readonly string[];
+/** One thing the instance refuses a start for: its code and its own sentence. */
+export interface WorkflowStartIssue {
+  code: string;
+  /** The instance's own sentence, which it writes in English. */
+  message: string;
 }
 
 export type WorkflowRunStatus =

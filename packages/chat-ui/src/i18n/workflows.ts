@@ -57,17 +57,9 @@ export const workflows = defineTranslations({
     "workflows.listFailed": "The workflows could not be loaded.",
     "workflows.missing": "There is no workflow at this address.",
     "workflows.noRuns": "No runs yet. Start one with “Start now”.",
-    "workflows.notRunnable.collect":
-      "It does not collect the results of a loop's entries yet: {names}.",
-    "workflows.notRunnable.concurrency":
-      "It works on the entries of a loop one at a time, not on several at once: {names}.",
-    "workflows.notRunnable.fields": "It does not read these settings of the workflow yet: {names}.",
-    "workflows.notRunnable.schedule":
-      "It starts on a schedule, and this instance starts a workflow by hand only.",
-    "workflows.notRunnable.steps": "It does not run steps of this kind yet: {names}.",
+    "workflows.notRunnable.badge": "Cannot start",
+    "workflows.notRunnable.refused": "This workflow cannot be started now.",
     "workflows.notRunnable.title": "This instance cannot run this workflow yet.",
-    "workflows.notRunnable.trigger":
-      "Something other than a person starts it, and this instance starts a workflow by hand only.",
     "workflows.noRunsPlain": "No runs yet.",
     "workflows.panel.atOnce": "At once",
     "workflows.panel.attempts": "Attempts",
@@ -185,7 +177,6 @@ export const workflows = defineTranslations({
     "workflows.runs.listFailed": "The runs could not be loaded.",
     "workflows.runs.title": "Runs of {name}",
     "workflows.runsUnavailable": "This instance does not run workflows yet.",
-    "workflows.quoted": "“{name}”",
     "workflows.schedule.custom": "On a schedule",
     "workflows.schedule.daily": "Every day, {time}",
     "workflows.schedule.manualOnly": "Started by hand only",
@@ -196,7 +187,6 @@ export const workflows = defineTranslations({
     "workflows.start.bodyManual": "It runs once, now.",
     "workflows.start.confirm": "Start",
     "workflows.start.failed": "The run could not be started.",
-    "workflows.start.notByHand": "This workflow is not started by hand.",
     "workflows.start.pending": "The start waits for an approval.",
     "workflows.start.refused": "You may not start this workflow.",
     "workflows.start.title": "Start “{name}” now?",
@@ -282,18 +272,9 @@ export const workflows = defineTranslations({
     "workflows.listFailed": "Die Workflows konnten nicht geladen werden.",
     "workflows.missing": "Unter dieser Adresse gibt es keinen Workflow.",
     "workflows.noRuns": "Noch keine Läufe. Starte einen mit „Jetzt starten“.",
-    "workflows.notRunnable.collect":
-      "Die Ergebnisse der Einträge einer Schleife sammelt sie noch nicht: {names}.",
-    "workflows.notRunnable.concurrency":
-      "Die Einträge einer Schleife bearbeitet sie nacheinander, nicht mehrere gleichzeitig: {names}.",
-    "workflows.notRunnable.fields":
-      "Diese Einstellungen des Workflows liest sie noch nicht: {names}.",
-    "workflows.notRunnable.schedule":
-      "Er startet nach Zeitplan, und diese Instanz startet einen Workflow nur von Hand.",
-    "workflows.notRunnable.steps": "Schritte dieser Art führt sie noch nicht aus: {names}.",
+    "workflows.notRunnable.badge": "Nicht startbar",
+    "workflows.notRunnable.refused": "Dieser Workflow kann gerade nicht gestartet werden.",
     "workflows.notRunnable.title": "Diese Instanz kann diesen Workflow noch nicht ausführen.",
-    "workflows.notRunnable.trigger":
-      "Etwas anderes als eine Person startet ihn, und diese Instanz startet einen Workflow nur von Hand.",
     "workflows.noRunsPlain": "Noch keine Läufe.",
     "workflows.panel.atOnce": "Gleichzeitig",
     "workflows.panel.attempts": "Versuche",
@@ -417,7 +398,6 @@ export const workflows = defineTranslations({
     "workflows.runs.listFailed": "Die Läufe konnten nicht geladen werden.",
     "workflows.runs.title": "Läufe von {name}",
     "workflows.runsUnavailable": "Diese Instanz führt noch keine Workflows aus.",
-    "workflows.quoted": "„{name}“",
     "workflows.schedule.custom": "Nach Zeitplan",
     "workflows.schedule.daily": "Jeden Tag, {time}",
     "workflows.schedule.manualOnly": "Startet nur von Hand",
@@ -428,7 +408,6 @@ export const workflows = defineTranslations({
     "workflows.start.bodyManual": "Er läuft einmal, jetzt.",
     "workflows.start.confirm": "Starten",
     "workflows.start.failed": "Der Lauf konnte nicht gestartet werden.",
-    "workflows.start.notByHand": "Dieser Workflow wird nicht von Hand gestartet.",
     "workflows.start.pending": "Der Start wartet auf eine Freigabe.",
     "workflows.start.refused": "Du darfst diesen Workflow nicht starten.",
     "workflows.start.title": "„{name}“ jetzt starten?",

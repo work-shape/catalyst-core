@@ -1,6 +1,7 @@
 import { Workflow } from "lucide-react";
 import { useMemo } from "react";
 import {
+  Badge,
   Button,
   EmptyState,
   List,
@@ -90,9 +91,16 @@ export function WorkflowsPageView({
                     // How the latest run stands, and when it began. A list that names no run
                     // says when the Workflow last changed, where it knows that.
                     chips={
-                      workflow.lastRun === undefined ? undefined : (
-                        <RunStateBadge status={workflow.lastRun.status} />
-                      )
+                      <>
+                        {workflow.refusedFor.length > 0 ? (
+                          <Badge tone="warning" size="sm">
+                            {t("workflows.notRunnable.badge")}
+                          </Badge>
+                        ) : null}
+                        {workflow.lastRun === undefined ? null : (
+                          <RunStateBadge status={workflow.lastRun.status} />
+                        )}
+                      </>
                     }
                     time={
                       moment === undefined ? undefined : (

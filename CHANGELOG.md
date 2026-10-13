@@ -146,21 +146,21 @@ contain breaking changes; a patch version does not.
   published definition and says so when the run started on an earlier one. A Workflow has two
   tabs, "Workflow" and "Runs". The drawing can be read with the keyboard and cannot be
   rearranged. The pages read and write through the operations of the module `workflows`: the list with
-  each Workflow's latest run, the runs, a run and its step runs, the start and the cancel. A
-  Workflow that holds what the engine does not run yet is shown with each reason and without a
-  start, and a start the instance refuses for it says what the instance names. A failed step
+  each Workflow's latest run, the runs, a run and its step runs, the start and the cancel; the
+  drawing is the manifest of the Workflow's asset. A Workflow the instance accepts no start of
+  is listed as "Cannot start" and opens with the reasons its list entry names, in the
+  instance's words, over a start that is switched off. The start is offered to whoever reads a
+  Workflow, because the instance names no right to use among a person's actions and decides
+  each start itself; the page says so when it refuses. A failed step
   names the right the account of the Workflow lacks, a run interrupted while a step changed
   data says that the change may or may not have happened and was not repeated, and a run that
-  was asked to stop says that it ends when the call that is going has. **Not in this
-  release:** no operation reads the definition of a Workflow yet and an instance is given no
-  source of definitions, so an instance lists no Workflow and draws none; the pages are shown
-  over sample Workflows and runs at `/ui-library/workflows`, behind the right that opens the
-  UI library. The step runs outside the items of a loop have no read of their own: the page
+  was asked to stop says that it ends when the call that is going has. The sample Workflows
+  and runs stay at `/ui-library/workflows`, behind the right that opens the UI library. **Not
+  in this release:** a start with input, for which there is no form.
+  The step runs outside the items of a loop have no read of their own: the page
   picks them out of at most 2,000 step runs of a run and says so where a run has more.
   `condition` and `parallel` are drawn and run by no engine. A step run carries the start of its output and no
-  count, so a table of a long output names no total; and an instance cannot yet tell an earlier
-  definition, because the read of a Workflow answers its revision's number and a run names the
-  revision's id.
+  count, so a table of a long output names no total.
 - **UI library:** `Breadcrumb`, the way into a nested place with the current one marked, and
   `IconTile`, the square an icon stands in on a node of a graph and in the head of its panel.
   On the flow canvas a group names its failed share in the failure colour (`failedLabel`),

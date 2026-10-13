@@ -13,8 +13,8 @@ interface Box {
   bottom: number;
 }
 
-// The Workflow pages over the sample Workflows and runs of `/ui-library/workflows`: the
-// instance lists no Workflow until it is given a source of definitions and a read of one.
+// The Workflow pages over the sample Workflows and runs of `/ui-library/workflows`, which hold
+// every state of the drawing whatever the instance's own Workflows are.
 
 test("a Workflow opens with all of its drawing in view: the loop, the two paths and the parallel part", async ({
   page

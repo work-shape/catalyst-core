@@ -77,21 +77,20 @@ describe("who is shown the Workflows area", () => {
 });
 
 describe("what a reader of Workflows is offered", () => {
-  it("offers the start to a person who may use every Workflow", () => {
-    expect(
-      resolveWorkflowRights({ actions: ["workflow.read", "workflow.use"], assetActions: [] })
-    ).toEqual({ read: true, start: true, write: false });
-  });
-
-  it("does not offer the start to a person who may read every Workflow and use none", () => {
-    expect(resolveWorkflowRights(reader)).toEqual({ read: true, start: false, write: false });
-  });
-
-  it("offers the start where a grant on single Workflows leaves it to the instance", () => {
-    // The instance names only the read action of such a grant, so the page cannot know.
+  it("offers the start to whoever reads a Workflow, and leaves the answer to the instance", () => {
+    // The instance names no right to use among a person's actions: it decides each start.
+    expect(resolveWorkflowRights(reader)).toEqual({ read: true, start: true, write: false });
     expect(resolveWorkflowRights({ actions: [], assetActions: ["workflow.read"] })).toEqual({
       read: true,
       start: true,
+      write: false
+    });
+  });
+
+  it("offers no start to a person who reads no Workflow", () => {
+    expect(resolveWorkflowRights({ actions: ["app.read"], assetActions: [] })).toEqual({
+      read: false,
+      start: false,
       write: false
     });
   });

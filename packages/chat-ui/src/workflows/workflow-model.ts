@@ -28,21 +28,17 @@ export interface WorkflowRights {
 }
 
 /**
- * The reader's rights on Workflows. The instance names every action a person holds on all
- * Workflows, and of a grant on single ones only that it reads. So a person with such a grant
- * is offered the start, and the instance answers whether the Workflow at hand is theirs to
- * start; a person who reads every Workflow and may use none is not offered it.
+ * The reader's rights on Workflows. The instance names the actions a person holds on all
+ * Workflows, and never the right to use one: that is decided on the Workflow at hand. So
+ * whoever reads a Workflow is offered its start, and the instance answers whether it is
+ * theirs to start; the page says so when it is not.
  */
 export function resolveWorkflowRights(context: HeldActions | undefined): WorkflowRights {
   const onAll = context?.actions ?? [];
-  const onSingle = context?.assetActions ?? [];
-  const readsAll = onAll.includes(WORKFLOW_ACTIONS.read);
-  const readsSingle = onSingle.includes(WORKFLOW_ACTIONS.read);
-  return {
-    read: readsAll || readsSingle,
-    start: onAll.includes(WORKFLOW_ACTIONS.use) || (!readsAll && readsSingle),
-    write: onAll.includes(WORKFLOW_ACTIONS.write)
-  };
+  const read =
+    onAll.includes(WORKFLOW_ACTIONS.read) ||
+    (context?.assetActions ?? []).includes(WORKFLOW_ACTIONS.read);
+  return { read, start: read, write: onAll.includes(WORKFLOW_ACTIONS.write) };
 }
 
 /** Whether the area is there for the reader. `unknown` until the instance has said both. */
@@ -77,7 +73,7 @@ export function workflowsAccess(input: {
  * start it, and it takes no input, for which there is no form yet.
  */
 export function startOffered(
-  workflow: Pick<WorkflowView, "published" | "startsByHand" | "needsInput" | "unsupported">,
+  workflow: Pick<WorkflowView, "published" | "startsByHand" | "needsInput" | "refusedFor">,
   rights: Pick<WorkflowRights, "start">
 ): boolean {
   return (
@@ -85,8 +81,8 @@ export function startOffered(
     workflow.published &&
     workflow.startsByHand &&
     !workflow.needsInput &&
-    // What the engine does not run is refused at the start: the page says so in its place.
-    workflow.unsupported.length === 0
+    // What the instance would refuse is not offered: the page says why in its place.
+    workflow.refusedFor.length === 0
   );
 }
 

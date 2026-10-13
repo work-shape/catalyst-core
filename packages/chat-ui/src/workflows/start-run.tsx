@@ -2,7 +2,6 @@ import { useState, type ReactNode } from "react";
 import { Button, Dialog, InlineError } from "@vivd-catalyst/ui";
 import { instanceSentence } from "../build-area/build-refusals";
 import { useTranslation } from "../i18n";
-import { startRefusal } from "./engine-limits";
 import { useWorkflowWrites, workflowWriteRefusal } from "./workflow-data";
 import { useWorkflowsHost } from "./workflows-host";
 
@@ -42,18 +41,12 @@ export function useStartRun(input: {
       }
     } catch (failure) {
       const refusal = workflowWriteRefusal(failure);
-      const engine = startRefusal(failure);
       setError(
         refusal === "pending"
           ? t("workflows.start.pending")
           : refusal === "refused"
             ? t("workflows.start.refused")
-            : engine?.why === "notSupported"
-              ? // The instance names each thing it does not run, in its own words.
-                [t("workflows.notRunnable.title"), ...engine.issues].join(" ")
-              : engine?.why === "notByHand"
-                ? t("workflows.start.notByHand")
-                : (instanceSentence(failure) ?? t("workflows.start.failed"))
+            : (instanceSentence(failure) ?? t("workflows.start.failed"))
       );
     } finally {
       setBusy(false);

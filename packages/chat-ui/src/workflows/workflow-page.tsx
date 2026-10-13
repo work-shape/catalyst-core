@@ -12,7 +12,7 @@ import {
 } from "./workflow-data";
 import { WorkflowHead } from "./workflow-head";
 import { startOffered, type WorkflowRights } from "./workflow-model";
-import type { WorkflowStepView, WorkflowUnsupported } from "./workflow-views";
+import type { WorkflowStartIssue, WorkflowStepView } from "./workflow-views";
 import { LoadError, WorkflowsFrame, type OpenRoute } from "./workflows-frame";
 import { useWorkflowsHost } from "./workflows-host";
 
@@ -111,6 +111,12 @@ export function WorkflowPageView({
   const { t } = useTranslation();
   const workflow = read.workflow;
   const canStart = runsAvailable && workflow !== undefined && startOffered(workflow, rights);
+  // A start the instance would refuse stands switched off, beside the reasons below.
+  const startOff =
+    runsAvailable &&
+    workflow !== undefined &&
+    workflow.refusedFor.length > 0 &&
+    startOffered({ ...workflow, refusedFor: [] }, rights);
   const shown = read;
   return (
     <WorkflowsFrame label={workflow?.name ?? t("workflows.title")} testId="workflow-page" fill>
@@ -121,6 +127,7 @@ export function WorkflowPageView({
         tab="workflow"
         runsAvailable={runsAvailable}
         canStart={canStart}
+        startOff={startOff}
         onStart={onStart}
         onOpenRoute={onOpenRoute}
       />
@@ -140,9 +147,9 @@ export function WorkflowPageView({
           />
         </div>
       )}
-      {workflow === undefined || workflow.unsupported.length === 0 ? null : (
+      {workflow === undefined || workflow.refusedFor.length === 0 ? null : (
         <div className="shrink-0 border-b px-(--layout-gutter) py-2">
-          <NotRunnableBanner unsupported={workflow.unsupported} />
+          <NotRunnableBanner issues={workflow.refusedFor} />
         </div>
       )}
       <div className="relative min-h-0 flex-1">
@@ -168,22 +175,19 @@ export function WorkflowPageView({
 }
 
 /**
- * Says that the engine of the instance does not run this Workflow yet, and each reason: the
- * Workflow is shown as it is defined, and nobody is offered a start the instance would refuse.
+ * Says that the instance accepts no start of this Workflow now, and each reason in the
+ * instance's own words: the Workflow is shown as it is defined, and its start is switched off.
  */
-function NotRunnableBanner({ unsupported }: { unsupported: readonly WorkflowUnsupported[] }) {
-  const { locale, t } = useTranslation();
-  const list = new Intl.ListFormat(locale, { style: "long", type: "conjunction" });
+function NotRunnableBanner({ issues }: { issues: readonly WorkflowStartIssue[] }) {
+  const { t } = useTranslation();
+  // What the engine does not run yet is no fault of the Workflow: the head line says which.
+  const notBuilt = issues.every((issue) => issue.code === "not_supported_yet");
   return (
     <Banner tone="warning" layout="inline" data-not-runnable="">
-      <p>{t("workflows.notRunnable.title")}</p>
+      <p>{t(notBuilt ? "workflows.notRunnable.title" : "workflows.notRunnable.refused")}</p>
       <ul className="list-disc pl-5">
-        {unsupported.map((entry) => (
-          <li key={entry.what}>
-            {t(`workflows.notRunnable.${entry.what}`, {
-              names: list.format(entry.names.map((name) => t("workflows.quoted", { name })))
-            })}
-          </li>
+        {issues.map((issue, position) => (
+          <li key={`${String(position)}:${issue.code}`}>{issue.message}</li>
         ))}
       </ul>
     </Banner>

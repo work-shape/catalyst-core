@@ -1,6 +1,5 @@
 import { createElement, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
-import { ApiError } from "@vivd-catalyst/api-client";
 import { createTranslationContext } from "@vivd-catalyst/chat-ui";
 import {
   WorkflowPageView,
@@ -8,11 +7,9 @@ import {
   createInstanceSource,
   failureHappened,
   startOffered,
-  startRefusal,
   toWorkflow,
   toWorkflowRun,
-  toWorkflowStepRun,
-  unsupportedByEngine
+  toWorkflowStepRun
 } from "@vivd-catalyst/chat-ui/workflows";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { recordedApiClient } from "./support/recorded-api-client";
@@ -59,6 +56,35 @@ function stepRun(id: string, stepId: string, extra: Record<string, unknown> = {}
 
 const { signal } = new AbortController();
 
+const NOT_BUILT = {
+  code: "not_supported_yet",
+  message: "This engine does not run a step of the type 'agent' yet (not_supported_yet)",
+  path: "steps[1].type"
+};
+
+/** A Workflow as the read of an asset answers it: its definition is `config.manifest`. */
+const ASSET = {
+  id: "asset_1",
+  kind: "workflow",
+  name: "month-end",
+  scope: { kind: "instance" },
+  revision: 4,
+  publishedRevision: 4,
+  createdAt: "2026-10-10T09:00:00.000Z",
+  updatedAt: "2026-10-10T09:00:00.000Z",
+  config: {
+    name: "month-end",
+    manifest: {
+      id: "month-end",
+      name: "Month end",
+      steps: [
+        { id: "start", type: "trigger", triggers: [{ kind: "manual" }] },
+        { id: "summary", name: "Write the summary", type: "agent" }
+      ]
+    }
+  }
+};
+
 /**
  * The source over the release's own client, whose requests are kept and answered here as the
  * instance answers them: what the source asks for is what the contract names.
@@ -74,15 +100,26 @@ function instance(
       case "workflows.list":
         return {
           items: [
-            { id: "open-invoices", name: "Open invoices" },
+            {
+              id: "open-invoices",
+              name: "Open invoices",
+              definitionRevisionId: "rev_1",
+              runnable: true,
+              reasons: []
+            },
             {
               id: "month-end",
               name: " ",
               description: "Closes the month.",
+              definitionRevisionId: "rev_7",
+              runnable: false,
+              reasons: [NOT_BUILT],
               lastRun: { id: "wfr_0", status: "failed", startedAt: "2026-10-11T09:00:00.000Z" }
             }
           ]
         };
+      case "assets.get":
+        return ASSET;
       case "workflows.list_step_runs": {
         const pages = answers.stepRunPages ?? [{ items: [] }];
         const current = pages[Math.min(page, pages.length - 1)];
@@ -105,17 +142,38 @@ describe("the Workflow screens over the engine of an instance", () => {
     const { source } = instance();
     const list = await source.listWorkflows("cw_1", { limit: 50, cursor: undefined }, signal);
     expect(list.items).toEqual([
-      { id: "open-invoices", name: "Open invoices", published: true },
+      { id: "open-invoices", name: "Open invoices", published: true, refusedFor: [] },
       {
         id: "month-end",
         // A name of blanks is no name: the id stands for it.
         name: "month-end",
         description: "Closes the month.",
         published: true,
+        // Listed although the instance starts none of it, with the instance's own reason.
+        refusedFor: [{ code: NOT_BUILT.code, message: NOT_BUILT.message }],
         lastRun: { id: "wfr_0", status: "failed", startedAt: "2026-10-11T09:00:00.000Z" }
       }
     ]);
     expect(list.nextCursor).toBeUndefined();
+  });
+
+  it("reads a Workflow from its asset, and from the list whether it starts and its revision", async () => {
+    const { source, calls } = instance();
+    const workflow = await source.getWorkflow("cw_1", "month-end", signal);
+    expect(calls.map((call) => [call.operation, call.params, call.query])).toEqual([
+      ["assets.get", { kind: "workflow", name: "month-end" }, {}],
+      ["workflows.list", {}, {}]
+    ]);
+    expect(workflow).toMatchObject({
+      id: "month-end",
+      name: "Month end",
+      published: true,
+      revisionId: "rev_7",
+      startsByHand: true,
+      refusedFor: [{ code: "not_supported_yet", message: NOT_BUILT.message }]
+    });
+    expect(workflow.steps.map((step) => step.name)).toEqual(["Start", "Write the summary"]);
+    expect(startOffered(workflow, READER)).toBe(false);
   });
 
   it("reads the runs of a Workflow a page at a time", async () => {
@@ -201,143 +259,58 @@ describe("the Workflow screens over the engine of an instance", () => {
   });
 });
 
-describe("what the engine does not run yet", () => {
-  const runnable = {
-    steps: [
-      { id: "start", type: "trigger", triggers: [{ kind: "manual" }] },
-      { id: "invoices", name: "Read the invoices", type: "operation" },
+describe("a Workflow the instance accepts no start of", () => {
+  const blocked = (issues: { code: string; message: string }[]) =>
+    toWorkflow(
       {
-        id: "each",
-        name: "For each invoice",
-        type: "loop",
-        steps: [{ id: "x", type: "operation" }]
+        name: "weekly-check",
+        publishedRevision: 1,
+        config: {
+          name: "Weekly check",
+          steps: [{ id: "start", type: "trigger", triggers: [{ kind: "manual" }] }]
+        }
       },
-      { id: "result", type: "output" }
-    ]
-  };
-
-  it("finds nothing in ordered steps and a loop that are started by hand", () => {
-    expect(unsupportedByEngine(runnable)).toEqual([]);
-  });
-
-  it("names each thing a definition holds that is refused at the start", () => {
-    expect(
-      unsupportedByEngine({
-        retention: { days: 30 },
-        steps: [
-          {
-            id: "start",
-            type: "trigger",
-            triggers: [
-              { kind: "manual" },
-              { kind: "schedule", cron: "0 6 * * 1" },
-              { kind: "parent" }
-            ]
-          },
-          { id: "any", name: "Any findings", type: "condition", then: [], else: [] },
-          {
-            id: "at_once",
-            name: "At once",
-            type: "parallel",
-            branches: [{ id: "a", steps: [{ id: "child", name: "Month end", type: "workflow" }] }]
-          },
-          {
-            id: "each",
-            name: "For each client",
-            type: "loop",
-            concurrency: 4,
-            collect: { path: "" },
-            steps: [{ id: "list", type: "operation", paginate: {} }]
-          }
-        ]
-      })
-    ).toEqual([
-      { what: "steps", names: ["Any findings", "At once", "Month end"] },
-      { what: "schedule", names: [] },
-      { what: "trigger", names: [] },
-      { what: "collect", names: ["For each client"] },
-      { what: "concurrency", names: ["For each client"] },
-      { what: "fields", names: ["retention", "paginate"] }
-    ]);
-  });
-
-  const blocked = toWorkflow(
-    {
-      name: "weekly-check",
-      publishedRevision: 1,
-      config: {
-        name: "Weekly check",
-        steps: [
-          {
-            id: "start",
-            type: "trigger",
-            triggers: [{ kind: "manual" }, { kind: "schedule", cron: "0 6 * * 1" }]
-          },
-          { id: "any", name: "Any findings", type: "condition", then: [], else: [] }
-        ]
-      }
-    },
-    undefined,
-    [
-      { what: "steps", names: ["Any findings"] },
-      { what: "schedule", names: [] }
-    ]
-  );
-
-  it("shows such a Workflow with every reason and without a start", () => {
-    expect(startOffered(blocked, READER)).toBe(false);
-    const markup = render(
+      "rev_1",
+      issues
+    );
+  const page = (workflow: ReturnType<typeof blocked>, rights = READER) =>
+    render(
       createElement(WorkflowPageView, {
         workspaceId: "cw_1",
         workflowId: "weekly-check",
-        read: { workflow: blocked, problem: undefined, retry: noop },
-        rights: READER,
+        read: { workflow, problem: undefined, retry: noop },
+        rights,
         runsAvailable: true,
         onOpenChild: noop,
         onOpenRoute: noop,
         onStart: noop
       })
     );
+
+  it("is shown with each reason of the instance, and its start is switched off", () => {
+    const workflow = blocked([NOT_BUILT]);
+    expect(startOffered(workflow, READER)).toBe(false);
+    const markup = page(workflow);
     expect(markup).toContain("Weekly check");
     expect(markup).toContain(t("workflows.notRunnable.title"));
-    expect(markup).toContain(t("workflows.notRunnable.steps", { names: "“Any findings”" }));
-    expect(markup).toContain(t("workflows.notRunnable.schedule"));
-    expect(markup).not.toContain(t("workflows.startNow"));
+    expect(markup).toContain("does not run a step of the type &#x27;agent&#x27; yet");
+    expect(markup).toMatch(/<button[^>]* disabled=""[^>]*>.*Start now/su);
   });
 
-  it("reads a start the instance refused for it, with what the instance names", () => {
-    const refusal = startRefusal(
-      new ApiError(422, "The definition cannot be run", {
-        error: {
-          code: "VALIDATION_FAILED",
-          message: "The definition cannot be run",
-          details: {
-            reason: "not_supported_yet",
-            issues: [
-              {
-                path: "steps[2].collect",
-                code: "not_supported_yet",
-                message: "This engine does not run 'collect' yet (not_supported_yet)"
-              },
-              { path: "steps[0]", message: "Another issue" }
-            ]
-          }
-        }
-      })
+  it("says that it cannot be started now where the reason is none of the engine's", () => {
+    const markup = page(
+      blocked([{ code: "principal_inactive", message: "The instance has no active principal" }])
     );
-    expect(refusal).toEqual({
-      why: "notSupported",
-      issues: ["This engine does not run 'collect' yet (not_supported_yet)"]
-    });
-    expect(
-      startRefusal(
-        new ApiError(409, "not started by hand", {
-          error: { code: "CONFLICT", message: "x", details: { reason: "no_manual_trigger" } }
-        })
-      )
-    ).toEqual({ why: "notByHand", issues: [] });
-    expect(startRefusal(new ApiError(403, "no", { error: { code: "FORBIDDEN" } }))).toBeUndefined();
-    expect(startRefusal(new Error("offline"))).toBeUndefined();
+    expect(markup).toContain(t("workflows.notRunnable.refused"));
+    expect(markup).not.toContain(t("workflows.notRunnable.title"));
+    expect(markup).toContain("The instance has no active principal");
+  });
+
+  it("shows no start, switched off or not, to a reader who may not start", () => {
+    expect(page(blocked([NOT_BUILT]), { ...READER, start: false })).not.toContain(
+      t("workflows.startNow")
+    );
+    expect(page(blocked([]))).not.toContain(' disabled=""');
   });
 });
 

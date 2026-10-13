@@ -16,6 +16,7 @@ export function WorkflowHead({
   tab,
   runsAvailable,
   canStart,
+  startOff = false,
   onStart,
   onOpenRoute
 }: {
@@ -26,6 +27,8 @@ export function WorkflowHead({
   tab: "workflow" | "runs";
   runsAvailable: boolean;
   canStart: boolean;
+  /** The reader may start the Workflow and the instance accepts no start of it now. */
+  startOff?: boolean;
   onStart(): void;
   onOpenRoute: OpenRoute;
 }) {
@@ -55,8 +58,8 @@ export function WorkflowHead({
         title={workflow?.name ?? <TitlePlaceholder>{t("workflows.title")}</TitlePlaceholder>}
         description={workflow?.description}
         primaryAction={
-          canStart ? (
-            <Button onClick={onStart}>
+          canStart || startOff ? (
+            <Button disabled={startOff} onClick={onStart}>
               <Play aria-hidden="true" />
               {t("workflows.startNow")}
             </Button>

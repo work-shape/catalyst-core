@@ -146,6 +146,7 @@ export function createSampleSource(locale: LocaleCode, now = Date.now()): Workfl
             name: manifest.name,
             description: manifest.description,
             published: true,
+            refusedFor: [],
             updatedAt: new Date(now - 86_400_000).toISOString(),
             ...(last === undefined
               ? {}

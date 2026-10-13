@@ -2,7 +2,6 @@
 // area route table and the workspace shell.
 export { CancelRunDialog, WorkflowRunPageView } from "./run-page";
 export { LoopEntriesView, defaultEntryFilter, loopEntries } from "./loop-entries";
-export { startRefusal, unsupportedByEngine } from "./engine-limits";
 export { createInstanceSource } from "./instance-source";
 export { scheduleInWords } from "./schedule-words";
 export { StepPanel } from "./step-panel";
