@@ -193,7 +193,8 @@ async function withPage({ instance, context }: Started, pageName = "Offer") {
     conversationId,
     pageName,
     kitVersion: "1.0.0",
-    manifest: { entry: "index.html" },
+    // A Page is never published, so nobody reviewed the host: it connects to none.
+    manifest: { entry: "index.html", externalHosts: ["api.example.com"] },
     sourceFiles,
     builtFiles
   });

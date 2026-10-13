@@ -1,0 +1,57 @@
+# Kai Berger's Workflow, which the seed saves in his session and leaves as a draft: it lists the
+# skills and reads each of them in a loop. A definition must name the principal it runs as, and
+# naming one in a draft lends nothing. Publishing it lends `workflow-demo` to whoever starts it,
+# which asks what administering service principals asks, and Kai does not hold that.
+id: kai-skill-inventory
+name: Skill inventory
+description: Lists the skills of this instance and reads each of them, one after the other.
+runAs: workflow-demo
+inputs:
+  type: object
+  additionalProperties: false
+outputs:
+  type: object
+  properties:
+    read:
+      type: integer
+    failed:
+      type: integer
+  required: [read, failed]
+steps:
+  - id: start
+    name: Start by hand
+    type: trigger
+    triggers:
+      - kind: manual
+  - id: skills
+    name: List the skills
+    type: operation
+    operation: assets.list
+    input:
+      kind:
+        value: skill
+  - id: each_skill
+    name: For each skill
+    type: loop
+    items: { step: skills, path: items }
+    itemName: skill
+    itemLabel: name
+    onItemFailure: continue
+    steps:
+      - id: read
+        name: Read the skill
+        type: operation
+        operation: assets.get
+        input:
+          kind:
+            value: skill
+          name:
+            ref: { step: each_skill, path: name }
+  - id: result
+    name: Result
+    type: output
+    input:
+      read:
+        ref: { step: each_skill, path: done }
+      failed:
+        ref: { step: each_skill, path: failed }

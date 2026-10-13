@@ -112,10 +112,16 @@ export async function readInstanceOverview(
   return instance.namespace === undefined ? api.getOverview() : {};
 }
 
+/**
+ * The assets of the instance a working copy holds. A skill that ships with the platform is
+ * none of them: a release of the platform writes it, so no pull brings it, no diff shows it and
+ * no prune deletes it.
+ */
 export async function listRemoteAssets(api: ConfigApi): Promise<Map<string, RemoteAsset>> {
   const assets = new Map<string, RemoteAsset>();
   for (const kind of ASSET_KINDS) {
     for (const asset of await api.listAssets(kind)) {
+      if (asset.attributes?.origin === "release") continue;
       const key = `${kind}:${asset.name}`;
       assets.set(key, {
         key,
