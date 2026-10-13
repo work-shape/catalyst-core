@@ -17222,6 +17222,12 @@
           },
           "interfacePath": {
             "type": "string"
+          },
+          "heldBackHosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -17231,7 +17237,8 @@
           "number",
           "pageSessionId",
           "revision",
-          "interfacePath"
+          "interfacePath",
+          "heldBackHosts"
         ]
       },
       "AppPreviewRequest": {
