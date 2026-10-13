@@ -66,7 +66,9 @@ export const workflowRuns = pgTable(
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     // Set by a cancel that ended the run: the person, where a person cancelled, and the moment.
     cancelledBy: text("cancelled_by").$type<UserId>(),
-    cancelledAt: timestamp("cancelled_at", { withTimezone: true })
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    // The due time of the schedule that started the run. Null on every other run.
+    scheduledFor: timestamp("scheduled_for", { withTimezone: true })
   },
   (table) => [
     check("workflow_runs_mode_check", sql`${table.mode} in ('live', 'test')`),
@@ -83,7 +85,12 @@ export const workflowRuns = pgTable(
       table.workflow,
       table.createdAt,
       table.id
-    )
+    ),
+    // One run per Workflow and due time of its schedule: a due time that is fired a second
+    // time, by another worker or after a restart, starts nothing.
+    uniqueIndex("workflow_runs_scheduled_for_idx")
+      .on(table.clientInstanceId, table.workflow, table.scheduledFor)
+      .where(sql`${table.scheduledFor} is not null`)
   ]
 );
 

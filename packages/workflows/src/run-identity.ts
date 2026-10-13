@@ -63,7 +63,7 @@ export async function workflowRunActor(
 }
 
 /** The run's principal as the actor of what the engine itself writes to the audit. */
-export function principalActor(run: WorkflowRun): AuditActor {
+export function principalActor(run: Pick<WorkflowRun, "principal">): AuditActor {
   return {
     displayLabel: run.principal.displayLabel,
     roles: [],

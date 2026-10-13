@@ -82,7 +82,8 @@ function mapRun(row: Omit<RunRow, "input" | "output" | "definition">): WorkflowR
     ...(row.startedAt === null ? {} : { startedAt: row.startedAt.toISOString() }),
     ...(row.finishedAt === null ? {} : { finishedAt: row.finishedAt.toISOString() }),
     ...(row.cancelledBy === null ? {} : { cancelledBy: row.cancelledBy }),
-    ...(row.cancelledAt === null ? {} : { cancelledAt: row.cancelledAt.toISOString() })
+    ...(row.cancelledAt === null ? {} : { cancelledAt: row.cancelledAt.toISOString() }),
+    ...(row.scheduledFor === null ? {} : { scheduledFor: row.scheduledFor.toISOString() })
   };
 }
 
@@ -131,7 +132,7 @@ const notEnded = (column: typeof workflowRuns.status | typeof workflowStepRuns.s
 export async function createWorkflowRun(
   db: PostgresConnection,
   run: Input<"createRun">
-): Promise<WorkflowRun> {
+): Promise<WorkflowRun | undefined> {
   const [row] = await db
     .insert(workflowRuns)
     .values({
@@ -151,11 +152,33 @@ export async function createWorkflowRun(
       operationRunId: run.operationRunId ?? null,
       deadlineAt: new Date(run.deadlineAt),
       correlationId: run.correlationId,
-      createdAt: new Date(run.createdAt)
+      createdAt: new Date(run.createdAt),
+      scheduledFor: run.scheduledFor === undefined ? null : new Date(run.scheduledFor)
     })
+    // The one conflict a new id can meet is the due time of a schedule that has its run.
+    .onConflictDoNothing()
     .returning(runColumns);
-  if (!row) throw new Error("Workflow run insert returned no row");
-  return mapRun(row);
+  return row ? mapRun(row) : undefined;
+}
+
+export async function readWorkflowScheduleState(
+  db: PostgresConnection,
+  input: Input<"readScheduleState">
+): Promise<{ fired: boolean; open: boolean }> {
+  const [row] = await db
+    .select({
+      fired: sql<boolean>`coalesce(bool_or(${workflowRuns.scheduledFor} = ${input.scheduledFor}::timestamptz), false)`,
+      open: sql<boolean>`coalesce(bool_or(${workflowRuns.status} in ('queued', 'running', 'waiting')), false)`
+    })
+    .from(workflowRuns)
+    .where(
+      and(
+        eq(workflowRuns.clientInstanceId, input.clientInstanceId),
+        eq(workflowRuns.workflow, input.workflow),
+        eq(workflowRuns.trigger, "schedule")
+      )
+    );
+  return { fired: row?.fired ?? false, open: row?.open ?? false };
 }
 
 export async function lockWorkflowRun(
@@ -540,6 +563,22 @@ export async function findWorkflowStepOutput(
     )
     .limit(1);
   return row?.output ?? undefined;
+}
+
+export async function countWorkflowLoopItemsStarted(
+  db: PostgresConnection,
+  ref: Input<"countLoopItemsStarted">
+): Promise<number> {
+  const [row] = await db
+    .select({ started: sql<number>`coalesce(max(${workflowStepRuns.iteration}) + 1, 0)::int` })
+    .from(workflowStepRuns)
+    .where(
+      and(
+        eq(workflowStepRuns.clientInstanceId, ref.clientInstanceId),
+        sql`${workflowStepRuns.containerStepRunId} = ${ref.id}`
+      )
+    );
+  return row?.started ?? 0;
 }
 
 export async function countWorkflowLoopItems(

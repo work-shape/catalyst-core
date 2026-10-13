@@ -369,6 +369,12 @@ export const EVENTS = {
     name: "workflow_run.started",
     subject: "workflow_run"
   },
+  // A due time of a schedule that started no run. The subject is the Workflow.
+  "workflow_run.tick_skipped": {
+    ...LEGACY_AUDIT,
+    name: "workflow_run.tick_skipped",
+    subject: "workflow"
+  },
   "workspace_command.cancelled": {
     ...LEGACY_AUDIT,
     name: "workspace_command.cancelled",

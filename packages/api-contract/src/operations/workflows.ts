@@ -74,6 +74,8 @@ export const workflowRunSchema = z.object({
     id: z.string(),
     label: z.string()
   }),
+  /** The due time of the schedule that started the run. Missing on every other run. */
+  scheduledFor: timestampSchema.optional(),
   /** The Operation Run of the call that started the run. */
   operationRunId: z.string().optional(),
   stepRunCount: z.number().int().min(0),

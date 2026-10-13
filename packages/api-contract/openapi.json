@@ -11002,6 +11002,9 @@
                         "label"
                       ]
                     },
+                    "scheduledFor": {
+                      "$ref": "#/components/schemas/Timestamp"
+                    },
                     "operationRunId": {
                       "type": "string"
                     },
@@ -11244,6 +11247,9 @@
                         "id",
                         "label"
                       ]
+                    },
+                    "scheduledFor": {
+                      "$ref": "#/components/schemas/Timestamp"
                     },
                     "operationRunId": {
                       "type": "string"
@@ -11998,6 +12004,9 @@
                               "label"
                             ]
                           },
+                          "scheduledFor": {
+                            "$ref": "#/components/schemas/Timestamp"
+                          },
                           "operationRunId": {
                             "type": "string"
                           },
@@ -12263,6 +12272,9 @@
                         "id",
                         "label"
                       ]
+                    },
+                    "scheduledFor": {
+                      "$ref": "#/components/schemas/Timestamp"
                     },
                     "operationRunId": {
                       "type": "string"

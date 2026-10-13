@@ -236,22 +236,6 @@ describe("the definitions a folder holds", () => {
         { steps: [{ ...trigger, triggers: [{ kind: "manual" }, { kind: "parent" }] }, output()] },
         "steps[0].triggers[1].kind"
       ],
-      // A schedule that is read and never fires would look like one that is kept.
-      [
-        {
-          steps: [{ ...trigger, triggers: [{ kind: "schedule", cron: "0 6 * * *" }] }, output()]
-        },
-        "steps[0].triggers[0].kind"
-      ],
-      [
-        {
-          steps: [
-            { ...trigger, triggers: [{ kind: "manual" }, { kind: "schedule", cron: "0 6 * * *" }] },
-            output()
-          ]
-        },
-        "steps[0].triggers[1].kind"
-      ],
       [
         { steps: [trigger, { ...operation("rows"), dataset: { at: "rows" } }, output()] },
         "steps[1].dataset"

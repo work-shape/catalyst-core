@@ -391,13 +391,13 @@ describe("a definition another release stored", () => {
     ["collect", () => withLoop({ collect: { step: "send", path: "" } })],
     ["concurrency", () => withLoop({ concurrency: 4 })],
     [
-      "schedule",
+      "parent",
       () =>
         manifest((base) => ({
           ...base,
           steps: base.steps.map((step) =>
             step.type === "trigger"
-              ? { ...step, triggers: [{ kind: "manual" }, { kind: "schedule", cron: "0 6 * * *" }] }
+              ? { ...step, triggers: [{ kind: "manual" }, { kind: "parent" }] }
               : step
           )
         }))

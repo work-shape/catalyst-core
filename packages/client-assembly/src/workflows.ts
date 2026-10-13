@@ -29,6 +29,10 @@ export interface InstanceWorkflowsParts extends Pick<
   definitions?: WorkflowDefinitionSource;
   /** Bounds below the release's own, for a test. */
   limits?: WorkflowEngineOptions["limits"];
+  /** The clock of the engine, for a test of due times. */
+  now?: WorkflowEngineOptions["now"];
+  /** The time zone the cron expressions of `schedule` triggers are read in. UTC when left out. */
+  timeZone?: string;
 }
 
 /** What one process has of Workflows: what its server registers and its job worker serves. */
@@ -38,8 +42,13 @@ export interface InstanceWorkflows {
    * it is off, each call is refused as a call of a module that is off, like every other one.
    */
   routes: readonly RouteRegistration[];
-  /** The handler of the step job. None where the module is off. */
+  /** The handlers of the step job and of the schedule job. None where the module is off. */
   jobHandlers: readonly RegisteredJobHandler[];
+  /**
+   * Queues the job of the next due time of every published Workflow that has a schedule and
+   * has none queued. Nothing where the module is off.
+   */
+  planSchedules(): Promise<{ workflow: string; dueAt: string }[]>;
 }
 
 /**
@@ -48,20 +57,42 @@ export interface InstanceWorkflows {
  */
 export function createInstanceWorkflows(parts: InstanceWorkflowsParts): InstanceWorkflows {
   if (!parts.modules.isEnabled(workflowsModule.name)) {
-    return { routes: [createWorkflowRoutes(undefined)], jobHandlers: [] };
+    return {
+      routes: [createWorkflowRoutes(undefined)],
+      jobHandlers: [],
+      planSchedules: () => Promise.resolve([])
+    };
   }
   const engine = createWorkflowEngine({
     clientInstanceId: parts.clientInstanceId,
     stores: parts.stores,
     definitions: parts.definitions ?? noWorkflowDefinitions,
     operationCalls: parts.operationCalls,
-    ...(parts.limits ? { limits: parts.limits } : {})
+    ...(parts.limits ? { limits: parts.limits } : {}),
+    ...(parts.now ? { now: parts.now } : {}),
+    ...(parts.timeZone === undefined ? {} : { timeZone: parts.timeZone })
   });
-  return { routes: [createWorkflowRoutes(engine)], jobHandlers: engine.jobHandlers };
+  return {
+    routes: [createWorkflowRoutes(engine)],
+    jobHandlers: engine.jobHandlers,
+    planSchedules: engine.planSchedules
+  };
 }
 
-/** The seam of the module: the engine is built once the call path of the process exists. */
+/**
+ * The seam of the module: the engine is built once the call path of the process exists. A
+ * process that starts plans the schedules of what is published, so a Workflow whose job was
+ * lost, or that was published while no process ran, has its next due time queued.
+ */
 export const assembleWorkflows: ModuleSeam = ({ modules, clientInstanceId, stores }) => ({
-  start: ({ operationCalls }) =>
-    createInstanceWorkflows({ modules, clientInstanceId, stores, operationCalls })
+  async start({ operationCalls }) {
+    const workflows = createInstanceWorkflows({
+      modules,
+      clientInstanceId,
+      stores,
+      operationCalls
+    });
+    await workflows.planSchedules();
+    return { routes: workflows.routes, jobHandlers: workflows.jobHandlers };
+  }
 });

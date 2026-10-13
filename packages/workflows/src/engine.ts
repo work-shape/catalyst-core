@@ -7,9 +7,11 @@ import {
   createPlatformId,
   defineJobHandler,
   defineJobKind,
+  isAppError,
   isAuthenticatedServicePrincipal,
   isWorkflowRunEnded,
   subjectDedupeKey,
+  type AuditActor,
   type AuthenticatedIdentity,
   type ClientInstanceId,
   type JobControl,
@@ -32,7 +34,11 @@ import {
 } from "@vivd-catalyst/core";
 import { z } from "zod";
 import { indexWorkflowSteps, type WorkflowStepIndex } from "./definition";
-import type { WorkflowDefinitionSource, WorkflowDefinitionSummary } from "./definition-source";
+import type {
+  WorkflowDefinitionRevision,
+  WorkflowDefinitionSource,
+  WorkflowDefinitionSummary
+} from "./definition-source";
 import { jsonBytes, jsonObjectSchema } from "./json";
 import {
   WORKFLOW_RUN_LIMITS,
@@ -47,7 +53,16 @@ import { secretOperationSteps, type WorkflowOperationCalls } from "./operation-s
 import { itemLabelOf } from "./references";
 import { principalActor, workflowRunPrincipal } from "./run-identity";
 import { withEveryBodyStep } from "./run-view";
+import { createScheduleTrigger } from "./schedule-trigger";
 import { createStepExecutor, type StepEnd } from "./step-execution";
+
+const reasonSchema = z.object({ reason: z.string().min(1) });
+
+/** The reason a refused start names, for the record of a due time that started nothing. */
+function refusalReason(error: AppError): string {
+  const details = reasonSchema.safeParse(error.details);
+  return details.success ? details.data.reason : error.code;
+}
 
 // The engine of Workflow Runs. A run is a row, each step it reaches is a step run, and each
 // step run is executed by one job of the shared executor. A step ends in the transaction
@@ -79,6 +94,8 @@ export interface WorkflowEngineOptions {
   /** Bounds below the release's own, for a test. */
   limits?: Partial<WorkflowRunLimits>;
   now?: () => Date;
+  /** The time zone the cron expressions of `schedule` triggers are read in. UTC when left out. */
+  timeZone?: string;
 }
 
 export interface StartWorkflowRunInput {
@@ -113,6 +130,11 @@ export interface WorkflowEngine {
   }): Promise<WorkflowStepRunView[]>;
   /** The Workflows with a published definition, each with its latest run where it has one. */
   listWorkflows(): Promise<(WorkflowDefinitionSummary & { lastRun?: WorkflowLastRun })[]>;
+  /**
+   * Makes sure every published Workflow with a `schedule` trigger has the job of its next due
+   * time. A process calls it when it starts, and whoever publishes a definition calls it then.
+   */
+  planSchedules(): Promise<{ workflow: string; dueAt: string }[]>;
   /** What the job worker of the process serves for the engine. */
   jobHandlers: readonly RegisteredJobHandler[];
 }
@@ -519,103 +541,186 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     }
   });
 
+  /**
+   * What every start checks before a run exists: the input against the definition, the
+   * operations of the steps, and the principal the run acts as. It throws the refusal.
+   */
+  async function prepareStart(published: WorkflowDefinitionRevision, given: unknown) {
+    const { manifest } = published;
+    const [trigger] = manifest.steps;
+    if (trigger?.type !== "trigger") {
+      throw new AppError("CONFLICT", `The Workflow '${manifest.id}' has no trigger`, {
+        reason: "no_trigger"
+      });
+    }
+    const schema = compileJsonSchema(manifest.inputs);
+    if (!schema.ok) {
+      throw new AppError("CONFLICT", "The Workflow's inputs are a schema that cannot be checked", {
+        reason: "inputs_unreadable"
+      });
+    }
+    const runInput = jsonObjectSchema.safeParse(given ?? {});
+    const issues = runInput.success ? schema.validate(runInput.data) : [];
+    if (!runInput.success || issues.length > 0) {
+      throw new AppError("VALIDATION_FAILED", "The input does not fit the Workflow's inputs", {
+        reason: "input_invalid",
+        issues: issues.map((issue) => ({ path: issue.path, message: issue.message }))
+      });
+    }
+    if (jsonBytes(runInput.data) > limits.stepDataMaxBytes) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `The input of a run is at most ${limits.stepDataMaxBytes} bytes`,
+        { reason: "input_invalid" }
+      );
+    }
+    const secret = await secretOperationSteps(manifest, operationCalls.registry);
+    if (secret.length > 0) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `The definition of the Workflow '${manifest.id}' cannot be run: ${secret[0]?.message ?? ""}`,
+        { reason: "operation_secret", issues: secret }
+      );
+    }
+    const principal = await workflowRunPrincipal(stores.apiAccess, clientInstanceId, manifest);
+    if (!principal) {
+      throw new AppError(
+        "CONFLICT",
+        `The instance has no active service principal named '${manifest.runAs}', which the Workflow '${manifest.id}' runs as`,
+        { reason: "principal_inactive" }
+      );
+    }
+    return { published, trigger, input: runInput.data, principal };
+  }
+
+  /**
+   * Writes a run with the step run of its trigger and the audit of its start. Answers
+   * nothing where the run names a due time of a schedule that has its run.
+   */
+  async function openRun(
+    tx: PlatformStores,
+    prepared: Awaited<ReturnType<typeof prepareStart>>,
+    started: Pick<WorkflowRun, "trigger" | "startedBy" | "correlationId"> &
+      Pick<Partial<WorkflowRun>, "operationRunId" | "scheduledFor"> & { actor: AuditActor }
+  ): Promise<WorkflowRun | undefined> {
+    const { published, trigger, input, principal } = prepared;
+    const { actor, ...origin } = started;
+    const createdAt = now();
+    const run = await tx.workflowRuns.createRun({
+      id: createPlatformId<"WorkflowRunId">("wfr"),
+      clientInstanceId,
+      workflow: published.manifest.id,
+      // The run keeps this revision to its end, whatever is published after it started.
+      definitionRevisionId: published.revisionId,
+      mode: "live",
+      definition: published.manifest,
+      input,
+      principal,
+      deadlineAt: new Date(createdAt.getTime() + limits.maxDurationMs).toISOString(),
+      createdAt: createdAt.toISOString(),
+      ...origin
+    });
+    if (!run) return undefined;
+    await beginStep(tx, run, trigger, { key: trigger.id });
+    await tx.audit.appendAuditEvent({
+      clientInstanceId,
+      type: "workflow_run.started",
+      status: "success",
+      actor,
+      subject: run.id,
+      correlationId: run.correlationId,
+      metadata: {
+        workflow: run.workflow,
+        definitionRevisionId: run.definitionRevisionId,
+        trigger: run.trigger,
+        mode: run.mode,
+        principalId: run.principal.id,
+        ...(run.scheduledFor === undefined ? {} : { scheduledFor: run.scheduledFor })
+      }
+    });
+    return run;
+  }
+
+  const schedule = createScheduleTrigger({
+    clientInstanceId,
+    stores,
+    definitions,
+    timeZone: options.timeZone ?? "UTC",
+    now,
+    async prepare(published) {
+      let prepared: Awaited<ReturnType<typeof prepareStart>>;
+      try {
+        // A schedule gives a run no input: a Workflow that needs one is not started by it.
+        prepared = await prepareStart(published, {});
+      } catch (error) {
+        if (!isAppError(error)) throw error;
+        return { refused: refusalReason(error) };
+      }
+      const { principal, published: revision } = prepared;
+      return {
+        async start(tx, scheduledFor, correlationId) {
+          const due = scheduledFor.toISOString();
+          const state = await tx.workflowRuns.readScheduleState({
+            clientInstanceId,
+            workflow: revision.manifest.id,
+            scheduledFor: due
+          });
+          if (state.fired) return { outcome: "fired" };
+          // The run of an earlier due time is still open: this one is skipped, not queued.
+          if (state.open) return { outcome: "skipped", reason: "overlap" };
+          const run = await openRun(tx, prepared, {
+            trigger: "schedule",
+            scheduledFor: due,
+            // Nobody is present at a due time: the run is started as its own principal.
+            startedBy: {
+              kind: "service_principal",
+              id: principal.id,
+              label: principal.displayLabel
+            },
+            actor: principalActor({ principal }),
+            correlationId
+          });
+          return { outcome: run ? "started" : "fired" };
+        }
+      };
+    }
+  });
+
   return {
-    jobHandlers: [stepHandler],
+    jobHandlers: [stepHandler, schedule.handler],
+    planSchedules: schedule.plan,
 
     async start(input) {
       const published = await definitions.read(input.workflow);
       if (!published) {
         throw new AppError("NOT_FOUND", `There is no Workflow '${input.workflow}'`);
       }
-      const { manifest } = published;
-      const [trigger] = manifest.steps;
+      const [trigger] = published.manifest.steps;
       if (trigger?.type !== "trigger" || !trigger.triggers.some(({ kind }) => kind === "manual")) {
-        throw new AppError("CONFLICT", `The Workflow '${manifest.id}' is not started by hand`, {
-          reason: "no_manual_trigger"
-        });
-      }
-      const schema = compileJsonSchema(manifest.inputs);
-      if (!schema.ok) {
         throw new AppError(
           "CONFLICT",
-          "The Workflow's inputs are a schema that cannot be checked",
-          {
-            reason: "inputs_unreadable"
-          }
+          `The Workflow '${published.manifest.id}' is not started by hand`,
+          { reason: "no_manual_trigger" }
         );
       }
-      const runInput = jsonObjectSchema.safeParse(input.input ?? {});
-      const issues = runInput.success ? schema.validate(runInput.data) : [];
-      if (!runInput.success || issues.length > 0) {
-        throw new AppError("VALIDATION_FAILED", "The input does not fit the Workflow's inputs", {
-          issues: issues.map((issue) => ({ path: issue.path, message: issue.message }))
-        });
-      }
-      if (jsonBytes(runInput.data) > limits.stepDataMaxBytes) {
-        throw new AppError(
-          "VALIDATION_FAILED",
-          `The input of a run is at most ${limits.stepDataMaxBytes} bytes`
-        );
-      }
-      const secret = await secretOperationSteps(manifest, operationCalls.registry);
-      if (secret.length > 0) {
-        throw new AppError(
-          "VALIDATION_FAILED",
-          `The definition of the Workflow '${manifest.id}' cannot be run: ${secret[0]?.message ?? ""}`,
-          { reason: "operation_secret", issues: secret }
-        );
-      }
-      const principal = await workflowRunPrincipal(stores.apiAccess, clientInstanceId, manifest);
-      if (!principal) {
-        throw new AppError(
-          "CONFLICT",
-          `The instance has no active service principal named '${manifest.runAs}', which the Workflow '${manifest.id}' runs as`,
-          { reason: "principal_inactive" }
-        );
-      }
+      const prepared = await prepareStart(published, input.input);
       const { startedBy } = input;
-      const createdAt = now();
-      const id = createPlatformId<"WorkflowRunId">("wfr");
-      await stores.transaction(async (tx) => {
-        const run = await tx.workflowRuns.createRun({
-          id,
-          clientInstanceId,
-          workflow: manifest.id,
-          // The run keeps this revision to its end, whatever is published after it started.
-          definitionRevisionId: published.revisionId,
-          mode: "live",
+      const run = await stores.transaction((tx) =>
+        openRun(tx, prepared, {
           trigger: "manual",
-          definition: manifest,
-          input: runInput.data,
-          principal,
           startedBy: {
             kind: isAuthenticatedServicePrincipal(startedBy) ? "service_principal" : "user",
             id: startedBy.id,
             label: startedBy.displayLabel
           },
           ...(input.operationRunId ? { operationRunId: input.operationRunId } : {}),
-          deadlineAt: new Date(createdAt.getTime() + limits.maxDurationMs).toISOString(),
-          correlationId: input.correlationId,
-          createdAt: createdAt.toISOString()
-        });
-        await beginStep(tx, run, trigger, { key: trigger.id });
-        await tx.audit.appendAuditEvent({
-          clientInstanceId,
-          type: "workflow_run.started",
-          status: "success",
           actor: auditActorFromIdentity(startedBy),
-          subject: run.id,
-          correlationId: run.correlationId,
-          metadata: {
-            workflow: run.workflow,
-            definitionRevisionId: run.definitionRevisionId,
-            trigger: run.trigger,
-            mode: run.mode,
-            principalId: run.principal.id
-          }
-        });
-      });
-      const view = await stores.workflowRuns.readRun({ clientInstanceId, id });
+          correlationId: input.correlationId
+        })
+      );
+      const view = run
+        ? await stores.workflowRuns.readRun({ clientInstanceId, id: run.id })
+        : undefined;
       if (!view) throw new AppError("INTERNAL", "The started Workflow Run cannot be read");
       return view;
     },

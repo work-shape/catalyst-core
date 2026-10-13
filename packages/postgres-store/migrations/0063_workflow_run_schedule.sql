@@ -1,0 +1,2 @@
+ALTER TABLE "workflow_runs" ADD COLUMN "scheduled_for" timestamp with time zone;--> statement-breakpoint
+CREATE UNIQUE INDEX "workflow_runs_scheduled_for_idx" ON "workflow_runs" USING btree ("client_instance_id","workflow","scheduled_for") WHERE "workflow_runs"."scheduled_for" is not null;

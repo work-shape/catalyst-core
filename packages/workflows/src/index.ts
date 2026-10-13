@@ -17,9 +17,10 @@ export const WORKFLOW_OPERATION_IDS = [
 export const workflowsModule = defineModule({
   name: "workflows",
   operations: WORKFLOW_OPERATION_IDS,
-  jobKinds: [WORKFLOW_RUN_JOB_KINDS.executeStep]
+  jobKinds: [WORKFLOW_RUN_JOB_KINDS.executeStep, WORKFLOW_RUN_JOB_KINDS.fireSchedule]
 });
 
+export { lastDueWithin, nextDueAfter, parseCron } from "./cron";
 export {
   WORKFLOW_EXECUTED_STEP_TYPES,
   parseWorkflowManifest,
@@ -44,4 +45,5 @@ export {
   type WorkflowEngineOptions
 } from "./engine";
 export * from "./limits";
+export { workflowScheduleJobKind } from "./schedule-trigger";
 export { secretOperationSteps, type WorkflowOperationCalls } from "./operation-step";

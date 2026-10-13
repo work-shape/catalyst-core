@@ -613,7 +613,7 @@ describe("the modules workflows and dataStores", () => {
         "workflows.list_step_runs",
         "workflows.cancel_run"
       ],
-      jobKinds: [WORKFLOW_RUN_JOB_KINDS.executeStep]
+      jobKinds: [WORKFLOW_RUN_JOB_KINDS.executeStep, WORKFLOW_RUN_JOB_KINDS.fireSchedule]
     });
     expect(dataStoresModule).toEqual({
       ...nothing,

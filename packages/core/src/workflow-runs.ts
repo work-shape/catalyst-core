@@ -68,8 +68,17 @@ export interface WorkflowRun extends WorkflowRunRecordView {
    * actor of a step's call is the whole principal, as it is stored when the step runs.
    */
   principal: Pick<ServicePrincipalRecord, "id" | "name" | "displayLabel">;
-  /** Who started the run. Its rights opened the start and nothing a step does. */
+  /**
+   * Who started the run. Its rights opened the start and nothing a step does. A run a
+   * schedule started has no person behind it: its `trigger` says `schedule`, and this names
+   * the Workflow's own principal, which the due time started the run as.
+   */
   startedBy: OperationRunActor;
+  /**
+   * The due time of the schedule that started the run. One run of a Workflow exists per due
+   * time, however often that time is fired. Missing on every other run.
+   */
+  scheduledFor?: ISODateString;
   /** The Operation Run of the call that started the run. */
   operationRunId?: OperationRunId;
   /** Step runs created so far, the steps of every loop iteration among them. */
@@ -93,6 +102,7 @@ export type NewWorkflowRun = Pick<
   | "trigger"
   | "principal"
   | "startedBy"
+  | "scheduledFor"
   | "operationRunId"
   | "deadlineAt"
   | "correlationId"
@@ -198,8 +208,20 @@ export interface WorkflowStepRunEnd {
 }
 
 export interface WorkflowRunsStore {
-  /** Writes a run as `queued`. */
-  createRun(run: NewWorkflowRun): Promise<WorkflowRun>;
+  /**
+   * Writes a run as `queued`. Answers nothing, and writes nothing, where the run names a due
+   * time of a schedule that a run of the same Workflow already has: a due time starts once.
+   */
+  createRun(run: NewWorkflowRun): Promise<WorkflowRun | undefined>;
+  /**
+   * What a due time of a Workflow's schedule meets: whether a run for it exists, and whether
+   * a run an earlier due time started has not ended.
+   */
+  readScheduleState(input: {
+    clientInstanceId: ClientInstanceId;
+    workflow: string;
+    scheduledFor: ISODateString;
+  }): Promise<{ fired: boolean; open: boolean }>;
   /**
    * Reads a run and holds its row until the transaction ends. Every write to a run or to one
    * of its step runs is made behind it, so a step that ends and a cancel never both win.
@@ -294,6 +316,11 @@ export interface WorkflowRunsStore {
   }): Promise<{ value: JsonValue } | undefined>;
   /** How many items the list of a loop step run holds, once the loop resolved it. */
   countLoopItems(ref: WorkflowStepRunRef): Promise<number | undefined>;
+  /**
+   * How many items of a loop step run have been started: one more than the highest item that
+   * has a step run. Items start in the order of the list, so every item below it has started.
+   */
+  countLoopItemsStarted(ref: WorkflowStepRunRef): Promise<number>;
   /** One item of the list of a loop step run, without reading the list. */
   readLoopItem(
     ref: WorkflowStepRunRef & { index: number }

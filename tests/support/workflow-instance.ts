@@ -208,6 +208,9 @@ export async function workflowFixture(
     limits?: InstanceWorkflowsParts["limits"];
     /** In place of the fixture folders. */
     definitions?: WorkflowDefinitionSource;
+    /** The clock of the engine and the time zone of its schedules, for a test of due times. */
+    now?: InstanceWorkflowsParts["now"];
+    timeZone?: string;
   } = {}
 ): Promise<WorkflowFixture> {
   let workflows: InstanceWorkflows | undefined;
@@ -230,7 +233,9 @@ export async function workflowFixture(
           stores,
           operationCalls: server.operationCalls,
           definitions: options.definitions ?? fixtureDefinitions(),
-          ...(options.limits ? { limits: options.limits } : {})
+          ...(options.limits ? { limits: options.limits } : {}),
+          ...(options.now ? { now: options.now } : {}),
+          ...(options.timeZone === undefined ? {} : { timeZone: options.timeZone })
         });
         return server;
       },

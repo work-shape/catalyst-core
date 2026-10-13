@@ -94,15 +94,15 @@ export function createStepExecutor(options: StepExecutorOptions) {
       switch (step?.type) {
         case "trigger": {
           // A definition another release stored may name a trigger no engine fires yet.
-          const other = step.triggers.find((trigger) => trigger.kind !== "manual");
+          const other = step.triggers.find((trigger) => trigger.kind === "parent");
           if (other) throw notSupportedFailure(`the trigger '${other.kind}'`);
           const input = await stores.workflowRuns.readRunInput({ clientInstanceId, id: run.id });
           const output: WorkflowTriggerOutput = {
             input: input ?? {},
             startedAt: run.startedAt ?? run.createdAt,
             trigger: run.trigger,
-            // Only a tick of a schedule has a scheduled time, and no run is started by one yet.
-            scheduledFor: null
+            // The due time of the schedule that started the run, and of no other run.
+            scheduledFor: run.scheduledFor ?? null
           };
           return { kind: "done", output: { ...output } };
         }

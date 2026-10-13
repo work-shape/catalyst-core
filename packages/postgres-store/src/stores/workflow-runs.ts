@@ -5,6 +5,8 @@ import type { PostgresConnection } from "../postgres-database";
 export function createPostgresWorkflowRunsStore(db: PostgresConnection): WorkflowRunsStore {
   return {
     createRun: (run) => operations.createWorkflowRun(db, run),
+    readScheduleState: (input) => operations.readWorkflowScheduleState(db, input),
+    countLoopItemsStarted: (ref) => operations.countWorkflowLoopItemsStarted(db, ref),
     lockRun: (ref) => operations.lockWorkflowRun(db, ref),
     readRun: (input) => operations.readWorkflowRun(db, input),
     listRuns: (input) => operations.listWorkflowRuns(db, input),

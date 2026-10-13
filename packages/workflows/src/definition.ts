@@ -19,6 +19,7 @@ import {
 } from "@vivd-catalyst/core";
 import { JSON_SCHEMA, YAMLException, load } from "js-yaml";
 import { z } from "zod";
+import { parseCron } from "./cron";
 import { holdsBrokenDatasetReference, jsonObjectSchema, jsonValueSchema } from "./json";
 import {
   WORKFLOW_DEFINITION_MAX_STEPS,
@@ -191,13 +192,20 @@ function unsupportedIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[
         issues.push(notSupported(`${at}.type`, `a step of the type '${step.type}'`));
       }
       if (step.type === "trigger") {
-        // Only the start by hand is built. A trigger that is read and never fires would
-        // look like a schedule that is kept.
+        // A trigger that is read and never fires would look like one that is kept.
         step.triggers.forEach((trigger, number) => {
-          if (trigger.kind !== "manual") {
-            issues.push(
-              notSupported(`${at}.triggers[${number}].kind`, `the trigger '${trigger.kind}'`)
-            );
+          const here = `${at}.triggers[${number}]`;
+          if (trigger.kind === "parent") {
+            issues.push(notSupported(`${here}.kind`, "the trigger 'parent'"));
+          }
+          if (trigger.kind !== "schedule") return;
+          // A schedule fires the latest of the due times it missed and skips a due time
+          // that meets an open run. The other ways are read and not built.
+          if (trigger.missed !== undefined && trigger.missed !== "last") {
+            issues.push(notSupported(`${here}.missed`, `'missed: ${trigger.missed}'`));
+          }
+          if (trigger.overlap !== undefined && trigger.overlap !== "skip") {
+            issues.push(notSupported(`${here}.overlap`, `'overlap: ${trigger.overlap}'`));
           }
         });
       }
@@ -294,6 +302,16 @@ function structuralIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[]
     }
   });
   for (const [id, { step, sequence }] of index) {
+    if (step.type === "trigger") {
+      for (const trigger of step.triggers) {
+        if (trigger.kind === "schedule" && !parseCron(trigger.cron)) {
+          issues.push({
+            path: `steps.${id}.triggers`,
+            message: `'${trigger.cron}' is no cron expression of five fields: minute, hour, day of month, month and day of week`
+          });
+        }
+      }
+    }
     if (sequence.loop !== undefined && (step.type === "trigger" || step.type === "output")) {
       issues.push({
         path: `steps.${id}`,

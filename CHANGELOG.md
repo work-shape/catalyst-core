@@ -22,6 +22,21 @@ contain breaking changes; a patch version does not.
   with a price above zero for the entry's model and for the model of every binding on it. The
   adapter fixes the endpoint; the profile, the key's IAM policy, Bedrock's data retention and
   invocation logging decide the rest and are the operator's to set, see the configuration docs.
+- **Workflow schedules:** a published Workflow with a `schedule` trigger starts its runs by
+  itself. The trigger names a cron expression of five fields (minute, hour, day of month,
+  month, day of week; numbers, ranges, steps and lists), read in UTC. One job per Workflow
+  waits for the next due time on the job executor and starts the run of that time; a due time
+  starts one run, whichever worker fires it and however often. Times that came due while the
+  instance was down start one run, for the latest of them. A due time that meets the open run
+  of an earlier one starts nothing and is audited as `workflow_run.tick_skipped` with the
+  reason `overlap`, as is one whose Workflow cannot be started (`principal_inactive`,
+  `input_invalid`, `operation_secret`). A scheduled run gets no input, has the trigger
+  `schedule` and its due time as `scheduledFor`, and names the Workflow's own service
+  principal as its starter. `manual` and `schedule` may stand together. `missed: skip`,
+  `missed: all` and `overlap: queue` are refused as `not_supported_yet`. A process plans the
+  schedules of what is published when it starts. **Migration `0063_workflow_run_schedule`**
+  adds the column `workflow_runs.scheduled_for` and a unique index on it per Workflow; the
+  previous release runs on the migrated database.
 - **Workflow Runs:** with the module `workflows` on, a Workflow is started by hand and runs to
   its end on the job executor. `POST /api/v1/workflows/{workflow}/runs` starts a run
   (`workflow.use`), `GET` on the same path lists the runs of a Workflow, `GET /api/v1/workflows`
@@ -39,8 +54,7 @@ contain breaking changes; a patch version does not.
   nested blocks), `reference_out_of_scope`, `duplicate_step_id` or `not_supported_yet`: the
   last for the reserved blocks `condition` and `parallel` and for every field the file form
   holds and this engine does not run (`dataset`, `paginate`, `collect`, a loop's `concurrency`
-  above 1, the step types `code`, `agent`, `notify` and `workflow`, the triggers `schedule`
-  and `parent`,
+  above 1, the step types `code`, `agent`, `notify` and `workflow`, the trigger `parent`,
   `labels`, `onFailure`, `retention`, `types`). A loop returns how many of its items ended how
   (`total`, `done`, `failed`) and never what an item returned. With `onItemFailure: continue`
   the loop goes on past a failed item and ends as `done`, and so does its run; without it the
