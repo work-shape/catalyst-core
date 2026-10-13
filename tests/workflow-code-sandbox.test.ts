@@ -181,7 +181,10 @@ for address in ("1.1.1.1", "172.17.0.1", "host.docker.internal"):
         found[address] = "connected"
     except Exception as error:
         found[address] = type(error).__name__
-found["interfaces"] = sorted(name for _, name in socket.if_nameindex())
+def up(name):
+    with open("/sys/class/net/" + name + "/flags") as flags:
+        return int(flags.read(), 16) & 1 == 1
+found["interfaces"] = sorted(name for _, name in socket.if_nameindex() if up(name))
 print(json.dumps(found))
 `);
     const found = z.record(z.string(), z.unknown()).parse(valueOf(outcomeOf(result)));
@@ -189,7 +192,9 @@ print(json.dumps(found))
     expect(found["1.1.1.1"]).not.toBe("connected");
     expect(found["172.17.0.1"]).not.toBe("connected");
     expect(found["host.docker.internal"]).not.toBe("connected");
-    // The loopback of the container and nothing else.
+    // The loopback of the container and nothing else that is up. A kernel with tunnel modules
+    // loaded, as Docker Desktop's, puts their fallback devices (gre0, sit0, tunl0) in every
+    // network namespace: they are down and lead nowhere.
     expect(found.interfaces).toEqual(["lo"]);
   }, 120_000);
 
