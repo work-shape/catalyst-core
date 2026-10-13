@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { MODEL_CALL_RESERVED_OUTPUT_TOKENS } from "@vivd-catalyst/core";
 import { createProviderToolMetadata, type ProviderToolNames } from "../openai-compatible-mapping";
 import type { ModelAdapterRequest, ModelCompletion, ModelContent, ModelToolCall } from "../types";
+import { assertBedrockDocuments, toBedrockDocumentBlock } from "./bedrock-documents";
 import {
   bedrockThinkingSettings,
   findBedrockThinkingTurn,
@@ -47,6 +48,7 @@ export function toBedrockRequest(
   toolNames: ProviderToolNames;
   thinkingTurns: BedrockThinkingTurn[];
 } {
+  assertBedrockDocuments(request.messages, providerId);
   const tools = createProviderToolMetadata(request.tools);
   const recordedTurns = readBedrockThinkingTurns(providerId, request.continuation);
   const thinkingTurns: BedrockThinkingTurn[] = [];
@@ -150,8 +152,8 @@ function toTextBlocks(content: ModelContent): { type: "text"; text: string }[] {
 }
 
 /**
- * Text and images in the order they were given. A document is refused before it gets here.
- * `leaveOut` is asked for every image that fits by its size.
+ * Text, images and documents in the order they were given. A document Bedrock would not take
+ * was refused before it gets here. `leaveOut` is asked for every image that fits by its size.
  */
 function contentBlocks(content: ModelContent, leaveOut: () => boolean): BedrockContentBlock[] {
   if (typeof content === "string") {
@@ -175,6 +177,8 @@ function contentBlocks(content: ModelContent, leaveOut: () => boolean): BedrockC
           data: Buffer.from(part.data).toString("base64")
         }
       });
+    } else {
+      blocks.push(toBedrockDocumentBlock(part));
     }
   }
   if (omitted > 0) {

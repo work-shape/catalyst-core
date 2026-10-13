@@ -120,7 +120,7 @@ describe("Bedrock adapter: what a config may name", () => {
     });
   });
 
-  it("declares tool calls, images and thinking, and nothing it does not map", async () => {
+  it("declares tool calls, images, documents and thinking, and nothing it does not map", async () => {
     const adapter = await bedrock();
     expect(adapter.capabilities(RECORDED_BEDROCK_PROFILE)).toEqual({
       reasoningEfforts: ["none", "low", "medium", "high"],
@@ -131,7 +131,7 @@ describe("Bedrock adapter: what a config may name", () => {
       continuation: true,
       fastTier: false,
       imageInput: true,
-      documentInput: false,
+      documentInput: true,
       structuredOutput: false,
       streaming: true,
       priceRequired: true

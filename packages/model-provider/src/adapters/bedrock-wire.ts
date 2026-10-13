@@ -9,7 +9,11 @@ export const BEDROCK_ANTHROPIC_VERSION = "bedrock-2023-05-31";
 
 export type BedrockContentBlock =
   | { type: "text"; text: string }
-  | { type: "image"; source: { type: "base64"; media_type: string; data: string } };
+  | { type: "image"; source: { type: "base64"; media_type: string; data: string } }
+  | {
+      type: "document";
+      source: { type: "base64"; media_type: "application/pdf"; data: string };
+    };
 
 /**
  * What the model thought before or between its tool calls. `signature` and `data` are opaque:

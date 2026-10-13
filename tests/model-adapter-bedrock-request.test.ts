@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ModelMessage, ModelTool } from "@vivd-catalyst/model-provider";
-import { answerWith, bedrock, message } from "./support/bedrock-adapter";
+import {
+  ModelProviderError,
+  type ModelMessage,
+  type ModelTool
+} from "@vivd-catalyst/model-provider";
+import { answerWith, bedrock, collect, message } from "./support/bedrock-adapter";
 import { RECORDED_BEDROCK_PROFILE } from "./support/model-adapter-recordings";
 
 /** What the Bedrock adapter sends: the host, the key, and a request in the Messages format. */
@@ -171,6 +175,115 @@ describe("Bedrock adapter: what it sends", () => {
     });
   });
 });
+
+describe("Bedrock adapter: documents", () => {
+  const pdf = (data: Uint8Array) => ({
+    type: "document" as const,
+    mimeType: "application/pdf" as const,
+    data
+  });
+  const ask = (documents: Uint8Array[]) => ({
+    model: RECORDED_BEDROCK_PROFILE,
+    messages: [user([...documents.map(pdf), { type: "text" as const, text: "Summarize." }])],
+    tools: []
+  });
+
+  it("sends a PDF as a document block where it stands, also in the result of a tool", async () => {
+    const sent = answerWith(() => Response.json(message([{ type: "text", text: "Read." }])));
+    const data = syntheticPdf(100);
+    const block = {
+      type: "document",
+      source: {
+        type: "base64",
+        media_type: "application/pdf",
+        data: Buffer.from(data).toString("base64")
+      }
+    };
+
+    await (
+      await bedrock()
+    ).complete({
+      model: RECORDED_BEDROCK_PROFILE,
+      messages: [
+        user("Load the report."),
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [{ toolCallId: "toolu_1", toolName: "get_weather", input: {} }]
+        },
+        { role: "tool", toolCallId: "toolu_1", content: [pdf(data)] }
+      ],
+      tools: [weatherTool]
+    });
+
+    const [, , result] = records(sent[0]?.body, "messages");
+    expect(records(result, "content")).toEqual([
+      { type: "tool_result", tool_use_id: "toolu_1", content: [block] }
+    ]);
+  });
+
+  it.each([
+    [
+      "a document above 4.5 MB",
+      [new Uint8Array(4_500_001)],
+      "document_too_large",
+      "BEDROCK_DOCUMENT_MAX_BYTES",
+      "A document is too large for the model. Split it and send the parts."
+    ],
+    [
+      "documents of more than 100 pages together",
+      [syntheticPdf(60), syntheticPdf(41)],
+      "document_too_many_pages",
+      "BEDROCK_DOCUMENT_MAX_PAGES",
+      "The documents have too many pages for the model. Split them and send the parts."
+    ]
+  ])("refuses %s by name and sends nothing", async (_name, documents, reason, limit, sentence) => {
+    const sent = answerWith(() => Response.json(message([{ type: "text", text: "Read." }])));
+    const adapter = await bedrock();
+    const request = ask(documents);
+
+    for (const failure of [
+      await adapter.complete(request).catch((error: unknown) => error),
+      await collect(adapter.stream(request)).catch((error: unknown) => error)
+    ]) {
+      expect(failure).toBeInstanceOf(ModelProviderError);
+      expect(failure).toMatchObject({
+        kind: "invalid_request",
+        retryable: false,
+        message: sentence,
+        details: { providerId: "bedrock", reason, limit }
+      });
+    }
+    // Refused whole: the document is not left out of a request that is sent without it.
+    expect(sent).toHaveLength(0);
+  });
+
+  it("sends documents at the limits", async () => {
+    const sent = answerWith(() => Response.json(message([{ type: "text", text: "Read." }])));
+
+    await (await bedrock()).complete(ask([syntheticPdf(100), new Uint8Array(4_500_000)]));
+
+    expect(sent).toHaveLength(1);
+    expect(records(records(sent[0]?.body, "messages")[0], "content")).toHaveLength(3);
+  });
+});
+
+/** A PDF in outline only: a page tree and that many page objects. No reader opens it. */
+function syntheticPdf(pages: number): Uint8Array {
+  const kids = Array.from({ length: pages }, (_unused, index) => `${index + 3} 0 R`).join(" ");
+  return new TextEncoder().encode(
+    [
+      "%PDF-1.4",
+      "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj",
+      `2 0 obj << /Type /Pages /Count ${pages} /Kids [${kids}] >> endobj`,
+      ...Array.from(
+        { length: pages },
+        (_unused, index) => `${index + 3} 0 obj << /Type/Page /Parent 2 0 R >> endobj`
+      ),
+      "%%EOF"
+    ].join("\n")
+  );
+}
 
 /** The objects in the list `key` of a request body or of one of its parts. */
 function records(value: unknown, key: string): Record<string, unknown>[] {

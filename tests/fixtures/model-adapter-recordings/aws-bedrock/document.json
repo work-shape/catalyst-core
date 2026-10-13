@@ -1,0 +1,55 @@
+{
+  "exchanges": [
+    {
+      "request": {
+        "url": "https://bedrock-runtime.eu-central-1.amazonaws.com/model/arn%3Aaws%3Abedrock%3Aeu-central-1%3A000000000000%3Aapplication-inference-profile%2Frecordedprofile/invoke",
+        "body": {
+          "anthropic_version": "bedrock-2023-05-31",
+          "max_tokens": 16000,
+          "messages": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "document",
+                  "source": {
+                    "type": "base64",
+                    "media_type": "application/pdf",
+                    "data": "JVBERi0xLjQKJSBzeW50aGV0aWMgY29uZm9ybWFuY2UgZG9jdW1lbnQK"
+                  }
+                },
+                {
+                  "type": "text",
+                  "text": "Summarize the document."
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "model": "recorded-claude-model",
+          "id": "msg_bdrk_recorded",
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "The document is a synthetic page."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 1600,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "output_tokens": 9
+          }
+        }
+      }
+    }
+  ]
+}
