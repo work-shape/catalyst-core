@@ -51,7 +51,14 @@ function toneLabel(tone: BadgeTone, text: GalleryText): string {
 }
 
 const avatarSizes: readonly AvatarSize[] = ["xs", "sm", "md", "lg"];
-const avatarKinds: readonly AvatarKind[] = ["person", "workspace", "agent", "app", "service"];
+const avatarKinds: readonly AvatarKind[] = [
+  "person",
+  "workspace",
+  "agent",
+  "app",
+  "workflow",
+  "service"
+];
 const chipSizes: readonly ChipSize[] = ["sm", "md"];
 const countTones: readonly CountBadgeTone[] = ["primary", "muted"];
 
@@ -63,7 +70,8 @@ function avatarName(kind: AvatarKind, text: GalleryText): string {
     person: text.personName,
     workspace: text.workspaceMarketing,
     agent: text.rowAgent,
-    app: text.rowWorkflow,
+    app: text.rowKnowledge,
+    workflow: text.rowWorkflow,
     service: text.rowServicePrincipal
   };
   return names[kind];
@@ -75,6 +83,7 @@ function kindLabel(kind: AvatarKind, text: GalleryText): string {
     workspace: text.avatarWorkspace,
     agent: text.avatarAgent,
     app: text.avatarApp,
+    workflow: text.avatarWorkflow,
     service: text.avatarService
   };
   return labels[kind];

@@ -9,16 +9,21 @@ import {
 } from "@vivd-catalyst/core";
 import {
   PLATFORM_ASSET_TOOL_NAMES,
+  PLATFORM_DISCOVERY_TOOL_NAMES,
   createPlatformAssetBinding,
   createPlatformAssetTools,
+  createPlatformDiscoveryTools,
   ToolRegistry,
   type PlatformAssetBinding
 } from "@vivd-catalyst/tool-execution";
 import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
 import { workflowAuthoringSkill, workflowsModule } from "@vivd-catalyst/workflows";
+import { platformSkill } from "./platform-skill";
 
-// What a conversation is offered beyond its agent's definition: the tools that read and save
-// an asset, and the skills the platform ships for the assets of a kind.
+// What a conversation is offered beyond its agent's definition. Every conversation: the tools
+// that find, open, read and save an asset of the platform and the skill that says how the
+// platform works. A conversation about an asset the skills the platform ships for its kind,
+// one about none yet those of every kind, since the agent may open any.
 
 /** The tool an agent reads a skill with. A shipped skill is read through it like any other. */
 const READ_SKILL_TOOL = "read_skill";
@@ -34,7 +39,7 @@ interface ConversationOfferInput {
 const SHIPPED_SKILL_KINDS = [WORKFLOW_ASSET_KIND];
 
 /** The skills the platform ships for the assets of one kind. */
-function shippedSkillsOf(kind: string, modules: ModuleSnapshot): ShippedSkill[] {
+function subjectSkillsOf(kind: string, modules: ModuleSnapshot): ShippedSkill[] {
   return kind === WORKFLOW_ASSET_KIND && modules.isEnabled(workflowsModule.name)
     ? [workflowAuthoringSkill]
     : [];
@@ -51,15 +56,19 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
       const { subject } = conversation;
       // A skill nobody can read is not listed: it would promise what no tool answers. A
       // conversation about an asset is offered the skills of its kind, one about none yet
-      // those of every kind, since the agent may start on any.
-      const skills = !input.hasTool(READ_SKILL_TOOL)
-        ? []
-        : subject
-          ? shippedSkillsOf(subject.kind, input.modules)
-          : SHIPPED_SKILL_KINDS.flatMap((kind) => shippedSkillsOf(kind, input.modules));
+      // those of every kind, since the agent may open any.
+      const skills = input.hasTool(READ_SKILL_TOOL)
+        ? [
+            platformSkill,
+            ...(subject
+              ? subjectSkillsOf(subject.kind, input.modules)
+              : SHIPPED_SKILL_KINDS.flatMap((kind) => subjectSkillsOf(kind, input.modules)))
+          ]
+        : [];
       return {
         ...(subject ? { subject } : {}),
         toolNames: [
+          ...PLATFORM_DISCOVERY_TOOL_NAMES,
           ...PLATFORM_ASSET_TOOL_NAMES,
           ...(skills.length > 0 ? [READ_SKILL_TOOL] : [])
         ].filter((toolName) => input.hasTool(toolName)),
@@ -86,12 +95,13 @@ export async function conversationToolNames(
 }
 
 /**
- * Everything a process has of the asset tools: the tools themselves, the port they are
- * carried out through, which the process binds once it has its asset operations, and what a
- * conversation is offered. The tools are built before the registry that holds them, so the
- * registry is attached when it exists; a run asks for it only after that.
+ * Everything a process has of the tools the platform offers a conversation: the tools
+ * themselves, the port they are carried out through, which the process binds once it has its
+ * asset operations, and what a conversation is offered. The tools are built before the
+ * registry that holds them, so the registry is attached when it exists; a run asks for it
+ * only after that.
  */
-export function createSubjectTools(input: Pick<ConversationOfferInput, "stores" | "modules">) {
+export function createPlatformTools(input: Pick<ConversationOfferInput, "stores" | "modules">) {
   const attached: { tools?: ToolRegistry } = {};
   const platformAssets: PlatformAssetBinding = createPlatformAssetBinding();
   return {
@@ -103,24 +113,28 @@ export function createSubjectTools(input: Pick<ConversationOfferInput, "stores" 
     bind(options: AssetWorkflowOptions): void {
       platformAssets.bind(createPlatformAssetCalls(options));
     },
-    tools: createPlatformAssetTools(platformAssets.calls),
+    tools: [
+      ...createPlatformDiscoveryTools(platformAssets.calls),
+      ...createPlatformAssetTools(platformAssets.calls)
+    ],
     conversationOffer: createConversationOffer({
       ...input,
       hasTool: (toolName) => attached.tools?.has(toolName) ?? false
     }),
     /**
-     * The tool registry of the process. The asset tools are offered by the server and listed
-     * by no agent, so no release names them: they are enabled beside the tools the release
-     * names, and the switch of their module turns them off. The tool that reads a skill is
-     * enabled with them, so that the skills the platform ships are readable whatever the
-     * release enables: an agent's own definition still lists the tool only where the release
-     * names it.
+     * The tool registry of the process. The tools the platform offers a conversation are
+     * listed by no agent, so no release names them: they are enabled beside the tools the
+     * release names, and the switch of their module turns them off. The tool that reads a
+     * skill is enabled with them, so that the skills the platform ships are readable in every
+     * conversation whatever the release enables: an agent's own definition still lists the
+     * tool only where the release names it.
      */
     registry(tools: AnyToolDefinition[], enabledByRelease: ReadonlySet<string>): ToolRegistry {
       attached.tools = new ToolRegistry({
         tools,
         enabledToolNames: new Set([
           ...enabledByRelease,
+          ...PLATFORM_DISCOVERY_TOOL_NAMES,
           ...PLATFORM_ASSET_TOOL_NAMES,
           READ_SKILL_TOOL
         ]),

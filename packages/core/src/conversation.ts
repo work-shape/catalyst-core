@@ -27,9 +27,9 @@ export type ConversationListScope = { kind: "viewer"; userId: string } | { kind:
 /**
  * The asset a conversation is about, by its kind and its name, such as a Workflow whose draft
  * the agent edits. It is set when the conversation is created from the asset's page, and by
- * the server when the agent's tool first reads or saves another asset in it: one subject at a
- * time, the last one wins. The tools that check and save a draft reach this asset and no
- * other, whatever a model names.
+ * the server when the agent opens another asset in it with `platform.assets.open`: one subject
+ * at a time, the last one opened wins. The tools that check and save a draft reach this asset
+ * and no other, whatever a model names.
  */
 export interface ConversationSubject {
   kind: string;
@@ -38,8 +38,8 @@ export interface ConversationSubject {
 
 /**
  * What the conversations of an instance are offered beyond what their agent's definition
- * lists: the tools that read and save an asset, and the skills the platform ships for the
- * assets of its kinds.
+ * lists: in every conversation the tools that find, open, read and save an asset and the skill
+ * that says how the platform works, and the skills the platform ships for the assets of a kind.
  */
 export interface ConversationOffer {
   /**
@@ -68,8 +68,9 @@ export interface ConversationOfferSource {
 }
 
 /**
- * The prefix of the tools that read and save an asset. The server offers them to the agent of
- * every conversation, whatever its definition lists.
+ * The prefix of the tools on the platform's assets. The server offers them to the agent of
+ * every conversation, whatever its definition lists. Only `platform.assets.open` moves what the
+ * conversation is about; the check and the save reach that asset and no other.
  */
 export const SUBJECT_TOOL_PREFIX = "platform.assets.";
 

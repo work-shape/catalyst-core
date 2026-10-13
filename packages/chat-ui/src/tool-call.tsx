@@ -625,6 +625,9 @@ export function readToolDisplayProjection(input: {
 
 const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
   en: {
+    "platform.context": "Check what this platform offers",
+    "platform.assets.list": "Search the platform",
+    "platform.assets.open": "Open the asset",
     "platform.assets.get": "Read the asset",
     "platform.assets.validate": "Check the draft",
     "platform.assets.put": "Save the draft",
@@ -644,6 +647,9 @@ const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
     "workspace.preview_images": "Preview images"
   },
   de: {
+    "platform.context": "Angebot der Plattform prüfen",
+    "platform.assets.list": "Plattform durchsuchen",
+    "platform.assets.open": "Asset öffnen",
     "platform.assets.get": "Asset lesen",
     "platform.assets.validate": "Entwurf prüfen",
     "platform.assets.put": "Entwurf speichern",

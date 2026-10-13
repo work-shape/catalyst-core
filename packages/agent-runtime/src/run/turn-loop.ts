@@ -49,8 +49,9 @@ export class TurnLoop {
   ): Promise<void> {
     const assets = await this.options.assetSource.getSnapshot();
     const listed = getSnapshotAgentConfig(assets, input.agentName);
-    // Every conversation is offered the asset tools, and the skills the platform ships for the
-    // asset it is about. The asset tools come from the offer alone, whatever the agent's
+    // Every conversation is offered the tools that find, open, read and save an asset of the
+    // platform and the skill that says how it works, and one about an asset the skills the
+    // platform ships for it. The asset tools come from the offer alone, whatever the agent's
     // definition lists.
     const offer = await this.options.conversationOffer?.offerOf({
       clientInstanceId: context.clientInstanceId,
@@ -141,7 +142,7 @@ export class TurnLoop {
         ],
         agentToolNames: agent.toolNames,
         agentSkillChangesEnabled: this.options.agentSkillChangesEnabled,
-        ...(offer ? { offer } : {})
+        ...(offer?.subject ? { subject: { ...offer, subject: offer.subject } } : {})
       })
     };
     const userMessage: ModelMessage = { role: "user", content: userContent };
