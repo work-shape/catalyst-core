@@ -1,6 +1,10 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
-import { ToolCallPart, ToolSubjectsProvider } from "@vivd-catalyst/chat-ui/tool-call";
+import {
+  ToolCallFoldLabel,
+  ToolCallPart,
+  ToolSubjectsProvider
+} from "@vivd-catalyst/chat-ui/tool-call";
 import { ToolDisplayPanelProvider } from "@vivd-catalyst/chat-ui/tool-display-panel";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
@@ -107,5 +111,45 @@ describe("a tool call of a Connection in a conversation", () => {
     expect(markup).not.toContain("tool-call-sentence");
     expect(markup).not.toContain("data-connection-icon");
     expect(markup).toContain("Workflow Summary");
+  });
+});
+
+describe("the fold of a group of tool calls", () => {
+  const fold = (
+    props: { only?: { toolName: string; result?: unknown }; count: number },
+    locale: "en" | "de" = "en"
+  ) =>
+    renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { children: null, locale },
+        createElement(
+          ToolSubjectsProvider,
+          { agents, children: null },
+          createElement(ToolCallFoldLabel, props)
+        )
+      )
+    );
+  const done = { toolName: READ, result: { rows: [] } };
+
+  it("says what its one call of a Connection did, beside the Connection's tile", () => {
+    expect(sentence(fold({ only: done, count: 1 }))).toBe("Read Sample business");
+    expect(sentence(fold({ only: done, count: 1 }, "de"))).toBe("Sample business gelesen");
+    expect(sentence(fold({ only: { toolName: READ }, count: 1 }, "de"))).toBe(
+      "Liest Sample business"
+    );
+    expect(fold({ only: done, count: 1 })).toContain('data-connection-icon="database"');
+    expect(fold({ only: done, count: 1 })).not.toContain("tool call");
+  });
+
+  it("counts several calls, and one call that has no sentence", () => {
+    expect(fold({ count: 3 })).toBe("3 tool calls");
+    expect(fold({ count: 3 }, "de")).toBe("3 Tool-Aufrufe");
+    expect(fold({ only: { toolName: "demo.workflow_summary", result: {} }, count: 1 })).toBe(
+      "1 tool call"
+    );
+    expect(fold({ only: { toolName: "read_skill", result: {} }, count: 1 }, "de")).toBe(
+      "1 Tool-Aufruf"
+    );
   });
 });

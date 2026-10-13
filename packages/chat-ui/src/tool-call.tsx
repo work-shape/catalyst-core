@@ -807,7 +807,6 @@ function ToolCallHead({
   statusLabel: string;
   subject?: ConnectionToolSubject;
 }) {
-  const { t } = useTranslation();
   if (!subject) {
     return (
       <>
@@ -818,6 +817,21 @@ function ToolCallHead({
       </>
     );
   }
+  return <ConnectionCallLine subject={subject} state={state} />;
+}
+
+/**
+ * What a call of a Connection did, in words beside the Connection's icon. The line of the
+ * call shows it, and so does the fold of a group that holds this one call.
+ */
+function ConnectionCallLine({
+  subject,
+  state
+}: {
+  subject: ConnectionToolSubject;
+  state: ToolUiState;
+}) {
+  const { t } = useTranslation();
   const { connection, effect } = subject;
   // The name is set apart in the sentence, wherever the language puts it.
   const [before, after = ""] = t(CONNECTION_SENTENCES[effect ?? "unknown"][state], {
@@ -833,6 +847,44 @@ function ToolCallHead({
       </span>
       {state === "completed" ? null : <ToolStatusIcon state={state} />}
     </>
+  );
+}
+
+/**
+ * What the fold of a group of tool calls says. A fold that holds one call of a Connection
+ * says what the call did, as the call's own line does. Several calls, and a call that has no
+ * sentence, are counted.
+ */
+export function ToolCallFoldLabel({
+  only,
+  count
+}: {
+  /** The group's one tool call, where it holds a single call. */
+  only?: {
+    toolName: string;
+    result?: unknown;
+    isError?: boolean;
+    status?: ToolCallMessagePartProps["status"];
+  };
+  count: number;
+}) {
+  const { t } = useTranslation();
+  const subject = useConnectionToolSubject(only?.toolName ?? "");
+  if (!only || !subject) {
+    return <>{t(count === 1 ? "toolCallCountSingular" : "toolCallCount", { count })}</>;
+  }
+  return (
+    <span className="inline-flex min-w-0 items-center gap-2" data-testid="tool-call-fold-line">
+      <ConnectionCallLine
+        subject={subject}
+        state={toolUiState({
+          isError: only.isError,
+          result: only.result,
+          status: only.status,
+          toolName: only.toolName
+        })}
+      />
+    </span>
   );
 }
 

@@ -33,7 +33,7 @@ import type { AssistantUiMessageCustomMetadata } from "./assistant-ui-adapter";
 import { AssistantSourcePart } from "./assistant-source-part";
 import { useTranslation } from "../i18n";
 import { MarkdownText } from "../markdown-text";
-import { DataPart, ToolCallPart } from "../tool-call";
+import { DataPart, ToolCallFoldLabel, ToolCallPart } from "../tool-call";
 import { ToolGroupContent, ToolGroupRoot, ToolGroupTrigger } from "./assistant-tool-group";
 import { formatWorkHistoryLabel } from "./elapsed-time";
 import { isWorkspacePromotedSurfacesData } from "../tool-surfaces";
@@ -312,7 +312,11 @@ function renderAssistantGroupedPart({
         part.indices
       );
       return (
-        <AssistantWorkGroup count={renderableIndices.length} summary={false}>
+        <AssistantWorkGroup
+          count={renderableIndices.length}
+          only={onlyToolCall(messageParts, renderableIndices)}
+          summary={false}
+        >
           {renderableIndices.map((index) => (
             <MessagePrimitive.PartByIndex
               key={`part-${index}`}
@@ -366,6 +370,7 @@ function AssistantWorkTimeline({
             <AssistantWorkGroup
               key={`tool-group-${item.indices[0]}`}
               count={renderableIndices.length}
+              only={onlyToolCall(messageParts, renderableIndices)}
               nested
               summary={false}
             >
@@ -407,8 +412,20 @@ function AssistantWorkTimeline({
 /** How long the work history of a run that just ended stays open before it folds itself. */
 const WORK_SUMMARY_AUTO_COLLAPSE_DELAY_MS = 80;
 
+type ToolCallPartState = Extract<PartState, { type: "tool-call" }>;
+
+/** The one tool call of a group that holds a single call. */
+function onlyToolCall(
+  parts: readonly PartState[],
+  indices: readonly number[]
+): ToolCallPartState | undefined {
+  const part = indices.length === 1 ? parts[indices[0] ?? -1] : undefined;
+  return part?.type === "tool-call" ? part : undefined;
+}
+
 function AssistantWorkGroup({
   count,
+  only,
   children,
   nested = false,
   summary,
@@ -416,6 +433,8 @@ function AssistantWorkGroup({
   autoCollapse = false
 }: {
   count: number;
+  /** The group's one tool call, where it holds a single call. */
+  only?: ToolCallPartState;
   children: ReactNode;
   nested?: boolean;
   summary: boolean;
@@ -439,9 +458,11 @@ function AssistantWorkGroup({
     return () => globalThis.clearTimeout(timeout);
   }, [autoCollapse, summary]);
 
-  const countLabel = summary
-    ? formatWorkHistoryLabel(t("workHistory"), durationMs)
-    : t(count === 1 ? "toolCallCountSingular" : "toolCallCount", { count });
+  const countLabel = summary ? (
+    formatWorkHistoryLabel(t("workHistory"), durationMs)
+  ) : (
+    <ToolCallFoldLabel only={only} count={count} />
+  );
 
   return (
     <ToolGroupRoot
