@@ -18,9 +18,9 @@ import type { AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
 import { offeredSkillNames } from "./shipped-skills";
 
 // What a conversation is offered beyond its agent's definition. Every conversation: the tools
-// that find what is on the platform and the skill that says how it works. A conversation about
-// an asset also: the tools the server binds to its subject, and the skill the platform ships
-// for an asset of that kind.
+// that find, open, read and save an asset of the platform and the skill that says how the
+// platform works. A conversation about an asset the skills the platform ships for its kind,
+// one about none yet those of every kind, since the agent may open any.
 
 /** The tool an agent reads a skill with. A shipped skill is read through it like any other. */
 const READ_SKILL_TOOL = "read_skill";
@@ -49,7 +49,7 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
         ...(subject ? { subject } : {}),
         toolNames: [
           ...PLATFORM_DISCOVERY_TOOL_NAMES,
-          ...(subject ? PLATFORM_ASSET_TOOL_NAMES : []),
+          ...PLATFORM_ASSET_TOOL_NAMES,
           ...(skillNames.length > 0 ? [READ_SKILL_TOOL] : [])
         ].filter((toolName) => input.hasTool(toolName)),
         skillNames
@@ -60,7 +60,7 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
 
 /**
  * The tools an agent may call in one conversation: those its definition lists, without the
- * tools of a subject, and those the conversation is offered.
+ * asset tools, and those the conversation is offered.
  */
 export async function conversationToolNames(
   listed: readonly string[],

@@ -22,7 +22,7 @@ import {
   type RuntimeCallContext
 } from "@vivd-catalyst/core";
 
-import type { ApprovalCheckRunner } from "./approval-check-runner";
+import type { GuardrailRunner } from "./guardrail-runner";
 
 /** Scopes the approval routes require; the view flags use the same ones. */
 const APPROVAL_DECIDE_AUTH_SCOPE = "governance:write";
@@ -44,7 +44,8 @@ export interface ApprovalRequestWorkflowOptions {
   store: ApprovalRequestStore;
   handlers: ApprovalRequestHandlerRegistry;
   auditRecorder: AuditRecorder;
-  checkRunner?: ApprovalCheckRunner;
+  /** Runs the guardrails of `approval_request.before_create` before a request is filed. */
+  guardrails?: GuardrailRunner;
   onDecided?(request: ApprovalRequest): void | Promise<void>;
 }
 
@@ -72,9 +73,18 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       throw new AppError("VALIDATION_FAILED", "Approval request summary is required");
     }
     const checks =
-      (await this.options.checkRunner?.run(
-        handler,
-        { ...command, payload },
+      (await this.options.guardrails?.check(
+        {
+          event: "approval_request.before_create",
+          subjectKind: command.kind,
+          content: () => {
+            const newContent = handler.checkContent?.(payload);
+            return newContent === undefined
+              ? undefined
+              : JSON.stringify({ summary: command.summary, newContent });
+          },
+          ...(command.origin ? { origin: command.origin } : {})
+        },
         {
           ...context,
           user,

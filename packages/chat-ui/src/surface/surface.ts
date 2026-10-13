@@ -16,9 +16,8 @@ interface RenderedSurfaceSource {
 }
 
 /**
- * Every kind of surface the slot can hold, with the source fields of each. The kinds without a
- * renderer carry none yet: the slice that renders a kind adds its fields here and its renderer
- * to the renderer record. It adds no kind.
+ * Every kind of surface the slot can hold, with the source fields of each. A kind comes with its
+ * renderer in the renderer record.
  */
 interface SurfaceSources {
   tool_display: RenderedSurfaceSource;
@@ -39,9 +38,15 @@ interface SurfaceSources {
    * own route to open on; without it the App opens where it starts.
    */
   app_view: { app: string; appPath?: string };
-  /** The draft revision of an App, for whoever may write it. */
-  app_edit: { app: string };
-  workflow_canvas: unknown;
+  /**
+   * The draft revision of an App, for whoever may write it. With `workspaceId` the frame is
+   * loaded anew after each saved revision of the App.
+   */
+  app_edit: { app: string; workspaceId?: string };
+  /** One Workflow of a workspace on its canvas, as its draft stands, with the bar of the draft. */
+  workflow_canvas: { workspaceId: string; workflow: string };
+  /** The saved state of an agent, read only. An agent has no draft: a save is live at once. */
+  agent: { agent: string };
   /** One item of the Inbox, by its id. The renderer reads the item's live state itself. */
   inbox_item: { itemId: string };
 }

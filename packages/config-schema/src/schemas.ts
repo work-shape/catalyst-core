@@ -1,7 +1,6 @@
 import { z } from "zod";
 import type {
   AgentConfig,
-  ApprovalCheckConfig,
   DataSourceConfig,
   CapabilityConfigMap,
   LocalizationConfig,
@@ -32,6 +31,7 @@ import {
   secretStoreConfigSchema
 } from "./connection-schema";
 import { dataStoresConfigSchema } from "./data-store-schema";
+import { releaseGuardrailsConfigSchema } from "./guardrail-schema";
 import { infrastructureConfigSchema } from "./infrastructure";
 import { localizationConfigSchema, localizedStringSchema } from "./localization";
 
@@ -157,6 +157,30 @@ const viewsConfigSchema = z
   })
   .default({ allowedScriptSrc: [] });
 
+const replyLinkHostSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^(\*\.)?[a-z0-9-]+(\.[a-z0-9-]+)*$/u, {
+    message:
+      'Link hosts must be host names such as "example.com", or "*.example.com" for every subdomain, without a scheme, port or path.'
+  });
+
+const repliesConfigSchema = z
+  .object({
+    /**
+     * Hosts a link in a reply or in a Markdown file preview may point to besides the instance
+     * itself. A link to any other host is shown as text with its address. Images from other
+     * hosts are never loaded, whatever this list names.
+     */
+    allowedLinkHosts: z
+      .array(replyLinkHostSchema)
+      .default([])
+      .transform((hosts) => Array.from(new Set(hosts)))
+  })
+  .strict()
+  .default({ allowedLinkHosts: [] });
+
 const dataSourceConfigSchema = z.object({
   kind: z.literal("postgres"),
   connectionRef: z.string().min(1),
@@ -275,31 +299,6 @@ export const usageCostConfigSchema = z
     customer: usageRateCardConfigSchema.optional()
   })
   .default({});
-
-export const approvalCheckConfigSchema = z.object({
-  id: z.string().trim().min(1),
-  appliesTo: z.string().trim().min(1),
-  modelBindingId: z.string().trim().min(1),
-  instruction: z.string().trim().min(1),
-  onFail: z.enum(["warn", "block"])
-}) satisfies z.ZodType<ApprovalCheckConfig>;
-
-const approvalChecksConfigSchema = z
-  .array(approvalCheckConfigSchema)
-  .superRefine((checks, context) => {
-    const ids = new Set<string>();
-    checks.forEach((check, index) => {
-      if (ids.has(check.id)) {
-        context.addIssue({
-          code: "custom",
-          path: [index, "id"],
-          message: `Duplicate approval check id '${check.id}'`
-        });
-      }
-      ids.add(check.id);
-    });
-  })
-  .default([]);
 
 export const conversationTitleConfigSchema = z
   .object({
@@ -867,7 +866,8 @@ export const clientInstanceConfigSchema = z.object({
   modelBindings: z.array(modelBindingConfigSchema).default([]),
   localization: localizationConfigSchema,
   conversationTitles: conversationTitleConfigSchema,
-  approvalChecks: approvalChecksConfigSchema,
+  /** The release's guardrails: the operator's floor. Seeded as read-only assets when the API starts. */
+  guardrails: releaseGuardrailsConfigSchema,
   runtime: agentRuntimeConfigSchema,
   modelContext: modelContextConfigSchema,
   webAccess: webAccessConfigSchema,
@@ -890,6 +890,7 @@ export const clientInstanceConfigSchema = z.object({
     }),
   tools: z.array(toolInstanceConfigSchema).default([]),
   views: viewsConfigSchema,
+  replies: repliesConfigSchema,
   dataSources: z.record(z.string(), dataSourceConfigSchema).default({}),
   /** The Connections the release defines. Seeded as read-only assets when the API starts. */
   connections: releaseConnectionsConfigSchema,
@@ -941,7 +942,6 @@ export type StandaloneSeedUserConfig = z.infer<typeof standaloneSeedUserSchema>;
 export type ToolInstanceConfig = z.infer<typeof toolInstanceConfigSchema>;
 export type {
   AgentConfig,
-  ApprovalCheckConfig,
   DataSourceConfig,
   CapabilityConfigMap,
   ExecutionWorkspacesConfig,

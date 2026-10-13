@@ -28,6 +28,7 @@ import {
   listMessages as listPostgresMessages,
   listRecentMessages as listPostgresRecentMessages,
   replaceConversationTitle as replacePostgresConversationTitle,
+  setConversationSubject as setPostgresConversationSubject,
   updateConversationTitle as updatePostgresConversationTitle
 } from "../postgres-conversation-operations";
 import { listConversationsWithActiveRun as listPostgresConversationsWithActiveRun } from "../postgres-conversation-list-operations";
@@ -92,6 +93,9 @@ export function createPostgresConversationsStore(db: PostgresConnection): Conver
     },
     async replaceConversationTitle(input): Promise<boolean> {
       return replacePostgresConversationTitle(db, input);
+    },
+    async setConversationSubject(input): Promise<Conversation | undefined> {
+      return setPostgresConversationSubject(db, input);
     },
     async appendMessage(input: CreateMessageInput): Promise<ChatMessage> {
       return appendPostgresMessage(db, input);

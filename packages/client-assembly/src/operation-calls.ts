@@ -1,5 +1,5 @@
 import {
-  ApprovalCheckRunner,
+  GuardrailRunner,
   ApprovalRequestWorkflow,
   createOperationCalls,
   type ChatServerOptions,
@@ -64,10 +64,11 @@ export function createInstanceOperationCalls(
 ): InstanceOperationCalls {
   const { clientInstanceId, config, store, auditRecorder, assetSource } = input;
   const authorizer = createAuthorizer(store.access);
-  const checkRunner = new ApprovalCheckRunner({
+  const guardrails = new GuardrailRunner({
     clientInstanceId,
     config,
-    modelGateway: input.modelGateway
+    modelGateway: input.modelGateway,
+    hits: store.guardrails
   });
   const operationCalls = createOperationCalls({
     clientInstanceId,
@@ -82,7 +83,7 @@ export function createInstanceOperationCalls(
     approvalRequests: {
       store: store.approvals,
       handlers: input.approvalRequestHandlers,
-      checkRunner
+      guardrails
     },
     async agentToolNames(agentName, conversationId) {
       const assets = await assetSource.getSnapshot();
@@ -100,7 +101,7 @@ export function createInstanceOperationCalls(
     clientInstanceId,
     store: store.approvals,
     handlers: operationCalls.approvalRequestHandlers,
-    checkRunner,
+    guardrails,
     onDecided: (request) => store.approvals.appendApprovalDecision(request),
     auditRecorder
   });
