@@ -7,6 +7,7 @@ import {
   skillFileFrontmatterSchema
 } from "./schemas";
 import { yamlValueIssue, yamlValueIssueSentence } from "./yaml-bounds";
+import { readYamlData } from "./yaml-data";
 
 /**
  * Why a frontmatter is refused before its fields are read: for an alias, for its depth, or
@@ -62,13 +63,12 @@ export function parseSkillMarkdown(
   }
 
   const frontmatterRaw = loadFrontmatter(match[1] ?? "", skillFile);
-  // Before anything walks it: a few lines of nested aliases are a value of any size.
-  const issue = yamlValueIssue(frontmatterRaw, SKILL_FRONTMATTER_MAX_DEPTH);
-  if (issue) {
+  // The aliases are refused by the reader; what it took is held to the depth of a frontmatter.
+  if (yamlValueIssue(frontmatterRaw, SKILL_FRONTMATTER_MAX_DEPTH) === "depth") {
     throw new SkillMarkdownError(
-      `Skill file '${skillFile}' frontmatter is not read: ${yamlValueIssueSentence(issue, SKILL_FRONTMATTER_MAX_DEPTH)}`,
+      `Skill file '${skillFile}' frontmatter is not read: ${yamlValueIssueSentence("depth", SKILL_FRONTMATTER_MAX_DEPTH)}`,
       undefined,
-      issue === "alias" ? "skill_frontmatter_alias" : "skill_frontmatter_too_deep"
+      "skill_frontmatter_too_deep"
     );
   }
   const frontmatter = skillFileFrontmatterSchema.safeParse(frontmatterRaw);
@@ -103,31 +103,40 @@ export function parseSkillMarkdown(
 }
 
 /**
- * The frontmatter as YAML reads it. A text that is no YAML is a skill file that is refused,
- * with the line and the column of the file the reader stopped at: a description with an
- * unquoted colon, a key written twice, a tag the reader does not know. So is one nested deeper
- * than the reader follows.
+ * The frontmatter as the one reader of YAML reads it. A text that is no YAML is a skill file
+ * that is refused, with the line and the column of the file the reader stopped at: a
+ * description with an unquoted colon, a key written twice, a tag the reader does not know.
+ * So is one with an alias, one nested deeper than the reader follows, and one that holds
+ * text that cannot be stored.
  */
 function loadFrontmatter(text: string, skillFile: string): unknown {
-  try {
-    return yaml.load(text);
-  } catch (error) {
-    if (error instanceof RangeError) {
-      throw new SkillMarkdownError(
-        `Skill file '${skillFile}' frontmatter is not read: ${yamlValueIssueSentence("depth", SKILL_FRONTMATTER_MAX_DEPTH)}`,
-        undefined,
-        "skill_frontmatter_too_deep"
-      );
-    }
-    if (!(error instanceof yaml.YAMLException)) throw error;
-    // The frontmatter begins on the second line of its file, below the `---`.
-    const line = error.mark.line + 2;
-    const column = error.mark.column + 1;
+  const read = readYamlData(text, skillFile, { refuseAliases: true });
+  if (read.ok) return read.value;
+  const { issue } = read;
+  if (issue.code === "yaml_alias") {
     throw new SkillMarkdownError(
-      `Skill file '${skillFile}' frontmatter is not valid YAML at line ${line}, column ${column}: ${error.reason}. A value that holds a colon and a space, as a description often does, is written in quotes: description: "Use this when: the user asks"`,
-      { issues: [{ message: error.reason, path: [], line, column }] }
+      `Skill file '${skillFile}' frontmatter is not read: ${yamlValueIssueSentence("alias")}`,
+      undefined,
+      "skill_frontmatter_alias"
     );
   }
+  if (issue.code === "yaml_too_deep") {
+    throw new SkillMarkdownError(
+      `Skill file '${skillFile}' frontmatter is not read: ${yamlValueIssueSentence("depth", SKILL_FRONTMATTER_MAX_DEPTH)}`,
+      undefined,
+      "skill_frontmatter_too_deep"
+    );
+  }
+  if (issue.code !== "yaml_invalid" || issue.line === undefined || issue.column === undefined) {
+    throw new SkillMarkdownError(`Skill file '${skillFile}' frontmatter: ${issue.message}`);
+  }
+  // The frontmatter begins on the second line of its file, below the `---`.
+  const line = issue.line + 1;
+  const { column } = issue;
+  throw new SkillMarkdownError(
+    `Skill file '${skillFile}' frontmatter is not valid YAML at line ${line}, column ${column}: ${issue.message} A value that holds a colon and a space, as a description often does, is written in quotes: description: "Use this when: the user asks"`,
+    { issues: [{ message: issue.message, path: [], line, column }] }
+  );
 }
 
 /**

@@ -7,19 +7,14 @@ import {
 import {
   REASONING_EFFORTS,
   StoreBackedAuditRecorder,
-  createAssetKindRegistry,
   type AgentConfig,
   type ApprovalRequestHandlerRegistry,
   type StructuredDataPublicationReviewer
 } from "@vivd-catalyst/core";
 import {
   createSkillChangeApprovalHandler,
-  createAgentAssetKind,
-  createAppAssetKind,
-  createConnectionAssetKind,
   createChatServer,
-  createChatServerJobs,
-  createSkillAssetKind
+  createChatServerJobs
 } from "@vivd-catalyst/chat-server";
 import type {
   ChatAttachmentService,
@@ -66,6 +61,7 @@ import { createConfigAssetSource } from "./config-asset-source";
 import { createInstanceAgentTools, createInstanceOperationCalls } from "./operation-calls";
 import { createClientInstanceAuth } from "./auth";
 import { createInstanceConnections, withConnections } from "./connections";
+import { createInstanceAssetKinds } from "./instance-asset-kinds";
 import { seedInstance } from "./instance-seed";
 import { createClientInstanceMail } from "./mail";
 import type {
@@ -370,16 +366,13 @@ export async function createClientInstanceExecutionAssembly(
   const configAssets: Parameters<typeof createChatServer>[0]["configAssets"] = {
     store: store.configAssets,
     source: assetSource,
-    // Every asset kind of this build. A later kind is one more registration in this list.
-    kinds: createAssetKindRegistry([
-      createAgentAssetKind({ config, validationRefs, validateAgents }),
-      createSkillAssetKind({ config }),
-      ...(connections
-        ? [createConnectionAssetKind({ connectorTypes: connections.connectorTypes })]
-        : []),
-      ...(modules.isEnabled("apps") ? [createAppAssetKind()] : []),
-      ...moduleAssembly.assetKinds
-    ]),
+    kinds: createInstanceAssetKinds({
+      agent: { config, validationRefs, validateAgents },
+      skill: { config },
+      connections,
+      modules,
+      moduleKinds: moduleAssembly.assetKinds
+    }),
     validationRefs
   };
   const approvalRequestHandlers = new Map(input.approvalRequestHandlers ?? []);

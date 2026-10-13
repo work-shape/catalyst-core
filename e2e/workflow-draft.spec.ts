@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { type Browser, type Page } from "@playwright/test";
+import { type Browser, type Locator, type Page } from "@playwright/test";
 import { z } from "zod";
+import { sendToolCall } from "./page-surface-fixtures";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
+import { shootThemes } from "./surface-shots";
 import { expect, test, type PageErrorWatch } from "./test";
 
 // The page of a Workflow for the person who builds it: "Edit with the agent" opens a
@@ -25,6 +27,9 @@ const NAME = "Draft walk";
 const EDIT = "Edit with the agent";
 
 const idSchema = z.object({ id: z.string() });
+const workspaceListSchema = z.object({
+  items: z.array(z.object({ id: z.string(), kind: z.string() }))
+});
 const threadSchema = z.object({
   conversation: z.object({
     collaborationWorkspaceId: z.string(),
@@ -52,7 +57,43 @@ async function sessionOf(
   return page;
 }
 
+/**
+ * The line the last finished run's calls read as. A run that ended folds its calls into its
+ * Work history, at once or a moment later: the history is waited for folded, then opened.
+ */
+async function lastWorkLine(page: Page): Promise<Locator> {
+  const message = page.locator('[data-role="assistant"]').last();
+  const history = message.getByRole("button", { name: /^Work history/u });
+  await expect(history).toHaveAttribute("aria-expanded", "false");
+  await history.click();
+  await expect(history).toHaveAttribute("aria-expanded", "true");
+  return message.getByTestId("tool-call-fold-sentence");
+}
+
 const assetUrlOf = (id: string) => `${apiBaseUrl}/api/v1/assets/workflow/${id}`;
+
+/** A definition of the Workflow with this description. */
+function draftConfig(id: string, input: { runAs: string; description: string }) {
+  return {
+    name: id,
+    manifest: {
+      id,
+      name: NAME,
+      description: input.description,
+      runAs: input.runAs,
+      inputs: { type: "object", additionalProperties: false },
+      outputs: {
+        type: "object",
+        properties: { done: { type: "integer" } },
+        required: ["done"]
+      },
+      steps: [
+        { id: "start", name: "Start by hand", type: "trigger", triggers: [{ kind: "manual" }] },
+        { id: "result", name: "Result", type: "output", input: { done: { value: 1 } } }
+      ]
+    }
+  };
+}
 
 /** Saves a draft of the Workflow: a new one, or the next revision of the one that is stored. */
 async function saveDraft(
@@ -61,28 +102,7 @@ async function saveDraft(
   input: { runAs: string; description: string; expectedRevision: number | null }
 ): Promise<void> {
   const saved = await requestWithOrigin(root, "put", assetUrlOf(id), {
-    data: {
-      expectedRevision: input.expectedRevision,
-      config: {
-        name: id,
-        manifest: {
-          id,
-          name: NAME,
-          description: input.description,
-          runAs: input.runAs,
-          inputs: { type: "object", additionalProperties: false },
-          outputs: {
-            type: "object",
-            properties: { done: { type: "integer" } },
-            required: ["done"]
-          },
-          steps: [
-            { id: "start", name: "Start by hand", type: "trigger", triggers: [{ kind: "manual" }] },
-            { id: "result", name: "Result", type: "output", input: { done: { value: 1 } } }
-          ]
-        }
-      }
-    }
+    data: { expectedRevision: input.expectedRevision, config: draftConfig(id, input) }
   });
   expect(saved.ok(), await saved.text()).toBe(true);
 }
@@ -191,13 +211,32 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
       workflowPath
     );
 
-    // A draft is saved while the builder is in the conversation, as its agent saves one. Back
-    // on the page of the Workflow the bar says that the draft differs.
-    await saveDraft(page, id, {
-      runAs,
-      description: "The second draft.",
+    // The Workflow opens on its canvas beside the conversation, as it is published.
+    const surface = page.locator('[data-surface-kind="workflow_canvas"]');
+    await expect(surface).toBeVisible();
+    await expect(surface.getByTestId("workflow-canvas")).toBeVisible();
+    await expect(surface.locator("[data-workflow-draft]")).toHaveCount(0);
+
+    // The agent saves a draft: the canvas beside the chat is drawn again with the bar of the
+    // draft, and the call reads as what it did.
+    await sendToolCall(page, "platform.assets.put", {
+      config: draftConfig(id, { runAs, description: "The second draft." }),
       expectedRevision: await assetRevision(page, assetUrlOf(id))
     });
+    await expect(surface.locator("[data-workflow-draft]")).toHaveAttribute(
+      "data-workflow-draft",
+      "ahead"
+    );
+    await expect(await lastWorkLine(page)).toHaveText(/^Saved revision \d+$/u);
+    await shootThemes(page, "workflow-from-page", async () => {
+      await expect(surface.locator("[data-workflow-draft]")).toHaveAttribute(
+        "data-workflow-draft",
+        "ahead"
+      );
+      await expect(surface.getByText("What the run returns.")).toBeVisible();
+    });
+
+    // Back on the page of the Workflow the bar says that the draft differs.
     await page.goBack();
     await expect(workflowPage.getByRole("heading", { level: 1 })).toHaveText(NAME);
     await expect(bar).toHaveAttribute("data-workflow-draft", "ahead");
@@ -236,6 +275,42 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     ).toBeVisible();
     await expect(bar).toContainText("Entwurf weicht von der veröffentlichten Version ab");
     await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "en"));
+
+    // In a plain conversation of the builder's own workspace, a read of an asset moves
+    // nothing. Opening it makes it the subject and shows it beside the chat, with a line that
+    // names it: the Workflow on its canvas, then, as the agent opens it, an agent's form.
+    // A conversation shared with its workspace is refused the open: the asset would reach
+    // every member who reads the conversation.
+    const workspaces = workspaceListSchema.parse(
+      await (await page.request.get(`${apiBaseUrl}/api/v1/workspaces?limit=100`)).json()
+    );
+    const personal = workspaces.items.find((workspace) => workspace.kind === "personal");
+    expect(personal).toBeDefined();
+    await page.goto(`/w/${personal?.id ?? ""}`);
+    await sendToolCall(page, "platform.assets.get", { kind: "workflow", name: id });
+    const subject = page.getByTestId("conversation-subject");
+    await expect(await lastWorkLine(page)).toHaveText("Read the workflow");
+    await expect(subject).toHaveCount(0);
+    await expect(page.locator('[data-surface-kind="workflow_canvas"]')).toHaveCount(0);
+    await sendToolCall(page, "platform.assets.open", { kind: "workflow", name: id });
+    await expect(await lastWorkLine(page)).toHaveText(`Opened ${NAME}`);
+    await expect(subject).toHaveAttribute("data-subject-kind", "workflow");
+    await expect(subject).toContainText(NAME);
+    const touched = page.locator('[data-surface-kind="workflow_canvas"]');
+    await expect(touched.getByTestId("workflow-canvas")).toBeVisible();
+    await shootThemes(page, "workflow-from-chat", async () => {
+      await expect(touched.getByText("What the run returns.")).toBeVisible();
+    });
+    await sendToolCall(page, "platform.assets.open", {
+      kind: "agent",
+      name: "research_assistant"
+    });
+    await expect(subject).toHaveAttribute("data-subject-kind", "agent");
+    const studio = page.locator('[data-surface-kind="agent"]').getByTestId("agent-surface");
+    await expect(studio).toBeVisible();
+    await shootThemes(page, "agent-from-chat", async () => {
+      await expect(studio).toBeVisible();
+    });
   } finally {
     // Whatever the test left: the member's rows on the Workflow.
     const listed = await page.request.get(

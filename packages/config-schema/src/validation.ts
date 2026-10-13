@@ -6,15 +6,21 @@ import { findDuplicates } from "./reference-validation";
 import { withoutRemovedWorkspaceSwitch } from "./removed-workspace-switch";
 import { getModelProviderConfigs } from "./infrastructure";
 import { refuseMovedInfrastructureKeys } from "./moved-infrastructure-keys";
+import { withApprovalChecksAsGuardrails } from "./approval-checks-transition";
+import { invalidConfigError } from "./config-errors";
 import {
   getModelSelectionForAgent,
   getModelSelectionForConversationTitles,
   resolveModelBinding
 } from "./selectors";
 
+export { invalidConfigError };
+
 export function parseClientInstanceConfig(input: unknown): ClientInstanceConfig {
   refuseMovedInfrastructureKeys(input);
-  const parsed = clientInstanceConfigSchema.safeParse(withoutRemovedUiSwitch(input));
+  const parsed = clientInstanceConfigSchema.safeParse(
+    withoutRemovedUiSwitch(withApprovalChecksAsGuardrails(input))
+  );
   if (!parsed.success) {
     throw invalidConfigError("Client instance config is invalid", parsed.error.issues);
   }
@@ -24,6 +30,7 @@ export function parseClientInstanceConfig(input: unknown): ClientInstanceConfig 
   assertExecutionWorkspaceInfrastructure(parsed.data);
   assertModuleSwitches(parsed.data);
   assertConfigReferences(parsed.data);
+  assertEmbeddingBindings(parsed.data);
   assertTokenSafeguardsAdmitACall(parsed.data);
   assertFastModePricingCoverage(parsed.data);
   assertSpendBudgetPricingCoverage(parsed.data, []);
@@ -35,19 +42,6 @@ function withoutRemovedUiSwitch(input: unknown): unknown {
     return input;
   }
   return { ...input, ui: withoutRemovedWorkspaceSwitch(input.ui) };
-}
-
-/**
- * The message carries the first issue, so a log line or a terminal names the key that stopped
- * startup. Issue messages come from the schemas and quote no config value.
- */
-export function invalidConfigError(
-  summary: string,
-  issues: readonly { path: PropertyKey[]; message: string }[]
-): AppError {
-  const first = issues[0];
-  const detail = first ? `: ${first.path.map(String).join(".")}: ${first.message}` : "";
-  return new AppError("VALIDATION_FAILED", `${summary}${detail}`, { issues });
 }
 
 function assertProductionSafeAuthConfig(config: ClientInstanceConfig): void {
@@ -146,11 +140,11 @@ function assertConfigReferences(config: ClientInstanceConfig): void {
   }
 
   const modelBindingIds = new Set(config.modelBindings.map((binding) => binding.id));
-  for (const check of config.approvalChecks) {
-    if (!modelBindingIds.has(check.modelBindingId)) {
+  for (const [name, guardrail] of Object.entries(config.guardrails)) {
+    if (!modelBindingIds.has(guardrail.check.modelBindingId)) {
       throw new AppError(
         "VALIDATION_FAILED",
-        `Approval check '${check.id}' references missing model binding '${check.modelBindingId}'`
+        `Guardrail '${name}' references missing model binding '${guardrail.check.modelBindingId}'`
       );
     }
   }
@@ -193,6 +187,56 @@ function assertConfigReferences(config: ClientInstanceConfig): void {
     throw new AppError(
       "VALIDATION_FAILED",
       `Conversation title generation references missing model binding '${config.conversationTitles.modelBindingId}'`
+    );
+  }
+}
+
+/**
+ * Embeddings send the text of documents and queries to their provider, so the approved route is
+ * part of the config: an embedding binding sits on an entry with region `eu` or on one that keeps
+ * data inside the instance. A chat use of the product never names an embedding binding, and the
+ * default of `knowledge` names nothing else.
+ */
+function assertEmbeddingBindings(config: ClientInstanceConfig): void {
+  const providers = getModelProviderConfigs(config);
+  for (const binding of config.modelBindings) {
+    if (binding.kind !== "embedding") continue;
+    const region = providers.find((provider) => provider.id === binding.providerId)?.region;
+    if (region !== undefined && region !== "eu") {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `Embedding binding '${binding.id}' is on model provider '${binding.providerId}', whose region is '${region}': embeddings send document text to their provider and need an entry with region 'eu'`
+      );
+    }
+  }
+  const embeddingBindingIds = new Set(
+    config.modelBindings
+      .filter((binding) => binding.kind === "embedding")
+      .map((binding) => binding.id)
+  );
+  const { conversationTitles } = config;
+  const chatUses = [
+    ...Object.entries(config.guardrails).map(([name, guardrail]) => ({
+      user: `Guardrail '${name}'`,
+      bindingId: guardrail.check.modelBindingId
+    })),
+    ...(conversationTitles.enabled && conversationTitles.modelBindingId
+      ? [{ user: "Conversation title generation", bindingId: conversationTitles.modelBindingId }]
+      : [])
+  ];
+  for (const { user, bindingId } of chatUses) {
+    if (embeddingBindingIds.has(bindingId)) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `${user} names the embedding binding '${bindingId}', which answers no chat call`
+      );
+    }
+  }
+  const defaultBinding = config.knowledge.defaultEmbeddingBinding;
+  if (defaultBinding !== undefined && !embeddingBindingIds.has(defaultBinding)) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `'knowledge.defaultEmbeddingBinding' names '${defaultBinding}', which is no model binding of kind 'embedding'`
     );
   }
 }
@@ -273,8 +317,15 @@ export function assertSpendBudgetPricingCoverage(
     }
   }
 
-  for (const check of config.approvalChecks) {
-    const selection = resolveModelBinding(config, check.modelBindingId);
+  const pricedBindingIds = [
+    ...Object.values(config.guardrails).map((guardrail) => guardrail.check.modelBindingId),
+    // Ingestion and search call them without an agent; the budget bounds them all the same.
+    ...config.modelBindings
+      .filter((binding) => binding.kind === "embedding")
+      .map((binding) => binding.id)
+  ];
+  for (const bindingId of pricedBindingIds) {
+    const selection = resolveModelBinding(config, bindingId);
     if (selection.provider.type !== "deterministic") {
       requiredPrices.add(createPricingKey(selection.provider.id, selection.model));
     }

@@ -7,6 +7,38 @@ contain breaking changes; a patch version does not.
 
 ### Added
 
+- **Guardrails replace approval checks, and Build lists them:** release config takes
+  `guardrails`, keyed by name, each with `on: approval_request.before_create`, an optional
+  `filter.kind`, a `check` of kind `model_judge` (`modelBindingId`, `instruction`) and
+  `outcome: warn | block`. They run where approval checks ran, with the same judge, timeout and
+  usage purpose `guardrail_judge`. The API seeds them as read-only assets of the kind
+  `guardrail` when it starts; Build > Guardrails lists them with their newest 50 hits for
+  holders of the new right `guardrail.read` (administrators), read through
+  `guardrails.list_hits` (`GET /api/v1/guardrails/:name/hits`), with counts for the last 7 and
+  30 days. A hit keeps the guardrail, the outcome, its reason and the kind of request, never the
+  checked content and never the person: hits are counted by rule and period, not listed by
+  person (works-council co-determination). Hits are deleted with the audit events (migration
+  `0071_guardrail_hits`). Every write of a guardrail
+  through the asset operations is refused with the reason `guardrail_release_config_only`.
+  **Operators:** `approvalChecks` still loads for this release, each check as the guardrail it
+  became (`id` the name, `appliesTo` the `filter.kind`, `onFail` the `outcome`). A config with
+  both keys stops startup with "'approvalChecks' was replaced by 'guardrails', and the config
+  sets both. Move each approval check into 'guardrails' and remove 'approvalChecks'." The next
+  release refuses `approvalChecks`; move the checks now. **Rollback:** an earlier release
+  ignores the table `guardrail_hits` and the stored guardrails, and it does not read
+  `guardrails`: roll back with the config that still has `approvalChecks`, or the instance runs
+  no checks.
+- **Embedding models:** a model binding of `kind: embedding` with `dimensions` turns text into
+  vectors for Knowledge Bases, and `knowledge.defaultEmbeddingBinding` names the default. The
+  gateway's `embed` is the one path for an embedding call, admitted, retried and settled like a
+  chat call, with the usage purpose `knowledge_embedding` or `knowledge_query` and no output
+  tokens. `openai-compatible` posts to `<baseUrl>/embeddings` (Azure OpenAI's v1 endpoint
+  included) and `deterministic` returns vectors from a hash of the text. Startup stops on an
+  embedding binding whose entry has a region other than `eu`, one without `dimensions` or with
+  `agentSelectable: true`, one on a provider that does not embed, a default that names no
+  embedding binding, and a guardrail or conversation title generation that names one.
+  Nothing calls `embed` yet; Knowledge Base ingestion and search follow. Existing config is
+  unchanged: a binding without `kind` is a chat binding.
 - **Skills that ship with the platform:** the guide to the platform (`platform-guide`) and, with
   Workflows on, `workflow-authoring` are stored skills of origin `release`. The API process
   writes them at start: a changed one gets a revision in History, one a release no longer ships
@@ -947,6 +979,10 @@ id from config_assets where status = 'deleted')`.
 
 ### Changed
 
+- **Agents page:** a card shows the agent mark in place of the initials, the name, the default
+  badge, what the agent does in two lines at most, and Start chat. Its starter prompts are no
+  longer on the card; they wait in the empty chat with that agent. New agent opens its dialog
+  on the page: Cancel stays there, and Continue leads to the new agent's page in Studio.
 - **Studio:** the list of agents names each agent in the reader's language and shows what it
   does under its name, in place of its id. `assets.list` takes an optional `locale`; an agent's
   title and description answer in it where the agent holds that language, and in the
@@ -2069,6 +2105,25 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   the number of an item's count on its icon.
 
 ### Fixed
+
+- **Dialogs:** a dialog closed by its Cancel or close button gives the focus back to what
+  opened it, such as New agent on the Agents page. Only Escape did; the buttons left the focus
+  on the page body.
+- **Agents page:** an agent renamed or changed in Studio shows its new name and description on
+  its card and in the agent picker without a reload. A save of an agent, and a change of the
+  default agent, now also ask again for the workspaces' lists of agents.
+- **Hostile YAML and tool-call text:** every YAML file an author or an agent writes
+  (`workflow.yaml`, `app.yaml`, App action files, `store.yaml`, `SKILL.md` frontmatter), the
+  release config and the CLI working copy are read by one reader. It knows JSON types only:
+  a timestamp, `!!binary` or other YAML-only tag in `store.yaml`, `SKILL.md` frontmatter, the
+  release config or an agent file now reads as plain text or is refused, as `workflow.yaml` and
+  `app.yaml` already were. A file whose aliases expand past 100,000 values is refused
+  (`'<file>' holds more than 100000 values once its aliases are followed
+  (YAML_DATA_MAX_VALUES).`); before, such a `workflow.yaml` hung its reader. A file with a NUL
+  character or half of a surrogate pair is refused (`'<file>' holds a NUL character or half of a
+  surrogate pair, which cannot be stored.`). A tool call whose arguments hold either is answered
+  to the model as the tool error `invalid_text` and stored with an empty input; before, it ended
+  the whole run with `INTERNAL`. Rollback: none needed, nothing is stored differently.
 
 - **Claude runs with `workspace.preview_images` or `structured_data.publish`:** the input schema
   a model is shown for each of the two had a combinator at its root (`anyOf` over the three

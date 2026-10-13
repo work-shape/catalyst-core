@@ -22,6 +22,8 @@ export type {
   ConnectionTestRun
 } from "./connection-source";
 export { dataStoreKindOn } from "./data-store-kind";
+export { GuardrailPage } from "./guardrail-page";
+export type { GuardrailSource } from "./guardrail-source";
 export { dataStoreStateView, formatDataStoreSize } from "./data-store-model";
 export { DataStoreValueDialog } from "./data-store-rows";
 export type {
@@ -45,9 +47,9 @@ export {
   type BuildWriteOutcome
 } from "./build-refusals";
 export {
-  buildCreateRequested,
-  clearBuildCreateRequest,
-  requestBuildCreate
+  clearBuildStartRequest,
+  requestBuildStart,
+  requestedBuildStart
 } from "./build-create-request";
 export { mayCreateAgents, resolveBuildRights } from "./build-rights";
 export {

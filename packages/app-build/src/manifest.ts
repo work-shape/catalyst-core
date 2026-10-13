@@ -1,5 +1,4 @@
-import { load, JSON_SCHEMA, YAMLException } from "js-yaml";
-import { fileSetPathIssue, yamlValueIssue, yamlValueIssueSentence } from "@vivd-catalyst/core";
+import { fileSetPathIssue, readYamlData } from "@vivd-catalyst/core";
 import { z } from "zod";
 import {
   compiledAppActionSchema,
@@ -140,23 +139,17 @@ export function parsePageManifest(bytes: Uint8Array): ParsedPageManifest {
       `The manifest has ${bytes.byteLength} bytes. It has at most ${PAGE_MANIFEST_MAX_BYTES} (PAGE_MANIFEST_MAX_BYTES).`
     );
   }
-  let value: unknown;
+  let text: string;
   try {
-    value = load(new TextDecoder("utf-8", { fatal: true }).decode(bytes), {
-      schema: JSON_SCHEMA,
-      filename: PAGE_MANIFEST_FILE
-    });
-  } catch (error) {
-    if (error instanceof YAMLException) {
-      return fail(`The manifest is not valid YAML: ${error.reason}`, error.mark.line + 1);
-    }
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
     return fail("The manifest is not UTF-8 text.");
   }
-  // Before anything walks it: a few lines of nested aliases are a value of any size.
-  const bound = yamlValueIssue(value);
-  if (bound) {
-    return fail(`The manifest is not read: ${yamlValueIssueSentence(bound)}.`);
+  const read = readYamlData(text, PAGE_MANIFEST_FILE, { refuseAliases: true });
+  if (!read.ok) {
+    return fail(read.issue.message, read.issue.line);
   }
+  const value = read.value;
   const parsed = pageManifestSchema.safeParse(value);
   if (parsed.success) {
     return { status: "valid", manifest: parsed.data };

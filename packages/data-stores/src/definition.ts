@@ -1,16 +1,14 @@
 import { createHash } from "node:crypto";
-import yaml from "js-yaml";
 import { z } from "zod";
 import {
   AppError,
   DATA_STORE_MANIFEST_FILE,
   DATA_STORE_RESERVED_SCHEMA,
+  readYamlData,
   type AssetScope,
   type AssetValidationIssue,
   type DataStoreAppliedMigration,
-  type JsonObject,
-  yamlValueIssue,
-  yamlValueIssueSentence
+  type JsonObject
 } from "@vivd-catalyst/core";
 
 // What a Data Store's folder is read into: the definition a revision holds as its config.
@@ -249,31 +247,23 @@ function readManifest(
     return undefined;
   }
   const text = readText(bytes);
-  let loaded: unknown;
-  try {
-    loaded = text === undefined ? undefined : yaml.load(text);
-  } catch {
-    loaded = undefined;
-  }
-  // Before anything walks it: a few lines of nested aliases are a value of any size.
-  const bound = yamlValueIssue(loaded);
-  if (bound) {
-    issues.push({
-      message: `'${DATA_STORE_MANIFEST_FILE}' is not read: ${yamlValueIssueSentence(bound)}`,
-      path
-    });
+  if (text === undefined) {
+    issues.push({ message: `'${DATA_STORE_MANIFEST_FILE}' is not UTF-8 text`, path });
     return undefined;
   }
-  const parsed = manifestSchema.safeParse(loaded);
+  const read = readYamlData(text, DATA_STORE_MANIFEST_FILE, { refuseAliases: true });
+  if (!read.ok) {
+    issues.push({ message: read.issue.message, path });
+    return undefined;
+  }
+  const parsed = manifestSchema.safeParse(read.value);
   if (!parsed.success) {
     issues.push(
-      ...(loaded === undefined
-        ? [{ message: `'${DATA_STORE_MANIFEST_FILE}' is not readable YAML`, path }]
-        : parsed.error.issues.map((issue) => ({
-            // The key is named in the sentence: a reader of the refusal sees no path.
-            message: `${issue.path.length > 0 ? `'${issue.path.join(".")}': ` : ""}${issue.message}`,
-            path: [...path, ...issue.path]
-          })))
+      ...parsed.error.issues.map((issue) => ({
+        // The key is named in the sentence: a reader of the refusal sees no path.
+        message: `${issue.path.length > 0 ? `'${issue.path.join(".")}': ` : ""}${issue.message}`,
+        path: [...path, ...issue.path]
+      }))
     );
     return undefined;
   }

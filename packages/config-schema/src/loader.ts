@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { dirname, extname, resolve } from "node:path";
-import yaml from "js-yaml";
 import {
+  loadYamlData,
   parseSkillMarkdown as parseSkillFileMarkdown,
   SkillMarkdownError
 } from "@vivd-catalyst/asset-schemas";
@@ -14,12 +14,15 @@ import {
 } from "./schemas";
 import { withoutRemovedWorkspaceSwitch } from "./removed-workspace-switch";
 import { refuseMovedInfrastructureKeys } from "./moved-infrastructure-keys";
+import { withApprovalChecksAsGuardrails } from "./approval-checks-transition";
 import { invalidConfigError, parseClientInstanceConfig } from "./validation";
 
 export async function loadClientInstanceConfigFromFile(
   path: string
 ): Promise<ClientInstanceConfig> {
-  const raw = await readConfigFileWithExtends(resolve(path), new Set());
+  const raw = withApprovalChecksAsGuardrails(
+    await readConfigFileWithExtends(resolve(path), new Set())
+  );
   refuseMovedInfrastructureKeys(raw);
   const hasInlineUi = hasOwnProperty(raw, "ui");
   const parsed = clientInstanceConfigFileSchema.safeParse(raw);
@@ -69,7 +72,7 @@ async function loadUiConfigFile(baseDir: string, uiFile: string, overlay?: unkno
 async function readStructuredFile(path: string): Promise<unknown> {
   const contents = await readFile(path, "utf8");
   const extension = extname(path).toLowerCase();
-  return extension === ".json" ? JSON.parse(contents) : yaml.load(contents);
+  return extension === ".json" ? JSON.parse(contents) : loadYamlData(contents, path);
 }
 
 /**

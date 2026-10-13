@@ -61,12 +61,12 @@ Record:
 - model id, and the model binding the call named
 - token counts when reported by the provider
 - conversation id, where a conversation caused the call
-- agent run id and agent name, or for a call the product made for itself what it was for: `conversation_title`, `guardrail_judge` or `document_extraction`
+- agent run id and agent name, or for a call the product made for itself what it was for: `conversation_title`, `guardrail_judge`, `document_extraction`, `knowledge_embedding` (the chunks of a Knowledge Base at ingestion and re-index) or `knowledge_query` (the query of a Knowledge Base search)
 - the user who caused the call and the workspace it happened in, where there is one
 - correlation id
 - persisted customer billable cost and completeness state
 
-Every model call leaves one record, including conversation titles and approval checks, and including a call that failed, timed out or was stopped. Titles and approval checks count toward the limits of the instance like every other call.
+Every model call leaves one record, including conversation titles and guardrail checks, and including a call that failed, timed out or was stopped. Titles and guardrail checks count toward the limits of the instance like every other call.
 
 A record has a status:
 
@@ -87,7 +87,7 @@ This has three consequences for how you set limits:
 
 - A call is refused when its reservation no longer fits, so a token or spend limit is reached slightly before it is used up.
 - A token limit at or below the 16,000 reserved output tokens would admit no call. The config is refused with a message that names the limit and the reservation.
-- With a spend budget, a model without a price on the customer rate card is refused. A `deterministic` provider needs no price: it bills nothing, and its calls reserve no cost. A run that is refused this way fails with the code `MODEL_NOT_PRICED`. The chat tells someone with `usage.view` that the price is missing and to choose another model until the operator has added it under `usage.costs` in release config, and anyone else to choose another model or ask an administrator. Startup validation asks a price of the models agents start on, of conversation titles and of approval checks; it does not ask one of a model an agent only offers for selection, so give every binding of a billed provider a price.
+- With a spend budget, a model without a price on the customer rate card is refused. A `deterministic` provider needs no price: it bills nothing, and its calls reserve no cost. A run that is refused this way fails with the code `MODEL_NOT_PRICED`. The chat tells someone with `usage.view` that the price is missing and to choose another model until the operator has added it under `usage.costs` in release config, and anyone else to choose another model or ask an administrator. Startup validation asks a price of the models agents start on, of conversation titles and of guardrails; it does not ask one of a model an agent only offers for selection, so give every binding of a billed provider a price.
 
 The limits are protective safeguards, not exact caps. A call reserves a fixed amount at admission and settles its real usage when it ends, and the request sets no maximum for the answer, so a call can use more than it reserved. The most a limit can be passed by is the sum, over the calls in flight when it is reached, of what each used minus what it reserved. The reserved output is the constant `MODEL_CALL_RESERVED_OUTPUT_TOKENS` (16,000) in `@vivd-catalyst/core`. Set a limit with that margin in mind, and keep a provider-side budget as the hard stop.
 
