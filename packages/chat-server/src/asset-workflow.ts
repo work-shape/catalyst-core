@@ -429,6 +429,7 @@ export class AssetWorkflow {
           version: result.version
         })
     ]);
+    await this.afterRemove(call, target);
     return { version: result.version, revision, warnings: [] };
   }
 
@@ -642,6 +643,27 @@ export class AssetWorkflow {
       if (!isAppError(error) || error.code !== "REVISION_CONFLICT") throw error;
       const now = await this.target(target.address);
       throw await revisionConflictOf(this.options, call.access, now);
+    }
+  }
+
+  /**
+   * What the kind of a deleted asset does beside the delete, for a kind whose revisions are a
+   * config. The delete is committed: a failure is logged and the call is answered as done.
+   */
+  private async afterRemove(call: AssetCall, target: AssetTarget): Promise<void> {
+    const { kind, asset } = target;
+    if (!kind.onRemove || !asset) return;
+    try {
+      await kind.onRemove({
+        assetId: asset.id,
+        ...(asset.publishedConfig === undefined ? {} : { published: asset.publishedConfig }),
+        stores: this.options.stores
+      });
+    } catch (error) {
+      this.options.logger.error(
+        { correlationId: call.correlationId, error: error instanceof Error ? error.message : "" },
+        `A ${kind.kind} was deleted but what its kind does beside the delete failed`
+      );
     }
   }
 

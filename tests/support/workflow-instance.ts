@@ -236,7 +236,9 @@ export async function workflowFixture(
         if (!principals) throw new Error("The instance is not set up");
         return principals.findServicePrincipalByName(input);
       }
-    }
+    },
+    ...(options.now ? { now: options.now } : {}),
+    ...(options.timeZone === undefined ? {} : { timeZone: options.timeZone })
   });
   const t = await fixtureOn((connectionOptions) =>
     setupAccessInstance({

@@ -74,7 +74,7 @@ export {
 } from "./engine";
 export { workflowStepJobKind } from "./step-job";
 export * from "./limits";
-export { workflowScheduleJobKind } from "./schedule-trigger";
+export { replaceScheduleJob, workflowScheduleJobKind } from "./schedule-trigger";
 export { secretOperationSteps, type WorkflowOperationCalls } from "./operation-step";
 export {
   workflowDefinitionStartIssues,

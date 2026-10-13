@@ -111,10 +111,23 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
     assetId: string;
     revision: number;
     config: JsonObject;
+    /** The config that was published until this publish, where one was. */
+    replaced?: JsonObject;
     stores: PlatformStores;
   }): Promise<void>;
-  /** What a delete does beside removing the asset, in the transaction that removes it. */
-  onRemove?(input: { assetId: string; stores: PlatformStores }): Promise<void>;
+  /**
+   * What a delete does beside removing the asset. For a kind whose revisions hold files it is
+   * called in the transaction that removes the asset. For a kind whose revisions are a config
+   * it is called once the delete is committed, with the stores of the instance: there a
+   * failure is logged and the delete stands, so what it does is something a later look
+   * repairs.
+   */
+  onRemove?(input: {
+    assetId: string;
+    /** The config that was published until the delete, where one was. */
+    published?: JsonObject;
+    stores: PlatformStores;
+  }): Promise<void>;
 }
 
 export function readDefinitionField(definition: unknown, field: string): unknown {

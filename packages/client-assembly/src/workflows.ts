@@ -154,30 +154,38 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
 
 /**
  * The seam of the module. Where it is on, the instance registers the asset kind `workflow`;
- * the engine is built once the call path of the process exists. A process that starts plans
- * the schedules of what is published, so a Workflow whose job was lost, or that was published
- * while no process ran, has its next due time queued.
+ * the engine is built once the call path of the process exists. The kind queues the job of a
+ * schedule when its definition is published. A process that starts plans the schedules of
+ * what is published as well, so a Workflow whose job was lost has its next due time queued.
  */
-export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceId, stores }) => ({
-  ...(modules.isEnabled(workflowsModule.name)
-    ? { assetKinds: [createWorkflowAssetKind({ clientInstanceId, apiAccess: stores.apiAccess })] }
-    : {}),
-  async start({ operationCalls }) {
-    const { timeZone } = config.clientInstance;
-    const workflows = createInstanceWorkflows({
-      modules,
-      clientInstanceId,
-      stores,
-      operationCalls,
-      // The instance's time zone: the schedules of its Workflows are read on its clock.
-      ...(timeZone === undefined ? {} : { timeZone }),
-      // The command worker runs the scripts of code steps. An instance without Execution
-      // Workspaces or without a sandbox has no such worker, and its engine knows.
-      ...(config.executionWorkspaces.enabled && config.infrastructure.sandbox
-        ? { codeRunner: { timeoutSeconds: config.workflows.codeSteps.timeoutSeconds } }
-        : {})
-    });
-    await workflows.planSchedules();
-    return { routes: workflows.routes, jobHandlers: workflows.jobHandlers };
-  }
-});
+export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceId, stores }) => {
+  // The instance's time zone: the schedules of its Workflows are read on its clock, by the
+  // engine and by the kind that queues the job of a schedule when its definition is published.
+  const { timeZone } = config.clientInstance;
+  const zone = timeZone === undefined ? {} : { timeZone };
+  return {
+    ...(modules.isEnabled(workflowsModule.name)
+      ? {
+          assetKinds: [
+            createWorkflowAssetKind({ clientInstanceId, apiAccess: stores.apiAccess, ...zone })
+          ]
+        }
+      : {}),
+    async start({ operationCalls }) {
+      const workflows = createInstanceWorkflows({
+        modules,
+        clientInstanceId,
+        stores,
+        operationCalls,
+        ...zone,
+        // The command worker runs the scripts of code steps. An instance without Execution
+        // Workspaces or without a sandbox has no such worker, and its engine knows.
+        ...(config.executionWorkspaces.enabled && config.infrastructure.sandbox
+          ? { codeRunner: { timeoutSeconds: config.workflows.codeSteps.timeoutSeconds } }
+          : {})
+      });
+      await workflows.planSchedules();
+      return { routes: workflows.routes, jobHandlers: workflows.jobHandlers };
+    }
+  };
+};

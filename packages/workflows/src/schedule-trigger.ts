@@ -46,6 +46,70 @@ function scheduleCrons(manifest: Pick<WorkflowManifest, "steps">): CronExpressio
   });
 }
 
+/** The key of the job of one due time of one Workflow: that job is queued once. */
+const scheduleJobKey = (workflow: string, dueAt: string) =>
+  `${workflowScheduleJobKind.kind}:${workflow}:${dueAt}`;
+
+/** Queues the job of one due time. A job for that Workflow and time is queued once. */
+async function queueScheduleJob(
+  tx: Pick<PlatformStores, "jobs">,
+  clientInstanceId: ClientInstanceId,
+  workflow: string,
+  due: Date
+): Promise<void> {
+  const dueAt = due.toISOString();
+  await tx.jobs.enqueue(
+    workflowScheduleJobKind,
+    { workflow, dueAt },
+    {
+      clientInstanceId,
+      subject: workflow,
+      runAfter: due,
+      dedupeKey: scheduleJobKey(workflow, dueAt)
+    }
+  );
+}
+
+/**
+ * Makes the waiting schedule job of one Workflow the one of the definition that is published
+ * from now on, for whoever publishes a definition or deletes the Workflow, with `tx` bound to
+ * the transaction that does it. The job of the next due time of the definition before is
+ * withdrawn and the one of the definition now is queued, so a Workflow that is published is
+ * scheduled without a process starting, and one that lost its schedule waits for nothing.
+ *
+ * A job whose time has come already is not found here and stays: it reads the published
+ * definition when it fires and starts nothing the definition does not name. Answers the due
+ * time that is queued now.
+ */
+export async function replaceScheduleJob(
+  tx: Pick<PlatformStores, "jobs">,
+  input: {
+    clientInstanceId: ClientInstanceId;
+    workflow: string;
+    /** The definition that was published until now, where one was. */
+    previous?: Pick<WorkflowManifest, "steps">;
+    /** The definition that is published now. Left out where none is: after a delete. */
+    published?: Pick<WorkflowManifest, "steps">;
+    /** The time zone the cron expressions are read in: the engine's. */
+    timeZone: string;
+    now: Date;
+  }
+): Promise<Date | undefined> {
+  const { clientInstanceId, workflow, timeZone, now } = input;
+  const dueOf = (manifest: Pick<WorkflowManifest, "steps"> | undefined) =>
+    manifest ? nextDueAfter(scheduleCrons(manifest), now, timeZone) : undefined;
+  const before = dueOf(input.previous);
+  const next = dueOf(input.published);
+  if (before && before.getTime() !== next?.getTime()) {
+    await tx.jobs.withdraw(workflowScheduleJobKind, {
+      clientInstanceId,
+      dedupeKey: scheduleJobKey(workflow, before.toISOString())
+    });
+  }
+  if (next) await queueScheduleJob(tx, clientInstanceId, workflow, next);
+  return next;
+}
+
 /** Why a due time started no run. `started` and `fired` are no refusal. */
 type ScheduledStart =
   | { outcome: "started" }
@@ -112,20 +176,8 @@ export function createScheduleTrigger(options: ScheduleTriggerOptions): Schedule
     }
   }
 
-  /** Queues the job of one due time. A job for that Workflow and time is queued once. */
-  async function queue(tx: PlatformStores, workflow: string, due: Date): Promise<void> {
-    const dueAt = due.toISOString();
-    await tx.jobs.enqueue(
-      workflowScheduleJobKind,
-      { workflow, dueAt },
-      {
-        clientInstanceId,
-        subject: workflow,
-        runAfter: due,
-        dedupeKey: `${workflowScheduleJobKind.kind}:${workflow}:${dueAt}`
-      }
-    );
-  }
+  const queue = (tx: Pick<PlatformStores, "jobs">, workflow: string, due: Date) =>
+    queueScheduleJob(tx, clientInstanceId, workflow, due);
 
   const handler = defineJobHandler({
     kind: workflowScheduleJobKind,

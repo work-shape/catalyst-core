@@ -14,11 +14,14 @@ import {
   defineAssetKind,
   type ClientInstanceId,
   type ConfigAssetRecord,
-  type ConfigAssetStore
+  type ConfigAssetStore,
+  type JsonObject,
+  type PlatformStores
 } from "@vivd-catalyst/core";
 import {
   WORKFLOW_MANIFEST_MAX_BYTES,
   parseWorkflowManifest,
+  replaceScheduleJob,
   workflowDefinitionRefusal,
   type WorkflowDefinitionResult,
   type WorkflowDefinitionSource
@@ -30,6 +33,7 @@ import { z } from "zod";
 // Workflow under `name` and `workflow.yaml` as an object under `manifest`.
 
 const manifestOfConfigSchema = z.object({ manifest: z.unknown() });
+const nameOfConfigSchema = z.object({ name: z.string() });
 const runAsOfConfigSchema = z.object({ manifest: z.object({ runAs: z.unknown() }) });
 
 /**
@@ -70,8 +74,44 @@ function parseStoredManifest(manifest: unknown): WorkflowDefinitionResult {
  * code as the reason. A publish also asks whether its caller may let a Workflow act as the
  * service principal the revision names. A release does not carry the kind: it is written by
  * its own rights through the asset operations.
+ *
+ * A publish and a delete move the job of the Workflow's schedule with them: the job of the
+ * next due time is queued in the transaction of the publish, and the one of a schedule the
+ * Workflow no longer has is withdrawn. The planner of a starting process queues what is
+ * missing, and a job that fires for a definition without its schedule starts nothing.
  */
-export function createWorkflowAssetKind(options: WorkflowRunAsOptions): WorkflowAssetKind {
+export function createWorkflowAssetKind(
+  options: WorkflowRunAsOptions & {
+    /** The time zone of the engine's schedules. UTC when left out. */
+    timeZone?: string;
+    /** The clock of the engine, for a test of due times. */
+    now?: () => Date;
+  }
+): WorkflowAssetKind {
+  const { clientInstanceId, timeZone = "UTC", now = () => new Date() } = options;
+  /** The definition of a published config as the engine runs it, or nothing where it runs none. */
+  const runnable = (config: JsonObject | undefined) => {
+    const parsed = parseStoredManifest(manifestOfConfigSchema.safeParse(config).data?.manifest);
+    return parsed.ok ? parsed.manifest : undefined;
+  };
+  async function reschedule(
+    stores: PlatformStores,
+    previous: JsonObject | undefined,
+    published: JsonObject | undefined
+  ): Promise<void> {
+    const workflow = nameOfConfigSchema.safeParse(published ?? previous).data?.name;
+    if (workflow === undefined) return;
+    const before = runnable(previous);
+    const next = runnable(published);
+    await replaceScheduleJob(stores, {
+      clientInstanceId,
+      workflow,
+      ...(before ? { previous: before } : {}),
+      ...(next ? { published: next } : {}),
+      timeZone,
+      now: now()
+    });
+  }
   return {
     ...defineAssetKind({
       kind: WORKFLOW_ASSET_KIND,
@@ -120,6 +160,8 @@ export function createWorkflowAssetKind(options: WorkflowRunAsOptions): Workflow
     missingUpsertRight: () => undefined,
     assertInteractiveUpsertAllowed: () => undefined,
     assertInteractiveDeleteAllowed: () => undefined,
+    onPublish: ({ stores, replaced, config }) => reschedule(stores, replaced, config),
+    onRemove: ({ stores, published }) => reschedule(stores, published, undefined),
     authorizeLive: createWorkflowLiveCheck(
       options,
       (config) => runAsOfConfigSchema.safeParse(config).data?.manifest.runAs

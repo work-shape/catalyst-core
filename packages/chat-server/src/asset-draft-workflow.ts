@@ -306,7 +306,13 @@ export class AssetDraftWorkflow {
     const published = onPublish
       ? await this.options.stores.transaction(async (stores) => {
           const moved = await move(stores.configAssets);
-          await onPublish({ assetId: moved.assetId, revision: moved.revision, config, stores });
+          await onPublish({
+            assetId: moved.assetId,
+            revision: moved.revision,
+            config,
+            ...(asset.publishedConfig === undefined ? {} : { replaced: asset.publishedConfig }),
+            stores
+          });
           return moved;
         })
       : await move(this.options.configAssets.store);
@@ -390,7 +396,12 @@ export class AssetDraftWorkflow {
       removed = onRemove
         ? await this.options.stores.transaction(async (stores) => {
             const gone = await remove(stores.configAssets);
-            await onRemove({ assetId: gone.assetId, stores });
+            const published = target.asset?.publishedConfig;
+            await onRemove({
+              assetId: gone.assetId,
+              ...(published === undefined ? {} : { published }),
+              stores
+            });
             return gone;
           })
         : await remove(this.options.configAssets.store);
