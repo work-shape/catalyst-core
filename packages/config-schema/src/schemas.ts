@@ -157,6 +157,30 @@ const viewsConfigSchema = z
   })
   .default({ allowedScriptSrc: [] });
 
+const replyLinkHostSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^(\*\.)?[a-z0-9-]+(\.[a-z0-9-]+)*$/u, {
+    message:
+      'Link hosts must be host names such as "example.com", or "*.example.com" for every subdomain, without a scheme, port or path.'
+  });
+
+const repliesConfigSchema = z
+  .object({
+    /**
+     * Hosts a link in a reply or in a Markdown file preview may point to besides the instance
+     * itself. A link to any other host is shown as text with its address. Images from other
+     * hosts are never loaded, whatever this list names.
+     */
+    allowedLinkHosts: z
+      .array(replyLinkHostSchema)
+      .default([])
+      .transform((hosts) => Array.from(new Set(hosts)))
+  })
+  .strict()
+  .default({ allowedLinkHosts: [] });
+
 const dataSourceConfigSchema = z.object({
   kind: z.literal("postgres"),
   connectionRef: z.string().min(1),
@@ -866,6 +890,7 @@ export const clientInstanceConfigSchema = z.object({
     }),
   tools: z.array(toolInstanceConfigSchema).default([]),
   views: viewsConfigSchema,
+  replies: repliesConfigSchema,
   dataSources: z.record(z.string(), dataSourceConfigSchema).default({}),
   /** The Connections the release defines. Seeded as read-only assets when the API starts. */
   connections: releaseConnectionsConfigSchema,

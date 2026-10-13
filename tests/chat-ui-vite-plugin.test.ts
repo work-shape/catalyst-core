@@ -28,7 +28,7 @@ describe("vivdCatalystChatUiPlugin", () => {
 
     const tags = await plugin.transformIndexHtml?.();
 
-    expect(tags).toHaveLength(2);
+    expect(tags).toHaveLength(3);
     const script = tags?.find((tag) => tag.tag === "script")?.children;
     const style = tags?.find((tag) => tag.tag === "style")?.children;
     expect(script).toContain("vivd-catalyst:theme");
@@ -66,7 +66,79 @@ describe("vivdCatalystChatUiPlugin", () => {
       }
     });
 
-    await expect(plugin.transformIndexHtml?.()).resolves.toBeUndefined();
+    const tags = await plugin.transformIndexHtml?.();
+    expect(tags?.map((tag) => tag.tag)).toEqual(["meta"]);
+  });
+
+  it("puts the content policy first, limiting images, media, fonts and connections", async () => {
+    const root = await createClientFixture();
+    const plugin = vivdCatalystChatUiPlugin({ clientConfigPath: "config/app.yaml" });
+    plugin.configResolved({
+      root,
+      publicDir: false,
+      command: "build",
+      env: {},
+      build: { outDir: "dist/client" }
+    });
+
+    const tags = await plugin.transformIndexHtml?.();
+    const policy = contentPolicyOf(tags);
+
+    expect(tags?.[0]?.attrs?.["http-equiv"]).toBe("Content-Security-Policy");
+    expect(directive(policy, "img-src")).toEqual(["'self'", "data:", "blob:"]);
+    expect(directive(policy, "media-src")).toEqual(["'self'", "data:", "blob:"]);
+    expect(directive(policy, "font-src")).toEqual(["'self'", "data:"]);
+    expect(directive(policy, "connect-src")).toEqual(["'self'", "blob:", "data:"]);
+    // Views and Apps have documents and policies of their own; scripts and frames stay open.
+    expect(policy).not.toMatch(/script-src|style-src|frame-src|default-src/u);
+  });
+
+  it("adds a separate API, a remote logo host and Vite's socket in development", async () => {
+    const root = await createClientFixture({ logoUrl: "https://brand.example.org/logo.svg" });
+    const plugin = vivdCatalystChatUiPlugin({ clientConfigPath: "config/app.yaml" });
+    plugin.configResolved({
+      root,
+      publicDir: false,
+      command: "serve",
+      env: { VITE_CHAT_API_PORT: "4101" },
+      build: { outDir: "dist/client" }
+    });
+
+    const policy = contentPolicyOf(await plugin.transformIndexHtml?.());
+
+    expect(directive(policy, "img-src")).toEqual([
+      "'self'",
+      "data:",
+      "blob:",
+      "http://*:4101",
+      "https://*:4101",
+      "https://brand.example.org"
+    ]);
+    expect(directive(policy, "connect-src")).toEqual(
+      expect.arrayContaining(["http://*:4101", "ws:", "wss:"])
+    );
+    expect(directive(policy, "connect-src")).not.toContain("https://brand.example.org");
+  });
+
+  it("names an API on another origin by that origin", async () => {
+    const root = await createClientFixture();
+    const plugin = vivdCatalystChatUiPlugin({ clientConfigPath: "config/app.yaml" });
+    plugin.configResolved({
+      root,
+      publicDir: false,
+      command: "build",
+      env: { VITE_CHAT_API_URL: "https://api.example.com/base", VITE_CHAT_API_PORT: "4101" },
+      build: { outDir: "dist/client" }
+    });
+
+    const policy = contentPolicyOf(await plugin.transformIndexHtml?.());
+
+    expect(directive(policy, "connect-src")).toEqual([
+      "'self'",
+      "blob:",
+      "data:",
+      "https://api.example.com"
+    ]);
   });
 
   it("does not add a platform favicon unless a fallback is explicitly configured", async () => {
@@ -124,11 +196,25 @@ describe("vivdCatalystChatUiPlugin", () => {
 
 const defaultFavicon = "packages/chat-ui/assets/favicon.svg";
 
+function contentPolicyOf(
+  tags: ReadonlyArray<{ tag: string; attrs?: Record<string, string> }> | undefined
+): string {
+  return tags?.find((tag) => tag.tag === "meta")?.attrs?.content ?? "";
+}
+
+function directive(policy: string, name: string): string[] {
+  const found = policy
+    .split(";")
+    .map((part) => part.trim().split(/\s+/u))
+    .find(([directiveName]) => directiveName === name);
+  return found ? found.slice(1) : [];
+}
+
 function platformFile(path: string): string {
   return fileURLToPath(new URL(`../${path}`, import.meta.url));
 }
 
-async function createClientFixture(): Promise<string> {
+async function createClientFixture(ui: { logoUrl?: string } = {}): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "vivd-catalyst-client-"));
   cleanupDirectories.push(root);
   await mkdir(join(root, "config"));
@@ -154,6 +240,7 @@ async function createClientFixture(): Promise<string> {
     [
       "clientName: Test Client",
       "title: Test Chat",
+      ...(ui.logoUrl ? [`logoUrl: ${ui.logoUrl}`] : []),
       'accentColor: "#00a6e3"',
       "defaultThemeMode: system",
       "theme:",

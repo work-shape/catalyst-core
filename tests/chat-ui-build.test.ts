@@ -5,20 +5,20 @@ import { DocsAddressProvider } from "@vivd-catalyst/ui";
 import {
   buildAssetKinds,
   BuildAssetKindsProvider,
-  buildCreateRequested,
   BuildFrame,
   buildLocationOfRoute,
   BuildNavigationProvider,
   buildRouteOfLocation,
-  clearBuildCreateRequest,
+  clearBuildStartRequest,
   isEditableKind,
-  requestBuildCreate,
+  requestBuildStart,
   resolveBuildPlace,
   resolveBuildRights,
   SkillEditor,
   skillConfigToForm,
   visibleBuildKinds,
   type BuildAsset,
+  type BuildAssetEditorProps,
   type BuildAssetKind,
   type BuildAssetRead,
   type BuildAssetRow,
@@ -215,27 +215,35 @@ const skillPages: BuildAssetKind = {
 const pageKinds = [agentKind, skillPages];
 
 describe("Studio frame", () => {
-  it("opens the dialog of a new agent on the list when a page outside Studio asked for it", () => {
-    const dialog = '<form id="build-create-form"';
+  it("opens the page of a new agent on the list when a page outside Studio started it", () => {
+    // The agent's form reads the instance's configuration from Settings: a plain body stands in.
+    const kinds = [
+      {
+        ...agentKind,
+        Editor: ({ start }: BuildAssetEditorProps) =>
+          createElement("p", null, `new ${start?.title} as ${start?.name}`)
+      },
+      skillPages
+    ];
+    const newPage = "new Kai Helper as kai_helper";
     try {
-      expect(render({ kindPath: "agents" })).not.toContain(dialog);
+      expect(render({ kindPath: "agents" }, { kinds })).not.toContain(newPage);
 
-      requestBuildCreate("agents");
-      expect(buildCreateRequested("agents")).toBe(true);
-      expect(buildCreateRequested("skills")).toBe(false);
-      expect(render({ kindPath: "agents" })).toContain(dialog);
-      // The wish names one kind's list: no other list and no asset's page opens with it.
-      expect(render({ kindPath: "skills" })).not.toContain(dialog);
-      expect(render({ kindPath: "agents", name: "workflow_assistant" })).not.toContain(dialog);
-      // A reader who may not create is asked nothing.
-      expect(
-        render({ kindPath: "agents" }, { source: source({ permissions: ["config_assets.read"] }) })
-      ).not.toContain(dialog);
+      requestBuildStart("agents", { name: "kai_helper", title: "Kai Helper" });
+      const markup = render({ kindPath: "agents" }, { kinds });
+      expect(markup).toContain(newPage);
+      // The dialog was answered where the agent was started: Studio does not ask again.
+      expect(markup).not.toContain('<form id="build-create-form"');
+      // The start names one kind's list: no other list and no asset's page opens with it.
+      expect(render({ kindPath: "skills" }, { kinds })).not.toContain(newPage);
+      expect(render({ kindPath: "agents", name: "workflow_assistant" }, { kinds })).not.toContain(
+        newPage
+      );
 
-      clearBuildCreateRequest();
-      expect(render({ kindPath: "agents" })).not.toContain(dialog);
+      clearBuildStartRequest();
+      expect(render({ kindPath: "agents" }, { kinds })).not.toContain(newPage);
     } finally {
-      clearBuildCreateRequest();
+      clearBuildStartRequest();
     }
   });
 

@@ -980,6 +980,10 @@ id from config_assets where status = 'deleted')`.
 
 ### Changed
 
+- **Agents page:** a card shows the agent mark in place of the initials, the name, the default
+  badge, what the agent does in two lines at most, and Start chat. Its starter prompts are no
+  longer on the card; they wait in the empty chat with that agent. New agent opens its dialog
+  on the page: Cancel stays there, and Continue leads to the new agent's page in Studio.
 - **Studio:** the list of agents names each agent in the reader's language and shows what it
   does under its name, in place of its id. `assets.list` takes an optional `locale`; an agent's
   title and description answer in it where the agent holds that language, and in the
@@ -2108,6 +2112,12 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   the database being unreachable and answered 500 with no sentence. It is now refused as the
   caller's statement with status 422, the SQLSTATE and the advice to narrow or aggregate it, and
   is not retried. Too many connections stays unavailable.
+- **Dialogs:** a dialog closed by its Cancel or close button gives the focus back to what
+  opened it, such as New agent on the Agents page. Only Escape did; the buttons left the focus
+  on the page body.
+- **Agents page:** an agent renamed or changed in Studio shows its new name and description on
+  its card and in the agent picker without a reload. A save of an agent, and a change of the
+  default agent, now also ask again for the workspaces' lists of agents.
 - **Hostile YAML and tool-call text:** every YAML file an author or an agent writes
   (`workflow.yaml`, `app.yaml`, App action files, `store.yaml`, `SKILL.md` frontmatter), the
   release config and the CLI working copy are read by one reader. It knows JSON types only:
