@@ -1,36 +1,36 @@
-import { constants } from "node:fs";
-import { chmod, lstat, mkdir, mkdtemp, open, readdir, rm, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { lstat, mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type {
   WorkflowCodeOutcome,
   WorkflowStagedCode,
   WorkflowStepRunLog
 } from "@vivd-catalyst/core";
-import type {
-  SandboxCommandLimits,
-  WorkspaceCommandProcessExecutor
+import {
+  SANDBOX_SOURCE_DIRECTORY,
+  type SandboxCommandLimits,
+  type WorkspaceCommandProcessExecutor
 } from "@vivd-catalyst/tool-execution";
 import { WORKFLOW_CODE_ERRORS, WORKFLOW_CODE_LOG_MAX_BYTES, codeLanguageOf } from "./code-step";
 import { jsonValueSchema } from "./json";
 
 // One code step is one command in the sandbox the instance runs agent commands in: a
-// container without a network, with a read-only root, without capabilities, and with one
-// writable directory that holds the script and its input and nothing else. No variable of
-// the worker's environment reaches it. The worker writes the two files, runs the script with
-// the input on its input stream, and reads the result back as data it does not trust.
+// container without a network, with a read-only root, without capabilities and without a
+// variable of the worker's environment. The worker writes the script and the input into a
+// directory of its own, which the container is handed read-only. The script works in a
+// directory in memory of a stated size, so nothing it writes reaches the worker's disk.
+//
+// The worker never opens what a script left behind. The command that runs the script also
+// reads its result, inside the container and within the script's time limit, and prints it
+// after the script's own output: a pipe, a link or a file without end that a script leaves
+// in place of its result is the container's to deal with, and ends with it.
 
-/** The file of the directory the input is in, beside being the script's input stream. */
-const CODE_STEP_INPUT_FILE = "input.json";
+const INPUT_FILE = "input.json";
 /** The file a script writes its result to. A script that writes none prints its result. */
-const CODE_STEP_OUTPUT_FILE = "output.json";
+const OUTPUT_FILE = "output.json";
 
 const DIRECTORY_PREFIX = "catalyst-code-step-";
 const COMMAND_ID_PREFIX = "code-step-";
-/** The exit code of a process the kernel killed, which a container over its memory is. */
-const EXIT_KILLED = 137;
-/** A directory or container this old was left by a worker that was killed. */
-const STALE_MS = 30 * 60 * 1_000;
-const SWEEP_INTERVAL_MS = 10 * 60 * 1_000;
 
 export interface CodeSandboxOptions {
   /** The sandbox of the instance, the one that runs agent commands. */
@@ -65,38 +65,47 @@ function cut(text: string): { text: string; cut: boolean } {
 }
 
 /**
- * The result a script wrote to its file, read without following a link: the script owns the
- * directory, and a link it left there would otherwise be read on the worker's host.
+ * The shell text that runs one script. It copies the script and the input into the working
+ * directory where the sandbox handed them in read-only, runs the script with the input on its
+ * input stream, and lets through as much of what the script prints as a result may be long.
+ * Then, where the script left a regular file as its result, it prints a line nobody but this
+ * run knows and at most one byte more of the file than a result may have. It reads nothing
+ * else: a link, a pipe, a socket, a device or a directory in the file's place is no result.
+ * It ends with the exit code of the script.
  */
-async function readOutputFile(
-  path: string,
-  maxBytes: number
-): Promise<{ text: string } | { missing: true } | { tooLarge: true }> {
-  let file;
-  try {
-    file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
-  } catch {
-    return { missing: true };
-  }
-  try {
-    const stat = await file.stat();
-    if (!stat.isFile()) return { missing: true };
-    if (stat.size > maxBytes) return { tooLarge: true };
-    return { text: await file.readFile("utf8") };
-  } finally {
-    await file.close();
-  }
+function scriptCommand(input: {
+  interpreter: string;
+  script: string;
+  mark: string;
+  maxBytes: number;
+}): string {
+  const { interpreter, script, mark } = input;
+  const most = String(input.maxBytes + 1);
+  return [
+    // Only where the sandbox handed the files in beside the working directory: a sandbox
+    // that runs the command in the worker's own directory has them there already.
+    `if [ ! -e ${script} ] && [ -f ${SANDBOX_SOURCE_DIRECTORY}/${script} ]; then cp ${SANDBOX_SOURCE_DIRECTORY}/${script} ${SANDBOX_SOURCE_DIRECTORY}/${INPUT_FILE} . || exit 125; fi`,
+    `${interpreter} ${script} < ${INPUT_FILE} | { head -c ${most}; cat > /dev/null; }`,
+    "code=${PIPESTATUS[0]}",
+    `if [ -f ${OUTPUT_FILE} ] && [ ! -L ${OUTPUT_FILE} ]; then printf '\\n%s\\n' '${mark}'; head -c ${most} ${OUTPUT_FILE}; fi`,
+    'exit "$code"'
+  ].join("\n");
 }
 
 /** Runs scripts of code steps in the sandbox. The function never rejects for what a script did. */
 export function createCodeSandbox(options: CodeSandboxOptions) {
   const { sandbox, tempRoot, limits, outputMaxBytes } = options;
   const active = new Set<string>();
-  let nextSweep = 0;
 
-  /** Removes what a killed worker left: directories and containers older than any run can be. */
-  async function sweep(): Promise<void> {
-    const cutoff = Date.now() - STALE_MS;
+  /**
+   * Removes what a killed worker left: the directories and the containers of code steps that
+   * are older than `olderThanMs`, which is longer than any script may run. Nothing ends a
+   * container whose worker is gone, so the worker calls this when it starts and on a timer
+   * of its own, whether or not another code step ever runs.
+   */
+  async function sweep(olderThanMs: number): Promise<{ directories: number; containers: number }> {
+    const cutoff = Date.now() - olderThanMs;
+    let directories = 0;
     for (const entry of await readdir(tempRoot, { withFileTypes: true }).catch(() => [])) {
       const directory = join(tempRoot, entry.name);
       if (!entry.isDirectory() || !entry.name.startsWith(DIRECTORY_PREFIX)) continue;
@@ -104,15 +113,19 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
       try {
         if ((await lstat(directory)).mtimeMs <= cutoff) {
           await rm(directory, { recursive: true, force: true });
+          directories += 1;
         }
       } catch {
         // Gone already, or not this worker's to remove. The next sweep looks again.
       }
     }
-    await sandbox.removeLeftovers?.({ idPrefix: COMMAND_ID_PREFIX, olderThanMs: STALE_MS });
+    const containers = await Promise.resolve(
+      sandbox.removeLeftovers?.({ idPrefix: COMMAND_ID_PREFIX, olderThanMs }) ?? 0
+    ).catch(() => 0);
+    return { directories, containers };
   }
 
-  return async function run(input: {
+  async function run(input: {
     /** Names the container: the id of the step run. */
     id: string;
     staged: WorkflowStagedCode;
@@ -132,32 +145,31 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
       };
     }
     await mkdir(tempRoot, { recursive: true });
-    if (Date.now() >= nextSweep) {
-      nextSweep = Date.now() + SWEEP_INTERVAL_MS;
-      sweep().catch(() => undefined);
-    }
     const root = await mkdtemp(join(tempRoot, DIRECTORY_PREFIX));
     active.add(root);
     try {
-      // The directory the sandbox mounts lies inside the one made above, which no other user
-      // of the host can enter. It holds the script and the input, and nothing else.
+      // The directory the sandbox is handed lies inside the one made above, which no other
+      // user of the host can enter. It holds the script and the input, and nothing else.
       const directory = join(root, "run");
       await mkdir(directory);
-      // The script may run as another user than the worker, and writes its result here.
-      await chmod(directory, 0o777);
       const script = `step.${staged.file.split(".").at(-1) ?? ""}`;
       await writeFile(join(directory, script), staged.source, { flag: "wx" });
-      await writeFile(join(directory, CODE_STEP_INPUT_FILE), JSON.stringify(staged.input), {
-        flag: "wx"
-      });
+      await writeFile(join(directory, INPUT_FILE), JSON.stringify(staged.input), { flag: "wx" });
+      const mark = `catalyst-result-${randomUUID()}`;
       const result = await sandbox.execute({
         command: {
           id: `${COMMAND_ID_PREFIX}${input.id}`,
-          command: `${language.command} ${script} < ${CODE_STEP_INPUT_FILE}`,
+          command: scriptCommand({
+            interpreter: language.command,
+            script,
+            mark,
+            maxBytes: outputMaxBytes
+          }),
           limits: {
             timeoutSeconds: staged.timeoutSeconds,
-            // One byte more than a result may have, so one that is too large is told apart.
-            maxStdoutBytes: outputMaxBytes + 1,
+            // What the command lets through at most: the script's output and its result,
+            // each one byte longer than a result may be, and the line between them.
+            maxStdoutBytes: 2 * (outputMaxBytes + 1) + mark.length + 2,
             maxStderrBytes: WORKFLOW_CODE_LOG_MAX_BYTES + 1
           }
         },
@@ -173,11 +185,14 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
       if (result.cancelled) return { kind: "stopped" };
       if (result.spawnError) return { kind: "notStarted", reason: result.spawnError.message };
 
-      const written = await readOutputFile(join(directory, CODE_STEP_OUTPUT_FILE), outputMaxBytes);
+      // What the script printed, and after the line of this run what it left as its result.
+      const at = result.stdoutPreview.indexOf(`\n${mark}\n`);
+      const printedText = at === -1 ? result.stdoutPreview : result.stdoutPreview.slice(0, at);
+      const written = at === -1 ? undefined : result.stdoutPreview.slice(at + mark.length + 2);
+      const tooLong = (text: string) => Buffer.byteLength(text, "utf8") > outputMaxBytes;
       // A script that wrote its result to the file printed a log; one that wrote none
       // printed its result, and its error stream is its log.
-      const printed = "missing" in written;
-      const stdout = cut(printed ? "" : result.stdoutPreview);
+      const stdout = cut(written === undefined ? "" : printedText);
       const stderr = cut(result.stderrPreview);
       const log: WorkflowStepRunLog = {
         stdout: stdout.text,
@@ -186,7 +201,7 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
           stdout.cut ||
           stderr.cut ||
           result.truncated.stderr ||
-          (!printed && result.truncated.stdout)
+          (written !== undefined && tooLong(printedText))
       };
       const ended = (outcome: WorkflowCodeOutcome): CodeSandboxResult => ({
         kind: "ended",
@@ -194,41 +209,39 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
         log
       });
       // A script that did not end by itself has no result, whatever it had written by then.
-      const unfinished = (): WorkflowStepRunLog => ({
-        ...log,
-        stdout: cut(result.stdoutPreview).text
+      const unfinished = (outcome: WorkflowCodeOutcome): CodeSandboxResult => ({
+        kind: "ended",
+        outcome,
+        log: { ...log, stdout: cut(printedText).text }
       });
       if (result.timeoutKind) {
-        return {
-          kind: "ended",
-          outcome: failed(
+        return unfinished(
+          failed(
             WORKFLOW_CODE_ERRORS.timeout,
             `The script did not end within ${staged.timeoutSeconds} seconds and was stopped`
-          ),
-          log: unfinished()
-        };
+          )
+        );
       }
-      if (result.exitCode === EXIT_KILLED) {
-        return {
-          kind: "ended",
-          outcome: failed(
+      // The sandbox's own word, where it has one: a script may end with any exit code it
+      // likes, and a process that was killed for another reason ends with the same one.
+      if (result.outOfMemory === true) {
+        return unfinished(
+          failed(
             WORKFLOW_CODE_ERRORS.outOfMemory,
             `The script was ended because it needed more memory than a code step gets (${limits.memoryBytes} bytes)`
-          ),
-          log: unfinished()
-        };
+          )
+        );
       }
       if (result.exitCode !== 0) {
-        return {
-          kind: "ended",
-          outcome: failed(
+        return unfinished(
+          failed(
             WORKFLOW_CODE_ERRORS.failed,
             `The script ended with the exit code ${result.exitCode}`
-          ),
-          log: unfinished()
-        };
+          )
+        );
       }
-      if ("tooLarge" in written || (printed && result.truncated.stdout)) {
+      const text = written ?? printedText;
+      if (tooLong(text) || result.truncated.stdout) {
         return ended(
           failed(
             WORKFLOW_CODE_ERRORS.tooLarge,
@@ -236,12 +249,11 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
           )
         );
       }
-      const text = "text" in written ? written.text : result.stdoutPreview;
       if (text.trim() === "") {
         return ended(
           failed(
             WORKFLOW_CODE_ERRORS.noOutput,
-            `The script ended without a result: it wrote no '${CODE_STEP_OUTPUT_FILE}' and printed nothing`
+            `The script ended without a result: it wrote no '${OUTPUT_FILE}' and printed nothing`
           )
         );
       }
@@ -258,5 +270,7 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
       // A directory that cannot be removed now is removed by a later sweep.
       await rm(root, { recursive: true, force: true }).catch(() => undefined);
     }
-  };
+  }
+
+  return { run, sweep };
 }

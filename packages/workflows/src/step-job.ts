@@ -1,4 +1,9 @@
-import { WORKFLOW_RUN_JOB_KINDS, defineJobKind } from "@vivd-catalyst/core";
+import {
+  WORKFLOW_RUN_JOB_KINDS,
+  defineJobKind,
+  defineSchedule,
+  scheduledJobPayloadSchema
+} from "@vivd-catalyst/core";
 import { z } from "zod";
 import {
   WORKFLOW_STEP_JOB_BACKOFF_BASE_MS,
@@ -34,6 +39,30 @@ export const workflowCodeJobKind = defineJobKind({
   leaseMs: 2 * 60 * 1_000,
   heartbeatMs: 30 * 1_000,
   concurrency: {}
+});
+
+/**
+ * The job kind that removes what a killed command worker left of code steps: containers no
+ * process will end, and the directories they were handed. A schedule runs it when a worker
+ * starts and every ten minutes after, whether or not another code step ever runs.
+ */
+export const WORKFLOW_CODE_SWEEP_JOB_KIND = "workflow_run.sweep_code";
+
+export const workflowCodeSweepJobKind = defineJobKind({
+  kind: WORKFLOW_CODE_SWEEP_JOB_KIND,
+  payloadSchema: scheduledJobPayloadSchema,
+  maxAttempts: 1,
+  backoff: { baseMs: 0, maxMs: 0 },
+  leaseMs: 2 * 60 * 1_000,
+  concurrency: { global: 1 },
+  // The next tick is the retry of a failed one.
+  manualRetry: false
+});
+
+export const workflowCodeSweepSchedule = defineSchedule({
+  kind: workflowCodeSweepJobKind,
+  every: 10 * 60 * 1_000,
+  dueAtStart: true
 });
 
 /** The key of the step job that takes a code step up again once its script has ended. */

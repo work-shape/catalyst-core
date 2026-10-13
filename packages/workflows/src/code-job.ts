@@ -1,6 +1,7 @@
 import {
   defineJobHandler,
   type ClientInstanceId,
+  type JobSchedule,
   type PlatformStores,
   type RegisteredJobHandler,
   type WorkflowCodeOutcome,
@@ -11,7 +12,13 @@ import type { WorkspaceCommandProcessExecutor } from "@vivd-catalyst/tool-execut
 import { createCodeSandbox, type CodeSandboxOptions } from "./code-sandbox";
 import { WORKFLOW_CODE_ERRORS } from "./code-step";
 import { WORKFLOW_STEP_DATA_MAX_BYTES } from "./limits";
-import { codeStepContinuationKey, workflowCodeJobKind, workflowStepJobKind } from "./step-job";
+import {
+  codeStepContinuationKey,
+  workflowCodeJobKind,
+  workflowCodeSweepJobKind,
+  workflowCodeSweepSchedule,
+  workflowStepJobKind
+} from "./step-job";
 
 // The command worker's half of a code step. The engine staged the step: the step run waits
 // and holds the script and the input. This job runs the script in the sandbox, keeps how it
@@ -28,14 +35,27 @@ export interface CodeStepJobsOptions {
   /** How many scripts this worker runs at once. */
   slots: number;
   limits: CodeSandboxOptions["limits"];
+  /** The longest a script may run. What a killed worker left is older than twice that. */
+  timeoutSeconds: number;
   /** For a test: in place of a second. */
   cancelCheckMs?: number;
+  /** For a test: in place of twice the time limit and a minute. */
+  leftoverAgeMs?: number;
 }
 
-/** What the command worker serves for the code steps of Workflows. */
-export function createCodeStepJobs(options: CodeStepJobsOptions): RegisteredJobHandler[] {
+/** What the command worker serves for the code steps of Workflows, and what it runs by itself. */
+export interface CodeStepJobs {
+  handlers: RegisteredJobHandler[];
+  /** The sweep of what a killed worker left: when the worker starts, and every ten minutes. */
+  schedules: JobSchedule[];
+}
+
+export function createCodeStepJobs(options: CodeStepJobsOptions): CodeStepJobs {
   const { clientInstanceId, stores } = options;
-  const run = createCodeSandbox({
+  // A script that still runs is younger than its time limit, also on another worker of the
+  // same engine. What is older than twice that and a minute has no worker left to end it.
+  const leftoverAgeMs = options.leftoverAgeMs ?? 2 * options.timeoutSeconds * 1_000 + 60_000;
+  const { run, sweep } = createCodeSandbox({
     sandbox: options.sandbox,
     tempRoot: options.tempRoot,
     limits: options.limits,
@@ -65,7 +85,15 @@ export function createCodeStepJobs(options: CodeStepJobsOptions): RegisteredJobH
     );
   }
 
-  return [
+  const sweepHandler = defineJobHandler({
+    kind: workflowCodeSweepJobKind,
+    slots: 1,
+    async run() {
+      await sweep(leftoverAgeMs);
+    }
+  });
+
+  const handlers = [
     defineJobHandler({
       kind: workflowCodeJobKind,
       slots: options.slots,
@@ -90,7 +118,8 @@ export function createCodeStepJobs(options: CodeStepJobsOptions): RegisteredJobH
             if (!still) stop.abort(new Error("The step run was cancelled"));
           }
         };
-        const watching = watch();
+        // It ends by itself at its next look after the script has ended.
+        watch().catch(() => undefined);
         let result;
         try {
           result = await run({ id: ref.id, staged, signal: stop.signal });
@@ -98,7 +127,6 @@ export function createCodeStepJobs(options: CodeStepJobsOptions): RegisteredJobH
           over = true;
           control.signal.removeEventListener("abort", stopped);
         }
-        await watching;
         // A worker that stops ends no step: the script changed nothing, and the next attempt
         // runs it again.
         if (control.signal.aborted) {
@@ -127,6 +155,8 @@ export function createCodeStepJobs(options: CodeStepJobsOptions): RegisteredJobH
           log: { stdout: "", stderr: "", truncated: false }
         });
       }
-    })
+    }),
+    sweepHandler
   ];
+  return { handlers, schedules: [workflowCodeSweepSchedule] };
 }

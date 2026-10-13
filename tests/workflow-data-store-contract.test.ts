@@ -617,10 +617,11 @@ describe("the modules workflows and dataStores", () => {
       jobKinds: [
         WORKFLOW_RUN_JOB_KINDS.executeStep,
         WORKFLOW_RUN_JOB_KINDS.fireSchedule,
-        "workflow_run.run_code"
+        "workflow_run.run_code",
+        "workflow_run.sweep_code"
       ],
       // The script of a code step runs in the sandbox, which the command worker reaches.
-      commandWorkerJobKinds: ["workflow_run.run_code"]
+      commandWorkerJobKinds: ["workflow_run.run_code", "workflow_run.sweep_code"]
     });
     expect(dataStoresModule).toEqual({
       ...nothing,
