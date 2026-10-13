@@ -115,3 +115,29 @@ The deterministic model provider is kept for local tests and repeatable debuggin
 Storage code uses product-owned store interfaces at package boundaries. The Postgres-backed adapters use Drizzle internally for typed database interactions; Drizzle table/query types should not leak into public platform APIs.
 
 Database schema changes must go through committed migrations. Use `pnpm db:generate` after changing Drizzle schema files, review the generated SQL, and commit the schema and migration together. Do not use `drizzle-kit push` or any `db push` workflow. Committed migrations never change, and a new migration expands before a later one contracts: `pnpm check:migrations` checks both against `packages/postgres-store/migration-policy.json`.
+
+## Changelog
+
+A change that users or operators of the packages notice gets an entry, and the entry is a file of
+its own, so two pull requests never edit the same lines of `CHANGELOG.md`. Add
+`changes/unreleased/<branch>.md`, named after the branch with `/` as `-` (more than one file per
+branch is fine), and do not edit `CHANGELOG.md`:
+
+```md
+---
+section: Fixed
+---
+
+- **Chat:** what changed, in the words of the person who notices it. A change that breaks config,
+  adds a migration or needs a deploy order names the exact refusal text and the rollback caveat.
+```
+
+`section` is one of `Added`, `Changed`, `Fixed` and `Database`; the entry is one or more Markdown
+list items without headings. `pnpm check:changes` (part of `pnpm check`) refuses a file the release
+could not place, and `pnpm changelog` prints the next release's section as it will read.
+
+The release runs `pnpm changelog --release <version>` (`--date YYYY-MM-DD`, default today) and
+commits the result with the version bump. It turns the Unreleased section of `CHANGELOG.md` into
+`## <version> — <date>`, puts each file's entry after the entries already in its section, files in
+name order, and deletes the files. Entries in the Unreleased section of `CHANGELOG.md` are the ones
+written before change files existed.

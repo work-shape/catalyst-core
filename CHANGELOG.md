@@ -3,6 +3,10 @@
 All platform packages are released in lockstep under one version. Before 1.0 a minor version may
 contain breaking changes; a patch version does not.
 
+The entries of the next release are files in `changes/unreleased/`, one per change; a change
+adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
+in, and `pnpm changelog` prints the next release's section as it will read.
+
 ## Unreleased
 
 ### Added
