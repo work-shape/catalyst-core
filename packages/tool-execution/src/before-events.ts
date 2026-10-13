@@ -15,7 +15,7 @@ import type {
 
 /** What the before-events of a call are asked from: a run's context. */
 export interface BeforeEventsOf {
-  definition: Pick<OperationDefinition, "name" | "events" | "beforeEvents">;
+  definition: Pick<OperationDefinition, "name" | "events" | "beforeEvents" | "inputWithoutSecrets">;
   call: Pick<OperationCall, "input" | "origin">;
   emit(
     name: PlatformEventName,
@@ -39,10 +39,13 @@ export async function askBeforeEvents(context: BeforeEventsOf): Promise<SubjectA
       "before",
       {},
       {
-        // The input as JSON: a pattern or a judge reads the arguments of the call. A hit names
-        // the operation and not the run, whose actor is a person.
+        // The input as JSON: a pattern or a judge reads the arguments of the call, a secret
+        // such as a password marked, so it never reaches a judge's model. A hit names the
+        // operation and not the run, whose actor is a person.
         subject: { kind: "operation", name: definition.name },
-        checkable: () => ({ input: JSON.stringify(call.input) ?? "" }),
+        checkable: () => ({
+          input: JSON.stringify(definition.inputWithoutSecrets?.(call.input) ?? call.input) ?? ""
+        }),
         filterBy: { operation: definition.name }
       }
     )

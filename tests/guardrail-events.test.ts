@@ -30,6 +30,7 @@ import {
   useDataStoreInstance
 } from "./support/data-store-instance";
 import { OPERATION_CALL_APPROVAL_KIND, runOperation } from "@vivd-catalyst/tool-execution";
+import { askBeforeEvents } from "../packages/tool-execution/src/before-events";
 
 // The guardrails of release config at every before-event of a call: what a pattern and a judge
 // answer and in which order, how the strictest answer wins, what a hit names, and what a person
@@ -520,5 +521,28 @@ describe("a guardrail that asks for an approval", () => {
       world.execution.operationCalls.deps
     );
     expect(counted.result).toMatchObject({ status: "done", output: { rows: [{ count: 0 }] } });
+  });
+});
+
+describe("the input a call's guardrails read", () => {
+  // Fails without the change: a judge on `operation.before_call` sent a new user's password to
+  // its model.
+  it("marks a secret of the input, so no guardrail reads a password", async () => {
+    const read: unknown[] = [];
+    await askBeforeEvents({
+      definition: {
+        name: "users.create",
+        inputWithoutSecrets: () => ({ email: "ada@example.test", password: "[secret]" })
+      },
+      call: {
+        input: { email: "ada@example.test", password: "First-Password-9920" },
+        origin: { kind: "user" }
+      },
+      emit: async (_name, _phase, _payload, before) => {
+        read.push(await before?.checkable?.());
+        return { outcome: "allow", guardrails: [] };
+      }
+    });
+    expect(read).toEqual([{ input: '{"email":"ada@example.test","password":"[secret]"}' }]);
   });
 });
