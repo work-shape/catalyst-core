@@ -1,4 +1,4 @@
-import { Bot, Check, Inbox, LayoutGrid, Shield, Users, X } from "lucide-react";
+import { Bot, Check, Inbox, KeyRound, LayoutGrid, Shield, Users, X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../actions/button";
 import { Spinner } from "../feedback/spinner";
@@ -48,7 +48,7 @@ function toneLabel(tone: BadgeTone, text: GalleryText): string {
 }
 
 const avatarSizes: readonly AvatarSize[] = ["xs", "sm", "md", "lg"];
-const avatarKinds: readonly AvatarKind[] = ["person", "workspace", "agent", "app"];
+const avatarKinds: readonly AvatarKind[] = ["person", "workspace", "agent", "app", "service"];
 const chipSizes: readonly ChipSize[] = ["sm", "md"];
 const countTones: readonly CountBadgeTone[] = ["primary", "muted"];
 
@@ -60,7 +60,8 @@ function avatarName(kind: AvatarKind, text: GalleryText): string {
     person: text.personName,
     workspace: text.workspaceMarketing,
     agent: text.rowAgent,
-    app: text.rowWorkflow
+    app: text.rowWorkflow,
+    service: text.rowServicePrincipal
   };
   return names[kind];
 }
@@ -70,7 +71,8 @@ function kindLabel(kind: AvatarKind, text: GalleryText): string {
     person: text.avatarPerson,
     workspace: text.avatarWorkspace,
     agent: text.avatarAgent,
-    app: text.avatarApp
+    app: text.avatarApp,
+    service: text.avatarService
   };
   return labels[kind];
 }
@@ -177,6 +179,13 @@ export const statusGallery: GalleryGroup = {
                   size="lg"
                   name={avatarName(kind, text)}
                   icon={<LayoutGrid aria-hidden="true" />}
+                />
+              ) : null}
+              {kind === "service" ? (
+                <Avatar
+                  kind={kind}
+                  name={avatarName(kind, text)}
+                  icon={<KeyRound aria-hidden="true" />}
                 />
               ) : null}
             </Samples>

@@ -156,6 +156,7 @@ export interface GalleryText
   avatarWorkspace: string;
   avatarAgent: string;
   avatarApp: string;
+  avatarService: string;
   bannerInfo: string;
   bannerSuccess: string;
   bannerWarningTitle: string;
@@ -202,6 +203,7 @@ export interface GalleryText
   tableUpdatedTime: string;
   rowAgent: string;
   rowWorkflow: string;
+  rowServicePrincipal: string;
   rowKnowledge: string;
   countPending: string;
   today: string;
@@ -382,6 +384,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     avatarWorkspace: "Workspace",
     avatarAgent: "Agent",
     avatarApp: "App",
+    avatarService: "Service principal",
     bannerInfo: "This agent comes from the instance and is read-only here.",
     bannerSuccess: "Your profile was saved.",
     bannerWarningTitle: "2 steps need a connection",
@@ -430,6 +433,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     tableUpdatedTime: "9:41 AM",
     rowAgent: "Support assistant",
     rowWorkflow: "Invoice check",
+    rowServicePrincipal: "Monthly check",
     rowKnowledge: "Product handbook",
     ...layoutGalleryText.en,
     ...sampleGalleryText.en,
@@ -616,6 +620,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     avatarWorkspace: "Workspace",
     avatarAgent: "Agent",
     avatarApp: "App",
+    avatarService: "Service principal",
     bannerInfo: "Dieser Agent stammt aus der Instanz und ist hier schreibgeschützt.",
     bannerSuccess: "Dein Profil wurde gespeichert.",
     bannerWarningTitle: "2 Schritte brauchen eine Verbindung",
@@ -665,6 +670,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     tableUpdatedTime: "09:41",
     rowAgent: "Support-Assistent",
     rowWorkflow: "Rechnungsprüfung",
+    rowServicePrincipal: "Monatsprüfung",
     rowKnowledge: "Produkthandbuch",
     ...layoutGalleryText.de,
     ...sampleGalleryText.de,
