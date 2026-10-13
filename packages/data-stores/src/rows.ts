@@ -18,6 +18,13 @@ const DATA_STORE_ROWS_PAGE_MAX = DATA_STORE_PREVIEW_ROW_LIMIT;
  * value is cut there and named in `cut` of its row; `value` reads it whole.
  */
 const DATA_STORE_ROW_VALUE_MAX_CHARS = 1_000;
+/**
+ * How many bytes a value that is no text may take as it is stored before a page leaves it
+ * unread. A text is cut by reading its first characters alone. Any other value has to be read
+ * whole to be shown as text, so one stored above this size is answered as an empty text and
+ * named in `cut`: a page never reads a long value.
+ */
+const DATA_STORE_ROW_VALUE_READ_MAX_BYTES = 65_536;
 /** How long a cursor is at most, in characters: the keys of one row as text. */
 const DATA_STORE_ROW_CURSOR_MAX_CHARS = 8_192;
 
@@ -36,8 +43,10 @@ const rowsOutputSchema = z.object({
   columns: z.array(z.object({ name: z.string(), type: z.string(), nativeType: z.string() })),
   /**
    * `key`: the rows come in the order of the table's primary key, whose columns are named.
-   * `physical`: the table has no primary key, so they come in the order they lie in, which a
-   * change of a row and a rewrite of the table move: a page may then show a row twice or miss one.
+   * `physical`: the table has no key that holds for all its rows, so they come in the order
+   * they lie in, part by part of the table. While nothing changes every row comes once; a
+   * change of a row and a rewrite of the table move rows, and a page may then show a row
+   * twice or miss one.
    */
   order: z.union([
     z.object({ by: z.literal("key"), columns: z.array(z.string()) }),
@@ -66,10 +75,14 @@ const valueInputSchema = z.strictObject({
 
 const valueOutputSchema = z.object({ value: z.json() });
 
-/** Where a row is: the values of its key as text, or the place it lies at. */
+/**
+ * Where a row is: the values of its key as text, or the place it lies at, which is the part of
+ * the table that holds it (`t`, the table itself, a partition or a child) and its place in
+ * that part (`p`). The place in a part alone names a row of each part.
+ */
 const placeSchema = z.union([
   z.strictObject({ k: z.array(z.string()).min(1) }),
-  z.strictObject({ p: z.string().regex(/^\(\d+,\d+\)$/u) })
+  z.strictObject({ t: z.string().regex(/^\d+$/u), p: z.string().regex(/^\(\d+,\d+\)$/u) })
 ]);
 type Place = z.infer<typeof placeSchema>;
 
@@ -91,7 +104,12 @@ function placeOf(cursor: string): Place {
   }
 }
 
-/** The columns of the primary key of a table, in the order of its index. */
+/**
+ * The columns of the primary key of a table, in the order of its index. A table that other
+ * tables inherit from has none here: its key holds for its own rows and not for the rows of
+ * its children, which a read of it answers too. The key of a partitioned table holds for all
+ * its partitions.
+ */
 const PRIMARY_KEY = `
   select a.attname::text as name
   from pg_catalog.pg_index i
@@ -101,6 +119,8 @@ const PRIMARY_KEY = `
   join pg_catalog.pg_attribute a on a.attrelid = c.oid and a.attnum = k.attnum
   where n.nspname = 'public' and c.relname = $1 and i.indisprimary
     and k.position <= i.indnkeyatts
+    and not (c.relkind = 'r' and exists (
+      select 1 from pg_catalog.pg_inherits h where h.inhparent = c.oid))
   order by k.position
 `;
 
@@ -142,8 +162,11 @@ function placed(
   if ("p" in place) {
     if (key.length > 0) throw cursorInvalid();
     return {
-      condition: `stored.ctid ${operator} ($1::pg_catalog.text)::pg_catalog.tid`,
-      parameters: [{ type: "text", value: place.p }]
+      condition: `(stored.tableoid, stored.ctid) ${operator} (($1::pg_catalog.text)::pg_catalog.oid, ($2::pg_catalog.text)::pg_catalog.tid)`,
+      parameters: [
+        { type: "text", value: place.t },
+        { type: "text", value: place.p }
+      ]
     };
   }
   if (place.k.length !== key.length) throw cursorInvalid();
@@ -166,44 +189,67 @@ export const rows: StoreRead = {
     const ordered = await orderedTable(call, input.table);
     const { table, stored, key } = ordered;
     const from = input.after === undefined ? undefined : placed(ordered, placeOf(input.after), ">");
-    // Every column is answered under a name of this statement's own, so no name of the table
-    // meets one of them: `v` the value, `x` its first characters where it is longer than a
-    // page answers, `k` what the row is found again by.
-    const long = (column: string) =>
-      `pg_catalog.length(stored.${quoteIdentifier(column)}::pg_catalog.text) > ${DATA_STORE_ROW_VALUE_MAX_CHARS}`;
+    const physical = key.length === 0;
+    const column = (name: string) => `page.${quoteIdentifier(name)}`;
+    // Names of this statement's own that no column of the table has: the part of the table a
+    // row lies in and its place there, which a table has under no name of its own.
+    const free = (name: string): string =>
+      table.columns.some((candidate) => candidate.name === name) ? free(`${name}_`) : name;
+    const [part, place] = [free("row_part"), free("row_place")].map(quoteIdentifier);
+    // The rows of the page are found first, by their key or their place alone, and no value
+    // of a row that is not on the page is looked at.
+    const order = physical
+      ? "stored.tableoid, stored.ctid"
+      : key.map(({ column: name }) => `stored.${quoteIdentifier(name)}`).join(", ");
+    const found = `select stored.*, stored.tableoid::pg_catalog.oid as ${part}, stored.ctid as ${place}
+      from ${stored} as stored ${from ? `where ${from.condition}` : ""}
+      order by ${order} limit ${input.limit + 1}`;
+    // Then each value is cut where the database holds it. A text is read up to one character
+    // past what a page answers, which reads the beginning of a long one and not the rest.
+    // Another value must be read whole to be text, so one stored above the read bound is not
+    // read at all. Every column is answered under a name of this statement's own: `v` the
+    // value, `x` its first characters where it is cut, `k` what the row is found again by.
     const selected = [
-      ...table.columns.flatMap(({ name }, index) => [
-        `case when ${long(name)} then null else stored.${quoteIdentifier(name)} end as "v${index}"`,
-        `case when ${long(name)} then pg_catalog.left(stored.${quoteIdentifier(name)}::pg_catalog.text, ${DATA_STORE_ROW_VALUE_MAX_CHARS}) end as "x${index}"`
-      ]),
-      ...(key.length > 0
-        ? key.map(
-            ({ column }, index) =>
-              `stored.${quoteIdentifier(column)}::pg_catalog.text as "k${index}"`
-          )
-        : [`stored.ctid::pg_catalog.text as "k0"`])
+      ...table.columns.flatMap(({ name, type }, index) => {
+        const shown = `pg_catalog.left(${column(name)}::pg_catalog.text, ${DATA_STORE_ROW_VALUE_MAX_CHARS + 1})`;
+        const long = `pg_catalog.length(${shown}) > ${DATA_STORE_ROW_VALUE_MAX_CHARS}`;
+        const cutText = `pg_catalog.left(${column(name)}::pg_catalog.text, ${DATA_STORE_ROW_VALUE_MAX_CHARS})`;
+        if (type === "text") {
+          return [
+            `case when ${long} then null else ${column(name)} end as "v${index}"`,
+            `case when ${long} then ${cutText} end as "x${index}"`
+          ];
+        }
+        const unread = `pg_catalog.pg_column_size(${column(name)}) > ${DATA_STORE_ROW_VALUE_READ_MAX_BYTES}`;
+        return [
+          `case when ${unread} then null when ${long} then null else ${column(name)} end as "v${index}"`,
+          `case when ${unread} then '' when ${long} then ${cutText} end as "x${index}"`
+        ];
+      }),
+      ...(physical
+        ? [`page.${part}::pg_catalog.text as "k0"`, `page.${place}::pg_catalog.text as "k1"`]
+        : key.map(({ column: name }, index) => `${column(name)}::pg_catalog.text as "k${index}"`))
     ];
-    const order =
-      key.length > 0
-        ? key.map(({ column }) => `stored.${quoteIdentifier(column)}`).join(", ")
-        : "stored.ctid";
+    const pageOrder = physical
+      ? `page.${part}, page.${place}`
+      : key.map(({ column: name }) => column(name)).join(", ");
     const read = await call.runtime.server.executor.query({
       ...call.target,
       // One row more than the page says whether a row follows it.
       limits: { ...call.target.limits, maxRows: input.limit + 1 },
-      sql: `select ${selected.join(", ")} from ${stored} as stored
-        ${from ? `where ${from.condition}` : ""} order by ${order}`,
+      sql: `select ${selected.join(", ")} from (${found}) as page order by ${pageOrder}`,
       ...(from ? { parameters: from.parameters } : {})
     });
     const page = read.rows.slice(0, input.limit).map((row: JsonObject) => {
       const cut = table.columns.flatMap(({ name }, index) =>
         typeof row[`x${index}`] === "string" ? [name] : []
       );
-      const texts = (key.length > 0 ? key : [undefined]).map((_, index) =>
-        String(row[`k${index}`])
-      );
       return {
-        at: cursorOf(key.length > 0 ? { k: texts } : { p: texts[0] ?? "" }),
+        at: cursorOf(
+          physical
+            ? { t: String(row.k0), p: String(row.k1) }
+            : { k: key.map((_, index) => String(row[`k${index}`])) }
+        ),
         values: Object.fromEntries(
           table.columns.map(({ name }, index) => [
             name,
@@ -219,10 +265,9 @@ export const rows: StoreRead = {
     return {
       table: table.name,
       columns: table.columns.map(({ name, type, nativeType }) => ({ name, type, nativeType })),
-      order:
-        key.length > 0
-          ? { by: "key" as const, columns: key.map(({ column }) => column) }
-          : { by: "physical" as const },
+      order: physical
+        ? { by: "physical" as const }
+        : { by: "key" as const, columns: key.map(({ column: name }) => name) },
       rows: page,
       ...(more && last ? { next: last.at } : {}),
       valueMaxChars: DATA_STORE_ROW_VALUE_MAX_CHARS
