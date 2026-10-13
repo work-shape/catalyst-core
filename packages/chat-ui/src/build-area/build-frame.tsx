@@ -241,6 +241,12 @@ export function BuildFrame({
   };
 
   const assetName = creating ? undefined : place.name;
+  // A new asset and a copy start where the dialog says: of a kind that starts in the workspace,
+  // in the one the reader works in.
+  const startsIn =
+    isEditableKind(entry) && entry.startsInWorkspace
+      ? { workspace, mayChooseAll: source.rights.instanceWrite }
+      : undefined;
   const back = (
     <PageHeaderBack label={t("build.backToList", { kind: t(entry.label) })} onClick={openList}>
       {t(entry.label)}
@@ -297,6 +303,7 @@ export function BuildFrame({
             initialTitle={t("build.copyTitle", { title: copying.title })}
             namespaces={source.rights.creatableNamespaces(entry.kind)}
             mayNameFreely={source.rights.instanceWrite}
+            startsIn={startsIn}
             onClose={() => setCopying(undefined)}
             onStart={(chosen) => {
               setCopying(undefined);
@@ -361,14 +368,7 @@ export function BuildFrame({
           entry={entry}
           namespaces={source.rights.creatableNamespaces(entry.kind)}
           mayNameFreely={source.rights.instanceWrite}
-          startsIn={
-            entry.startsInWorkspace
-              ? {
-                  workspace,
-                  mayChooseAll: source.rights.instanceWrite
-                }
-              : undefined
-          }
+          startsIn={startsIn}
           onClose={() => setAsking(false)}
           onStart={(chosen) => {
             setAsking(false);
