@@ -199,8 +199,12 @@ export async function callStepOperation(input: {
     );
   }
   // What the call touches is read as the call path reads it: from the input the operation's
-  // own schema accepts. An input it refuses names nothing, and the call below says why.
-  const accepted = definition.inputSchema.safeParse(input.input);
+  // own schema accepts. An input it refuses names nothing, and the call below says why. The
+  // schema of an operation an outside system described is checked in a worker thread, so it
+  // is asked without blocking; a check that gave no answer names nothing either.
+  const accepted = await definition.inputSchema
+    .safeParseAsync(input.input)
+    .catch(() => ({ success: false as const }));
   const touched = accepted.success ? definition.resource(accepted.data) : undefined;
   const source = touched?.name ?? touched?.id;
   const made: WorkflowStepRunCall = {
