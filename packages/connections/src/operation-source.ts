@@ -175,6 +175,12 @@ function definitionOf(
     // A read of a customer's system is recorded, every time.
     ...(operation.effect === "reading" ? { recordsEveryCall: true as const } : {}),
     ...(operation.policy === undefined ? {} : { defaultPolicy: operation.policy }),
+    // The outside system is handed the key of the call and carries out one call per key.
+    ...(operation.effect === "changing" &&
+    operation.idempotencyKeyHeader !== undefined &&
+    connection.type?.carriesIdempotencyKey === true
+      ? { repeatsUnderKey: true as const }
+      : {}),
     action: null,
     authorize: (_input, context) => authorizeCall(connection, operation, context),
     scope: null,
@@ -182,6 +188,9 @@ function definitionOf(
     inputSchema: inputSchemaOf(deps, connection, operation, descriptor),
     // The result is checked inside the call, where a failure has a reason of its own.
     outputSchema: z.unknown(),
+    // What the outside system, or the type, described: for whoever shows the operation.
+    ...(descriptor ? { inputJsonSchema: descriptor.inputSchema } : {}),
+    ...(descriptor?.outputSchema ? { outputJsonSchema: descriptor.outputSchema } : {}),
     resource: () => resource,
     module: CONNECTIONS_MODULE,
     timeoutMs: limits.slotWaitMs + limits.callTimeoutMs + CONNECTION_RUN_GRACE_MS,

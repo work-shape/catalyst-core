@@ -141,6 +141,8 @@ export interface ServedFileSetAsset {
   workspaceId?: string;
   activeRevisionId: string;
   publishedRevisionId?: string;
+  /** The file set of the published revision, which may be another than this one. */
+  publishedFileSetId?: FileSetId;
   /** The revisions of the asset that hold this file set. */
   revisionIds: string[];
 }

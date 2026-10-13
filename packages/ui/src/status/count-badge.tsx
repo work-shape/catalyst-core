@@ -17,8 +17,13 @@ const dotTones: Record<CountBadgeTone, string> = {
 };
 
 export interface CountBadgeProps extends HTMLAttributes<HTMLSpanElement> {
-  /** The number shown. Above 99 it shows as 99+. */
+  /** The number shown. Above 99 it shows as 99+, unless `exact`. */
   count?: number;
+  /**
+   * The whole number, however large: for a count that is the fact a control states, such as
+   * how many rows a filter holds. A hint that something waits stays capped.
+   */
+  exact?: boolean;
   tone?: CountBadgeTone;
   /** A dot without a number, where there is room only to say that something waits. */
   dot?: boolean;
@@ -28,6 +33,7 @@ export function CountBadge({
   className,
   count = 0,
   tone = "primary",
+  exact = false,
   dot = false,
   ...props
 }: CountBadgeProps) {
@@ -48,7 +54,7 @@ export function CountBadge({
       )}
       {...props}
     >
-      {count > COUNT_CAP ? `${COUNT_CAP}+` : count}
+      {count > COUNT_CAP && !exact ? `${COUNT_CAP}+` : count}
     </span>
   );
 }

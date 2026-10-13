@@ -4,6 +4,19 @@ import { readWorkflowManifest } from "@vivd-catalyst/client-assembly";
 import { WORKFLOWS_MODULE, WORKFLOW_KIND, type SeedApi } from "./api";
 import { workflowPrincipal, workflows } from "./company";
 
+/** The definition of `seed/workflows/<name>/workflow.yaml`, as the engine reads it. */
+export async function readWorkflowFile(
+  assetsDir: string,
+  name: string
+): Promise<Record<string, unknown>> {
+  const file = join(assetsDir, "workflows", name, "workflow.yaml");
+  const read = readWorkflowManifest(await readFile(file, "utf8"));
+  if (!read.ok) {
+    throw new Error(`${file} is no definition the engine runs: ${read.issues[0]?.message}`);
+  }
+  return { ...read.manifest };
+}
+
 /**
  * The Workflows of the demo, on an instance with the module: the service principal they run
  * as, and each definition written from its `workflow.yaml` and published. The superadmin
@@ -30,12 +43,10 @@ export async function seedWorkflows(
   for (const name of workflows) {
     let stored = await root.getAsset(WORKFLOW_KIND, name);
     if (!stored) {
-      const file = join(assetsDir, "workflows", name, "workflow.yaml");
-      const read = readWorkflowManifest(await readFile(file, "utf8"));
-      if (!read.ok) {
-        throw new Error(`${file} is no definition the engine runs: ${read.issues[0]?.message}`);
-      }
-      await root.saveAsset(WORKFLOW_KIND, { name, manifest: { ...read.manifest } });
+      await root.saveAsset(WORKFLOW_KIND, {
+        name,
+        manifest: await readWorkflowFile(assetsDir, name)
+      });
       created += 1;
       stored = await root.getAsset(WORKFLOW_KIND, name);
     }

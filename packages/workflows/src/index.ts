@@ -24,7 +24,8 @@ export const workflowsModule = defineModule({
     WORKFLOW_RUN_JOB_KINDS.executeStep,
     WORKFLOW_RUN_JOB_KINDS.fireSchedule,
     WORKFLOW_CODE_JOB_KIND,
-    WORKFLOW_CODE_SWEEP_JOB_KIND
+    WORKFLOW_CODE_SWEEP_JOB_KIND,
+    WORKFLOW_RUN_JOB_KINDS.pruneData
   ],
   // The scripts of code steps run in the sandbox, which the command worker alone reaches.
   commandWorkerJobKinds: [WORKFLOW_CODE_JOB_KIND, WORKFLOW_CODE_SWEEP_JOB_KIND]
@@ -38,8 +39,14 @@ export {
   WORKFLOW_CODE_LANGUAGES,
   WORKFLOW_CODE_LOG_MAX_BYTES,
   WORKFLOW_CODE_STEP_EFFECT,
+  WORKFLOW_STEP_FILES_MAX_BYTES,
   codeStepIssues,
   noWorkflowStepFiles,
+  stepFileBytes,
+  workflowStepFileIssues,
+  workflowStepFilesRefusal,
+  type WorkflowStepFile,
+  type WorkflowStepFileIssue,
   type WorkflowStepFiles
 } from "./code-step";
 export {
@@ -49,6 +56,12 @@ export {
 } from "./step-job";
 export type { WorkflowCodeRunner } from "./step-execution";
 
+export {
+  WORKFLOW_AUTHORING_EXAMPLES,
+  WORKFLOW_AUTHORING_SKILL_NAME,
+  workflowAuthoringSkill,
+  workflowStepTypesNotRun
+} from "./authoring-skill";
 export { lastDueWithin, nextDueAfter, parseCron } from "./cron";
 export {
   WORKFLOW_EXECUTED_STEP_TYPES,

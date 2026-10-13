@@ -88,7 +88,6 @@ export function UiGallery({ initialMode, initialLanguage, initialSection }: UiGa
           width="wide"
           subRail={
             <SubRail
-              mode="routes"
               label={text.sections}
               groups={sectionGroups(text)}
               value={section}

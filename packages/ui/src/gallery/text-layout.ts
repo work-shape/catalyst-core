@@ -23,12 +23,10 @@ export interface LayoutGalleryText {
   navGroupPlain: string;
   navGroupFolding: string;
   navGroupPinned: string;
-  subRailRoutes: string;
-  subRailAnchors: string;
-  subRailAnchorsHeader: string;
-  subRailAnchorsHeaderTitle: string;
+  pageOutlinePlain: string;
+  pageOutlineHeader: string;
+  pageOutlineHeaderTitle: string;
   subRailSettings: string;
-  subRailSections: string;
   subRailScope: string;
   subRailYou: string;
   subRailWorkspace: string;
@@ -166,6 +164,9 @@ export interface LayoutGalleryText {
   codeCut: string;
   codeCutFooter: string;
   codeCutNumbered: string;
+  codeWrapped: string;
+  codeAsFile: string;
+  codeConfigName: string;
   codeOutputName: string;
   countPrimary: string;
   countMuted: string;
@@ -187,7 +188,7 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     navWorkflows: "Workflows",
     navScheduled: "Scheduled",
     navInbox: "Inbox",
-    navBuild: "Build",
+    navBuild: "Studio",
     navRecent: "Recent",
     navConversationLease: "Check the lease",
     navConversationTax: "Tax: depreciation over the remaining useful life",
@@ -197,12 +198,10 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     navGroupPlain: "Group label",
     navGroupFolding: "Group that folds",
     navGroupPinned: "Label that stays while its items scroll",
-    subRailRoutes: "Routes",
-    subRailAnchors: "Anchors",
-    subRailAnchorsHeader: "Anchors under a page head",
-    subRailAnchorsHeaderTitle: "Support assistant",
+    pageOutlinePlain: "Sections of a page",
+    pageOutlineHeader: "Under a page head",
+    pageOutlineHeaderTitle: "Support assistant",
     subRailSettings: "Settings pages",
-    subRailSections: "Sections of this page",
     subRailScope: "Workspace",
     subRailYou: "You",
     subRailWorkspace: "Workspace",
@@ -248,7 +247,7 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     headerListDescription: "Twelve agents, nine of them published.",
     headerNewAgent: "New agent",
     headerBack: "Back to agents",
-    headerBreadcrumbBuild: "Build",
+    headerBreadcrumbBuild: "Studio",
     headerBreadcrumbAgents: "Agents",
     headerScope: "Instance",
     headerTestRun: "Test run",
@@ -341,6 +340,9 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     codeCut: "Cut to six lines, without numbers, with a footer",
     codeCutFooter: "Shortened. The run keeps the whole output for 30 days.",
     codeCutNumbered: "Cut to four lines",
+    codeWrapped: "Long lines broken",
+    codeAsFile: "As a file, with colours and its controls",
+    codeConfigName: "agents/support.yaml",
     codeOutputName: "Output of the step",
     countPrimary: "Needs you",
     countMuted: "Plain count",
@@ -360,7 +362,7 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     navWorkflows: "Workflows",
     navScheduled: "Geplant",
     navInbox: "Eingang",
-    navBuild: "Bauen",
+    navBuild: "Studio",
     navRecent: "Zuletzt",
     navConversationLease: "Mietvertrag prüfen",
     navConversationTax: "Steuer: Abschreibung über die restliche Nutzungsdauer",
@@ -370,12 +372,10 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     navGroupPlain: "Gruppenbezeichnung",
     navGroupFolding: "Einklappbare Gruppe",
     navGroupPinned: "Bezeichnung bleibt stehen, während die Einträge rollen",
-    subRailRoutes: "Seiten",
-    subRailAnchors: "Anker",
-    subRailAnchorsHeader: "Anker unter einem Seitenkopf",
-    subRailAnchorsHeaderTitle: "Support-Assistent",
+    pageOutlinePlain: "Abschnitte einer Seite",
+    pageOutlineHeader: "Unter einem Seitenkopf",
+    pageOutlineHeaderTitle: "Support-Assistent",
     subRailSettings: "Einstellungsseiten",
-    subRailSections: "Abschnitte dieser Seite",
     subRailScope: "Arbeitsbereich",
     subRailYou: "Du",
     subRailWorkspace: "Arbeitsbereich",
@@ -421,7 +421,7 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     headerListDescription: "Zwölf Agenten, neun davon veröffentlicht.",
     headerNewAgent: "Neuer Agent",
     headerBack: "Zurück zu den Agenten",
-    headerBreadcrumbBuild: "Bauen",
+    headerBreadcrumbBuild: "Studio",
     headerBreadcrumbAgents: "Agenten",
     headerScope: "Instanz",
     headerTestRun: "Testlauf",
@@ -514,6 +514,9 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     codeCut: "Auf sechs Zeilen gekürzt, ohne Nummern, mit Fußzeile",
     codeCutFooter: "Gekürzt. Der Lauf bewahrt die ganze Ausgabe 30 Tage auf.",
     codeCutNumbered: "Auf vier Zeilen gekürzt",
+    codeWrapped: "Lange Zeilen umbrochen",
+    codeAsFile: "Als Datei, mit Farben und Bedienelementen",
+    codeConfigName: "agents/support.yaml",
     codeOutputName: "Ausgabe des Schritts",
     countPrimary: "Braucht dich",
     countMuted: "Einfache Anzahl",

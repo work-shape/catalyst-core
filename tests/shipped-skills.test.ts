@@ -1,0 +1,247 @@
+import { afterEach, describe, expect, it } from "vitest";
+import { z } from "zod";
+import { seedShippedSkills } from "@vivd-catalyst/chat-server";
+import { asClientInstanceId } from "@vivd-catalyst/core";
+import { createTestConfig } from "./support/fixtures";
+import { createTestInstance, type TestInstance } from "./support/test-instance";
+
+// The skills that ship with the platform are stored skills of origin `release`, written by the
+// seed of the API process and by nothing else. Each test fails without the change: before it
+// no start stored a skill, and the platform's guide was no asset a list could show.
+
+const ADMIN = "admin";
+const GUIDE = "platform-guide";
+const AUTHORING = "workflow-authoring";
+const clientInstanceId = asClientInstanceId("demo-local");
+
+const listSchema = z.object({
+  items: z.array(
+    z.object({
+      name: z.string(),
+      revision: z.number(),
+      attributes: z.record(z.string(), z.union([z.string(), z.boolean()])).optional()
+    })
+  )
+});
+const assetSchema = z.object({
+  revision: z.number(),
+  config: z.looseObject({ name: z.string(), title: z.string(), content: z.string() })
+});
+const refusalSchema = z.object({
+  error: z.object({ message: z.string(), details: z.unknown().optional() })
+});
+
+describe("the skills that ship with the platform", () => {
+  const open: TestInstance[] = [];
+  afterEach(async () => {
+    for (const instance of open.splice(0).reverse()) await instance.close();
+  });
+
+  async function start(workflows: boolean) {
+    const config = createTestConfig({
+      developmentAuth: {
+        enabled: true,
+        defaultUserId: ADMIN,
+        users: [
+          {
+            id: ADMIN,
+            externalUserId: ADMIN,
+            displayLabel: "Admin",
+            roles: ["user", "admin", "superadmin"]
+          }
+        ]
+      }
+    });
+    config.modules = { assetManagement: { enabled: true }, workflows: { enabled: workflows } };
+    config.administration.agentConfiguration.allowSkillEditing = true;
+    const app = await createTestInstance({ config, env: {}, tools: [] });
+    open.push(app);
+    return app;
+  }
+
+  const listed = async (app: TestInstance) =>
+    listSchema.parse((await app.call("assets.list", { params: { kind: "skill" } })).json()).items;
+  const shippedNames = async (app: TestInstance) =>
+    (await listed(app))
+      .filter((skill) => skill.attributes?.origin === "release")
+      .map((skill) => skill.name)
+      .sort();
+  const read = async (app: TestInstance, name: string) => {
+    const response = await app.call("assets.get", { params: { kind: "skill", name } });
+    expect(response.statusCode, response.body).toBe(200);
+    return assetSchema.parse(response.json());
+  };
+
+  it("lists them as the platform's, with their icon, and stores what each module that is on ships", async () => {
+    const app = await start(true);
+    const skills = await listed(app);
+    expect(skills.find((skill) => skill.name === GUIDE)?.attributes).toMatchObject({
+      origin: "release",
+      icon: "guide"
+    });
+    expect(skills.find((skill) => skill.name === AUTHORING)?.attributes).toMatchObject({
+      origin: "release",
+      icon: "workflow"
+    });
+    expect((await read(app, GUIDE)).config.content).toContain("# How this platform works");
+  });
+
+  it("refuses every change and delete of one, and a new skill under its name", async () => {
+    const app = await start(false);
+    const guide = await read(app, GUIDE);
+    const refusals = [
+      await app.call("assets.put", {
+        params: { kind: "skill", name: GUIDE },
+        payload: {
+          config: { ...guide.config, content: "Changed." },
+          expectedRevision: guide.revision
+        }
+      }),
+      await app.call("assets.put", {
+        params: { kind: "skill", name: GUIDE },
+        payload: {
+          config: { name: GUIDE, title: "Mine", description: "Mine.", content: "Mine." },
+          expectedRevision: null
+        }
+      }),
+      await app.call("assets.delete", {
+        params: { kind: "skill", name: GUIDE },
+        payload: { expectedRevision: guide.revision }
+      }),
+      await app.call("assets.revert", {
+        params: { kind: "skill", name: GUIDE },
+        payload: { revision: guide.revision, expectedRevision: guide.revision }
+      })
+    ];
+    for (const refused of refusals) {
+      expect(refused.statusCode, refused.body).toBe(403);
+      const { error } = refusalSchema.parse(refused.json());
+      expect(error.message).toContain(`The skill '${GUIDE}' ships with the platform`);
+    }
+    expect((await read(app, GUIDE)).revision).toBe(guide.revision);
+
+    // Nobody but the seed names the origin or the icon of a shipped skill.
+    const posing = await app.call("assets.put", {
+      params: { kind: "skill", name: "my-guide" },
+      payload: {
+        config: { ...guide.config, name: "my-guide", origin: "release" },
+        expectedRevision: null
+      }
+    });
+    expect(posing.statusCode, posing.body).toBe(422);
+    expect(posing.body).toContain("Only a skill that ships with the platform names an origin");
+  });
+
+  it("copies one into an ordinary skill of the instance that can be changed", async () => {
+    const app = await start(false);
+    const { config } = await read(app, GUIDE);
+    // What "Copy to edit" sends: the definition without what only the platform writes.
+    const { origin: _origin, icon: _icon, ...copied } = config;
+    const created = await app.call("assets.put", {
+      params: { kind: "skill", name: "our-guide" },
+      payload: {
+        config: { ...copied, name: "our-guide", title: "Our guide" },
+        expectedRevision: null
+      }
+    });
+    expect(created.statusCode, created.body).toBe(200);
+    const copy = await read(app, "our-guide");
+    expect(copy.config.content).toBe(config.content);
+    expect((await listed(app)).find((skill) => skill.name === "our-guide")?.attributes).toEqual({
+      origin: "instance"
+    });
+
+    const changed = await app.call("assets.put", {
+      params: { kind: "skill", name: "our-guide" },
+      payload: {
+        config: { ...copy.config, content: "Our own words." },
+        expectedRevision: copy.revision
+      }
+    });
+    expect(changed.statusCode, changed.body).toBe(200);
+    expect((await read(app, GUIDE)).config.content).toBe(config.content);
+  });
+
+  it("is replaced by a release: a changed skill gets a revision, a dropped one is deleted, the same writes nothing", async () => {
+    const first = await start(true);
+    expect(await shippedNames(first)).toEqual([GUIDE, AUTHORING].sort());
+    const guide = await read(first, GUIDE);
+
+    // A start of the same release writes nothing.
+    const again = await start(true);
+    expect((await read(again, GUIDE)).revision).toBe(guide.revision);
+
+    // A release that no longer ships a skill: here, a module that is off ships none.
+    const without = await start(false);
+    expect(await shippedNames(without)).toEqual([GUIDE]);
+
+    // A release whose skill says something else.
+    const result = await seedShippedSkills({
+      clientInstanceId,
+      stores: without.stores,
+      skills: [
+        {
+          name: GUIDE,
+          title: "How this platform works",
+          description: "The next release's guide.",
+          content: "# The next release's guide",
+          icon: "guide"
+        }
+      ]
+    });
+    expect(result).toEqual({ created: [], updated: [GUIDE], removed: [] });
+    const replaced = await read(without, GUIDE);
+    expect(replaced.revision).toBeGreaterThan(guide.revision);
+    expect(replaced.config.content).toBe("# The next release's guide");
+  });
+
+  it("is stored once by starts that run at the same time", async () => {
+    const app = await start(true);
+    const next = {
+      name: GUIDE,
+      title: "How this platform works",
+      description: "The next release's guide.",
+      content: "# The next release's guide",
+      icon: "guide"
+    };
+    const seeds = await Promise.allSettled(
+      Array.from({ length: 3 }, () =>
+        seedShippedSkills({ clientInstanceId, stores: app.stores, skills: [next] })
+      )
+    );
+    expect(seeds.map((seed) => seed.status)).toEqual(["fulfilled", "fulfilled", "fulfilled"]);
+    const revisions = await app.stores.configAssets.listConfigAssetRevisions({
+      clientInstanceId,
+      kind: "skill",
+      name: GUIDE
+    });
+    expect(revisions).toHaveLength(2);
+  });
+
+  it("stops the start where a skill of the instance holds a name the platform ships", async () => {
+    const app = await start(false);
+    const created = await app.call("assets.put", {
+      params: { kind: "skill", name: "spreadsheets" },
+      payload: {
+        config: { name: "spreadsheets", title: "Ours", description: "Ours.", content: "Ours." },
+        expectedRevision: null
+      }
+    });
+    expect(created.statusCode, created.body).toBe(200);
+    await expect(
+      seedShippedSkills({
+        clientInstanceId,
+        stores: app.stores,
+        skills: [
+          {
+            name: "spreadsheets",
+            title: "Spreadsheets",
+            description: "Shipped.",
+            content: "Shipped.",
+            icon: "spreadsheet"
+          }
+        ]
+      })
+    ).rejects.toThrow("The platform ships the skill 'spreadsheets'");
+  });
+});

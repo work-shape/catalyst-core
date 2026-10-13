@@ -2,6 +2,7 @@ import { createContext, useContext } from "react";
 import { agentKind } from "./agent-kind";
 import type { BuildKind } from "./build-asset-kind";
 import { connectionKind } from "./connection-kind";
+import { dataStoreKind } from "./data-store-kind";
 import { skillKind } from "./skill-kind";
 
 /**
@@ -9,7 +10,12 @@ import { skillKind } from "./skill-kind";
  * registry: an asset page changes how the instance behaves, so a client assembly must not
  * replace it.
  */
-export const buildAssetKinds: readonly BuildKind[] = [agentKind, skillKind, connectionKind];
+export const buildAssetKinds: readonly BuildKind[] = [
+  agentKind,
+  skillKind,
+  connectionKind,
+  dataStoreKind
+];
 
 const BuildAssetKindsContext = createContext<readonly BuildKind[]>(buildAssetKinds);
 

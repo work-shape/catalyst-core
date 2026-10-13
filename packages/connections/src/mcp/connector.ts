@@ -139,6 +139,7 @@ export function createMcpConnectorType(options: McpConnectorOptions = {}): Conne
     secretFields: ["key"],
     target: (settings) => egressTargetOfUrl(settingsOf(settings).url),
     credentialHeaderName: (settings) => settingsOf(settings).headerName,
+    carriesIdempotencyKey: true,
     limits: {
       callTimeoutMs: MCP_CALL_TIMEOUT_MS,
       resultMaxBytes: MCP_RESULT_MAX_BYTES,

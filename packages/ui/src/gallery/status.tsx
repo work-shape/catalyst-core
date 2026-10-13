@@ -1,4 +1,4 @@
-import { Bot, Check, Inbox, LayoutGrid, Shield, Users, X } from "lucide-react";
+import { Bot, Check, Inbox, KeyRound, LayoutGrid, Shield, Users, X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../actions/button";
 import { Spinner } from "../feedback/spinner";
@@ -13,8 +13,15 @@ import {
   RegistryIcon,
   type IconFamily
 } from "../status/registry-icon";
+import { IconTile } from "../status/icon-tile";
+import { ConnectionIcon, type ConnectionIconSize } from "../status/connection-icon";
+import { KnowsHowTo, SkillIcon, type SkillIconSize } from "../status/skill-icon";
 import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
+
+const skillIconSizes: readonly SkillIconSize[] = ["sm", "md", "lg"];
+const connectionIconSizes: readonly ConnectionIconSize[] = ["sm", "md", "lg"];
+const shippedSkillIcons = ["spreadsheet", "document", "presentation", "pdf"] as const;
 
 const iconFamilies: readonly IconFamily[] = ["file", "service", "skill", "tool"];
 const fileTypeKeys = Object.keys(fileTypeIcons);
@@ -44,7 +51,14 @@ function toneLabel(tone: BadgeTone, text: GalleryText): string {
 }
 
 const avatarSizes: readonly AvatarSize[] = ["xs", "sm", "md", "lg"];
-const avatarKinds: readonly AvatarKind[] = ["person", "workspace", "agent", "app"];
+const avatarKinds: readonly AvatarKind[] = [
+  "person",
+  "workspace",
+  "agent",
+  "app",
+  "workflow",
+  "service"
+];
 const chipSizes: readonly ChipSize[] = ["sm", "md"];
 const countTones: readonly CountBadgeTone[] = ["primary", "muted"];
 
@@ -56,7 +70,9 @@ function avatarName(kind: AvatarKind, text: GalleryText): string {
     person: text.personName,
     workspace: text.workspaceMarketing,
     agent: text.rowAgent,
-    app: text.rowWorkflow
+    app: text.rowKnowledge,
+    workflow: text.rowWorkflow,
+    service: text.rowServicePrincipal
   };
   return names[kind];
 }
@@ -66,7 +82,9 @@ function kindLabel(kind: AvatarKind, text: GalleryText): string {
     person: text.avatarPerson,
     workspace: text.avatarWorkspace,
     agent: text.avatarAgent,
-    app: text.avatarApp
+    app: text.avatarApp,
+    workflow: text.avatarWorkflow,
+    service: text.avatarService
   };
   return labels[kind];
 }
@@ -175,6 +193,13 @@ export const statusGallery: GalleryGroup = {
                   icon={<LayoutGrid aria-hidden="true" />}
                 />
               ) : null}
+              {kind === "service" ? (
+                <Avatar
+                  kind={kind}
+                  name={avatarName(kind, text)}
+                  icon={<KeyRound aria-hidden="true" />}
+                />
+              ) : null}
             </Samples>
           ))}
         </>
@@ -256,7 +281,7 @@ export const statusGallery: GalleryGroup = {
     },
     {
       name: "RegistryIcon",
-      components: ["RegistryIcon", "IconRegistryProvider"],
+      components: ["RegistryIcon", "IconRegistryProvider", "IconTile"],
       render: (text) => (
         <>
           <Samples label={text.iconsFileTypes}>
@@ -302,6 +327,17 @@ export const statusGallery: GalleryGroup = {
               </span>
             ))}
           </Samples>
+          <Samples label="IconTile">
+            <IconTile>
+              <RegistryIcon name="database" />
+            </IconTile>
+            <IconTile accent>
+              <RegistryIcon name="agent" />
+            </IconTile>
+            <IconTile size="lg">
+              <RegistryIcon name="repeat" />
+            </IconTile>
+          </Samples>
           <Samples label={text.iconsFallback}>
             <IconRegistryProvider icons={{ ledger: genericIcons.files }}>
               {[
@@ -315,6 +351,79 @@ export const statusGallery: GalleryGroup = {
                 </span>
               ))}
             </IconRegistryProvider>
+          </Samples>
+        </>
+      )
+    },
+    {
+      name: "ConnectionIcon",
+      components: ["ConnectionIcon"],
+      render: (text) => (
+        <>
+          <Samples label={text.connectionIconSizes}>
+            {connectionIconSizes.map((size) => (
+              <span
+                key={size}
+                data-gallery-sample={`connection-icon-${size}`}
+                className="flex items-center gap-2"
+              >
+                <ConnectionIcon size={size} />
+                <ConnectionIcon size={size} category="database" />
+                <ConnectionIcon size={size} category="mail" />
+                <ConnectionIcon size={size} category="files" />
+                <ConnectionIcon size={size} category="web" />
+              </span>
+            ))}
+          </Samples>
+          <Samples label={text.connectionIconUnknownService}>
+            <ConnectionIcon service="not-registered" category="database" />
+            <ConnectionIcon service="not-registered" />
+          </Samples>
+        </>
+      )
+    },
+    {
+      name: "SkillIcon",
+      components: ["SkillIcon", "KnowsHowTo"],
+      render: (text) => (
+        <>
+          <Samples label={text.skillIconSizes}>
+            {skillIconSizes.map((size) => (
+              <span
+                key={size}
+                data-gallery-sample={`skill-icon-${size}`}
+                className="flex items-center gap-2"
+              >
+                {shippedSkillIcons.map((icon) => (
+                  <SkillIcon key={icon} icon={icon} size={size} />
+                ))}
+                <SkillIcon size={size} />
+              </span>
+            ))}
+          </Samples>
+          <Samples label={text.skillIconInChip}>
+            <Chip leading={<SkillIcon icon="spreadsheet" size="sm" />} onRemove={() => undefined}>
+              {text.skillSpreadsheets}
+            </Chip>
+            <Chip leading={<SkillIcon icon="pdf" size="sm" />} onRemove={() => undefined}>
+              {text.skillPdf}
+            </Chip>
+            <Chip leading={<SkillIcon size="sm" />} onRemove={() => undefined}>
+              {text.skillPlainLanguage}
+            </Chip>
+            <Chip size="sm" leading={<SkillIcon icon="document" size="sm" />}>
+              {text.skillDocuments}
+            </Chip>
+          </Samples>
+          <Samples label={text.skillKnowsHowTo}>
+            <KnowsHowTo
+              label={text.skillKnowsHowToLabel}
+              skills={[
+                { title: text.skillSpreadsheets, icon: "spreadsheet" },
+                { title: text.skillDocuments, icon: "document" },
+                { title: text.skillPlainLanguage }
+              ]}
+            />
           </Samples>
         </>
       )

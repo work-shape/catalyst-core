@@ -1,18 +1,41 @@
 import type { SurfaceKind } from "./surface";
 
 /**
- * The width a surface opens at until its width has been changed, in pixels. A kind without a
- * line of its own opens at `DEFAULT_SURFACE_WIDTH`; the slice that renders it sets its own.
+ * The width a surface opens at until its width has been changed: a share of the main area up
+ * to `max` pixels, or `max` pixels where the kind names no share. The split minimum of both
+ * sides still applies.
  */
-export const DEFAULT_SURFACE_WIDTH = 560;
-export const surfaceDefaultWidths: Partial<Record<SurfaceKind, number>> = {
-  tool_display: DEFAULT_SURFACE_WIDTH,
-  file_preview: DEFAULT_SURFACE_WIDTH,
+interface SurfaceDefaultWidth {
+  share?: number;
+  max: number;
+}
+
+/** A kind without a line of its own opens at this width; the slice that renders it sets its own. */
+const DEFAULT_SURFACE_WIDTH = 560;
+const surfaceDefaultWidths: Partial<Record<SurfaceKind, SurfaceDefaultWidth>> = {
+  // A file or a view is read beside the conversation: it takes a little less than half of the
+  // main area, so the conversation stays the wider side, and no more than a page needs.
+  tool_display: { share: 0.45, max: 720 },
+  file_preview: { share: 0.45, max: 720 },
   // An item is read like a document: wide enough for a proposal's lines beside the list.
-  inbox_item: 520,
+  inbox_item: { max: 520 },
   // A Page is laid out like a small application: it gets more room than a document.
-  page: 640
+  page: { max: 640 }
 };
+
+/** The width `kind` opens at in a main area of `mainWidth`, before the split minimum applies. */
+export function defaultSurfaceWidth(
+  kind: SurfaceKind | undefined,
+  mainWidth: number | undefined
+): number {
+  const preset = kind === undefined ? undefined : surfaceDefaultWidths[kind];
+  if (!preset) {
+    return DEFAULT_SURFACE_WIDTH;
+  }
+  return preset.share === undefined || mainWidth === undefined
+    ? preset.max
+    : Math.min(preset.max, Math.round(mainWidth * preset.share));
+}
 
 /**
  * `--layout-split-min` in pixels at the default root font size. It is used only where the
@@ -20,7 +43,13 @@ export const surfaceDefaultWidths: Partial<Record<SurfaceKind, number>> = {
  */
 export const SPLIT_MIN_FALLBACK_PX = 380;
 
-/** `beside` the conversation, or `covering` the main area because both sides would not fit. */
+/**
+ * Where what opens at the right of the conversation stands: `beside` it, or `covering` it
+ * because both sides would not keep their minimum. One rule for the surface and for the
+ * Resources card: from twice the split minimum of main area they stand beside the
+ * conversation, below it they lie over it. Nothing else gives way: the sidebar is collapsed by
+ * its reader alone, and the conversation is never narrower than the split minimum.
+ */
 type SurfacePlacement = "beside" | "covering";
 
 export function surfacePlacement(

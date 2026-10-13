@@ -52,7 +52,6 @@ import {
   createProposeSkillChangeTool,
   createStructuredDataToolDefinitions,
   createWorkspaceToolDefinitions,
-  ToolRegistry,
   WorkspaceCommandService
 } from "@vivd-catalyst/tool-execution";
 import type { ToolAssemblyDefinition } from "@vivd-catalyst/tool-sdk";
@@ -66,7 +65,8 @@ import { createInstanceModels } from "./capability-models";
 import { createConfigAssetSource } from "./config-asset-source";
 import { createInstanceAgentTools, createInstanceOperationCalls } from "./operation-calls";
 import { createClientInstanceAuth } from "./auth";
-import { createInstanceConnections, seedInstanceConnections, withConnections } from "./connections";
+import { createInstanceConnections, withConnections } from "./connections";
+import { seedInstance } from "./instance-seed";
 import { createClientInstanceMail } from "./mail";
 import type {
   ClientInstanceAttachmentHandler,
@@ -80,6 +80,7 @@ import { createInfrastructureWorkflow } from "./infrastructure";
 import { createInProcessAgentRunWorker, type AgentRunWorkerPlacement } from "./agent-run-jobs";
 import { createInstancePageSave, createInstancePages } from "./pages";
 import { createJobWorker } from "./job-worker";
+import { createPlatformTools } from "./conversation-offer";
 import { assembleModules, endResolveOnlyRun, resolveInstanceModules } from "./modules";
 import { createRuntimeFailureReporter } from "./runtime-error-logging";
 import { createPlatformStore } from "./store";
@@ -141,7 +142,7 @@ export async function createClientInstanceApp(
     modelGateway
   } = execution;
   // Only the API process seeds, before it takes a request. A worker reads what is stored.
-  await seedInstanceConnections(execution);
+  await seedInstance(execution);
   // A run is a row and a job. The API reads its events from the store; a worker executes it.
   // Where that worker is in this process, the two tell each other and need not poll.
   const inProcess =
@@ -390,8 +391,11 @@ export async function createClientInstanceExecutionAssembly(
     const handler = createSkillChangeApprovalHandler({ config, clientInstanceId, configAssets });
     approvalRequestHandlers.set(handler.kind, handler);
   }
+  const platformTools = createPlatformTools({ stores: store, modules });
+  const { conversationOffer } = platformTools;
   const { authorizer, operationCalls, approvalRequestCreator } = createInstanceOperationCalls({
     clientInstanceId,
+    conversationOffer,
     config,
     logger,
     modules,
@@ -404,6 +408,9 @@ export async function createClientInstanceExecutionAssembly(
     operations: input.operations
   });
   const handlers = operationCalls.approvalRequestHandlers;
+  // The agent's asset tools are carried out by the asset operations, in this process too.
+  const assetOptions = { logger, config, modules, clientInstanceId, stores: store, pages };
+  platformTools.bind({ ...assetOptions, auditRecorder, configAssets, authorizer, operationCalls });
   const workspaceService = config.executionWorkspaces.enabled
     ? new WorkspaceCommandService({
         store,
@@ -438,7 +445,8 @@ export async function createClientInstanceExecutionAssembly(
         ? createWebFetchToolDefinitions({ config: config.webAccess.fetch })
         : []),
       ...createDataSourceTools({ dataSources }),
-      createReadSkillTool({ assetSource }),
+      createReadSkillTool({ assetSource, conversationOffer }),
+      ...platformTools.tools,
       ...(skillPolicy.enabled
         ? [
             createProposeSkillChangeTool({
@@ -454,11 +462,7 @@ export async function createClientInstanceExecutionAssembly(
     ]
   });
   assertClientAssemblyValid({ config, tools, approvalRequestHandlers: handlers, modules });
-  const toolRegistry = new ToolRegistry({
-    tools,
-    enabledToolNames: getEnabledToolNames(config),
-    modules
-  });
+  const toolRegistry = platformTools.registry(tools, getEnabledToolNames(config));
   const modulesStarted = await moduleAssembly.start({
     operationCalls,
     authorizer,
@@ -489,6 +493,7 @@ export async function createClientInstanceExecutionAssembly(
     modelProviderContinuationStore: store.conversations,
     modelGateway,
     ...createInstanceAgentTools(operationCalls, toolRegistry, toolOptions),
+    conversationOffer,
     webAccess: config.webAccess,
     agentSkillChangesEnabled: skillPolicy.enabled,
     maxSteps: config.runtime.maxSteps,

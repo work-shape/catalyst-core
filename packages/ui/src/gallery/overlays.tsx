@@ -43,6 +43,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger, type PopoverSize } from "../overlays/popover";
 import { Avatar } from "../status/avatar";
 import { Badge } from "../status/badge";
+import { SkillIcon } from "../status/skill-icon";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../overlays/tooltip";
 import { SidePanelSamples } from "./flow";
 import { Samples, type GalleryGroup } from "./entry";
@@ -496,6 +497,57 @@ function AskedAgentsPicker({ text }: { text: GalleryText }) {
   );
 }
 
+/**
+ * Objects that need a sentence each: every description shows in full in a wider panel, and a
+ * note under the list says what the objects are. An option without a sentence shows its name.
+ */
+function SkillPicker({ text }: { text: GalleryText }) {
+  const [skills, setSkills] = useState<readonly string[]>(["spreadsheets"]);
+  const skill = (
+    value: string,
+    label: string,
+    description?: string,
+    icon?: string
+  ): PickerOption => ({
+    value,
+    label,
+    description,
+    keywords: value,
+    leading: <SkillIcon icon={icon} />
+  });
+  return (
+    <Picker
+      multiple
+      search
+      wrapDescriptions
+      className="w-120"
+      label={text.skillPickerLabel}
+      note={text.skillPickerNote}
+      options={[
+        skill("spreadsheets", text.skillSpreadsheets, text.skillSpreadsheetsSummary, "spreadsheet"),
+        skill("documents", text.skillDocuments, text.skillDocumentsSummary, "document"),
+        skill(
+          "presentations",
+          text.skillPresentations,
+          text.skillPresentationsSummary,
+          "presentation"
+        ),
+        skill("pdf", text.skillPdf, text.skillPdfSummary, "pdf"),
+        skill("plain-language", text.skillPlainLanguage, text.skillPlainLanguageSummary),
+        skill("offer-structure", text.skillOfferStructure)
+      ]}
+      value={skills}
+      onValueChange={setSkills}
+    >
+      <Button variant="outline" data-gallery-sample="picker-skills">
+        {text.skillPickerLabel}
+        <Badge size="sm">{skills.length}</Badge>
+        <ChevronDown aria-hidden="true" />
+      </Button>
+    </Picker>
+  );
+}
+
 function PickerSamples({ text }: { text: GalleryText }) {
   const [workspaces, setWorkspaces] = useState<readonly string[]>([text.workspaceMarketing]);
   const [role, setRole] = useState<string | undefined>(undefined);
@@ -507,6 +559,7 @@ function PickerSamples({ text }: { text: GalleryText }) {
       <PointedAgentPicker text={text} />
       <ManyAgentsPicker text={text} />
       <AskedAgentsPicker text={text} />
+      <SkillPicker text={text} />
       <Picker
         multiple
         options={workspaceOptions(text)}

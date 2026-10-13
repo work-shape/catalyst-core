@@ -40,12 +40,14 @@ Every seeded person signs in with the address below and the password in `DEMO_SE
 | Sven Olsen     | `sven.olsen@nordlicht-beratung.test`     | user  | active                   | `config_assets.read`, `usage.view`         |
 | Lena Hoffmann  | `lena.hoffmann@nordlicht-beratung.test`  | user  | deactivated              |                                            |
 | Noah Fischer   | `noah.fischer@nordlicht-beratung.test`   | user  | invited, never signed in |                                            |
+| Kai Berger     | `kai.berger@nordlicht-beratung.test`     | user  | active                   |                                            |
 
-The superadmin is the one of the demo's config, so the instance has eight people in three roles.
+The superadmin is the one of the demo's config, so the instance has nine people in three roles.
 
-- Three Namespaces: `tax-` (Steuern), `hr-` (Personal) and `sales-` (Vertrieb). `tax-` has a tool list (`read_skill`, `show_view`, `demo.workflow_summary`) and a model list (`primary`, `gpt56Luna`); the other two inherit everything.
-- Eight agents and seven skills from the working copy under `seed/`, pushed with the config CLI: two agents and two skills in each Namespace, and the agents `meeting-notes` and `travel-weather` and the skill `plain-language` outside every Namespace. The agent `tax-vat-checker` has two revisions: a draft Jonas Brandt saved in the interface's way, and the pushed definition over it.
-- Sixteen grant rows: allows in a Namespace, allows on one agent and one skill, a deny on one agent inside an allowed Namespace, and a deny in a Namespace against an admin.
+- Four Namespaces: `tax-` (Steuern), `hr-` (Personal), `sales-` (Vertrieb) and `kai-` (Kai). `tax-` has a tool list (`read_skill`, `show_view`, `demo.workflow_summary`) and a model list (`primary`, `gpt56Luna`); the other three inherit everything.
+- Eight agents and seven skills from the working copy under `seed/`, pushed with the config CLI: two agents and two skills in each of `tax-`, `hr-` and `sales-`, and the agents `meeting-notes` and `travel-weather` and the skill `plain-language` outside every Namespace. The agent `tax-vat-checker` has two revisions: a draft Jonas Brandt saved in the interface's way, and the pushed definition over it.
+- Twenty-five grant rows: allows in a Namespace, allows on one agent and one skill, a deny on one agent inside an allowed Namespace, a deny in a Namespace against an admin, and the nine rows of Kai Berger in `kai-`.
+- Kai Berger, a member who builds. He holds no right beside his rows in his own Namespace `kai-`: reading, writing and deleting agents and skills, and reading, writing and publishing Workflows. In his own session he made the agent `kai-helper` and the Workflow `kai-skill-inventory`, from `seed/workflows/kai-skill-inventory/workflow.yaml`, so both carry his name. His Workflow stays a draft: a definition names the principal it runs as (`workflow-demo`), and publishing it asks what administering service principals asks, which he does not hold. He has no App: an App belongs to a workspace, and no grant gives a right on Apps yet, so only an admin writes one. The seed leaves his Workflow out on an instance whose module `workflows` is off.
 - Three grant rows on the Connection `sample-business`, which the release config brings and not the seed: Sven Olsen may see and use it, Tobias Keller may use it. The two admins hold every right on it by their role and the other users hold none, so an agent of Elif Aydin is refused when it calls one of the Connection's tools. See [docs/try-connections.md](docs/try-connections.md).
 - One service principal, `Local config CLI`, with one key.
 - Two approvals waiting in the Inbox, both asked for by Elif Aydin and held by the demo, see below. One is the new skill `hr-parental-leave-faq` ("Elternzeit: häufige Fragen"), which the Inbox shows whole. The other replaces one paragraph of the pushed skill `hr-leave-policy` ("Urlaubsrichtlinie"), which the Inbox shows as before and after.
@@ -68,7 +70,7 @@ The seed asks for the change only while the request for the new skill waits: tha
 
 ### Running it again
 
-A rerun puts back what the seed owns and leaves everything else alone. The seed owns what it finds by its own names: the seven people by their address, the three Namespaces by their prefix, and the agents and skills of `seed/` by their name.
+A rerun puts back what the seed owns and leaves everything else alone. The seed owns what it finds by its own names: the eight people by their address, the four Namespaces by their prefix, the agents and skills of `seed/` and the agent and Workflow of Kai Berger by their name.
 
 - A seeded person gets the seeded label, role, rights and status again. So a seeded person you deactivated is active after a rerun, and Lena Hoffmann is deactivated again.
 - A seeded Namespace gets its seeded name, tool list and model list again.
@@ -76,10 +78,11 @@ A rerun puts back what the seed owns and leaves everything else alone. The seed 
 - A seeded grant row that was removed is written again, the rows on the Connection too. Rows you added stay.
 - A decided approval request is not asked again once the skill exists.
 - The seeded workspace is found by its name. A seeded member who was removed is added again; members you added stay.
+- An agent or Workflow of Kai Berger that the instance holds is left as it is, whatever was written since.
 - A seeded App that has all its revisions is left as it is, whatever was published or written since. One that an earlier run left half way gets the missing revision or the missing publish.
 - Other people, Namespaces, agents, skills, grants, keys and conversations are not touched. Something of yours that uses a seeded address, prefix or name counts as the seed's.
 
-The seed never sets a password after it created a person. It signs in as Mara Lindqvist, Jonas Brandt and Elif Aydin when it has to write something in their name. If one of them has a new password, that sign-in is refused and the run stops with the address it could not sign in as. The way out is to change that person's password back to the value of `DEMO_SEED_PASSWORD`, or to set `DEMO_SEED_PASSWORD` in `.env` to the new password if all three share it.
+The seed never sets a password after it created a person. It signs in as Mara Lindqvist, Jonas Brandt, Elif Aydin and Kai Berger when it has to write something in their name. If one of them has a new password, that sign-in is refused and the run stops with the address it could not sign in as. The way out is to change that person's password back to the value of `DEMO_SEED_PASSWORD`, or to set `DEMO_SEED_PASSWORD` in `.env` to the new password if all four share it.
 
 A run that stopped half way is continued by the next one. An invited person who was created and never mailed gets the invitation then: the seed looks for it in the audit events. A key that was created and not written to `.env` stays on the service principal unused, and the next run creates another; remove the unused one under Administration > API Access.
 
@@ -98,6 +101,8 @@ Open Settings > Instance > Access > Check, pick the person, the kind and the ass
 | Elif Aydin     | agent `hr-exit-interview`    | yes  | yes   | yes    | The agent does not exist yet. Her rows in `hr-` would let her create it.                                   |
 | Elif Aydin     | skill `tax-vat-rules`        | no   | no    | no     | Her rows end at the Namespace `hr-`.                                                                       |
 | Lena Hoffmann  | agent `sales-pitch-coach`    | no   | no    | no     | Her account is deactivated, so her rows in `sales-` allow nothing.                                         |
+| Kai Berger     | agent `kai-helper`           | yes  | yes   | yes    | He made this agent in his own Namespace `kai-`, where his rows allow all three.                            |
+| Kai Berger     | skill `plain-language`       | no   | no    | no     | His rows end at his Namespace `kai-`, and he holds no right beside them.                                   |
 
 The table is `checkQuestions` in `src/seed/company.ts`, and `tests/demo-seed.test.ts` asks the instance every row of it.
 
@@ -111,6 +116,14 @@ A Connection has a fourth action: using it, which is calling through it, is a ri
 | Elif Aydin     | no   | no  | no    | no     | No right of hers names a Connection.                                                    |
 
 This table is `connectionCheckQuestions` in `src/seed/company.ts`, and `tests/demo-seed-own-config.test.ts` asks an instance with the demo's own config every row of it.
+
+A Workflow has a further action as well: using it, which is starting it. Choose the kind Workflows and the asset `kai-skill-inventory`. Publishing is a row of its own under Rights and not a question of this tab.
+
+| Person     | Read | Use | Write | Delete | Because                                                                                                                  |
+| ---------- | ---- | --- | ----- | ------ | ------------------------------------------------------------------------------------------------------------------------ |
+| Kai Berger | yes  | no  | yes   | no     | His rows in `kai-` let him read and change his draft. He holds no row for starting it, and deleting stays with the role. |
+
+This table is `workflowCheckQuestions` in `src/seed/company.ts`, and `tests/demo-seed.test.ts` asks every row of it.
 
 ### What it leaves out
 
@@ -138,7 +151,7 @@ The demo runs with Execution Workspaces and the `apps` module on. Its agent read
 
 Beside the instance runs a small outside system: the Compose service `sample-mcp` (`sample-mcp/`), a remote MCP server with customers, orders and invoices of an invented wholesale company over the last twelve full months. The data is generated at start from a fixed seed, so it is the same for a whole month. At `/mcp` the server has six reading tools. It publishes no host port and answers only with its key.
 
-The instance reaches it through the Connection `sample-business` ("Sample business" under Build > Connections), which release config defines in `config/app.yaml`:
+The instance reaches it through the Connection `sample-business` ("Sample business" under Studio > Connections), which release config defines in `config/app.yaml`:
 
 - `connections.sample-business` names the Connector type `mcp`, the address `http://sample-mcp:8787/mcp`, the secret `DEMO_SAMPLE_MCP_KEY` and the six accepted operations, each reading and open to agents and to Pages.
 - `egress.allow` lists the one target a Connection may reach: `sample-mcp`, port 8787, as a private target whose address lies in a private range. Docker gives a Compose network such a range. Remove the entry and the Connection's test answers `network_denied`.

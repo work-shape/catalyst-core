@@ -88,7 +88,12 @@ export const workflowRunSchema = z.object({
   finishedAt: timestampSchema.optional(),
   /** The person who cancelled the run. Missing where a service principal did, and on a run nobody cancelled. */
   cancelledBy: z.string().optional(),
-  cancelledAt: timestampSchema.optional()
+  cancelledAt: timestampSchema.optional(),
+  /**
+   * When the values of the run were removed: its input and result, and the inputs and outputs
+   * of its step runs. The run and its step runs stay. Missing while the run has its values.
+   */
+  dataPrunedAt: timestampSchema.optional()
 });
 
 export const workflowStepRunSchema = z.object({
@@ -108,6 +113,14 @@ export const workflowStepRunSchema = z.object({
   loop: countsSchema.optional(),
   /** On the step run of a loop: how the step runs of each step directly inside it stand, by step id. */
   bodyCounts: z.record(z.string(), countsSchema).optional(),
+  /**
+   * On the step run of a loop: how many of its items run at once. `asked` is the loop's
+   * `concurrency`, an upper bound; `ranWith` is what one process runs of it, which the step
+   * slots of a process bound.
+   */
+  concurrency: z
+    .object({ asked: z.number().int().min(1), ranWith: z.number().int().min(1) })
+    .optional(),
   /** On the step run of an operation step: what its operation does and what it belongs to. */
   effect: z.enum(["reading", "changing"]).optional(),
   source: z.string().optional(),
@@ -171,6 +184,11 @@ export const workflowSummarySchema = z.object({
   runnable: z.boolean(),
   /** Why not. Empty exactly where `runnable` is true. */
   reasons: z.array(workflowStartIssueSchema),
+  /**
+   * The published revision's `inputs`: the JSON Schema a start's `input` is checked against,
+   * from which a page builds its start form. Missing where the definition cannot be read.
+   */
+  inputs: z.record(z.string(), z.unknown()).optional(),
   /**
    * What the caller may do with this Workflow, of `workflow.read` (its runs) and `workflow.use`
    * (a start). Never empty: a Workflow the caller holds neither on is not listed.

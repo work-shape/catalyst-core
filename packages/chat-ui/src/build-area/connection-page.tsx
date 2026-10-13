@@ -1,6 +1,7 @@
-import { Bot } from "lucide-react";
+import { Bot, KeyRound } from "lucide-react";
 import type { ReactNode } from "react";
 import {
+  Avatar,
   Badge,
   Banner,
   Button,
@@ -14,9 +15,9 @@ import {
   ListRow,
   Page,
   PageHeader,
+  PageOutline,
   Section,
   SkeletonList,
-  SubRail,
   type BadgeTone
 } from "@vivd-catalyst/ui";
 import type {
@@ -27,10 +28,14 @@ import type {
 import { formatDateTime } from "../control-plane/locale-format";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { agentKind } from "./agent-kind";
-import { usePageShown } from "./asset-editor-shell";
+import { AssetIdentifier, usePageShown } from "./asset-editor-shell";
 import type { BuildAssetViewProps } from "./build-asset-kind";
 import { useBuildNavigation } from "./build-route";
-import type { ConnectionSource, ConnectionTestRun } from "./connection-source";
+import type {
+  ConnectionHoldersRead,
+  ConnectionSource,
+  ConnectionTestRun
+} from "./connection-source";
 
 /** What the Status section says of a Connection: one word and one sentence each. */
 type HealthView =
@@ -219,6 +224,7 @@ export function ConnectionPage({
   const { t } = useTranslation();
   usePageShown(page, "asset");
   const read = source.useDetail(asset.name);
+  const holders = source.useHolders(asset.id);
   const detail = read.status === "ready" ? read.detail : undefined;
   const { config } = asset;
   const title = textOf(config, "displayName") ?? asset.name;
@@ -237,6 +243,7 @@ export function ConnectionPage({
       description: t("connections.statusDescription"),
       body: (
         <>
+          <AssetIdentifier name={asset.name} />
           {enabled ? null : (
             <Banner tone="warning" data-connection-disabled="">
               {t("connections.disabledNotice")}
@@ -311,11 +318,24 @@ export function ConnectionPage({
             count: detail?.usedBy.length,
             body: detail ? <ConnectionAgents usedBy={detail.usedBy} /> : <SkeletonList rows={2} />
           }
+        ]),
+    // Who was given this Connection is shown to who is shown rights at all.
+    ...(holders.status === "hidden"
+      ? []
+      : [
+          {
+            id: "access",
+            label: t("connections.accessTitle"),
+            description: t("connections.accessDescription"),
+            count: holders.status === "ready" ? holders.holders.length : undefined,
+            body: <ConnectionHolders read={holders} principalHref={source.principalHref} />
+          }
         ])
   ];
 
   return (
     <Page
+      width="narrow"
       ref={page.ref}
       header={
         <PageHeader
@@ -336,32 +356,17 @@ export function ConnectionPage({
               {t(enabled ? "connections.enabled" : "connections.disabled")}
             </Badge>
           }
-          description={
-            <span className="flex min-w-0 items-center gap-2">
-              <span>{t("connections.kindSingular")}</span>
-              <code className="min-w-0 truncate text-code" title={asset.name}>
-                {asset.name}
-              </code>
-            </span>
-          }
         />
       }
-      subRail={
-        <SubRail
-          mode="anchors"
+      outline={
+        <PageOutline
           belowHeader
-          label={t("build.sections")}
-          groups={[
-            {
-              id: "sections",
-              items: sections.map(({ id, label, count }) => ({ id, label, count }))
-            }
-          ]}
+          items={sections.map(({ id, label, count }) => ({ id, label, count }))}
         />
       }
     >
       {page.above}
-      {/* The first line of the content starts where the first item of the index does. */}
+      {/* The first line of the content starts where the outline does. */}
       <div className="grid min-w-0 content-start pt-5">
         {config.origin === "release" ? (
           <Banner layout="line" className="mb-4" data-build-read-only="">
@@ -372,6 +377,7 @@ export function ConnectionPage({
           <Section
             key={section.id}
             id={section.id}
+            layout="stacked"
             title={section.label}
             description={section.description}
             count={section.count}
@@ -463,8 +469,9 @@ function ConnectionStatus({
                         : "neutral"
                   }
                 >
+                  {/* The version of the credential is for whoever may change the Connection. */}
                   {secret.state === "set"
-                    ? secret.version === undefined
+                    ? secret.version === undefined || !mayTest
                       ? t("connections.credentialSet")
                       : t("connections.credentialSetVersion", { version: secret.version })
                     : t(
@@ -499,6 +506,19 @@ function ConnectionStatus({
   );
 }
 
+/**
+ * An operation as a person reads it: its name in sentence case, such as "List customers" for
+ * `list_customers`. The outside system names operations; it gives them no title for people.
+ */
+function operationTitle(name: string): string {
+  const words = name
+    .replace(/([a-z0-9])([A-Z])/gu, "$1 $2")
+    .replace(/[_.-]+/gu, " ")
+    .trim()
+    .toLowerCase();
+  return words === "" ? name : `${words.slice(0, 1).toUpperCase()}${words.slice(1)}`;
+}
+
 function ConnectionOperations({ operations }: { operations: ConnectionOperationDetail[] }) {
   const { t } = useTranslation();
   if (operations.length === 0) {
@@ -516,7 +536,9 @@ function ConnectionOperations({ operations }: { operations: ConnectionOperationD
             className="grid min-w-0 gap-1.5 border-b py-3 first:pt-0 last:border-b-0 last:pb-0"
           >
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <code className="min-w-0 font-mono text-code break-all">{operation.name}</code>
+              <span className="min-w-0 text-label break-words">
+                {operationTitle(operation.name)}
+              </span>
               <Badge tone={operation.effect === "changing" ? "warning" : "neutral"}>
                 {t(
                   operation.effect === "changing"
@@ -528,9 +550,6 @@ function ConnectionOperations({ operations }: { operations: ConnectionOperationD
                 {t(status.label)}
               </Badge>
             </div>
-            <code className="font-mono text-caption break-all text-muted-foreground">
-              {operation.toolName}
-            </code>
             {operation.description ? (
               <p className="line-clamp-3 text-body whitespace-pre-line">{operation.description}</p>
             ) : null}
@@ -561,6 +580,80 @@ function ConnectionOperations({ operations }: { operations: ConnectionOperationD
               </p>
             ) : null}
           </li>
+        );
+      })}
+    </List>
+  );
+}
+
+/**
+ * The people and the service principals that were given this Connection by itself. A person is
+ * a round avatar with an address; a service principal is a square one with a key, says what it
+ * is in words, and opens its own page.
+ */
+function ConnectionHolders({
+  read,
+  principalHref
+}: {
+  read: Exclude<ConnectionHoldersRead, { status: "hidden" }>;
+  principalHref(principalId: string): string;
+}) {
+  const { t } = useTranslation();
+  if (read.status === "loading") {
+    return <SkeletonList rows={2} />;
+  }
+  if (read.status === "failed") {
+    return (
+      <InlineError className="flex flex-wrap items-center justify-between gap-2">
+        <span>{t("connections.accessFailed")}</span>
+        <Button variant="outline" size="sm" onClick={read.retry}>
+          {t("tryAgain")}
+        </Button>
+      </InlineError>
+    );
+  }
+  if (read.holders.length === 0) {
+    return <EmptyState layout="inline">{t("connections.accessEmpty")}</EmptyState>;
+  }
+  return (
+    <List aria-label={t("connections.accessTitle")}>
+      {read.holders.map((holder) => {
+        if (holder.kind === "person") {
+          const name = holder.name ?? t("connections.accessUnknownPerson");
+          return (
+            <ListRow
+              key={holder.grantId}
+              data-holder-kind="person"
+              leading={<Avatar kind="person" size="sm" name={name} />}
+              title={name}
+              description={holder.detail}
+            />
+          );
+        }
+        const name = holder.name ?? t("connections.accessUnknownPrincipal");
+        return (
+          <ListRow
+            key={holder.grantId}
+            data-holder-kind="service_principal"
+            leading={
+              <Avatar kind="service" size="sm" name={name} icon={<KeyRound aria-hidden="true" />} />
+            }
+            title={name}
+            chips={
+              <>
+                <Chip size="sm">{t("connections.accessServicePrincipal")}</Chip>
+                {holder.disabled ? (
+                  <Badge tone="neutral" size="sm">
+                    {t("connections.accessPrincipalDisabled")}
+                  </Badge>
+                ) : null}
+              </>
+            }
+            description={
+              holder.detail ? <code className="font-mono">{holder.detail}</code> : undefined
+            }
+            link={holder.name === undefined ? undefined : <a href={principalHref(holder.id)} />}
+          />
         );
       })}
     </List>

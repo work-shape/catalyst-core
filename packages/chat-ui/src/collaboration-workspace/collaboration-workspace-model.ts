@@ -365,6 +365,7 @@ function isPageOutsideCollaborationWorkspace(route: WorkspaceRoute): boolean {
     route.kind === "build" ||
     route.kind === "inbox" ||
     route.kind === "inbox-item" ||
-    route.kind === "ui-library"
+    route.kind === "ui-library" ||
+    route.kind === "workflow-samples"
   );
 }

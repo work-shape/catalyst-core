@@ -2,14 +2,14 @@ import {
   StreamdownTextPrimitive,
   type ControlsConfig as AssistantControlsConfig
 } from "@assistant-ui/react-streamdown";
-import { code } from "@streamdown/code";
 import { mermaid } from "@streamdown/mermaid";
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { Streamdown, type ControlsConfig, type StreamdownTranslations } from "streamdown";
+import { CODE_THEMES, codeHighlighter } from "./code-highlight";
 import { useTranslation } from "./i18n";
 import { markdownRehypePlugins, type MarkdownLinkPolicy } from "./markdown-security";
 
-const plugins = { code, mermaid };
+const plugins = { code: codeHighlighter, mermaid };
 const controls: ControlsConfig = {
   code: { copy: true, download: false },
   table: { copy: true, download: false, fullscreen: true },
@@ -84,7 +84,7 @@ export function MarkdownText() {
       lineNumbers={false}
       plugins={plugins}
       rehypePlugins={rehypePlugins}
-      shikiTheme={["github-light", "github-dark"]}
+      shikiTheme={CODE_THEMES}
       translations={translations}
     />
   );
@@ -102,7 +102,7 @@ export function MarkdownArtifact({ children }: { children: string }) {
       mode="static"
       plugins={plugins}
       rehypePlugins={rehypePlugins}
-      shikiTheme={["github-light", "github-dark"]}
+      shikiTheme={CODE_THEMES}
       translations={translations}
     >
       {children}

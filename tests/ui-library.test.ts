@@ -442,6 +442,7 @@ describe("SurfaceFrame", () => {
         library.SurfaceFrame,
         {
           leading: slot("leading"),
+          icon: slot("icon"),
           title: "name",
           subtitle: "subtitle",
           actions: slot("actions"),
@@ -451,7 +452,16 @@ describe("SurfaceFrame", () => {
         slot("content")
       )
     );
-    const order = ["leading", "name", "subtitle", "actions", "fullscreen", "close", "content"];
+    const order = [
+      "leading",
+      "icon",
+      "name",
+      "subtitle",
+      "actions",
+      "fullscreen",
+      "close",
+      "content"
+    ];
     const positions = order.map((text) => markup.indexOf(`>${text}<`));
 
     expect(positions.every((position) => position >= 0)).toBe(true);

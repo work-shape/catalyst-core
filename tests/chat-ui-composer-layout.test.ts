@@ -17,6 +17,7 @@ import {
 } from "../packages/chat-ui/src/assistant/send-block";
 import {
   AssistantThread,
+  ThreadStartBlock,
   ThreadWelcomeHeading
 } from "../packages/chat-ui/src/assistant/assistant-thread";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
@@ -480,6 +481,94 @@ describe("the retention line above the composer", () => {
       expect(
         lineOf({ retention: short, daysLeft: Math.min(7, conversationDays / 2) - 0.01 })
       ).toBeDefined();
+    }
+  });
+});
+
+type StarterAgent = SafeConfig["agents"][number];
+const noStarterAction = () => undefined;
+
+/** A thread without a message: the screen for a new conversation. */
+function EmptyConversation({ children }: { children: ReactNode }) {
+  const runtime = useLocalRuntime({
+    async run() {
+      return { content: [] };
+    }
+  });
+  return createElement(AssistantRuntimeProvider, { runtime }, children);
+}
+
+function startPage(
+  of: Pick<StarterAgent, "starters"> & Partial<Pick<StarterAgent, "initialPrompts">>,
+  locale: "en" | "de" = "en"
+): string {
+  return renderToStaticMarkup(
+    createElement(
+      TranslationProvider,
+      { children: null, locale },
+      createElement(
+        EmptyConversation,
+        null,
+        createElement(ThreadStartBlock, {
+          initialPrompts: of.initialPrompts ?? [],
+          starters: of.starters ?? [],
+          onStarterChosen: noStarterAction
+        })
+      )
+    )
+  );
+}
+
+/** The markup of the group of starters, or nothing where the page shows none. */
+function startersOf(markup: string): string | undefined {
+  return /<div role="group" aria-label="[^"]*"[^>]*>.*?<\/div>/su.exec(markup)?.[0];
+}
+
+describe("starters on the empty chat", () => {
+  const starters = [
+    {
+      skillName: "sheets",
+      title: "Build a sheet",
+      hint: "With formulas",
+      prompt: "Build a sheet."
+    },
+    { skillName: "plain", title: "Simplify a text", prompt: "Simplify:" }
+  ];
+
+  it("shows each starter of the agent as a button with icon, title and hint", () => {
+    const group = startersOf(startPage({ starters }));
+
+    expect(group).toContain('aria-label="Suggestions to start with"');
+    expect(group?.match(/<button /gu)).toHaveLength(2);
+    // A button is reached with Tab and chosen with Enter or Space.
+    expect(group).not.toContain("tabindex");
+    expect(group).toMatch(/type="button"[^>]*>.*Build a sheet.*With formulas/su);
+    expect(group).toContain("Simplify a text");
+    // Every starter carries the icon of its skill: the generic one where the skill names none.
+    expect(group?.match(/data-skill-icon="generic"/gu)).toHaveLength(2);
+  });
+
+  it("names the group in German", () => {
+    expect(startersOf(startPage({ starters }, "de"))).toContain(
+      'aria-label="Vorschläge für den Einstieg"'
+    );
+  });
+
+  it("keeps the agent's own prompts as they are, beside the starters", () => {
+    const markup = startPage({
+      starters,
+      initialPrompts: [{ title: "Check weather", prompt: "Check it." }]
+    });
+
+    expect(startersOf(markup)).not.toContain("Check weather");
+    expect(markup).toContain("Check weather");
+  });
+
+  it("shows the empty chat as before for an agent without starters", () => {
+    for (const none of [{}, { starters: [] }]) {
+      const markup = startPage(none);
+      expect(startersOf(markup)).toBeUndefined();
+      expect(markup).not.toContain("data-skill-icon");
     }
   });
 });

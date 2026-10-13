@@ -681,8 +681,9 @@ export const uiConfigSchema = z
     // The start page names the agent beside its icon; when false it shows the
     // icon alone, as a conversation always does.
     showAgentName: z.boolean().default(true),
-    // When true the agent list shows each agent's description under its name.
-    showAgentDescriptions: z.boolean().default(false),
+    // The agent list shows each agent's description under its name, so a person sees what
+    // each agent does before choosing it. False lists the names alone.
+    showAgentDescriptions: z.boolean().default(true),
     /** Legacy switch of the module `resources`; use `modules.resources.enabled`. */
     resources: z.object({ enabled: z.boolean().optional() }).default({}),
     accentColor: z.string().min(1).default(defaultLightUiTheme.accentColor),
@@ -694,7 +695,7 @@ export const uiConfigSchema = z
     title: "Workshape Catalyst",
     welcomeMessage: "How can I help?",
     showAgentName: true,
-    showAgentDescriptions: false,
+    showAgentDescriptions: true,
     resources: {},
     accentColor: defaultLightUiTheme.accentColor,
     logoInvertOnDark: false,
@@ -870,6 +871,12 @@ export const clientInstanceConfigSchema = z.object({
        * one `audit.pruned` event with the count.
        */
       auditDays: z.number().int().positive().max(3650).default(365),
+      /**
+       * For how many days after a Workflow Run ended the inputs and outputs of its steps, and
+       * its own input and result, are kept. The job `workflow_run.prune_data` removes them
+       * once a day. The run and its step runs stay, with status, times and error codes.
+       */
+      workflowStepDataDays: z.number().int().positive().max(3650).default(30),
       allowUserDelete: z.boolean().default(true)
     })
     .default({
@@ -877,6 +884,7 @@ export const clientInstanceConfigSchema = z.object({
       expireConversations: true,
       extendOnActivity: true,
       auditDays: 365,
+      workflowStepDataDays: 30,
       allowUserDelete: true
     }),
   infrastructure: infrastructureConfigSchema,

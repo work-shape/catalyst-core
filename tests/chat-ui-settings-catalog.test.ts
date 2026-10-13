@@ -100,15 +100,15 @@ describe("Settings catalog", () => {
     ]);
   });
 
-  it("names every page and Build in both languages", () => {
+  it("names every page and Studio in both languages", () => {
     const en = createTranslationContext("en");
     const de = createTranslationContext("de");
     for (const page of [...catalog, administration.build]) {
       expect(en.t(page.labelKey)).not.toBe(page.labelKey);
       expect(de.t(page.labelKey)).not.toBe(page.labelKey);
     }
-    expect(en.t("nav.build")).toBe("Build");
-    expect(de.t("nav.build")).toBe("Bauen");
+    expect(en.t("nav.build")).toBe("Studio");
+    expect(de.t("nav.build")).toBe("Studio");
   });
 
   it.each<[key: string, pages: string[]]>([
@@ -148,7 +148,7 @@ describe("Settings catalog", () => {
     ]);
   });
 
-  it("shows Build to holders of config_assets.read while config assets are on", () => {
+  it("shows Studio to holders of config_assets.read while config assets are on", () => {
     const holder = viewer({ permissions: ["config_assets.read"] });
 
     expect(settingsGoToTargets(catalog, buildOn, holder).map((target) => target.id)).toContain(
@@ -162,7 +162,7 @@ describe("Settings catalog", () => {
     );
   });
 
-  it("shows Build to a holder of a Namespace who has no permission on the instance", () => {
+  it("shows Studio to a holder of a Namespace who has no permission on the instance", () => {
     const targets = (build: BuildAccess, of: SettingsViewer) =>
       settingsGoToTargets(catalog, build, of).map((target) => target.id);
 
@@ -172,12 +172,12 @@ describe("Settings catalog", () => {
       "build"
     ]);
     expect(firstAdministrationRoute(catalog, buildOn, namespaceHolder)).toEqual({ kind: "build" });
-    // Build is the instance's switch first: off, no Namespace opens it.
+    // Studio is the instance's switch first: off, no Namespace opens it.
     expect(targets(buildOff, namespaceHolder)).not.toContain("build");
     expect(firstAdministrationRoute(catalog, buildOff, namespaceHolder)).toBeUndefined();
   });
 
-  it("shows no Build to a viewer who holds no right on an agent or a skill", () => {
+  it("shows no Studio to a viewer who holds no right on an agent or a skill", () => {
     for (const of of [member, answeredMember, instanceAdmin]) {
       expect(settingsGoToTargets(catalog, buildOn, of).map((target) => target.id)).not.toContain(
         "build"
@@ -186,7 +186,7 @@ describe("Settings catalog", () => {
     expect(firstAdministrationRoute(catalog, buildOn, answeredMember)).toBeUndefined();
   });
 
-  it("shows Build to a holder of config_assets.write alone", () => {
+  it("shows Studio to a holder of config_assets.write alone", () => {
     expect(
       settingsGoToTargets(catalog, buildOn, viewer({ permissions: ["config_assets.write"] })).map(
         (target) => target.id
@@ -217,7 +217,7 @@ describe("the four role views", () => {
     }
   );
 
-  it("opens the gear on the first Instance page, else on General, else on Build", () => {
+  it("opens the gear on the first Instance page, else on General, else on Studio", () => {
     expect(firstAdministrationRoute(catalog, buildOn, instanceAdmin)).toEqual({
       kind: "settings",
       group: "instance",
@@ -252,7 +252,7 @@ describe("old addresses", () => {
     });
   });
 
-  it("lands /admin/config on Build", () => {
+  it("lands /admin/config on Studio", () => {
     expect(resolve("/admin/config", superadminWithoutMembership)).toEqual({
       kind: "build",
       page: administration.build
@@ -261,7 +261,7 @@ describe("old addresses", () => {
 
   const buildAddresses = ["/build", "/build/agents", "/build/skills/tax-review"];
 
-  it.each(buildAddresses)("answers %s with Build for a viewer who may open it", (path) => {
+  it.each(buildAddresses)("answers %s with Studio for a viewer who may open it", (path) => {
     const open = { kind: "build", page: administration.build };
 
     expect(resolve(path, superadminWithoutMembership)).toEqual(open);
@@ -271,7 +271,7 @@ describe("old addresses", () => {
   });
 
   it.each(buildAddresses)(
-    "says at %s that Build is closed to a viewer who holds nothing in it",
+    "says at %s that Studio is closed to a viewer who holds nothing in it",
     (path) => {
       const closed = { kind: "build-closed", page: administration.build };
 
@@ -287,7 +287,7 @@ describe("old addresses", () => {
     expect(resolve(path, namespaceHolder, buildOn)).toMatchObject({ kind: "build" });
   });
 
-  it.each(buildAddresses)("leads %s away where the instance runs without Build", (path) => {
+  it.each(buildAddresses)("leads %s away where the instance runs without Studio", (path) => {
     expect(resolve(path, member, buildOff)).toEqual({ kind: "chat" });
     expect(resolve(path, namespaceHolder, buildOff)).toEqual({ kind: "chat" });
     expect(resolve(path, member, { ...buildOff, ready: false })).toEqual({ kind: "chat" });
@@ -295,7 +295,7 @@ describe("old addresses", () => {
       kind: "redirect",
       route: { kind: "settings", group: "instance", page: "users" }
     });
-    // An assembly without a Build page has nothing to say that it is closed.
+    // An assembly without a Studio page has nothing to say that it is closed.
     expect(
       resolve(path, superadminWithoutMembership, { page: undefined, enabled: true, ready: true })
     ).toEqual({
@@ -304,7 +304,7 @@ describe("old addresses", () => {
     });
   });
 
-  it("leads /admin to the first permitted Settings page, else to Build, else to chat", () => {
+  it("leads /admin to the first permitted Settings page, else to Studio, else to chat", () => {
     const users: WorkspaceRoute = { kind: "settings", group: "instance", page: "users" };
 
     expect(resolve("/admin", instanceAdmin)).toEqual({ kind: "redirect", route: users });
@@ -324,7 +324,7 @@ describe("old addresses", () => {
       route: { kind: "settings", group: "instance", page: "usage" }
     });
     expect(resolve("/admin/users", member)).toEqual({ kind: "chat" });
-    // The old address of Build is a Build address: closed to a viewer who holds nothing in it.
+    // The old address of Studio is a Studio address: closed to a viewer who holds nothing in it.
     expect(resolve("/admin/config", member)).toEqual({
       kind: "build-closed",
       page: administration.build

@@ -13,14 +13,17 @@ import { apiErrorMessage } from "../workspace-utils";
 import { AgentAvailabilityEditor, AgentEditor } from "./agent-editor";
 import { agentConfigToForm, startedAgentForm } from "./asset-form-model";
 import type { BuildAssetEditorProps, BuildAssetKind } from "./build-asset-kind";
+import { AGENT_ASSET_KIND } from "./build-rights";
+import { AGENTS_BUILD_PATH } from "./build-route";
 import { useConnectionToolChoice } from "./connection-tools";
+import { skillFacts } from "./skill-facts";
 
 /** How many skills the chooser of an agent asks the instance for with one search. */
 const SKILL_CHOICE_PAGE_SIZE = 50;
 
 export const agentKind: BuildAssetKind = {
-  kind: "agent",
-  path: "agents",
+  kind: AGENT_ASSET_KIND,
+  path: AGENTS_BUILD_PATH,
   label: "build.kindAgents",
   searchLabel: "build.agentsSearch",
   newLabel: "configNewAgent",
@@ -32,6 +35,8 @@ export const agentKind: BuildAssetKind = {
   missingText: "build.agentMissing",
   icon: Bot,
   avatar: "agent",
+  // A row says what the agent does, as its card on the Agents page does, and never its id.
+  row: (asset) => ({ description: asset.description?.trim() || undefined }),
   badges: (asset, t) => (asset.isDefault ? <Badge>{t("configDefaultAgent")}</Badge> : null),
   Editor: AgentAssetEditor
 };
@@ -91,7 +96,8 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
       skillChoice={{
         options: (skillsQuery.data?.items ?? []).map((skill) => ({
           name: skill.name,
-          title: skill.title
+          title: skill.title,
+          ...skillFacts(skill)
         })),
         onSearch: (text) => setSkillSearch(text.trim())
       }}

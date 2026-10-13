@@ -5,6 +5,7 @@ import { resolveEffectivePermissions, type Permission } from "@vivd-catalyst/cor
 import { describe, expect, it } from "vitest";
 import {
   USER_PERMISSIONS,
+  authSourceLabel,
   setUserPermission,
   userPermissionCopy,
   userPermissionStates
@@ -117,6 +118,12 @@ describe("user permission model", () => {
     ]);
     expect(setUserPermission(user(), "audit.view", false)).toEqual([]);
   });
+
+  it("names the built-in password sign-in in words and any other source as configured", () => {
+    const t = (key: string) => `[${key}]`;
+    expect(authSourceLabel("better-auth", t)).toBe("[settings.userSignInMethodPassword]");
+    expect(authSourceLabel("entra-id", t)).toBe("entra-id");
+  });
 });
 
 describe("user rights in the administration", () => {
@@ -135,7 +142,7 @@ describe("user rights in the administration", () => {
     );
 
     expect(markup).toContain("Rechte");
-    expect(markup).toContain("Änderungen an Fähigkeiten freigeben");
+    expect(markup).toContain("Änderungen an Skills freigeben");
     expect(markup).toContain("über Rolle");
     expect(markup).toContain("einzeln entzogen");
     expect(markup).toContain('aria-label="Auditprotokoll ansehen"');
@@ -160,7 +167,7 @@ describe("user rights in the administration", () => {
 
     expect(markup).toContain("Felix Pahlke");
     expect(markup).toContain("Anna Beispiel");
-    expect(markup).toContain("Änderungen an Fähigkeiten freigeben");
+    expect(markup).toContain("Änderungen an Skills freigeben");
     expect(markup).toContain('<span class="sr-only">über Rolle</span>');
     expect(markup.match(/<span class="sr-only">einzeln vergeben<\/span>/gu)).toHaveLength(1);
     expect(markup).not.toContain('role="switch"');

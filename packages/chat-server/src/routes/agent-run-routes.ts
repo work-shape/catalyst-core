@@ -112,7 +112,8 @@ export function registerAgentRunRoutes(
         title: body.conversation?.title,
         collaborationWorkspaceId: body.conversation?.collaborationWorkspaceId
           ? asCollaborationWorkspaceId(body.conversation.collaborationWorkspaceId)
-          : undefined
+          : undefined,
+        ...(body.conversation?.subject ? { subject: body.conversation.subject } : {})
       }
     );
     if (isObservableRunStatus(started.run.status)) {

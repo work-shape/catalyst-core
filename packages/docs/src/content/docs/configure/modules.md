@@ -25,13 +25,13 @@ modules:
 | `resources`       | The Resources panel of a conversation.                                                                  | Nothing.                                                                          |
 | `assetManagement` | Changing agents and skills in the interface. Running agents and `catalyst config push` work without it. | Nothing. `administration.agentConfiguration` still says what a person may change. |
 | `userInvitations` | Inviting a user by an emailed link to set a password.                                                   | A mail sender under `infrastructure.mail` and standalone password sign-in.        |
-| `connections`     | Connections to outside systems: the asset kind `connection`, its rights and its list in Build.          | `secretStore.keys` and `egress.allow` once `connections` names a Connection.      |
+| `connections`     | Connections to outside systems: the asset kind `connection`, its rights and its list in Studio.         | `secretStore.keys` and `egress.allow` once `connections` names a Connection.      |
 
 The document processing capability is part of the paid capabilities and not in the open repository. The other modules ship with the open platform.
 
 ### Connections
 
-A Connection is one configured access to an outside system, stored as an asset of kind `connection`. With the module on, **Build > Connections** lists the Connections of the instance, and **Settings > Instance > Access** grants `connection.read` and `connection.use`. With the module off, the kind does not exist for any caller: `GET /api/v1/assets/connection` answers `404` with `details.reason: "module_off"`, and stored Connections stay as they are.
+A Connection is one configured access to an outside system, stored as an asset of kind `connection`. With the module on, **Studio > Connections** lists the Connections of the instance, and **Settings > Instance > Access** grants `connection.read` and `connection.use`. With the module off, the kind does not exist for any caller: `GET /api/v1/assets/connection` answers `404` with `details.reason: "module_off"`, and stored Connections stay as they are.
 
 A Connection comes from release config: [`connections`](/configure/release-config/#connections) names each one, and the API process writes them into the store when it starts. Such a Connection is read-only on the instance. A put, a revert or a delete of it through the interface, the API or the CLI is refused with `403` and `details.reason: "read_only_origin"`; change it in release config and restart. A Connection cannot be created on the instance yet: that write is refused with `connection_runtime_authoring_unavailable`.
 

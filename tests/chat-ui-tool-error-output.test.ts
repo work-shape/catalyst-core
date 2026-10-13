@@ -9,7 +9,7 @@ import { ToolDisplayPanelProvider } from "@vivd-catalyst/chat-ui/tool-display-pa
 // of JSON in a code box, cut at the right edge. The id of the call is never shown.
 
 const SENTENCE =
-  "The connection Sample business cannot be used right now. Trying again later may work. If it keeps failing, an administrator can check it under Build > Connections.";
+  "The connection Sample business cannot be used right now. Trying again later may work. If it keeps failing, an administrator can check it under Studio > Connections.";
 const labels = { input: "Input", output: "Output" };
 const call = {
   toolName: "connection.sample-business.revenue_by_month",

@@ -204,16 +204,34 @@ describe("asset kind registry", () => {
       title: "Assistant",
       description: "Answers"
     });
+    // A list in another language names the agent in it, and falls back to the default.
+    expect(
+      agentKind.summarize(agent({ description: { en: "Answers", de: "Antwortet" } }), "de")
+    ).toEqual({ name: "assistant", title: "Assistentin", description: "Antwortet" });
+    expect(agentKind.summarize(agent({ displayName: "Assistant" }), "de")).toMatchObject({
+      title: "Assistant"
+    });
 
     expect(issuesOf(skillKind, withSkills(), skill)).toEqual([]);
     expect(issuesOf(skillKind, withSkills(), { ...skill, name: "1st" })).toEqual([
       expect.objectContaining({ path: ["name"] })
     ]);
+    // A list says who ships the skill: every stored skill is the instance's own.
     expect(skillKind.summarize(skill)).toEqual({
       name: "research",
       title: "Research",
-      description: "How to"
+      description: "How to",
+      attributes: { origin: "instance" }
     });
+    // The sentence for people reaches a list beside the name. No skill names an icon itself.
+    expect(skillKind.summarize({ ...skill, summary: "Knows how to research a question." })).toEqual(
+      {
+        name: "research",
+        title: "Research",
+        description: "How to",
+        attributes: { origin: "instance", summary: "Knows how to research a question." }
+      }
+    );
   });
 
   it("derives the Namespace of an asset from its name", () => {

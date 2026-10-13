@@ -1,5 +1,6 @@
 import { Cable } from "lucide-react";
-import { Badge, Chip } from "@vivd-catalyst/ui";
+import { Badge, Chip, ConnectionIcon } from "@vivd-catalyst/ui";
+import { connectionCategory } from "../connection-facts";
 import type { BuildAssetViewProps, BuildListedKind } from "./build-asset-kind";
 import { ConnectionPage } from "./connection-page";
 import { useConnectionSource } from "./connection-source";
@@ -13,8 +14,8 @@ function ConnectionAssetPage(frame: BuildAssetViewProps) {
 /**
  * Connections in Build: a list, and a page that shows one Connection. A Connection is written
  * by the release so far, so the kind has no editor and no button that starts one. A row says what the instance tells of the
- * Connection without its definition: its connector type, whom it belongs to and whether it is
- * on. Where it comes from is not a chip: every Connection comes from release config so far.
+ * Connection without its definition: its icon, what it is for, its connector type, whom it
+ * belongs to and whether it is on. Where it comes from is not a chip: every Connection comes from release config so far.
  * No row holds a setting or a reference to a credential.
  */
 export const connectionKind: BuildListedKind = {
@@ -26,6 +27,23 @@ export const connectionKind: BuildListedKind = {
   emptyText: "connections.empty",
   icon: Cable,
   view: { Page: ConnectionAssetPage, missingText: "connections.missing" },
+  // A row shows the icon of the system behind the Connection, on its tile, and what the
+  // Connection is for in words. Its id stands on its page.
+  row: (asset) => {
+    const { service, connectorType } = asset.attributes ?? {};
+    return {
+      leading: (
+        <ConnectionIcon
+          size="lg"
+          service={typeof service === "string" ? service : undefined}
+          category={connectionCategory(
+            typeof connectorType === "string" ? connectorType : undefined
+          )}
+        />
+      ),
+      description: asset.description?.trim() || undefined
+    };
+  },
   badges: (asset, t) => {
     const { connectorType, enabled } = asset.attributes ?? {};
     return (

@@ -138,6 +138,13 @@ export function distinctAuthSources(identities: AdministeredUserIdentity[]): str
   return [...new Set(identities.map((identity) => identity.authSource))];
 }
 
+/** The name of a sign-in source: the built-in password sign-in in words, any other as configured. */
+export function authSourceLabel(authSource: string, t: (key: TranslationKey) => string): string {
+  return authSource === STANDALONE_AUTH_SOURCE
+    ? t("settings.userSignInMethodPassword")
+    : authSource;
+}
+
 export function generatePassword(): string {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
   const bytes = new Uint8Array(16);

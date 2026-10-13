@@ -1,6 +1,7 @@
 import { realpathSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
+import { assetHelpText, runAssetCommand } from "./asset-commands";
 import { runConfigCommand, type ConfigCommandName, type ConfigCommandOptions } from "./commands";
 
 export * from "./api";
@@ -47,12 +48,17 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
   const stdout = runtime.stdout ?? ((text: string) => process.stdout.write(text));
   const stderr = runtime.stderr ?? ((text: string) => process.stderr.write(text));
   if (argv.length === 0 || argv[0] === "--help" || argv[0] === "-h") {
-    stdout(helpText);
+    stdout(`${assetHelpText}\n${helpText}`);
     return 0;
   }
   if (argv[0] !== "config") {
-    stderr(`Unknown command '${argv[0]}'.\n\n${helpText}`);
-    return 2;
+    return runAssetCommand(argv, {
+      cwd: runtime.cwd ?? process.cwd(),
+      ...(runtime.fetchImpl === undefined ? {} : { fetchImpl: runtime.fetchImpl }),
+      ...(runtime.env === undefined ? {} : { env: runtime.env }),
+      stdout,
+      stderr
+    });
   }
   if (argv.length === 1 || argv[1] === "--help" || argv[1] === "-h") {
     stdout(helpText);

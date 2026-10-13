@@ -13,6 +13,7 @@ import {
   type BuildListedKind,
   type BuildSource,
   type ConnectionDetailRead,
+  type ConnectionHoldersRead,
   type ConnectionSource,
   type ConnectionTestRun
 } from "@vivd-catalyst/chat-ui/build-area";
@@ -46,6 +47,8 @@ interface PageInput {
   detailRead?: ConnectionDetailRead;
   run?: ConnectionTestRun;
   mayTest?: boolean;
+  /** Who was given the Connection. Without it the reader is not shown rights. */
+  holders?: ConnectionHoldersRead;
   locale?: LocaleCode;
 }
 
@@ -56,7 +59,9 @@ function renderPage(input: PageInput = {}): string {
     mayTest: () => input.mayTest ?? true,
     useDetail: (name) =>
       input.detailRead ?? { status: "ready", detail: connectionDetail(name, input.detail) },
-    useTest: () => ({ run: input.run ?? { status: "idle" }, start: noop })
+    useTest: () => ({ run: input.run ?? { status: "idle" }, start: noop }),
+    useHolders: () => input.holders ?? { status: "hidden" },
+    principalHref: (principalId) => `/settings/instance/api-access?principal=${principalId}`
   };
   const context = platformContext();
   const source: BuildSource = {
@@ -128,15 +133,17 @@ function healthOf(markup: string): string | undefined {
 }
 
 describe("Connection page", () => {
-  it("shows whom the Connection belongs to and that release config defines it, with nothing to edit", () => {
+  it("shows whom the Connection belongs to and that its operator sets it up, with nothing to edit", () => {
     const markup = renderPage();
 
     expect(markup).toContain(">Sample business</h1>");
-    expect(markup).toContain(">Connection<");
-    expect(markup).toContain('title="sample-business"');
+    // The head names the Connection only; its id stands in the first section.
+    expect(markup).not.toContain(">Connection<");
+    expect(markup.indexOf("data-asset-identifier")).toBeGreaterThan(markup.indexOf("</header>"));
+    expect(markup.match(/>sample-business<\/code>/gu)).toHaveLength(1);
     expect(markup).toContain(">Instance<");
     expect(markup).toContain(
-      "Connections come from the release config and cannot be changed here."
+      "The operator of this instance sets up its connections. They cannot be changed here."
     );
     // Where it comes from is a sentence at the top of the page and no chip.
     expect(markup).not.toContain("Defined in release config");
@@ -148,7 +155,7 @@ describe("Connection page", () => {
       expect(markup, control).not.toContain(control);
     }
     expect(renderPage({ locale: "de" })).toContain(
-      "Verbindungen kommen aus der Release-Konfiguration und lassen sich hier nicht ändern."
+      "Der Betreiber dieser Instanz richtet ihre Verbindungen ein. Hier lassen sie sich nicht ändern."
     );
     expect(renderPage({ asset: connectionAsset("ledger", { origin: "runtime" }) })).not.toContain(
       "data-build-read-only"
@@ -176,6 +183,10 @@ describe("Connection page", () => {
     expect(markup).toContain("Revenue, customers and orders of the sample business.");
     expect(markup).toContain('data-connection-credential="set"');
     expect(markup).toContain("Set, version 2");
+    // A reader who may not change the Connection is told that it is set, not its version.
+    const readOnly = renderPage({ mayTest: false });
+    expect(readOnly).toContain(">Set<");
+    expect(readOnly).not.toContain("version 2");
     expect(markup).toContain(
       "The credential stays in the Secret Store. This page shows only whether it is there."
     );
@@ -230,8 +241,8 @@ describe("Connection page", () => {
       [
         "networkDenied",
         "network_denied",
-        "The instance may not reach this address. Its host is not in the list of allowed outside addresses in release config (egress.allow).",
-        "Die Instanz darf diese Adresse nicht erreichen. Ihr Host steht nicht in der Liste der erlaubten externen Adressen der Release-Konfiguration (egress.allow)."
+        "The instance may not reach this address. Its host is not among the outside addresses the operator allowed.",
+        "Die Instanz darf diese Adresse nicht erreichen. Ihr Host gehört nicht zu den externen Adressen, die der Betreiber erlaubt hat."
       ],
       [
         "unavailable",
@@ -242,8 +253,8 @@ describe("Connection page", () => {
       [
         "notConfigured",
         "not_configured",
-        "The credential of this connection is missing. Release config names where it comes from. Until it is there, no call reaches the outside system.",
-        "Die Zugangsdaten dieser Verbindung fehlen. Die Release-Konfiguration nennt, woher sie kommen. Solange sie fehlen, erreicht kein Aufruf das externe System."
+        "The credential of this connection is missing. Until the operator supplies it, no call reaches the outside system.",
+        "Die Zugangsdaten dieser Verbindung fehlen. Bis der Betreiber sie bereitstellt, erreicht kein Aufruf das externe System."
       ],
       [
         "secretUnreadable",
@@ -263,32 +274,32 @@ describe("Connection page", () => {
       [
         "unauthorized",
         "The operator sets a new credential in the instance's environment and restarts the instance. Then test again.",
-        "Der Betreiber setzt neue Zugangsdaten in der Umgebung der Instanz und startet die Instanz neu. Testen Sie danach erneut."
+        "Der Betreiber setzt neue Zugangsdaten in der Umgebung der Instanz und startet die Instanz neu. Teste danach erneut."
       ],
       [
         "networkDenied",
-        "The operator adds the host to egress.allow in the release config and restarts the instance. Then test again.",
-        "Der Betreiber trägt den Host in der Release-Konfiguration unter egress.allow ein und startet die Instanz neu. Testen Sie danach erneut."
+        "The operator lets the instance reach this host and restarts it. Then test again.",
+        "Der Betreiber erlaubt der Instanz diesen Host und startet sie neu. Teste danach erneut."
       ],
       [
         "unavailable",
-        "Check the address under Settings. It is changed in the release config.",
-        "Prüfen Sie die Adresse unter Einstellungen. Sie wird in der Release-Konfiguration geändert."
+        "Check the address under Settings. The operator of this instance can change it.",
+        "Prüfe die Adresse unter Einstellungen. Ändern kann sie der Betreiber dieser Instanz."
       ],
       [
         "notConfigured",
         "The operator supplies the credential in the instance's environment and restarts the instance. Then test again.",
-        "Der Betreiber stellt die Zugangsdaten in der Umgebung der Instanz bereit und startet die Instanz neu. Testen Sie danach erneut."
+        "Der Betreiber stellt die Zugangsdaten in der Umgebung der Instanz bereit und startet die Instanz neu. Teste danach erneut."
       ],
       [
         "secretUnreadable",
         "The operator restores the Secret Store key the credential was stored with, or supplies the credential again in the instance's environment, and restarts the instance. Then test again.",
-        "Der Betreiber stellt den Secret-Store-Schlüssel wieder her, mit dem die Zugangsdaten gespeichert wurden, oder stellt die Zugangsdaten in der Umgebung der Instanz erneut bereit, und startet die Instanz neu. Testen Sie danach erneut."
+        "Der Betreiber stellt den Secret-Store-Schlüssel wieder her, mit dem die Zugangsdaten gespeichert wurden, oder stellt die Zugangsdaten in der Umgebung der Instanz erneut bereit, und startet die Instanz neu. Teste danach erneut."
       ],
       [
         "failedUnnamed",
         "Test again. If it fails again, ask the operator.",
-        "Testen Sie erneut. Schlägt der Test wieder fehl, wenden Sie sich an den Betreiber."
+        "Teste erneut. Schlägt der Test wieder fehl, wende dich an den Betreiber."
       ]
     ];
     for (const [state, english, german] of steps) {
@@ -386,7 +397,7 @@ describe("Connection page", () => {
       "You can read this connection. Testing it needs the right to change connections on the instance."
     );
     expect(renderPage({ mayTest: false, locale: "de" })).toContain(
-      "Sie können diese Verbindung lesen. Zum Testen brauchen Sie das Recht, Verbindungen der Instanz zu ändern."
+      "Du kannst diese Verbindung lesen. Zum Testen brauchst du das Recht, Verbindungen der Instanz zu ändern."
     );
     // The reader still sees the recorded state.
     expect(healthOf(renderPage({ mayTest: false, detail: recordedStates.ready }))).toBe("ready");
@@ -430,7 +441,9 @@ describe("Connection page", () => {
       return markup.slice(start, markup.indexOf("</li>", start));
     };
 
-    expect(row("revenue_by_month")).toContain("connection.sample-business.revenue_by_month");
+    // A person reads the operation's name, never the id a tool call carries.
+    expect(row("revenue_by_month")).toContain(">Revenue by month<");
+    expect(row("revenue_by_month")).not.toContain("connection.sample-business.revenue_by_month");
     expect(row("revenue_by_month")).toContain("Returns the revenue of each month of one year.");
     expect(row("revenue_by_month")).toContain("Reading");
     expect(row("revenue_by_month")).toContain("Callable by");
@@ -455,7 +468,7 @@ describe("Connection page", () => {
     expect(row("top_products")).toContain("The outside system does not offer this operation.");
     // An operation that is switched off reads as disabled.
     expect(row("delete_order")).toContain("Disabled");
-    expect(row("delete_order")).toContain("Switched off in release config.");
+    expect(row("delete_order")).toContain("Switched off by the operator of this instance.");
 
     const german = renderPage({ locale: "de" });
     for (const text of ["Lesend", "Ändernd", "Aufrufbar durch", "Prüfung nötig", "Bereit"]) {
@@ -512,6 +525,61 @@ describe("Connection page", () => {
     );
     expect(renderPage({ assetRead: { status: "refused" } })).toContain(
       "You may not read this asset."
+    );
+  });
+
+  it("has no section on who may use it for a reader who is not shown rights", () => {
+    const markup = renderPage();
+    expect(markup).not.toContain("Who may use it");
+    expect(markup).not.toContain('id="access"');
+  });
+
+  it("lists the service principals that may use it beside the people, told apart and linked", () => {
+    const markup = renderPage({
+      holders: {
+        status: "ready",
+        holders: [
+          {
+            grantId: "g1",
+            kind: "person",
+            id: "user_kai",
+            name: "Kai Example",
+            detail: "kai@example.test",
+            disabled: false
+          },
+          {
+            grantId: "g2",
+            kind: "service_principal",
+            id: "spn_1",
+            name: "Monthly check",
+            detail: "monthly-check",
+            disabled: true
+          }
+        ]
+      }
+    });
+    expect(markup).toContain('id="access"');
+    expect(markup).toContain(">Who may use it<");
+    const person = /<li[^>]*data-holder-kind="person".*?<\/li>/su.exec(markup)?.[0] ?? "";
+    const service =
+      /<li[^>]*data-holder-kind="service_principal".*?<\/li>/su.exec(markup)?.[0] ?? "";
+    // A person is a round avatar with an address and no link.
+    expect(person).toContain('data-kind="person"');
+    expect(person).toContain("kai@example.test");
+    expect(person).not.toContain("<a ");
+    // A service principal is a square one, says what it is in words and opens its page.
+    expect(service).toContain('data-kind="service"');
+    expect(service).toContain(">Service principal<");
+    expect(service).toContain(">Disabled<");
+    expect(service).toContain('href="/settings/instance/api-access?principal=spn_1"');
+    expect(service).toContain("monthly-check");
+  });
+
+  it("says that nobody was given the Connection by itself", () => {
+    const markup = renderPage({ holders: { status: "ready", holders: [] } });
+    expect(markup).toContain("Nobody was given this Connection by itself.");
+    expect(renderPage({ holders: { status: "ready", holders: [] }, locale: "de" })).toContain(
+      "Wer sie verwenden darf"
     );
   });
 });

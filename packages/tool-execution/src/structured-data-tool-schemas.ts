@@ -108,10 +108,48 @@ const patchInputSchema = z
   })
   .strict();
 
-export const structuredDataPublishInputSchema = z.discriminatedUnion("operation", [
+const publishOperationSchema = z.discriminatedUnion("operation", [
   replaceInputSchema,
   patchInputSchema
 ]);
+
+/**
+ * What a model is shown: one object with the fields of both operations. A model provider takes
+ * a tool's input schema only with an object at its root (Anthropic refuses a union there), so
+ * the choice between the operations is the `operation` field, not a union of two objects.
+ */
+const publishFieldsSchema = z
+  .object({
+    operation: z
+      .enum(["replace", "patch"])
+      .describe(
+        "replace supplies the full structure and needs title and sections. patch edits named fields with set and remove."
+      ),
+    resourceKey: keySchema.describe(
+      "Stable key identifying this conversation resource. With patch, the key of the resource previously published with replace."
+    ),
+    title: replaceInputSchema.shape.title
+      .describe("Title shown for the resource. Required with replace, not allowed with patch.")
+      .optional(),
+    sections: replaceInputSchema.shape.sections
+      .describe(
+        "Complete replacement structure for the resource. Required with replace, not allowed with patch."
+      )
+      .optional(),
+    set: patchInputSchema.shape.set.describe(
+      "Named field values to update or append in existing sections. Only with patch."
+    ),
+    remove: patchInputSchema.shape.remove.describe(
+      "Named fields to remove; missing fields are ignored. Only with patch."
+    )
+  })
+  .strict();
+
+/**
+ * The input of structured_data.publish. It is read as the one object a model is shown and then
+ * as the operation it names, so each operation still takes exactly its own fields.
+ */
+export const structuredDataPublishInputSchema = publishFieldsSchema.pipe(publishOperationSchema);
 
 export const structuredDataPublishOutputSchema = z.object({
   resourceKey: z.string(),

@@ -116,6 +116,12 @@ export function toolOperation(
     // Every call of a tool is recorded, a reading one too: the run holds the tool's usage and
     // is the trace of what the agent did.
     ...(tool.effect === "reading" ? { recordsEveryCall: true } : {}),
+    ...(tool.policyFloor
+      ? {
+          policyFloorOf: (origin) =>
+            origin.kind === "agent" ? tool.policyFloor?.(origin) : undefined
+        }
+      : {}),
     action: null,
     authorize(_input, context) {
       for (const permissionRef of requiredPermissionRefs) {

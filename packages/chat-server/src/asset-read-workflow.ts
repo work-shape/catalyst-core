@@ -16,13 +16,15 @@ import {
   type JsonObject,
   type Namespace,
   type OperationAuthorization,
+  type LocaleCode,
   type StorePage
 } from "@vivd-catalyst/core";
+import { resolveConfigLocale } from "@vivd-catalyst/config-schema";
 import { accessResource, decide, type AssetCall } from "./asset-access";
 import { readSourceFiles, type AssetFileOutput } from "./asset-files";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
 import { notFound, requireActive, type AssetAddress, type AssetTarget } from "./asset-target";
-import type { ChatServerOptions } from "./types";
+import type { AssetWorkflowOptions } from "./types";
 
 /** How many assets a list reads where its caller names no page. */
 const DEFAULT_ASSET_LIST_LIMIT = 51;
@@ -39,10 +41,10 @@ export interface AssetReadHost {
  * its history. Every call addresses one scope and stays in it, as the writes do.
  */
 export class AssetReadWorkflow {
-  private readonly options: ChatServerOptions;
+  private readonly options: AssetWorkflowOptions;
   private readonly host: AssetReadHost;
 
-  constructor(options: ChatServerOptions, host: AssetReadHost) {
+  constructor(options: AssetWorkflowOptions, host: AssetReadHost) {
     this.options = options;
     this.host = host;
   }
@@ -53,10 +55,14 @@ export class AssetReadWorkflow {
    */
   async list(
     call: AssetCall,
-    input: { kind: string; prefix?: string; text?: string; workspaceId?: string },
+    input: { kind: string; prefix?: string; text?: string; workspaceId?: string; locale?: string },
     page: StorePage | undefined
   ) {
     const kind = this.host.kind(input.kind);
+    // Names and descriptions in the reader's language where the instance offers it.
+    const locale = resolveConfigLocale(this.options.config.localization, {
+      requestedLocale: input.locale
+    });
     const scope = scopeOf(input.workspaceId);
     const [after] = page?.after ?? [];
     // Whoever reads the asset is shown all of it; a holder of the use right its published view.
@@ -70,7 +76,22 @@ export class AssetReadWorkflow {
         kind: kind.kind,
         scope,
         namePrefix: input.prefix,
-        nameContains: input.text,
+        ...(input.text === undefined
+          ? {}
+          : {
+              text: {
+                contains: input.text,
+                // The title of the revision the caller is shown, as the summary below is.
+                titleOf: (asset, revisions) =>
+                  summarizeAsset(
+                    kind,
+                    asset.name,
+                    reads(accessResource(asset.kind, asset.name, asset.scope, asset.id))
+                      ? revisions.active
+                      : revisions.published
+                  ).title
+              }
+            }),
         afterName: typeof after === "string" ? after : undefined,
         limit: page?.limit ?? DEFAULT_ASSET_LIST_LIMIT,
         readable: (asset) => {
@@ -85,12 +106,12 @@ export class AssetReadWorkflow {
     return records.map((record) => {
       const namespace = findNamespaceOfAssetName(namespaces, record.name);
       if (!reads(accessResource(record.kind, record.name, record.scope, record.id))) {
-        return this.publishedSummary(kind, record, namespace?.prefix);
+        return this.publishedSummary(kind, record, namespace?.prefix, locale);
       }
       return {
         id: record.id,
         kind: record.kind,
-        ...summarizeAsset(kind, record.name, record.config),
+        ...summarizeAsset(kind, record.name, record.config, locale),
         scope: record.scope,
         ...(namespace ? { namespace: namespace.prefix } : {}),
         revision: record.revision,
@@ -212,11 +233,16 @@ export class AssetReadWorkflow {
    * One asset as a list shows it to a holder of the use right alone: the published revision
    * under its own number, and nothing of the draft.
    */
-  publishedSummary(kind: WorkflowAssetKind, record: ConfigAssetRecord, namespace?: string) {
+  publishedSummary(
+    kind: WorkflowAssetKind,
+    record: ConfigAssetRecord,
+    namespace?: string,
+    locale?: LocaleCode
+  ) {
     return {
       id: record.id,
       kind: record.kind,
-      ...summarizeAsset(kind, record.name, record.publishedConfig),
+      ...summarizeAsset(kind, record.name, record.publishedConfig, locale),
       scope: record.scope,
       ...(namespace ? { namespace } : {}),
       revision: record.publishedRevision ?? record.revision,
@@ -450,9 +476,14 @@ function showsPublishedView(
 }
 
 /** What a list shows of one asset. A stored definition its kind no longer reads shows its name. */
-function summarizeAsset(kind: WorkflowAssetKind, name: string, config: unknown) {
+function summarizeAsset(
+  kind: WorkflowAssetKind,
+  name: string,
+  config: unknown,
+  locale?: LocaleCode
+) {
   try {
-    const { title, description, attributes } = kind.summarize(config);
+    const { title, description, attributes } = kind.summarize(config, locale);
     return {
       name,
       title,

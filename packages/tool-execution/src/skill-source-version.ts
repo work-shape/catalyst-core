@@ -10,6 +10,11 @@ export function createSkillSourceVersion(skill: SkillConfig): string {
     .update(skill.description)
     .update("\0")
     .update(skill.content);
+  // A skill without a summary keeps the version it had before skills could carry one.
+  if (skill.summary !== undefined) {
+    hash.update("\0summary\0").update(skill.summary);
+  }
+  // Starters are for the empty chat and no part of what the agent reads.
   for (const resource of [...(skill.resources ?? [])].sort((left, right) =>
     left.path.localeCompare(right.path)
   )) {

@@ -49,10 +49,57 @@ export interface AgentConfig {
 export interface SkillConfig {
   name: string;
   title: string;
+  /** For the agent: when to use the skill. */
   description: string;
+  /**
+   * For people: one sentence on one line that says what an agent with the skill knows how to
+   * do. Lists and choosers show it under the title.
+   */
+  summary?: string;
+  /** Up to `SKILL_STARTERS_MAX` first requests the empty chat offers for an agent with the skill. */
+  starters?: SkillStarterConfig[];
   content: string;
   resources?: SkillResourceConfig[];
+  /**
+   * `release` on a skill that ships with the platform. Only the release seed writes it: every
+   * other write of a skill that carries it is refused, and a stored one is read-only.
+   */
+  origin?: "release";
+  /** The key of the interface's icon registry. Only a skill that ships with the platform has one. */
+  icon?: string;
 }
+
+/** How many starters one skill carries at most. */
+export const SKILL_STARTERS_MAX = 2;
+/** How many starters the empty chat shows for one agent at most. */
+export const AGENT_STARTERS_MAX = 4;
+/** The most characters a starter's `title` and its `hint` hold, in each language. */
+export const SKILL_STARTER_LINE_MAX_LENGTH = 60;
+
+/** One first request a skill offers on the empty chat. Choosing it fills the composer. */
+export interface SkillStarterConfig {
+  title: LocalizedStringConfig;
+  /** One short line under the title. */
+  hint?: LocalizedStringConfig;
+  /** The text that fills the composer. */
+  prompt: LocalizedStringConfig;
+  /**
+   * The tools the request needs. The starter shows only for an agent that holds every one of
+   * them, so it never offers what the agent cannot do.
+   */
+  tools?: string[];
+}
+
+/** The most characters a skill's `summary` holds. */
+export const SKILL_SUMMARY_MAX_LENGTH = 120;
+
+/**
+ * Who ships a skill, as a list says it: `instance` for a skill of the instance's own, `release`
+ * for one that ships with the platform, which the release seed alone writes.
+ */
+export const SKILL_ORIGINS = ["instance", "release"] as const;
+
+export type SkillOrigin = (typeof SKILL_ORIGINS)[number];
 
 export const SKILL_RESOURCE_MEDIA_TYPES = [
   "text/markdown",

@@ -8,6 +8,7 @@ import { AppError } from "./errors";
 import type { PlatformEventName } from "./events";
 import type { AuthenticatedIdentity, OperationScope } from "./identity";
 import type { CollaborationWorkspaceId, OperationRunId } from "./ids";
+import type { JsonObject } from "./json";
 import type { PolicyTarget } from "./operation-policy";
 import type {
   OperationCallRuntime,
@@ -40,6 +41,11 @@ export interface OperationExecutionContext {
   origin: OperationOrigin;
   workspaceId?: CollaborationWorkspaceId;
   correlationId: string;
+  /**
+   * The idempotency key of the call, where it has one. An operation that sets
+   * `repeatsUnderKey` hands it to whatever carries the call out.
+   */
+  idempotencyKey?: string;
   /** What only the live call has. Empty for a call that is executed after an approval. */
   runtime: OperationCallRuntime;
   /** The actor's rights, for an operation whose rule is more than one action. */
@@ -161,6 +167,16 @@ interface OperationDefinitionBase<Input, Output> {
    */
   streams?: true;
   changeClass?: OperationChangeClass;
+  /**
+   * Set on a changing operation whose call may be made again under the key of a call that was
+   * interrupted: what carries the call out is handed the key (`idempotencyKey` of the
+   * execution context) and carries out one call per key, so a second call under it changes
+   * nothing more. An interrupted run of such an operation is run again under its key, where
+   * every other interrupted changing call is never made a second time. An operation of a
+   * Connection sets it where its entry names the header that carries the key to the outside
+   * system.
+   */
+  repeatsUnderKey?: true;
   /** The release's own policy value. Without one the instance default of the effect applies. */
   defaultPolicy?: PolicyValue;
   /**
@@ -168,6 +184,15 @@ interface OperationDefinitionBase<Input, Output> {
    * `policyFloor` of the policy's input.
    */
   policyFloor?: PolicyValue;
+  /**
+   * A floor of one call, where it depends on where the call came from and not on the operation
+   * alone: a tool an agent is given for the subject of its conversation stands for an operation
+   * on that asset. Asked with the policy, and again before a call that waited is executed. The
+   * stricter of it and `policyFloor` holds.
+   */
+  policyFloorOf?(
+    origin: OperationOrigin
+  ): PolicyValue | undefined | Promise<PolicyValue | undefined>;
   /**
    * The answer holds a secret that is shown once, such as a new key. The run keeps no output,
    * so a repeated call with the same key answers OUTPUT_NOT_RETAINED and never the secret
@@ -191,6 +216,13 @@ interface OperationDefinitionBase<Input, Output> {
   auth: "user" | "principal";
   inputSchema: z.ZodType<Input>;
   outputSchema: z.ZodType;
+  /**
+   * The input and the output as JSON Schema, where the operation was described by one: an
+   * operation of a Connection carries what its outside system listed. A reader that shows an
+   * operation to a person or a model takes these before it derives one from `inputSchema`.
+   */
+  inputJsonSchema?: JsonObject;
+  outputJsonSchema?: JsonObject;
   resource(input: Input): OperationResource | undefined;
   /**
    * What the policy is asked about, where the resource does not say it all: the Namespace of

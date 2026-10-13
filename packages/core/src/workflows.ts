@@ -724,12 +724,14 @@ export const WORKFLOW_RUN_DATASET_AUDIT_EVENTS = {
 /**
  * The job kinds of the engine. `execute_step` runs one step run and queues what follows it.
  * `fire_schedule` starts the run of a due `schedule` trigger and queues the next due time.
- * `delete_datasets` removes the objects of the datasets of a run that were marked deleted.
+ * `prune_data` removes, once a day, the values of the runs that ended longer ago than the
+ * release keeps step data. `delete_datasets` removes the objects of the datasets of a run that were marked deleted.
  * Spec: Engine on the shared job executor; Lifetime, rights, audit and limits.
  */
 export const WORKFLOW_RUN_JOB_KINDS = {
   executeStep: "workflow_run.execute_step",
   fireSchedule: "workflow_run.fire_schedule",
+  pruneData: "workflow_run.prune_data",
   deleteDatasets: "workflow_run.delete_datasets"
 } as const;
 

@@ -237,11 +237,20 @@ export function useDataStoreWorld(prefix: string) {
   }
 
   /** Executes one operation of a store, with its input read by the operation's schema. */
-  async function call(world: World, verb: DataStoreOperationVerb, input: unknown) {
+  async function call(
+    world: World,
+    verb: DataStoreOperationVerb,
+    input: unknown,
+    /** The key the call path hands a changing call that carried one. */
+    idempotencyKey?: string
+  ) {
     const operation = required(
       await world.dataStores.operationSource.resolve(dataStoreOperationName("findings", verb))
     );
-    return operation.execute(operation.inputSchema.parse(input), callContext);
+    return operation.execute(operation.inputSchema.parse(input), {
+      ...callContext,
+      ...(idempotencyKey === undefined ? {} : { idempotencyKey })
+    });
   }
 
   /** A connection of the test's own, as the platform's role or as a role it gave a password. */

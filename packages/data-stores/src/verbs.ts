@@ -7,11 +7,13 @@ import {
   AppError,
   type DataStoreOperationVerb,
   type DataStoreRecord,
+  type JsonObject,
   type OperationChangeClass,
   type OperationEffect,
   type OperationResource
 } from "@vivd-catalyst/core";
 import type { z } from "zod";
+import { claimCall, recordCall, type KeyedCall } from "./calls";
 import type { DataStoreDefinition } from "./definition";
 import type { DataStoreRuntime } from "./runtime";
 
@@ -30,6 +32,8 @@ interface VerbCall {
   store: PublishedStore;
   /** The database of the store as its app role, cancelled with the call. */
   target: PostgresTarget;
+  /** The call as the store records it, where it carried an idempotency key. */
+  keyed?: KeyedCall;
 }
 
 /**
@@ -51,6 +55,17 @@ export interface StoreVerb {
   run(call: VerbCall, input: unknown): Promise<unknown>;
 }
 
+/**
+ * A read of the rows of a store that no agent and no Workflow step is offered: the page of a
+ * store calls it. It is named `data_store.<id>.<part>` and asks `data_store.read`.
+ */
+export interface StoreRead {
+  part: string;
+  inputSchema: z.ZodType;
+  outputSchema: z.ZodType;
+  run(call: VerbCall, input: unknown): Promise<unknown>;
+}
+
 export function tableUnknown(table: string): AppError {
   return new AppError("VALIDATION_FAILED", `The store has no table '${table}'`, {
     reason: "table_unknown"
@@ -67,24 +82,49 @@ export class CommitOutcomeUnknown extends Error {
   }
 }
 
+/** A call under a key the store has a record of: what the first call was answered. */
+export class AnsweredBefore extends Error {
+  constructor(readonly outcome: JsonObject) {
+    super("The store holds the answer of an earlier call under this key");
+  }
+}
+
 /**
- * Runs the whole of a changing verb as one transaction. A failure inside `work` rolls all of
- * it back and leaves here as it is. One that comes once `work` has ended leaves as
- * `CommitOutcomeUnknown`: only that one may have changed the store.
+ * Runs the whole of a changing verb as one transaction and answers what `work` answers. A
+ * failure inside `work` rolls all of it back and leaves here as it is. One that comes once
+ * `work` has ended leaves as `CommitOutcomeUnknown`: only that one may have changed the store.
+ *
+ * A call that carried a key takes the key first, which a call under the same key at the same
+ * moment waits for. Where the store has a record of the key the transaction ends with nothing
+ * written and the answer of the first call leaves as `AnsweredBefore`. Otherwise the key is
+ * recorded with the answer, in this transaction: the rows and the record are kept together.
  */
-export async function changeWhole<Result>(
-  runtime: DataStoreRuntime,
+export async function changeWhole<Result extends JsonObject>(
+  { runtime, keyed }: Pick<VerbCall, "runtime" | "keyed">,
   input: PostgresChangeInput,
   work: (sql: PostgresChangeStatements) => Promise<Result>
 ): Promise<Result> {
   let worked = false;
+  // Whatever a change throws leaves it as a failure of the database.
+  let before: JsonObject | undefined;
+  let reused: AppError | undefined;
   try {
     return await runtime.server.executor.change(input, async (sql) => {
+      if (keyed) {
+        before = await claimCall(sql, keyed).catch((error: unknown) => {
+          if (error instanceof AppError) reused = error;
+          throw error;
+        });
+        if (before) throw new AnsweredBefore(before);
+      }
       const result = await work(sql);
+      if (keyed) await recordCall(sql, keyed, result);
       worked = true;
       return result;
     });
   } catch (error) {
+    if (before) throw new AnsweredBefore(before);
+    if (reused) throw reused;
     throw worked ? new CommitOutcomeUnknown(error) : error;
   }
 }

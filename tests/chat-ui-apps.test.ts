@@ -25,7 +25,6 @@ import {
   appRowRoute,
   appState,
   AppsHostProvider,
-  AppsPageView,
   AppViewFrame,
   NO_APP_RIGHTS,
   PublishDialog,
@@ -49,7 +48,6 @@ import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harn
 // exist, and the route table had no row for it.
 
 const { t } = createTranslationContext("en");
-const de = createTranslationContext("de").t;
 
 const render = (node: ReactNode, locale: "en" | "de" = "en") =>
   renderToStaticMarkup(createElement(TranslationProvider, { locale, children: node }));
@@ -57,7 +55,6 @@ const render = (node: ReactNode, locale: "en" | "de" = "en") =>
 const workspace = { id: "cw_1", name: "Nordlicht Beratung", emoji: null };
 const ALL: AppRights = { read: true, write: true, publish: true, delete: true };
 const WRITER: AppRights = { read: true, write: true, publish: false, delete: false };
-const now = new Date("2026-10-11T12:00:00.000Z");
 
 function summary(overrides: Partial<AssetSummary> = {}): AssetSummary {
   return {
@@ -73,30 +70,6 @@ function summary(overrides: Partial<AssetSummary> = {}): AssetSummary {
     updatedAt: "2026-10-10T12:00:00.000Z",
     ...overrides
   };
-}
-
-function list(rows: readonly AssetSummary[] | undefined, overrides = {}) {
-  return {
-    rows,
-    failed: false,
-    hasMore: false,
-    loadingMore: false,
-    loadMore() {},
-    retry() {},
-    ...overrides
-  };
-}
-
-function appsPage(rows: readonly AssetSummary[] | undefined, rights: AppRights, extra = {}) {
-  return createElement(AppsPageView, {
-    workspace,
-    rights,
-    list: list(rows, extra),
-    now,
-    onOpenRoute() {},
-    onAction() {},
-    onBuildInChat() {}
-  });
 }
 
 describe("addresses of the Apps area", () => {
@@ -252,113 +225,6 @@ describe("what a reader may do with Apps", () => {
   });
 });
 
-describe("the Apps list", () => {
-  it("shows name, description, workspace, state and the menu of each App", () => {
-    const markup = render(
-      appsPage(
-        [
-          summary(),
-          summary({
-            name: "urlaubsplaner",
-            title: "Urlaubsplaner",
-            description: undefined,
-            publishedRevision: undefined,
-            revision: 1,
-            draftRevision: 1
-          })
-        ],
-        ALL
-      )
-    );
-
-    expect(markup).toContain(">Apps</h1>");
-    expect(markup).toContain("Angebotsrechner");
-    expect(markup).toContain("Rechnet ein Angebot aus Tagessatz und Tagen.");
-    // The list is the one of the open workspace: no row names it.
-    expect(markup).not.toContain("Nordlicht Beratung");
-    expect(markup).toContain("Published · revision 2");
-    expect(markup).toContain("Unpublished changes");
-    expect(markup).toContain('href="/w/cw_1/apps/angebotsrechner"');
-    expect(markup).toContain('aria-label="Actions for Angebotsrechner"');
-    // An App without a description goes by its id, and one without a publish opens its draft.
-    expect(markup).toContain(">urlaubsplaner</code>");
-    expect(markup).toContain("Draft only");
-    expect(markup).toContain('href="/w/cw_1/apps/urlaubsplaner/edit"');
-  });
-
-  it("keeps the draft's news from a reader who does not write", () => {
-    const markup = render(appsPage([summary()], { ...NO_APP_RIGHTS, publish: true }));
-
-    expect(markup).toContain("Published · revision 2");
-    expect(markup).not.toContain("Unpublished changes");
-  });
-
-  it("shows whoever only uses Apps the App, without its revision, its id or its workspace", () => {
-    const markup = render(
-      appsPage(
-        [summary(), summary({ name: "urlaubsplaner", title: "Urlaubsplaner", description: "" })],
-        NO_APP_RIGHTS
-      )
-    );
-
-    expect(markup).toContain("Angebotsrechner");
-    expect(markup).toContain("Rechnet ein Angebot aus Tagessatz und Tagen.");
-    expect(markup).toContain("Urlaubsplaner");
-    expect(markup).toContain('href="/w/cw_1/apps/urlaubsplaner"');
-    expect(markup).not.toContain("Published");
-    expect(markup).not.toContain("<code");
-    expect(markup).not.toContain("Nordlicht Beratung");
-    // The right to read the record alone makes nobody a builder.
-    expect(render(appsPage([summary()], { ...NO_APP_RIGHTS, read: true }))).not.toContain(
-      "Published"
-    );
-  });
-
-  it("says to everybody that an App has nothing published", () => {
-    const markup = render(
-      appsPage([summary({ publishedRevision: undefined, draftRevision: undefined })], NO_APP_RIGHTS)
-    );
-
-    expect(markup).toContain("Draft only");
-  });
-
-  it("tells a builder how an App comes to be, with the way into the chat and two starts", () => {
-    const markup = render(appsPage([], ALL));
-
-    expect(markup).toContain(
-      "No apps in this workspace yet. Describe a tool in chat and the agent builds it as a page; save it as an app so everyone here can use it."
-    );
-    expect(markup).toContain(">Build an app in chat</button>");
-    expect(markup).toContain("A form that computes…");
-    expect(markup).toContain("A dashboard for…");
-  });
-
-  it("tells everybody else who can add one, without an action", () => {
-    const markup = render(appsPage([], NO_APP_RIGHTS));
-
-    expect(markup).toContain("No apps yet. A builder of this workspace can add one.");
-    expect(markup).not.toContain("Build an app in chat");
-    expect(markup).not.toContain("A form that computes…");
-  });
-
-  it("offers the next page while the instance holds more, and the way to ask again", () => {
-    expect(render(appsPage([summary()], ALL, { hasMore: true }))).toContain(">Show more</button>");
-    const failed = render(appsPage(undefined, ALL, { failed: true }));
-
-    expect(failed).toContain("The apps could not be loaded.");
-    expect(failed).toContain(">Try again</button>");
-  });
-
-  it("is written in German as well", () => {
-    const markup = render(appsPage([], ALL), "de");
-
-    expect(markup).toContain(de("apps.empty"));
-    expect(markup).toContain(">App im Chat bauen</button>");
-    expect(de("apps.empty")).not.toBe(t("apps.empty"));
-    expect(render(appsPage([summary()], ALL), "de")).toContain("Veröffentlicht · Revision 2");
-  });
-});
-
 describe("an open App (layout 2)", () => {
   const frame = (
     rights: AppRights,
@@ -497,7 +363,7 @@ describe("the draft of an App (layout 3)", () => {
     expect(markup).not.toContain("revision 3");
   });
 
-  it("offers the files of the draft beside its preview", () => {
+  it("offers the views of the draft as tabs under its head, the open one selected", () => {
     const markup = render(
       createElement(AppEditFrame, {
         name: "Angebotsrechner",
@@ -512,8 +378,14 @@ describe("the draft of an App (layout 3)", () => {
       })
     );
 
-    expect(markup).toContain("Preview");
-    expect(markup).toContain("Files");
+    const tabs = [...markup.matchAll(/<button[^>]*role="tab"[^>]*>([^<]*)<\/button>/gu)];
+    expect(tabs.map((tab) => tab[1])).toEqual(["Preview", "Files", "Actions"]);
+    expect(tabs[0]?.[0]).toContain('aria-selected="true"');
+    expect(markup).toContain('role="tabpanel"');
+    expect(markup).not.toContain('role="radio"');
+    // The tabs stand under the head, before the view they show.
+    expect(markup.indexOf('role="tablist"')).toBeGreaterThan(markup.indexOf("</header>"));
+    expect(markup.indexOf("the draft")).toBeGreaterThan(markup.indexOf('role="tablist"'));
   });
 
   it("says in its own words that a revision lost its files or is too large to be held", () => {
@@ -780,7 +652,11 @@ describe("Save as app", () => {
       })
     );
 
-    expect(markup).toContain("An app with this ID already exists on this instance.");
+    expect(markup).toContain(
+      "An app with this ID already exists. Choose another ID to save this page as a new app."
+    );
     expect(markup).toContain('aria-invalid="true"');
+    // Nothing is offered about an App the reader may not write.
+    expect(markup.match(/<button/gu)).toHaveLength(3);
   });
 });

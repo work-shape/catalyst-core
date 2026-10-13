@@ -3,14 +3,14 @@ import { defineTranslations } from "./translation-area";
 export const connections = defineTranslations({
   en: {
     "connections.description":
-      "Connections come from the release config and cannot be changed here.",
+      "The operator of this instance sets up its connections. They cannot be changed here.",
     "connections.disabled": "Disabled",
     "connections.empty": "No connections yet. A connection holds the access to an outside system.",
     "connections.healthFailed": "Failed",
     "connections.healthFailedNext": "Test again. If it fails again, ask the operator.",
     "connections.healthFailedText": "The test failed for a reason the instance does not name.",
     "connections.healthNetworkDeniedNext":
-      "The operator adds the host to egress.allow in the release config and restarts the instance. Then test again.",
+      "The operator lets the instance reach this host and restarts it. Then test again.",
     "connections.healthNotConfiguredNext":
       "The operator supplies the credential in the instance's environment and restarts the instance. Then test again.",
     "connections.healthSecretUnreadableNext":
@@ -18,8 +18,17 @@ export const connections = defineTranslations({
     "connections.healthUnauthorizedNext":
       "The operator sets a new credential in the instance's environment and restarts the instance. Then test again.",
     "connections.healthUnavailableNext":
-      "Check the address under Settings. It is changed in the release config.",
+      "Check the address under Settings. The operator of this instance can change it.",
     "connections.statusDescription": "Whether the instance reaches the outside system.",
+    "connections.accessTitle": "Who may use it",
+    "connections.accessDescription":
+      "People and service principals with a right on this Connection itself. Rights on a whole workspace or Namespace are on the Access page.",
+    "connections.accessEmpty": "Nobody was given this Connection by itself.",
+    "connections.accessFailed": "Who may use this Connection could not be loaded.",
+    "connections.accessServicePrincipal": "Service principal",
+    "connections.accessPrincipalDisabled": "Disabled",
+    "connections.accessUnknownPerson": "A person you cannot see",
+    "connections.accessUnknownPrincipal": "A service principal that no longer exists",
     "connections.agentsTitle": "Used by",
     "connections.agentsDescription": "The agents that carry a tool of this connection.",
     "connections.agentsEmpty": "No agent carries a tool of this connection.",
@@ -48,12 +57,12 @@ export const connections = defineTranslations({
     "connections.exposureWorkflow": "Workflows",
     "connections.healthNetworkDenied": "Network denied",
     "connections.healthNetworkDeniedText":
-      "The instance may not reach this address. Its host is not in the list of allowed outside addresses in release config (egress.allow).",
+      "The instance may not reach this address. Its host is not among the outside addresses the operator allowed.",
     "connections.healthNeverTested": "Not tested",
     "connections.healthNeverTestedText": "This connection has not been tested yet.",
     "connections.healthNotConfigured": "Not configured",
     "connections.healthNotConfiguredText":
-      "The credential of this connection is missing. Release config names where it comes from. Until it is there, no call reaches the outside system.",
+      "The credential of this connection is missing. Until the operator supplies it, no call reaches the outside system.",
     "connections.healthReady": "Ready",
     "connections.healthReadyText": "The outside system answered the test.",
     "connections.healthSecretUnreadable": "Credential unreadable",
@@ -90,10 +99,10 @@ export const connections = defineTranslations({
     "connections.statusAwaitingDiscoveryText":
       "The instance has not read this operation from the outside system yet. It cannot be called until then.",
     "connections.statusDisabled": "Disabled",
-    "connections.statusDisabledText": "Switched off in release config.",
+    "connections.statusDisabledText": "Switched off by the operator of this instance.",
     "connections.statusNeedsReview": "Needs review",
     "connections.statusNeedsReviewText":
-      "The outside system now describes this operation differently than was accepted. It cannot be called until release config accepts the new description.",
+      "The outside system now describes this operation differently than was accepted. It cannot be called until the operator accepts the new description.",
     "connections.statusNeedsReviewFingerprint": "New fingerprint:",
     "connections.statusReady": "Ready",
     "connections.statusTitle": "Status",
@@ -121,23 +130,32 @@ export const connections = defineTranslations({
   },
   de: {
     "connections.description":
-      "Verbindungen kommen aus der Release-Konfiguration und lassen sich hier nicht ändern.",
+      "Der Betreiber dieser Instanz richtet ihre Verbindungen ein. Hier lassen sie sich nicht ändern.",
     "connections.healthFailed": "Fehlgeschlagen",
     "connections.healthFailedText":
       "Der Test ist aus einem Grund fehlgeschlagen, den die Instanz nicht nennt.",
     "connections.healthFailedNext":
-      "Testen Sie erneut. Schlägt der Test wieder fehl, wenden Sie sich an den Betreiber.",
+      "Teste erneut. Schlägt der Test wieder fehl, wende dich an den Betreiber.",
     "connections.healthNetworkDeniedNext":
-      "Der Betreiber trägt den Host in der Release-Konfiguration unter egress.allow ein und startet die Instanz neu. Testen Sie danach erneut.",
+      "Der Betreiber erlaubt der Instanz diesen Host und startet sie neu. Teste danach erneut.",
     "connections.healthNotConfiguredNext":
-      "Der Betreiber stellt die Zugangsdaten in der Umgebung der Instanz bereit und startet die Instanz neu. Testen Sie danach erneut.",
+      "Der Betreiber stellt die Zugangsdaten in der Umgebung der Instanz bereit und startet die Instanz neu. Teste danach erneut.",
     "connections.healthSecretUnreadableNext":
-      "Der Betreiber stellt den Secret-Store-Schlüssel wieder her, mit dem die Zugangsdaten gespeichert wurden, oder stellt die Zugangsdaten in der Umgebung der Instanz erneut bereit, und startet die Instanz neu. Testen Sie danach erneut.",
+      "Der Betreiber stellt den Secret-Store-Schlüssel wieder her, mit dem die Zugangsdaten gespeichert wurden, oder stellt die Zugangsdaten in der Umgebung der Instanz erneut bereit, und startet die Instanz neu. Teste danach erneut.",
     "connections.healthUnauthorizedNext":
-      "Der Betreiber setzt neue Zugangsdaten in der Umgebung der Instanz und startet die Instanz neu. Testen Sie danach erneut.",
+      "Der Betreiber setzt neue Zugangsdaten in der Umgebung der Instanz und startet die Instanz neu. Teste danach erneut.",
     "connections.healthUnavailableNext":
-      "Prüfen Sie die Adresse unter Einstellungen. Sie wird in der Release-Konfiguration geändert.",
+      "Prüfe die Adresse unter Einstellungen. Ändern kann sie der Betreiber dieser Instanz.",
     "connections.statusDescription": "Ob die Instanz das externe System erreicht.",
+    "connections.accessTitle": "Wer sie verwenden darf",
+    "connections.accessDescription":
+      "Personen und Service Principals mit einem Recht auf dieser Verbindung selbst. Rechte auf einem ganzen Arbeitsbereich oder Namespace stehen auf der Seite Zugriff.",
+    "connections.accessEmpty": "Niemand hat diese Verbindung einzeln erhalten.",
+    "connections.accessFailed": "Wer diese Verbindung verwenden darf, konnte nicht geladen werden.",
+    "connections.accessServicePrincipal": "Service Principal",
+    "connections.accessPrincipalDisabled": "Deaktiviert",
+    "connections.accessUnknownPerson": "Eine Person, die du nicht sehen kannst",
+    "connections.accessUnknownPrincipal": "Ein Service Principal, den es nicht mehr gibt",
     "connections.agentsTitle": "Verwendet von",
     "connections.agentsDescription": "Die Agenten, die ein Tool dieser Verbindung führen.",
     "connections.agentsEmpty": "Kein Agent führt ein Tool dieser Verbindung.",
@@ -169,12 +187,12 @@ export const connections = defineTranslations({
     "connections.exposureWorkflow": "Workflows",
     "connections.healthNetworkDenied": "Netzwerk gesperrt",
     "connections.healthNetworkDeniedText":
-      "Die Instanz darf diese Adresse nicht erreichen. Ihr Host steht nicht in der Liste der erlaubten externen Adressen der Release-Konfiguration (egress.allow).",
+      "Die Instanz darf diese Adresse nicht erreichen. Ihr Host gehört nicht zu den externen Adressen, die der Betreiber erlaubt hat.",
     "connections.healthNeverTested": "Nicht getestet",
     "connections.healthNeverTestedText": "Diese Verbindung wurde noch nicht getestet.",
     "connections.healthNotConfigured": "Nicht konfiguriert",
     "connections.healthNotConfiguredText":
-      "Die Zugangsdaten dieser Verbindung fehlen. Die Release-Konfiguration nennt, woher sie kommen. Solange sie fehlen, erreicht kein Aufruf das externe System.",
+      "Die Zugangsdaten dieser Verbindung fehlen. Bis der Betreiber sie bereitstellt, erreicht kein Aufruf das externe System.",
     "connections.healthReady": "Bereit",
     "connections.healthReadyText": "Das externe System hat auf den Test geantwortet.",
     "connections.healthSecretUnreadable": "Zugangsdaten nicht lesbar",
@@ -211,10 +229,10 @@ export const connections = defineTranslations({
     "connections.statusAwaitingDiscoveryText":
       "Die Instanz hat diese Operation noch nicht vom externen System gelesen. Bis dahin kann sie nicht aufgerufen werden.",
     "connections.statusDisabled": "Deaktiviert",
-    "connections.statusDisabledText": "In der Release-Konfiguration abgeschaltet.",
+    "connections.statusDisabledText": "Vom Betreiber dieser Instanz abgeschaltet.",
     "connections.statusNeedsReview": "Prüfung nötig",
     "connections.statusNeedsReviewText":
-      "Das externe System beschreibt diese Operation jetzt anders als akzeptiert. Sie kann erst wieder aufgerufen werden, wenn die Release-Konfiguration die neue Beschreibung akzeptiert.",
+      "Das externe System beschreibt diese Operation jetzt anders als akzeptiert. Sie kann erst wieder aufgerufen werden, wenn der Betreiber die neue Beschreibung akzeptiert.",
     "connections.statusNeedsReviewFingerprint": "Neuer Fingerabdruck:",
     "connections.statusReady": "Bereit",
     "connections.statusTitle": "Status",
@@ -226,8 +244,8 @@ export const connections = defineTranslations({
     "connections.testHeld":
       "Der Test wartet auf eine Freigabe im Eingang. Er ist noch nicht gelaufen.",
     "connections.testNotAllowed":
-      "Sie können diese Verbindung lesen. Zum Testen brauchen Sie das Recht, Verbindungen der Instanz zu ändern.",
-    "connections.testRefused": "Sie dürfen diese Verbindung nicht testen. Lesen können Sie sie.",
+      "Du kannst diese Verbindung lesen. Zum Testen brauchst du das Recht, Verbindungen der Instanz zu ändern.",
+    "connections.testRefused": "Du darfst diese Verbindung nicht testen. Lesen kannst du sie.",
     "connections.toolsEmpty":
       "Keine Verbindung, die du lesen darfst, bietet Agenten eine Operation an.",
     "connections.toolsHeld": "Werkzeuge von Verbindungen, die dieser Agent führt",

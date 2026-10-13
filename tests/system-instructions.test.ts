@@ -56,4 +56,25 @@ describe("system instructions", () => {
     expect(content).toContain("call read_skill");
     expect(content).not.toContain("# Support Review");
   });
+
+  it("tells the agent the subject of a conversation with only the tools and skills it is offered", () => {
+    const content = createSystemInstructions("Use customer workflow rules.", "en", {
+      subject: {
+        subject: { kind: "data_store", name: "visit-log" },
+        toolNames: ["platform.assets.get", "read_skill"],
+        skillNames: ["workflow-authoring"]
+      }
+    });
+
+    expect(content).toContain("This conversation is about one data store, named 'visit-log'.");
+    expect(content).toContain(
+      "Read it with platform.assets.get before you answer a question about it or change it."
+    );
+    expect(content).toContain("call read_skill for 'workflow-authoring'");
+    // A conversation that may not save is not told of a save.
+    expect(content).not.toContain("platform.assets.put");
+
+    const without = createSystemInstructions("Use customer workflow rules.", "en");
+    expect(without).not.toContain("Subject of this conversation:");
+  });
 });

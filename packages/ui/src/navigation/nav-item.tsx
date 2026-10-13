@@ -160,6 +160,13 @@ const trailingSlotOutOfFlowClassName = cn(
 export interface NavGroupProps extends HTMLAttributes<HTMLDivElement> {
   /** The group's name in sentence case. Without it the items stand as an unnamed group. */
   label?: string;
+  /**
+   * One small action of the group at the right end of its label, such as an `IconButton` of
+   * size `sm` that adds an item. It shows while the pointer is over the group, while the
+   * keyboard is in the action and on a screen without hover, and keeps its room otherwise, so
+   * the label never moves. Needs a `label`; a collapsed sidebar and a group that folds show none.
+   */
+  labelAction?: ReactNode;
   /** The label folds the group away and shows a caret. */
   collapsible?: boolean;
   open?: boolean;
@@ -184,6 +191,7 @@ const pinnedGroupLabelClassName =
 export function NavGroup({
   className,
   label,
+  labelAction,
   collapsible = false,
   open,
   defaultOpen = true,
@@ -197,7 +205,11 @@ export function NavGroup({
     useContext(NavGroupLabelPinnedContext) && pinnedGroupLabelClassName
   );
   const labelId = useId();
-  const groupClassName = cn("grid min-w-0 gap-0.5", collapsed && "justify-items-center", className);
+  const groupClassName = cn(
+    "group/nav-group grid min-w-0 gap-0.5",
+    collapsed && "justify-items-center",
+    className
+  );
 
   // A collapsed sidebar has no room for a label, so a folded group shows its icons too.
   if (label === undefined || collapsed) {
@@ -210,9 +222,26 @@ export function NavGroup({
   if (!collapsible) {
     return (
       <div role="group" aria-labelledby={labelId} className={groupClassName} {...props}>
-        <span id={labelId} data-nav-group-label="" className={labelClassName}>
-          {label}
-        </span>
+        {labelAction === undefined ? (
+          <span id={labelId} data-nav-group-label="" className={labelClassName}>
+            {label}
+          </span>
+        ) : (
+          <div
+            data-nav-group-label=""
+            className={cn(labelClassName, "justify-between gap-1 pr-0.5")}
+          >
+            <span id={labelId} className="min-w-0 truncate">
+              {label}
+            </span>
+            <span
+              data-nav-group-action=""
+              className="flex shrink-0 opacity-0 transition-opacity group-hover/nav-group:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100"
+            >
+              {labelAction}
+            </span>
+          </div>
+        )}
         {children}
       </div>
     );

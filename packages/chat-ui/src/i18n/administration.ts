@@ -138,7 +138,7 @@ export const administration = defineTranslations({
       "The Pages of a conversation and the sandboxed frame that shows them.",
     "modules.connections": "Connections",
     "modules.connectionsDescription":
-      "Connections to outside systems: the asset kind, its rights and its list in Build.",
+      "Connections to outside systems: the asset kind, its rights and its list in Studio.",
     "modules.workflows": "Workflows",
     "modules.workflowsDescription":
       "Workflows: steps that run on a schedule or a manual start, and their runs.",
@@ -316,8 +316,8 @@ export const administration = defineTranslations({
       "Angehängte Dokumente: ihre Verarbeitung, die Werkzeuge, die sie lesen, und ihre Seitenvorschau.",
     "modules.resources": "Inhalte",
     "modules.resourcesDescription": "Der Bereich Inhalte einer Unterhaltung.",
-    "modules.assetManagement": "Agenten und Fähigkeiten verwalten",
-    "modules.assetManagementDescription": "Agenten und Fähigkeiten in der Oberfläche ändern.",
+    "modules.assetManagement": "Agenten und Skills verwalten",
+    "modules.assetManagementDescription": "Agenten und Skills in der Oberfläche ändern.",
     "modules.userInvitations": "Einladungen",
     "modules.userInvitationsDescription":
       "Benutzer per E-Mail-Link einladen, über den sie ein Passwort festlegen.",
@@ -326,7 +326,7 @@ export const administration = defineTranslations({
       "Die Pages einer Unterhaltung und der abgeschirmte Rahmen, der sie anzeigt.",
     "modules.connections": "Verbindungen",
     "modules.connectionsDescription":
-      "Verbindungen zu externen Systemen: die Asset-Art, ihre Rechte und ihre Liste in Bauen.",
+      "Verbindungen zu externen Systemen: die Asset-Art, ihre Rechte und ihre Liste im Studio.",
     "modules.workflows": "Workflows",
     "modules.workflowsDescription":
       "Workflows: Schritte, die nach Zeitplan oder von Hand starten, und ihre Läufe.",
@@ -345,9 +345,9 @@ export const administration = defineTranslations({
     updatePassword: "Passwort aktualisieren",
     userListView: "Liste",
     userListViewChoice: "Ansicht",
-    userRightAgentSkillsApprove: "Änderungen an Fähigkeiten freigeben",
+    userRightAgentSkillsApprove: "Änderungen an Skills freigeben",
     userRightAgentSkillsApproveDescription:
-      "Vorgeschlagene Änderungen an Fähigkeiten übernehmen, ablehnen und rückgängig machen sowie den Verlauf sehen.",
+      "Vorgeschlagene Änderungen an Skills übernehmen, ablehnen und rückgängig machen sowie den Verlauf sehen.",
     userRightAgentModelsManage: "Modelleinstellungen der Agenten verwalten",
     userRightAgentModelsManageDescription:
       "Modell, Denkaufwand und Schnellmodus je Agent festlegen.",
@@ -357,9 +357,9 @@ export const administration = defineTranslations({
     userRightAuditView: "Auditprotokoll ansehen",
     userRightAuditViewDescription: "Sehen, wer in dieser Instanz was geändert hat.",
     userRightConfigAssetsRead: "Agenten-Konfiguration ansehen",
-    userRightConfigAssetsReadDescription: "Agenten und Fähigkeiten in der Administration öffnen.",
+    userRightConfigAssetsReadDescription: "Agenten und Skills in der Administration öffnen.",
     userRightConfigAssetsWrite: "Agenten-Konfiguration bearbeiten",
-    userRightConfigAssetsWriteDescription: "Agenten und Fähigkeiten direkt ändern.",
+    userRightConfigAssetsWriteDescription: "Agenten und Skills direkt ändern.",
     userRightSourceGranted: "einzeln vergeben",
     userRightSourceRevoked: "einzeln entzogen",
     userRightSourceRole: "über Rolle",

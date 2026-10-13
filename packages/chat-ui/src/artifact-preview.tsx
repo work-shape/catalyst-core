@@ -16,7 +16,7 @@ import "@univerjs/sheets-drawing-ui/lib/index.css";
 import "@univerjs/ui/facade";
 import type { ApiClient } from "@vivd-catalyst/api-client";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { Spinner } from "@vivd-catalyst/ui";
+import { SegmentedControl, SegmentedControlItem, Spinner } from "@vivd-catalyst/ui";
 import {
   LiveArtifactPreview,
   shouldUseLiveArtifactPreviewState as shouldUseLiveArtifactPreviewStateValue
@@ -27,11 +27,14 @@ import {
   NativeFilePreview
 } from "./artifact-preview-shell";
 import { useConversationFileBlob } from "./conversation-file-content";
+import { resolveFileType } from "./file-type";
 import { TranslationProvider, useTranslation } from "./i18n";
 import { MarkdownArtifact } from "./markdown-text";
 import { workbookToUniverPreview, type SpreadsheetWorkbookPreview } from "./spreadsheet-preview";
 import { SPREADSHEET_VISUAL_COMPONENT, SpreadsheetVisualLayer } from "./spreadsheet-visual-layer";
+import { StoredFileView } from "./stored-file-view";
 import type { SpreadsheetVisual, SpreadsheetVisualAnchor } from "./spreadsheet-visuals";
+import { RenderedHtmlDisplay } from "./rendered-html-display";
 import {
   artifactDisplayFilename,
   getArtifactFileType,
@@ -173,7 +176,13 @@ function BlobArtifactPreview({
   return (
     <ArtifactPreviewFrame>
       {previewKind === "markdown" ? <MarkdownArtifactPreview blob={state.blob} /> : null}
-      {previewKind === "text" ? <TextArtifactPreview blob={state.blob} /> : null}
+      {previewKind === "text" ? (
+        <TextArtifactPreview
+          blob={state.blob}
+          filename={artifactDisplayFilename(artifact)}
+          html={isHtmlFile(artifact)}
+        />
+      ) : null}
     </ArtifactPreviewFrame>
   );
 }
@@ -186,14 +195,71 @@ export function SpreadsheetFilePreview({ blob }: { blob: Blob }) {
   );
 }
 
-function TextArtifactPreview({ blob }: { blob: Blob }) {
+/** Whether a stored text file is an HTML page: by its type, or by what its name ends on. */
+export function isHtmlFile(file: { filename?: string; mimeType?: string }): boolean {
+  return (
+    file.mimeType?.split(";")[0]?.trim().toLowerCase() === "text/html" ||
+    /\.html?$/iu.test(file.filename ?? "")
+  );
+}
+
+type TextFileView = "preview" | "source";
+
+/**
+ * A stored text file in the code view every stored file is read in. An HTML file opens as the
+ * page it is, in the frame and under the policy of a generated view (view-document.ts): no
+ * origin, so nothing of the app's cookies or storage, and no network. A switch shows its text.
+ */
+function TextArtifactPreview({
+  blob,
+  filename,
+  html
+}: {
+  blob: Blob;
+  filename: string;
+  html: boolean;
+}) {
   const { t } = useTranslation();
   const text = useBlobText(blob);
+  const [view, setView] = useState<TextFileView>("preview");
 
+  if (text === undefined) {
+    return (
+      <div role="status" className="flex h-full items-center justify-center">
+        <Spinner size="sm" />
+        <span className="sr-only">{t("artifactPreviewLoading")}</span>
+      </div>
+    );
+  }
+  if (!html) {
+    return <StoredFileView className="h-full" path={filename} text={text} />;
+  }
+  const choice = (
+    <SegmentedControl
+      size="sm"
+      label={t("artifactViewChoice")}
+      value={view}
+      onValueChange={(next) => setView(next === "source" ? "source" : "preview")}
+    >
+      <SegmentedControlItem value="preview">{t("artifactViewPreview")}</SegmentedControlItem>
+      <SegmentedControlItem value="source">{t("artifactViewSource")}</SegmentedControlItem>
+    </SegmentedControl>
+  );
+  if (view === "source") {
+    return <StoredFileView className="h-full" path={filename} text={text} leading={choice} />;
+  }
   return (
-    <pre className="h-full overflow-auto bg-background p-4 font-mono text-xs leading-5 text-foreground">
-      {text ?? t("artifactPreviewLoading")}
-    </pre>
+    <div className="flex h-full min-h-0 flex-col" data-testid="html-file-preview">
+      <div className="flex min-h-control-md shrink-0 items-center gap-2 border-b bg-card px-2 py-1">
+        {choice}
+        <span className="min-w-0 flex-1 truncate px-2 font-mono text-caption text-muted-foreground">
+          {filename}
+        </span>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <RenderedHtmlDisplay html={text} kind="html.file" mode="side_panel" title={filename} />
+      </div>
+    </div>
   );
 }
 
@@ -262,12 +328,7 @@ function SpreadsheetArtifactPreview({ blob }: { blob: Blob }) {
   if (error) {
     return (
       <ArtifactPreviewMessage
-        fileType={{
-          badge: "XLS",
-          label: "Spreadsheet",
-          className: "bg-emerald-700",
-          extension: "xlsx"
-        }}
+        fileType={resolveFileType({ kind: "spreadsheet" })}
         title={t("artifactPreviewFailed")}
         detail={error}
       />
@@ -277,12 +338,7 @@ function SpreadsheetArtifactPreview({ blob }: { blob: Blob }) {
   if (!preview) {
     return (
       <ArtifactPreviewMessage
-        fileType={{
-          badge: "XLS",
-          label: "Spreadsheet",
-          className: "bg-emerald-700",
-          extension: "xlsx"
-        }}
+        fileType={resolveFileType({ kind: "spreadsheet" })}
         title={t("artifactPreviewLoading")}
       />
     );

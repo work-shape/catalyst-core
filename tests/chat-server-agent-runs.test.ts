@@ -1240,10 +1240,12 @@ describe("agent availability per Collaboration Workspace", () => {
         items: [{ name: "shared_only" }, { name: "test_agent", displayName: "Test Agent" }]
       });
       expect(Object.keys((shared.json() as { items: object[] }).items[0]!).sort()).toEqual([
+        "connections",
         "displayName",
         "initialPrompts",
         "name",
-        "selectableModels"
+        "selectableModels",
+        "starters"
       ]);
 
       const personal = await app.call("workspaces.agents.list", {

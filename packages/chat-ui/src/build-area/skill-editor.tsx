@@ -1,6 +1,6 @@
 import { FileText, Plus, X } from "lucide-react";
-import { useState } from "react";
-import { SKILL_RESOURCE_MEDIA_TYPES } from "@vivd-catalyst/core";
+import { useState, type ReactNode } from "react";
+import { SKILL_RESOURCE_MEDIA_TYPES, SKILL_SUMMARY_MAX_LENGTH } from "@vivd-catalyst/core";
 import { Button, Field, Input, List, ListRow, Select, Textarea } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
 import { AssetEditorShell, useAssetForm, type AssetSection } from "./asset-editor-shell";
@@ -17,12 +17,15 @@ type SkillResource = SkillFormState["resources"][number];
 export function SkillEditor({
   frame,
   initialForm,
-  editable: instanceEditable
+  editable: instanceEditable,
+  badges
 }: {
   frame: BuildAssetEditorProps;
   initialForm: SkillFormState;
   /** The instance lets people change skills here. */
   editable: boolean;
+  /** What the page head says of the skill beside its title, such as who ships it. */
+  badges?: ReactNode;
 }) {
   const { t } = useTranslation();
   const state = useAssetForm(initialForm);
@@ -78,6 +81,15 @@ export function SkillEditor({
               value={form.description}
               readOnly={!editable}
               onChange={(event) => update({ description: event.target.value })}
+            />
+          </Field>
+          <Field label={t("build.skillSummary")} hint={t("build.skillSummaryHint")}>
+            <Input
+              value={form.summary}
+              maxLength={SKILL_SUMMARY_MAX_LENGTH}
+              placeholder={editable ? t("build.skillSummaryPlaceholder") : undefined}
+              readOnly={!editable}
+              onChange={(event) => update({ summary: event.target.value })}
             />
           </Field>
         </>
@@ -165,8 +177,8 @@ export function SkillEditor({
   return (
     <AssetEditorShell
       frame={{ ...frame, canWrite: editable }}
-      kindLabel={t("configSkill")}
       title={form.title.trim() || form.name}
+      badges={badges}
       sections={sections}
       control={{
         changes: countChangedFields(form, state.baseline),

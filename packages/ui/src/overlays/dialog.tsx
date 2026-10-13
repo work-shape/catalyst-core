@@ -132,7 +132,9 @@ export function ModalSurface({
       )}
       onClose={(event) => {
         // React hands on the closing of a dialog opened inside this one. Only its own counts.
-        if (event.target === event.currentTarget) {
+        // The event of a close arrives late: where the dialog was opened again meanwhile, it
+        // is the earlier close that speaks, and the dialog stays open.
+        if (event.target === event.currentTarget && !event.currentTarget.open) {
           onClose();
         }
       }}

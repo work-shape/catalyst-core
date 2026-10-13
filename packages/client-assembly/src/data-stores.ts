@@ -10,6 +10,7 @@ import {
 } from "@vivd-catalyst/core";
 import {
   createDataStores,
+  dataStorePageOperationName,
   dataStoreStateOperationName,
   dataStoresModule,
   sizeLimitBytes,
@@ -46,7 +47,19 @@ const STORE_NOT_AVAILABLE = "Data Store is not available";
  * The routes to the rows of a store. Each names the store in its path and runs as that
  * store's own operation, `data_store.<id>.<verb>`: the verb is the route's, never the caller's.
  */
-const dataStoreRoutes: RouteRegistration = (routes) => {
+const dataStoreRoutes =
+  (dataStores: DataStores): RouteRegistration =>
+  (routes) => {
+    registerStoreRoutes(routes);
+    // The list is of what the caller may read: the right is asked of each store.
+    routes.operation(apiOperations["data_stores.list"], {
+      authorize: () => ({ allowed: true }),
+      module: dataStoresModule.name,
+      execute: (_input, { access }) => dataStores.list(access)
+    });
+  };
+
+const registerStoreRoutes: RouteRegistration = (routes) => {
   const bind = (verb: DataStoreOperationVerb) => ({
     target: ({ store, ...input }: { store: string }) => ({
       operation: dataStoreOperationName(store, verb),
@@ -60,6 +73,18 @@ const dataStoreRoutes: RouteRegistration = (routes) => {
   routes.resourceOperation(apiOperations["data_stores.describe"], bind("describe"));
   routes.resourceOperation(apiOperations["data_stores.preview_rows"], bind("preview_rows"));
   // The state of a store is its own operation, which reads no row and no database of a store.
+  // The reads of a store's page, each the store's own operation of the same name.
+  const page = (part: "rows" | "value" | "used_by") => ({
+    target: ({ store, ...input }: { store: string }) => ({
+      operation: dataStorePageOperationName(store, part),
+      input
+    }),
+    right: DATA_STORE_ACTIONS.read,
+    notFound: STORE_NOT_AVAILABLE
+  });
+  routes.resourceOperation(apiOperations["data_stores.rows"], page("rows"));
+  routes.resourceOperation(apiOperations["data_stores.value"], page("value"));
+  routes.resourceOperation(apiOperations["data_stores.used_by"], page("used_by"));
   routes.resourceOperation(apiOperations["data_stores.get"], {
     target: ({ store }) => ({ operation: dataStoreStateOperationName(store), input: {} }),
     right: DATA_STORE_ACTIONS.read,
@@ -99,7 +124,7 @@ export const assembleDataStores: ModuleSeam = async (parts) => {
       jobHandlers: dataStores.jobHandlers,
       schedules: dataStores.schedules,
       jobRetries: dataStores.jobRetries,
-      routes: [dataStoreRoutes],
+      routes: [dataStoreRoutes(dataStores)],
       dataToolSources: [dataStores.toolSource],
       close: () => dataStores.close()
     })

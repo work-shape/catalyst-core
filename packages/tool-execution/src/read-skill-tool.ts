@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ConfigAssetSource } from "@vivd-catalyst/core";
+import type { ConfigAssetSource, ConversationOfferSource } from "@vivd-catalyst/core";
 import { createSkillSourceVersion } from "./skill-source-version";
 import {
   defineTool,
@@ -59,6 +59,8 @@ const readSkillOutputSchema = z.object({
 
 export interface ReadSkillToolOptions {
   assetSource: ConfigAssetSource;
+  /** Which skills the platform ships to a conversation, beside those its agent lists. */
+  conversationOffer?: ConversationOfferSource;
 }
 
 export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefinition {
@@ -75,9 +77,21 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
         return toolFailed("handler_failed", "read_skill requires an active agent run");
       }
 
+      // The skills the platform ships are offered to a conversation, and no agent's definition
+      // needs to list them. They are stored skills, read like any other.
+      const conversationId = context.toolRequest?.conversationId;
+      const offer = conversationId
+        ? await options.conversationOffer?.offerOf({
+            clientInstanceId: context.clientInstanceId,
+            conversationId
+          })
+        : undefined;
       const assets = await options.assetSource.getSnapshot();
       const agent = assets.agents.find((candidate) => candidate.name === agentName);
-      const allowedSkillNames = new Set(agent?.skillNames ?? []);
+      const allowedSkillNames = new Set([
+        ...(agent?.skillNames ?? []),
+        ...(offer?.skillNames ?? [])
+      ]);
       if (!allowedSkillNames.has(input.name)) {
         return toolFailed(
           "not_allowed",

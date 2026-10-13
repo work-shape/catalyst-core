@@ -1,6 +1,8 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import { cn, DocsAddressProvider, SkipLink, Spinner, UiRoot } from "@vivd-catalyst/ui";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { cn, DocsAddressProvider, SkipLink, Spinner, UiRoot, useExit } from "@vivd-catalyst/ui";
 import { DEFAULT_THEME_INPUTS } from "@vivd-catalyst/ui/theme";
+import { startNewAgent } from "./agents/agents-model";
+import { AgentsPage } from "./agents/agents-page";
 import { ApprovalRevisionHostProvider } from "./approvals/approval-revision-host";
 import { AssistantRuntimePanel } from "./assistant/assistant-runtime-panel";
 import { AttachmentContentProvider } from "./attachment-content";
@@ -14,13 +16,19 @@ import { ControlPlaneRoutes } from "./control-plane/control-plane-routes";
 import { createTranslationContext, TranslationProvider, useTranslation } from "./i18n";
 import { AppsArea, isAppsRoute } from "./apps/apps-area";
 import { AppsHostProvider, type AppsHost } from "./apps/apps-host";
+import { WorkflowsArea, isWorkflowsRoute } from "./workflows/workflows-area";
+import { WorkflowsHostProvider, type WorkflowsHost } from "./workflows/workflows-host";
+import { useRailApps } from "./apps/rail-apps";
 import { InboxArea } from "./inbox";
 import { LoginPanel } from "./login-panel";
 import { operationRunHref, operationRunsHref } from "./operations/operations-model";
 import { PageHostProvider } from "./pages/page-host";
 import { ResourcesPanel, ResourcesPanelToggle, useResourcesPanelState } from "./resources-panel";
 import { isResourcesPanelAvailable } from "./resources-panel-model";
+import { announcePanelMove } from "./surface/panel-move";
+import { surfacePlacement } from "./surface/surface-layout";
 import { SurfaceSlot } from "./surface/surface-slot";
+import { useSplitArea } from "./surface/use-split-area";
 import { useToolDisplayPanel } from "./tool-display-panel";
 import { uiLabelsFor } from "./ui-labels";
 import { MarkdownLinkPolicyProvider } from "./markdown-text";
@@ -42,6 +50,12 @@ import { useWorkspaceChatModel, WORKSPACE_AUTH_SCOPE } from "./workspace/workspa
 import { WorkspaceProviders } from "./workspace/workspace-providers";
 import { useWorkspaceShortcuts } from "./workspace/workspace-shortcuts";
 
+// The Workflow screens on sample data: a page for whoever may open the UI library, loaded
+// only when it is opened.
+const WorkflowSamples = lazy(async () => {
+  const { WorkflowSamples: Samples } = await import("./workflows/samples/workflow-samples");
+  return { default: Samples };
+});
 // The gallery of the shared UI library is its own chunk, loaded only when its route is opened.
 const UiGallery = lazy(async () => {
   const { UiGallery: Gallery } = await import("@vivd-catalyst/ui/gallery");
@@ -134,19 +148,51 @@ function ChatWorkspaceContent({
     enabled: resourcesEnabled,
     conversationId: resourcesConversationId
   });
+  // The main area the conversation shares with what opens at its right: the surface and the
+  // Resources card stand beside it by one rule.
+  const [splitAreaElement, setSplitAreaElement] = useState<HTMLDivElement | null>(null);
+  const splitArea = useSplitArea(splitAreaElement, "self");
+  const roomBeside = surfacePlacement(splitArea.mainWidth, splitArea.splitMin) === "beside";
   const resourcesPanel = useResourcesPanelState({
     conversationId: resourcesConversationId,
-    enabled: resourcesAvailable
+    enabled: resourcesAvailable,
+    roomBeside
   });
   const displayPanel = useToolDisplayPanel();
   // The slot reports its placement a render late; a surface that has closed covers nothing at once.
   const inboxRoute = model.route.view === "inbox" ? model.route.route : undefined;
+  const agentsRoute = model.route.route.kind === "agents" ? model.route.route : undefined;
   // With the module off the model leads an Apps address to the chat; nothing shows meanwhile.
   const appsRoute =
     model.apps.enabled && isAppsRoute(model.route.route) ? model.route.route : undefined;
+  // An address of the Workflows shows nothing until the instance has said whether the area is
+  // there for this person: the model leads a closed one to the chat.
+  const workflowsRoute = isWorkflowsRoute(model.route.route) ? model.route.route : undefined;
+  // The published Apps of the open workspace, under the Apps row of the rail.
+  const railAppsWorkspaceId = model.collaborationWorkspace.activeCollaborationWorkspaceId;
+  const railApps = useRailApps({
+    enabled: model.apps.enabled,
+    userId: model.auth.user?.id,
+    workspaceId: railAppsWorkspaceId,
+    openApp: appsRoute?.kind === "app" ? appsRoute.app : undefined
+  });
   const chatCovered =
     surfaceCovering && (inboxRoute ? inboxRoute.kind === "inbox-item" : displayPanel.open);
-  const resourcesVisible = resourcesPanel.open && !displayPanel.open;
+  const resourcesShown =
+    resourcesPanel.open && resourcesPanel.hasResources && Boolean(resourcesConversationId);
+  // The card stays where it is while a surface is open: the surface comes in over it and
+  // uncovers it again, so the right-hand column never closes and reopens in between.
+  const resourcesExit = useExit(resourcesShown ? resourcesConversationId : undefined);
+  // The thread keeps room for the card where the card stands beside it. Under a surface the
+  // surface's own width is that room; over a narrow conversation the card takes none.
+  const resourcesInset = resourcesShown && roomBeside && !displayPanel.open;
+  const resourcesInsetBefore = useRef(resourcesInset);
+  useLayoutEffect(() => {
+    if (resourcesInsetBefore.current !== resourcesInset) {
+      resourcesInsetBefore.current = resourcesInset;
+      announcePanelMove(resourcesInset ? "open" : "close");
+    }
+  }, [resourcesInset]);
   const showsLogin = model.auth.loginRequired || Boolean(passwordSetupToken);
   const themeMode = model.config.resolvedThemeMode;
   const uiLabels = uiLabelsFor(model.config.activeLocale);
@@ -232,7 +278,15 @@ function ChatWorkspaceContent({
           </UiRoot>
         }
       >
-        <UiGallery initialMode={themeMode} initialLanguage={model.config.activeLocale} />
+        {model.route.route.kind === "workflow-samples" ? (
+          <WorkflowSamples
+            theme={model.config.theme}
+            mode={themeMode}
+            locale={model.config.activeLocale}
+          />
+        ) : (
+          <UiGallery initialMode={themeMode} initialLanguage={model.config.activeLocale} />
+        )}
       </Suspense>
     );
   }
@@ -314,6 +368,18 @@ function ChatWorkspaceContent({
       ? { operations: { href: operationRunsHref(), runHref: operationRunHref } }
       : {})
   };
+  const workflowsHost: WorkflowsHost | undefined =
+    model.workflows.access === "open"
+      ? {
+          rights: model.workflows.rights,
+          viewerId: model.auth.user.id,
+          workspace: activeWorkspace
+            ? { id: activeWorkspace.id, name: activeWorkspace.name }
+            : undefined,
+          showRoute: model.route.showRoute,
+          editWithAgent: model.workflows.editWithAgent
+        }
+      : undefined;
 
   const workspace = (
     <TranslationProvider locale={model.config.activeLocale} labelOverrides={labelOverrides}>
@@ -356,7 +422,21 @@ function ChatWorkspaceContent({
             canViewAdministration={rail.canViewAdministration}
             canViewBuild={model.controlPlane.canViewBuild}
             inbox={rail.inbox}
+            agents={rail.agents}
             apps={rail.apps}
+            workflows={rail.workflows}
+            publishedApps={railApps}
+            openAppName={appsRoute?.kind === "app" ? appsRoute.app : undefined}
+            onOpenApp={(app) => {
+              if (railAppsWorkspaceId) {
+                closeDrawer();
+                model.route.showRoute({
+                  kind: "app",
+                  collaborationWorkspaceId: railAppsWorkspaceId,
+                  app
+                });
+              }
+            }}
             view={rail.view}
             deletingConversation={rail.deletingConversation}
             canMoveConversation={rail.canMoveConversation}
@@ -381,21 +461,32 @@ function ChatWorkspaceContent({
             onDeleteConversation={rail.deleteConversation}
           />
 
-          <div id={CONTENT_ID} tabIndex={-1} className="relative min-w-0 flex-1 outline-none">
+          <div
+            id={CONTENT_ID}
+            tabIndex={-1}
+            // Clipped, not hidden: a panel on its way in or out reaches past the edge, and
+            // nothing that takes the focus there may scroll the frame sideways.
+            className="relative min-w-0 flex-1 overflow-clip outline-none"
+          >
             <WorkspaceChrome
               agents={model.config.config.agents}
               agentDisplay={agentChipDisplayFor(model.config.config.ui)}
               // An App takes the whole main area: the surface of the conversation it was opened
               // from stands beside nothing there, so the header is no band over the App's head.
-              // The Inbox has a page title where the band would stand: the band would cover it.
-              surfaceBesideWidth={appsRoute || inboxRoute ? 0 : surfaceBesideWidth}
+              // The Inbox and the Agents page have a page title where the band would stand: the
+              // band would cover it.
+              surfaceBesideWidth={
+                appsRoute || workflowsRoute || inboxRoute || agentsRoute ? 0 : surfaceBesideWidth
+              }
               covered={chatCovered}
               selectedAgentName={model.config.activeAgentName}
-              // Only a conversation has an agent to choose: not the Inbox, Apps, Build or Settings.
+              // Only a conversation has an agent to choose: no other area has one.
               showAgentSelector={
                 !onStartPage &&
                 !inboxRoute &&
+                !agentsRoute &&
                 !appsRoute &&
+                !workflowsRoute &&
                 !model.controlPlane.build &&
                 !model.controlPlane.settings
               }
@@ -424,85 +515,129 @@ function ChatWorkspaceContent({
 
             <ApprovalRevisionHostProvider value={model.approvalRevision}>
               <AppsHostProvider value={appsHost}>
-                <ControlPlaneRoutes
-                  controlPlane={model.controlPlane}
-                  appsArea={
-                    appsRoute ? (
-                      // An App is told who looks at it and how the interface looks, as a Page is.
-                      <PageHostProvider conversationId={undefined} {...pageHost}>
-                        <AppsArea route={appsRoute} />
-                      </PageHostProvider>
-                    ) : undefined
-                  }
-                  inboxArea={
-                    inboxRoute ? (
-                      <InboxArea
-                        itemId={inboxRoute.kind === "inbox-item" ? inboxRoute.itemId : undefined}
-                        onOpenItem={(itemId) =>
-                          model.route.showRoute({ kind: "inbox-item", itemId })
-                        }
-                        onCloseItem={() => model.route.showRoute({ kind: "inbox" })}
-                        onBesideWidthChange={setSurfaceBesideWidth}
-                        onCoveringChange={setSurfaceCovering}
-                      />
-                    ) : undefined
-                  }
-                >
-                  <section className="relative h-full min-h-0 min-w-0">
-                    <AttachmentContentProvider
-                      client={chat.client}
-                      selectedConversationId={chat.selectedConversationId}
-                    >
-                      <PageHostProvider conversationId={chat.selectedConversationId} {...pageHost}>
-                        <div className="flex h-full min-h-0 min-w-0">
-                          <div
-                            className={cn(
-                              "relative h-full min-h-0 min-w-0 flex-1",
-                              // 23.5rem = panel width (22rem) + its right-6 offset, so the
-                              // thread centers with equal gaps to sidebar and panel edge
-                              resourcesVisible && "lg:[--resources-inset:23.5rem]"
-                            )}
-                            // Under a surface that covers it the chat leaves the tab order.
-                            inert={chatCovered}
-                            onDragEnter={chat.fileDropzone.onChatDragEnter}
-                            onDragOver={chat.fileDropzone.onChatDragOver}
-                            onDragLeave={chat.fileDropzone.onChatDragLeave}
-                            onDrop={chat.fileDropzone.onChatDrop}
-                          >
-                            <AssistantRuntimePanel chat={chat} />
-                            {chat.fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
-                            {resourcesAvailable &&
-                            resourcesConversationId &&
-                            resourcesPanel.hasResources ? (
-                              resourcesVisible ? (
-                                <ResourcesPanel
-                                  client={resourcesPanel.client}
-                                  conversationId={resourcesConversationId}
-                                  error={resourcesPanel.error}
-                                  loading={resourcesPanel.loading}
-                                  onClose={resourcesPanel.close}
-                                  open
-                                  resources={resourcesPanel.resources}
-                                />
-                              ) : (
+                {/* Around every area: a Data Store's page in Studio links to the Workflows
+                    that use the store. */}
+                <WorkflowsHostProvider value={workflowsHost}>
+                  <ControlPlaneRoutes
+                    controlPlane={model.controlPlane}
+                    agentsArea={
+                      agentsRoute ? (
+                        <AgentsPage
+                          agents={model.config.config.agents}
+                          defaultAgentName={model.config.config.defaultAgentName}
+                          status={model.agents.status}
+                          onRetry={model.agents.retry}
+                          onStartChat={model.agents.startChat}
+                          onOpenStudio={
+                            model.controlPlane.canOpenAgentsInBuild
+                              ? model.route.showRoute
+                              : undefined
+                          }
+                          onNewAgent={
+                            model.controlPlane.canCreateAgentsInBuild
+                              ? () => startNewAgent(model.route.showRoute)
+                              : undefined
+                          }
+                        />
+                      ) : undefined
+                    }
+                    appsArea={
+                      appsRoute ? (
+                        // An App is told who looks at it and how the interface looks, as a Page is.
+                        <PageHostProvider conversationId={undefined} {...pageHost}>
+                          <AppsArea route={appsRoute} />
+                        </PageHostProvider>
+                      ) : undefined
+                    }
+                    workflowsArea={
+                      workflowsRoute ? (
+                        model.workflows.access === "open" ? (
+                          <WorkflowsArea route={workflowsRoute} />
+                        ) : (
+                          <div className="h-full bg-background" />
+                        )
+                      ) : undefined
+                    }
+                    inboxArea={
+                      inboxRoute ? (
+                        <InboxArea
+                          itemId={inboxRoute.kind === "inbox-item" ? inboxRoute.itemId : undefined}
+                          onOpenItem={(itemId) =>
+                            model.route.showRoute({ kind: "inbox-item", itemId })
+                          }
+                          onCloseItem={() => model.route.showRoute({ kind: "inbox" })}
+                          onBesideWidthChange={setSurfaceBesideWidth}
+                          onCoveringChange={setSurfaceCovering}
+                        />
+                      ) : undefined
+                    }
+                  >
+                    <section className="relative h-full min-h-0 min-w-0">
+                      <AttachmentContentProvider
+                        client={chat.client}
+                        selectedConversationId={chat.selectedConversationId}
+                      >
+                        <PageHostProvider
+                          conversationId={chat.selectedConversationId}
+                          {...pageHost}
+                        >
+                          <div ref={setSplitAreaElement} className="flex h-full min-h-0 min-w-0">
+                            <div
+                              className={cn(
+                                "relative h-full min-h-0 min-w-0 flex-1",
+                                // The card's width of 22rem and its gap of 1.5rem to the edge,
+                                // so the thread centres with equal gaps to the sidebar and to
+                                // the card. It is less than the split minimum: a card that has
+                                // room beside the conversation leaves it its minimum too.
+                                resourcesInset && "[--resources-inset:23.5rem]"
+                              )}
+                              // Under a surface that covers it the chat leaves the tab order.
+                              inert={chatCovered}
+                              onDragEnter={chat.fileDropzone.onChatDragEnter}
+                              onDragOver={chat.fileDropzone.onChatDragOver}
+                              onDragLeave={chat.fileDropzone.onChatDragLeave}
+                              onDrop={chat.fileDropzone.onChatDrop}
+                            >
+                              <AssistantRuntimePanel chat={chat} />
+                              {chat.fileDropzone.draggingFiles ? <ChatDropOverlay /> : null}
+                              {resourcesAvailable &&
+                              resourcesConversationId &&
+                              resourcesPanel.hasResources &&
+                              !resourcesShown ? (
                                 <ResourcesPanelToggle
                                   onOpen={() => {
                                     displayPanel.close();
                                     resourcesPanel.openExplicitly();
                                   }}
                                 />
-                              )
-                            ) : null}
+                              ) : null}
+                            </div>
+                            <SurfaceSlot
+                              onBesideWidthChange={setSurfaceBesideWidth}
+                              onCoveringChange={setSurfaceCovering}
+                            />
                           </div>
-                          <SurfaceSlot
-                            onBesideWidthChange={setSurfaceBesideWidth}
-                            onCoveringChange={setSurfaceCovering}
-                          />
-                        </div>
-                      </PageHostProvider>
-                    </AttachmentContentProvider>
-                  </section>
-                </ControlPlaneRoutes>
+                          {/* Placed in the main area, not in the conversation: it keeps its
+                            place when a surface takes room from the conversation. */}
+                          {resourcesExit.held ? (
+                            <ResourcesPanel
+                              client={resourcesPanel.client}
+                              conversationId={resourcesExit.held}
+                              error={resourcesPanel.error}
+                              loading={resourcesPanel.loading}
+                              onClose={resourcesPanel.close}
+                              open
+                              leaving={resourcesExit.leaving}
+                              covered={displayPanel.open}
+                              onAnimationEnd={resourcesExit.onAnimationEnd}
+                              resources={resourcesPanel.resources}
+                            />
+                          ) : null}
+                        </PageHostProvider>
+                      </AttachmentContentProvider>
+                    </section>
+                  </ControlPlaneRoutes>
+                </WorkflowsHostProvider>
               </AppsHostProvider>
             </ApprovalRevisionHostProvider>
           </div>

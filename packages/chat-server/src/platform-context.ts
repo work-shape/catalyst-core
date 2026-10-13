@@ -1,0 +1,145 @@
+import { RELEASE_VERSION, type PlatformContext } from "@vivd-catalyst/api-contract";
+import {
+  ASSET_GET_FILES_MAX_BYTES,
+  ASSET_PUT_FILES_MAX_BYTES,
+  FILE_SET_MAX_FILE_BYTES,
+  FILE_SET_MAX_FILES,
+  FILE_SET_MAX_TOTAL_BYTES,
+  hasAuthScope,
+  isPrincipalGrantableAction,
+  type ActorAccess,
+  type AssetKindActions,
+  type AuthenticatedIdentity,
+  type OperationScope
+} from "@vivd-catalyst/core";
+import type { ChatServerOptions } from "./types";
+
+// Where a caller is: the instance, its release, the asset kinds and what the caller may do with
+// them. `platform.context.get` answers it, and so does the agent's tool that projects it.
+
+type ContextOptions = Pick<
+  ChatServerOptions,
+  "clientInstanceId" | "config" | "configAssets" | "modules" | "stores"
+>;
+
+interface Caller {
+  access: ActorAccess;
+  actor: AuthenticatedIdentity;
+}
+
+/**
+ * The scope a credential must carry before its holder can use each right of a kind. `use` is
+ * not among them: it is held on what one workspace owns and never on the instance as a whole.
+ */
+const SCOPE_OF_VERB = {
+  read: "config_assets:read",
+  write: "config_assets:write",
+  delete: "config_assets:write",
+  publish: "config_assets:publish"
+} as const satisfies Partial<Record<keyof AssetKindActions, OperationScope>>;
+
+const VERBS = ["read", "write", "delete", "publish"] as const;
+
+/**
+ * The actions of the registered kinds a caller can use: the ones its grants allow on what
+ * `name` says and its credential's scopes let it call. With a Namespace prefix that is the
+ * Namespace, without a name the instance's own assets as a whole.
+ */
+export function usableActions(options: ContextOptions, caller: Caller, name?: string): string[] {
+  const usable = VERBS.filter((verb) => hasAuthScope(caller.actor, SCOPE_OF_VERB[verb]));
+  return options.configAssets.kinds.kinds.flatMap((kind) =>
+    usable
+      .flatMap((verb) => kind.actions[verb] ?? [])
+      .filter(
+        (action) =>
+          caller.access.authorize(action, {
+            kind: kind.kind,
+            ...(name === undefined ? {} : { name })
+          }).allowed
+      )
+  );
+}
+
+/**
+ * The read actions of the registered kinds a grant row allows the caller on one asset or on one
+ * workspace's assets, where its credential's scopes let it read. Read from the grant rows the
+ * request's authorization already loaded: it sends no statement.
+ */
+function readActionsOnSingleAssets(options: ContextOptions, context: Caller): string[] {
+  if (!hasAuthScope(context.actor, SCOPE_OF_VERB.read)) {
+    return [];
+  }
+  return options.configAssets.kinds.kinds
+    .map((kind) => kind.actions.read)
+    .filter((action) => context.access.holdsGrantAt(action, ["asset", "workspace"]));
+}
+
+/**
+ * The rights of a kind a service principal can be granted: the ones of the one list in `core`
+ * that the kind registers, which is what the grant write hands out. A kind of a module that is
+ * off has none to hand out.
+ */
+function principalActionsOf(
+  options: ContextOptions,
+  kind: { kind: string; actions: AssetKindActions }
+): { principalActions?: string[] } {
+  if (options.modules.offModuleOf("kind", kind.kind) !== undefined) {
+    return {};
+  }
+  const principalActions = Object.values(kind.actions).filter(
+    (action): action is string => action !== undefined && isPrincipalGrantableAction(action)
+  );
+  return principalActions.length > 0 ? { principalActions } : {};
+}
+
+/**
+ * The context of one caller. A Namespace is listed for a caller who holds at least one action
+ * of a registered kind in it, through any grant that covers its names, and whose credential
+ * carries the scope the action is called with: the answer never names an action this
+ * credential could not use.
+ */
+export async function readPlatformContext(
+  options: ContextOptions,
+  caller: Caller
+): Promise<PlatformContext> {
+  const { kinds } = options.configAssets.kinds;
+  // The Namespaces alone: no count is shown here, so none is computed.
+  const namespaces = await options.stores.access.listNamespaceRecords({
+    clientInstanceId: options.clientInstanceId
+  });
+  return {
+    instance: {
+      id: options.clientInstanceId,
+      name: options.config.clientInstance.displayName
+    },
+    release: { version: RELEASE_VERSION },
+    kinds: kinds.map((kind) => ({
+      kind: kind.kind,
+      plural: kind.plural,
+      lifecycle: kind.lifecycle,
+      representation: kind.representation,
+      actions: { ...kind.actions },
+      ...principalActionsOf(options, kind),
+      ...(kind.representation === "files"
+        ? {
+            ...(kind.manifestFile === undefined ? {} : { manifestFile: kind.manifestFile }),
+            limits: {
+              FILE_SET_MAX_FILES,
+              FILE_SET_MAX_FILE_BYTES,
+              FILE_SET_MAX_TOTAL_BYTES,
+              ASSET_PUT_FILES_MAX_BYTES,
+              ASSET_GET_FILES_MAX_BYTES
+            }
+          }
+        : {})
+    })),
+    actions: usableActions(options, caller),
+    assetActions: readActionsOnSingleAssets(options, caller),
+    namespaces: namespaces.flatMap((namespace) => {
+      const actions = usableActions(options, caller, namespace.prefix);
+      return actions.length > 0
+        ? [{ prefix: namespace.prefix, displayName: namespace.displayName, actions }]
+        : [];
+    })
+  };
+}

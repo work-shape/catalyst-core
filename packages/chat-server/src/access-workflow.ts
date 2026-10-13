@@ -344,6 +344,7 @@ export class AccessWorkflow {
       holderId?: string;
       action?: string;
       scopeKind?: PermissionGrant["scopeKind"];
+      scopeId?: string;
       page?: StorePage;
     }
   ): Promise<PermissionGrant[]> {

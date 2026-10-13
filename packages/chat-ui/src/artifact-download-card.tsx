@@ -1,4 +1,3 @@
-import { FileText } from "lucide-react";
 import { useCallback, useEffect } from "react";
 import { cn } from "@vivd-catalyst/ui";
 import { useAttachmentContentContext } from "./attachment-content";
@@ -8,7 +7,8 @@ import {
   conversationFilePreviewAvailable,
   createConversationFilePanelEntry
 } from "./conversation-file-presentation";
-import { useTranslation } from "./i18n";
+import { FileTypeIcon } from "./file-type-icon";
+import { useTranslation, type TranslationContextValue } from "./i18n";
 import type { Surface } from "./surface/surface";
 import { useToolDisplayPanel } from "./tool-display-panel";
 import {
@@ -39,13 +39,13 @@ export function ToolArtifactList({
   const previewPanelEntry = useCallback(
     (artifact: ToolArtifactDownloadRef): Surface | undefined => {
       const fileType = getArtifactFileType(artifact);
-      const file = conversationFileFromArtifact(artifact, artifactDetail(fileType, artifact));
+      const file = conversationFileFromArtifact(artifact, artifactDetail(fileType, artifact, t));
       if (!client || !conversationId || !conversationFilePreviewAvailable(file)) {
         return undefined;
       }
       return createConversationFilePanelEntry({ client, conversationId, file });
     },
-    [client, conversationId]
+    [client, conversationId, t]
   );
 
   useEffect(() => {
@@ -77,7 +77,8 @@ export function ToolArtifactList({
       {artifacts.map((artifact) => {
         const filename = artifactDisplayFilename(artifact);
         const fileType = getArtifactFileType(artifact);
-        const file = conversationFileFromArtifact(artifact, artifactDetail(fileType, artifact));
+        const detail = artifactDetail(fileType, artifact, t);
+        const file = conversationFileFromArtifact(artifact, detail);
         const previewAvailable = downloadAvailable && conversationFilePreviewAvailable(file);
         const cardClassName = cn(
           "flex w-full min-w-0 items-center gap-3 rounded-md border bg-background text-left text-sm text-foreground shadow-xs transition-colors",
@@ -118,9 +119,7 @@ export function ToolArtifactList({
               >
                 {filename}
               </span>
-              <span className="block truncate text-xs text-muted-foreground">
-                {artifactDetail(fileType, artifact)}
-              </span>
+              <span className="block truncate text-xs text-muted-foreground">{detail}</span>
             </span>
             <ConversationFileDownloadButton
               client={client}
@@ -135,6 +134,7 @@ export function ToolArtifactList({
   );
 }
 
+/** The file-type icon of a card or a list row, in the box the row's other icons fill. */
 export function ArtifactFileIcon({
   fileType,
   large
@@ -142,22 +142,15 @@ export function ArtifactFileIcon({
   fileType: ArtifactFileType;
   large?: boolean;
 }) {
-  return (
-    <span
-      className={cn(
-        "relative grid shrink-0 place-items-center rounded-md text-[10px] font-bold tracking-wide text-white shadow-xs",
-        large ? "h-12 w-12" : "h-8 w-8",
-        fileType.className
-      )}
-      aria-hidden="true"
-    >
-      <FileText size={large ? 24 : 18} className="absolute opacity-20" />
-      <span className="relative">{fileType.badge}</span>
-    </span>
-  );
+  return <FileTypeIcon type={fileType} className={large ? "size-12" : "size-8"} />;
 }
 
-function artifactDetail(fileType: ArtifactFileType, artifact: ToolArtifactDownloadRef): string {
+function artifactDetail(
+  fileType: ArtifactFileType,
+  artifact: ToolArtifactDownloadRef,
+  t: TranslationContextValue["t"]
+): string {
+  const label = t(fileType.labelKey);
   const detail = artifact.kind ?? artifact.mimeType;
-  return detail ? `${fileType.label} · ${detail}` : fileType.label;
+  return detail ? `${label} · ${detail}` : label;
 }

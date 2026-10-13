@@ -1,0 +1,436 @@
+import {
+  AppError,
+  CONNECTION_OPERATION_PREFIX,
+  DATA_STORE_OPERATION_PREFIX,
+  KNOWLEDGE_OPERATION_PREFIX,
+  createAuthorizer,
+  moduleOffError,
+  operationDenialError,
+  resolvePolicy,
+  unknownToJsonValue,
+  type ActorAccess,
+  type AuditRecorder,
+  type AuthenticatedIdentity,
+  type ConversationSubject,
+  type JsonObject,
+  type OperationAuthorization,
+  type OperationDefinition,
+  type ToolExecutionContext
+} from "@vivd-catalyst/core";
+import {
+  PLATFORM_ASSET_LIST_MAX,
+  platformAssetWriteRefusal,
+  type PlatformAssetCalls,
+  type PlatformAssetFound,
+  type PlatformCallableOperation
+} from "@vivd-catalyst/tool-execution";
+import { z } from "zod";
+import type { AssetCall } from "./asset-access";
+import { readDefinitionName } from "./asset-kinds/shared";
+import { AssetWorkflow } from "./asset-workflow";
+import { readPlatformContext } from "./platform-context";
+import { findWorkspaceFiles } from "./workspace-files";
+import type { AssetWorkflowOptions } from "./types";
+
+// What carries the agent's asset tools out: the workflow of the asset operations of the API,
+// called for the person the agent acts for, on the subject of the conversation the call came
+// from, and the reads that find what is on the platform. Nothing of an asset is decided here:
+// the right, the checks of a definition, the revision and the audit rows are the ones a call
+// of `assets.get`, `assets.validate`, `assets.put`, `assets.list`, `workspaces.files.list` and
+// `platform.context.get` has.
+
+/** The module whose switch turns changing assets through `assets.put` on and off. */
+const ASSET_WRITE_OPERATION = "assets.put";
+
+/** How many operations one list answers. The list has no pages, so this is its bound. */
+const CALLABLE_OPERATION_LIST_MAX = 200;
+
+/** The operations that exist as data and that a step of a Workflow may name. */
+const CALLABLE_PREFIXES = [
+  CONNECTION_OPERATION_PREFIX,
+  DATA_STORE_OPERATION_PREFIX,
+  KNOWLEDGE_OPERATION_PREFIX
+];
+
+type AssetOptions = Pick<
+  AssetWorkflowOptions,
+  "clientInstanceId" | "stores" | "authorizer" | "auditRecorder" | "configAssets" | "modules"
+>;
+
+const accessOf = (options: AssetOptions, actor: AuthenticatedIdentity): Promise<ActorAccess> =>
+  (options.authorizer ?? createAuthorizer(options.stores.access)).forActor(actor);
+
+/** One refusal for a subject that does not exist and for one its caller may not read. */
+const subjectUnavailable = () =>
+  new AppError(
+    "NOT_FOUND",
+    "The subject of the conversation is not available",
+    { reason: "subject_unavailable" },
+    { exposeMessage: true }
+  );
+
+/**
+ * Refuses a conversation about an asset its creator may not read. A kind the instance does
+ * not have, an asset that does not exist and one the caller holds no read right on are told
+ * the same way, so the refusal says nothing of what is stored.
+ */
+export async function requireReadableSubject(
+  options: AssetWorkflowOptions,
+  actor: AuthenticatedIdentity,
+  subject: ConversationSubject
+): Promise<void> {
+  const kind = options.configAssets.kinds.kinds.find(
+    (candidate) => candidate.kind === subject.kind
+  );
+  // The kind says this, not an asset: it tells nothing of what is stored.
+  if (kind && kind.lifecycle !== "draft_published") {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `A conversation is about an asset that has a draft. An asset of the kind '${subject.kind}' has none: a save of it is live at once`,
+      { reason: "subject_without_draft" },
+      { exposeMessage: true }
+    );
+  }
+  let decision: OperationAuthorization;
+  try {
+    decision = await new AssetWorkflow(options).authorizeRead(
+      await accessOf(options, actor),
+      subject
+    );
+  } catch {
+    // The kind is unknown here, or of a module that is off.
+    throw subjectUnavailable();
+  }
+  if (!decision.allowed) throw subjectUnavailable();
+  const asset = await options.configAssets.store.getConfigAsset({
+    clientInstanceId: options.clientInstanceId,
+    kind: subject.kind,
+    name: subject.name
+  });
+  if (asset?.status !== "active") throw subjectUnavailable();
+}
+
+const jsonObjectSchema = z.record(z.string(), z.unknown());
+
+/** The input or output of an operation as JSON Schema, where it can be told as one. */
+function jsonSchemaOf(given: JsonObject | undefined, schema: z.ZodType): JsonObject | undefined {
+  if (given) return given;
+  try {
+    const derived = jsonObjectSchema.safeParse(z.toJSONSchema(schema, { unrepresentable: "any" }));
+    if (!derived.success || Object.keys(derived.data).length <= 1) return undefined;
+    const value = unknownToJsonValue(derived.data);
+    return typeof value === "object" && value !== null && !Array.isArray(value) ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function createPlatformAssetCalls(options: AssetWorkflowOptions): PlatformAssetCalls {
+  const workflow = new AssetWorkflow(options);
+
+  /** The conversation the call came from. */
+  async function conversationOf(context: ToolExecutionContext) {
+    const conversationId = context.toolRequest?.conversationId;
+    return conversationId
+      ? options.stores.conversations.getConversation(options.clientInstanceId, conversationId)
+      : undefined;
+  }
+
+  /** The conversation the call came from, and the call as the asset operations take one. */
+  async function callOf(context: ToolExecutionContext) {
+    const conversation = await conversationOf(context);
+    const runId = context.operationRun?.id;
+    // The audit rows of the call carry its run, as those of a call of the API do.
+    const audit: AuditRecorder = {
+      record: (input) =>
+        options.auditRecorder.record({
+          ...input,
+          correlationId: context.correlationId,
+          metadata: { ...input.metadata, ...(runId ? { operationRunId: runId } : {}) }
+        })
+    };
+    const call: AssetCall = {
+      actor: context.user,
+      access: await accessOf(options, context.user),
+      audit,
+      correlationId: context.correlationId,
+      ...(runId ? { runId } : {})
+    };
+    return { conversation, call };
+  }
+
+  /** The asset the call is bound to, and the call as the asset operations take one. */
+  async function bound(context: ToolExecutionContext): Promise<{
+    subject: ConversationSubject;
+    call: AssetCall;
+  }> {
+    const { conversation, call } = await callOf(context);
+    const subject = conversation?.subject;
+    if (!subject) {
+      throw new AppError(
+        "CONFLICT",
+        "This conversation is about no asset, so there is none to read or save here",
+        { reason: "conversation_without_subject" },
+        { exposeMessage: true }
+      );
+    }
+    return { subject, call };
+  }
+
+  /** The kinds that exist here: a kind of a module that is off does not. */
+  const existingKinds = () =>
+    options.configAssets.kinds.kinds.filter(
+      (kind) => options.modules.offModuleOf("kind", kind.kind) === undefined
+    );
+
+  const allowed = (decision: OperationAuthorization): void => {
+    if (!decision.allowed) {
+      throw operationDenialError({
+        kind: "forbidden",
+        action: decision.action,
+        reason: decision.reason
+      });
+    }
+  };
+
+  /** The one issue of a config that names another asset than the conversation is about. */
+  const otherName = (subject: ConversationSubject, config: Record<string, unknown>) =>
+    readDefinitionName(config) === subject.name
+      ? undefined
+      : {
+          path: "name",
+          code: "subject_mismatch",
+          message: `The config names another asset than this conversation is about. 'name' is '${subject.name}'`
+        };
+
+  return {
+    async get(context) {
+      const { subject, call } = await bound(context);
+      allowed(await workflow.reads.authorizeGet(call.access, subject));
+      const read = await workflow.reads.get(call, subject);
+      const published = "publishedRevision" in read ? read.publishedRevision : undefined;
+      return {
+        kind: read.kind,
+        name: read.name,
+        config: read.config ?? {},
+        revision: read.revision,
+        ...(published === undefined ? {} : { publishedRevision: published }),
+        shows: published !== undefined && published === read.revision ? "published" : "draft"
+      };
+    },
+
+    async validate(context, config) {
+      const { subject, call } = await bound(context);
+      const mismatch = otherName(subject, config);
+      if (mismatch) return { issues: [mismatch] };
+      const input = { kind: subject.kind, config };
+      allowed(await workflow.authorizeValidate(call.access, input));
+      try {
+        const { issues } = await workflow.validate(call, input);
+        return {
+          issues: issues.map((issue) => ({
+            path: (issue.path ?? []).join("."),
+            message: issue.message,
+            ...(issue.code === undefined ? {} : { code: issue.code })
+          }))
+        };
+      } catch (error) {
+        // A kind's own parser refuses a definition by throwing, with its issues and codes.
+        const refused = platformAssetWriteRefusal(error);
+        if (refused && "issues" in refused) return { issues: refused.issues };
+        throw error;
+      }
+    },
+
+    async put(context, input) {
+      const { subject, call } = await bound(context);
+      const kind = options.configAssets.kinds.kinds.find(
+        (candidate) => candidate.kind === subject.kind
+      );
+      // A kind without a draft is live with every write. This tool moves a draft and nothing else.
+      if (kind?.lifecycle !== "draft_published") {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          `A ${subject.kind} has no draft: a save of it would be live at once, and this tool saves drafts only`,
+          { reason: "no_draft" },
+          { exposeMessage: true }
+        );
+      }
+      const off = options.modules.offModuleOf("operation", ASSET_WRITE_OPERATION);
+      if (off !== undefined) throw moduleOffError(off);
+      const mismatch = otherName(subject, input.config);
+      if (mismatch) return { saved: false, issues: [mismatch] };
+      const write = { ...subject, config: input.config, expectedRevision: input.expectedRevision };
+      try {
+        allowed(await workflow.authorizeRevisionWrite(call.access, write, "write"));
+        const written = await workflow.put(call, write);
+        return { saved: true, revision: written.revision };
+      } catch (error) {
+        const refused = platformAssetWriteRefusal(error);
+        if (refused) return refused;
+        throw error;
+      }
+    },
+
+    async putPolicyFloor(conversationId) {
+      const policy = options.operationCalls?.deps.policy;
+      const conversation = await options.stores.conversations.getConversation(
+        options.clientInstanceId,
+        conversationId
+      );
+      const subject = conversation?.subject;
+      if (!policy || !subject) return undefined;
+      // Read as the value that was set: the tool's own mode stands where no setting names the
+      // operation, since the instance default for changes is one an agent's call cannot meet.
+      const asked = resolvePolicy({
+        definition: { name: ASSET_WRITE_OPERATION, effect: "changing", defaultPolicy: "allow" },
+        origin: { kind: "user" },
+        instanceDefaults: policy.instanceDefaults,
+        centralSettings: await policy.centralSettings(),
+        targets: await workflow.policyTargets(subject),
+        callerCanConfirm: true,
+        canPause: true
+      });
+      return asked.source === "central_setting" ? asked.value : undefined;
+    },
+
+    async readContext(context) {
+      const { call } = await callOf(context);
+      const read = await readPlatformContext(options, call);
+      const kinds = existingKinds();
+      const existing = new Set<string>(kinds.flatMap((kind) => Object.values(kind.actions)));
+      const ofExisting = (actions: string[]) => actions.filter((action) => existing.has(action));
+      return {
+        instance: { name: read.instance.name },
+        modules: options.modules.modules.filter((module) => module.enabled).map(({ name }) => name),
+        kinds: kinds.map((kind) => ({
+          kind: kind.kind,
+          plural: kind.plural,
+          hasDraft: kind.lifecycle === "draft_published"
+        })),
+        actions: ofExisting(read.actions),
+        assetActions: ofExisting(read.assetActions),
+        namespaces: read.namespaces.flatMap((namespace) => {
+          const actions = ofExisting(namespace.actions);
+          return actions.length > 0 ? [{ ...namespace, actions }] : [];
+        })
+      };
+    },
+
+    async listAssets(context, input) {
+      const { conversation, call } = await callOf(context);
+      const kinds = existingKinds().filter(
+        (kind) => input.kind === undefined || kind.kind === input.kind
+      );
+      if (kinds.length === 0) {
+        throw new AppError(
+          "NOT_FOUND",
+          `This platform has no kind '${input.kind}'. platform.context lists the kinds it has`,
+          { reason: "unknown_kind" },
+          { exposeMessage: true }
+        );
+      }
+      // What the instance owns, and what the workspace of the conversation owns.
+      const workspaces = [undefined, conversation?.collaborationWorkspaceId];
+      const assets: PlatformAssetFound[] = [];
+      for (const kind of kinds) {
+        for (const workspaceId of workspaces) {
+          const room = PLATFORM_ASSET_LIST_MAX - assets.length;
+          // One more than there is room for says whether the list is cut.
+          const listed = await workflow.reads.list(
+            call,
+            {
+              kind: kind.kind,
+              ...(input.text === undefined ? {} : { text: input.text }),
+              ...(workspaceId === undefined ? {} : { workspaceId })
+            },
+            { limit: room + 1 }
+          );
+          for (const asset of listed.slice(0, room)) {
+            assets.push({
+              kind: asset.kind,
+              name: asset.name,
+              title: asset.title,
+              ...(asset.description === undefined ? {} : { description: asset.description })
+            });
+          }
+          if (listed.length > room) return { assets, truncated: true };
+        }
+      }
+      return { assets, truncated: false };
+    },
+
+    async listFiles(context, input) {
+      const conversation = await conversationOf(context);
+      if (!conversation) {
+        throw new AppError("NOT_FOUND", "This conversation is not available");
+      }
+      // One more than is answered says whether the list is cut.
+      const found = await findWorkspaceFiles(options, {
+        user: context.user,
+        collaborationWorkspaceId: conversation.collaborationWorkspaceId,
+        ...input,
+        page: { limit: PLATFORM_ASSET_LIST_MAX + 1 }
+      });
+      return {
+        files: found
+          .slice(0, PLATFORM_ASSET_LIST_MAX)
+          .map((file) =>
+            file.conversation.id === conversation.id ? { ...file, inThisConversation: true } : file
+          ),
+        truncated: found.length > PLATFORM_ASSET_LIST_MAX
+      };
+    },
+
+    async listOperations(context) {
+      const { call } = await bound(context);
+      const listing = await options.operationCalls?.registry.list({});
+      const candidates = (listing?.operations ?? [])
+        .filter((definition) =>
+          CALLABLE_PREFIXES.some((prefix) => definition.name.startsWith(prefix))
+        )
+        .sort((left, right) => (left.name < right.name ? -1 : 1));
+      const visible = async (definition: OperationDefinition): Promise<boolean> => {
+        try {
+          const resource = definition.resource({});
+          if (definition.action !== null) {
+            return call.access.authorize(definition.action, resource).allowed;
+          }
+          const decision = await definition.authorize(
+            {},
+            {
+              actor: call.actor,
+              // Asked as a step of a Workflow would call it: an operation that is not exposed
+              // to Workflows is none a step may name.
+              origin: { kind: "workflow", workflowRunId: "", stepRunId: "" },
+              correlationId: call.correlationId,
+              access: call.access,
+              resource
+            }
+          );
+          return decision.allowed;
+        } catch {
+          return false;
+        }
+      };
+      const operations: PlatformCallableOperation[] = [];
+      let truncated = (listing?.truncated.length ?? 0) > 0;
+      for (const definition of candidates) {
+        if (!(await visible(definition))) continue;
+        if (operations.length >= CALLABLE_OPERATION_LIST_MAX) {
+          truncated = true;
+          break;
+        }
+        const inputSchema = jsonSchemaOf(definition.inputJsonSchema, definition.inputSchema);
+        const outputSchema = jsonSchemaOf(definition.outputJsonSchema, definition.outputSchema);
+        operations.push({
+          name: definition.name,
+          effect: definition.effect,
+          ...(inputSchema ? { inputSchema } : {}),
+          ...(outputSchema ? { outputSchema } : {})
+        });
+      }
+      return { operations, truncated };
+    }
+  };
+}

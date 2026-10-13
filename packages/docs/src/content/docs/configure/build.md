@@ -1,24 +1,24 @@
 ---
-title: Build agents and skills
-description: Create, edit, restore and delete agents and skills in the Build area, on the whole instance or in the Namespaces you hold rights in.
+title: Agents and skills in Studio
+description: Create, edit, restore and delete agents and skills in the Studio area, on the whole instance or in the Namespaces you hold rights in.
 ---
 
-**Build** is the area of the interface where agents and skills are made. It stands in the main rail as a row of its own and opens at `/build`. The old address `/admin/config` leads there.
+**Studio** is the area of the interface where agents and skills are made. It stands in the main rail as a row of its own and opens at `/build`. The old address `/admin/config` leads there.
 
-Build works on the [asset API](/reference/api/assets/): it reads a list page by page, reads one asset when its page opens and writes one asset at a time. It never loads the whole set of agents and skills.
+Studio works on the [asset API](/reference/api/assets/): it reads a list page by page, reads one asset when its page opens and writes one asset at a time. It never loads the whole set of agents and skills.
 
-## Who sees Build
+## Who sees Studio
 
-The Build row shows for a person who holds a right on at least one agent or skill:
+The Studio row shows for a person who holds a right on at least one agent or skill:
 
 - `config_assets.read` or `config_assets.write` on the instance, or
 - a grant in a [Namespace](/operate/rights-and-namespaces/).
 
-A person with a grant in a Namespace sees the assets of that Namespace and nothing else. A person with no such right has no Build row, and the address says that Build is not available.
+A person with a grant in a Namespace sees the assets of that Namespace and nothing else. A person with no such right has no Studio row, and the address says that Studio is not available.
 
-A grant on one single asset, or on what one workspace owns, is checked by the instance on every read and write. The interface learns only that the person may read some asset of the kind: a read grant gives the Build row and the list of the kind, which holds the assets the person may read. Such an asset opens read-only. A grant that allows another action and no reading gives no Build row.
+A grant on one single asset, or on what one workspace owns, is checked by the instance on every read and write. The interface learns only that the person may read some asset of the kind: a read grant gives the Studio row and the list of the kind, which holds the assets the person may read. Such an asset opens read-only. A grant that allows another action and no reading gives no Studio row.
 
-On an instance with the module [`connections`](/configure/modules/#connections) on, Build also lists Connections for a person who may read every Connection of the instance, which the administrator role allows, and for a person with a read grant in a Namespace, on one Connection or on the Connections of one workspace, who sees those Connections. A grant to use a Connection gives no entry in Build. A row shows the connector type, whether the instance or a workspace owns the Connection, and whether it is enabled. A row opens the [page of the Connection](#the-page-of-a-connection). Build starts no Connection and changes none: Connections come from the release config.
+On an instance with the module [`connections`](/configure/modules/#connections) on, Studio also lists Connections for a person who may read every Connection of the instance, which the administrator role allows, and for a person with a read grant in a Namespace, on one Connection or on the Connections of one workspace, who sees those Connections. A grant to use a Connection gives no entry in Studio. A row shows the connector type, whether the instance or a workspace owns the Connection, and whether it is enabled. A row opens the [page of the Connection](#the-page-of-a-connection). Studio starts no Connection and changes none: Connections come from the release config.
 
 ## Giving an agent the tools of a Connection
 

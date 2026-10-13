@@ -170,10 +170,11 @@ test("a Connection's page shows its definition, its state in every case and the 
   });
   expect(signedIn.ok()).toBe(true);
   await page.setViewportSize({ width: 1280, height: widths[1280] });
-  const main = page.getByRole("region", { name: /^(Build|Bauen)$/u });
+  const main = page.getByRole("region", { name: "Studio" });
   const health = main.locator("[data-connection-health]");
-  // The one button of the Status section. While a test runs it shows a spinner and no name.
-  const testButton = main.locator("#status").getByRole("button");
+  // The one button of the Status section beside the copy button of the id. While a test runs
+  // it shows a spinner and no name.
+  const testButton = main.locator("#status button:not([data-asset-identifier] button)");
 
   /** The page of a Connection, in the given language. */
   const open = async (
@@ -256,9 +257,12 @@ test("a Connection's page shows its definition, its state in every case and the 
       await expect(page).toHaveURL(new RegExp(`${addressOf(reachable)}$`, "u"));
       await expect(page.getByRole("heading", { name: "Sample business", level: 1 })).toBeVisible();
       await expect(
-        main.getByText("Connections come from the release config and cannot be changed here.", {
-          exact: true
-        })
+        main.getByText(
+          "The operator of this instance sets up its connections. They cannot be changed here.",
+          {
+            exact: true
+          }
+        )
       ).toBeVisible();
       await expect(main.getByText("Instance", { exact: true })).toBeVisible();
       await expect(main.getByText(reachable.name, { exact: true })).toBeVisible();
@@ -328,9 +332,9 @@ test("a Connection's page shows its definition, its state in every case and the 
       await testButton.click();
       await expect(health).toHaveAttribute("data-connection-health", "network_denied");
       await expect(health).toContainText(
-        "The instance may not reach this address. Its host is not in the list of allowed outside addresses in release config (egress.allow)."
+        "The instance may not reach this address. Its host is not among the outside addresses the operator allowed."
       );
-      await expect(health).toContainText("The operator adds the host to egress.allow");
+      await expect(health).toContainText("The operator lets the instance reach this host");
       await open(walled);
       await expect(health).toHaveAttribute("data-connection-health", "network_denied");
       await shoot("network-denied", walled);
@@ -355,7 +359,7 @@ test("a Connection's page shows its definition, its state in every case and the 
       await open(walled, { locale: "de" });
       await expect(
         main.getByText(
-          "Verbindungen kommen aus der Release-Konfiguration und lassen sich hier nicht ändern.",
+          "Der Betreiber dieser Instanz richtet ihre Verbindungen ein. Hier lassen sie sich nicht ändern.",
           { exact: true }
         )
       ).toBeVisible();

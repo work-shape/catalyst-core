@@ -6,6 +6,7 @@ import {
   readDatabaseReadiness
 } from "@vivd-catalyst/core";
 import { getWorkspaceAssetSnapshot } from "../agent-availability";
+import { agentConnections } from "../agent-connections";
 import type { Route } from "../http/route";
 import { resolveRequestLocale } from "../request-context";
 import type { ChatServerOptions } from "../types";
@@ -36,7 +37,8 @@ export function registerConfigRoutes(route: Route, options: ChatServerOptions): 
     const config = createSafeConfigView(options.config, assets, options.modules, {
       requestedLocale: resolveRequestLocale(options, request),
       reasoningEffortsOfBinding: (bindingId) =>
-        options.modelGateway.capabilities({ bindingId }).reasoningEfforts
+        options.modelGateway.capabilities({ bindingId }).reasoningEfforts,
+      connections: await agentConnections(options)
     });
     return {
       ...config,

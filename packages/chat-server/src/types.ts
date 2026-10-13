@@ -191,6 +191,26 @@ export interface ChatServerOptions {
   };
 }
 
+/**
+ * What the workflow of the asset operations reads of a process: its stores, its asset kinds,
+ * its modules, its audit and, for a kind whose revisions hold files, where those are built
+ * and kept. The API process has all of it, and so has every process that runs agents, whose
+ * tools read and save the draft of an asset through the same workflow.
+ */
+export type AssetWorkflowOptions = Pick<
+  ChatServerOptions,
+  | "logger"
+  | "config"
+  | "modules"
+  | "clientInstanceId"
+  | "stores"
+  | "auditRecorder"
+  | "configAssets"
+  | "pages"
+  | "authorizer"
+  | "operationCalls"
+>;
+
 /** The options as the server's own modules see them, with every default filled in. */
 export type ResolvedChatServerOptions = ChatServerOptions &
   Required<Pick<ChatServerOptions, "rateLimiter" | "authorizer" | "operationCalls">>;

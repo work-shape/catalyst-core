@@ -22,6 +22,7 @@ import {
 import { MaskedPasswordInput, UserFields } from "./user-administration-fields";
 import {
   STANDALONE_AUTH_SOURCE,
+  authSourceLabel,
   emptyIdentityForm,
   errorMessage,
   formToIdentityInput,
@@ -34,7 +35,7 @@ import {
 } from "./user-administration-model";
 import { Field, FormNotice, StatusBadge, UserAvatar } from "./user-administration-primitives";
 import { UserPermissionsCard } from "./user-permissions-card";
-import { formatDateTime } from "./locale-format";
+import { formatMomentShort } from "./locale-format";
 import { useTranslation } from "../i18n";
 
 export function UserDetail({
@@ -292,7 +293,7 @@ function IdentitiesCard({
               >
                 <div className="grid min-w-0 flex-1 gap-1">
                   <span className="flex flex-wrap items-center gap-2">
-                    <Badge appearance="outline">{identity.authSource}</Badge>
+                    <Badge appearance="outline">{authSourceLabel(identity.authSource, t)}</Badge>
                     {identity.emailVerified ? (
                       <Badge tone="success">{t("settings.userIdentityVerified")}</Badge>
                     ) : null}
@@ -332,7 +333,9 @@ function IdentitiesCard({
                     size="icon"
                     variant="ghost"
                     className="shrink-0 text-muted-foreground hover:text-destructive"
-                    aria-label={t("settings.userIdentityDelete", { source: identity.authSource })}
+                    aria-label={t("settings.userIdentityDelete", {
+                      source: authSourceLabel(identity.authSource, t)
+                    })}
                     disabled={mutating || Boolean(disabledReason)}
                     onClick={() => setConfirmingKey(key)}
                   >
@@ -680,14 +683,14 @@ function AccountMetaCard({ user }: { user: AdministeredUser }) {
             <span className="font-mono text-xs break-all">{user.id}</span>
           </KeyValue>
           <KeyValue label={t("settings.created")}>
-            {formatDateTime(user.createdAt, locale)}
+            {formatMomentShort(user.createdAt, locale)}
           </KeyValue>
           <KeyValue label={t("settings.updated")}>
-            {formatDateTime(user.updatedAt, locale)}
+            {formatMomentShort(user.updatedAt, locale)}
           </KeyValue>
           <KeyValue label={t("settings.userLastActive")}>
             {user.lastAuthenticatedAt
-              ? formatDateTime(user.lastAuthenticatedAt, locale)
+              ? formatMomentShort(user.lastAuthenticatedAt, locale)
               : t("settings.never")}
           </KeyValue>
         </KeyValueList>

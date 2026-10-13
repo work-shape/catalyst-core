@@ -1,124 +1,16 @@
-import { RELEASE_VERSION, apiOperations } from "@vivd-catalyst/api-contract";
-import {
-  AppError,
-  ASSET_GET_FILES_MAX_BYTES,
-  ASSET_PUT_FILES_MAX_BYTES,
-  FILE_SET_MAX_FILE_BYTES,
-  FILE_SET_MAX_FILES,
-  FILE_SET_MAX_TOTAL_BYTES,
-  hasAuthScope,
-  type ActorAccess,
-  type AssetKindActions,
-  type AuthenticatedIdentity,
-  type OperationScope
-} from "@vivd-catalyst/core";
+import { apiOperations } from "@vivd-catalyst/api-contract";
+import { AppError } from "@vivd-catalyst/core";
 import { configAssetReferences } from "../config-asset-workflow";
 import type { Route } from "../http/route";
+import { readPlatformContext, usableActions } from "../platform-context";
 import type { ChatServerOptions } from "../types";
 
-/**
- * The scope a credential must carry before its holder can use each right of a kind. `use` is
- * not among them: it is held on what one workspace owns and never on the instance as a whole.
- */
-const SCOPE_OF_VERB = {
-  read: "config_assets:read",
-  write: "config_assets:write",
-  delete: "config_assets:write",
-  publish: "config_assets:publish"
-} as const satisfies Partial<Record<keyof AssetKindActions, OperationScope>>;
-
-const VERBS = ["read", "write", "delete", "publish"] as const;
-
-/**
- * The actions of the registered kinds a caller can use: the ones its grants allow on what
- * `name` says and its credential's scopes let it call. With a Namespace prefix that is the
- * Namespace, without a name the instance's own assets as a whole.
- */
-function usableActions(
-  options: ChatServerOptions,
-  caller: { access: ActorAccess; actor: AuthenticatedIdentity },
-  name?: string
-): string[] {
-  const usable = VERBS.filter((verb) => hasAuthScope(caller.actor, SCOPE_OF_VERB[verb]));
-  return options.configAssets.kinds.kinds.flatMap((kind) =>
-    usable
-      .flatMap((verb) => kind.actions[verb] ?? [])
-      .filter(
-        (action) =>
-          caller.access.authorize(action, {
-            kind: kind.kind,
-            ...(name === undefined ? {} : { name })
-          }).allowed
-      )
-  );
-}
-
-/**
- * The read actions of the registered kinds a grant row allows the caller on one asset or on one
- * workspace's assets, where its credential's scopes let it read. Read from the grant rows the
- * request's authorization already loaded: it sends no statement.
- */
-function readActionsOnSingleAssets(
-  options: ChatServerOptions,
-  context: { access: ActorAccess; actor: AuthenticatedIdentity }
-): string[] {
-  if (!hasAuthScope(context.actor, SCOPE_OF_VERB.read)) {
-    return [];
-  }
-  return options.configAssets.kinds.kinds
-    .map((kind) => kind.actions.read)
-    .filter((action) => context.access.holdsGrantAt(action, ["asset", "workspace"]));
-}
-
 export function registerPlatformRoutes(route: Route, options: ChatServerOptions): void {
-  // Orientation for an outside editor, a person or a service principal. A Namespace is listed
-  // for a caller who holds at least one action of a registered kind in it, through any grant
-  // that covers its names, and whose credential carries the scope the action is called with:
-  // the answer never names an action this credential could not use.
+  // Orientation for an outside editor, a person, a service principal or an agent's tool.
   route.operation(apiOperations["platform.context.get"], {
     // Every authenticated caller may ask where it is. What it is told is its own.
     authorize: () => ({ allowed: true }),
-    async execute(_input, { access, actor }) {
-      const { kinds } = options.configAssets.kinds;
-      // The Namespaces alone: no count is shown here, so none is computed.
-      const namespaces = await options.stores.access.listNamespaceRecords({
-        clientInstanceId: options.clientInstanceId
-      });
-      return {
-        instance: {
-          id: options.clientInstanceId,
-          name: options.config.clientInstance.displayName
-        },
-        release: { version: RELEASE_VERSION },
-        kinds: kinds.map((kind) => ({
-          kind: kind.kind,
-          plural: kind.plural,
-          lifecycle: kind.lifecycle,
-          representation: kind.representation,
-          actions: { ...kind.actions },
-          ...(kind.representation === "files"
-            ? {
-                ...(kind.manifestFile === undefined ? {} : { manifestFile: kind.manifestFile }),
-                limits: {
-                  FILE_SET_MAX_FILES,
-                  FILE_SET_MAX_FILE_BYTES,
-                  FILE_SET_MAX_TOTAL_BYTES,
-                  ASSET_PUT_FILES_MAX_BYTES,
-                  ASSET_GET_FILES_MAX_BYTES
-                }
-              }
-            : {})
-        })),
-        actions: usableActions(options, { access, actor }),
-        assetActions: readActionsOnSingleAssets(options, { access, actor }),
-        namespaces: namespaces.flatMap((namespace) => {
-          const actions = usableActions(options, { access, actor }, namespace.prefix);
-          return actions.length > 0
-            ? [{ prefix: namespace.prefix, displayName: namespace.displayName, actions }]
-            : [];
-        })
-      };
-    }
+    execute: (_input, { access, actor }) => readPlatformContext(options, { access, actor })
   });
 
   // What an editor offers for a definition: the models, efforts and tools of this instance.

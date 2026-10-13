@@ -31,6 +31,8 @@ const builder = { email: "e2e-apps-builder@example.test", password: "e2e-apps-bu
 const WORKSPACE = "Sales team";
 const PUBLISHED_HEADING = "Revenue overview";
 const DRAFT_HEADING = "Revenue forecast";
+/** The outside host the draft adds and the published revision does not list. */
+const HELD_HOST = "rates.example.com";
 
 const idSchema = z.object({ id: z.string() });
 const contextSchema = z.looseObject({ actions: z.array(z.string()) });
@@ -227,7 +229,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await memberPage.goto(appsPath);
   const memberArea = memberPage.getByTestId("apps-area");
   await expect(memberArea).toContainText(appName);
-  await memberArea.getByText(appName, { exact: true }).click();
+  await memberArea.getByRole("link", { name: "Open", exact: true }).click();
   await expect(memberPage).toHaveURL(new RegExp(`${appPath}$`, "u"));
   const memberView = memberPage.getByTestId("app-view");
   const memberApp = appIn(memberPage, "app-view");
@@ -255,14 +257,15 @@ test("a Page is saved as an App, published, opened by a second member and deep l
     "The draft of this app is not available to you."
   );
 
-  // A write moves the draft ahead of what is published.
+  // A write moves the draft ahead of what is published, with an outside host that nobody has
+  // reviewed yet.
   const written = await requestWithOrigin(page, "put", `${apiOrigin}/api/v1/assets/app/${appId}`, {
     data: {
       workspaceId,
       expectedRevision: 1,
       files: Object.entries({
         ...pageSource(PUBLISHED_HEADING),
-        "app.yaml": `id: ${appId}\nname: ${appName}\nkit: 1.0.0\n`,
+        "app.yaml": `id: ${appId}\nname: ${appName}\nkit: 1.0.0\nexternalHosts: [${HELD_HOST}]\n`,
         "src/routes/index.tsx": overviewRoute(DRAFT_HEADING)
       }).map(([path, text]) => ({ path, text }))
     },
@@ -279,12 +282,19 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await memberListReady();
   await expect(memberArea).toContainText(appName);
   await expect(memberArea).not.toContainText("Unpublished changes");
-  await memberArea.getByRole("button", { name: `Actions for ${appName}` }).click();
-  await expect(memberPage.getByRole("menuitem", { name: "Open" })).toBeVisible();
+  // The App is a card with one main action. The id and the way to the draft are a builder's,
+  // and the menu holds what a member does beside opening.
+  const memberCard = memberArea.getByRole("listitem").filter({ hasText: appName });
+  const memberOpen = memberCard.getByRole("link", { name: "Open", exact: true });
+  await expect(memberOpen).toHaveAttribute("href", appPath);
+  await expect(memberCard.getByRole("link", { name: "Edit", exact: true })).toHaveCount(0);
+  await expect(memberCard).not.toContainText(appId);
+  await memberCard.getByRole("button", { name: `Actions for ${appName}` }).click();
+  await expect(memberPage.getByRole("menuitem", { name: "Copy link" })).toBeVisible();
   await expect(memberPage.getByRole("menuitem", { name: "Edit" })).toHaveCount(0);
   await memberPage.keyboard.press("Escape");
   await shoot(memberPage, "apps-list-member", [["light", "en", 1440]], memberListReady);
-  await memberArea.getByText(appName, { exact: true }).click();
+  await memberArea.getByRole("link", { name: "Open", exact: true }).click();
   await expect(
     appIn(memberPage, "app-view").getByRole("heading", { name: PUBLISHED_HEADING })
   ).toBeVisible();
@@ -303,15 +313,18 @@ test("a Page is saved as an App, published, opened by a second member and deep l
     await expect(
       appIn(page, "app-edit").getByRole("heading", { name: DRAFT_HEADING })
     ).toBeVisible();
+    // The host the draft added is held back until the draft is published.
+    await expect(edit.getByRole("status").filter({ hasText: HELD_HOST })).toBeVisible();
   };
   await draftReady();
+  await expect(edit).toContainText(`This draft cannot call ${HELD_HOST} until it is published.`);
   await expect(publish).toBeEnabled();
   const discard = edit.getByRole("button", { name: "Discard", exact: true });
   await expect(discard).toBeVisible();
   await shoot(page, "app-draft", MAIN, draftReady);
 
   // The files of the draft, with the one the draft changed marked and open.
-  await edit.getByRole("radio", { name: "Files" }).click();
+  await edit.getByRole("tab", { name: "Files" }).click();
   await expect(edit.getByRole("navigation", { name: "Files" })).toContainText(
     "src/routes/data.tsx"
   );
@@ -323,7 +336,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
       animations: "disabled"
     });
   }
-  await edit.getByRole("radio", { name: "Preview" }).click();
+  await edit.getByRole("tab", { name: "Preview" }).click();
 
   // The revisions of the App, with the way to publish one of them.
   const openRevisions = async () => {
@@ -375,13 +388,19 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   });
   await builderContext.close();
 
-  // The list shows the App with its state, and opens it.
+  // The page shows the App with its state, and opens it.
   await page.goto(appsPath);
   await expect(area).toContainText(appName);
   await shoot(page, "apps-list", MAIN, async () => {
     await expect(area).toContainText(appName);
   });
-  await area.getByText(appName, { exact: true }).click();
+  // The builder's card opens the App and leads to its draft beside that.
+  const card = area.getByRole("listitem").filter({ hasText: appName });
+  await expect(card.getByRole("link", { name: "Edit", exact: true })).toHaveAttribute(
+    "href",
+    `${appPath}/edit`
+  );
+  await card.getByRole("link", { name: "Open", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${appPath}$`, "u"));
   const viewReady = async () => {
     await expect(
@@ -419,4 +438,5 @@ test("a Page is saved as an App, published, opened by a second member and deep l
     appIn(page, "app-edit").getByRole("heading", { name: PUBLISHED_HEADING })
   ).toBeVisible();
   await expect(discard).toBeHidden();
+  await expect(edit).not.toContainText(HELD_HOST);
 });

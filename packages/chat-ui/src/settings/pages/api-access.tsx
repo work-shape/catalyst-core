@@ -1,8 +1,25 @@
-import { useEffect } from "react";
+import { useQueries } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { listAll, type ServicePrincipalDetail } from "@vivd-catalyst/api-client";
+import { loadFailure } from "../../access/access-model";
+import { usePrincipalGrantMutations, usePrincipalGrantsQuery } from "../../access/access-queries";
+import {
+  principalGrantKinds,
+  principalGrantViews,
+  principalOfSearch
+} from "../../access/principal-grants-model";
+import { PrincipalRights } from "../../access/principal-rights";
 import { useApiAccessMutations } from "../../api/workspace-mutations";
-import { useServicePrincipalsQuery } from "../../api/workspace-queries";
+import {
+  useAdministeredCollaborationWorkspacesQuery,
+  usePlatformContextQuery,
+  useServicePrincipalsQuery,
+  useWorkspaceUsersQuery
+} from "../../api/workspace-queries";
+import { workspaceQueryKeys } from "../../api/workspace-query-keys";
 import { ApiAccessPanel } from "../../control-plane/api-access-panel";
 import { createApiAccessAuthorityKey } from "../../control-plane/api-access-reveal-controller";
+import { canManageUsers } from "../../control-plane/governance";
 import { useTranslation } from "../../i18n";
 import { apiErrorMessage } from "../../workspace-utils";
 import { useSettingsPage } from "../settings-page-context";
@@ -30,6 +47,8 @@ export function ApiAccessPage() {
     })
   });
   const { clearRevealedCredential } = apiAccessMutations;
+  // A link to one principal, such as the one on a Connection's page, opens the page on it.
+  const [initialPrincipalId] = useState(() => principalOfSearch(window.location.search));
 
   useEffect(() => {
     if (!canManageSuperadminAccess) {
@@ -41,6 +60,14 @@ export function ApiAccessPage() {
     <ApiAccessPanel
       canMutate={canManageSuperadminAccess}
       principals={servicePrincipalsQuery.data ?? []}
+      initialPrincipalId={initialPrincipalId}
+      renderRights={(detail) => (
+        <PrincipalRightsOnInstance
+          key={detail.principal.id}
+          detail={detail}
+          canMutate={canManageSuperadminAccess}
+        />
+      )}
       revealedCredential={apiAccessMutations.revealedCredential}
       loading={servicePrincipalsQuery.isLoading}
       error={
@@ -60,6 +87,72 @@ export function ApiAccessPage() {
         apiAccessMutations.revokeCredential.mutateAsync(credentialId)
       }
       onClearRevealedCredential={clearRevealedCredential}
+    />
+  );
+}
+
+/**
+ * What one principal may use, on the instance's own answers: its rows, the kinds and rights
+ * the instance hands out, and the resources of those kinds the reader is shown.
+ */
+function PrincipalRightsOnInstance({
+  detail,
+  canMutate
+}: {
+  detail: ServicePrincipalDetail;
+  canMutate: boolean;
+}) {
+  const { apiBaseUrl, authScope, client, user } = useSettingsPage();
+  const api = { apiBaseUrl, authScope, client };
+  const { principal } = detail;
+  const grantsQuery = usePrincipalGrantsQuery({ ...api, principalId: principal.id });
+  const contextQuery = usePlatformContextQuery({ ...api, enabled: true });
+  const kinds = principalGrantKinds(contextQuery.data);
+  // One list per kind, shared with the Access page: the names of the rows and the dialog's choices.
+  const resourceQueries = useQueries({
+    queries: kinds.map(({ kind }) => ({
+      queryKey: [...workspaceQueryKeys.assets(apiBaseUrl, authScope), "choice", kind],
+      queryFn: () => listAll((paging) => client.assets.list({ params: { kind }, query: paging })),
+      retry: false
+    }))
+  });
+  const resourcesLoaded = resourceQueries.every((query) => query.data !== undefined);
+  const resources = resourceQueries.flatMap((query) => query.data ?? []);
+  const workspacesQuery = useAdministeredCollaborationWorkspacesQuery({ ...api, enabled: true });
+  const workspaces = workspacesQuery.data ?? [];
+  // Who gave a right is named for a reader who is shown the users.
+  const usersQuery = useWorkspaceUsersQuery({ ...api, enabled: canManageUsers(user) });
+  const mutations = usePrincipalGrantMutations({ ...api, principalId: principal.id });
+  const failure = loadFailure(grantsQuery.error);
+
+  return (
+    <PrincipalRights
+      principal={principal}
+      canMutate={canMutate}
+      read={
+        grantsQuery.data
+          ? {
+              status: "ready",
+              rows: principalGrantViews(grantsQuery.data, {
+                assets: resources,
+                workspaces,
+                users: usersQuery.data ?? []
+              })
+            }
+          : failure === "forbidden"
+            ? { status: "forbidden" }
+            : failure === "failed"
+              ? { status: "failed", retry: () => void grantsQuery.refetch().catch(() => undefined) }
+              : { status: "loading" }
+      }
+      kinds={kinds}
+      resources={{
+        items: resourcesLoaded ? resources : undefined,
+        failed: resourceQueries.some((query) => Boolean(query.error))
+      }}
+      workspaces={workspaces}
+      onGive={(right) => mutations.give.mutateAsync(right)}
+      onRemove={(grantId) => mutations.remove.mutateAsync(grantId)}
     />
   );
 }

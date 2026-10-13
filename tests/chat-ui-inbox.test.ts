@@ -167,7 +167,7 @@ describe("inbox model", () => {
       kind: "inbox_item",
       key: "inbox-item:apr_1",
       title: "Änderung einer Fähigkeit",
-      subtitle: "Fähigkeit: Gehaltsabrechnungen prüfen",
+      subtitle: "Skill: Gehaltsabrechnungen prüfen",
       itemId: "apr_1"
     });
     expect(inboxItemSurface("apr_1", undefined, kindOf, t).title).toBe("Anfrage");

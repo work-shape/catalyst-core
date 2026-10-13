@@ -13,6 +13,7 @@ import {
   type Authorizer,
   type ClientInstanceId,
   type ConfigAssetSource,
+  type ConversationOfferSource,
   type DataToolSource,
   type Logger,
   type ModuleSnapshot,
@@ -20,6 +21,7 @@ import {
   type ToolOperationRunner
 } from "@vivd-catalyst/core";
 import type { ModelGateway } from "@vivd-catalyst/model-provider";
+import { conversationToolNames } from "./conversation-offer";
 import {
   createBoundedDataToolSource,
   createToolOperationRunner,
@@ -42,6 +44,8 @@ export interface InstanceOperationCallsInput {
   /** The approval kinds the assembly brings. The kind of a held call is added to them. */
   approvalRequestHandlers: ApprovalRequestHandlerRegistry;
   operations?: ChatServerOptions["operations"];
+  /** What a conversation about an asset is offered beyond its agent's definition. */
+  conversationOffer?: ConversationOfferSource;
 }
 
 export interface InstanceOperationCalls {
@@ -80,9 +84,16 @@ export function createInstanceOperationCalls(
       handlers: input.approvalRequestHandlers,
       checkRunner
     },
-    async agentToolNames(agentName) {
+    async agentToolNames(agentName, conversationId) {
       const assets = await assetSource.getSnapshot();
-      return assets.agents.find((candidate) => candidate.name === agentName)?.toolNames ?? [];
+      const listed =
+        assets.agents.find((candidate) => candidate.name === agentName)?.toolNames ?? [];
+      // The tools the server binds to the subject of a conversation are no part of an agent's
+      // definition: the conversation of the call decides whether the agent has them.
+      const offer = conversationId
+        ? await input.conversationOffer?.offerOf({ clientInstanceId, conversationId })
+        : undefined;
+      return conversationToolNames(listed, offer);
     }
   });
   const approvalRequestCreator = new ApprovalRequestWorkflow({

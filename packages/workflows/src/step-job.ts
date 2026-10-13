@@ -8,6 +8,7 @@ import { z } from "zod";
 import {
   WORKFLOW_STEP_JOB_BACKOFF_BASE_MS,
   WORKFLOW_STEP_JOB_BACKOFF_MAX_MS,
+  WORKFLOW_STEP_JOB_HEARTBEAT_MS,
   WORKFLOW_STEP_JOB_LEASE_MS,
   WORKFLOW_STEP_JOB_MAX_ATTEMPTS
 } from "./limits";
@@ -19,6 +20,7 @@ export const workflowStepJobKind = defineJobKind({
   maxAttempts: WORKFLOW_STEP_JOB_MAX_ATTEMPTS,
   backoff: { baseMs: WORKFLOW_STEP_JOB_BACKOFF_BASE_MS, maxMs: WORKFLOW_STEP_JOB_BACKOFF_MAX_MS },
   leaseMs: WORKFLOW_STEP_JOB_LEASE_MS,
+  heartbeatMs: WORKFLOW_STEP_JOB_HEARTBEAT_MS,
   concurrency: {}
 });
 

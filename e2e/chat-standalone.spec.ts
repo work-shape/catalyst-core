@@ -1,12 +1,7 @@
 import { loadNewerVersion } from "./build-fixtures";
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import { randomUUID } from "node:crypto";
-import {
-  assetRevision,
-  readAssetSet,
-  requestWithOrigin,
-  restoreAssetSet
-} from "./request-with-origin";
+import { assetRevision, readAsset, requestWithOrigin } from "./request-with-origin";
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./test";
 import { z } from "zod";
@@ -50,7 +45,7 @@ test("standalone login renders the authenticated chat workspace", async ({ page 
   );
   await expect(page.getByRole("button", { name: "Search", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "New chat", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "New chat", exact: true }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Language" })).toHaveCount(0);
   await expect(page.locator("header").getByText("Ready", { exact: true })).toHaveCount(0);
   await expect(settingsGear(page)).toHaveCount(0);
@@ -360,7 +355,7 @@ test("switching between conversations keeps the composer at the bottom from the 
 
   // From the start page to a conversation it is in the middle, then at the bottom, and in no
   // frame between the two.
-  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
   await expect.poll(() => composerBottomGap(page)).toBeCloseTo(startGap, 0);
   const frames = recordComposerBottomGaps(page);
   await rowOf(`Docked two ${stamp}`).click();
@@ -560,7 +555,7 @@ test("the first message puts the agent's icon in the header at once, without its
   await expect(headerChip).toHaveAccessibleName("Select agent: Application Assistant");
   await expect(headerChip).toHaveText("");
   expect(await headerChip.boundingBox()).toEqual(headerChipBox);
-  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
   await expect(startChip).toHaveText("Application Assistant");
   await expect(headerChip).toHaveCount(0);
   expect(await startChip.boundingBox()).toEqual(startChipBox);
@@ -675,7 +670,7 @@ test("without its name the agent chip is an icon that opens the agent list under
   // The test names every option of the picker.
   instanceAgents: _instanceAgents
 }) => {
-  await serveAgentSettings(page, { showAgentName: false });
+  await serveAgentSettings(page, { showAgentName: false, showAgentDescriptions: false });
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
 
@@ -921,7 +916,7 @@ test("a tap opens the agent icon's list and chooses from it", async ({
   const context = await browser.newContext({ baseURL, hasTouch: true });
   await pageErrors.watch(context);
   const page = await context.newPage();
-  await serveAgentSettings(page, { showAgentName: false });
+  await serveAgentSettings(page, { showAgentName: false, showAgentDescriptions: false });
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
 
@@ -1066,7 +1061,7 @@ test("a single agent's icon names it in the list it opens under the pointer", as
 test("a single named agent is a plain label on the start page and an icon in the header", async ({
   page
 }) => {
-  await serveAgentSettings(page, { singleAgent: true });
+  await serveAgentSettings(page, { singleAgent: true, showAgentDescriptions: false });
   await signInViaUi(page, normalUser);
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
 
@@ -1494,7 +1489,7 @@ test("new conversation action opens an unsaved draft screen", async ({ page }) =
   });
 
   await page.goto("/");
-  const newConversationButton = page.getByRole("button", { name: "New chat", exact: true });
+  const newConversationButton = page.getByRole("button", { name: "New chat", exact: true }).first();
   await expect(newConversationButton).toBeVisible();
   await expect(page.getByRole("button", { name: "Select agent" })).toHaveAccessibleName(
     "Select agent: Application Assistant"
@@ -1535,7 +1530,7 @@ test("new conversation action returns from a persisted conversation to a clean d
   await expect(createdConversation).toHaveCount(1);
   await expect(createdConversation).toHaveAttribute("data-selected", "true");
 
-  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
 
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
   await expect(input).toHaveValue("");
@@ -1560,7 +1555,7 @@ test("standalone conversation routes are addressable and follow rail navigation"
   await expect(targetConversation).toHaveAttribute("data-selected", "true");
   await expect(page).toHaveURL(conversationUrlPattern(conversation.id));
 
-  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
   await input.fill("Route-scoped new draft");
 
@@ -2007,7 +2002,7 @@ test("first message from the root route moves to the persisted conversation rout
   const createdConversation = page.getByTestId("conversation-row").filter({ hasText: messageText });
   await expect(createdConversation).toHaveAttribute("data-selected", "true");
 
-  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
   await expect(page).toHaveURL(collaborationWorkspaceUrlPattern);
   await expect(page.getByPlaceholder("Message")).toHaveValue("");
   await expect(createdConversation).toHaveCount(1);
@@ -2206,7 +2201,7 @@ test("composer drafts are scoped to the new screen and selected conversations", 
   await expect(input).toHaveValue("");
   await input.fill("Selected conversation draft");
 
-  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
   await expect(input).toHaveValue("New screen draft");
 
   await targetConversation.getByRole("button").first().click();
@@ -2964,7 +2959,7 @@ test("standalone auth gates superadmin views", async ({ page }) => {
   await expect(settingsPages(page).getByRole("group", { name: "Instance" })).toHaveCount(0);
 });
 
-test("the Settings pages and Build are route-backed", async ({ page }) => {
+test("the Settings pages and Studio are route-backed", async ({ page }) => {
   await signInViaApi(page, superadminUser);
 
   await page.goto("/");
@@ -2984,7 +2979,7 @@ test("the Settings pages and Build are route-backed", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Usage", level: 1 })).toBeVisible();
   await expect(page.getByText("Billable this month")).toBeVisible();
 
-  await page.getByRole("button", { name: "Build", exact: true }).click();
+  await page.getByRole("button", { name: "Studio", exact: true }).click();
   await expect(page).toHaveURL(/\/build\/agents$/u);
   await expect(page.getByRole("heading", { name: "Agents", level: 1 })).toBeVisible();
   await expect(settingsPages(page)).toHaveCount(0);
@@ -3013,10 +3008,10 @@ test("users, usage, audit and API access follow the German locale", async ({ pag
   await expect(panel.getByRole("searchbox", { name: "Benutzer suchen" })).toBeVisible();
   await expect(panel.getByRole("columnheader", { name: "Anmeldemethoden" })).toBeVisible();
   await expect(panel.getByRole("button", { name: "Nächste Seite" })).toBeVisible();
-  // The sign-in above is the superadmin's last activity, written as a German date.
+  // The sign-in above is the superadmin's last activity, written as a German date, without seconds.
   await searchUsers(page, superadminUser.email, "Benutzer suchen");
   await expect(panel.getByRole("row", { name: /E2E Superadmin/u })).toContainText(
-    /\d{1,2}\.\d{1,2}\.\d{4}, \d{2}:\d{2}:\d{2}/u
+    /\d{1,2}\.\d{1,2}\.\d{4}, \d{2}:\d{2}(?!:\d)/u
   );
 
   await page.goto("/settings/instance/usage");
@@ -3169,17 +3164,18 @@ test("the Settings sub-rail stands still while the page scrolls up to the top ed
   }
 });
 
-test("Build opens on a list, and a list and an asset each have an address", async ({ page }) => {
+test("Studio opens on a list, and a list and an asset each have an address", async ({ page }) => {
   await signInViaApi(page, superadminUser);
   await page.goto("/");
 
-  // Build lands on the Agents list: names as titles, the id beneath, nothing to select first.
-  await page.getByRole("button", { name: "Build", exact: true }).click();
+  // Studio lands on the Agents list: names as titles, what each does beneath and never its id,
+  // nothing to select first.
+  await page.getByRole("button", { name: "Studio", exact: true }).click();
   await expect(page).toHaveURL(/\/build\/agents$/u);
   await expect(page.getByRole("heading", { name: "Agents", level: 1 })).toBeVisible();
   const agents = page.getByRole("list", { name: "Agents" });
   const research = agents.getByRole("link", { name: /Research Assistant/u });
-  await expect(research).toContainText("research_assistant");
+  await expect(research).not.toContainText("research_assistant");
   await expect(agents.getByRole("link", { name: /Application Assistant/u })).toBeVisible();
   await expect(page.getByText(/Version \d+/u)).toHaveCount(0);
   await expect(page.getByText("Also editable with the catalyst CLI.")).toHaveCount(0);
@@ -3230,7 +3226,7 @@ test("Build opens on a list, and a list and an asset each have an address", asyn
 
   // The kind rail switches the list; New starts a skill from there.
   await page
-    .getByRole("navigation", { name: "Kinds in Build" })
+    .getByRole("navigation", { name: "Kinds in Studio" })
     .getByRole("button", { name: /^Skills/u })
     .click();
   await expect(page).toHaveURL(/\/build\/skills$/u);
@@ -3243,7 +3239,7 @@ test("Build opens on a list, and a list and an asset each have an address", asyn
   await expect(newSkill).toBeHidden();
   await expect(page.getByRole("heading", { name: "Skills", level: 1 })).toBeVisible();
 
-  // Build without a kind, and the old Config address, open the list last visited.
+  // Studio without a kind, and the old Config address, open the list last visited.
   await page.goto("/build");
   await expect(page).toHaveURL(/\/build\/skills$/u);
   await page.goto("/admin/config");
@@ -3258,7 +3254,7 @@ test("Build opens on a list, and a list and an asset each have an address", asyn
   await expect(page).toHaveURL(/\/build\/agents$/u);
 });
 
-test("a Build row is a link, the heading takes the focus, and unsaved changes are asked about", async ({
+test("a Studio row is a link, the heading takes the focus, and unsaved changes are asked about", async ({
   page,
   context
 }) => {
@@ -3304,8 +3300,8 @@ test("a Build row is a link, the heading takes the focus, and unsaved changes ar
   await expect(page).toHaveURL(/\/build\/agents\/research_assistant$/u);
   await expect(instructions).toHaveValue("Unsaved instructions.");
 
-  // So does a way out of Build; discarding leaves, and nothing was stored.
-  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  // So does a way out of Studio; discarding leaves, and nothing was stored.
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
   await expect(question).toBeVisible();
   await question.getByRole("button", { name: "Discard changes", exact: true }).click();
   await expect(page).not.toHaveURL(/\/build\//u);
@@ -3332,19 +3328,19 @@ test("superadmin config follows the German locale", async ({ page }) => {
   await page.goto("/admin/config");
 
   await expect(page).toHaveURL(/\/build\/agents$/u);
-  await expect(page.getByRole("region", { name: "Bauen" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Bauen", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Studio" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Studio", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Agenten", level: 1 })).toBeVisible();
   await expect(
     page
-      .getByRole("navigation", { name: "Arten in Bauen" })
+      .getByRole("navigation", { name: "Arten im Studio" })
       .getByRole("button", { name: /^Skills/u })
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Neuer Agent", exact: true })).toBeVisible();
 
   await page
     .getByRole("list", { name: "Agenten" })
-    .getByRole("link", { name: /research_assistant/u })
+    .getByRole("link", { name: /Research Assistant/u })
     .click();
   await expect(page).toHaveURL(/\/build\/agents\/research_assistant$/u);
 
@@ -3380,32 +3376,42 @@ test("superadmin manages config assets with validation and conflict protection",
 }) => {
   test.setTimeout(60_000);
   await signInViaApi(page, superadminUser);
-  const original = await readAssetSet(page, apiBaseUrl);
-  const originalResearchAgent = original.assets.find(
-    (asset) => asset.kind === "agent" && asset.name === "research_assistant"
-  )?.config;
-  expect(originalResearchAgent).toBeDefined();
+  const researchAgentUrl = `${apiBaseUrl}/api/v1/assets/agent/research_assistant`;
+  const skillUrl = `${apiBaseUrl}/api/v1/assets/skill/config_e2e_skill`;
+  const original = await readAsset(page, researchAgentUrl);
+  if (!original) {
+    throw new Error("The instance has no agent research_assistant.");
+  }
+  const originalResearchAgent = original.config;
 
-  // The page shows no version counter; the instance's own answer says whether a save went through.
-  const expectVersion = async (version: number) => {
+  // The page shows no version counter; the instance's own answer says whether a save went
+  // through. It is asked for the two assets of this test only: other specs write agents and
+  // skills of their own on the same instance meanwhile, so the instance's count of releases
+  // and the set of its skills are not this test's to predict.
+  const revisionOf = async (assetUrl: string) => (await readAsset(page, assetUrl))?.revision;
+  /** Waits for the asset to stand at another revision than `before`, and answers that one. */
+  const expectSaved = async (assetUrl: string, before: number | undefined) => {
+    let revision: number | undefined;
     await expect
       .poll(async () => {
-        const response = await page.request.get(`${apiBaseUrl}/api/v1/instance/config/assets`);
-        const body: unknown = await response.json();
-        return typeof body === "object" && body !== null && "version" in body
-          ? body.version
-          : undefined;
+        revision = await revisionOf(assetUrl);
+        return revision !== undefined && revision !== before;
       })
-      .toBe(version);
+      .toBe(true);
+    return revision;
   };
-  /** Opens a kind's list from wherever Build is: back out of an asset page, then the kind rail. */
+  const expectUnchanged = async (assetUrl: string, revision: number | undefined) => {
+    await expect.poll(() => revisionOf(assetUrl)).toBe(revision);
+  };
+  let agentRevision: number | undefined = original.revision;
+  /** Opens a kind's list from wherever Studio is: back out of an asset page, then the kind rail. */
   const openList = async (kind: "Agents" | "Skills") => {
     const back = page.getByRole("button", { name: /^Back to /u });
     if ((await back.count()) > 0) {
       await back.click();
     }
     await page
-      .getByRole("navigation", { name: "Kinds in Build" })
+      .getByRole("navigation", { name: "Kinds in Studio" })
       .getByRole("button", { name: new RegExp(`^${kind}`, "u") })
       .click();
     await expect(page.getByRole("heading", { name: kind, level: 1 })).toBeVisible();
@@ -3435,7 +3441,7 @@ test("superadmin manages config assets with validation and conflict protection",
     await openList("Agents");
     await page
       .getByRole("list", { name: "Agents" })
-      .getByRole("link", { name: /research_assistant/u })
+      .getByRole("link", { name: /Research Assistant/u })
       .click();
     await expect(page).toHaveURL(/\/build\/agents\/research_assistant$/u);
     await expect(form()).toBeVisible();
@@ -3444,7 +3450,7 @@ test("superadmin manages config assets with validation and conflict protection",
     await openList("Skills");
     await page
       .getByRole("list", { name: "Skills" })
-      .getByRole("link", { name: /config_e2e_skill/u })
+      .getByRole("link", { name: /^Config E2E skill/u })
       .click();
     await expect(page).toHaveURL(/\/build\/skills\/config_e2e_skill$/u);
     await expect(form()).toBeVisible();
@@ -3452,7 +3458,7 @@ test("superadmin manages config assets with validation and conflict protection",
 
   try {
     await page.goto("/admin/config");
-    await expect(page.getByRole("region", { name: "Build" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Studio" })).toBeVisible();
     await expect(page).toHaveURL(/\/build\/agents$/u);
     await expect(page.getByText(/Version \d+/u)).toHaveCount(0);
 
@@ -3495,7 +3501,7 @@ test("superadmin manages config assets with validation and conflict protection",
     await fieldControl("Description").fill("Verifies config asset editing");
     await fieldControl("Content").fill("# Verify config assets");
     await form().getByRole("button", { name: "Create skill", exact: true }).click();
-    await expectVersion(original.version + 1);
+    const skillRevision = await expectSaved(skillUrl, undefined);
     await expect(page).toHaveURL(/\/build\/skills\/config_e2e_skill$/u);
     await expect(
       page.getByRole("heading", { name: "Config E2E skill", exact: true })
@@ -3514,13 +3520,13 @@ test("superadmin manages config assets with validation and conflict protection",
         { exact: true }
       )
     ).toBeVisible();
-    await expectVersion(original.version + 1);
+    await expectUnchanged(researchAgentUrl, agentRevision);
 
     await fieldset("Instance tools").getByLabel("read_skill", { exact: true }).check();
     const updatedPrompt = `Keep this saved prompt ${Date.now()}.`;
     await firstPromptText.fill(updatedPrompt);
     await form().getByRole("button", { name: "Save changes", exact: true }).click();
-    await expectVersion(original.version + 2);
+    agentRevision = await expectSaved(researchAgentUrl, agentRevision);
     await expect(firstPromptText).toHaveValue(updatedPrompt);
     await expect(form().getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
 
@@ -3548,7 +3554,7 @@ test("superadmin manages config assets with validation and conflict protection",
     await expect(deleteSkillDialog).toBeHidden();
     expect(configWrites).toEqual([]);
     page.off("request", recordConfigWrite);
-    await expectVersion(original.version + 2);
+    await expectUnchanged(skillUrl, skillRevision);
 
     await askToDelete();
     await page
@@ -3560,28 +3566,28 @@ test("superadmin manages config assets with validation and conflict protection",
         exact: true
       })
     ).toBeVisible();
-    await expectVersion(original.version + 2);
+    await expectUnchanged(skillUrl, skillRevision);
 
     await clickAgent();
     await toggleSkill();
     await expect(form().getByText("No skills chosen.", { exact: true })).toBeVisible();
     await form().getByRole("button", { name: "Save changes", exact: true }).click();
-    await expectVersion(original.version + 3);
+    agentRevision = await expectSaved(researchAgentUrl, agentRevision);
     await clickSkill();
     await askToDelete();
     await page
       .getByRole("dialog", { name: "Delete skill 'config_e2e_skill'?", exact: true })
       .getByRole("button", { name: "Delete", exact: true })
       .click();
-    await expectVersion(original.version + 4);
-    // A deleted asset has no page: Build is back on the kind's list, which is empty again.
+    await expectUnchanged(skillUrl, undefined);
+    // A deleted asset has no page: Studio is back on the kind's list, which has it no more.
     await expect(page).toHaveURL(/\/build\/skills$/u);
-    await expect(page.getByText(/^No skills yet\./u)).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Skills", level: 1 })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Config E2E skill/u })).toHaveCount(0);
 
     await clickAgent();
     const instructions = form().getByRole("textbox", { name: /^System prompt/u });
     const serverInstructions = `${String(originalResearchAgent?.instructions)}\n\nServer change.`;
-    const researchAgentUrl = `${apiBaseUrl}/api/v1/assets/agent/research_assistant`;
     const serverChange = await requestWithOrigin(page, "put", researchAgentUrl, {
       data: {
         expectedRevision: await assetRevision(page, researchAgentUrl),
@@ -3589,6 +3595,7 @@ test("superadmin manages config assets with validation and conflict protection",
       }
     });
     expect(serverChange.ok()).toBe(true);
+    agentRevision = await expectSaved(researchAgentUrl, agentRevision);
     const unsaved = `${String(originalResearchAgent?.instructions)}\n\nUnsaved UI change.`;
     await instructions.fill(unsaved);
     await form().getByRole("button", { name: "Save changes", exact: true }).click();
@@ -3597,13 +3604,26 @@ test("superadmin manages config assets with validation and conflict protection",
     const conflict = page.locator("[data-build-conflict]");
     await expect(conflict).toContainText(/saved this on .+, while you were editing\./u);
     await expect(instructions).toHaveValue(unsaved);
-    await expectVersion(original.version + 5);
+    await expectUnchanged(researchAgentUrl, agentRevision);
     await loadNewerVersion(page);
     await expect(conflict).toHaveCount(0);
     await expect(instructions).toHaveValue(serverInstructions);
   } finally {
-    const restored = await restoreAssetSet(page, apiBaseUrl, original);
+    // The agent first: the skill cannot be deleted while the agent still names it.
+    const restored = await requestWithOrigin(page, "put", researchAgentUrl, {
+      data: {
+        expectedRevision: await assetRevision(page, researchAgentUrl),
+        config: originalResearchAgent
+      }
+    });
     expect(restored.ok(), await restored.text()).toBe(true);
+    const leftSkill = await revisionOf(skillUrl);
+    if (leftSkill !== undefined) {
+      const deleted = await requestWithOrigin(page, "post", `${skillUrl}/delete`, {
+        data: { expectedRevision: leftSkill }
+      });
+      expect(deleted.ok(), await deleted.text()).toBe(true);
+    }
   }
 });
 
@@ -3633,9 +3653,9 @@ test("an instance admin opens every group of the Settings rail", async ({ page }
     "aria-current",
     "true"
   );
-  // Build stands in the main rail as an area of its own, not among the Settings pages.
-  await expect(page.getByRole("button", { name: "Build", exact: true })).toBeVisible();
-  await expect(rail.getByRole("button", { name: "Build" })).toHaveCount(0);
+  // Studio stands in the main rail as an area of its own, not among the Settings pages.
+  await expect(page.getByRole("button", { name: "Studio", exact: true })).toBeVisible();
+  await expect(rail.getByRole("button", { name: "Studio" })).toHaveCount(0);
 
   await rail.getByRole("button", { name: "API access", exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/instance\/api-access$/u);
@@ -3664,7 +3684,7 @@ test("an instance admin opens every group of the Settings rail", async ({ page }
   await expect(rail).toHaveCount(0);
 });
 
-// A grant in a Namespace opens Build for this user: no spec hands one out while this runs.
+// A grant in a Namespace opens Studio for this user: no spec hands one out while this runs.
 test("a plain user finds only their own pages in the Settings rail", async ({
   page,
   accessState: _accessState
@@ -3684,7 +3704,7 @@ test("a plain user finds only their own pages in the Settings rail", async ({
     await expect(rail.getByRole("button", { name: closed, exact: true })).toHaveCount(0);
   }
   await expect(rail.getByRole("group", { name: "Instance" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Build", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Studio", exact: true })).toHaveCount(0);
 
   // The server refuses what the rail hides: the list of users stays closed to this user.
   const users = await page.request.get(`${apiBaseUrl}/api/v1/instance/users`);
@@ -3966,26 +3986,27 @@ test("the surface slot keeps a width per kind, leaves both sides 380 px and cove
     );
   await page.getByRole("button", { name: "Send message" }).click();
 
-  // It opens beside the conversation at the default width, with nothing animating.
+  // It opens beside the conversation at 45 percent of the main area. Its width never moves in
+  // steps: the surface comes in from the edge at the width it keeps.
   await expect(slot).toHaveAttribute("data-surface-kind", "tool_display");
   await expect(slot).toHaveAttribute("data-surface-mode", "beside");
   await expect(slot.getByRole("heading", { name: "Surface view" })).toBeVisible();
-  await expect.poll(() => width(slot)).toBe(560);
+  await expect.poll(() => width(slot)).toBe(450);
   await expect(slot).toHaveCSS("transition-duration", "0s");
   await expect(showChat).toHaveCount(0);
   // The main area is the window without the 280 px rail: 1000 px, so the surface may take 620.
   await expect(separator).toHaveAttribute("aria-valuemin", "380");
   await expect(separator).toHaveAttribute("aria-valuemax", "620");
-  await expect(separator).toHaveAttribute("aria-valuenow", "440");
+  await expect(separator).toHaveAttribute("aria-valuenow", "550");
   expect((await separator.boundingBox())?.width).toBe(12);
 
   // The keyboard moves the line 16 px, and Home and End take it to the limits.
   await separator.focus();
   await page.keyboard.press("ArrowRight");
-  await expect(separator).toHaveAttribute("aria-valuenow", "456");
-  await expect.poll(() => width(slot)).toBe(544);
+  await expect(separator).toHaveAttribute("aria-valuenow", "566");
+  await expect.poll(() => width(slot)).toBe(434);
   await page.keyboard.press("ArrowLeft");
-  await expect(separator).toHaveAttribute("aria-valuenow", "440");
+  await expect(separator).toHaveAttribute("aria-valuenow", "550");
   await page.keyboard.press("Home");
   await expect(separator).toHaveAttribute("aria-valuenow", "380");
   await expect.poll(() => width(slot)).toBe(620);
@@ -4048,6 +4069,161 @@ test("the surface slot keeps a width per kind, leaves both sides 380 px and cove
   await expect(slot).toBeHidden();
   await card.click();
   await expect(slot).toHaveAttribute("data-surface-mode", "covering");
+});
+
+test("panels at the right of the conversation open and close in one step, leave it 380 px and scroll nothing sideways", async ({
+  page
+}) => {
+  test.setTimeout(90_000);
+  const slot = page.locator("aside[data-surface-kind]");
+  const resources = page.getByRole("complementary", { name: "Resources" });
+  const toggle = page.getByRole("button", { name: "Toggle Resources panel" });
+  const closeSurface = page.getByRole("button", { name: "Close display panel" });
+  const suffix = Date.now();
+  const fileName = `umsatz-${suffix}.csv`;
+
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await signInViaUi(page, normalUser);
+  // A stored width wider than the window: the file takes all it may, so the conversation is at
+  // its minimum, and room kept for the card on top of that would squash it.
+  await page.evaluate(() =>
+    window.localStorage.setItem("vivd-catalyst:surface-width:file_preview", "5000")
+  );
+  await page.locator('input[type="file"]').setInputFiles({
+    name: fileName,
+    mimeType: "text/csv",
+    buffer: Buffer.from(
+      [
+        "Month;Revenue",
+        ...Array.from({ length: 20 }, (_, row) => `M${row + 1};${1000 + row}`)
+      ].join("\n")
+    )
+  });
+  // The chip says the size once the upload stands; a message sent before that goes without the file.
+  await expect(
+    page
+      .locator("form")
+      .filter({ has: page.getByPlaceholder("Message") })
+      .getByText(/ · \d+ B$/u)
+  ).toBeVisible();
+  await page
+    .getByPlaceholder("Message")
+    .fill(
+      `Panels ${suffix}. ${"A sentence that is long enough to wrap in a narrow column. ".repeat(12)}`
+    );
+  await page.getByRole("button", { name: "Send message" }).click();
+
+  // With resources the card opens by itself where it has room beside the conversation.
+  await expect(resources).toBeVisible();
+  await expect(resources.getByText(fileName)).toBeVisible();
+  await expect(resources).toHaveCSS("animation-name", "panel-in");
+  // Marked, to tell later that it was never taken away and put back.
+  await resources.evaluate((card) => card.setAttribute("data-kept", ""));
+
+  // The file opens over the card: the conversation gives up the card's room and takes the
+  // file's in the same frame.
+  let frames = await watchPanelFrames(page);
+  await resources.getByText(fileName).click();
+  await expect(slot).toHaveAttribute("data-surface-kind", "file_preview");
+  await expect(slot).toHaveAttribute("data-surface-mode", "beside");
+  await expect(slot).toHaveCSS("animation-name", "panel-in");
+  expectOneStep(await frames.stop(), "the file opens");
+  expect(Math.round((await slot.boundingBox())?.width ?? 0)).toBe(620);
+  await expect(resources).toHaveAttribute("data-kept", "");
+  await expect(resources).toHaveAttribute("inert", "");
+
+  // Closing it uncovers the card, which is the one that was there.
+  frames = await watchPanelFrames(page);
+  await closeSurface.click();
+  await expect(slot).toBeHidden();
+  expectOneStep(await frames.stop(), "the file closes");
+  await expect(resources).toHaveAttribute("data-kept", "");
+  await expect(resources).not.toHaveAttribute("inert", "");
+
+  // The card closes to its button, which stands in the header's row and on no message.
+  frames = await watchPanelFrames(page);
+  await page.getByRole("button", { name: "Close Resources panel" }).click();
+  await expect(toggle).toBeVisible();
+  await expect(resources).toBeHidden();
+  expectOneStep(await frames.stop(), "the card closes");
+  const header = await page.locator("header").first().boundingBox();
+  const toggleBox = await toggle.boundingBox();
+  if (!header || !toggleBox) {
+    throw new Error("The header or the Resources button has no box.");
+  }
+  expect(toggleBox.y + toggleBox.height).toBeLessThanOrEqual(header.y + header.height);
+  // The thread scrolls under the header's row, so a message may well stand at the button's
+  // height: the button is beside the column of the messages and none reaches under it.
+  for (const message of await page.locator(".group\\/message").all()) {
+    const box = await message.boundingBox();
+    // A message without a box would pass as uncovered without having been measured.
+    expect(box).not.toBeNull();
+    const covered =
+      box !== null &&
+      box.y < toggleBox.y + toggleBox.height &&
+      box.y + box.height > toggleBox.y &&
+      box.x < toggleBox.x + toggleBox.width &&
+      box.x + box.width > toggleBox.x;
+    expect(covered).toBe(false);
+  }
+
+  // The file opens from the message while the card is closed, and Escape closes it.
+  frames = await watchPanelFrames(page);
+  await page.getByRole("button", { name: `Open preview for ${fileName}` }).click();
+  await expect(slot).toHaveAttribute("data-surface-kind", "file_preview");
+  // Opened from a message the file is looked up first; what stands in the slot until then
+  // would come back after an Escape pressed too early.
+  await expect(slot.getByRole("button", { name: /^Download / }).first()).toBeVisible();
+  expectOneStep(await frames.stop(), "the file opens from the message");
+  await expect(toggle).toBeVisible();
+  frames = await watchPanelFrames(page);
+  await page.keyboard.press("Escape");
+  await expect(slot).toBeHidden();
+  expectOneStep(await frames.stop(), "Escape closes the file");
+
+  // The button opens the card again.
+  frames = await watchPanelFrames(page);
+  await toggle.click();
+  await expect(resources).toBeVisible();
+  expectOneStep(await frames.stop(), "the card opens");
+
+  // A view opens in the same slot, here in a conversation without resources.
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
+  await expect(resources).toBeHidden();
+  await page
+    .getByPlaceholder("Message")
+    .fill(
+      `/tool show_view ${JSON.stringify({ html: "<p>Panel body</p>", mode: "side_panel", title: "Panel view" })}`
+    );
+  frames = await watchPanelFrames(page);
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(slot).toHaveAttribute("data-surface-kind", "tool_display");
+  await expect(slot.getByRole("heading", { name: "Panel view" })).toBeVisible();
+  expectOneStep(await frames.stop(), "the view opens", { widths: 3 });
+  expect(Math.round((await slot.boundingBox())?.width ?? 0)).toBe(450);
+  frames = await watchPanelFrames(page);
+  await closeSurface.click();
+  await expect(slot).toBeHidden();
+  expectOneStep(await frames.stop(), "the view closes");
+});
+
+test("under reduced motion a panel is there at once and gone at once", async ({ page }) => {
+  const slot = page.locator("aside[data-surface-kind]");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await signInViaUi(page, normalUser);
+  await page
+    .getByPlaceholder("Message")
+    .fill(
+      `/tool show_view ${JSON.stringify({ html: "<p>Still body</p>", mode: "side_panel", title: "Still view" })}`
+    );
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(slot.getByRole("heading", { name: "Still view" })).toBeVisible();
+  await expect(slot).toHaveCSS("animation-name", "none");
+  // Nothing of the surface is held for a way out: with the click it has left the page.
+  await page.getByRole("button", { name: "Close display panel" }).click();
+  await expect(page.getByRole("heading", { name: "Still view" })).toHaveCount(0);
+  expect(await page.locator("aside.bg-card:not([hidden])").count()).toBe(0);
 });
 
 test("the rail shows placeholder rows while its list loads and offers a retry when the load failed", async ({
@@ -4127,7 +4303,7 @@ test("under 768 px the rail is a drawer that the header opens and a choice close
   await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
 });
 
-// A grant in a Namespace opens Build for this user: no spec hands one out while this runs.
+// A grant in a Namespace opens Studio for this user: no spec hands one out while this runs.
 test("the command palette opens from the rail and the keyboard, searches titles on the server and opens a conversation", async ({
   page,
   accessState: _accessState
@@ -4167,7 +4343,7 @@ test("the command palette opens from the rail and the keyboard, searches titles 
   await expect(palette.getByRole("option", { name: "Profile", exact: true })).toBeVisible();
   await expect(palette.getByRole("option", { name: "Security", exact: true })).toBeVisible();
   await expect(palette.getByRole("option", { name: "Users", exact: true })).toHaveCount(0);
-  await expect(palette.getByRole("option", { name: "Build", exact: true })).toHaveCount(0);
+  await expect(palette.getByRole("option", { name: "Studio", exact: true })).toHaveCount(0);
   expect(searches).toBe(0);
   // Escape closes it and the focus is back on what opened it.
   await page.keyboard.press("Escape");
@@ -4257,13 +4433,13 @@ test("the palette lists the eight most recent conversations and reaches the rest
   await expect(palette.getByRole("option")).toHaveText([oldest ?? ""]);
 });
 
-test("the palette's Go to group offers an administrator the instance pages and Build", async ({
+test("the palette's Go to group offers an administrator the instance pages and Studio", async ({
   page
 }) => {
   await signInViaUi(page, superadminUser);
   await page.getByRole("button", { name: "Search", exact: true }).click();
   const palette = page.getByRole("dialog", { name: "Search" });
-  for (const name of ["Profile", "Users", "Usage", "Audit", "Build"]) {
+  for (const name of ["Profile", "Users", "Usage", "Audit", "Studio"]) {
     await expect(palette.getByRole("option", { name, exact: true })).toBeVisible();
   }
   await palette.getByRole("option", { name: "Usage", exact: true }).click();
@@ -4488,7 +4664,7 @@ test("superadmin creates a user with a password from the users panel", async ({ 
   await expect(createdPasswordInput).toHaveValue(createdUser.password);
   await page.getByRole("button", { name: "Open user" }).click();
   await expect(page.getByText(createdUser.displayLabel, { exact: true })).toBeVisible();
-  await expect(page.getByText("better-auth")).toBeVisible();
+  await expect(page.getByText("Password sign-in", { exact: true }).first()).toBeVisible();
 
   await page.getByRole("button", { name: "E2E Superadmin account" }).click();
   await page.getByRole("menuitem", { name: "Sign out" }).click();
@@ -4679,6 +4855,94 @@ function longRunMessage(token: string): string {
 
 function isRunEventsPath(pathname: string): boolean {
   return /^\/api\/v1\/conversations\/[^/]+\/runs\/[^/]+\/events$/u.test(pathname);
+}
+
+/** What the frames painted while a panel opened or closed had in common. */
+interface PanelFrames {
+  /** The least room the conversation had for its text and gutters, in pixels. */
+  minRoom: number;
+  /** The widths the thread's column was laid out at, in the order they appeared. */
+  widths: number[];
+  /** The farthest anything was scrolled or reached sideways, in pixels. */
+  sideways: number;
+}
+
+declare global {
+  interface Window {
+    /** Ends the watch `watchPanelFrames` began and gives what it read. */
+    stopPanelFrames?: () => PanelFrames;
+  }
+}
+
+/**
+ * Reads every frame the page paints until `stop`: the room the conversation keeps beside what
+ * stands at its right, the widths its text was wrapped at, and whether the frame, the main area
+ * or the sidebar was scrolled sideways or the document grew wider than the window.
+ */
+async function watchPanelFrames(page: Page): Promise<{ stop(): Promise<PanelFrames> }> {
+  await page.evaluate(() => {
+    const frames = { minRoom: Number.POSITIVE_INFINITY, widths: [] as number[], sideways: 0 };
+    let watching = true;
+    const read = () => {
+      const viewport = document.querySelector<HTMLElement>(".chat-thread-inset");
+      const column = viewport?.querySelector<HTMLElement>(":scope > div");
+      if (viewport && column) {
+        const room =
+          viewport.getBoundingClientRect().width -
+          Number.parseFloat(getComputedStyle(viewport).paddingRight);
+        frames.minRoom = Math.min(frames.minRoom, room);
+        if (frames.widths.at(-1) !== column.offsetWidth) {
+          frames.widths.push(column.offsetWidth);
+        }
+      }
+      const scrollers = [
+        document.scrollingElement,
+        document.querySelector("main"),
+        document.getElementById("workspace-content"),
+        document.querySelector("[data-sidebar-body]"),
+        viewport
+      ];
+      frames.sideways = Math.max(
+        frames.sideways,
+        document.documentElement.scrollWidth - window.innerWidth,
+        -(document.querySelector("nav")?.getBoundingClientRect().left ?? 0),
+        ...scrollers.map((scroller) => scroller?.scrollLeft ?? 0)
+      );
+      if (watching) {
+        // A task from the frame's callback runs after the frame is laid out and painted.
+        requestAnimationFrame(() => setTimeout(read, 0));
+      }
+    };
+    read();
+    window.stopPanelFrames = () => {
+      watching = false;
+      read();
+      return frames;
+    };
+  });
+  return {
+    stop: () =>
+      page.evaluate(() => {
+        if (!window.stopPanelFrames) {
+          throw new Error("No frames are being watched.");
+        }
+        return window.stopPanelFrames();
+      })
+  };
+}
+
+/**
+ * The conversation kept its minimum in every frame, its text was wrapped at no width between
+ * the one before and the one after, and nothing was scrolled sideways. A run that streams its
+ * answer meanwhile may add the width of that change to the two.
+ */
+function expectOneStep(frames: PanelFrames, what: string, limits: { widths?: number } = {}): void {
+  expect(frames.minRoom, `the conversation's room while ${what}`).toBeGreaterThanOrEqual(380);
+  expect(
+    frames.widths.length,
+    `column widths while ${what}: ${frames.widths.join(", ")}`
+  ).toBeLessThanOrEqual(limits.widths ?? 2);
+  expect(frames.sideways, `scrolled sideways while ${what}`).toBeLessThanOrEqual(0);
 }
 
 /** The gap between the composer and the lower edge of the window, as painted now. */

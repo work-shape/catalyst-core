@@ -1,4 +1,4 @@
-import { Inbox, LayoutGrid, type LucideIcon } from "lucide-react";
+import { Bot, Inbox, LayoutGrid, Workflow, type LucideIcon } from "lucide-react";
 import type { TranslationKey } from "../i18n";
 import type { WorkspaceRouteView } from "./workspace-route";
 
@@ -7,8 +7,12 @@ import type { WorkspaceRouteView } from "./workspace-route";
  * absent here does not show.
  */
 export interface RailSectionsGiven {
+  /** The session has workspaces, so the agents of the open one have a page. */
+  agents?: boolean;
   /** The Apps module is on and the person is in a workspace that can hold Apps. */
   apps?: boolean;
+  /** The Workflows module is on and the person may read a Workflow. */
+  workflows?: boolean;
   /** Present for a person who may decide requests or has made one. */
   inbox?: { toDecide: number };
 }
@@ -35,11 +39,25 @@ export interface RailSection {
  */
 export const railSections: readonly RailSection[] = [
   {
+    id: "agents",
+    label: "nav.agents",
+    icon: Bot,
+    view: "agents",
+    shown: (given) => given.agents === true
+  },
+  {
     id: "apps",
     label: "nav.apps",
     icon: LayoutGrid,
     view: "apps",
     shown: (given) => given.apps === true
+  },
+  {
+    id: "workflows",
+    label: "nav.workflows",
+    icon: Workflow,
+    view: "workflows",
+    shown: (given) => given.workflows === true
   },
   {
     id: "inbox",

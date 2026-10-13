@@ -1,5 +1,6 @@
 import { AppError } from "./errors";
 import type { CollaborationWorkspaceId } from "./ids";
+import type { LocaleCode } from "./localization";
 
 /** Who owns an asset: the instance, or one workspace. */
 export type AssetScope =
@@ -16,6 +17,62 @@ export function assetScopesEqual(left: AssetScope, right: AssetScope): boolean {
 export interface AssetValidationIssue {
   message: string;
   path?: PropertyKey[];
+  /** The fixed code of the check that found it, where the check names one. */
+  code?: string;
+}
+
+/** The code of a text or a key of a definition that the store cannot hold. */
+const ASSET_TEXT_NOT_STORABLE = "text_not_storable";
+
+/** How many texts of one definition are named before the list ends. */
+const UNSTORABLE_TEXT_ISSUES_MAX = 20;
+
+/** A NUL character or half of a surrogate pair: what a revision, stored as JSON, cannot hold. */
+function isStorableText(text: string): boolean {
+  return !text.includes("\u0000") && !/\p{Surrogate}/u.test(text);
+}
+
+/**
+ * Every text and every key of a definition that the store cannot hold, by the path of the
+ * value. A key is named by the object that has it, so no path and no message carries the text
+ * itself: a refusal is stored with its run. Walked without recursion, since a definition is
+ * as deep as its sender made it.
+ */
+function unstorableTextIssues(input: unknown): AssetValidationIssue[] {
+  const issues: AssetValidationIssue[] = [];
+  const open: { value: unknown; path: PropertyKey[] }[] = [{ value: input, path: [] }];
+  for (
+    let next = open.pop();
+    next && issues.length < UNSTORABLE_TEXT_ISSUES_MAX;
+    next = open.pop()
+  ) {
+    const { value, path } = next;
+    if (typeof value === "string") {
+      if (!isStorableText(value)) {
+        issues.push({
+          path,
+          code: ASSET_TEXT_NOT_STORABLE,
+          message:
+            "The text has a NUL character or half of a surrogate pair in it, which a definition cannot hold"
+        });
+      }
+    } else if (Array.isArray(value)) {
+      value.forEach((item: unknown, index) => open.push({ value: item, path: [...path, index] }));
+    } else if (typeof value === "object" && value !== null) {
+      const entries = Object.entries(value);
+      if (entries.some(([key]) => !isStorableText(key))) {
+        issues.push({
+          path,
+          code: ASSET_TEXT_NOT_STORABLE,
+          message:
+            "A key of this object has a NUL character or half of a surrogate pair in it, which a definition cannot hold"
+        });
+        continue;
+      }
+      for (const [key, item] of entries) open.push({ value: item, path: [...path, key] });
+    }
+  }
+  return issues;
 }
 
 /** What a kind's schema must answer. A schema library's object fits without being named here. */
@@ -119,7 +176,11 @@ export interface AssetKindDefinition<Definition, Kind extends string = string> {
     context: AssetValidationContext,
     definitions: readonly Definition[]
   ): AssetValidationIssue[];
-  summarize(definition: Definition): AssetSummary;
+  /**
+   * What a list shows of a definition. A kind whose names and descriptions hold several
+   * languages answers them in `locale`, and in the instance's default without one.
+   */
+  summarize(definition: Definition, locale?: LocaleCode): AssetSummary;
 }
 
 /** A definition the schema or the name rule refused, with its place among those read. */
@@ -163,7 +224,7 @@ export interface RegisteredAssetKind<Kind extends string = string> {
   /** Reads definitions: the schema first, then the name rule. The checks follow on the reading. */
   read(definitions: readonly unknown[]): AssetKindReading;
   /** Throws `VALIDATION_FAILED` for a definition the schema refuses. */
-  summarize(definition: unknown): AssetSummary;
+  summarize(definition: unknown, locale?: LocaleCode): AssetSummary;
 }
 
 const KIND_ID_PATTERN = /^[a-z][a-z0-9]*(_[a-z0-9]+)*$/u;
@@ -227,6 +288,12 @@ export function defineAssetKind<Definition, Kind extends string>(
       const accepted: Definition[] = [];
       const refused: RefusedAssetDefinition[] = [];
       for (const [index, input] of inputs.entries()) {
+        // Asked before the schema, which lets through what it does not name.
+        const unstorable = unstorableTextIssues(input);
+        if (unstorable.length > 0) {
+          refused.push({ index, issues: unstorable });
+          continue;
+        }
         const parsed = definition.schema.safeParse(input);
         if (!parsed.success) {
           const name = readName(input);
@@ -252,7 +319,7 @@ export function defineAssetKind<Definition, Kind extends string>(
         validateWrite: (context) => definition.validateWrite?.(context, accepted) ?? []
       };
     },
-    summarize(input: unknown) {
+    summarize(input: unknown, locale?: LocaleCode) {
       const parsed = definition.schema.safeParse(input);
       if (!parsed.success) {
         throw new AppError("VALIDATION_FAILED", `The ${definition.kind} definition is invalid`, {
@@ -262,7 +329,7 @@ export function defineAssetKind<Definition, Kind extends string>(
           }))
         });
       }
-      return definition.summarize(parsed.data);
+      return definition.summarize(parsed.data, locale);
     }
   });
 }

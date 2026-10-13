@@ -31,6 +31,13 @@ export {
 export { PageSaveCardView } from "./page-card";
 export { changedSourcePaths, defaultOpenPath, PageFilesView } from "./page-files";
 export { PageHostProvider } from "./page-host";
+export {
+  codeColouring,
+  HIGHLIGHT_MAX_CHARS,
+  HIGHLIGHT_MAX_LINES,
+  highlightCode
+} from "../code-highlight";
+export { StoredFileView } from "../stored-file-view";
 export { pageSurface, pageSurfaceAfterRunCalls, readPageSave, type PageSave } from "./page-save";
 export {
   pageFrameAddress,

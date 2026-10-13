@@ -5,11 +5,14 @@ import { DocsAddressProvider } from "@vivd-catalyst/ui";
 import {
   buildAssetKinds,
   BuildAssetKindsProvider,
+  buildCreateRequested,
   BuildFrame,
   buildLocationOfRoute,
   BuildNavigationProvider,
   buildRouteOfLocation,
+  clearBuildCreateRequest,
   isEditableKind,
+  requestBuildCreate,
   resolveBuildPlace,
   resolveBuildRights,
   SkillEditor,
@@ -73,7 +76,12 @@ function asset(kind: string, name: string, overrides: Partial<BuildAsset> = {}):
 // In the order the instance answers them: by name.
 const agents: BuildAssetRow[] = [
   row("agent", "tax-steuer_agent", { title: "Steuer-Agent", namespace: "tax-" }),
-  row("agent", "workflow_assistant", { title: "Workflow Assistant", isDefault: true, revision: 3 })
+  row("agent", "workflow_assistant", {
+    title: "Workflow Assistant",
+    description: "Reviews a workflow and plans the next checks.",
+    isDefault: true,
+    revision: 3
+  })
 ];
 const skills: BuildAssetRow[] = [row("skill", "tax-review", { title: "Tax review" })];
 
@@ -205,13 +213,39 @@ const skillPages: BuildAssetKind = {
 };
 const pageKinds = [agentKind, skillPages];
 
-describe("Build frame", () => {
-  it("lands on the Agents list, titled by the name with the id beneath", () => {
+describe("Studio frame", () => {
+  it("opens the dialog of a new agent on the list when a page outside Studio asked for it", () => {
+    const dialog = '<form id="build-create-form"';
+    try {
+      expect(render({ kindPath: "agents" })).not.toContain(dialog);
+
+      requestBuildCreate("agents");
+      expect(buildCreateRequested("agents")).toBe(true);
+      expect(buildCreateRequested("skills")).toBe(false);
+      expect(render({ kindPath: "agents" })).toContain(dialog);
+      // The wish names one kind's list: no other list and no asset's page opens with it.
+      expect(render({ kindPath: "skills" })).not.toContain(dialog);
+      expect(render({ kindPath: "agents", name: "workflow_assistant" })).not.toContain(dialog);
+      // A reader who may not create is asked nothing.
+      expect(
+        render({ kindPath: "agents" }, { source: source({ permissions: ["config_assets.read"] }) })
+      ).not.toContain(dialog);
+
+      clearBuildCreateRequest();
+      expect(render({ kindPath: "agents" })).not.toContain(dialog);
+    } finally {
+      clearBuildCreateRequest();
+    }
+  });
+
+  it("lands on the Agents list, titled by the name with what the agent does beneath", () => {
     const markup = render({});
 
     expect(markup).toContain('<h1 class="min-w-0 break-words outline-none text-title-lg">Agents');
     expect(markup).toContain(">Workflow Assistant<");
-    expect(markup).toContain('<code class="font-mono">workflow_assistant</code>');
+    expect(markup).toContain(">Reviews a workflow and plans the next checks.<");
+    // An id is never the second line of an agent.
+    expect(markup).not.toContain(">workflow_assistant<");
     expect(markup).toContain(">Default agent<");
     expect(markup).toContain(">New agent<");
     expect(markup).not.toContain("New skill");
@@ -230,12 +264,54 @@ describe("Build frame", () => {
 
   it("falls back to the id where the instance sent no title", () => {
     const markup = render(
-      { kindPath: "skills" },
-      { source: source({ lists: { skill: { rows: [row("skill", "untitled", { title: " " })] } } }) }
+      { kindPath: "agents" },
+      { source: source({ lists: { agent: { rows: [row("agent", "untitled", { title: " " })] } } }) }
     );
 
     expect(markup).toContain(">untitled</");
-    expect(markup).toContain('<code class="font-mono">untitled</code>');
+    expect(markup).not.toContain('<code class="font-mono">untitled</code>');
+  });
+
+  it("says what a skill knows how to do, and shows a skill without a summary by its title alone", () => {
+    const summary = "Knows how to review a tax file.";
+    const markup = render(
+      { kindPath: "skills" },
+      {
+        source: source({
+          lists: {
+            skill: {
+              rows: [
+                row("skill", "tax-review", { title: "Tax review", attributes: { summary } }),
+                row("skill", "plain", { title: "Plain language" }),
+                // A custom skill named like a shipped one, which claims the shipped icon.
+                row("skill", "pdf", { title: "PDF", attributes: { icon: "pdf" } }),
+                row("skill", "platform.pdf", {
+                  title: "PDF",
+                  attributes: { origin: "release", icon: "pdf" }
+                })
+              ]
+            }
+          }
+        })
+      }
+    );
+    const rowOf = (name: string) =>
+      new RegExp(
+        `<li[^>]*>(?:(?!</li>).)*href="/build/skills/${name}"(?:(?!</li>).)*</li>`,
+        "u"
+      ).exec(markup)?.[0] ?? "";
+
+    expect(rowOf("tax-review")).toContain(`>${summary}<`);
+    // Never the id and never the text for the agent.
+    expect(markup).not.toContain("<code");
+    expect(rowOf("plain")).toContain(">Plain language<");
+    expect(rowOf("plain")).not.toContain("text-caption text-muted-foreground");
+    expect(rowOf("plain")).toContain('data-skill-icon="generic"');
+    expect(rowOf("pdf")).toContain('data-skill-icon="generic"');
+    expect(rowOf("pdf")).not.toContain("data-file-type");
+    expect(rowOf("platform.pdf")).toContain('data-file-type="pdf"');
+    // The icon repeats the title beside it.
+    expect(rowOf("platform.pdf")).toMatch(/<span aria-hidden="true" data-skill-icon="pdf"/u);
   });
 
   it("names the kinds in the reader's language", () => {
@@ -258,10 +334,10 @@ describe("Build frame", () => {
       }
     );
 
-    expect(both).toContain('aria-label="Kinds in Build"');
+    expect(both).toContain('aria-label="Kinds in Studio"');
     expect(both).toContain('<option value="agents">Agents</option>');
     expect(both).toContain('<option value="skills" selected="">Skills</option>');
-    expect(one).not.toContain('aria-label="Kinds in Build"');
+    expect(one).not.toContain('aria-label="Kinds in Studio"');
   });
 
   it("shows a planted kind as a third rail item, with its list and its asset page", () => {
@@ -332,7 +408,9 @@ describe("Build frame", () => {
     expect(list).not.toContain(">New ");
     expect(list).not.toContain("More actions");
     // The list says where Connections come from, with rows and without.
-    expect(list).toContain("Connections come from the release config and cannot be changed here.");
+    expect(list).toContain(
+      "The operator of this instance sets up its connections. They cannot be changed here."
+    );
     // The address of a Connection the instance does not hold says so, and names the way back.
     const missing = render(
       { kindPath: "connections", name: "crm" },
@@ -358,11 +436,11 @@ describe("Build frame", () => {
       "No connections yet. A connection holds the access to an outside system."
     );
     expect(empty("en")).toContain(
-      "Connections come from the release config and cannot be changed here."
+      "The operator of this instance sets up its connections. They cannot be changed here."
     );
     expect(empty("en")).not.toContain("cannot be created here");
     expect(empty("de")).toContain(
-      "Verbindungen kommen aus der Release-Konfiguration und lassen sich hier nicht ändern."
+      "Der Betreiber dieser Instanz richtet ihre Verbindungen ein. Hier lassen sie sich nicht ändern."
     );
     expect(empty("en")).not.toContain(">New ");
     expect(empty("de")).toContain(
@@ -414,10 +492,10 @@ describe("Build frame", () => {
     expect(page).not.toContain("There is no agent");
   });
 
-  it("says that Build could not be loaded and offers to try again", () => {
+  it("says that Studio could not be loaded and offers to try again", () => {
     const area = render(
       {},
-      { source: source({ overrides: { kinds: [], error: "Build could not be loaded." } }) }
+      { source: source({ overrides: { kinds: [], error: "Studio could not be loaded." } }) }
     );
     const list = render(
       { kindPath: "agents" },
@@ -429,7 +507,7 @@ describe("Build frame", () => {
     );
 
     expect(area).toContain('role="alert"');
-    expect(area).toContain("Build could not be loaded.");
+    expect(area).toContain("Studio could not be loaded.");
     expect(area).toContain("Try again");
     expect(area).not.toContain("There is nothing to build on this instance yet.");
     expect(list).toContain('role="alert"');
@@ -457,7 +535,7 @@ describe("Build frame", () => {
   });
 });
 
-describe("Build for a Namespace holder", () => {
+describe("Studio for a Namespace holder", () => {
   const holder = (namespaces: Namespaces, input: SourceInput = {}) =>
     source({ permissions: [], namespaces, ...input });
 
@@ -480,12 +558,11 @@ describe("Build for a Namespace holder", () => {
 
   it("names the Namespace of a row, and none on a row that belongs to none", () => {
     const markup = render({ kindPath: "agents" }, { source: holder([taxNamespace]) });
-    const rowOf = (name: string) =>
-      markup.split("<li").find((item) => item.includes(`${name}</code>`)) ?? "";
+    const rowOf = (title: string) =>
+      markup.split("<li").find((item) => item.includes(`>${title}<`)) ?? "";
 
-    expect(rowOf("tax-steuer_agent")).toContain(">Tax<");
-    expect(rowOf("workflow_assistant")).toContain(">Workflow Assistant<");
-    expect(rowOf("workflow_assistant")).not.toContain(">Tax<");
+    expect(rowOf("Steuer-Agent")).toContain(">Tax<");
+    expect(rowOf("Workflow Assistant")).not.toContain(">Tax<");
   });
 
   it("shows the prefix on a row whose Namespace the reader does not hold", () => {
@@ -515,7 +592,7 @@ describe("Build for a Namespace holder", () => {
   });
 });
 
-describe("Build asset page", () => {
+describe("Studio asset page", () => {
   const taxSkill = asset("skill", "tax-review", {
     namespace: "tax-",
     config: {
@@ -662,7 +739,7 @@ describe("Build asset page", () => {
   });
 });
 
-describe("Build addresses", () => {
+describe("Studio addresses", () => {
   const kinds = visibleBuildKinds(buildAssetKinds, source().kinds);
 
   it("opens the kind last visited at /build, else the first one, and marks the address for correction", () => {
@@ -703,7 +780,7 @@ describe("Build addresses", () => {
     ).toEqual({ kind: viewed, name: "crm", corrected: false });
   });
 
-  it("maps a place in Build to its route and back", () => {
+  it("maps a place in Studio to its route and back", () => {
     for (const location of [{}, { kindPath: "agents" }, { kindPath: "skills", name: "a.b" }]) {
       expect(buildLocationOfRoute(buildRouteOfLocation(location))).toEqual(location);
     }

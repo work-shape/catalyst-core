@@ -98,7 +98,7 @@ describe("compact approval request card in the thread", () => {
 
     expect(markup).toContain('data-variant="compact"');
     expect(markup).toContain("Bei Gehaltsabrechnungen auch die Steuerklasse prüfen.");
-    expect(markup).toContain("Fähigkeit: Gehaltsabrechnungen prüfen");
+    expect(markup).toContain("Skill: Gehaltsabrechnungen prüfen");
     expect(markup).toContain("Wartet auf Freigabe");
     expect(markup).toContain(">Details</button>");
     expect(markup).not.toContain("Bisher");
@@ -185,7 +185,7 @@ describe("compact approval request card in the thread", () => {
     const markup = renderCompact({ kind: "future_kind" });
 
     expect(markup).toContain("Bei Gehaltsabrechnungen auch die Steuerklasse prüfen.");
-    expect(markup).not.toContain("Fähigkeit:");
+    expect(markup).not.toContain("Skill:");
   });
 });
 
@@ -282,7 +282,7 @@ describe("first message of a reviewer's revision conversation", () => {
       "de"
     );
 
-    expect(message).toContain("Fähigkeit „Payroll“ (payroll)");
+    expect(message).toContain("Skill „Payroll“ (payroll)");
     expect(message).toContain("mit read_skill");
     expect(message).toContain(`Gewünschte Änderung: ${comment}`);
     expect(message).toContain(
@@ -435,10 +435,30 @@ describe("skill change body", () => {
       }
     });
 
-    expect(markup).toContain("Neue Fähigkeit");
+    expect(markup).toContain("Neuer Skill");
     expect(markup).toContain("Neue Mitarbeitende begleiten.");
     expect(markup).toContain("<details");
     expect(markup).toContain("Inhalt anzeigen");
+    // Content that is new as a whole is no change to mark: it stands in a neutral block.
+    expect(markup).not.toContain("border-primary");
+  });
+
+  it("marks with the accent only the text that changes", () => {
+    const markup = renderReady({
+      preview: {
+        skillName: "payroll",
+        skillTitle: "Payroll",
+        isNewSkill: false,
+        changes: [
+          { type: "replace", target: "root", before: "Alt", after: "Neu" },
+          { type: "new_resource", target: "references/a.md", after: "Ganz neu" }
+        ]
+      }
+    });
+    const accented = markup.split("border-primary").slice(1);
+
+    expect(accented).toHaveLength(1);
+    expect(accented[0]).toMatch(/^[^<]*"><pre[^>]*>Neu<\/pre>/u);
   });
 
   it("keeps readable changes and drops malformed ones", () => {

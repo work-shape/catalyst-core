@@ -1,9 +1,10 @@
-import { ArrowLeft, Check, Link } from "lucide-react";
+import { Check, Link } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Asset } from "@vivd-catalyst/api-client";
 import {
   Badge,
   Button,
+  cn,
   ConfirmDialog,
   Dialog,
   DropdownMenuItem,
@@ -11,6 +12,7 @@ import {
   KeyValue,
   KeyValueList,
   PageHeader,
+  PageHeaderBack,
   SkeletonList
 } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
@@ -117,52 +119,57 @@ export function AppStateBadge({ state }: { state: AppState }) {
 export function AppHeader({
   name,
   state,
-  description,
   secondaryActions,
   primaryAction,
   overflow,
+  tabs,
   backHref,
   onBack
 }: {
   name: string;
   /** The badge after the name: the published or the draft revision. */
   state?: ReactNode;
-  description?: ReactNode;
   secondaryActions?: ReactNode;
   primaryAction?: ReactNode;
   overflow?: ReactNode;
+  /** The views of the App, as a `TabsList`: a row under the head, whose line ends the head. */
+  tabs?: ReactNode;
   backHref: string;
   onBack(): void;
 }) {
   const { t } = useTranslation();
-  return (
+  const head = (
     <PageHeader
       variant="detail"
-      className="shrink-0"
+      className={cn("shrink-0", tabs !== undefined && "border-b-0")}
       back={
-        <Button asChild variant="ghost" size="sm">
-          <a
-            href={backHref}
-            aria-label={t("apps.backToList")}
-            onClick={(event) => {
-              if (opensHere(event)) {
-                event.preventDefault();
-                onBack();
-              }
-            }}
-          >
-            <ArrowLeft aria-hidden="true" />
-            <span className="max-sm:hidden">{t("apps.title")}</span>
-          </a>
-        </Button>
+        <PageHeaderBack
+          href={backHref}
+          label={t("apps.backToList")}
+          onClick={(event) => {
+            if (opensHere(event)) {
+              event.preventDefault();
+              onBack();
+            }
+          }}
+        >
+          {t("apps.title")}
+        </PageHeaderBack>
       }
       title={name}
       state={state}
-      description={description}
       secondaryActions={secondaryActions}
       primaryAction={primaryAction}
       overflow={overflow}
     />
+  );
+  return tabs === undefined ? (
+    head
+  ) : (
+    <>
+      {head}
+      <div className="shrink-0 px-(--layout-gutter)">{tabs}</div>
+    </>
   );
 }
 

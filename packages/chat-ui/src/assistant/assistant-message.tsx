@@ -10,20 +10,13 @@ import {
   useThreadViewportStore,
   type PartState
 } from "@assistant-ui/react";
-import {
-  Check,
-  Copy,
-  FileText,
-  ImageIcon,
-  ListRestart,
-  Pencil,
-  RefreshCw,
-  User
-} from "lucide-react";
+import { Check, Copy, ListRestart, Pencil, RefreshCw, User } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button, cn, IconButton } from "@vivd-catalyst/ui";
 import { ApprovalDecisionLine } from "../approvals/approval-decision-line";
 import { managedFileIdFromUrl, useAttachmentContentContext } from "../attachment-content";
+import { resolveFileType } from "../file-type";
+import { FileTypeIcon } from "../file-type-icon";
 import { MessageAttachments } from "../message-attachments";
 import {
   ASSISTANT_WORK_GROUP,
@@ -40,7 +33,7 @@ import type { AssistantUiMessageCustomMetadata } from "./assistant-ui-adapter";
 import { AssistantSourcePart } from "./assistant-source-part";
 import { useTranslation } from "../i18n";
 import { MarkdownText } from "../markdown-text";
-import { DataPart, ToolCallPart } from "../tool-call";
+import { DataPart, ToolCallFoldLabel, ToolCallPart } from "../tool-call";
 import { ToolGroupContent, ToolGroupRoot, ToolGroupTrigger } from "./assistant-tool-group";
 import { formatWorkHistoryLabel } from "./elapsed-time";
 import { isWorkspacePromotedSurfacesData } from "../tool-surfaces";
@@ -319,7 +312,11 @@ function renderAssistantGroupedPart({
         part.indices
       );
       return (
-        <AssistantWorkGroup count={renderableIndices.length} summary={false}>
+        <AssistantWorkGroup
+          count={renderableIndices.length}
+          only={onlyToolCall(messageParts, renderableIndices)}
+          summary={false}
+        >
           {renderableIndices.map((index) => (
             <MessagePrimitive.PartByIndex
               key={`part-${index}`}
@@ -373,6 +370,7 @@ function AssistantWorkTimeline({
             <AssistantWorkGroup
               key={`tool-group-${item.indices[0]}`}
               count={renderableIndices.length}
+              only={onlyToolCall(messageParts, renderableIndices)}
               nested
               summary={false}
             >
@@ -414,8 +412,20 @@ function AssistantWorkTimeline({
 /** How long the work history of a run that just ended stays open before it folds itself. */
 const WORK_SUMMARY_AUTO_COLLAPSE_DELAY_MS = 80;
 
+type ToolCallPartState = Extract<PartState, { type: "tool-call" }>;
+
+/** The one tool call of a group that holds a single call. */
+function onlyToolCall(
+  parts: readonly PartState[],
+  indices: readonly number[]
+): ToolCallPartState | undefined {
+  const part = indices.length === 1 ? parts[indices[0] ?? -1] : undefined;
+  return part?.type === "tool-call" ? part : undefined;
+}
+
 function AssistantWorkGroup({
   count,
+  only,
   children,
   nested = false,
   summary,
@@ -423,6 +433,8 @@ function AssistantWorkGroup({
   autoCollapse = false
 }: {
   count: number;
+  /** The group's one tool call, where it holds a single call. */
+  only?: ToolCallPartState;
   children: ReactNode;
   nested?: boolean;
   summary: boolean;
@@ -446,9 +458,11 @@ function AssistantWorkGroup({
     return () => globalThis.clearTimeout(timeout);
   }, [autoCollapse, summary]);
 
-  const countLabel = summary
-    ? formatWorkHistoryLabel(t("workHistory"), durationMs)
-    : t(count === 1 ? "toolCallCountSingular" : "toolCallCount", { count });
+  const countLabel = summary ? (
+    formatWorkHistoryLabel(t("workHistory"), durationMs)
+  ) : (
+    <ToolCallFoldLabel only={only} count={count} />
+  );
 
   return (
     <ToolGroupRoot
@@ -647,8 +661,8 @@ function FilePart() {
     return <ImageFilePart data={url} filename={file.filename} mimeType={mimeType} />;
   }
   return (
-    <div className="my-2 inline-flex max-w-full items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-xs">
-      <FileText size={16} aria-hidden="true" className="text-muted-foreground" />
+    <div className="chat-message-block my-2 inline-flex max-w-full items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-xs">
+      <FileTypeIcon type={resolveFileType({ filename: file.filename, mimeType })} />
       <span className="truncate">{file.filename ?? mimeType ?? t("attachmentFallbackName")}</span>
     </div>
   );
@@ -661,7 +675,7 @@ function ImagePart() {
     return null;
   }
   return (
-    <div className="my-2 overflow-hidden rounded-md border bg-card shadow-xs">
+    <div className="chat-message-block my-2 overflow-hidden rounded-md border bg-card shadow-xs">
       <MessagePartPrimitive.Image
         alt={image.filename ?? t("attachmentImageFallbackAlt")}
         className="max-h-96 w-auto max-w-full object-contain"
@@ -726,15 +740,15 @@ function ImageFilePart({
 
   if (!imageUrl) {
     return (
-      <div className="my-2 inline-flex max-w-full items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-xs">
-        <ImageIcon size={16} aria-hidden="true" className="text-muted-foreground" />
+      <div className="chat-message-block my-2 inline-flex max-w-full items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-xs">
+        <FileTypeIcon type={resolveFileType({ filename, mimeType })} />
         <span className="truncate">{filename ?? mimeType}</span>
       </div>
     );
   }
 
   return (
-    <figure className="my-2 grid gap-1 overflow-hidden rounded-md border bg-card p-1 shadow-xs">
+    <figure className="chat-message-block my-2 grid gap-1 overflow-hidden rounded-md border bg-card p-1 shadow-xs">
       <img
         src={imageUrl}
         alt={filename ?? t("attachmentImageFallbackAlt")}

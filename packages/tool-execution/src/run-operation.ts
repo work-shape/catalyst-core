@@ -103,7 +103,11 @@ export async function runOperation(
       idempotencyKey,
       inputHash,
       correlationId: call.correlationId,
-      startedAt: now().toISOString()
+      startedAt: now().toISOString(),
+      // What carries the call out is handed its key and carries out one call per key.
+      ...(definition.repeatsUnderKey && idempotencyKey !== undefined
+        ? { takesInterrupted: true as const }
+        : {})
     };
     // The definition says whether an allowed call leaves a run. A read that leaves none is
     // checked like every call and written only if it is refused or fails.
@@ -133,7 +137,7 @@ export async function runOperation(
     // key. Every other run answers again what it answered, to the actor that holds its key and
     // without asking for the right again: the actor had it when the call ran, and a refusal
     // now would hide an outcome that happened and invite the same change under a new key.
-    if (held && !runsAgain(held)) {
+    if (held && !runsAgain(held, definition)) {
       return {
         result: replay(held, definition, actor, inputHash, secretInput),
         run: held,
@@ -263,11 +267,15 @@ function sameCall(
 
 /**
  * Whether the key of a failed run starts its call again. A read changed nothing. A changing
- * call does only where it failed before its implementation started: one that started may have
- * changed something before it threw or was cut off.
+ * call does where it failed before its implementation started: one that started may have
+ * changed something before it threw or was cut off. One that was cut off is made again all
+ * the same where its operation says so (`repeatsUnderKey`): what carries it out is handed
+ * the key and carries out one call per key.
  */
-function runsAgain(run: OperationRun): boolean {
-  return run.status === "failed" && (run.effect === "reading" || run.error?.unexecuted === true);
+function runsAgain(run: OperationRun, definition: OperationDefinition): boolean {
+  if (run.status !== "failed") return false;
+  if (run.effect === "reading" || run.error?.unexecuted === true) return true;
+  return definition.repeatsUnderKey === true && run.error?.code === INTERRUPTED_RUN_ERROR.code;
 }
 
 function keyReused(): AppError {

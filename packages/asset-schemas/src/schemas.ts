@@ -2,6 +2,9 @@ import { z } from "zod";
 import {
   REASONING_EFFORTS,
   SKILL_RESOURCE_MEDIA_TYPES,
+  SKILL_STARTERS_MAX,
+  SKILL_STARTER_LINE_MAX_LENGTH,
+  SKILL_SUMMARY_MAX_LENGTH,
   type SkillResourceMediaType
 } from "./asset-types";
 
@@ -93,12 +96,46 @@ export const skillResourceConfigSchema = z
     }
   });
 
+/** A starter's title or hint: one short line in each language it is written in. */
+const starterLineSchema = localizedStringSchema.refine(
+  (value) =>
+    (typeof value === "string" ? [value] : Object.values(value)).every(
+      (line) => line.length <= SKILL_STARTER_LINE_MAX_LENGTH && !/[\r\n]/u.test(line)
+    ),
+  { message: `Must be one line of at most ${SKILL_STARTER_LINE_MAX_LENGTH} characters` }
+);
+
+export const skillStarterSchema = z.strictObject({
+  title: starterLineSchema,
+  hint: starterLineSchema.optional(),
+  prompt: localizedStringSchema,
+  tools: z.array(z.string().min(1)).optional()
+});
+
 const skillConfigObjectSchema = z.object({
   name: skillNameSchema,
   title: z.string().min(1),
   description: z.string().min(1),
+  summary: z
+    .string()
+    .min(1)
+    .max(SKILL_SUMMARY_MAX_LENGTH, {
+      message: `Skill summary must be at most ${SKILL_SUMMARY_MAX_LENGTH} characters`
+    })
+    .refine((summary) => !/[\r\n]/u.test(summary), {
+      message: "Skill summary must be one line"
+    })
+    .optional(),
+  starters: z
+    .array(skillStarterSchema)
+    .max(SKILL_STARTERS_MAX, {
+      message: `A skill carries at most ${SKILL_STARTERS_MAX} starters`
+    })
+    .optional(),
   content: z.string().min(1),
-  resources: z.array(skillResourceConfigSchema).optional()
+  resources: z.array(skillResourceConfigSchema).optional(),
+  origin: z.literal("release").optional(),
+  icon: z.string().min(1).optional()
 });
 
 export const skillConfigSchema = skillConfigObjectSchema.superRefine((skill, context) => {
@@ -116,10 +153,13 @@ export const skillConfigSchema = skillConfigObjectSchema.superRefine((skill, con
   }
 });
 
+// A skill file is the instance's own: what only a shipped skill carries is no field of it.
 export const skillFileFrontmatterSchema = skillConfigObjectSchema
   .omit({
     content: true,
-    resources: true
+    resources: true,
+    origin: true,
+    icon: true
   })
   .extend({
     name: skillNameSchema.optional()
@@ -181,10 +221,12 @@ export const WORKFLOW_NAME_RULE =
   "A Workflow id starts with a lowercase letter and holds lowercase letters, digits, '_' and '-', at most 63 characters";
 
 /**
- * What a revision of a Workflow holds as its config: the id the asset is addressed by, and
- * `workflow.yaml` as an object under `manifest`. This is the shape alone, which every stored
- * revision keeps whatever a later engine accepts. Whether the engine of the instance runs the
- * manifest is asked of its own parser when a revision is saved and when one is published.
+ * What a revision of a Workflow holds as its config: the id the asset is addressed by,
+ * `workflow.yaml` as an object under `manifest`, and the files of its `steps/` folder under
+ * `files`, each with its path in the Workflow's folder and its text. This is the shape alone,
+ * which every stored revision keeps whatever a later engine accepts. Whether the engine of the
+ * instance runs the manifest and takes the files is asked of the engine when a revision is
+ * saved and when one is published.
  */
 export const workflowConfigSchema = z.strictObject({
   name: z.string(),
@@ -192,7 +234,8 @@ export const workflowConfigSchema = z.strictObject({
     id: z.string(),
     name: z.string().min(1),
     description: z.string().optional()
-  })
+  }),
+  files: z.array(z.strictObject({ path: z.string(), content: z.string() })).optional()
 });
 
 export type WorkflowAssetConfig = z.infer<typeof workflowConfigSchema>;

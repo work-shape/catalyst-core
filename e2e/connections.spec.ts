@@ -6,7 +6,7 @@ import postgres from "postgres";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
-// Build > Connections on an instance with the module on: the rail entry, the empty list in
+// Studio > Connections on an instance with the module on: the rail entry, the empty list in
 // both languages, a row with its chips, and the grant of a Connection right on the Access page.
 // No operation writes a Connection yet, so the row is planted in the store, as the release
 // seed will write it.
@@ -22,9 +22,10 @@ const member = { email: "e2e-connections@example.test", password: "e2e-connectio
 const shotsDir = process.env.E2E_SHOTS_DIR;
 
 const EMPTY_EN = "No connections yet. A connection holds the access to an outside system.";
-const DESCRIPTION_EN = "Connections come from the release config and cannot be changed here.";
+const DESCRIPTION_EN =
+  "The operator of this instance sets up its connections. They cannot be changed here.";
 const DESCRIPTION_DE =
-  "Verbindungen kommen aus der Release-Konfiguration und lassen sich hier nicht ändern.";
+  "Der Betreiber dieser Instanz richtet ihre Verbindungen ein. Hier lassen sie sich nicht ändern.";
 const EMPTY_DE =
   "Noch keine Verbindungen. Eine Verbindung hält den Zugang zu einem externen System.";
 
@@ -125,7 +126,7 @@ async function shoot(page: Page, name: string, ready: () => Promise<void>): Prom
 }
 
 // The test writes a grant: it takes its turn with the other tests that write or count grants.
-test("an administrator sees Connections in Build and grants its rights; a read grant on one Connection opens Build, a grant to use does not", async ({
+test("an administrator sees Connections in Studio and grants its rights; a read grant on one Connection opens Studio, a grant to use does not", async ({
   page,
   browser,
   accessState: _accessState,
@@ -158,7 +159,7 @@ test("an administrator sees Connections in Build and grants its rights; a read g
   const memberPage = await memberContext.newPage();
   await memberPage.setViewportSize({ width: 1280, height: 800 });
   await page.setViewportSize({ width: 1280, height: 800 });
-  const main = page.getByRole("region", { name: /^(Build|Bauen)$/u });
+  const main = page.getByRole("region", { name: "Studio" });
   const list = page.getByRole("list", { name: "Connections", exact: true });
 
   try {
@@ -167,7 +168,7 @@ test("an administrator sees Connections in Build and grants its rights; a read g
       await expect(page.getByRole("heading", { name: "Connections", level: 1 })).toBeVisible();
       await expect(
         page
-          .getByRole("navigation", { name: "Kinds in Build" })
+          .getByRole("navigation", { name: "Kinds in Studio" })
           .getByRole("button", { name: "Connections", exact: true })
       ).toHaveAttribute("aria-current", "true");
       await expect(main.getByText(EMPTY_EN, { exact: true })).toBeVisible();
@@ -195,8 +196,11 @@ test("an administrator sees Connections in Build and grants its rights; a read g
     await test.step("a Connection the store holds shows as a row with its chips", async () => {
       await plantConnection(connection);
       await page.reload();
-      const row = list.getByRole("listitem").filter({ hasText: connection.name });
+      // A row says what the Connection is, not its id: the id stands on the Connection's page.
+      const rowLink = page.locator(`a[href="/build/connections/${connection.name}"]`);
+      const row = list.getByRole("listitem").filter({ has: rowLink });
       await expect(row).toContainText("Client records");
+      await expect(row).not.toContainText(connection.name);
       // The explanation stands above the rows as it stood above the empty list.
       await expect(main.getByText(DESCRIPTION_EN, { exact: true })).toBeVisible();
       for (const chip of ["mcp", "Instance", "Enabled"]) {
@@ -212,11 +216,11 @@ test("an administrator sees Connections in Build and grants its rights; a read g
       await expect(main).not.toContainText("secret_");
       await expect(main).not.toContainText("records.example.test");
       await shoot(page, "connections-list", async () => {
-        await expect(page.getByText(connection.name, { exact: true })).toBeVisible();
+        await expect(row).toBeVisible();
       });
       if (shotsDir) {
         await page.setViewportSize({ width: 390, height: 844 });
-        await expect(page.getByText(connection.name, { exact: true })).toBeVisible();
+        await expect(row).toBeVisible();
         await page.screenshot({ path: join(shotsDir, "connections-list-light-en-390.png") });
         await page.setViewportSize({ width: 1280, height: 800 });
       }
@@ -226,7 +230,7 @@ test("an administrator sees Connections in Build and grants its rights; a read g
       const germanRow = page
         .getByRole("list", { name: "Verbindungen", exact: true })
         .getByRole("listitem")
-        .filter({ hasText: connection.name });
+        .filter({ has: rowLink });
       for (const chip of ["mcp", "Instanz", "Aktiv"]) {
         await expect(germanRow.getByText(chip, { exact: true })).toBeVisible();
       }
@@ -252,7 +256,7 @@ test("an administrator sees Connections in Build and grants its rights; a read g
       await dialog.getByRole("radio", { name: /^On one connection/u }).check();
       // Each action says what it allows.
       await expect(
-        dialog.getByText("See the connection and its status in Build. Never its credentials.", {
+        dialog.getByText("See the connection and its status in Studio. Never its credentials.", {
           exact: true
         })
       ).toBeVisible();
@@ -346,7 +350,7 @@ test("an administrator sees Connections in Build and grants its rights; a read g
       }
     });
 
-    await test.step("a grant to use the Connection gives its holder no Build entry", async () => {
+    await test.step("a grant to use the Connection gives its holder no Studio entry", async () => {
       const signedIn = await requestWithOrigin(
         memberPage,
         "post",
@@ -356,10 +360,10 @@ test("an administrator sees Connections in Build and grants its rights; a read g
       expect(signedIn.ok()).toBe(true);
       await memberPage.goto("/");
       await expect(memberPage.getByPlaceholder("Message")).toBeVisible();
-      await expect(memberPage.getByRole("button", { name: "Build", exact: true })).toHaveCount(0);
+      await expect(memberPage.getByRole("button", { name: "Studio", exact: true })).toHaveCount(0);
       await memberPage.goto("/build/connections");
-      await expect(memberPage.getByRole("region", { name: "Build" })).toContainText(
-        "Build is not available to you."
+      await expect(memberPage.getByRole("region", { name: "Studio" })).toContainText(
+        "Studio is not available to you."
       );
     });
 
@@ -380,20 +384,24 @@ test("an administrator sees Connections in Build and grants its rights; a read g
       );
       expect(granted.ok()).toBe(true);
       await memberPage.goto("/");
-      await memberPage.getByRole("button", { name: "Build", exact: true }).click();
+      await memberPage.getByRole("button", { name: "Studio", exact: true }).click();
       await expect(memberPage).toHaveURL(/\/build\/connections$/u);
       await expect(
         memberPage.getByRole("heading", { name: "Connections", level: 1 })
       ).toBeVisible();
       // Connections is the only kind this person has a list of: no rail names another.
-      await expect(memberPage.getByRole("navigation", { name: "Kinds in Build" })).toHaveCount(0);
+      await expect(memberPage.getByRole("navigation", { name: "Kinds in Studio" })).toHaveCount(0);
       const rows = memberPage
         .getByRole("list", { name: "Connections", exact: true })
         .getByRole("listitem");
       await expect(rows).toHaveCount(1);
       await expect(rows).toContainText("Client records");
-      await expect(rows).toContainText(connection.name);
-      const memberMain = memberPage.getByRole("region", { name: "Build" });
+      // The row is this Connection's: it leads to its page. Its id is not in the row.
+      await expect(rows.getByRole("link")).toHaveAttribute(
+        "href",
+        `/build/connections/${connection.name}`
+      );
+      const memberMain = memberPage.getByRole("region", { name: "Studio" });
       await expect(memberMain.getByRole("button", { name: /^New /u })).toHaveCount(0);
       await expect(memberMain).not.toContainText("secret_");
       await expect(memberMain).not.toContainText("records.example.test");

@@ -63,6 +63,9 @@ import {
   updateManifestDefaultAgent
 } from "../packages/config-cli/src/index";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
+import { agent as namespaceAgent, recordAuthAdapter } from "./support/access-instance";
+import { setupNamespaceHolder } from "./support/asset-operations";
+import { appFiles, setupAppInstance } from "./support/app-instance";
 
 const servers: TestInstance[] = [];
 const temporaryDirectories: string[] = [];
@@ -158,6 +161,34 @@ describe("config CLI serialization", () => {
     expect(serialized).toContain("---\n# Pulled from staging (config version 4).\n");
     expect(parseSkillFile(serialized)).toEqual(skill);
     expect(serializeSkillMarkdown(parseSkillFile(serialized))).toBe(serializeSkillMarkdown(skill));
+  });
+
+  it("keeps a skill's summary through a pull and a push, and writes none where there is none", () => {
+    const skill = {
+      name: "review",
+      title: "Review",
+      description: "Review a workflow",
+      content: "# Review"
+    };
+    const summary = "Knows how to review a workflow and name what is missing.";
+    const serialized = serializeSkillMarkdown({ ...skill, summary });
+
+    expect(serialized).toContain(`summary: ${summary}\n`);
+    expect(parseSkillFile(serialized)).toEqual({ ...skill, summary });
+    expect(canonicalizeSkillConfig({ ...skill, summary })).toEqual({ ...skill, summary });
+    expect(serializeSkillMarkdown(skill)).not.toContain("summary");
+  });
+
+  it("keeps starters through a pull and a push and writes none where there are none", () => {
+    const plain = { name: "sheets", title: "Sheets", description: "When.", content: "# Text" };
+    const starters = [
+      { title: { en: "Build", de: "Bauen" }, hint: "Short", prompt: "Build it.", tools: ["a.b"] }
+    ];
+    const serialized = serializeSkillMarkdown({ ...plain, starters });
+
+    expect(parseSkillFile(serialized)).toEqual({ ...plain, starters });
+    expect(canonicalizeSkillConfig({ ...plain, starters })).toEqual({ ...plain, starters });
+    expect(serializeSkillMarkdown(plain)).not.toContain("starters");
   });
 });
 
@@ -621,11 +652,25 @@ skills:
     });
     const mergeRequests: unknown[] = [];
     const { fetchImpl, fixture } = await instanceHolding(remote, mergeRequests);
-    // A row of a kind no release carries, left by a module that is off.
+    // A row of a kind no release carries, left by a module that is off, and a skill that ships
+    // with the platform, which no working copy holds.
     await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
-        { type: "upsert", kind: "connection", name: "crm", config: { name: "crm", title: "CRM" } }
+        { type: "upsert", kind: "connection", name: "crm", config: { name: "crm", title: "CRM" } },
+        {
+          type: "upsert",
+          kind: "skill",
+          name: "platform-guide",
+          config: {
+            name: "platform-guide",
+            title: "How this platform works",
+            description: "Shipped.",
+            content: "Shipped.",
+            origin: "release",
+            icon: "guide"
+          }
+        }
       ]
     });
     const mergeStdout: string[] = [];
@@ -692,13 +737,19 @@ skills:
       ]
     });
     expect(pruneStdout.join("")).not.toContain("crm");
-    expect(
-      await fixture.store.configAssets.getConfigAsset({
-        clientInstanceId: fixture.clientInstanceId,
-        kind: "connection",
-        name: "crm"
-      })
-    ).toMatchObject({ status: "active", revision: 1 });
+    expect(mergeStdout.join("") + pruneStdout.join("")).not.toContain("platform-guide");
+    for (const [kind, name] of [
+      ["connection", "crm"],
+      ["skill", "platform-guide"]
+    ] as const) {
+      expect(
+        await fixture.store.configAssets.getConfigAsset({
+          clientInstanceId: fixture.clientInstanceId,
+          kind,
+          name
+        })
+      ).toMatchObject({ status: "active", revision: 1 });
+    }
   });
 
   it("sends only selected assets on push and rejects --prune with --only", async () => {
@@ -2234,6 +2285,219 @@ describe("config CLI help", () => {
     expect(output.join("")).toContain("Administration, API Access");
     expect(await runCli(["config", "local-key"], { cwd, env: {}, stderr })).toBe(2);
     expect(output.join("")).toContain("catalyst-local-key");
+  });
+});
+
+describe("catalyst asset commands against an instance", () => {
+  /**
+   * The CLI as one user of the instance: the key exchange is answered here, and every other
+   * call reaches the instance signed in as that user. Each request is recorded.
+   */
+  function cliAs(instance: TestInstance, userId: string, cwd: string) {
+    const serverFetch = createTestFetch(instance, { "x-test-user": userId });
+    const requests: string[] = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      const path = new URL(request.url).pathname;
+      requests.push(`${request.method} ${path}`);
+      if (path === testOperations["access_tokens.exchange"].path) {
+        return jsonResponse(200, {
+          accessToken: "access-token",
+          expiresAt: new Date(Date.now() + 60_000).toISOString()
+        });
+      }
+      return serverFetch(request);
+    };
+    const run = async (...args: string[]) => {
+      const out: string[] = [];
+      const err: string[] = [];
+      const code = await runCli([...args, "--instance", "https://catalyst.test"], {
+        cwd,
+        env: { CATALYST_API_KEY: "cat_personal" },
+        fetchImpl,
+        stdout: (text) => out.push(text),
+        stderr: (text) => err.push(text)
+      });
+      return { code, out: out.join(""), err: err.join("") };
+    };
+    return { run, requests };
+  }
+
+  it("builds an agent with its own skill in the holder's Namespace and is refused outside it", async () => {
+    const t = await setupNamespaceHolder({
+      furtherToolNames: ["read_skill"],
+      // The CLI sends its token: the sign-in takes it beside the test header.
+      server: (stores) => ({
+        authAdapter: { ...recordAuthAdapter(stores), credentialMode: "explicit" }
+      })
+    });
+    const cwd = await createTemporaryDirectory();
+    await mkdir(join(cwd, "skills", "kai-guide", "references"), { recursive: true });
+    await writeFile(
+      join(cwd, "skills", "kai-guide", "SKILL.md"),
+      serializeSkillMarkdown({
+        name: "kai-guide",
+        title: "Tax guide",
+        description: "What to ask about taxes",
+        content: "Ask for the year first."
+      })
+    );
+    await writeFile(join(cwd, "skills", "kai-guide", "references", "rates.md"), "# Rates\n");
+    const tax = { toolNames: ["read_skill"], skillNames: ["kai-guide"] };
+    await writeFile(join(cwd, "kai-tax.yaml"), serializeAgentYaml(namespaceAgent("kai-tax", tax)));
+    await writeFile(
+      join(cwd, "lena-tax.yaml"),
+      serializeAgentYaml(namespaceAgent("lena-tax", tax))
+    );
+    const { run, requests } = cliAs(t.instance, t.kai.id, cwd);
+
+    const context = await run("context");
+    expect(context.code, context.err).toBe(0);
+    expect(context.out).toMatch(/kai- {2}kai-: .*agent\.write/u);
+
+    const skill = await run(
+      "skill",
+      "put",
+      "kai-guide",
+      "--from",
+      "skills/kai-guide",
+      "--if-revision",
+      "new"
+    );
+    expect(skill, skill.err).toMatchObject({
+      code: 0,
+      out: "Wrote skill 'kai-guide' at revision 1.\n"
+    });
+    const created = await run(
+      "agents",
+      "put",
+      "kai-tax",
+      "--from",
+      "kai-tax.yaml",
+      "--if-revision",
+      "new"
+    );
+    expect(created.code, created.err).toBe(0);
+    expect((await t.stored("agent", "kai-tax"))?.config).toMatchObject({
+      skillNames: ["kai-guide"]
+    });
+    expect((await t.stored("skill", "kai-guide"))?.config).toMatchObject({
+      resources: [{ path: "references/rates.md", content: "# Rates\n" }]
+    });
+
+    const listed = await run("agent", "list");
+    expect(listed.out).toContain("kai-tax");
+    expect(listed.out).not.toContain("assistant");
+    expect((await run("agent", "show", "kai-tax")).out).toContain("- kai-guide");
+    expect((await run("agent", "history", "kai-tax")).out).toMatch(/^1 +create +Kai/mu);
+
+    // Outside the Namespace the instance refuses, and the CLI prints what it said.
+    const outside = await run(
+      "agent",
+      "put",
+      "lena-tax",
+      "--from",
+      "lena-tax.yaml",
+      "--if-revision",
+      "new"
+    );
+    expect(outside.code).toBe(1);
+    expect(outside.err).toContain(
+      "Refused by the instance (HTTP 403 FORBIDDEN): Missing the right 'agent.write'"
+    );
+    expect(await t.stored("agent", "lena-tax")).toBeUndefined();
+
+    // A write made against a revision the asset is no longer at changes nothing.
+    const stale = await run(
+      "agent",
+      "put",
+      "kai-tax",
+      "--from",
+      "kai-tax.yaml",
+      "--if-revision",
+      "new"
+    );
+    expect(stale.code).toBe(1);
+    expect(stale.err).toContain("REVISION_CONFLICT");
+    expect(stale.err).toContain("- agent 'kai-tax' is at revision 1");
+
+    // A command line that cannot be sent sends nothing.
+    const sent = requests.length;
+    const usage = [
+      await run("agent", "put", "kai-tax", "--from", "kai-tax.yaml"),
+      await run("agent", "put", "kai-tax", "--from", "kai-tax.yaml", "--if-revision", "0"),
+      await run("agent", "publish", "kai-tax", "--to", "1"),
+      await run("agent", "erase", "kai-tax"),
+      await run("agnet")
+    ];
+    expect(usage.map((result) => result.code)).toEqual([2, 2, 2, 2, 2]);
+    expect(requests).toHaveLength(sent);
+    await writeFile(join(cwd, "broken.yaml"), "name: [kai-tax\n");
+    const broken = await run("agent", "validate", "--from", "broken.yaml");
+    expect(broken.code).toBe(1);
+    expect(broken.err).toContain(`'${join(cwd, "broken.yaml")}' cannot be read:`);
+    const renamed = await run(
+      "agent",
+      "put",
+      "kai-other",
+      "--from",
+      "kai-tax.yaml",
+      "--if-revision",
+      "new"
+    );
+    expect(renamed).toMatchObject({
+      code: 2,
+      err: "The definition names 'kai-tax', and the command 'kai-other'.\n"
+    });
+
+    const deleted = await run("agent", "delete", "kai-tax", "--if-revision", "1");
+    expect(deleted, deleted.err).toMatchObject({ code: 0 });
+    expect(deleted.out).toContain("its delete is revision 2");
+    const reverted = await run("agent", "revert", "kai-tax", "--to", "1", "--if-revision", "2");
+    expect(reverted.code, reverted.err).toBe(0);
+    expect((await t.stored("agent", "kai-tax"))?.revision).toBe(3);
+  });
+
+  it("writes an App from its folder as a draft and publishes the revision it names", async () => {
+    const t = await setupAppInstance({ explicitCredentials: true });
+    try {
+      const cwd = await createTemporaryDirectory();
+      await mkdir(join(cwd, "offers"), { recursive: true });
+      for (const file of appFiles("one")) {
+        await writeFile(join(cwd, "offers", file.path), "text" in file ? file.text : "");
+      }
+      const { run } = cliAs(t.instance, t.admin.id, cwd);
+      const workspace = ["--workspace", t.workspaceId];
+
+      const kinds = await run("kinds");
+      expect(kinds.out).toMatch(/^app +app +draft, then publish +folder \(app\.yaml\)/mu);
+      const written = await run(
+        "app",
+        "put",
+        "offers",
+        "--from",
+        "offers",
+        "--if-revision",
+        "new",
+        ...workspace
+      );
+      expect(written, written.err).toMatchObject({
+        code: 0,
+        out: "Wrote app 'offers' at revision 1. It is a draft until it is published.\n"
+      });
+      expect(await t.listed("offers")).not.toHaveProperty("publishedRevision");
+
+      const published = await run("app", "publish", "offers", "--revision", "1", ...workspace);
+      expect(published, published.err).toMatchObject({
+        code: 0,
+        out: "Published revision 1 of app 'offers'.\n"
+      });
+      expect(await t.listed("offers")).toMatchObject({ publishedRevision: 1 });
+      const shown = await run("apps", "show", "offers", "--files", ...workspace);
+      expect(shown.out).toContain("index.html");
+    } finally {
+      await t.close();
+    }
   });
 });
 

@@ -131,7 +131,15 @@ export type NewOperationRun = Pick<
   | "idempotencyKey"
   | "inputHash"
   | "correlationId"
-> & { startedAt: ISODateString };
+> & {
+  startedAt: ISODateString;
+  /**
+   * The operation is one that is called again under the key of an interrupted call
+   * (`repeatsUnderKey`): a run of it that failed as `interrupted` is taken like one that
+   * never executed.
+   */
+  takesInterrupted?: true;
+};
 
 /** How a running call ends for its caller: with an outcome, or waiting for an approval. */
 export type OperationRunEnd = { finishedAt: ISODateString } & (
@@ -175,7 +183,8 @@ export interface OperationRunStore {
   /**
    * Starts a run. Where the actor already used the run's idempotency key, nothing is inserted.
    * A failed run of the same operation and input is taken for its next attempt and returned
-   * where it is a read or its error says `unexecuted`. Every other run that holds the key
+   * where it is a read, its error says `unexecuted`, or it was interrupted and the new run
+   * says `takesInterrupted`. Every other run that holds the key
    * leaves the answer `undefined`: a changing call that failed or was interrupted after its
    * implementation started may have changed something, and is never run again under its key.
    */
@@ -186,10 +195,15 @@ export interface OperationRunStore {
    * takes no idempotency key.
    */
   recordEnded(run: EndedOperationRun): Promise<OperationRun>;
-  /** Ends a run that is still `running`. `undefined` when it is not running any more. */
+  /**
+   * Ends a run that is still `running`. `undefined` when it is not running any more, or when
+   * it is on another attempt than `attempt`: a later call took the run under its key, and
+   * only the writer of that attempt ends it. A writer names the attempt its call was given.
+   */
   finish(input: {
     clientInstanceId: ClientInstanceId;
     id: OperationRunId;
+    attempt?: number;
     end: OperationRunEnd;
   }): Promise<OperationRun | undefined>;
   findByIdempotencyKey(input: {

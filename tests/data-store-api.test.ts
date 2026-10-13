@@ -1,5 +1,6 @@
 import postgres from "postgres";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import {
@@ -30,6 +31,13 @@ type World = DataStoreInstance;
 // A Data Store through the assembled instance: its folder is written and published with the
 // asset operations, its jobs are the module's, and its rows are reached through the call
 // path, with the caller's right, one run per call and audit rows without a value.
+
+const rowsPageSchema = z.object({
+  order: z.unknown(),
+  rows: z.array(z.object({ at: z.string(), values: z.record(z.string(), z.unknown()) })),
+  next: z.string().optional(),
+  valueMaxChars: z.number()
+});
 
 interface ErrorBody {
   error: { code: string; message: string; details?: { reason?: string; module?: string } };
@@ -537,6 +545,61 @@ describe("a Data Store on an assembled instance", () => {
     });
     const none = await instance.api.call("data_stores.get", { params: { store: "nowhere" } });
     expect(none.statusCode).toBe(404);
+  });
+
+  it("serves the reads of a store's page over HTTP: the list, a page of rows, one value and what uses the store", async () => {
+    const instance = await start(true);
+    const record = await publishStore(instance);
+    await overHttp(instance, "data_stores.insert", {
+      payload: { table: "findings", rows: [finding, { ...finding, client_id: "client-8" }] }
+    });
+    const get = (
+      operation: "data_stores.rows" | "data_stores.value" | "data_stores.used_by",
+      query?: Record<string, string>,
+      store = "findings"
+    ) => instance.api.call(operation, { params: { store }, ...(query ? { query } : {}) });
+
+    const listed = await instance.api.call("data_stores.list", {});
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json()).toMatchObject({
+      items: [{ id: record.id, name: "findings", status: "ready", level: 1, tableCount: 1 }],
+      truncated: false
+    });
+
+    // The table has no key: its rows come as they lie, one to a page here.
+    const first = await get("data_stores.rows", { table: "findings", limit: "1" });
+    expect(first.statusCode).toBe(200);
+    const page = rowsPageSchema.parse(first.json());
+    expect(page).toMatchObject({
+      order: { by: "physical" },
+      rows: [{ values: { client_id: "client-secret-7" } }],
+      valueMaxChars: 1_000
+    });
+    const second = await get("data_stores.rows", {
+      table: "findings",
+      limit: "1",
+      after: required(page.next)
+    });
+    expect(rowsPageSchema.parse(second.json()).rows).toMatchObject([
+      { values: { client_id: "client-8" } }
+    ]);
+    const value = await get("data_stores.value", {
+      table: "findings",
+      column: "details",
+      at: required(page.rows[0]).at
+    });
+    expect(value.json()).toEqual({ value: { booking: 7 } });
+
+    const used = await get("data_stores.used_by");
+    expect(used.statusCode).toBe(200);
+    expect(used.json()).toEqual({
+      apps: [],
+      workflows: [],
+      hidden: { apps: 0, workflows: 0 },
+      truncated: false
+    });
+    expect((await get("data_stores.rows", { table: "findings" }, "nowhere")).statusCode).toBe(404);
+    expect((await get("data_stores.used_by", undefined, "nowhere")).statusCode).toBe(404);
   });
 
   it("gives back its connections to the stores when the process closes", async () => {

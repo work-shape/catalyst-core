@@ -60,9 +60,10 @@ export function createMemoryOperationRunStore(): OperationRunStore & { runs: Ope
       runs.push(recorded);
       return Promise.resolve(recorded);
     },
-    finish({ clientInstanceId, id, end }) {
+    finish({ clientInstanceId, id, attempt, end }) {
       const run = find(clientInstanceId, id);
       if (run?.status !== "running") return Promise.resolve(undefined);
+      if (attempt !== undefined && run.attempt !== attempt) return Promise.resolve(undefined);
       const { finishedAt, ...outcome } = end;
       if (outcome.status === "pending_approval") {
         return Promise.resolve(replace(run, { ...outcome, updatedAt: finishedAt }));

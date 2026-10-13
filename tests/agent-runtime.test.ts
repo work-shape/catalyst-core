@@ -1432,6 +1432,136 @@ describe("local agent runtime", () => {
     expect(providerMessages[0]?.content).not.toContain("Respond in German");
   });
 
+  it("tells the agent the asset its conversation is about and offers the tools of that subject", async () => {
+    const clientInstanceId = asClientInstanceId("subject-client");
+    const context: RuntimeCallContext = {
+      clientInstanceId,
+      correlationId: "corr-subject",
+      user: {
+        id: "user-1",
+        externalUserId: "user-1",
+        displayLabel: "User",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "test"
+      }
+    };
+    const store = (await createTestInstance()).stores;
+    const about = await createConversationWithMessages(store, { clientInstanceId, messages: [] });
+    const aboutNothing = await createConversationWithMessages(store, {
+      clientInstanceId,
+      messages: []
+    });
+    const requests: Parameters<FakeModelProvider["complete"]>[0][] = [];
+    const providerConfig: ModelProviderConfig = {
+      id: "test-provider",
+      type: "deterministic",
+      model: "test-model"
+    };
+    const modelProvider: FakeModelProvider = {
+      id: "test-provider",
+      async complete(request) {
+        requests.push(request);
+        return {
+          text: "Done.",
+          toolCalls: [],
+          usage: {
+            inputTokens: 0,
+            outputTokens: 0,
+            totalTokens: 0,
+            source: "not_reported",
+            webSearchCallCount: 0
+          }
+        };
+      }
+    };
+    const subjectTool = (name: string) =>
+      defineTool({
+        name,
+        effect: "reading",
+        description: "A tool of the subject.",
+        inputSchema: z.object({}),
+        async execute() {
+          throw new Error("Tool registry execution should not be used by this test");
+        }
+      });
+    const runtime = new LocalAgentRuntime(
+      withTestModelGateway({
+        assetSource: createStaticConfigAssetSource({
+          agents: [
+            {
+              skillNames: [],
+              name: "subject_agent",
+              displayName: "Subject Agent",
+              instructions: "Help the user.",
+              modelProviderId: "test-provider",
+              // A definition that lists a tool of a subject is offered it in no other conversation.
+              toolNames: ["platform.assets.get"],
+              initialPrompts: []
+            }
+          ]
+        }),
+        modelProviders: [providerConfig],
+        defaultModelProvider: providerConfig,
+        conversationHistory: store.conversations,
+        modelProvider,
+        toolRegistry: new ToolRegistry({
+          tools: [subjectTool("platform.assets.get"), subjectTool("platform.assets.put")]
+        }),
+        runTool: createUnusedToolRunner(),
+        conversationOffer: {
+          async offerOf({ conversationId }) {
+            return conversationId === about
+              ? {
+                  subject: { kind: "workflow", name: "month-end" },
+                  toolNames: ["platform.assets.get", "platform.assets.put"],
+                  skillNames: []
+                }
+              : undefined;
+          }
+        },
+        usageGovernance: new ModelUsageGovernance({
+          store: store.usage,
+          budget: {},
+          safeguards: {}
+        })
+      })
+    );
+    const firstRequestOf = async (conversationId: typeof about) => {
+      requests.length = 0;
+      const run = await runtime.start(
+        { agentName: "subject_agent", conversationId, message: { text: "Can you change it?" } },
+        context
+      );
+      for await (const event of runtime.observe(run.runId, context)) {
+        if (event.type === "run_completed") break;
+      }
+      const [request] = requests;
+      return {
+        system: modelContentText(request?.messages[0]?.content ?? ""),
+        tools: (request?.tools ?? []).flatMap((tool) => ("name" in tool ? [tool.name] : []))
+      };
+    };
+
+    const first = await firstRequestOf(about);
+    expect(first.system).toContain("Subject of this conversation:");
+    expect(first.system).toContain("This conversation is about one workflow, named 'month-end'.");
+    expect(first.system).toContain("Never ask which workflow they mean.");
+    expect(first.system).toContain("Read it with platform.assets.get before you answer");
+    expect(first.system.indexOf("Subject of this conversation:")).toBeLessThan(
+      first.system.indexOf("Client agent instructions:")
+    );
+    expect(first.tools).toEqual(
+      expect.arrayContaining(["platform.assets.get", "platform.assets.put"])
+    );
+
+    const other = await firstRequestOf(aboutNothing);
+    expect(other.system).not.toContain("Subject of this conversation:");
+    expect(other.system).not.toContain("month-end");
+    expect(other.tools).not.toContain("platform.assets.get");
+  });
+
   it("streams model text around tool calls and keeps final messages separate", async () => {
     const clientInstanceId = asClientInstanceId("tool-stream-client");
     const context: RuntimeCallContext = {
