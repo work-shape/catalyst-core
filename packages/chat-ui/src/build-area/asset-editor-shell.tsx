@@ -187,7 +187,16 @@ export function AssetEditorShell({
           variant="detail"
           back={back}
           title={title}
-          state={badges}
+          state={
+            frame.draftState ? (
+              <>
+                {frame.draftState}
+                {badges}
+              </>
+            ) : (
+              badges
+            )
+          }
           secondaryActions={
             <>
               {headActions}

@@ -94,6 +94,12 @@ interface BuildWrites {
     expectedRevision: number | null;
   }): Promise<{ revision: number }>;
   delete(input: { kind: string; name: string; expectedRevision: number }): Promise<unknown>;
+  /** Makes a saved revision of a kind with drafts the one its users get. */
+  publish(input: {
+    kind: string;
+    name: string;
+    revision: number;
+  }): Promise<{ draftRevision: number; publishedRevision: number }>;
   revert(input: {
     kind: string;
     name: string;
@@ -256,6 +262,7 @@ export function useBuildSource(): BuildSource {
     writes: {
       put: (input) => made(writes.put(input)).finally(changed),
       delete: (input) => made(writes.delete(input)).finally(changed),
+      publish: (input) => made(writes.publish(input)).finally(changed),
       revert: (input) => made(writes.revert(input)).finally(changed),
       revisions: ({ kind, name, cursor }) =>
         client.assets.revisions.list({

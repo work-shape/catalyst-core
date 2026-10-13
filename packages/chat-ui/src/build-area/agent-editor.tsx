@@ -50,6 +50,7 @@ import { refusalsOf } from "./build-refusals";
 import { AppToolsGroup, isAppToolName, type AppToolsRead } from "../apps/app-tools-group";
 import { isConnectionToolName, type ConnectionToolChoice } from "./connection-tools";
 import { ConnectionToolsGroup } from "./connection-tools-group";
+import { AgentKnowledge, type KnowledgeBaseChoice } from "./agent-knowledge";
 import type { SkillFacts } from "./skill-facts";
 
 /** The skills an agent can be given, as far as the instance was asked for them. */
@@ -68,6 +69,7 @@ export function AgentEditor({
   editableAgentFields,
   canManageAgentModels,
   skillChoice,
+  knowledgeChoice,
   connectionTools = NO_CONNECTION_TOOLS,
   appTools = NO_APP_TOOLS,
   onMakeDefault,
@@ -81,6 +83,8 @@ export function AgentEditor({
   editableAgentFields: readonly string[];
   canManageAgentModels: boolean;
   skillChoice: SkillChoice;
+  /** The Knowledge Bases on offer. Left out where the instance has none: the section is not shown. */
+  knowledgeChoice?: KnowledgeBaseChoice;
   /** The tools of Connections on offer. Left out, the page shows only those the agent holds. */
   connectionTools?: ConnectionToolChoice;
   /** The actions of Apps on offer. Left out, the page shows only those the agent holds. */
@@ -316,6 +320,28 @@ export function AgentEditor({
         </>
       )
     },
+    ...(knowledgeChoice
+      ? [
+          {
+            id: "knowledge",
+            label: t("knowledge.agentSection"),
+            description: t("knowledge.agentSectionDescription"),
+            count: form.knowledgeBases.length,
+            refusalField: "knowledge" as const,
+            body: (
+              <>
+                <AgentKnowledge
+                  choice={knowledgeChoice}
+                  value={form.knowledgeBases}
+                  editable={canEdit("knowledgeBases")}
+                  onChange={(knowledgeBases) => update({ knowledgeBases })}
+                />
+                <FieldRefusals messages={refusalsOf(outcome, "knowledge")} />
+              </>
+            )
+          }
+        ]
+      : []),
     {
       id: "tools",
       label: t("configTools"),

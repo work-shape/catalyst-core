@@ -14,6 +14,7 @@ import { conversation } from "./conversation";
 import { dataStores } from "./data-stores";
 import { files } from "./files";
 import { inbox } from "./inbox";
+import { knowledge } from "./knowledge";
 import { navigation } from "./navigation";
 import { operations } from "./operations";
 import { pages } from "./pages";
@@ -44,6 +45,7 @@ export const translations = combineTranslations(common)
   .and(dataStores)
   .and(files)
   .and(inbox)
+  .and(knowledge)
   .and(navigation)
   .and(operations)
   .and(pages)

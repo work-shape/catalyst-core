@@ -24,7 +24,8 @@ export const kindLabelKeys = {
   skill: "access.kindSkill",
   connection: "access.kindConnection",
   app: "access.kindApp",
-  workflow: "access.kindWorkflow"
+  workflow: "access.kindWorkflow",
+  knowledge_base: "access.kindKnowledgeBase"
 } as const satisfies Record<GrantKind, TranslationKey> & Record<string, TranslationKey>;
 
 /** The label of a registered asset kind; nothing for a kind this interface has no name for. */
@@ -93,6 +94,17 @@ export const kindWords: Record<GrantKind, KindWords> = {
     chooseAsset: "access.chooseWorkflow",
     noAssets: "access.noWorkflows",
     assetsLoadFailed: "access.workflowsLoadFailed"
+  },
+  knowledge_base: {
+    actionOnKind: "access.actionOnKnowledgeBase",
+    scopeAsset: "access.scopeKnowledgeBase",
+    inNamespaceDescription: "access.scopeInNamespaceKnowledgeBaseDescription",
+    onAsset: "access.scopeOnKnowledgeBase",
+    onAssetDescription: "access.scopeOnKnowledgeBaseDescription",
+    assetField: "access.grantKnowledgeBase",
+    chooseAsset: "access.chooseKnowledgeBase",
+    noAssets: "access.noKnowledgeBases",
+    assetsLoadFailed: "access.knowledgeBasesLoadFailed"
   }
 };
 
@@ -111,7 +123,11 @@ export const rightSentenceKeys: Partial<Record<GrantableAction, TranslationKey>>
   "workflow.read": "access.actionReadWorkflowDescription",
   "workflow.use": "access.actionUseWorkflowDescription",
   "workflow.write": "access.actionWriteWorkflowDescription",
-  "workflow.publish": "access.actionPublishWorkflowDescription"
+  "workflow.publish": "access.actionPublishWorkflowDescription",
+  "knowledge_base.read": "access.actionReadKnowledgeBaseDescription",
+  "knowledge_base.use": "access.actionUseKnowledgeBaseDescription",
+  "knowledge_base.write": "access.actionWriteKnowledgeBaseDescription",
+  "knowledge_base.publish": "access.actionPublishKnowledgeBaseDescription"
 };
 
 /**

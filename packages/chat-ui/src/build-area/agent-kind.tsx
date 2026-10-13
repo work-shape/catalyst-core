@@ -3,7 +3,10 @@ import { Bot } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@vivd-catalyst/ui";
 import { useAgentPlacementMutations } from "../api/agent-placement-mutations";
-import { useAdministeredCollaborationWorkspacesQuery } from "../api/workspace-queries";
+import {
+  useAdministeredCollaborationWorkspacesQuery,
+  usePlatformContextQuery
+} from "../api/workspace-queries";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { canManageAgentModels } from "../control-plane/governance";
 import { useTranslation } from "../i18n";
@@ -16,6 +19,7 @@ import type { BuildAssetEditorProps, BuildAssetKind } from "./build-asset-kind";
 import { AGENT_ASSET_KIND } from "./build-rights";
 import { AGENTS_BUILD_PATH } from "./build-route";
 import { useConnectionToolChoice } from "./connection-tools";
+import { useKnowledgeBaseSource } from "./knowledge-base-source";
 import { skillFacts } from "./skill-facts";
 
 /** How many skills the chooser of an agent asks the instance for with one search. */
@@ -70,6 +74,11 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
       }),
     placeholderData: (previous) => previous
   });
+  // The Knowledge Bases are offered where the instance has the kind: its module is on.
+  const context = usePlatformContextQuery({ ...api, enabled: true }).data;
+  const knowledgeOn = context?.kinds.some((kind) => kind.kind === "knowledge_base") ?? false;
+  const [knowledgeSearch, setKnowledgeSearch] = useState("");
+  const knowledgeRead = useKnowledgeBaseSource().useKnowledgeBases(knowledgeSearch, knowledgeOn);
   const administeredWorkspacesQuery = useAdministeredCollaborationWorkspacesQuery({
     ...api,
     enabled: instanceWrite && asset !== undefined
@@ -99,6 +108,14 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
         })),
         onSearch: (text) => setSkillSearch(text.trim())
       }}
+      knowledgeChoice={
+        knowledgeOn
+          ? {
+              options: knowledgeRead.status === "ready" ? knowledgeRead.data : [],
+              onSearch: (text) => setKnowledgeSearch(text.trim())
+            }
+          : undefined
+      }
       connectionTools={connectionTools}
       appTools={appTools}
       onMakeDefault={

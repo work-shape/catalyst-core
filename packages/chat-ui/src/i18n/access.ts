@@ -118,6 +118,25 @@ export const access = defineTranslations({
     "access.chooseWorkflow": "Choose a Workflow",
     "access.noWorkflows": "This instance has no Workflow yet.",
     "access.workflowsLoadFailed": "The Workflows could not be loaded.",
+    "access.actionOnKnowledgeBase": "{action} Knowledge Bases",
+    "access.actionReadKnowledgeBaseDescription":
+      "See the Knowledge Base, the tables it describes and whether they can be read.",
+    "access.actionUseKnowledgeBaseDescription":
+      "Read its rows: in chat through an agent that has it, and with a test query. This person needs no right on the Data Store behind it.",
+    "access.actionWriteKnowledgeBaseDescription":
+      "Change the draft of the Knowledge Base. A draft answers nobody until it is published.",
+    "access.actionPublishKnowledgeBaseDescription":
+      "Make a draft the version that answers. Publishing also needs the right to read the Data Store behind it.",
+    "access.scopeKnowledgeBase": "Knowledge Base {name}",
+    "access.scopeInNamespaceKnowledgeBaseDescription":
+      "Every Knowledge Base whose name starts with the prefix, future ones included.",
+    "access.scopeOnKnowledgeBase": "On one Knowledge Base",
+    "access.scopeOnKnowledgeBaseDescription": "One existing Knowledge Base.",
+    "access.grantKnowledgeBase": "Knowledge Base",
+    "access.chooseKnowledgeBase": "Choose a Knowledge Base",
+    "access.noKnowledgeBases": "This instance has no Knowledge Base yet.",
+    "access.knowledgeBasesLoadFailed": "The Knowledge Bases could not be loaded.",
+    "access.kindKnowledgeBase": "Knowledge bases",
     "access.noAssets": "This instance has none of this kind yet.",
     "access.grantRightNotOffered":
       "This right cannot be given in a Namespace or on one asset. Reload the page and choose one of the actions it offers.",
@@ -387,6 +406,25 @@ export const access = defineTranslations({
     "access.chooseWorkflow": "Workflow wählen",
     "access.noWorkflows": "Auf dieser Instanz gibt es noch keinen Workflow.",
     "access.workflowsLoadFailed": "Die Workflows konnten nicht geladen werden.",
+    "access.actionOnKnowledgeBase": "Wissensbasen: {action}",
+    "access.actionReadKnowledgeBaseDescription":
+      "Die Wissensbasis sehen, die Tabellen, die sie beschreibt, und ob sie sich lesen lassen.",
+    "access.actionUseKnowledgeBaseDescription":
+      "Ihre Zeilen lesen: im Chat über einen Agenten, der sie hat, und mit einer Testabfrage. Diese Person braucht kein Recht am Datenspeicher dahinter.",
+    "access.actionWriteKnowledgeBaseDescription":
+      "Den Entwurf der Wissensbasis ändern. Ein Entwurf antwortet niemandem, bis er veröffentlicht ist.",
+    "access.actionPublishKnowledgeBaseDescription":
+      "Einen Entwurf zu der Version machen, die antwortet. Veröffentlichen braucht zusätzlich das Recht, den Datenspeicher dahinter zu lesen.",
+    "access.scopeKnowledgeBase": "Wissensbasis {name}",
+    "access.scopeInNamespaceKnowledgeBaseDescription":
+      "Jede Wissensbasis, deren Name mit dem Präfix beginnt, auch künftige.",
+    "access.scopeOnKnowledgeBase": "An einer Wissensbasis",
+    "access.scopeOnKnowledgeBaseDescription": "Eine vorhandene Wissensbasis.",
+    "access.grantKnowledgeBase": "Wissensbasis",
+    "access.chooseKnowledgeBase": "Wissensbasis wählen",
+    "access.noKnowledgeBases": "Auf dieser Instanz gibt es noch keine Wissensbasis.",
+    "access.knowledgeBasesLoadFailed": "Die Wissensbasen konnten nicht geladen werden.",
+    "access.kindKnowledgeBase": "Wissensbasen",
     "access.noAssets": "Auf dieser Instanz gibt es davon noch nichts.",
     "access.grantRightNotOffered":
       "Dieses Recht lässt sich nicht in einem Namespace oder an einem einzelnen Asset vergeben. Lade die Seite neu und wähle eine der angebotenen Aktionen.",

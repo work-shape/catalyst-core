@@ -8,7 +8,8 @@ const INSTANCE_WRITE_PERMISSION = "config_assets.write";
 /** The asset kind of agents, as the instance names it. */
 export const AGENT_ASSET_KIND = "agent";
 
-type AssetVerb = "read" | "write" | "delete";
+/** `publish` is named by a kind with a draft and a published revision only. */
+type AssetVerb = "read" | "write" | "delete" | "publish";
 
 /** A Namespace the reader holds a right in, as the picker and the filter name it. */
 export interface BuildNamespace {

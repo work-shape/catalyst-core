@@ -7,7 +7,7 @@ interface AssetAddress {
 }
 
 /**
- * The three writes of one asset. Each names the revision its caller loaded, so a write over
+ * The writes of one asset. Each names the revision its caller loaded, so a write over
  * somebody else's newer revision is answered with a conflict. The caller holds that revision
  * with the form it was loaded into: nothing here looks a later one up.
  */
@@ -23,6 +23,9 @@ export function createAssetWrites(client: ApiClient) {
       client.assets.put({ params: { kind, name }, body: { config, expectedRevision } }),
     delete: ({ kind, name, expectedRevision }: AssetAddress & { expectedRevision: number }) =>
       client.assets.delete({ params: { kind, name }, body: { expectedRevision } }),
+    /** Names the revision to publish, which is the one its caller saved. */
+    publish: ({ kind, name, revision }: AssetAddress & { revision: number }) =>
+      client.assets.publish({ params: { kind, name }, body: { revision } }),
     revert: ({
       kind,
       name,
