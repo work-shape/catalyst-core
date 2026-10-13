@@ -143,6 +143,8 @@ describe("Knowledge Bases in Build", () => {
     expect(page).toContain('data-knowledge-table="runs"');
     expect(page).toContain('data-knowledge-table="invoices"');
     expect(page).toContain("Not in the data store");
+    // A box left clear is no error: a required box stopped the browser from sending the form.
+    expect(page).not.toMatch(/role="checkbox"[^>]*aria-required="true"/u);
     expect(page).toContain('data-knowledge-state="needs_attention"');
     expect(page).toContain("Cannot be read");
     expect(page).toContain("Check now");

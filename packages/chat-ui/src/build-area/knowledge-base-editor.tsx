@@ -164,6 +164,7 @@ export function KnowledgeBaseEditor({
       outcome={outcome}
       saving={saving}
       saveLabel={asset ? t("configSaveChanges") : t("knowledge.create")}
+      saveHint={t("build.savesDraft")}
     />
   );
 }
@@ -249,7 +250,8 @@ function TableChoice({
   const describe = (name: string, description: string) =>
     onChange(tables.map((table) => (table.name === name ? { ...table, description } : table)));
   return (
-    <Field label={t("knowledge.tables")} hint={t("knowledge.tablesHint")} required>
+    // Not `required`: a Field hands that to each box in it, and a box left clear is no error.
+    <Field label={t("knowledge.tables")} hint={t("knowledge.tablesHint")}>
       <ReadState
         read={read}
         failedText={t("knowledge.tablesFailed")}

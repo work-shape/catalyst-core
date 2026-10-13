@@ -31,6 +31,7 @@ export const build = defineTranslations({
     "build.draftAhead": "Draft",
     "build.neverPublished": "Not published",
     "build.publish": "Publish",
+    "build.savesDraft": "Saves a draft. It answers nobody until it is published.",
     "build.publishTitle": "Publish {name}?",
     "build.publishDescription":
       "The saved draft becomes the version everyone who uses it gets, from now on. Unsaved changes are not part of it.",
@@ -145,6 +146,8 @@ export const build = defineTranslations({
     "build.draftAhead": "Entwurf",
     "build.neverPublished": "Nicht veröffentlicht",
     "build.publish": "Veröffentlichen",
+    "build.savesDraft":
+      "Speichert einen Entwurf. Er antwortet niemandem, bis er veröffentlicht ist.",
     "build.publishTitle": "{name} veröffentlichen?",
     "build.publishDescription":
       "Der gespeicherte Entwurf wird ab jetzt die Version, die alle bekommen, die ihn nutzen. Ungespeicherte Änderungen gehören nicht dazu.",
