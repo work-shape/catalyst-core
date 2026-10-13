@@ -43,11 +43,7 @@ const UNSTORABLE_TEXT_PATHS_MAX = 20;
 export function unstorableTextPaths(value: JsonValue): string[][] {
   const paths: string[][] = [];
   const open: { value: JsonValue; path: string[] }[] = [{ value, path: [] }];
-  for (
-    let next = open.pop();
-    next && paths.length < UNSTORABLE_TEXT_PATHS_MAX;
-    next = open.pop()
-  ) {
+  for (let next = open.pop(); next && paths.length < UNSTORABLE_TEXT_PATHS_MAX; next = open.pop()) {
     const { value: item, path } = next;
     if (typeof item === "string") {
       if (!isStorableText(item)) paths.push(path);
