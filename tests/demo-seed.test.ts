@@ -5,9 +5,11 @@ import { listAll } from "@vivd-catalyst/api-client";
 import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
 import {
   assertLocalDevelopmentHost,
+  builder,
   heldSkillChange,
   people,
-  seedDemo
+  seedDemo,
+  workflowCheckQuestions
 } from "@vivd-catalyst/demo/seed";
 import {
   createdBy,
@@ -49,14 +51,15 @@ const seeded = useSeededInstance({
 describe("the demo seed on the fixture instance", () => {
   it("creates the company on an empty instance and says how much of each", () => {
     expect(createdBy(seeded().first)).toEqual({
-      people: 7,
+      people: 8,
       "service principals": 1,
       "API keys": 1,
       "the instance's own agents and skills": 2,
-      namespaces: 3,
+      namespaces: 4,
       agents: 8,
       skills: 7,
-      "grant rows": 16,
+      "grant rows": 25,
+      "builder assets": 2,
       "approval requests": 2,
       "connection grant rows": 0,
       workspaces: 1,
@@ -116,7 +119,7 @@ describe("the demo seed on the fixture instance", () => {
     );
   });
 
-  it("registers three Namespaces, one with a tool list and a model list", () => {
+  it("registers four Namespaces, one with a tool list and a model list", () => {
     expect(
       seeded().before.namespaces.map(
         ({ prefix, allowedToolNames, allowedModelBindingIds, assetCount }) => ({
@@ -128,6 +131,7 @@ describe("the demo seed on the fixture instance", () => {
       )
     ).toEqual([
       { prefix: "hr-", allowedToolNames: null, allowedModelBindingIds: null, assetCount: 4 },
+      { prefix: "kai-", allowedToolNames: null, allowedModelBindingIds: null, assetCount: 2 },
       { prefix: "sales-", allowedToolNames: null, allowedModelBindingIds: null, assetCount: 4 },
       {
         prefix: "tax-",
@@ -145,7 +149,8 @@ describe("the demo seed on the fixture instance", () => {
     const own = ["application_assistant", "research_assistant"];
     const assets = seeded().before.assets.filter((asset) => !own.includes(asset.name));
     expect(defaultAgentName).toBe("application_assistant");
-    expect(assets.filter((asset) => asset.kind === "agent")).toHaveLength(8);
+    // The company's eight and the one Kai Berger made.
+    expect(assets.filter((asset) => asset.kind === "agent")).toHaveLength(9);
     expect(assets.filter((asset) => asset.kind === "skill")).toHaveLength(7);
     expect(assets.filter((asset) => asset.kind === "agent" && asset.shown !== "all")).toEqual([]);
     expect(assets.filter((asset) => asset.revision !== 1).map((asset) => asset.name)).toEqual([
@@ -171,11 +176,51 @@ describe("the demo seed on the fixture instance", () => {
     const { grants } = seeded().before;
     const count = (effect: string, scopeKind: string) =>
       grants.filter((row) => row.effect === effect && row.scopeKind === scopeKind).length;
-    expect(grants).toHaveLength(16);
-    expect(count("allow", "namespace")).toBe(12);
+    expect(grants).toHaveLength(25);
+    expect(count("allow", "namespace")).toBe(21);
     expect(count("allow", "asset")).toBe(2);
     expect(count("deny", "namespace")).toBe(1);
     expect(count("deny", "asset")).toBe(1);
+  });
+
+  it("leaves an agent and a Workflow draft that Kai Berger made in his own Namespace", async () => {
+    const { client, users, grants } = seeded().before;
+    const kai = users.find((user) => user.displayLabel === "Kai Berger");
+    expect(kai).toMatchObject({ roles: ["user"], permissions: [], status: "active" });
+    // Nothing but his rows in `kai-`: no right on an App, which no grant gives yet.
+    expect(
+      grants
+        .filter((row) => row.holderId === kai?.id)
+        .map((row) => `${row.action} ${row.scopeKind} ${row.namespace ?? ""}`)
+        .sort()
+    ).toEqual(
+      [
+        "agent.delete",
+        "agent.read",
+        "agent.write",
+        "skill.delete",
+        "skill.read",
+        "skill.write",
+        "workflow.publish",
+        "workflow.read",
+        "workflow.write"
+      ].map((action) => `${action} namespace kai-`)
+    );
+    for (const [kind, name] of [
+      ["agent", builder.agent.name],
+      ["workflow", builder.workflow]
+    ] as const) {
+      const revisions = await listAll((paging) =>
+        client.assets.revisions.list({ params: { kind, name }, query: paging })
+      );
+      expect(revisions.map((revision) => revision.actor?.displayLabel)).toEqual(["Kai Berger"]);
+    }
+    // His Workflow stays a draft: publishing it would lend the principal it names.
+    const draft = await client.assets.get({
+      params: { kind: "workflow", name: builder.workflow }
+    });
+    expect(draft.revision).toBe(1);
+    expect(draft.publishedRevision).toBeUndefined();
   });
 
   it("creates the config CLI's service principal with one key and leaves two calls waiting in the Inbox", async () => {
@@ -250,6 +295,7 @@ describe("the demo seed on the fixture instance", () => {
 
   it("gives the Check tab the answers the demo README promises", async () => {
     await expectCheckAnswers(seeded().before);
+    await expectCheckAnswers(seeded().before, workflowCheckQuestions);
   });
 
   it("refuses a host that is not a local development host before it sends anything", async () => {

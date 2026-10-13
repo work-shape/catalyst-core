@@ -21,6 +21,7 @@ import {
 } from "@vivd-catalyst/core";
 import { CONNECTIONS_MODULE, CONNECTION_KIND, createSeedApi, type SeedApi } from "./api";
 import { seedApps } from "./apps";
+import { seedBuilder } from "./builder";
 import { seedWorkflows } from "./workflows";
 import {
   assertLocalDevelopmentHost,
@@ -154,6 +155,7 @@ export async function seedDemo(options: SeedOptions): Promise<SeedReport> {
   await seedNamespaces(root, as, steps);
   await seedAssets(root, as, instance, apiKey, steps);
   await seedGrants(root, as, userIds, steps);
+  await seedBuilder(root, as, modules, instance.assetsDir, steps);
   await seedHeldCalls(root, as, steps);
   await seedConnections(root, as, userIds, modules, steps);
   await seedApps(modules, as, instance.assetsDir, steps);
