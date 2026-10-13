@@ -213,11 +213,8 @@ interface AgentsModel {
   /** How the open workspace's own list of agents stands. */
   status: AgentListStatus;
   retry(): void;
-  /**
-   * Opens a new conversation of the open workspace with this agent selected. With `prompt`,
-   * that text stands in its composer.
-   */
-  startChat(agentName: string, prompt?: string): void;
+  /** Opens a new conversation of the open workspace with this agent selected. */
+  startChat(agentName: string): void;
 }
 
 /** What the workspace knows about Apps: the module's state and the reader's rights. */
@@ -1172,13 +1169,9 @@ export function useWorkspaceChatModel({
       retry: () => {
         workspaceAgentsQuery.refetch().catch(() => undefined);
       },
-      startChat: (agentName, prompt) => {
+      startChat: (agentName) => {
         setSelectedAgentName(agentName);
-        if (prompt === undefined) {
-          startNewConversation();
-        } else {
-          startNewConversationWith(prompt);
-        }
+        startNewConversation();
       }
     },
     apps: {

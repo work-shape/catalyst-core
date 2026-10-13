@@ -51,7 +51,10 @@ async function listModels(
   return providerCheckResultOfStatus(response.status);
 }
 
-/** Any endpoint that speaks the OpenAI chat completions or responses wire format. */
+/**
+ * Any endpoint that speaks the OpenAI chat completions or responses wire format, and its
+ * embeddings endpoint for bindings of kind `embedding`.
+ */
 export const openAiCompatibleModelProvider = defineProvider({
   port: "models",
   type: "openai-compatible",
@@ -87,7 +90,8 @@ export const openAiCompatibleModelProvider = defineProvider({
       return {
         capabilities: () => capabilities,
         complete: (request) => provider.complete(toRequest(request), request),
-        stream: (request) => provider.stream(toRequest(request), request)
+        stream: (request) => provider.stream(toRequest(request), request),
+        embed: (request) => provider.embed(request)
       };
     };
     build.check = (context) => listModels({ ...config, apiKey, organization }, context);
