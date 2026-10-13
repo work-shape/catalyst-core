@@ -18,7 +18,13 @@ import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import { readWorkflowManifest } from "@vivd-catalyst/workflows";
 import { errorSchema } from "./support/access-instance";
 import { setupAppInstance, type AppInstance } from "./support/app-instance";
-import { putAgent, putSkill, setupRelease, syncAsService } from "./support/asset-release";
+import {
+  asService,
+  putAgent,
+  putSkill,
+  setupRelease,
+  syncAsService
+} from "./support/asset-release";
 import {
   hostileDocuments,
   hostileJsonStrings,
@@ -183,13 +189,18 @@ describe("a config push through assets.sync", () => {
   });
 
   it("refuses a nesting deeper than any config holds, and a body over the limit", async () => {
-    let deep: unknown = "leaf";
-    for (let level = 0; level < 5_000; level += 1) deep = [deep];
+    // The body is written as text: a nesting this deep ends the stack of JSON.stringify.
+    const body = JSON.stringify({
+      items: [putAgent("hostile-agent", { instructions: "DEEP" })]
+    }).replace('"DEEP"', `${"[".repeat(5_000)}"leaf"${"]".repeat(5_000)}`);
     const nested = await withinBound("deep", () =>
-      syncAsService(t, [putAgent("hostile-agent", { instructions: deep })])
+      asService(t, "assets.sync", {
+        payload: body,
+        headers: { "content-type": "application/json" }
+      })
     );
-    expect(nested.statusCode).toBeGreaterThanOrEqual(400);
-    expect(nested.statusCode).toBeLessThan(500);
+    expect(nested.statusCode).toBe(422);
+    expect(errorSchema.parse(nested.json()).error.code).toBe("VALIDATION_FAILED");
 
     const huge = await withinBound("huge", () =>
       syncAsService(t, [putSkill("hostile-skill", "x".repeat(21 * 1024 * 1024))])

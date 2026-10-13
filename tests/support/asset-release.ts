@@ -102,7 +102,11 @@ export function asService(
 ): ReturnType<AccessInstance["call"]> {
   return t.instance.call(operation, {
     ...input,
-    headers: { [SERVICE_HEADER]: SERVICE, ...(scopes ? { [SCOPES_HEADER]: scopes } : {}) }
+    headers: {
+      ...input?.headers,
+      [SERVICE_HEADER]: SERVICE,
+      ...(scopes ? { [SCOPES_HEADER]: scopes } : {})
+    }
   });
 }
 
