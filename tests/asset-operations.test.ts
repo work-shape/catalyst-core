@@ -125,6 +125,19 @@ describe("assets.list", () => {
     );
   });
 
+  it("finds a title by text that holds a quote or a backslash, which its JSON escapes", async () => {
+    const t = await setupNamespace();
+    await t.expectOk(t.admin.id, "assets.put", {
+      params: { kind: "agent", name: "kai-quoted" },
+      payload: { config: agent("kai-quoted", { displayName: 'The "Q4" share at C:\\ledger' }) }
+    });
+    const list = (text: string) =>
+      t.names(t.admin.id, "assets.list", { params: { kind: "agent" }, query: { text } });
+
+    expect(await list('"Q4"')).toEqual(["kai-quoted"]);
+    expect(await list("C:\\ledger")).toEqual(["kai-quoted"]);
+  });
+
   it("reads ten thousand assets through the name index, for a caller who may read few of them", async () => {
     const t = await setupNamespace();
     // 10,000 agents of this instance, each with its active revision; 100 of them in `kai-`.
