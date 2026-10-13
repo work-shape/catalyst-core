@@ -45,6 +45,19 @@ export function resolveAppRights(context: Pick<PlatformContext, "actions"> | und
 }
 
 /**
+ * Whether the Apps row of the sidebar shows: the module is on and the person is shown at least
+ * one App of the open workspace or may write one. A member is never shown an empty row; a
+ * builder is, so the first App has a place to go. Unknown counts as none until the list arrived.
+ */
+export function appsRowShown(input: {
+  enabled: boolean;
+  rights: Pick<AppRights, "write">;
+  listed: boolean | undefined;
+}): boolean {
+  return input.enabled && (input.rights.write || input.listed === true);
+}
+
+/**
  * Whether the reader builds Apps here: writes them or publishes them. Everybody else uses an
  * App, and is not shown what only its builders work with: its id and its revision numbers.
  */

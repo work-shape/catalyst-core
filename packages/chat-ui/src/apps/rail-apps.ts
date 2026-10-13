@@ -93,11 +93,23 @@ function writeStoredAppOpens(key: string, opens: AppOpens): void {
   }
 }
 
+/** What the rail knows of the Apps of the open workspace. */
+export interface RailAppsRead {
+  /** The published ones, listed under the Apps row. */
+  apps: readonly RailApp[];
+  /**
+   * The Apps page shows this person at least one App, a draft included. Unknown while the
+   * module is off, no workspace is open, or the list has not arrived or failed.
+   */
+  listed: boolean | undefined;
+}
+
 /**
  * The published Apps of the open workspace for the rail, most recently opened by this person
  * first. Empty while the module is off, no workspace is open, the list has not arrived or
- * failed, or the person may open no App: the rail then shows the Apps row alone. The list is
- * the first page the Apps page reads, under the same key, so the two share one request.
+ * failed, or the person may open no App: the rail then shows the Apps row alone, where it
+ * shows it. The list is the first page the Apps page reads, under the same key, so the two
+ * share one request, and whether the page has an App to show is read from it.
  */
 export function useRailApps(input: {
   enabled: boolean;
@@ -105,7 +117,7 @@ export function useRailApps(input: {
   workspaceId: string | undefined;
   /** The App on screen, which counts as opened now. */
   openApp: string | undefined;
-}): readonly RailApp[] {
+}): RailAppsRead {
   const { apiBaseUrl } = useWorkspaceApiClient();
   const workspaceId = input.enabled ? input.workspaceId : undefined;
   const list = useAppList(workspaceId);
@@ -123,5 +135,9 @@ export function useRailApps(input: {
       writeStoredAppOpens(key, opens);
     }
   }, [key, openApp, opens]);
-  return useMemo(() => railApps(list.rows, opens), [list.rows, opens]);
+  const apps = useMemo(() => railApps(list.rows, opens), [list.rows, opens]);
+  return {
+    apps,
+    listed: workspaceId === undefined || list.rows === undefined ? undefined : list.rows.length > 0
+  };
 }

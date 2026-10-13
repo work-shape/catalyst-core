@@ -22,6 +22,7 @@ export {
   appPreviewProblemText,
   appDraftShown,
   appRefusalText,
+  appsRowShown,
   appRowActions,
   appState,
   NO_APP_RIGHTS,

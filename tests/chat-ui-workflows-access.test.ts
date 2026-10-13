@@ -5,6 +5,7 @@ import {
   resolveWorkflowRights,
   shownRailSections,
   workflowsAccess,
+  workflowsRowShown,
   workspaceRouteFromPath,
   workspaceRoutePath
 } from "@vivd-catalyst/chat-ui/workflows";
@@ -73,6 +74,17 @@ describe("who is shown the Workflows area", () => {
     expect(ids(true)).toEqual(["apps", "workflows"]);
     expect(ids(false)).toEqual(["apps"]);
     expect(shownRailSections(railSections).map((section) => section.id)).toEqual([]);
+  });
+
+  // NAV-VIS-1: the instance names the row where its list shows the person a Workflow or they
+  // may write one, so a member is never shown an empty row. The area stays open either way.
+  it("shows the row only where the area is open and the instance names it", () => {
+    const named = { visibleSections: ["workflows" as const] };
+    const unnamed = { visibleSections: [] };
+    expect(workflowsRowShown("open", named)).toBe(true);
+    expect(workflowsRowShown("open", unnamed)).toBe(false);
+    expect(workflowsRowShown("closed", named)).toBe(false);
+    expect(workflowsRowShown("unknown", undefined)).toBe(false);
   });
 });
 

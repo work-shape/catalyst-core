@@ -71,6 +71,18 @@ export function workflowsAccess(input: {
 }
 
 /**
+ * Whether the Workflows row of the sidebar shows: the area is open to the person, and the
+ * instance says the row is there for them, which it does where `workflows.list` names them a
+ * Workflow or they may write one. The area's addresses stay open either way.
+ */
+export function workflowsRowShown(
+  access: WorkflowsAccess,
+  context: Pick<PlatformContext, "visibleSections"> | undefined
+): boolean {
+  return access === "open" && context?.visibleSections.includes("workflows") === true;
+}
+
+/**
  * Whether a start stands on the page or the card of a Workflow: a revision is published, the
  * reader holds the right to start this Workflow, and its start form can ask for every input a
  * start needs.

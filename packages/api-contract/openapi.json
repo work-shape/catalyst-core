@@ -23593,6 +23593,15 @@
             "items": {
               "$ref": "#/components/schemas/PlatformContextNamespace"
             }
+          },
+          "visibleSections": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "workflows"
+              ]
+            }
           }
         },
         "required": [
@@ -23601,7 +23610,8 @@
           "kinds",
           "actions",
           "assetActions",
-          "namespaces"
+          "namespaces",
+          "visibleSections"
         ]
       },
       "PlatformContextNamespace": {

@@ -413,6 +413,13 @@ contain breaking changes; a patch version does not.
   nothing more, and there is no block without the Apps module or for a person without a
   published App. The rail reads the first page of the Apps list, so in a workspace with more
   than fifty Apps it chooses among those fifty.
+- **No empty Apps or Workflows row for members:** the rows "Apps" and "Workflows" of the main
+  rail, open and collapsed, show only while their module is on and the person is shown at least
+  one App of the open workspace or one Workflow, or may write one (`app.write`; `workflow.write`
+  on the instance, in a Namespace or on one Workflow). A builder keeps the empty row to make the
+  first one. The pages and their addresses are unchanged. `platform.context.get` answers
+  `visibleSections`, which names `workflows` where that row is there for the caller, decided by
+  the check of `workflows.list`.
 - **New chat from the Recent heading:** the "Recent" heading of the main rail has a small plus
   at its right end that starts a new chat as the "New chat" row does. It shows while the pointer
   is over the Recent section or the keyboard is on it, and always on a screen without hover.

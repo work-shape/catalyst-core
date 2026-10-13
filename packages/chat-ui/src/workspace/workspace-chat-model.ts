@@ -68,6 +68,7 @@ import { NO_APP_RIGHTS, resolveAppRights, type AppRights } from "../apps/app-mod
 import {
   resolveWorkflowRights,
   workflowsAccess,
+  workflowsRowShown,
   type WorkflowRights,
   type WorkflowsAccess
 } from "../workflows/workflow-model";
@@ -312,9 +313,15 @@ export interface ConversationRailModel {
   inbox: { toDecide: number } | undefined;
   /** The session has workspaces: the Agents row shows. */
   agents: boolean;
-  /** The Apps module is on: the Apps row shows. */
+  /**
+   * The Apps module is on. The row shows where the person is also shown an App of the open
+   * workspace or may write one, which the frame decides with the list the rail reads.
+   */
   apps: boolean;
-  /** The Workflows area is open to the person: the Workflows row shows. */
+  /**
+   * The Workflows area is open to the person and the instance names them a Workflow or they
+   * may write one: the Workflows row shows.
+   */
   workflows: boolean;
   view: WorkspaceView;
   creatingConversation: boolean;
@@ -1120,7 +1127,7 @@ export function useWorkspaceChatModel({
       inbox,
       agents: collaborationWorkspacesAvailable,
       apps: appsEnabled,
-      workflows: workflowsOpen === "open",
+      workflows: workflowsRowShown(workflowsOpen, platformContextQuery.data),
       view,
       creatingConversation: false,
       deletingConversation: deleteConversationMutation.isPending,

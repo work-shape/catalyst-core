@@ -54,8 +54,11 @@ describe("platform.context.get", () => {
       "instance",
       "kinds",
       "namespaces",
-      "release"
+      "release",
+      "visibleSections"
     ]);
+    // The Workflows module is off here: no section row is named.
+    expect(context.visibleSections).toEqual([]);
   });
 
   it("lists no Namespace for a user who holds nothing, and an administrator's actions less a deny", async () => {

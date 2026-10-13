@@ -19,6 +19,7 @@ import {
   appPreviewProblemText,
   appDraftShown,
   appRefusalText,
+  appsRowShown,
   AppPreviewNotice,
   appPreviewState,
   appRowActions,
@@ -153,6 +154,25 @@ describe("the Apps row of the rail", () => {
     expect(ids({ apps: false })).toEqual([]);
     expect(ids({})).toEqual([]);
     expect(ids({ apps: true, inbox: { toDecide: 0 } })).toEqual(["apps", "inbox"]);
+  });
+
+  // NAV-VIS-1: a member is never shown an empty row; a builder is, to make the first App.
+  it("shows for a member only while the workspace's list holds an App", () => {
+    const member = NO_APP_RIGHTS;
+    expect(appsRowShown({ enabled: true, rights: member, listed: true })).toBe(true);
+    expect(appsRowShown({ enabled: true, rights: member, listed: false })).toBe(false);
+    // Until the list arrived, or where it failed, nothing is known to show.
+    expect(appsRowShown({ enabled: true, rights: member, listed: undefined })).toBe(false);
+  });
+
+  it("shows the empty row to whoever may write an App, and to nobody with the module off", () => {
+    const builder = { ...NO_APP_RIGHTS, write: true };
+    expect(appsRowShown({ enabled: true, rights: builder, listed: false })).toBe(true);
+    expect(appsRowShown({ enabled: true, rights: builder, listed: undefined })).toBe(true);
+    expect(appsRowShown({ enabled: false, rights: builder, listed: true })).toBe(false);
+    // Publishing alone makes no App.
+    const publisher: AppRights = { ...NO_APP_RIGHTS, publish: true };
+    expect(appsRowShown({ enabled: true, rights: publisher, listed: false })).toBe(false);
   });
 });
 
