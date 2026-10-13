@@ -214,6 +214,26 @@ contain breaking changes; a patch version does not.
   transaction that commits, or outside of one, for a database the platform manages itself. A
   change takes at most `POSTGRES_CHANGE_MAX_TIMEOUT_MS` (10 minutes). `createPostgresExecutor`
   takes `poolMaxConnections` for an executor whose databases the platform sizes itself.
+  the capabilities repository carries both from the build that follows this release.
+- **Database:** migration `0060_asset_repositories` adds the tables `asset_repo_bundles` and
+  `asset_checkouts` and the columns `commit` and `tree` on `config_asset_revisions`. They are
+  empty for every asset that exists. The migration waits five seconds for its locks at most; one
+  that gives up is run again. **Rollback:** an earlier release ignores them.
+- **Workspace command worker:** with the module `apps` on, the worker serves two more job
+  kinds. `asset_repo.commit` makes the commit of a save in the sandbox, with the command and
+  the git of the runner image: it reads the bundles the ledger names, each checked against the
+  size and the SHA-256 the ledger recorded before the command sees it
+  (`bundle_hash_mismatch` otherwise), names the new bundle on the save's pending row and then
+  puts its object into the `files` store. `asset_repo.sweep` runs every hour and gives up the
+  saves that are still pending after a day, with their objects. A kind of asset says with
+  `content: repository` that its files are a repository; the kind `app` does. No operation
+  starts a commit yet. **Operators:** a worker of this release needs a runner image that has
+  `catalyst-asset-repo`: the image of this release, or the capabilities runner image built
+  from it. On a `local` sandbox the command runs the git of the machine, 2.47 or later. A
+  worker of an earlier release beside this one is refused at its start, as for `page.bundle`.
+- **Database:** migration `0061_asset_repo_commit_request` adds the columns `request` and
+  `result` to `asset_repo_bundles`: what a pending save commits, without bytes, and how its
+  commit ended. **Rollback:** an earlier release ignores them.
 - **Pages, plain HTML:** App Kit version `1.2.0`, with two new files, `page.css` and `theme.js`.
   A plain HTML Page that names it comes out with the look of the platform: the build links
   `page.css` and `theme.js` first into every HTML file of a Page with an `entry`, also one whose
