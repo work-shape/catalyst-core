@@ -413,6 +413,16 @@ export interface ConfigAssetStore {
     name: string;
     revision: number;
   }): Promise<ConfigAssetRevisionRecord | undefined>;
+  /**
+   * One revision of one asset by its id: what a reader holds that kept the id of the revision
+   * it started on, such as a Workflow Run. A revision of another asset is not answered.
+   */
+  getConfigAssetRevisionById(input: {
+    clientInstanceId: ClientInstanceId;
+    kind: ConfigAssetKind;
+    name: string;
+    revisionId: string;
+  }): Promise<ConfigAssetRevisionRecord | undefined>;
   applyConfigAssetMutations(input: {
     clientInstanceId: ClientInstanceId;
     /**

@@ -13,9 +13,12 @@ import {
   listConfigAssetPage as listPostgresConfigAssetPage,
   listConfigAssetsByKey as listPostgresConfigAssetsByKey,
   listPublishedConfigAssets as listPublishedPostgresConfigAssets,
-  getConfigAssetRevision as getPostgresConfigAssetRevision,
   listConfigAssetRevisions as listPostgresConfigAssetRevisions
 } from "../postgres-config-asset-operations";
+import {
+  getConfigAssetRevision as getPostgresConfigAssetRevision,
+  getConfigAssetRevisionById as getPostgresConfigAssetRevisionById
+} from "../postgres-config-asset-revisions";
 import {
   listAgentAvailability as listPostgresAgentAvailability,
   setAgentAvailability as setPostgresAgentAvailability
@@ -82,6 +85,7 @@ export function createPostgresConfigAssetsStore(
     ): Promise<ConfigAssetRevisionRecord | undefined> {
       return getPostgresConfigAssetRevision(db, input);
     },
+    getConfigAssetRevisionById: (input) => getPostgresConfigAssetRevisionById(db, input),
     listConfigAssetsByKey: (input) => listPostgresConfigAssetsByKey(db, input),
     applyConfigAssetMutations: (input) => applyPostgresConfigAssetMutations(db, input),
     publishConfigAssetRevision: (input) => publishPostgresConfigAssetRevision(db, input),
