@@ -56,9 +56,16 @@ export function MarkdownLinkPolicyProvider({
 
 function useMarkdownRehypePlugins() {
   const policy = useContext(MarkdownLinkPolicyContext);
+  const { t } = useTranslation();
+  const imageWithDescription = t("markdownImageNotLoaded", { description: "{description}" });
+  const image = t("markdownImageNotLoadedNoDescription");
   return useMemo(
-    () => markdownRehypePlugins(policy ?? { allowedLinkHosts: [], ownOrigins: pageOrigin() }),
-    [policy]
+    () =>
+      markdownRehypePlugins(policy ?? { allowedLinkHosts: [], ownOrigins: pageOrigin() }, {
+        imageWithDescription,
+        image
+      }),
+    [policy, imageWithDescription, image]
   );
 }
 

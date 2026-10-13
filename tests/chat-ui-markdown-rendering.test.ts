@@ -37,8 +37,9 @@ describe("Markdown remote content", () => {
 
     expect(markup).not.toContain("<img");
     expect(markup).not.toContain("cdn.example.net");
-    expect(markup).toContain("Chart");
+    expect(markup).toContain("Image not loaded: Chart");
     expect(markup).toContain("chat-markdown-blocked-image");
+    expect(markup).not.toContain("[Image blocked");
   });
 
   it("loads no data: image", () => {
@@ -88,6 +89,27 @@ describe("Markdown remote content", () => {
     expect(markup).toContain("the offer (https://evil.example.net/offer?id=7)");
   });
 
+  it("names a blocked image in the reader's language", () => {
+    const markup = renderMarkdown(
+      "![Diagramm](https://cdn.example.net/d.png)\n\n![](https://cdn.example.net/e.png)",
+      "de"
+    );
+
+    expect(markup).toContain("Bild nicht geladen: Diagramm");
+    expect(markup).toContain("Bild nicht geladen<");
+    expect(markup).not.toContain("cdn.example.net");
+  });
+
+  it("shows a link with a refused protocol as its text, without the library's marker", () => {
+    // The sanitizer drops a `javascript:` address before the link rule sees it.
+    const markup = renderMarkdown("[run](javascript:alert(1))");
+
+    expect(markup).not.toContain('data-streamdown="link"');
+    expect(markup).not.toContain("[blocked]");
+    expect(markup).not.toContain("javascript:");
+    expect(markup).toContain('<span class="chat-markdown-blocked-link">run</span>');
+  });
+
   it("shows a bare address once when the link text is the address", () => {
     const markup = renderMarkdown("See https://evil.example.net/x");
 
@@ -106,15 +128,17 @@ describe("Markdown remote content", () => {
     expect(staysLink("https://a.b.partner.example/x")).toBe(true);
     expect(staysLink("https://partner.example/x")).toBe(false);
     expect(staysLink("https://docs.example.org.evil.net/x")).toBe(false);
+    expect(staysLink("//evil.example.net/x")).toBe(false);
     expect(staysLink("ftp://docs.example.org/x")).toBe(false);
+    expect(staysLink("javascript:alert(1)")).toBe(false);
   });
 });
 
-function renderMarkdown(markdown: string): string {
+function renderMarkdown(markdown: string, locale: "en" | "de" = "en"): string {
   return renderToStaticMarkup(
     createElement(
       TranslationProvider,
-      { children: null, locale: "en" },
+      { children: null, locale },
       createElement(
         MarkdownLinkPolicyProvider,
         { ...policy, children: null },

@@ -1,6 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createChatUiContentPolicy } from "./content-policy.js";
 import { readChatUiEnv } from "./env.js";
 import {
   createClientBranding,
@@ -19,6 +20,7 @@ export function vivdCatalystChatUiPlugin(options = {}) {
   );
   const faviconRelativePath = faviconPublicPath.replace(/^\/+/, "");
   const injectBrandingBootstrap = options.brandingBootstrap !== false;
+  const injectContentPolicy = options.contentPolicy !== false;
   let config;
 
   return {
@@ -27,29 +29,50 @@ export function vivdCatalystChatUiPlugin(options = {}) {
       config = resolvedConfig;
     },
     async transformIndexHtml() {
-      if (!config || !injectBrandingBootstrap) {
+      if (!config) {
         return undefined;
       }
 
-      const brandingBootstrap = await createBrandingBootstrap(config, options);
-      if (!brandingBootstrap) {
-        return undefined;
+      const clientConfig = await loadClientConfig(config, options);
+      const tags = [];
+      if (injectContentPolicy) {
+        // First in the head: a policy in a meta tag governs only what comes after it.
+        tags.push({
+          tag: "meta",
+          attrs: {
+            "http-equiv": "Content-Security-Policy",
+            content: createChatUiContentPolicy({
+              apiUrl: config.env?.VITE_CHAT_API_URL,
+              apiPort: config.env?.VITE_CHAT_API_PORT,
+              imageUrls: clientConfig
+                ? [clientConfig.ui.logoUrl, clientConfig.ui.logoUrlDark, clientConfig.ui.faviconUrl]
+                : [],
+              dev: config.command === "serve"
+            })
+          },
+          injectTo: "head-prepend"
+        });
       }
 
-      return [
-        {
-          tag: "script",
-          attrs: { id: "vivd-catalyst-theme-bootstrap" },
-          children: brandingBootstrap.script,
-          injectTo: "head-prepend"
-        },
-        {
-          tag: "style",
-          attrs: { id: "vivd-catalyst-theme-bootstrap-style" },
-          children: brandingBootstrap.style,
-          injectTo: "head-prepend"
-        }
-      ];
+      if (injectBrandingBootstrap && clientConfig) {
+        const branding = createClientBranding(clientConfig);
+        tags.push(
+          {
+            tag: "script",
+            attrs: { id: "vivd-catalyst-theme-bootstrap" },
+            children: createThemeBootstrapScript(branding.defaultThemeMode),
+            injectTo: "head-prepend"
+          },
+          {
+            tag: "style",
+            attrs: { id: "vivd-catalyst-theme-bootstrap-style" },
+            children: createThemeBootstrapStyle(branding),
+            injectTo: "head-prepend"
+          }
+        );
+      }
+
+      return tags.length > 0 ? tags : undefined;
     },
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
@@ -85,7 +108,7 @@ export function vivdCatalystChatUiPlugin(options = {}) {
   };
 }
 
-async function createBrandingBootstrap(config, options) {
+async function loadClientConfig(config, options) {
   const env = readChatUiEnv();
   const configPathInput =
     options.clientConfigPath ?? env.clientConfigPath ?? DEFAULT_CLIENT_CONFIG_PATH;
@@ -101,12 +124,7 @@ async function createBrandingBootstrap(config, options) {
     return undefined;
   }
 
-  const clientConfig = await loadClientInstanceConfigFromFile(configPath);
-  const branding = createClientBranding(clientConfig);
-  return {
-    script: createThemeBootstrapScript(branding.defaultThemeMode),
-    style: createThemeBootstrapStyle(branding)
-  };
+  return loadClientInstanceConfigFromFile(configPath);
 }
 
 function createThemeBootstrapScript(defaultThemeMode) {

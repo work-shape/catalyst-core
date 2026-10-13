@@ -14,6 +14,14 @@ export interface MarkdownLinkPolicy {
   allowedLinkHosts: readonly string[];
 }
 
+/** The texts shown in place of what is not loaded, in the reader's language. */
+export interface MarkdownBlockedLabels {
+  /** Shown for an image that has a description; `{description}` stands for it. */
+  imageWithDescription: string;
+  /** Shown for an image without a description. */
+  image: string;
+}
+
 /** Stands in for the instance's origin where none is known, so relative links stay links. */
 const FALLBACK_OWN_ORIGIN = "https://instance.invalid";
 
@@ -22,16 +30,20 @@ const BLOCKED_IMAGE_CLASS = "chat-markdown-blocked-image";
 
 /**
  * The one set of rehype plugins every Markdown reply and Markdown file preview renders with.
- * Raw HTML is parsed and sanitized as Streamdown does by default; then no image loads, neither
+ * Raw HTML is parsed and sanitized as Streamdown does by default. Then no image loads, neither
  * remote, nor relative, nor `data:`, and a link to a host outside the policy becomes text that
- * shows its address.
+ * shows its address. `rehype-harden` runs last as a second line; it finds nothing left to block.
  */
-export function markdownRehypePlugins(policy: MarkdownLinkPolicy): RehypePlugins {
+export function markdownRehypePlugins(
+  policy: MarkdownLinkPolicy,
+  labels: MarkdownBlockedLabels
+): RehypePlugins {
   const parsing = Object.entries(defaultRehypePlugins)
     .filter(([name]) => name !== "harden")
     .map(([, plugin]) => plugin);
   return [
     ...parsing,
+    [restrictRemoteContent, { policy, labels }],
     [
       harden,
       {
@@ -42,8 +54,7 @@ export function markdownRehypePlugins(policy: MarkdownLinkPolicy): RehypePlugins
         blockedImageClass: BLOCKED_IMAGE_CLASS,
         blockedLinkClass: BLOCKED_LINK_CLASS
       }
-    ],
-    [restrictRemoteContent, policy]
+    ]
   ];
 }
 
@@ -98,13 +109,18 @@ interface MarkdownNode {
   children?: MarkdownNode[];
 }
 
-function restrictRemoteContent(policy: MarkdownLinkPolicy) {
+interface RestrictOptions {
+  policy: MarkdownLinkPolicy;
+  labels: MarkdownBlockedLabels;
+}
+
+function restrictRemoteContent(options: RestrictOptions) {
   return (tree: MarkdownNode) => {
-    restrictChildren(tree, policy);
+    restrictChildren(tree, options);
   };
 }
 
-function restrictChildren(parent: MarkdownNode, policy: MarkdownLinkPolicy): void {
+function restrictChildren(parent: MarkdownNode, options: RestrictOptions): void {
   if (!parent.children) {
     return;
   }
@@ -116,16 +132,38 @@ function restrictChildren(parent: MarkdownNode, policy: MarkdownLinkPolicy): voi
     if (child.properties && "srcSet" in child.properties) {
       delete child.properties.srcSet;
     }
-    restrictChildren(child, policy);
+    if (child.tagName === "img") {
+      return imageAsText(child, options.labels);
+    }
+    restrictChildren(child, options);
     if (child.tagName !== "a") {
       return child;
     }
     const href = child.properties?.href;
-    if (typeof href === "string" && isAllowedMarkdownLink(href, policy)) {
+    if (typeof href === "string" && isAllowedMarkdownLink(href, options.policy)) {
       return child;
     }
     return linkAsText(child, typeof href === "string" ? href : "");
   });
+}
+
+/** An image is never loaded; its description is shown in its place. */
+function imageAsText(image: MarkdownNode, labels: MarkdownBlockedLabels): MarkdownNode {
+  const alt = image.properties?.alt;
+  const description = typeof alt === "string" ? alt.trim() : "";
+  return {
+    type: "element",
+    tagName: "span",
+    properties: { className: [BLOCKED_IMAGE_CLASS] },
+    children: [
+      {
+        type: "text",
+        value: description
+          ? labels.imageWithDescription.replace("{description}", description)
+          : labels.image
+      }
+    ]
+  };
 }
 
 /** The link's text, followed by its address unless the text already is the address. */
