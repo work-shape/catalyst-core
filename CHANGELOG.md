@@ -23,7 +23,8 @@ contain breaking changes; a patch version does not.
   select from exactly the tables the published revision describes: publishing grants them and
   takes the rest away in one transaction, "Check now" sets them again, and deleting the
   Knowledge Base drops the role. A store that has a Knowledge Base takes EXECUTE on its
-  functions from PUBLIC and keeps it for its app role; every call is one recorded Operation
+  functions from PUBLIC and keeps it for its app role, also for a function a later migration
+  makes; every call is one recorded Operation
   Run, and the audit holds no SQL, parameter or row. `knowledge_bases.get` reads the last
   check and `knowledge_bases.check` runs it again. An agent lists Knowledge Bases under
   `knowledgeBases`; however many it lists, it gets one tool, `knowledge.query`, whose

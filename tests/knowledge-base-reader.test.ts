@@ -157,6 +157,28 @@ describe("the role a Knowledge Base on a Data Store reads as", () => {
     expect((await query(instance, "select rule_id from findings")).statusCode).toBe(200);
   });
 
+  it("keeps a function a later migration makes closed to it, and open to the store's app role", async () => {
+    const { instance } = await world();
+    const later = {
+      path: "migrations/0002_later.sql",
+      text: `create function payroll_later() returns text language sql security definer
+        as $$ select string_agg(salary, ',') from payroll $$;`
+    };
+    expect((await put(instance, [...storeFiles, later], 1)).statusCode).toBe(200);
+    expect((await publish(instance, 2)).statusCode).toBe(200);
+    await settle(instance, 2);
+
+    const refused = await query(instance, "select payroll_later()");
+    const own = await instance.api.call("data_stores.query", {
+      params: { store: "findings" },
+      payload: { sql: "select payroll_later() as total" }
+    });
+
+    expect(refused.statusCode).toBe(422);
+    expect(refused.body).not.toContain(SALARY);
+    expect(own.json()).toMatchObject({ rows: [{ total: SALARY }] });
+  });
+
   it("takes a grant a migration added by hand away again at the next check", async () => {
     const { instance, database } = await world();
     const [reader] = await readerRoles(database);

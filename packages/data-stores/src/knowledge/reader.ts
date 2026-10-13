@@ -12,7 +12,9 @@ import { quoteIdentifier } from "../server";
 // schema `public`, and grants CONNECT and USAGE. The migration role owns the tables, so it
 // grants SELECT on them, and it takes EXECUTE on the store's functions from PUBLIC: a function
 // a migration made with SECURITY DEFINER would otherwise read for the caller what it may not.
-// No default privilege names this role, so a table made later is not readable by it.
+// A function made later is kept closed by the migration role's global default: a default in
+// schema `public` adds to the global one and cannot take PUBLIC's EXECUTE away. No default
+// privilege names this role, so a table made later is not readable by it.
 
 /** How long one step of granting or taking away may take before it fails. */
 const READER_STEP_TIMEOUT_MS = 120_000;
@@ -92,7 +94,7 @@ export async function grantReader(
      grant select on table ${tables.join(", ")} to ${reader};
      revoke execute on all routines in schema public from public;
      grant execute on all routines in schema public to ${app};
-     alter default privileges in schema public revoke execute on routines from public;
+     alter default privileges revoke execute on routines from public;
      alter default privileges in schema public grant execute on routines to ${app};`
   );
 }
