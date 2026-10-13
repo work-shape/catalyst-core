@@ -7,6 +7,20 @@ contain breaking changes; a patch version does not.
 
 ### Added
 
+- **Apps, an action that starts a Workflow (App Kit 1.3.0):** an action file
+  `actions/<name>.action.yaml` with `workflow: <id>` and `input.schema`/`input.mapping` starts
+  the published Workflow as the viewer, who needs `workflow.use` on it; without it the call is
+  refused with the right named. Its effect is always `changing`. The call answers
+  `{ runId, status, result }` with the Workflow Run in `result`; the Page follows it with the
+  kit's `useWorkflowRun(result.id)` or `workflowRuns.get(result.id)`, through the new operation
+  `apps.sessions.get_workflow_run`
+  (`POST /api/v1/app-content-sessions/:pageSessionId/workflow-runs/:runId`), which reads only
+  runs of the Workflows the App's actions start and only for the viewer who started them. In a
+  draft the call starts nothing and answers `status: "dry_run"` with "Would have started the
+  Workflow '<id>' with <input>". The build refuses a Workflow action in an App on a kit before
+  1.3.0. `page.save` documents the kind. The kit's `page.css` for a plain Page leaves out the
+  flow canvas rules the library's stylesheet brings. **Operators:** the chat-server tarball
+  limit rises to 2.1 MB for the fourth kit version.
 - **Data Stores, the reads of a store's page:** `data_stores.list` (`GET /api/v1/data-stores`)
   lists the stores a caller may read with the size, the number of tables and the estimate of
   rows of the last measurement (migration `0069_data_store_table_counts` adds the two columns;

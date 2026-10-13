@@ -117,11 +117,18 @@ const sqlActionBase = {
   input: z.strictObject({ schema: appActionInputSchemaSchema })
 };
 
+/** What a call passes, and where a mapping puts each parameter in the input of what it calls. */
+const mappedInput = z.strictObject({
+  schema: appActionInputSchemaSchema,
+  mapping: z.record(z.string(), jsonValue)
+});
+
 /**
  * One named action as the build wrote it into the manifest, by its kind. A `connection` action
  * stands for one operation of one Connection the manifest lists. An `sql` action reaches the
  * Data Store the manifest lists: a reading one is a statement, a changing one is a row of
- * parameters for one table.
+ * parameters for one table. A `workflow` action starts a run of the published revision of one
+ * Workflow, with the mapping as the run's input; a start always changes something.
  */
 export const compiledAppActionSchema = z.union([
   z.strictObject({
@@ -130,10 +137,14 @@ export const compiledAppActionSchema = z.union([
     effect: z.enum(["reading", "changing"]),
     connection: z.string().min(1).max(64),
     operation: z.string().min(1).max(128),
-    input: z.strictObject({
-      schema: appActionInputSchemaSchema,
-      mapping: z.record(z.string(), jsonValue)
-    })
+    input: mappedInput
+  }),
+  z.strictObject({
+    ...compiledActionBase,
+    kind: z.literal("workflow"),
+    effect: z.literal("changing"),
+    workflow: z.string().min(1).max(64),
+    input: mappedInput
   }),
   z.strictObject({
     ...sqlActionBase,
