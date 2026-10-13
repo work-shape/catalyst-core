@@ -190,9 +190,14 @@ const dataSourceConfigSchema = z.object({
 
 export {
   agentConfigSchema,
+  formatSkillMarkdown,
+  parseSkillMarkdown as parseSkillManifest,
+  SkillMarkdownError,
+  type SkillFileEntry,
   SKILL_NAME_PATTERN,
   SKILL_NAME_RULE,
   skillConfigSchema,
+  skillFileEntrySchema,
   skillFileFrontmatterSchema,
   skillNameSchema,
   skillResourceConfigSchema,

@@ -112,6 +112,14 @@ export const skillStarterSchema = z.strictObject({
   tools: z.array(z.string().min(1)).optional()
 });
 
+/** One file of a skill's folder as its index names it: no content. */
+export const skillFileEntrySchema = z.object({
+  path: z.string().min(1),
+  sha256: z.string().regex(/^[0-9a-f]{64}$/u),
+  bytes: z.number().int().min(0),
+  mediaType: z.string().min(1)
+});
+
 const skillConfigObjectSchema = z.object({
   name: skillNameSchema,
   title: z.string().min(1),
@@ -133,7 +141,8 @@ const skillConfigObjectSchema = z.object({
     })
     .optional(),
   content: z.string().min(1),
-  resources: z.array(skillResourceConfigSchema).optional()
+  resources: z.array(skillResourceConfigSchema).optional(),
+  files: z.array(skillFileEntrySchema).optional()
 });
 
 export const skillConfigSchema = skillConfigObjectSchema.superRefine((skill, context) => {
@@ -154,7 +163,8 @@ export const skillConfigSchema = skillConfigObjectSchema.superRefine((skill, con
 export const skillFileFrontmatterSchema = skillConfigObjectSchema
   .omit({
     content: true,
-    resources: true
+    resources: true,
+    files: true
   })
   .extend({
     name: skillNameSchema.optional()

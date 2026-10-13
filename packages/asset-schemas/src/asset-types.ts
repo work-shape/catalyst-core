@@ -60,6 +60,22 @@ export interface SkillConfig {
   starters?: SkillStarterConfig[];
   content: string;
   resources?: SkillResourceConfig[];
+  /**
+   * The files of the skill's folder that the config does not hold itself: everything beside
+   * `SKILL.md` and the text resources, such as a script, a PDF or an image. An index and no
+   * content. The platform writes it with the files; what a caller sends here is not read.
+   */
+  files?: SkillFileEntry[];
+}
+
+/** One file of a skill's folder as its index names it. */
+export interface SkillFileEntry {
+  /** Relative to the folder of the skill, with `/` between segments. */
+  path: string;
+  /** Lower-case hex. */
+  sha256: string;
+  bytes: number;
+  mediaType: string;
 }
 
 /** How many starters one skill carries at most. */

@@ -44,6 +44,24 @@ export function parseSkillMarkdown(
   };
 }
 
+/**
+ * A `SKILL.md` of a skill's name, title, description and content: what `parseSkillMarkdown`
+ * reads back as the same four. It is what a skill that was written as its config has for a
+ * file.
+ */
+export function formatSkillMarkdown(skill: {
+  name: string;
+  title: string;
+  description: string;
+  content: string;
+}): string {
+  const frontmatter = yaml.dump(
+    { name: skill.name, title: skill.title, description: skill.description },
+    { lineWidth: -1, noCompatMode: true, noRefs: true, sortKeys: false }
+  );
+  return `---\n${frontmatter}---\n\n${skill.content.trim()}\n`;
+}
+
 function deriveSkillName(skillPath: string): string {
   const filename = lastSegment(skillPath);
   const sourceName =
