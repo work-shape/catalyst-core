@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { type Browser, type Page } from "@playwright/test";
+import { type Browser, type Locator, type Page } from "@playwright/test";
 import { z } from "zod";
 import { sendToolCall } from "./page-surface-fixtures";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
@@ -55,6 +55,19 @@ async function sessionOf(
   const page = await context.newPage();
   await signIn(page, user);
   return page;
+}
+
+/**
+ * The line the last finished run's calls read as. A run that ended folds its calls into its
+ * Work history, at once or a moment later: the history is waited for folded, then opened.
+ */
+async function lastWorkLine(page: Page): Promise<Locator> {
+  const message = page.locator('[data-role="assistant"]').last();
+  const history = message.getByRole("button", { name: /^Work history/u });
+  await expect(history).toHaveAttribute("aria-expanded", "false");
+  await history.click();
+  await expect(history).toHaveAttribute("aria-expanded", "true");
+  return message.getByTestId("tool-call-fold-sentence");
 }
 
 const assetUrlOf = (id: string) => `${apiBaseUrl}/api/v1/assets/workflow/${id}`;
@@ -214,7 +227,7 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
       "data-workflow-draft",
       "ahead"
     );
-    await expect(page.getByText(/^Saved revision \d+$/u).first()).toBeVisible();
+    await expect(await lastWorkLine(page)).toHaveText(/^Saved revision \d+$/u);
     await shootThemes(page, "workflow-from-page", async () => {
       await expect(surface.locator("[data-workflow-draft]")).toHaveAttribute(
         "data-workflow-draft",
