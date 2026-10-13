@@ -1,5 +1,7 @@
 import yaml from "js-yaml";
+import type { SkillStarterConfig } from "./asset-types";
 import {
+  SKILL_FRONTMATTER_FIELDS,
   SKILL_FRONTMATTER_MAX_BYTES,
   SKILL_FRONTMATTER_MAX_DEPTH,
   skillFileFrontmatterSchema
@@ -77,13 +79,13 @@ export function parseSkillMarkdown(
   }
 
   const content = (match[2] ?? "").trim();
-  const { name: named, title, description, ...others } = frontmatter.data;
+  const { name: named, title, description, summary, starters, ...others } = frontmatter.data;
   const name = named ?? deriveSkillName(skillPath);
   // What the platform does not read is kept as JSON: a date of the YAML becomes its text.
   const json = JSON.stringify(others);
   if (json.length > SKILL_FRONTMATTER_MAX_BYTES) {
     throw new SkillMarkdownError(
-      `Skill file '${skillFile}' holds ${json.length} characters of frontmatter beside its name, title and description. It holds at most ${SKILL_FRONTMATTER_MAX_BYTES} (SKILL_FRONTMATTER_MAX_BYTES)`,
+      `Skill file '${skillFile}' holds ${json.length} characters of frontmatter beside the fields of the skill (${SKILL_FRONTMATTER_FIELDS.join(", ")}). It holds at most ${SKILL_FRONTMATTER_MAX_BYTES} (SKILL_FRONTMATTER_MAX_BYTES)`,
       undefined,
       "skill_frontmatter_too_large"
     );
@@ -93,6 +95,8 @@ export function parseSkillMarkdown(
     name,
     title: title ?? deriveSkillTitle(name, content),
     description,
+    ...(summary === undefined ? {} : { summary }),
+    ...(starters === undefined ? {} : { starters }),
     content,
     ...(Object.keys(others).length > 0 ? { frontmatter: kept } : {})
   };
@@ -148,14 +152,16 @@ export function deriveSkillTitle(name: string, content: string): string {
 
 /**
  * A `SKILL.md` of a skill's config: what `parseSkillMarkdown` reads back as the same name,
- * title, description, content and further frontmatter. A title the content or the name gives
- * anyway is left out, as a file of the public skill convention has none. It is what a skill
- * that was written as its config has for a file.
+ * title, description, summary, starters, content and further frontmatter. A title the content
+ * or the name gives anyway is left out, as a file of the public skill convention has none. It
+ * is what a skill that was written as its config has for a file.
  */
 export function formatSkillMarkdown(skill: {
   name: string;
   title: string;
   description: string;
+  summary?: string;
+  starters?: SkillStarterConfig[];
   content: string;
   frontmatter?: Record<string, unknown>;
 }): string {
@@ -165,6 +171,8 @@ export function formatSkillMarkdown(skill: {
       name: skill.name,
       ...(skill.title === deriveSkillTitle(skill.name, content) ? {} : { title: skill.title }),
       description: skill.description,
+      ...(skill.summary === undefined ? {} : { summary: skill.summary }),
+      ...(skill.starters === undefined ? {} : { starters: skill.starters }),
       ...skill.frontmatter
     },
     { lineWidth: -1, noCompatMode: true, noRefs: true, sortKeys: false }

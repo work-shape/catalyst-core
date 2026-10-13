@@ -155,12 +155,23 @@ export const skillStarterSchema = z.strictObject({
 });
 
 /**
- * How much frontmatter a `SKILL.md` holds beside its name, title and description, as JSON, in
+ * How much frontmatter a `SKILL.md` holds beside the keys the platform reads, as JSON, in
  * characters. The keys of the public skill convention are a few lines.
  */
 export const SKILL_FRONTMATTER_MAX_BYTES = 8_192;
 /** How deep the frontmatter of a `SKILL.md` nests at most. */
 export const SKILL_FRONTMATTER_MAX_DEPTH = 8;
+/**
+ * The keys of the frontmatter of a `SKILL.md` that are fields of the skill. Every other key is
+ * kept apart as its further `frontmatter`.
+ */
+export const SKILL_FRONTMATTER_FIELDS = [
+  "name",
+  "title",
+  "description",
+  "summary",
+  "starters"
+] as const;
 
 /** One file of a skill's folder as its index names it: no content. */
 export const skillFileEntrySchema = z.object({
@@ -210,6 +221,16 @@ const skillConfigObjectSchema = z.object({
 });
 
 export const skillConfigSchema = skillConfigObjectSchema.superRefine((skill, context) => {
+  // A key the file reads as a field of the skill would be read back as that field.
+  for (const key of SKILL_FRONTMATTER_FIELDS) {
+    if (skill.frontmatter && Object.hasOwn(skill.frontmatter, key)) {
+      context.addIssue({
+        code: "custom",
+        path: ["frontmatter", key],
+        message: `Skill frontmatter cannot hold '${key}': it is a field of the skill itself`
+      });
+    }
+  }
   const seen = new Set<string>();
   for (const [index, resource] of (skill.resources ?? []).entries()) {
     const pathKey = resource.path.toLowerCase();
@@ -226,14 +247,16 @@ export const skillConfigSchema = skillConfigObjectSchema.superRefine((skill, con
 
 /**
  * The frontmatter of a `SKILL.md`. `description` is required. `name` may be left to the folder
- * and `title` to the content. Every other key is kept as it is and never refused: the public
- * skill convention has keys of its own, such as `license` and `metadata`, and a library may
- * add more.
+ * and `title` to the content; `summary` and `starters` are read as the config holds them.
+ * Every other key is kept as it is and never refused: the public skill convention has keys of
+ * its own, such as `license` and `metadata`, and a library may add more.
  */
 export const skillFileFrontmatterSchema = z.looseObject({
   name: skillNameSchema.optional(),
   title: z.string().min(1).optional(),
-  description: z.string().min(1)
+  description: z.string().min(1),
+  summary: skillConfigObjectSchema.shape.summary,
+  starters: skillConfigObjectSchema.shape.starters
 });
 
 const welcomeSubtitleSchema = z.union([

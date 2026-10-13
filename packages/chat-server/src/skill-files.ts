@@ -331,7 +331,7 @@ export function readSkillFiles(name: string, files: readonly SkillFileInput[]): 
   };
 }
 
-/** The name, title, description and content a `SKILL.md` holds. A file without a name has the skill's. */
+/** The fields and the content a `SKILL.md` holds. A file without a name has the skill's. */
 function readSkillManifest(name: string, bytes: Uint8Array): Record<string, unknown> {
   const invalid = (
     message: string,
@@ -397,6 +397,8 @@ export function storedFileMatchesConfig(config: unknown, file: SkillFileInput): 
       read.data.name === skill.data.name &&
       read.data.title === skill.data.title &&
       read.data.description === skill.data.description &&
+      read.data.summary === skill.data.summary &&
+      sameJson(read.data.starters ?? [], skill.data.starters ?? []) &&
       read.data.content === skill.data.content &&
       sameJson(read.data.frontmatter ?? {}, skill.data.frontmatter ?? {})
     );

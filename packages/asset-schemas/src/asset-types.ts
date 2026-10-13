@@ -67,9 +67,10 @@ export interface SkillConfig {
    */
   files?: SkillFileEntry[];
   /**
-   * The keys of the frontmatter of `SKILL.md` that are not the skill's name, title and
-   * description, such as `license`, `metadata` and `allowed-tools` of the public skill
-   * convention, as JSON values. They are kept and returned and never read by the platform.
+   * The keys of the frontmatter of `SKILL.md` that are not fields of the skill
+   * (`SKILL_FRONTMATTER_FIELDS`), such as `license`, `metadata` and `allowed-tools` of the
+   * public skill convention, as JSON values. They are kept and returned and never read by the
+   * platform.
    */
   frontmatter?: Record<string, unknown>;
 }
