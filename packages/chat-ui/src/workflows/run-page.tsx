@@ -238,7 +238,6 @@ export function WorkflowRunPageView({
             </>
           ) : undefined
         }
-        descriptionPlacement="inline"
         descriptionTooltip={[workflow?.name, secondary]
           .filter((part) => part !== undefined && part !== "")
           .join(" · ")}

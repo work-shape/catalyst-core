@@ -57,7 +57,6 @@ export function WorkflowHead({
         // names the area, and the Workflow's id is never shown.
         title={workflow?.name ?? <TitlePlaceholder>{t("workflows.title")}</TitlePlaceholder>}
         description={workflow?.description}
-        descriptionPlacement="inline"
         primaryAction={
           canStart || startOff ? (
             <Button disabled={startOff} onClick={onStart}>

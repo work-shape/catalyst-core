@@ -29,7 +29,7 @@ import {
   type DisclosureVariant
 } from "../structure/disclosure";
 import { Page, PageFooter, type PageWidth } from "../structure/page";
-import { PageHeader } from "../structure/page-header";
+import { PageHeader, PageHeaderBack } from "../structure/page-header";
 import { Section, type SectionLayout } from "../structure/section";
 import { SurfaceFrame } from "../structure/surface-frame";
 import { Samples, type GalleryGroup } from "./entry";
@@ -99,20 +99,19 @@ function PageHeaderSamples({ text }: { text: GalleryText }) {
           </Page>
         </div>
       </Samples>
-      <Samples label="descriptionPlacement: inline">
+      <Samples label="detail: PageHeaderBack, description">
         <div className="w-full overflow-hidden rounded-lg border">
           <PageHeader
             variant="detail"
             headingLevel={2}
             className="static border-b-0"
             back={
-              <IconButton label={text.headerBack}>
-                <ArrowLeft aria-hidden="true" />
-              </IconButton>
+              <PageHeaderBack label={text.headerBack} onClick={() => undefined}>
+                {text.headerBreadcrumbAgents}
+              </PageHeaderBack>
             }
             title={text.rowAgent}
             description={text.headerListDescription}
-            descriptionPlacement="inline"
             {...actions}
           />
         </div>

@@ -15,6 +15,12 @@ export {
   type DisclosureVariant
 } from "./disclosure";
 export { Page, PageFooter, type PageProps, type PageWidth } from "./page";
-export { PageHeader, type PageHeaderProps, type PageHeaderVariant } from "./page-header";
+export {
+  PageHeader,
+  PageHeaderBack,
+  type PageHeaderBackProps,
+  type PageHeaderProps,
+  type PageHeaderVariant
+} from "./page-header";
 export { Section, type SectionLayout, type SectionProps } from "./section";
 export { SurfaceFrame, type SurfaceFrameProps } from "./surface-frame";

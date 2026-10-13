@@ -12,6 +12,7 @@ import {
   Page,
   PageFooter,
   PageHeader,
+  PageHeaderBack,
   PageOutline,
   type PageProps,
   SaveBar,
@@ -433,29 +434,35 @@ describe("navigation, page structure and data components", () => {
     expect(markup).toMatch(/<h1[^>]*>NAME<\/h1>/u);
   });
 
-  it("puts an inline description on the name's row of a detail head", () => {
-    const head = (descriptionPlacement: "below" | "inline") =>
-      render(
-        createElement(PageHeader, {
-          variant: "detail",
-          title: "NAME",
-          state: "STATE",
-          description: "ABOUT",
-          descriptionPlacement,
-          primaryAction: "PRIMARY"
-        })
-      );
-    const inline = head("inline");
-    const order = ["NAME", "STATE", "ABOUT", "PRIMARY"].map((slot) => inline.indexOf(slot));
-
+  it("puts the description of a detail head on the name's row and none under it", () => {
+    const head = render(
+      createElement(PageHeader, {
+        variant: "detail",
+        back: createElement(PageHeaderBack, { label: "WAY", href: "/agents", children: "BACK" }),
+        title: "NAME",
+        scope: "SCOPE",
+        state: "STATE",
+        description: "ABOUT",
+        primaryAction: "PRIMARY"
+      })
+    );
+    const order = ["BACK", "NAME", "SCOPE", "STATE", "ABOUT", "PRIMARY"].map((slot) =>
+      head.indexOf(slot)
+    );
     expect([...order].sort((left, right) => left - right)).toEqual(order);
-    // The row never wraps: the name is cut after the description gave way.
-    expect(inline).toMatch(/<h1[^>]*class="[^"]*truncate[^"]*"[^>]*>NAME<\/h1>/u);
-    expect(inline).toMatch(/data-slot="page-header-description"[^>]*>ABOUT</u);
-    expect(inline).not.toMatch(/<header[^>]*class="[^"]*flex-wrap/u);
-    // Without the prop the description keeps its own line under the name.
-    expect(head("below")).not.toContain("page-header-description");
-    expect(head("below")).toMatch(/<header[^>]*class="[^"]*flex-wrap/u);
+    // The way back is a link named without its text, which gives way to the name.
+    expect(head).toMatch(
+      /<a href="\/agents"[^>]*data-slot="page-header-back"[^>]*aria-label="WAY"/u
+    );
+    // The name is cut last and says itself whole in a tooltip.
+    expect(head).toMatch(/<h1[^>]*class="[^"]*truncate[^"]*"[^>]*title="NAME"[^>]*>NAME<\/h1>/u);
+    expect(head).toMatch(/data-slot="page-header-description"[^>]*>ABOUT</u);
+    // The chips give way before the name does.
+    expect(head).toMatch(/shrink-\[1000000000000\][^>]*><div[^>]*data-slot="page-header-chips"/u);
+    // A list head keeps the description under the name.
+    const list = render(createElement(PageHeader, { title: "NAME", description: "ABOUT" }));
+    expect(list).not.toContain("page-header-description");
+    expect(list).toMatch(/<\/h1><\/div><div[^>]*>ABOUT<\/div>/u);
   });
 
   it("keeps a section flat and gives it its anchor, count and action", () => {

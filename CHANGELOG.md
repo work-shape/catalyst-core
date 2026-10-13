@@ -923,7 +923,14 @@ id from config_assets where status = 'deleted')`.
   to a second row only when they do not fit. The kind and the technical id are gone from the
   head: the id stands at the top of the page's first section, read-only with a copy button. On
   an App draft the sentence that names the missing publish right is a line under the head.
-  `@vivd-catalyst/ui`: a `detail` `PageHeader` no longer shows `description`.
+  `@vivd-catalyst/ui`: a `detail` `PageHeader` shows no line under the name.
+- **Detail heads, one row everywhere:** every `detail` `PageHeader` is one row. A `description`
+  stands after the name and its chips in the muted style, cut with an ellipsis and read in full
+  in a tooltip; the Workflow and run pages use it, and `descriptionPlacement` is gone. The name
+  wins a narrow row: the description goes first, then the state and the scope chip, then the
+  text of the way back, and only then is the name cut. New `PageHeaderBack` is that way back:
+  an arrow with where it leads, the arrow alone where the name needs the room. Under 768 px the
+  actions go to a second row when they do not fit beside the whole name.
 - **Build, the sections of a page:** the page of an agent, a skill and a Connection no longer
   lists its sections in a column on the left that looked like the list of pages in Build and
   Settings. The sections are an outline on the right of the content, under "On this page": a
