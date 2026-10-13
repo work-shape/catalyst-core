@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import { shoot, shotsDir, signIn } from "./inbox-fixtures";
+import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
 // The Agents page: its row in the rail, the cards of the agents a person may use in the open
@@ -17,6 +18,9 @@ const OTHER_AGENT = "Research Assistant";
 const PROMPT_TITLE = "Find review risks";
 const PROMPT_TEXT =
   "List the most important application or document review risks I should check first.";
+
+const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
+const agentPath = (name: string) => `${apiBaseUrl}/api/v1/assets/agent/${name}`;
 
 const rail = (page: Page) => page.getByRole("navigation", { name: "Main navigation" });
 const agentsArea = (page: Page) => page.getByRole("region", { name: /^(Agents|Agenten)$/u });
@@ -154,4 +158,55 @@ test("a builder is led from a card to the agent's page in Studio", async ({
   // The way back is the browser's: the cards are where they were.
   await page.goBack();
   await expect(card(page, OTHER_AGENT)).toBeVisible();
+});
+
+test("a builder who renames an agent in Studio finds the new name on its card", async ({
+  page,
+  // The probe agent is offered in every workspace while it exists, so the tests that count
+  // the agents of the instance wait for this one.
+  instanceAgentsChange: _instanceAgentsChange
+}) => {
+  test.setTimeout(90_000);
+  const name = "e2e_rename_probe";
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page, builder);
+  const remove = async () => {
+    if ((await page.request.get(agentPath(name))).ok()) {
+      await requestWithOrigin(page, "post", `${agentPath(name)}/delete`, {
+        data: { expectedRevision: await assetRevision(page, agentPath(name)) }
+      });
+    }
+  };
+  await remove();
+  const created = await requestWithOrigin(page, "put", agentPath(name), {
+    data: {
+      expectedRevision: await assetBaseRevision(page, agentPath(name)),
+      config: {
+        name,
+        displayName: "Rename Probe",
+        modelProviderId: "local",
+        instructions: "A probe of the Agents page tests.",
+        toolNames: []
+      }
+    }
+  });
+  expect(created.ok()).toBe(true);
+  try {
+    // The page has read the workspace's agents before the rename.
+    await page.reload();
+    await openAgents(page);
+    await card(page, "Rename Probe").getByRole("link", { name: "Edit in Studio" }).click();
+    await expect(page).toHaveURL(new RegExp(`/build/agents/${name}$`, "u"));
+    await page.getByRole("textbox", { name: /^Display name/u }).fill("Renamed Probe");
+    await page.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
+
+    // Back on the Agents page without a reload, the card carries the saved name.
+    await rail(page).getByRole("button", { name: "Agents", exact: true }).click();
+    await expect(page).toHaveURL(/\/w\/[^/]+\/agents$/u);
+    await expect(card(page, "Renamed Probe")).toBeVisible();
+    await expect(card(page, "Rename Probe")).toHaveCount(0);
+  } finally {
+    await remove();
+  }
 });

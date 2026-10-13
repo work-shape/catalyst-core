@@ -2035,6 +2035,9 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- **Agents page:** an agent renamed or changed in Studio shows its new name and description on
+  its card and in the agent picker without a reload. A save of an agent, and a change of the
+  default agent, now also ask again for the workspaces' lists of agents.
 - **Claude runs with `workspace.preview_images` or `structured_data.publish`:** the input schema
   a model is shown for each of the two had a combinator at its root (`anyOf` over the three
   preview sources, `oneOf` over replace and patch), which Anthropic's Messages format, also on
