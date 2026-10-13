@@ -163,6 +163,11 @@ export function createChatServerJobs(
             clientInstanceId: options.clientInstanceId,
             days: options.config.retention.auditDays
           });
+          // The hits of guardrails are kept as long as the audit events.
+          const guardrailHitsDeletedCount = await stores.guardrails.deleteHitsOlderThan({
+            clientInstanceId: options.clientInstanceId,
+            days: options.config.retention.auditDays
+          });
           await stores.audit.appendAuditEvent({
             clientInstanceId: options.clientInstanceId,
             type: "audit.pruned",
@@ -172,7 +177,8 @@ export function createChatServerJobs(
               deletedCount,
               createdBefore,
               auditDays: options.config.retention.auditDays,
-              operationRunsDeletedCount
+              operationRunsDeletedCount,
+              guardrailHitsDeletedCount
             }
           });
         });

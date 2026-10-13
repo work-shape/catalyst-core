@@ -2,7 +2,7 @@
 // firm with a tax, an HR and a sales team. Every name here is made up. The agents and skills of
 // the company live as a config working copy under `clients/demo/seed`.
 
-export type PersonKey = "mara" | "jonas" | "tobias" | "elif" | "sven" | "lena" | "noah";
+export type PersonKey = "mara" | "jonas" | "tobias" | "elif" | "sven" | "lena" | "noah" | "kai";
 
 export interface SeedPerson {
   key: PersonKey;
@@ -37,7 +37,7 @@ const person = (
 });
 
 /**
- * Two admins and five users. The instance's own seeded superadmin is the one superadmin and
+ * Two admins and six users. The instance's own seeded superadmin is the one superadmin and
  * the account the seed signs in with first.
  */
 export const people: SeedPerson[] = [
@@ -51,8 +51,17 @@ export const people: SeedPerson[] = [
   // A user holds no instance-wide right by default.
   person("sven", "Sven Olsen", ["user"], { permissions: ["config_assets.read", "usage.view"] }),
   person("lena", "Lena Hoffmann", ["user"], { status: "disabled" }),
-  person("noah", "Noah Fischer", ["user"], { invited: true })
+  person("noah", "Noah Fischer", ["user"], { invited: true }),
+  // A member who builds: his rows in his own Namespace are all he holds.
+  person("kai", "Kai Berger", ["user"])
 ];
+
+/** The seeded person of a key. */
+export function personOf(key: PersonKey): SeedPerson {
+  const found = people.find((candidate) => candidate.key === key);
+  if (!found) throw new Error(`The seed has no person '${key}'`);
+  return found;
+}
 
 /** The reference every tool of the demo asks for. */
 export const PERSON_PERMISSION_REFS = ["demo-tools"];
@@ -79,7 +88,8 @@ export const namespaces: SeedNamespace[] = [
     registeredBy: "mara"
   },
   { prefix: "hr-", displayName: "Personal", registeredBy: "mara" },
-  { prefix: "sales-", displayName: "Vertrieb / Sales", registeredBy: "jonas" }
+  { prefix: "sales-", displayName: "Vertrieb / Sales", registeredBy: "jonas" },
+  { prefix: "kai-", displayName: "Kai", registeredBy: "mara" }
 ];
 
 /**
@@ -137,8 +147,9 @@ type Verb = "read" | "write" | "delete";
 
 interface SeedGrant {
   holder: PersonKey;
-  kind: AssetKind;
-  verbs: Verb[];
+  kind: AssetKind | "workflow";
+  /** A Workflow has no row for deleting it: that stays with the role. */
+  verbs: (Verb | "publish")[];
   effect: "allow" | "deny";
   /** A registered prefix, or the name of one asset of `kind`. */
   scope: { namespace: string } | { asset: string };
@@ -220,6 +231,32 @@ export const grants: SeedGrant[] = [
     effect: "deny",
     scope: { namespace: "hr-" },
     grantedBy: "jonas"
+  },
+  // Kai Berger builds in his own Namespace. No grant gives a right on Apps yet: an App
+  // belongs to a workspace, and a Namespace row never reaches one.
+  {
+    holder: "kai",
+    kind: "agent",
+    verbs: ["read", "write", "delete"],
+    effect: "allow",
+    scope: { namespace: "kai-" },
+    grantedBy: "mara"
+  },
+  {
+    holder: "kai",
+    kind: "skill",
+    verbs: ["read", "write", "delete"],
+    effect: "allow",
+    scope: { namespace: "kai-" },
+    grantedBy: "mara"
+  },
+  {
+    holder: "kai",
+    kind: "workflow",
+    verbs: ["read", "write", "publish"],
+    effect: "allow",
+    scope: { namespace: "kai-" },
+    grantedBy: "mara"
   }
 ];
 
@@ -303,6 +340,40 @@ export const heldSkillChange: {
   before: "Niemand muss eine Diagnose nennen.",
   after:
     "Eine Diagnose muss niemand nennen. Die Krankmeldung geht an die Teamleitung und an das HR-Team, nicht an das ganze Team."
+};
+
+/**
+ * What the member who builds made himself, in his own session, so each carries his name: one
+ * agent, and one Workflow left as a draft, a folder under `seed/workflows`. A definition must
+ * name a principal under `runAs`, and a draft lends nothing: making it live asks what
+ * administering service principals asks, which he does not hold. So it stays a draft.
+ */
+export const builder: {
+  person: PersonKey;
+  agent: {
+    name: string;
+    displayName: { de: string; en: string };
+    description: { de: string; en: string };
+    instructions: string;
+    toolNames: string[];
+  };
+  workflow: string;
+} = {
+  person: "kai",
+  agent: {
+    name: "kai-helper",
+    displayName: { de: "Kais Helfer", en: "Kai's helper" },
+    description: {
+      de: "Kais erster eigener Agent: kurze Antworten zu seinen Notizen.",
+      en: "Kai's first agent of his own: short answers about his notes."
+    },
+    // No model setting: choosing a model asks `agent_models.manage`, so his agent takes the
+    // instance's default.
+    instructions:
+      "You help Kai Berger sort his notes. Answer briefly and in the language of the question.\n",
+    toolNames: ["read_skill"]
+  },
+  workflow: "kai-skill-inventory"
 };
 
 /**
@@ -413,6 +484,41 @@ export const checkQuestions: CheckQuestion[] = [
     asset: "sales-pitch-coach",
     expect: { read: no("inactive"), write: no("inactive"), delete: no("inactive") },
     because: "Her account is deactivated, so her rows in `sales-` allow nothing."
+  },
+  {
+    person: "kai",
+    kind: "agent",
+    asset: "kai-helper",
+    expect: { read: yes("grant"), write: yes("grant"), delete: yes("grant") },
+    because: "He made this agent in his own Namespace `kai-`, where his rows allow all three."
+  },
+  {
+    person: "kai",
+    kind: "skill",
+    asset: "plain-language",
+    expect: { read: no("no_grant"), write: no("no_grant"), delete: no("no_grant") },
+    because: "His rows end at his Namespace `kai-`, and he holds no right beside them."
+  }
+];
+
+/**
+ * The same for a Workflow, which has a further action: starting it. Publishing is a row of
+ * its own on the Rights tab and not a question of the Check tab. An instance answers these
+ * only with the module `workflows` on.
+ */
+export const workflowCheckQuestions: CheckQuestion<"workflow", Verb | "use">[] = [
+  {
+    person: "kai",
+    kind: "workflow",
+    asset: builder.workflow,
+    expect: {
+      read: yes("grant"),
+      use: no("no_grant"),
+      write: yes("grant"),
+      delete: no("no_grant")
+    },
+    because:
+      "His rows in `kai-` let him read and change his draft. He holds no row for starting it, and deleting a Workflow stays with the role."
   }
 ];
 

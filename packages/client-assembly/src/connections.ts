@@ -129,19 +129,6 @@ export async function createInstanceConnections(
   }
 }
 
-/** Seeds for the API process. A seed that fails closes what the start had opened. */
-export async function seedInstanceConnections(execution: {
-  connections?: InstanceConnections | undefined;
-  close(): Promise<void>;
-}): Promise<void> {
-  try {
-    await execution.connections?.seed();
-  } catch (error) {
-    await execution.close();
-    throw error;
-  }
-}
-
 interface InstanceConnectionParts {
   config: ClientInstanceConfig;
   modules: ModuleSnapshot;

@@ -1,4 +1,4 @@
-import { History, Lock, MoreHorizontal, SearchX, Send, Trash2 } from "lucide-react";
+import { Copy, History, Lock, MoreHorizontal, SearchX, Send, Trash2 } from "lucide-react";
 import { useCallback, useState, type ReactNode } from "react";
 import {
   Badge,
@@ -105,16 +105,25 @@ export function NewAssetPage({
   );
 }
 
+/** What "Copy to edit" starts from: the shipped asset's title and its definition. */
+export interface BuildAssetCopy {
+  title: string;
+  config: Record<string, unknown>;
+}
+
 /** The page at an asset's address: the asset once it is read, and every state before that. */
 export function ExistingAssetPage({
   kind,
   name,
   onDeleted,
+  onCopy,
   ...page
 }: AssetPageProps & {
   kind: VisibleBuildKind<BuildAssetKind>;
   name: string;
   onDeleted(): void;
+  /** Starts a copy of an asset that ships with the platform. */
+  onCopy(copy: BuildAssetCopy): void;
 }) {
   const { entry } = kind;
   const read = page.source.useAsset(entry.kind, name);
@@ -134,6 +143,7 @@ export function ExistingAssetPage({
         restored={restored}
         onRestored={setRestored}
         onDeleted={onDeleted}
+        onCopy={onCopy}
       />
     );
   }
@@ -238,7 +248,8 @@ function LoadedAssetPage({
   reload,
   restored,
   onRestored,
-  onDeleted
+  onDeleted,
+  onCopy
 }: AssetPageProps & {
   kind: VisibleBuildKind<BuildAssetKind>;
   loaded: BuildAsset;
@@ -247,6 +258,7 @@ function LoadedAssetPage({
   restored: number | undefined;
   onRestored(revision: number | undefined): void;
   onDeleted(): void;
+  onCopy(copy: BuildAssetCopy): void;
 }) {
   const { locale, t } = useTranslation();
   const { entry, state } = kind;
@@ -267,15 +279,19 @@ function LoadedAssetPage({
   const [publishing, setPublishing] = useState(false);
   const [unsaved, setUnsaved] = useState(false);
   const address = { kind: entry.kind, name: stored.name };
-  const canWrite = source.rights.may("write", stored);
+  // An asset that ships with the platform is changed by a release alone, whoever reads it.
+  const shippedTitle = entry.shippedTitle?.(stored);
+  const shipped = shippedTitle !== undefined;
+  const canWrite = !shipped && source.rights.may("write", stored);
   const namespace = source.rights.namespaces.find(
     (candidate) => candidate.prefix === stored.namespace
   );
-  const readOnlyReason =
-    stored.namespace === undefined
+  const readOnlyReason = shipped
+    ? t("build.readOnlyPlatform")
+    : stored.namespace === undefined
       ? t("build.readOnlyInstance")
       : t("build.readOnlyNamespace", { namespace: namespace?.displayName ?? stored.namespace });
-  const canDelete = state.canDelete && source.rights.may("delete", stored);
+  const canDelete = !shipped && state.canDelete && source.rights.may("delete", stored);
   // A kind with drafts answers its two pointers. The saved draft is ahead of what is
   // published, or nothing is published yet.
   const hasDraft = stored.draftRevision !== undefined;
@@ -399,6 +415,16 @@ function LoadedAssetPage({
               >
                 <Send aria-hidden="true" />
                 {t("build.publish")}
+              </Button>
+            ) : null}
+            {shipped && state.canCreate ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onCopy({ title: shippedTitle, config: stored.config })}
+              >
+                <Copy aria-hidden="true" />
+                {t("build.copyToEdit")}
               </Button>
             ) : null}
             <Button variant="outline" size="sm" onClick={() => setHistoryOpen(true)}>

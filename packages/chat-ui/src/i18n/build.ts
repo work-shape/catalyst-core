@@ -15,6 +15,8 @@ export const build = defineTranslations({
     "build.assetRefused": "You may not read this asset.",
     "build.conflictDeleted":
       "Somebody deleted this while you were editing. Your text is still here, but it can no longer be saved.",
+    "build.copyTitle": "{title} (copy)",
+    "build.copyToEdit": "Copy to edit",
     "build.createContinue": "Continue",
     "build.createId": "Id",
     "build.createIdHint":
@@ -55,6 +57,7 @@ export const build = defineTranslations({
       "Studio is not available to you. It opens for people who hold a right on an agent or a skill.",
     "build.noMatchInNamespace": "Nothing in this Namespace.",
     "build.noSkillsChosen": "No skills chosen.",
+    "build.platform": "Platform",
     "build.pendingApproval":
       "This change waits for an approval. Nothing was changed yet and your text is still here.",
     "build.readOnly": "You can read this but not change it.",
@@ -62,6 +65,8 @@ export const build = defineTranslations({
       "Belongs to no Namespace. Only a person who may edit on the whole instance can change it.",
     "build.readOnlyNamespace":
       "Belongs to the Namespace {namespace}. Only a person who may edit in this Namespace can change it.",
+    "build.readOnlyPlatform":
+      "Ships with the platform and is updated with each release. To change it, copy it and edit the copy.",
     "build.restored": "Revision {number} restored.",
     "build.refusedModel": "The model {model} is not allowed in Namespace {namespace}.",
     "build.refusedModelRequired":
@@ -126,9 +131,11 @@ export const build = defineTranslations({
       "{name} hat dies am {time} gespeichert, während du es bearbeitet hast. Dein Text ist noch da und nichts wurde überschrieben. Die neuere Version zu laden ersetzt deinen Text. Kopiere vorher, was du behalten willst.",
     "build.conflictDeletedBy":
       "{name} hat dies am {time} gelöscht, während du es bearbeitet hast. Dein Text steht noch hier, lässt sich aber nicht mehr speichern.",
-    "build.assetRefused": "Sie dürfen dieses Asset nicht lesen.",
+    "build.assetRefused": "Du darfst dieses Asset nicht lesen.",
     "build.conflictDeleted":
       "Jemand hat dies gelöscht, während du es bearbeitet hast. Dein Text steht noch hier, lässt sich aber nicht mehr speichern.",
+    "build.copyTitle": "{title} (Kopie)",
+    "build.copyToEdit": "Zum Bearbeiten kopieren",
     "build.createContinue": "Weiter",
     "build.createId": "Kennung",
     "build.createIdHint":
@@ -156,30 +163,32 @@ export const build = defineTranslations({
       "Speichere zuerst deine Änderungen: Nur ein gespeicherter Entwurf lässt sich veröffentlichen.",
     "build.historyDescription": "Jede gespeicherte Version von {name}, die neueste zuerst.",
     "build.historyStale":
-      "Diese Seite zeigt eine ältere Version. Laden Sie die neuere Version, bevor Sie eine wiederherstellen.",
+      "Diese Seite zeigt eine ältere Version. Lade die neuere Version, bevor du eine wiederherstellst.",
     "build.loadNewer": "Neuere Version laden",
     "build.loadNewerDescription": "Ungespeicherte Änderungen auf dieser Seite gehen verloren.",
     "build.loadNewerFailed":
-      "Die neuere Version konnte nicht geladen werden. Ihr Text steht noch hier. Versuchen Sie es gleich noch einmal.",
+      "Die neuere Version konnte nicht geladen werden. Dein Text steht noch hier. Versuch es gleich noch einmal.",
     "build.loadNewerTitle": "Neuere Version laden?",
     "build.nameDeleted":
-      "Ein Asset mit der Kennung {name} wurde gelöscht, und Sie dürfen seinen Verlauf nicht lesen. Gehen Sie zurück und wählen Sie eine andere.",
-    "build.nameTaken":
-      "Die Kennung {name} ist vergeben. Gehen Sie zurück und wählen Sie eine andere.",
+      "Ein Asset mit der Kennung {name} wurde gelöscht, und du darfst seinen Verlauf nicht lesen. Geh zurück und wähle eine andere.",
+    "build.nameTaken": "Die Kennung {name} ist vergeben. Geh zurück und wähle eine andere.",
     "build.openHistory": "Verlauf öffnen",
     "build.namespaceAll": "Alle Namespaces",
     "build.namespaceFilter": "Namespace",
     "build.noAccess":
-      "Studio steht Ihnen nicht zur Verfügung. Es öffnet sich für Personen mit einem Recht an einem Agenten oder einem Skill.",
+      "Studio steht dir nicht zur Verfügung. Es öffnet sich für Personen mit einem Recht an einem Agenten oder einem Skill.",
     "build.noMatchInNamespace": "Nichts in diesem Namespace.",
     "build.noSkillsChosen": "Keine Skills ausgewählt.",
+    "build.platform": "Plattform",
     "build.pendingApproval":
-      "Diese Änderung wartet auf eine Freigabe. Es wurde noch nichts geändert und Ihr Text ist noch da.",
-    "build.readOnly": "Sie können dies lesen, aber nicht ändern.",
+      "Diese Änderung wartet auf eine Freigabe. Es wurde noch nichts geändert und dein Text ist noch da.",
+    "build.readOnly": "Du kannst dies lesen, aber nicht ändern.",
     "build.readOnlyInstance":
       "Gehört zu keinem Namespace. Ändern kann es nur, wer in der ganzen Instanz bearbeiten darf.",
     "build.readOnlyNamespace":
       "Gehört zum Namespace {namespace}. Ändern kann es nur, wer in diesem Namespace bearbeiten darf.",
+    "build.readOnlyPlatform":
+      "Kommt mit der Plattform und wird mit jedem Release aktualisiert. Um es zu ändern, kopieren Sie es und bearbeiten die Kopie.",
     "build.restored": "Version {number} wiederhergestellt.",
     "build.refusedModel": "Das Modell {model} ist im Namespace {namespace} nicht erlaubt.",
     "build.refusedModelRequired":
@@ -218,7 +227,7 @@ export const build = defineTranslations({
     "build.loadFailed": "Studio konnte nicht geladen werden.",
     "build.leaveConfirm": "Änderungen verwerfen",
     "build.leaveDescription":
-      "Was Sie auf dieser Seite geändert haben, ist noch nicht gespeichert. Beim Verlassen geht es verloren.",
+      "Was du auf dieser Seite geändert hast, ist noch nicht gespeichert. Beim Verlassen geht es verloren.",
     "build.leaveTitle": "Ohne Speichern verlassen?",
     "build.noKinds": "Auf dieser Instanz gibt es noch nichts zu bauen.",
     "build.noMatch": "Nichts passt zu „{query}“.",

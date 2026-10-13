@@ -25,6 +25,7 @@ import { createPostgresInfrastructureChecksStore } from "./stores/infrastructure
 import { createPostgresPagesStore } from "./stores/pages";
 import { createPostgresConnectionsStore } from "./stores/connections";
 import { createPostgresDataStoreRecordsStore } from "./stores/data-stores";
+import { createPostgresGuardrailsStore } from "./stores/guardrails";
 import { createPostgresKnowledgeBaseStateStore } from "./stores/knowledge-bases";
 import {
   createPostgresWorkflowRunDatasetsStore,
@@ -104,6 +105,7 @@ function bindStores(
     workflowRunDatasets: createPostgresWorkflowRunDatasetsStore(db),
     dataStores: createPostgresDataStoreRecordsStore(db),
     knowledgeBases: createPostgresKnowledgeBaseStateStore(db),
+    guardrails: createPostgresGuardrailsStore(db),
     transaction: (fn) => transact((_tx, stores) => fn(stores))
   };
 }

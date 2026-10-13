@@ -185,6 +185,11 @@ export const workflowSummarySchema = z.object({
   /** Why not. Empty exactly where `runnable` is true. */
   reasons: z.array(workflowStartIssueSchema),
   /**
+   * The published revision's `inputs`: the JSON Schema a start's `input` is checked against,
+   * from which a page builds its start form. Missing where the definition cannot be read.
+   */
+  inputs: z.record(z.string(), z.unknown()).optional(),
+  /**
    * What the caller may do with this Workflow, of `workflow.read` (its runs) and `workflow.use`
    * (a start). Never empty: a Workflow the caller holds neither on is not listed.
    */

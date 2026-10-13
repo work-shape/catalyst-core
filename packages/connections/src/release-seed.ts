@@ -14,6 +14,7 @@ import {
   type ConnectionConfig,
   type ConnectionHealth,
   type ConnectorTypeRegistry,
+  sameJson,
   type JsonObject,
   type PlatformStores,
   type SecretResolver
@@ -81,21 +82,6 @@ function storedConnection(asset: ConfigAssetRecord): ConnectionConfig | undefine
 /** What is stored says where it came from, also where this build no longer reads the rest. */
 function storedOrigin(asset: ConfigAssetRecord): unknown {
   return asset.config?.origin;
-}
-
-function sorted(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(sorted);
-  if (typeof value !== "object" || value === null) return value;
-  return Object.fromEntries(
-    Object.entries(value)
-      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-      .map(([key, entry]) => [key, sorted(entry)])
-  );
-}
-
-/** Object key order carries no meaning: a JSON column may return keys in another order. */
-function sameJson(left: unknown, right: unknown): boolean {
-  return JSON.stringify(sorted(left)) === JSON.stringify(sorted(right));
 }
 
 function toJsonObject(config: ConnectionConfig): JsonObject {

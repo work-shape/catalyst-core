@@ -12,6 +12,7 @@ import { conversationFileOperations } from "./conversation-files";
 import { conversationOperations } from "./conversations";
 import { credentialOperations } from "./credentials";
 import { governanceOperations } from "./governance";
+import { guardrailOperations } from "./guardrails";
 import { instanceOperations } from "./instance";
 import { jobOperations } from "./jobs";
 import { knowledgeOperations } from "./knowledge";
@@ -39,6 +40,7 @@ export const apiOperations = {
   ...configAssetOperations,
   ...assetOperations,
   ...connectionOperations,
+  ...guardrailOperations,
   ...workflowOperations,
   ...dataStoreOperations,
   ...knowledgeOperations,
@@ -52,6 +54,7 @@ export const apiOperations = {
 } as const;
 
 export * from "./connections";
+export * from "./guardrails";
 export * from "./workflows";
 
 export type ApiOperationName = keyof typeof apiOperations;

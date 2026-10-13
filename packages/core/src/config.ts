@@ -222,14 +222,6 @@ export function isModelBindingUserSelectableForAgent(
   );
 }
 
-export interface ApprovalCheckConfig {
-  id: string;
-  appliesTo: string;
-  modelBindingId: string;
-  instruction: string;
-  onFail: "warn" | "block";
-}
-
 export interface AgentSkillChangesPolicy {
   enabled: boolean;
   allowSkillCreation: boolean;

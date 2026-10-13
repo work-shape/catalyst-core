@@ -2,6 +2,7 @@ import type { PlatformContext } from "@vivd-catalyst/api-client";
 import { WORKFLOW_ACTIONS } from "@vivd-catalyst/core";
 import type { BadgeTone } from "@vivd-catalyst/ui";
 import type { TranslationKey } from "../i18n";
+import { startFormUsable } from "./start-form";
 import type {
   WorkflowFailure,
   WorkflowFailureReason,
@@ -70,21 +71,21 @@ export function workflowsAccess(input: {
 }
 
 /**
- * Whether "Start now" stands on the page of a Workflow: a revision is published, the reader
- * holds the right to start this Workflow, and it takes no input, for which there is no form
- * yet.
+ * Whether a start stands on the page or the card of a Workflow: a revision is published, the
+ * reader holds the right to start this Workflow, and its start form can ask for every input a
+ * start needs.
  */
 export function startOffered(
   workflow: Pick<
     WorkflowView,
-    "published" | "startsByHand" | "needsInput" | "refusedFor" | "mayStart"
+    "published" | "startsByHand" | "startForm" | "refusedFor" | "mayStart"
   >
 ): boolean {
   return (
     workflow.mayStart &&
     workflow.published &&
     workflow.startsByHand &&
-    !workflow.needsInput &&
+    startFormUsable(workflow.startForm) &&
     // What the instance would refuse is not offered: the page says why in its place.
     workflow.refusedFor.length === 0
   );

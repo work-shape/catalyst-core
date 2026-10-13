@@ -29,13 +29,14 @@ export function assertClientAssemblyValid(input: {
 }): void {
   const issues = [
     ...findDuplicateToolImplementations(input.tools),
-    ...input.config.approvalChecks.flatMap((check) =>
-      input.approvalRequestHandlers?.has(check.appliesTo)
+    ...Object.entries(input.config.guardrails).flatMap(([name, guardrail]) => {
+      const kind = guardrail.filter?.kind;
+      return kind === undefined || input.approvalRequestHandlers?.has(kind)
         ? []
         : [
-            `Approval check '${check.id}' references approval request kind '${check.appliesTo}' with no registered handler`
-          ]
-    ),
+            `Guardrail '${name}' filters on approval request kind '${kind}' with no registered handler`
+          ];
+    }),
     ...findModelProviderReferenceIssues(input.config),
     ...findToolReferenceIssues(input.config, input.tools, input.modules)
   ];
@@ -168,14 +169,6 @@ function findModelProviderReferenceIssues(config: ClientInstanceConfig): string[
     issues.push(
       `Conversation title generation references model binding '${config.conversationTitles.modelBindingId}' that is missing from release config`
     );
-  }
-
-  for (const check of config.approvalChecks) {
-    if (!configuredModelBindingIds.has(check.modelBindingId)) {
-      issues.push(
-        `Approval check '${check.id}' references model binding '${check.modelBindingId}' that is missing from release config`
-      );
-    }
   }
 
   return issues;

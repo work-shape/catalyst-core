@@ -55,6 +55,9 @@
       "name": "Governance"
     },
     {
+      "name": "Guardrails"
+    },
+    {
       "name": "Instance"
     },
     {
@@ -1586,6 +1589,15 @@
             "schema": {
               "type": "string",
               "minLength": 1
+            }
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 35
             }
           }
         ],
@@ -7676,6 +7688,149 @@
         "x-catalyst-rate-class": "read"
       }
     },
+    "/api/v1/guardrails/{name}/hits": {
+      "get": {
+        "operationId": "guardrails.list_hits",
+        "summary": "List the newest times one Guardrail warned or blocked, and count them by period",
+        "tags": [
+          "Guardrails"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "event": {
+                            "type": "string"
+                          },
+                          "outcome": {
+                            "type": "string",
+                            "enum": [
+                              "warn",
+                              "block"
+                            ]
+                          },
+                          "message": {
+                            "type": "string"
+                          },
+                          "subjectKind": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "$ref": "#/components/schemas/Timestamp"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "event",
+                          "outcome",
+                          "message",
+                          "subjectKind",
+                          "createdAt"
+                        ]
+                      }
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    },
+                    "counts": {
+                      "type": "object",
+                      "properties": {
+                        "last7Days": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "last30Days": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "last7Days",
+                        "last30Days"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "hasMore",
+                    "counts"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/instance/access/effective": {
       "get": {
         "operationId": "permissions.effective",
@@ -13290,6 +13445,13 @@
                               ]
                             }
                           },
+                          "inputs": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
                           "actions": {
                             "type": "array",
                             "items": {
@@ -17800,6 +17962,12 @@
           },
           "interfacePath": {
             "type": "string"
+          },
+          "heldBackHosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -17809,7 +17977,8 @@
           "number",
           "pageSessionId",
           "revision",
-          "interfacePath"
+          "interfacePath",
+          "heldBackHosts"
         ]
       },
       "AppPreviewRequest": {

@@ -25,7 +25,8 @@ export const kindLabelKeys = {
   connection: "access.kindConnection",
   app: "access.kindApp",
   workflow: "access.kindWorkflow",
-  knowledge_base: "access.kindKnowledgeBase"
+  knowledge_base: "access.kindKnowledgeBase",
+  guardrail: "access.kindGuardrail"
 } as const satisfies Record<GrantKind, TranslationKey> & Record<string, TranslationKey>;
 
 /** The label of a registered asset kind; nothing for a kind this interface has no name for. */

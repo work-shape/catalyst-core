@@ -11,6 +11,7 @@ import {
   cancelOffered,
   runListRefreshMs,
   runRefreshMs,
+  startFormOf,
   startOffered,
   toWorkflow,
   toWorkflowListItem,
@@ -185,7 +186,11 @@ const clientsStep = stepRunResource({
 });
 
 describe("the list of Workflows", () => {
-  const listPage = (rows: Parameters<typeof toWorkflowListItem>[0][] | undefined, failed = false) =>
+  const listPage = (
+    rows: Parameters<typeof toWorkflowListItem>[0][] | undefined,
+    failed = false,
+    runsAvailable = true
+  ) =>
     createElement(WorkflowsPageView, {
       workspaceId: "cw_1",
       list: {
@@ -197,7 +202,9 @@ describe("the list of Workflows", () => {
         retry: noop
       },
       now,
-      onOpenRoute: noop
+      runsAvailable,
+      onOpenRoute: noop,
+      onStart: noop
     });
   const summary = {
     id: "notify-clients",
@@ -251,6 +258,27 @@ describe("the list of Workflows", () => {
     expect(scheduled).not.toContain(t("workflows.notRunnable.badge"));
     const refused = render(listPage([{ ...summary, reasons: [issue("not_supported_yet")] }]));
     expect(refused).toContain(t("workflows.notRunnable.badge"));
+  });
+
+  it("offers a start on the card of a Workflow the reader may start, with or without inputs", () => {
+    const usable = {
+      ...summary,
+      actions: ["workflow.read", "workflow.use"],
+      inputs: { type: "object", properties: { note: { type: "string" } }, required: ["note"] }
+    };
+    expect(render(listPage([usable]))).toContain(t("workflows.startNow"));
+    // Not to a reader, not where the instance runs no Workflow, and not where it is refused.
+    expect(render(listPage([{ ...usable, actions: ["workflow.read"] }]))).not.toContain(
+      t("workflows.startNow")
+    );
+    expect(render(listPage([usable], false, false))).not.toContain(t("workflows.startNow"));
+    const issue = { code: "no_manual_trigger", message: "Refused." };
+    expect(render(listPage([{ ...usable, reasons: [issue] }]))).not.toContain(
+      t("workflows.startNow")
+    );
+    // A required input the form has no field for leaves the start to the agent and the API.
+    const list = { type: "object", properties: { ids: { type: "array" } }, required: ["ids"] };
+    expect(render(listPage([{ ...usable, inputs: list }]))).not.toContain(t("workflows.startNow"));
   });
 
   it("shows placeholders while the list loads, and the head at once", () => {
@@ -314,24 +342,27 @@ describe("the page of a Workflow", () => {
     }
   });
 
-  it("leaves the start out for a Workflow that asks for input: there is no form yet", () => {
-    const asking = toWorkflow(
-      {
-        name: "top-customers",
-        publishedRevision: 1,
-        config: {
-          ...definition,
-          inputs: {
-            type: "object",
-            properties: { limit: { type: "integer" } },
-            required: ["limit"]
-          }
-        }
-      },
-      { mayStart: true }
-    );
-    expect(startOffered(asking)).toBe(false);
-    expect(render(page({ workflow: asking }))).not.toContain(t("workflows.startNow"));
+  it("offers the start of a Workflow with inputs, and none where the form cannot ask for one", () => {
+    const asking = (inputs: Record<string, unknown>) =>
+      toWorkflow(
+        { name: "top-customers", publishedRevision: 1, config: definition },
+        { mayStart: true, startForm: startFormOf(inputs) }
+      );
+    const limit = asking({
+      type: "object",
+      properties: { limit: { type: "integer" } },
+      required: ["limit"]
+    });
+    expect(startOffered(limit)).toBe(true);
+    expect(render(page({ workflow: limit }))).toContain(t("workflows.startNow"));
+    // A required list has no field: the start stays with the agent and the API.
+    const list = asking({
+      type: "object",
+      properties: { ids: { type: "array", items: { type: "string" } } },
+      required: ["ids"]
+    });
+    expect(startOffered(list)).toBe(false);
+    expect(render(page({ workflow: list }))).not.toContain(t("workflows.startNow"));
   });
 
   it("offers the start only where a revision is published and the reader may start it", () => {
@@ -424,6 +455,48 @@ describe("the page of a Workflow", () => {
     expect(dialog()).toContain(t("workflows.start.title", { name: "Notify clients" }));
     expect(dialog()).toContain(t("workflows.start.bodyManual"));
     expect(dialog(t("workflows.start.refused"))).toContain(t("workflows.start.refused"));
+  });
+
+  it("asks for the inputs in the dialog, each with its label, its hint and its default", () => {
+    const form = startFormOf({
+      type: "object",
+      properties: {
+        month: { type: "string", format: "date", title: "Month", description: "The first day." },
+        limit: { type: "integer", default: 10 },
+        region: { type: "string", enum: ["north", "south"] },
+        dry_run: { type: "boolean", default: true }
+      },
+      required: ["month", "region"]
+    });
+    const refused = [{ path: ["limit"], message: "must be <= 100" }];
+    const markup = (locale: "en" | "de") =>
+      render(
+        createElement(StartDialog, {
+          name: "Top customers",
+          form,
+          loading: false,
+          error: undefined,
+          refusedValues: refused,
+          onConfirm: noop,
+          onClose: noop
+        }),
+        locale
+      );
+    const en = markup("en");
+    expect(en).toContain(t("workflows.startForm.body"));
+    expect(en).not.toContain(t("workflows.start.bodyManual"));
+    expect(en).toContain(">Month<");
+    expect(en).toContain("The first day.");
+    expect(en).toContain('type="date"');
+    // The name stands as words where the schema gives no title; no key is shown.
+    expect(en).toContain(">Dry run<");
+    expect(en).not.toContain("dry_run<");
+    expect(en).toContain('value="10"');
+    expect(en).toContain(">north<");
+    // The instance's sentence on a value stands under its field.
+    expect(en).toContain("must be &lt;= 100");
+    expect(en).toContain(t("workflows.startForm.refused"));
+    expect(markup("de")).toContain(de("workflows.startForm.body"));
   });
 });
 

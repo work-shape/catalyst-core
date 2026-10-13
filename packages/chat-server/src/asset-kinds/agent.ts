@@ -40,7 +40,7 @@ export interface AgentAssetKindOptions {
 /** The agent kind: instructions with a model, tools and skills, usable where it is available. */
 export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAssetKind {
   const policy = () => options.config.administration.agentConfiguration;
-  const locale = options.config.localization.defaultLocale;
+  const defaultLocale = options.config.localization.defaultLocale;
   return {
     ...defineAssetKind({
       kind: "agent",
@@ -68,11 +68,11 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
           ) ?? []
         ).map((message) => ({ message }));
       },
-      summarize: (agent) => {
-        const description = resolveLocalizedString(agent.description, locale, locale);
+      summarize: (agent, locale = defaultLocale) => {
+        const description = resolveLocalizedString(agent.description, locale, defaultLocale);
         return {
           name: agent.name,
-          title: resolveLocalizedString(agent.displayName, locale, locale),
+          title: resolveLocalizedString(agent.displayName, locale, defaultLocale),
           ...(description === undefined ? {} : { description })
         };
       }

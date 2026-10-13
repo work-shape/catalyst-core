@@ -65,6 +65,13 @@ export interface SkillConfig {
   starters?: SkillStarterConfig[];
   content: string;
   resources?: SkillResourceConfig[];
+  /**
+   * `release` on a skill that ships with the platform. Only the release seed writes it: every
+   * other write of a skill that carries it is refused, and a stored one is read-only.
+   */
+  origin?: "release";
+  /** The key of the interface's icon registry. Only a skill that ships with the platform has one. */
+  icon?: string;
 }
 
 /** How many starters one skill carries at most. */
@@ -92,8 +99,8 @@ export interface SkillStarterConfig {
 export const SKILL_SUMMARY_MAX_LENGTH = 120;
 
 /**
- * Who ships a skill, as a list says it. Every stored skill is the instance's own; `release`
- * is kept for the skills a module ships, which the release seed alone will write.
+ * Who ships a skill, as a list says it: `instance` for a skill of the instance's own, `release`
+ * for one that ships with the platform, which the release seed alone writes.
  */
 export const SKILL_ORIGINS = ["instance", "release"] as const;
 

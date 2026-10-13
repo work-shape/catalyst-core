@@ -19,6 +19,7 @@ export * from "./schema/pages";
 export * from "./schema/connections";
 export * from "./schema/workflowRuns";
 export * from "./schema/dataStores";
+export * from "./schema/guardrails";
 export * from "./schema/knowledgeBases";
 import { productUsers, userIdentities } from "./schema/users";
 import { servicePrincipals, apiCredentials } from "./schema/apiAccess";
@@ -50,6 +51,7 @@ import { pages, fileSets, pageBuilds } from "./schema/pages";
 import { secrets, connectionState } from "./schema/connections";
 import { workflowRuns, workflowStepRuns } from "./schema/workflowRuns";
 import { dataStores } from "./schema/dataStores";
+import { guardrailHits } from "./schema/guardrails";
 import { knowledgeBaseStates } from "./schema/knowledgeBases";
 
 export const schema = {
@@ -93,5 +95,6 @@ export const schema = {
   workflowRuns,
   workflowStepRuns,
   dataStores,
-  knowledgeBaseStates
+  knowledgeBaseStates,
+  guardrailHits
 };

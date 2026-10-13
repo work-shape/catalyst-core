@@ -22,7 +22,7 @@ export function agentChipDisplayFor(
 ): AgentChipDisplay {
   return {
     showName: ui?.showAgentName ?? true,
-    showDescriptions: ui?.showAgentDescriptions ?? false
+    showDescriptions: ui?.showAgentDescriptions ?? true
   };
 }
 

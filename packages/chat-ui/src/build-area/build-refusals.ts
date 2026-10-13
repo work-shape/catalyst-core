@@ -61,7 +61,8 @@ function text(value: unknown, key: string): string | undefined {
   return typeof found === "string" ? found : undefined;
 }
 
-function readRefusalDetails(error: unknown): RefusalDetails {
+/** The reason and the issues a refusal of the instance names in its details. */
+export function readRefusalDetails(error: unknown): RefusalDetails {
   const details = field(field(field(error, "payload"), "error"), "details");
   const issues = field(details, "issues");
   return {

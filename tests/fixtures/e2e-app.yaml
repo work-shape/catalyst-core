@@ -96,6 +96,15 @@ auth:
           - user
         permissionRefs:
           - demo-tools
+      # The member the Workflow start form spec gives rights to. No other spec uses this member.
+      - email: e2e-workflow-start@example.test
+        displayLabel: E2E Zz Workflow Start
+        passwordEnvName: E2E_WORKFLOW_START_PASSWORD
+        developmentPassword: e2e-workflow-start-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
       # The three people of the Apps spec. No other spec uses them: the admin builds and
       # publishes, the member uses what is published, and the builder is the one the spec shows
       # the draft without the publish right. No grant gives a right on Apps yet, so the builder
