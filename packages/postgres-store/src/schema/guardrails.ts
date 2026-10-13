@@ -17,8 +17,8 @@ export const guardrailHits = pgTable(
     outcome: text("outcome").$type<GuardrailHitOutcome>().notNull(),
     message: text("message").notNull(),
     subjectKind: text("subject_kind").notNull(),
-    // The asset's or the Operation Run's id and the asset's or the operation's name, where the
-    // subject has them. Hits written before GR-2 have neither.
+    // The asset's id and the asset's or the operation's name, where the subject has them; never
+    // a run's id, which names the person who acted. Hits written before GR-2 have neither.
     subjectId: text("subject_id"),
     subjectName: text("subject_name"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()

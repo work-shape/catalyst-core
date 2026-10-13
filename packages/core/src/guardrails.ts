@@ -139,7 +139,7 @@ export interface GuardrailFilter {
 export interface GuardrailSubject {
   /** The asset kind, `operation`, or the kind of an approval request. */
   kind: string;
-  /** The asset's id or the Operation Run's, where there is one. */
+  /** The asset's id, where there is one. Never a run's, which names the person who acted. */
   id?: string;
   /** The asset's name or the operation's. */
   name?: string;
@@ -206,7 +206,7 @@ export interface GuardrailHit {
   message: string;
   /** What was checked: the asset kind, `operation`, or the kind of an approval request. */
   subjectKind: string;
-  /** The asset's or the Operation Run's id, where the subject has one. */
+  /** The asset's id, where the subject has one. Never a run's, which names a person. */
   subjectId?: string;
   /** The asset's or the operation's name, where the subject has one. */
   subjectName?: string;
