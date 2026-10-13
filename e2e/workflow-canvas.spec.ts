@@ -14,7 +14,7 @@ interface Box {
 }
 
 // The Workflow pages over the sample Workflows and runs of `/ui-library/workflows`: the
-// instance runs no Workflow until the engine's slice is in.
+// instance lists no Workflow until it is given a source of definitions and a read of one.
 
 test("a Workflow opens with all of its drawing in view: the loop, the two paths and the parallel part", async ({
   page
@@ -171,6 +171,30 @@ test("the focus walks the steps, Enter opens the step's panel and Escape closes 
   expect(await focused()).toBe("clients");
 });
 
+test("a panel that opens is given room: no step stands under it, and closing it gives the room back", async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const canvas = await openSample(page, "monthly-booking-check");
+  const last = canvas.locator('[data-flow-id="result"]');
+  const open = await boxOf(last);
+
+  // The first step is in view wherever the panel stands, so nothing has to move for its sake.
+  await canvas.locator('[data-flow-id="start"]').click();
+  const panel = canvas.locator('[data-slot="side-panel"]');
+  await expect(panel).toBeVisible();
+  await expect
+    .poll(async () => {
+      const edge = (await boxOf(panel)).left;
+      return (await partsOf(canvas)).filter((part) => part.right > edge).map((part) => part.id);
+    })
+    .toEqual([]);
+
+  await page.keyboard.press("Escape");
+  await expect(panel).toHaveCount(0);
+  await expect.poll(async () => Math.round((await boxOf(last)).right)).toBe(Math.round(open.right));
+});
+
 test("a failed run opens on the step that failed, and a loop at work lists its failed entries", async ({
   page
 }) => {
@@ -179,7 +203,7 @@ test("a failed run opens on the step that failed, and a loop at work lists its f
   await expect(failed.locator('[data-flow-id="clients"]')).toHaveAttribute("data-status", "failed");
   await expect(failed.locator('[data-step-panel="clients"]')).toBeVisible();
   await expect(failed.locator('[data-step-panel="clients"]')).toContainText(
-    "The workflow may not do this: it lacks a right."
+    "The workflow may not do this: its account lacks the right “connection.use”."
   );
 
   const running = await openSample(page, "monthly-booking-check/runs/run-running");

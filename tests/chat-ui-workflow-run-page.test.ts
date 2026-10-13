@@ -91,6 +91,7 @@ function read(resource: RunResource, stepRuns: readonly StepRunResource[]): Work
     problem: undefined,
     silentSince: undefined,
     stepRuns: stepRuns.map(toWorkflowStepRun),
+    stepRunsCut: false,
     retry: noop
   };
 }

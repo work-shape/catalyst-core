@@ -130,6 +130,46 @@ contain breaking changes; a patch version does not.
   under the action's name and does not offer the kind in its form yet. A run a caller may not
   read on its Workflow is answered like a run that does not exist, also under a deny on one
   Workflow.
+- **Workflows, the pages on the canvas:** a Workflow opens as a drawing of its steps, left to
+  right on a wide page and top to bottom on a phone, fitted to the page when it opens. A loop
+  and a parallel part are frames around their steps, a condition is a step with one exit per
+  path, and a step that starts another Workflow opens that Workflow at an address of its own
+  (`/w/<workspace>/workflows/<workflow>/open/<child>`): the browser's way back leads one level
+  up, a trail names the way, and the head, the start and the runs are those of the Workflow
+  shown. A press on a step opens one panel beside the drawing (a sheet on a phone) that says
+  what the step does. The page of a run draws the same graph with how far each step is: a loop
+  shows its counts and its bar however many entries it has, with the failed in the failure
+  colour; a failed step says why and its panel opens by itself, and what an ended run did not
+  reach is dimmed. A step's panel shows what the step returned: a list of records as a table of
+  its first rows, anything else as text. The entries of a loop are listed in the loop's panel,
+  failed ones first, a page at a time, under a filter that stays in view. The run page draws the
+  published definition and says so when the run started on an earlier one. A Workflow has two
+  tabs, "Workflow" and "Runs". The drawing can be read with the keyboard and cannot be
+  rearranged. The pages read and write through the operations of the module `workflows`: the list with
+  each Workflow's latest run, the runs, a run and its step runs, the start and the cancel. A
+  Workflow that holds what the engine does not run yet is shown with each reason and without a
+  start, and a start the instance refuses for it says what the instance names. A failed step
+  names the right the account of the Workflow lacks, a run interrupted while a step changed
+  data says that the change may or may not have happened and was not repeated, and a run that
+  was asked to stop says that it ends when the call that is going has. **Not in this
+  release:** no operation reads the definition of a Workflow yet and an instance is given no
+  source of definitions, so an instance lists no Workflow and draws none; the pages are shown
+  over sample Workflows and runs at `/ui-library/workflows`, behind the right that opens the
+  UI library. The step runs outside the items of a loop have no read of their own: the page
+  picks them out of at most 2,000 step runs of a run and says so where a run has more.
+  `condition` and `parallel` are drawn and run by no engine. A step run carries the start of its output and no
+  count, so a table of a long output names no total; and an instance cannot yet tell an earlier
+  definition, because the read of a Workflow answers its revision's number and a run names the
+  revision's id.
+- **UI library:** `Breadcrumb`, the way into a nested place with the current one marked, and
+  `IconTile`, the square an icon stands in on a node of a graph and in the head of its panel.
+  On the flow canvas a group names its failed share in the failure colour (`failedLabel`),
+  folding a group leaves it where it stood, a graph that runs top to bottom and is wide enough
+  to be small either way opens whole, and on a narrow canvas the canvas library's mark stands
+  in the corner on the canvas' ground. `ListRow` takes `descriptionWraps="always"` for a list in
+  a narrow column. A panel that opens beside the canvas is given room: until the reader moves
+  the view, the graph is fitted again into what the panel leaves free, and again when it
+  closes, at the pace of the library's `--duration-open`.
 - **Workflow Runs:** with the module `workflows` on, a Workflow is started by hand and runs to
   its end on the job executor. `POST /api/v1/workflows/{workflow}/runs` starts a run
   (`workflow.use`), `GET` on the same path lists the runs of a Workflow, `GET /api/v1/workflows`

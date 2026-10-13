@@ -1,4 +1,4 @@
-import { Breadcrumb } from "@vivd-catalyst/ui";
+import { Banner, Breadcrumb } from "@vivd-catalyst/ui";
 import { useTranslation, type TranslationKey } from "../i18n";
 import { workspaceRoutePath, type WorkspaceRoute } from "../routes";
 import { useStartRun } from "./start-run";
@@ -12,7 +12,7 @@ import {
 } from "./workflow-data";
 import { WorkflowHead } from "./workflow-head";
 import { startOffered, type WorkflowRights } from "./workflow-model";
-import type { WorkflowStepView } from "./workflow-views";
+import type { WorkflowStepView, WorkflowUnsupported } from "./workflow-views";
 import { LoadError, WorkflowsFrame, type OpenRoute } from "./workflows-frame";
 import { useWorkflowsHost } from "./workflows-host";
 
@@ -140,6 +140,11 @@ export function WorkflowPageView({
           />
         </div>
       )}
+      {workflow === undefined || workflow.unsupported.length === 0 ? null : (
+        <div className="shrink-0 border-b px-(--layout-gutter) py-2">
+          <NotRunnableBanner unsupported={workflow.unsupported} />
+        </div>
+      )}
       <div className="relative min-h-0 flex-1">
         {shown.problem === "failed" ? (
           <div className="p-(--layout-gutter)">
@@ -159,5 +164,28 @@ export function WorkflowPageView({
         )}
       </div>
     </WorkflowsFrame>
+  );
+}
+
+/**
+ * Says that the engine of the instance does not run this Workflow yet, and each reason: the
+ * Workflow is shown as it is defined, and nobody is offered a start the instance would refuse.
+ */
+function NotRunnableBanner({ unsupported }: { unsupported: readonly WorkflowUnsupported[] }) {
+  const { locale, t } = useTranslation();
+  const list = new Intl.ListFormat(locale, { style: "long", type: "conjunction" });
+  return (
+    <Banner tone="warning" layout="inline" data-not-runnable="">
+      <p>{t("workflows.notRunnable.title")}</p>
+      <ul className="list-disc pl-5">
+        {unsupported.map((entry) => (
+          <li key={entry.what}>
+            {t(`workflows.notRunnable.${entry.what}`, {
+              names: list.format(entry.names.map((name) => t("workflows.quoted", { name })))
+            })}
+          </li>
+        ))}
+      </ul>
+    </Banner>
   );
 }

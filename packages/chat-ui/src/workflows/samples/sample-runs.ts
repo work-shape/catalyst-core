@@ -140,7 +140,8 @@ function failed(clock: Clock): SampleRun {
   const id = "run-failed";
   const error = {
     code: "FORBIDDEN",
-    message: "workflow-runner may not call connection.bookings.list_clients."
+    message: "workflow-runner may not call connection.bookings.list_clients.",
+    action: "connection.use"
   };
   return {
     run: monthly(id, {

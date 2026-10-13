@@ -11,8 +11,9 @@ import { SAMPLE_VIEWER_ID } from "./sample-runs";
 import { createSampleSource } from "./sample-source";
 
 // The Workflow pages over sample Workflows and sample runs, beside the UI library and behind
-// the same right. The instance runs no Workflow until the engine's slice is in; this page is
-// where the screens are looked at, photographed and tested in a browser until then. The
+// the same right. An instance has no source of definitions and no read of one yet, so it lists
+// no Workflow; this page is where the screens are looked at, photographed and tested in a
+// browser until then. The
 // address says what to open: `?at=<workflow>`, `?at=<workflow>/runs`,
 // `?at=<workflow>/runs/<run>`, `?at=<workflow>/open/<child>`, with `lang=de`. Light and dark
 // are the reader's own, as everywhere in the interface.

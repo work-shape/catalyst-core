@@ -14,7 +14,7 @@ export const workflows = defineTranslations({
     "workflows.advice.guardrail":
       "An administrator can say which rule it was and whether it should apply here.",
     "workflows.advice.interrupted":
-      "Look at what the step works on before you run it again: part of it may already be done.",
+      "Look at what the step writes to before you run the workflow again, so nothing is done twice.",
     "workflows.advice.loopEntry": "Open a failed entry to read why, then run the workflow again.",
     "workflows.advice.missingRight":
       "Ask an administrator to give the workflow that right, then run it again.",
@@ -57,6 +57,17 @@ export const workflows = defineTranslations({
     "workflows.listFailed": "The workflows could not be loaded.",
     "workflows.missing": "There is no workflow at this address.",
     "workflows.noRuns": "No runs yet. Start one with “Start now”.",
+    "workflows.notRunnable.collect":
+      "It does not collect the results of a loop's entries yet: {names}.",
+    "workflows.notRunnable.concurrency":
+      "It works on the entries of a loop one at a time, not on several at once: {names}.",
+    "workflows.notRunnable.fields": "It does not read these settings of the workflow yet: {names}.",
+    "workflows.notRunnable.schedule":
+      "It starts on a schedule, and this instance starts a workflow by hand only.",
+    "workflows.notRunnable.steps": "It does not run steps of this kind yet: {names}.",
+    "workflows.notRunnable.title": "This instance cannot run this workflow yet.",
+    "workflows.notRunnable.trigger":
+      "Something other than a person starts it, and this instance starts a workflow by hand only.",
     "workflows.noRunsPlain": "No runs yet.",
     "workflows.panel.atOnce": "At once",
     "workflows.panel.attempts": "Attempts",
@@ -94,9 +105,12 @@ export const workflows = defineTranslations({
       "The step did not get the data it needs from the steps before it.",
     "workflows.reason.durationLimit": "The run took longer than a run may and was stopped.",
     "workflows.reason.guardrail": "A safety rule of the instance stopped this step.",
-    "workflows.reason.interrupted": "The step was interrupted, and it is not known how far it got.",
+    "workflows.reason.interrupted":
+      "The run was interrupted while this step was changing data. The change may or may not have happened, and the step was not repeated.",
     "workflows.reason.loopEntry": "A step failed for one of the entries.",
     "workflows.reason.missingRight": "The workflow may not do this: it lacks a right.",
+    "workflows.reason.missingRightNamed":
+      "The workflow may not do this: its account lacks the right “{right}”.",
     "workflows.reason.needsApproval":
       "This step would wait for an approval, which a run cannot do.",
     "workflows.reason.notSupported": "This instance cannot run this kind of step yet.",
@@ -157,7 +171,11 @@ export const workflows = defineTranslations({
     "workflows.run.startStepSchedule": "Started by the schedule",
     "workflows.run.startedByPerson": "started by {person}",
     "workflows.run.startedBySchedule": "started by the schedule",
+    "workflows.run.stepRunsCut":
+      "This run has more steps than the page reads. Steps late in the run may show no state.",
     "workflows.run.stopping": "Stopping",
+    "workflows.run.stoppingLine":
+      "Cancelling. The call that is going now is not broken off: the run stops when it has ended.",
     "workflows.run.thisRun": "This run",
     "workflows.run.title": "Run of {date}",
     "workflows.run.unavailable": "This run is not available to you.",
@@ -167,6 +185,7 @@ export const workflows = defineTranslations({
     "workflows.runs.listFailed": "The runs could not be loaded.",
     "workflows.runs.title": "Runs of {name}",
     "workflows.runsUnavailable": "This instance does not run workflows yet.",
+    "workflows.quoted": "“{name}”",
     "workflows.schedule.custom": "On a schedule",
     "workflows.schedule.daily": "Every day, {time}",
     "workflows.schedule.manualOnly": "Started by hand only",
@@ -177,6 +196,7 @@ export const workflows = defineTranslations({
     "workflows.start.bodyManual": "It runs once, now.",
     "workflows.start.confirm": "Start",
     "workflows.start.failed": "The run could not be started.",
+    "workflows.start.notByHand": "This workflow is not started by hand.",
     "workflows.start.pending": "The start waits for an approval.",
     "workflows.start.refused": "You may not start this workflow.",
     "workflows.start.title": "Start “{name}” now?",
@@ -217,7 +237,7 @@ export const workflows = defineTranslations({
     "workflows.advice.guardrail":
       "Ein Administrator kann sagen, welche Regel es war und ob sie hier gelten soll.",
     "workflows.advice.interrupted":
-      "Sieh dir an, woran der Schritt arbeitet, bevor du ihn erneut startest: Ein Teil kann schon erledigt sein.",
+      "Sieh dir an, wohin der Schritt schreibt, bevor du den Workflow erneut startest, damit nichts doppelt geschieht.",
     "workflows.advice.loopEntry":
       "Öffne einen fehlgeschlagenen Eintrag, um den Grund zu lesen, und starte den Workflow dann erneut.",
     "workflows.advice.missingRight":
@@ -262,6 +282,18 @@ export const workflows = defineTranslations({
     "workflows.listFailed": "Die Workflows konnten nicht geladen werden.",
     "workflows.missing": "Unter dieser Adresse gibt es keinen Workflow.",
     "workflows.noRuns": "Noch keine Läufe. Starte einen mit „Jetzt starten“.",
+    "workflows.notRunnable.collect":
+      "Die Ergebnisse der Einträge einer Schleife sammelt sie noch nicht: {names}.",
+    "workflows.notRunnable.concurrency":
+      "Die Einträge einer Schleife bearbeitet sie nacheinander, nicht mehrere gleichzeitig: {names}.",
+    "workflows.notRunnable.fields":
+      "Diese Einstellungen des Workflows liest sie noch nicht: {names}.",
+    "workflows.notRunnable.schedule":
+      "Er startet nach Zeitplan, und diese Instanz startet einen Workflow nur von Hand.",
+    "workflows.notRunnable.steps": "Schritte dieser Art führt sie noch nicht aus: {names}.",
+    "workflows.notRunnable.title": "Diese Instanz kann diesen Workflow noch nicht ausführen.",
+    "workflows.notRunnable.trigger":
+      "Etwas anderes als eine Person startet ihn, und diese Instanz startet einen Workflow nur von Hand.",
     "workflows.noRunsPlain": "Noch keine Läufe.",
     "workflows.panel.atOnce": "Gleichzeitig",
     "workflows.panel.attempts": "Versuche",
@@ -302,9 +334,11 @@ export const workflows = defineTranslations({
       "Der Lauf hat länger gedauert, als ein Lauf darf, und wurde gestoppt.",
     "workflows.reason.guardrail": "Eine Schutzregel der Instanz hat diesen Schritt gestoppt.",
     "workflows.reason.interrupted":
-      "Der Schritt wurde unterbrochen, und es ist nicht bekannt, wie weit er kam.",
+      "Der Lauf wurde unterbrochen, während dieser Schritt Daten änderte. Die Änderung kann geschehen sein oder nicht, und der Schritt wurde nicht wiederholt.",
     "workflows.reason.loopEntry": "Bei einem der Einträge ist ein Schritt fehlgeschlagen.",
     "workflows.reason.missingRight": "Der Workflow darf das nicht: Ihm fehlt ein Recht.",
+    "workflows.reason.missingRightNamed":
+      "Der Workflow darf das nicht: Seinem Konto fehlt das Recht „{right}“.",
     "workflows.reason.needsApproval":
       "Dieser Schritt würde auf eine Freigabe warten, und das kann ein Lauf nicht.",
     "workflows.reason.notSupported":
@@ -369,7 +403,11 @@ export const workflows = defineTranslations({
     "workflows.run.startStepSchedule": "Vom Zeitplan gestartet",
     "workflows.run.startedByPerson": "von {person} gestartet",
     "workflows.run.startedBySchedule": "vom Zeitplan gestartet",
+    "workflows.run.stepRunsCut":
+      "Dieser Lauf hat mehr Schritte, als die Seite liest. Späte Schritte zeigen womöglich keinen Stand.",
     "workflows.run.stopping": "Wird abgebrochen",
+    "workflows.run.stoppingLine":
+      "Wird abgebrochen. Der Aufruf, der gerade läuft, wird nicht unterbrochen: Der Lauf stoppt, wenn er beendet ist.",
     "workflows.run.thisRun": "Dieser Lauf",
     "workflows.run.title": "Lauf vom {date}",
     "workflows.run.unavailable": "Dieser Lauf ist für dich nicht verfügbar.",
@@ -379,6 +417,7 @@ export const workflows = defineTranslations({
     "workflows.runs.listFailed": "Die Läufe konnten nicht geladen werden.",
     "workflows.runs.title": "Läufe von {name}",
     "workflows.runsUnavailable": "Diese Instanz führt noch keine Workflows aus.",
+    "workflows.quoted": "„{name}“",
     "workflows.schedule.custom": "Nach Zeitplan",
     "workflows.schedule.daily": "Jeden Tag, {time}",
     "workflows.schedule.manualOnly": "Startet nur von Hand",
@@ -389,6 +428,7 @@ export const workflows = defineTranslations({
     "workflows.start.bodyManual": "Er läuft einmal, jetzt.",
     "workflows.start.confirm": "Starten",
     "workflows.start.failed": "Der Lauf konnte nicht gestartet werden.",
+    "workflows.start.notByHand": "Dieser Workflow wird nicht von Hand gestartet.",
     "workflows.start.pending": "Der Start wartet auf eine Freigabe.",
     "workflows.start.refused": "Du darfst diesen Workflow nicht starten.",
     "workflows.start.title": "„{name}“ jetzt starten?",

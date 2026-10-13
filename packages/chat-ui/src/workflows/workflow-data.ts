@@ -6,11 +6,8 @@ import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { PendingApprovalError } from "../build-area/build-refusals";
 import { retryUnlessGone } from "../pages/page-address";
-import {
-  useWorkflowsSource,
-  type WorkflowRunsSource,
-  type WorkflowStepRunStatusFilter
-} from "./workflow-source";
+import type { WorkflowRunsSource, WorkflowStepRunStatusFilter } from "./source-shapes";
+import { useWorkflowsSource } from "./workflow-source";
 import type {
   WorkflowListItem,
   WorkflowRunView,
@@ -213,6 +210,8 @@ export interface WorkflowRunRead {
    * arrived.
    */
   stepRuns: readonly WorkflowStepRunView[] | undefined;
+  /** The run has more step runs than the page reads: steps late in the run may show no state. */
+  stepRunsCut: boolean;
   retry(): void;
 }
 
@@ -245,7 +244,8 @@ export function useWorkflowRun(runId: string): WorkflowRunRead {
     run,
     problem: query.isError && run === undefined ? readProblem(query.error) : undefined,
     silentSince: query.isError && run !== undefined ? query.dataUpdatedAt : undefined,
-    stepRuns: steps.data,
+    stepRuns: steps.data?.stepRuns,
+    stepRunsCut: steps.data?.complete === false,
     retry: () => void query.refetch().catch(() => undefined)
   };
 }

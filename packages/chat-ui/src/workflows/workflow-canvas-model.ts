@@ -8,7 +8,7 @@ import type {
 import { formatElapsed, formatMoment } from "../control-plane/locale-format";
 import type { TranslationContextValue } from "../i18n";
 import { scheduleInWords } from "./schedule-words";
-import { failureSentences, stepFallbackSentence } from "./workflow-model";
+import { failureHappened, stepFallbackSentence } from "./workflow-model";
 import type {
   WorkflowLoopCounts,
   WorkflowRunView,
@@ -321,7 +321,7 @@ export function workflowGraph(
         ? stepRun.status === "cancelled"
           ? { footer: t("workflows.run.cancelled") }
           : {}
-        : { footer: t(failureSentences(stepRun.failure.reason).happened) }),
+        : { footer: failureHappened(stepRun.failure, t) }),
       ...(took === undefined || status === "idle" ? {} : { meta: took })
     };
   };

@@ -139,6 +139,7 @@ function runRead(run: RunResource, stepRuns: readonly StepRunResource[]): Workfl
     problem: undefined,
     silentSince: undefined,
     stepRuns: stepRuns.map(toWorkflowStepRun),
+    stepRunsCut: false,
     retry: noop
   };
 }
@@ -196,15 +197,9 @@ describe("the list of Workflows", () => {
       onOpenRoute: noop
     });
   const summary = {
-    id: "asset_1",
-    kind: "workflow",
-    name: "notify-clients",
-    title: "Notify clients",
-    description: "Reads the clients and sends each of them a note.",
-    scope: { kind: "workspace" as const, workspaceId: "cw_1" },
-    revision: 3,
-    publishedRevision: 3,
-    updatedAt: "2026-10-10T09:00:00.000Z"
+    id: "notify-clients",
+    name: "Notify clients",
+    description: "Reads the clients and sends each of them a note."
   };
 
   it("says in one sentence that a workspace has no Workflows, and offers nothing to build", () => {
@@ -226,9 +221,18 @@ describe("the list of Workflows", () => {
     );
   });
 
-  it("gives a Workflow without a published revision no link", () => {
-    const { publishedRevision: _published, ...draftOnly } = summary;
-    expect(render(listPage([draftOnly]))).not.toContain("href=");
+  it("says how the latest run of a Workflow stands, and nothing where it has none", () => {
+    expect(render(listPage([summary]))).not.toContain(t("workflows.run.failed"));
+    const markup = render(
+      listPage([
+        {
+          ...summary,
+          lastRun: { id: "wr_9", status: "failed", startedAt: "2026-10-12T09:00:00.000Z" }
+        }
+      ])
+    );
+    expect(markup).toContain(t("workflows.run.failed"));
+    expect(markup).toContain('dateTime="2026-10-12T09:00:00.000Z"');
   });
 
   it("shows placeholders while the list loads, and the head at once", () => {
@@ -594,7 +598,13 @@ describe("the page of a run", () => {
     expect(dialog(undefined, "de")).toContain(de("workflows.run.cancelKeep"));
   });
 
-  const unread = { run: undefined, silentSince: undefined, stepRuns: undefined, retry: noop };
+  const unread = {
+    run: undefined,
+    silentSince: undefined,
+    stepRuns: undefined,
+    stepRunsCut: false,
+    retry: noop
+  };
 
   it("shows placeholders while the run loads", () => {
     const markup = render(runPage({ ...unread, problem: undefined }));

@@ -3,6 +3,7 @@ import { WORKFLOW_ACTIONS } from "@vivd-catalyst/core";
 import type { BadgeTone } from "@vivd-catalyst/ui";
 import type { TranslationKey } from "../i18n";
 import type {
+  WorkflowFailure,
   WorkflowFailureReason,
   WorkflowRunStatus,
   WorkflowRunView,
@@ -76,10 +77,17 @@ export function workflowsAccess(input: {
  * start it, and it takes no input, for which there is no form yet.
  */
 export function startOffered(
-  workflow: Pick<WorkflowView, "published" | "startsByHand" | "needsInput">,
+  workflow: Pick<WorkflowView, "published" | "startsByHand" | "needsInput" | "unsupported">,
   rights: Pick<WorkflowRights, "start">
 ): boolean {
-  return rights.start && workflow.published && workflow.startsByHand && !workflow.needsInput;
+  return (
+    rights.start &&
+    workflow.published &&
+    workflow.startsByHand &&
+    !workflow.needsInput &&
+    // What the engine does not run is refused at the start: the page says so in its place.
+    workflow.unsupported.length === 0
+  );
 }
 
 /** Whether "Cancel run" stands on the page of a run: it is going, and the reader may end it. */
@@ -142,6 +150,19 @@ export function runStatePresentation(
   return stopping && status !== "cancelled"
     ? { label: "workflows.run.stopping", tone: "neutral", spins: true }
     : RUN_STATES[status];
+}
+
+/**
+ * What happened, as one sentence. A missing right is named where the instance names it: the
+ * action the account of the Workflow does not hold.
+ */
+export function failureHappened(
+  failure: Pick<WorkflowFailure, "reason" | "action">,
+  t: (key: TranslationKey, values?: Record<string, string>) => string
+): string {
+  return failure.reason === "missingRight" && failure.action !== undefined
+    ? t("workflows.reason.missingRightNamed", { right: failure.action })
+    : t(failureSentences(failure.reason).happened);
 }
 
 /** What happened, and what the reader can do about it, for why something did not end as done. */

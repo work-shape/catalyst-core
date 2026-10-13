@@ -10,7 +10,7 @@ import {
 import { useTranslation } from "../i18n";
 import { FailureBanner } from "./failure-banner";
 import { useLoopEntries, type LoopEntriesRead } from "./workflow-data";
-import { failureSentences } from "./workflow-model";
+import { failureHappened } from "./workflow-model";
 import type { WorkflowLoopCounts, WorkflowStepRunView, WorkflowStepView } from "./workflow-views";
 import { LoadError, RunStateBadge } from "./workflows-frame";
 
@@ -182,7 +182,7 @@ function LoopEntryRow({ entry, loop }: { entry: LoopEntry; loop: WorkflowStepVie
       ? undefined
       : [
           failedAt === undefined ? undefined : t("workflows.run.atStep", { step: failedAt }),
-          t(failureSentences(failure.reason).happened)
+          failureHappened(failure, t)
         ]
           .filter((part) => part !== undefined)
           .join(" · ");

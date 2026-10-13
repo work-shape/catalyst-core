@@ -1,9 +1,8 @@
-import type { Asset, AssetSummary } from "@vivd-catalyst/api-client";
+import type { Asset } from "@vivd-catalyst/api-client";
 import {
   CONNECTION_OPERATION_PREFIX,
   DATA_STORE_OPERATION_PREFIX,
   type WorkflowBlockStepRunView,
-  type WorkflowLastRun,
   type WorkflowLoopCounts,
   type WorkflowRunLineage,
   type WorkflowRunStatus,
@@ -22,6 +21,7 @@ import type {
   WorkflowStepRunView,
   WorkflowStepSource,
   WorkflowStepView,
+  WorkflowUnsupported,
   WorkflowView
 } from "./workflow-views";
 
@@ -67,6 +67,8 @@ type OnTheWire<Shape> = {
 interface ErrorResource {
   code: string;
   message: string;
+  /** On a refused call: the action the account of the Workflow would have needed. */
+  action?: string;
 }
 
 interface TimesResource {
@@ -91,6 +93,8 @@ export interface WorkflowRunResource extends TimesResource, Partial<OnTheWire<Wo
   definitionRevisionId?: string;
   error?: ErrorResource;
   outputPreview?: WorkflowOutputPreview;
+  /** When someone asked to cancel the run. It ends when the call that is going has ended. */
+  cancelledAt?: string;
 }
 
 /** A step run as the engine's read answers it, with the placement the contract names. */
@@ -119,7 +123,13 @@ export interface WorkflowStepRunResource
 function toFailure(error: ErrorResource | undefined) {
   return error === undefined
     ? {}
-    : { failure: { reason: FAILURE_REASONS[error.code] ?? "other", detail: error.message } };
+    : {
+        failure: {
+          reason: FAILURE_REASONS[error.code] ?? "other",
+          detail: error.message,
+          ...(error.action === undefined ? {} : { action: error.action })
+        }
+      };
 }
 
 function toOutput(preview: WorkflowOutputPreview | undefined) {
@@ -148,6 +158,7 @@ export function toWorkflowRun(run: WorkflowRunResource): WorkflowRunView {
     workflowId: run.workflow,
     status: run.status,
     ended: workflowRunEnded(run.status),
+    stopping: run.cancelledAt !== undefined && !workflowRunEnded(run.status),
     // A run its schedule or another run started names no person.
     startedBy:
       run.trigger === "manual" ? { id: run.startedBy.id, name: run.startedBy.label } : undefined,
@@ -204,18 +215,25 @@ export function toWorkflowStepRun(stepRun: WorkflowStepRunResource): WorkflowSte
   };
 }
 
-/** A Workflow as a row of the list. `lastRun` is on the entry of `workflows.list`. */
-export function toWorkflowListItem(
-  summary: AssetSummary,
-  lastRun?: WorkflowLastRun
-): WorkflowListItem {
+/** A Workflow as the engine's list names it: what has a published definition. */
+export interface WorkflowSummaryResource {
+  id: string;
+  name: string;
+  description?: string;
+  /** The latest run of the Workflow, where it has one. */
+  lastRun?: { id: string; status: WorkflowRunStatus; startedAt?: string };
+}
+
+/** A Workflow as a row of the list. */
+export function toWorkflowListItem(summary: WorkflowSummaryResource): WorkflowListItem {
   const description = summary.description?.trim();
+  const { lastRun } = summary;
   return {
-    id: summary.name,
-    name: summary.title.trim() || summary.name,
+    id: summary.id,
+    name: summary.name.trim() || summary.id,
     ...(description ? { description } : {}),
-    published: summary.publishedRevision !== undefined,
-    updatedAt: summary.updatedAt,
+    // The engine lists what has a published definition.
+    published: true,
     ...(lastRun === undefined
       ? {}
       : {
@@ -387,7 +405,9 @@ export function toWorkflow(
    * The id of the published revision, which a run names as the one it started on. The read of
    * an asset answers the revision's number and not its id, so the instance cannot give it yet.
    */
-  revisionId?: string
+  revisionId?: string,
+  /** What the engine of the instance does not run of this definition. See `engine-limits`. */
+  unsupported: readonly WorkflowUnsupported[] = []
 ): WorkflowView {
   const definition = asset.config;
   const description = text(definition.description);
@@ -410,6 +430,7 @@ export function toWorkflow(
     startsByHand: steps.some((step) => step.starts?.byHand === true),
     needsInput:
       (isRecord(inputs.properties) && Object.keys(inputs.properties).length > 0) ||
-      (Array.isArray(inputs.required) && inputs.required.length > 0)
+      (Array.isArray(inputs.required) && inputs.required.length > 0),
+    unsupported
   };
 }

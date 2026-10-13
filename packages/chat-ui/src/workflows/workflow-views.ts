@@ -9,7 +9,8 @@ export interface WorkflowListItem {
   description?: string;
   /** A revision is published: there is something to open and to start. */
   published: boolean;
-  updatedAt: string;
+  /** When it was last changed, where the list names it. */
+  updatedAt?: string;
   /** The latest run, where the instance names it on the list. */
   lastRun?: { id: string; status: WorkflowRunStatus; startedAt?: string };
 }
@@ -91,6 +92,21 @@ export interface WorkflowView {
   startsByHand: boolean;
   /** A start has to give values: the definition declares inputs. */
   needsInput: boolean;
+  /**
+   * What the Workflow holds that the engine of the instance does not run yet. With one entry
+   * the Workflow is shown and cannot be started.
+   */
+  unsupported: readonly WorkflowUnsupported[];
+}
+
+/**
+ * One thing of a definition the engine does not run yet, with the names it concerns: the steps
+ * of a kind it does not run, a start on a schedule or another start that is not by hand, the
+ * loops that collect or work on several entries at once, and the fields it does not read.
+ */
+export interface WorkflowUnsupported {
+  what: "steps" | "schedule" | "trigger" | "collect" | "concurrency" | "fields";
+  names: readonly string[];
 }
 
 export type WorkflowRunStatus =
@@ -124,6 +140,8 @@ export interface WorkflowFailure {
   reason: WorkflowFailureReason;
   /** The instance's own sentence, which it writes in English. */
   detail: string;
+  /** On a missing right: the action the account of the Workflow does not hold. */
+  action?: string;
 }
 
 /** The start of what a run or a step returned, as JSON. */
@@ -139,6 +157,8 @@ export interface WorkflowRunView {
   status: WorkflowRunStatus;
   /** The run has left the states it changes in. */
   ended: boolean;
+  /** Someone asked to cancel the run, and the call that is going has not ended yet. */
+  stopping: boolean;
   /** Who started it. A run its schedule started names nobody. */
   startedBy: { id: string; name: string } | undefined;
   createdAt: string;

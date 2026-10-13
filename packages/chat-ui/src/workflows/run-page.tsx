@@ -109,7 +109,7 @@ export function WorkflowRunPage({ workflow, run: runId }: { workflow: string; ru
         canRunAgain={
           definition.workflow !== undefined && startOffered(definition.workflow, host.rights)
         }
-        stopping={stopping}
+        stopping={stopping || read.run?.stopping === true}
         onCancel={() => {
           setCancelError(undefined);
           setCancelling(true);
@@ -299,6 +299,8 @@ export function WorkflowRunPageView({
                 workflow?.revisionId !== undefined &&
                 run.revisionId !== workflow.revisionId
               }
+              stopping={stopping}
+              stepRunsCut={read.stepRunsCut}
             />
           )}
           <div className="relative min-h-0 flex-1">
@@ -322,27 +324,37 @@ function RunNotices({
   run,
   silentFor,
   showFailure,
-  earlierRevision
+  earlierRevision,
+  stopping,
+  stepRunsCut
 }: {
   run: NonNullable<WorkflowRunRead["run"]>;
   silentFor: number | undefined;
   showFailure: boolean;
   earlierRevision: boolean;
+  /** Someone asked to cancel the run, and it has not ended yet. */
+  stopping: boolean;
+  /** The run has more step runs than the page reads. */
+  stepRunsCut: boolean;
 }) {
   const { locale, t } = useTranslation();
   const line =
-    run.status === "queued"
-      ? t("workflows.run.queuedLine")
-      : run.status === "waiting"
-        ? // C6: who is asked and since when is not in the contract yet.
-          t("workflows.run.waitingLine")
-        : run.status === "cancelled" && run.finishedAt !== undefined
-          ? t("workflows.run.cancelledLine", { time: formatTime(run.finishedAt, locale) })
-          : undefined;
+    stopping && !run.ended
+      ? // A call that is going is not broken off: the run ends when it has.
+        t("workflows.run.stoppingLine")
+      : run.status === "queued"
+        ? t("workflows.run.queuedLine")
+        : run.status === "waiting"
+          ? // C6: who is asked and since when is not in the contract yet.
+            t("workflows.run.waitingLine")
+          : run.status === "cancelled" && run.finishedAt !== undefined
+            ? t("workflows.run.cancelledLine", { time: formatTime(run.finishedAt, locale) })
+            : undefined;
   if (
     silentFor === undefined &&
     line === undefined &&
     !earlierRevision &&
+    !stepRunsCut &&
     !(showFailure && run.failure)
   ) {
     return null;
@@ -365,6 +377,11 @@ function RunNotices({
       {earlierRevision ? (
         <Banner tone="info" layout="line" data-run-revision="">
           {t("workflows.run.earlierRevision")}
+        </Banner>
+      ) : null}
+      {stepRunsCut ? (
+        <Banner tone="info" layout="line" data-run-cut="">
+          {t("workflows.run.stepRunsCut")}
         </Banner>
       ) : null}
       {showFailure && run.failure ? <FailureBanner failure={run.failure} /> : null}

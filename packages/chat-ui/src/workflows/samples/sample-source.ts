@@ -1,6 +1,6 @@
 import { ApiError, type LocaleCode } from "@vivd-catalyst/api-client";
 import { toWorkflow, toWorkflowRun, toWorkflowStepRun } from "../workflow-mapping";
-import type { WorkflowRunsSource, WorkflowsSource } from "../workflow-source";
+import type { WorkflowRunsSource, WorkflowsSource } from "../source-shapes";
 import {
   SAMPLE_REVISION,
   SAMPLE_VIEWER_ID,
@@ -74,7 +74,8 @@ export function createSampleSource(locale: LocaleCode, now = Date.now()): Workfl
       });
     },
     getRun: async (runId) => Promise.resolve(toWorkflowRun(find(runId).run)),
-    listFrameStepRuns: async (runId) => Promise.resolve(find(runId).frame.map(toWorkflowStepRun)),
+    listFrameStepRuns: async (runId) =>
+      Promise.resolve({ stepRuns: find(runId).frame.map(toWorkflowStepRun), complete: true }),
     listEntryStepRuns: async (runId, query) => {
       const page = sampleEntryStepRuns(find(runId), query.containerStepRunId, query);
       return Promise.resolve({

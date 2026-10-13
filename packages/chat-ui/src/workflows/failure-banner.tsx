@@ -1,6 +1,6 @@
 import { Banner, Disclosure, DisclosureContent, DisclosureTrigger } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
-import { failureSentences } from "./workflow-model";
+import { failureHappened, failureSentences } from "./workflow-model";
 import type { WorkflowFailure } from "./workflow-views";
 
 /**
@@ -13,7 +13,7 @@ export function FailureBanner({ failure }: { failure: WorkflowFailure }) {
   const sentences = failureSentences(failure.reason);
   return (
     <Banner tone="danger" layout="inline">
-      <p>{t(sentences.happened)}</p>
+      <p data-failure-happened="">{failureHappened(failure, t)}</p>
       <p data-failure-advice="">{t(sentences.advice)}</p>
       <Disclosure className="mt-1">
         <DisclosureTrigger>{t("workflows.technicalDetails")}</DisclosureTrigger>

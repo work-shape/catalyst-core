@@ -13,7 +13,13 @@ import { formatUpdated } from "../build-area/build-model";
 import { formatDateTime } from "../control-plane/locale-format";
 import { useTranslation } from "../i18n";
 import { useWorkflowList, type WorkflowList } from "./workflow-data";
-import { LoadError, WorkflowsFrame, routeLink, type OpenRoute } from "./workflows-frame";
+import {
+  LoadError,
+  RunStateBadge,
+  WorkflowsFrame,
+  routeLink,
+  type OpenRoute
+} from "./workflows-frame";
 import { useWorkflowsHost } from "./workflows-host";
 
 /** The Workflows of the open workspace, as far as the reader may read them. */
@@ -70,39 +76,53 @@ export function WorkflowsPageView({
         ) : (
           <div className="grid min-w-0 grid-cols-1 gap-3">
             <List aria-label={t("workflows.title")}>
-              {rows.map((workflow) => (
-                <ListRow
-                  key={workflow.id}
-                  leading={<Workflow aria-hidden="true" className="size-4 text-muted-foreground" />}
-                  title={workflow.name}
-                  description={workflow.description}
-                  descriptionWraps
-                  time={
-                    <time
-                      className="hidden sm:inline"
-                      dateTime={workflow.updatedAt}
-                      title={formatDateTime(workflow.updatedAt, locale)}
-                    >
-                      {formatUpdated(workflow.updatedAt, now, locale)}
-                    </time>
-                  }
-                  // A Workflow without a published revision has nothing a reader could open.
-                  link={
-                    workflow.published ? (
-                      <a
-                        {...routeLink(
-                          {
-                            kind: "workflow",
-                            collaborationWorkspaceId: workspaceId,
-                            workflow: workflow.id
-                          },
-                          onOpenRoute
-                        )}
-                      />
-                    ) : undefined
-                  }
-                />
-              ))}
+              {rows.map((workflow) => {
+                const moment = workflow.lastRun?.startedAt ?? workflow.updatedAt;
+                return (
+                  <ListRow
+                    key={workflow.id}
+                    leading={
+                      <Workflow aria-hidden="true" className="size-4 text-muted-foreground" />
+                    }
+                    title={workflow.name}
+                    description={workflow.description}
+                    descriptionWraps
+                    // How the latest run stands, and when it began. A list that names no run
+                    // says when the Workflow last changed, where it knows that.
+                    chips={
+                      workflow.lastRun === undefined ? undefined : (
+                        <RunStateBadge status={workflow.lastRun.status} />
+                      )
+                    }
+                    time={
+                      moment === undefined ? undefined : (
+                        <time
+                          className="hidden sm:inline"
+                          dateTime={moment}
+                          title={formatDateTime(moment, locale)}
+                        >
+                          {formatUpdated(moment, now, locale)}
+                        </time>
+                      )
+                    }
+                    // A Workflow without a published revision has nothing a reader could open.
+                    link={
+                      workflow.published ? (
+                        <a
+                          {...routeLink(
+                            {
+                              kind: "workflow",
+                              collaborationWorkspaceId: workspaceId,
+                              workflow: workflow.id
+                            },
+                            onOpenRoute
+                          )}
+                        />
+                      ) : undefined
+                    }
+                  />
+                );
+              })}
             </List>
             {list.hasMore ? (
               <Button
