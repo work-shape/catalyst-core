@@ -201,31 +201,28 @@ function refuseReservedFields(
 }
 
 /**
- * The names a request is routed, framed or authenticated by. A key sent under one of them
- * would stand in the place of what the request needs. In lower case.
+ * Whether a request header may carry the idempotency key of a call. A name is accepted for
+ * what it says it is, never for not being on a list: `Idempotency-Key`, a name that ends in
+ * `-Idempotency-Key` or `-Request-Id`, or a name that starts with `X-`. `X-Forwarded-` names
+ * are a proxy's, and no header of HTTP itself, of a credential or of a connector fits the rule.
  */
-const HEADERS_NO_KEY_IS_SENT_UNDER = new Set([
-  "authorization",
-  "proxy-authorization",
-  "cookie",
-  "host",
-  "content-length",
-  "content-type",
-  "accept",
-  "connection",
-  "transfer-encoding",
-  "mcp-session-id",
-  "mcp-protocol-version"
-]);
+function carriesIdempotencyKey(name: string): boolean {
+  const lower = name.toLowerCase();
+  if (lower.startsWith("x-forwarded-")) return false;
+  return (
+    lower === "idempotency-key" ||
+    lower.endsWith("-idempotency-key") ||
+    lower.endsWith("-request-id") ||
+    lower.startsWith("x-")
+  );
+}
 
 /** The request header that carries the idempotency key of a changing call, by its name. */
 const idempotencyKeyHeaderSchema = z
   .string()
-  .regex(/^[A-Za-z][A-Za-z0-9-]{0,63}$/u, {
-    message: "A header name starts with a letter and holds letters, digits and hyphens, 64 at most"
-  })
-  .refine((name) => !HEADERS_NO_KEY_IS_SENT_UNDER.has(name.toLowerCase()), {
-    message: "This header is the request's own and carries no idempotency key"
+  .refine((name) => /^[A-Za-z][A-Za-z0-9-]{0,63}$/u.test(name) && carriesIdempotencyKey(name), {
+    message:
+      "The header of an idempotency key is 'Idempotency-Key', ends in '-Idempotency-Key' or '-Request-Id', or starts with 'X-' and not with 'X-Forwarded-', in at most 64 letters, digits and hyphens"
   });
 
 const connectionOperationSchema = z

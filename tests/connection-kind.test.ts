@@ -243,9 +243,28 @@ describe("the definition of a Connection", () => {
         message: "Only a changing operation can name a header for its idempotency key"
       }
     ]);
-    for (const own of ["Authorization", "content-type", "Mcp-Session-Id", "a header"]) {
-      expect(withHeader("changing", own)).toMatchObject([
-        { path: "operations.0.idempotencyKeyHeader" }
+    // A name is accepted for what it says it is, and for nothing else.
+    for (const named of ["X-Request-Id", "Stripe-Idempotency-Key", "Acme-Request-Id", "x-key"]) {
+      expect(withHeader("changing", named)).toEqual([]);
+    }
+    // Fails without the change: `Expect`, `Upgrade` and `X-Forwarded-For` were no names of a
+    // list of refused ones, so they passed.
+    for (const other of [
+      "Expect",
+      "Upgrade",
+      "X-Forwarded-For",
+      "Authorization",
+      "content-type",
+      "Mcp-Session-Id",
+      "Cookie",
+      "a header"
+    ]) {
+      expect(withHeader("changing", other)).toEqual([
+        {
+          path: "operations.0.idempotencyKeyHeader",
+          message:
+            "The header of an idempotency key is 'Idempotency-Key', ends in '-Idempotency-Key' or '-Request-Id', or starts with 'X-' and not with 'X-Forwarded-', in at most 64 letters, digits and hyphens"
+        }
       ]);
     }
   });
