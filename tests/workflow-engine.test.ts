@@ -492,6 +492,19 @@ describe("starting a Workflow that cannot run", () => {
       reason: "input_invalid",
       issues: [{ path: ["note"], message: "must be string" }]
     });
+    // A text the store cannot hold is the caller's to mend, not a failure of the instance.
+    for (const note of ["a\u0000b", "a\udc00b"]) {
+      const unstorable = await t.expectRefused(
+        t.root.id,
+        "workflows.start",
+        { params: { workflow: "notify-clients" }, payload: { input: { note } } },
+        { status: 422, code: "VALIDATION_FAILED" }
+      );
+      expect(unstorable.details).toMatchObject({
+        reason: "input_invalid",
+        issues: [{ path: ["note"] }]
+      });
+    }
 
     await t.stores.apiAccess.updateServicePrincipal({
       clientInstanceId,
