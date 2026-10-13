@@ -596,7 +596,7 @@ describe("Connection page", () => {
       discovered: [
         {
           name: "list_invoices",
-          description: "Lists the invoices of one customer.",
+          description: "Lists the invoices of one customer.\nTwo.\nThree.\nThe fourth line.",
           proposedEffect: "reading",
           fingerprint: "a".repeat(64)
         }
@@ -613,6 +613,10 @@ describe("Connection page", () => {
     expect(markup).toContain('data-connection-discovered="list_invoices"');
     expect(markup).toContain('data-connection-accept="list_invoices"');
     expect(markup).toContain("The server says this tool only reads.");
+    // Whoever accepts it reads all of what the model will read, not three lines of it.
+    expect(markup).toMatch(
+      /<p class="(?![^"]*line-clamp)[^"]*">Lists the invoices[^<]*The fourth line\.</u
+    );
     // An accepted operation can be taken off; the menu holds Delete.
     expect(markup).toContain('data-connection-remove="revenue_by_month"');
     expect(markup).toContain('aria-label="More actions"');

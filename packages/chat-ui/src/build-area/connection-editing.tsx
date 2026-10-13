@@ -327,7 +327,11 @@ function DiscoveredTool({
         </Badge>
       </div>
       {tool.description ? (
-        <p className="line-clamp-3 text-body whitespace-pre-line">{tool.description}</p>
+        // Whole: the model of an agent that carries the tool reads all of it, so whoever
+        // accepts it does too.
+        <p className="max-h-40 overflow-y-auto text-body break-words whitespace-pre-line">
+          {tool.description}
+        </p>
       ) : null}
       <p className="text-caption text-muted-foreground">
         {t(
