@@ -1,10 +1,14 @@
+import { APP_ASSET_KIND } from "@vivd-catalyst/api-contract";
 import {
   AppError,
   CONNECTION_OPERATION_PREFIX,
   DATA_STORE_OPERATION_PREFIX,
   KNOWLEDGE_OPERATION_PREFIX,
   createAuthorizer,
+  isAppError,
+  isPageId,
   moduleOffError,
+  normalizePageName,
   operationDenialError,
   resolvePolicy,
   unknownToJsonValue,
@@ -16,6 +20,7 @@ import {
   type JsonObject,
   type OperationAuthorization,
   type OperationDefinition,
+  type Page,
   type ToolExecutionContext
 } from "@vivd-catalyst/core";
 import {
@@ -23,10 +28,12 @@ import {
   PLATFORM_ASSET_TOOLS,
   platformAssetWriteRefusal,
   type PlatformAssetCalls,
+  type PageSaveIntoApp,
   type PlatformAssetFound,
   type PlatformCallableOperation
 } from "@vivd-catalyst/tool-execution";
 import { z } from "zod";
+import { PageApps } from "./apps/page-apps";
 import type { AssetCall } from "./asset-access";
 import { readDefinitionName } from "./asset-kinds/shared";
 import { AssetWorkflow } from "./asset-workflow";
@@ -129,8 +136,35 @@ const withoutSubject = () =>
 const sameSubject = (left: ConversationSubject, right: ConversationSubject | undefined) =>
   right !== undefined && left.kind === right.kind && left.name === right.name;
 
+/** What a save of a Page answers about its App, where the App's draft was not written. */
+const draftNotWritten = (app: { name: string; title: string }, message: string): PageSaveIntoApp => ({
+  ...app,
+  saved: false,
+  message
+});
+
 export function createPlatformAssetCalls(options: AssetWorkflowOptions): PlatformAssetCalls {
   const workflow = new AssetWorkflow(options);
+  const pageApps = new PageApps(options);
+
+  /** The Page of that name in the conversation. */
+  async function pageNamed(conversation: Conversation, name: string): Promise<Page> {
+    const wanted = normalizePageName(name);
+    const pages = await options.stores.pages.listPages({
+      clientInstanceId: options.clientInstanceId,
+      conversationId: conversation.id
+    });
+    const page = pages.find((candidate) => candidate.name === wanted);
+    if (!page) {
+      throw new AppError(
+        "NOT_FOUND",
+        `This conversation has no Page named '${wanted}'. Save it with page.save first`,
+        { reason: "page_not_found" },
+        { exposeMessage: true }
+      );
+    }
+    return page;
+  }
 
   /** The conversation the call came from, where it came from one. */
   async function conversationOfCall(
@@ -380,6 +414,88 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       } catch (error) {
         const refused = platformAssetWriteRefusal(error);
         if (refused) return refused;
+        throw error;
+      }
+    },
+
+    async saveAsApp(context, input) {
+      const conversation = await conversationOf(context);
+      // The App becomes the subject, which a conversation others read never has.
+      await requireOwnTranscript(conversation);
+      const page = await pageNamed(conversation, input.page);
+      const created = await pageApps.create(await callOf(context), page, {
+        name: input.name,
+        title: input.title,
+        workspaceId: conversation.collaborationWorkspaceId
+      });
+      await options.stores.conversations.setConversationSubject({
+        clientInstanceId: options.clientInstanceId,
+        conversationId: conversation.id,
+        subject: { kind: APP_ASSET_KIND, name: created.name }
+      });
+      return { kind: "app", name: created.name, title: input.title, revision: created.revision };
+    },
+
+    async saveIntoSubjectApp(context, input) {
+      const conversation = await conversationOfCall(context);
+      const subject = conversation?.subject;
+      if (!conversation || subject?.kind !== APP_ASSET_KIND) return undefined;
+      const row = await options.configAssets.store.getConfigAsset({
+        clientInstanceId: options.clientInstanceId,
+        kind: APP_ASSET_KIND,
+        name: subject.name
+      });
+      if (
+        row?.status !== "active" ||
+        row.scope.kind !== "workspace" ||
+        row.scope.workspaceId !== conversation.collaborationWorkspaceId
+      ) {
+        return undefined;
+      }
+      // Only the App this Page became, or was put into, is written by the Page's saves.
+      const origin = await options.configAssets.store.getConfigAssetPageOrigin({
+        clientInstanceId: options.clientInstanceId,
+        assetId: row.id
+      });
+      if (
+        origin?.pageId !== input.pageId ||
+        origin.conversationId !== conversation.id ||
+        !isPageId(origin.pageId)
+      ) {
+        return undefined;
+      }
+      const page = await options.stores.pages.getPage({
+        clientInstanceId: options.clientInstanceId,
+        conversationId: conversation.id,
+        pageId: origin.pageId
+      });
+      if (!page) return undefined;
+      const app = { name: row.name, title: titleOf(APP_ASSET_KIND, row.name, row.config ?? {}) };
+      const elsewhere =
+        "The App's draft was changed elsewhere since this Page last wrote it, so this save did not write over it; the Page is saved. Tell the person: Update app on the Page replaces the draft with the Page.";
+      if (row.revisionOrigin?.kind !== "page" || row.revisionOrigin.pageId !== page.id) {
+        return draftNotWritten(app, elsewhere);
+      }
+      try {
+        const updated = await pageApps.update(await callOf(context), page, {
+          app: row.name,
+          workspaceId: row.scope.workspaceId,
+          expectedRevision: row.revision,
+          link: false
+        });
+        return { ...app, saved: true, revision: updated.revision };
+      } catch (error) {
+        // The Page is saved either way: a refusal of the App's write is the answer's, not a
+        // failed save.
+        if (!isAppError(error)) throw error;
+        if (error.code === "REVISION_CONFLICT") return draftNotWritten(app, elsewhere);
+        if (error.code === "FORBIDDEN") {
+          return draftNotWritten(
+            app,
+            "The person may not write this App, so its draft was not written; the Page is saved."
+          );
+        }
+        if (error.code === "VALIDATION_FAILED") return draftNotWritten(app, error.message);
         throw error;
       }
     },

@@ -36,7 +36,8 @@ import {
   createPageSaveTool,
   LocalWorkspaceCommandProcessExecutor,
   ToolRegistry,
-  WorkspaceCommandService
+  WorkspaceCommandService,
+  type PageSaveToolOptions
 } from "@vivd-catalyst/tool-execution";
 import { createTestConfig, workspaceInfrastructure } from "./support/fixtures";
 import { MemoryObjectStorage } from "./support/memory-object-storage";
@@ -72,6 +73,7 @@ const issueSchema = z.looseObject({
   code: z.string().optional()
 });
 const saveOutputSchema = z.looseObject({
+  app: z.looseObject({ name: z.string(), saved: z.boolean() }).optional(),
   pageId: z.string().optional(),
   number: z.number().optional(),
   fileSetId: z.string().optional(),
@@ -106,6 +108,8 @@ async function createSaveHarness(
     unclaimedMs?: number;
     /** Runs before each object of a built Page is stored. */
     beforeStore?: () => Promise<void>;
+    /** What writes the App the conversation is about from the Page. */
+    apps?: PageSaveToolOptions["apps"];
   } = {}
 ) {
   const harness = await createWorkspaceHarness();
@@ -128,7 +132,8 @@ async function createSaveHarness(
   });
   const tool = createPageSaveTool({
     workspace: service.dependencies,
-    builds: options.builds?.(client) ?? client
+    builds: options.builds?.(client) ?? client,
+    ...(options.apps ? { apps: options.apps } : {})
   });
   const execution = createTestToolRunner({
     registry: new ToolRegistry({ tools: [tool] }),
@@ -408,6 +413,33 @@ export const Route = createFileRoute("/")({ component: () => <p>never</p> });
 
     expect(await harness.save("Hostile", "hostile")).toMatchObject({ output: { number: 1 } });
     expect(existsSync(marker)).toBe(false);
+  });
+
+  // Once the Page became the App of its conversation, the save is the App's draft too. Fails
+  // without the change: a save answered the Page alone and the App stayed as it was made.
+  it("writes the App the conversation is about once the Page is built, and nothing for a refused build", async () => {
+    const written: string[] = [];
+    const harness = await createSaveHarness({
+      apps: {
+        saveIntoSubjectApp: async (_context, input) => {
+          written.push(input.pageId);
+          return { name: "offers", title: "Offers", saved: true, revision: 2 };
+        }
+      }
+    });
+    await harness.write("offers", reactPage({ "index.tsx": fileRoute("/") }));
+
+    const saved = await harness.save("Offers", "offers");
+
+    expect(saved.output).toMatchObject({
+      number: 1,
+      app: { name: "offers", title: "Offers", saved: true, revision: 2 }
+    });
+    expect(written).toEqual([saved.output?.pageId]);
+
+    await harness.write("broken", { "index.html": "<p>no manifest</p>" });
+    expect((await harness.save("Broken", "broken")).output?.errors).toHaveLength(1);
+    expect(written).toHaveLength(1);
   });
 
   // Ran the file before the refusal matched the route generator's own pattern.
