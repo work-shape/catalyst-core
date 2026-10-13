@@ -18,7 +18,7 @@ export const connections = defineTranslations({
       "The remote MCP server this connection reaches. The instance reaches only hosts the operator allowed.",
     "connections.url": "Server address",
     "connections.urlHint":
-      "The https address of the server with the path of its MCP endpoint, as its provider gives it.",
+      "The https address of the server with the path of its MCP endpoint, as its provider gives it. Moving to another server removes the key entered for this one.",
     "connections.authTitle": "Authentication",
     "connections.authDescription": "How the instance proves itself to the server.",
     "connections.authNone": "None",
@@ -208,7 +208,7 @@ export const connections = defineTranslations({
       "Der entfernte MCP-Server, den diese Verbindung erreicht. Die Instanz erreicht nur Hosts, die der Betreiber erlaubt hat.",
     "connections.url": "Serveradresse",
     "connections.urlHint":
-      "Die https-Adresse des Servers mit dem Pfad seines MCP-Endpunkts, wie sein Anbieter sie angibt.",
+      "Die https-Adresse des Servers mit dem Pfad seines MCP-Endpunkts, wie sein Anbieter sie angibt. Beim Wechsel zu einem anderen Server wird der für diesen eingegebene Schlüssel entfernt.",
     "connections.authTitle": "Authentifizierung",
     "connections.authDescription": "Wie sich die Instanz beim Server ausweist.",
     "connections.authNone": "Keine",

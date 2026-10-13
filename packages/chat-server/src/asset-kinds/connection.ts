@@ -72,6 +72,18 @@ function toolNamesOf(agent: unknown): string[] {
     : [];
 }
 
+/** Where a Connection's type sends its calls, or nothing where that cannot be read. */
+function targetOf(
+  options: ConnectionAssetKindOptions,
+  connection: ConnectionConfig
+): EgressTarget | undefined {
+  try {
+    return options.connectorTypes.get(connection.connectorType)?.target(connection.settings);
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Why a Connection's target is refused on a save, or nothing. Only the operator's list is
  * asked, never DNS: the address is judged again by every test, discovery and call.
@@ -80,14 +92,8 @@ function egressIssue(
   options: ConnectionAssetKindOptions,
   connection: ConnectionConfig
 ): AssetValidationIssue | undefined {
-  const type = options.connectorTypes.get(connection.connectorType);
-  if (!type) return undefined;
-  let target: EgressTarget | undefined;
-  try {
-    target = type.target(connection.settings);
-  } catch {
-    target = undefined;
-  }
+  if (!options.connectorTypes.get(connection.connectorType)) return undefined;
+  const target = targetOf(options, connection);
   if (target && options.egress.admits(target)) return undefined;
   const place = target ? ` ${target.host}:${target.port}` : "";
   return {
@@ -95,6 +101,29 @@ function egressIssue(
     path: ["settings"],
     code: EGRESS_DENIED
   };
+}
+
+/**
+ * Whether a write sends the Connection to another origin than the one its secret was entered
+ * for. A secret is for the origin it was entered for: a writer, who never reads it, could
+ * otherwise have it sent to a system of their choosing on the egress list.
+ */
+function originMoved(
+  options: ConnectionAssetKindOptions,
+  previous: unknown,
+  next: ConnectionConfig
+): boolean {
+  if (previous === undefined) return false;
+  const stored = connectionConfigSchema.safeParse(previous);
+  const before = stored.success ? targetOf(options, stored.data) : undefined;
+  const after = targetOf(options, next);
+  return (
+    before === undefined ||
+    after === undefined ||
+    before.protocol !== after.protocol ||
+    before.host !== after.host ||
+    before.port !== after.port
+  );
 }
 
 /** The settings and the auth scheme: what decides which system the Connection reaches and how. */
@@ -251,7 +280,7 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
       if (!asset) return;
       const connectionAssetId = asset.id;
       const authenticates = connection.authScheme !== AUTH_SCHEME_NONE;
-      if (!authenticates) {
+      if (!authenticates || originMoved(options, previous, connection)) {
         await stores.connections.deleteSecrets({
           clientInstanceId,
           connectionAssetId,

@@ -220,10 +220,37 @@ describe("a Connection made on the instance", () => {
     expect(changed.state?.health).toBe("unknown");
     expect(changed.catalog).toBeUndefined();
     expect((await discoveryJobs()).filter((job) => job.subject === NAME).length).toBeGreaterThan(1);
+    // The origin is the one the key was entered for, so the key stays.
+    expect(await secretsOfConnection()).toHaveLength(1);
 
     // Without a credential the stored key goes.
     await put(instance, definition({ authScheme: "none", settings: { url: `${URL}/v2` } }), 2);
     expect(await secretsOfConnection()).toEqual([]);
+  });
+
+  it("drops the key when the Connection goes to another origin: a writer never sends it elsewhere", async () => {
+    const w = world();
+    const elsewhere = "93.184.216.35";
+    const instance = await w.start({
+      egress: [
+        { protocol: "https", host: OUTSIDE_HOST, port: 443 },
+        { protocol: "https", host: elsewhere, port: 443 }
+      ]
+    });
+    started.push(instance);
+    await put(instance, definition(), null);
+    const key = generateTestSecret();
+    await setSecret(instance, key, null);
+    await runJobs(instance);
+    const handedBefore = w.connector.handed.length;
+
+    await put(instance, definition({ settings: { url: `https://${elsewhere}/mcp` } }), 1);
+    expect(await secretsOfConnection()).toEqual([]);
+    expect((await storedState(instance, NAME)).state?.health).toBe("needs_configuration");
+    await runJobs(instance);
+    expect(w.connector.handed.slice(handedBefore)).not.toContain(key);
+    // A key entered for the new origin is taken as the first one.
+    expect((await setSecret(instance, generateTestSecret(), null)).statusCode).toBe(200);
   });
 
   it("keeps the handle the key is stored under when an earlier revision is restored", async () => {
