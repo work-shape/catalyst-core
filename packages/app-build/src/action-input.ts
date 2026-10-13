@@ -204,7 +204,10 @@ export const externalHostSchema = z
     "an https host name such as 'api.example.com', without scheme, port, path or wildcard"
   )
   .refine(
-    (host) => !LOCAL_NETWORK_DOMAINS.some((domain) => host.endsWith(`.${domain}`)),
+    // `home.arpa` itself too. A name of one label, `localhost` among them, the pattern refuses.
+    (host) =>
+      !host.includes(".") ||
+      !LOCAL_NETWORK_DOMAINS.some((domain) => host === domain || host.endsWith(`.${domain}`)),
     `a host on the internet: a name under ${LOCAL_NETWORK_DOMAINS.map((domain) => `.${domain}`).join(", ")} reaches the viewer's own machine or network`
   );
 

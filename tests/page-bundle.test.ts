@@ -606,7 +606,8 @@ externalHosts: [api.example.com]
       "printer.local",
       "db.corp.internal",
       "nas.lan",
-      "router.home.arpa"
+      "router.home.arpa",
+      "home.arpa"
     ]) {
       expect(
         manifestErrors(`id: a\nname: A\nkit: 1.0.0\nexternalHosts: [${host}]\n`),
