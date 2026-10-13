@@ -94,6 +94,28 @@ function listsOf(step: ReadStep): ReadStep[][] {
   return [];
 }
 
+/**
+ * Every step of a definition as it is stored, at whatever depth of its blocks: the steps of a
+ * `loop`, both sides of a `condition` and every branch of a `parallel`, down to
+ * `WORKFLOW_MAX_BLOCK_DEPTH`. For whoever asks what a definition names, such as the operations
+ * its steps call. It never throws, whatever it is given.
+ */
+export function workflowStepsDeep(
+  steps: unknown
+): ({ id: string; type: string } & Readonly<Record<string, unknown>>)[] {
+  const found: ReadStep[] = [];
+  const walk = (list: ReadStep[], depth: number) => {
+    for (const step of list) {
+      found.push(step);
+      if (depth < WORKFLOW_MAX_BLOCK_DEPTH) {
+        for (const inner of listsOf(step)) walk(inner, depth + 1);
+      }
+    }
+  };
+  walk(stepsOf(steps), 0);
+  return found;
+}
+
 const referenceOf = (value: unknown): string[] =>
   isRecord(value) && typeof value.step === "string" ? [value.step] : [];
 

@@ -3,6 +3,7 @@ import {
   DATA_STORE_OPERATION_PREFIX,
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
+  workflowStepsDeep,
   type ActorAccess,
   type ConfigAssetRecord,
   type OperationDefinition
@@ -22,8 +23,6 @@ import type { PublishedStore } from "./verbs";
 const DATA_STORE_USED_BY_MAX_ASSETS = 1_000;
 /** How long the read may take, in milliseconds. It reads no database of a store. */
 const DATA_STORE_USED_BY_TIMEOUT_MS = 15_000;
-/** How deep the blocks of a Workflow are followed for their steps. */
-const DATA_STORE_USED_BY_MAX_BLOCK_DEPTH = 16;
 
 /** The kind of an App and the rights that show one, as the kind `app` registers them. */
 const APP = { kind: "app", read: "app.read", use: "app.use" } as const;
@@ -49,23 +48,13 @@ const appConfigSchema = z.object({
 const sqlActionSchema = z.object({ kind: z.literal("sql"), dataStore: z.string() });
 
 const workflowConfigSchema = z.object({
-  manifest: z.object({ name: z.string().optional(), steps: z.array(z.unknown()) })
+  manifest: z.object({
+    name: z.string().optional(),
+    steps: z.unknown(),
+    /** The operations an agent step of the Workflow may call as tools. */
+    tools: z.array(z.string()).optional()
+  })
 });
-const stepSchema = z.object({
-  type: z.string(),
-  operation: z.string().optional(),
-  steps: z.array(z.unknown()).optional()
-});
-
-/** Whether a step, or a step of a block it holds, calls an operation of the store. */
-function stepCalls(step: unknown, prefix: string, depth = 0): boolean {
-  const read = stepSchema.safeParse(step);
-  if (!read.success || depth > DATA_STORE_USED_BY_MAX_BLOCK_DEPTH) return false;
-  return (
-    (read.data.type === "operation" && read.data.operation?.startsWith(prefix) === true) ||
-    (read.data.steps ?? []).some((inner) => stepCalls(inner, prefix, depth + 1))
-  );
-}
 
 /** The title of an App that uses the store, or nothing where its published revision does not. */
 function appUse(asset: ConfigAssetRecord, store: string): string | undefined {
@@ -78,13 +67,26 @@ function appUse(asset: ConfigAssetRecord, store: string): string | undefined {
   return uses ? (config.data.title ?? asset.name) : undefined;
 }
 
+/**
+ * The name of a Workflow that uses the store, or nothing where its published revision does
+ * not. It uses it where an operation step calls one of the store's operations, at whatever
+ * depth of the definition's blocks, or where an agent step may call one as a tool. The steps
+ * are walked by the definition's own walker, so a block a later engine runs is followed here
+ * as soon as a definition may hold it.
+ */
 function workflowUse(asset: ConfigAssetRecord, store: string): string | undefined {
   const config = workflowConfigSchema.safeParse(asset.publishedConfig);
   if (!config.success) return undefined;
   const prefix = `${DATA_STORE_OPERATION_PREFIX}${store}.`;
-  return config.data.manifest.steps.some((step) => stepCalls(step, prefix))
-    ? (config.data.manifest.name ?? asset.name)
-    : undefined;
+  const { manifest } = config.data;
+  const uses =
+    workflowStepsDeep(manifest.steps).some(
+      (step) =>
+        step.type === "operation" &&
+        typeof step.operation === "string" &&
+        step.operation.startsWith(prefix)
+    ) || (manifest.tools ?? []).some((tool) => tool.startsWith(prefix));
+  return uses ? (manifest.name ?? asset.name) : undefined;
 }
 
 async function usedBy(
