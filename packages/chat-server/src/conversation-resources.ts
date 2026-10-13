@@ -1,5 +1,6 @@
 import type { PlatformStores } from "@vivd-catalyst/core";
 import { posix } from "node:path";
+import { isWorkspaceInspectionArtifact } from "@vivd-catalyst/tool-execution";
 import type {
   ConversationResourceListItem,
   ConversationResourceListResponse
@@ -122,7 +123,8 @@ function generatedFileResources(
     if (
       source !== "execution_workspace" ||
       typeof workspaceId !== "string" ||
-      typeof workspacePath !== "string"
+      typeof workspacePath !== "string" ||
+      isWorkspaceInspectionArtifact(artifact)
     ) {
       continue;
     }

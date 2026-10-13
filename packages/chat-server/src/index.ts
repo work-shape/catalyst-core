@@ -107,6 +107,7 @@ export {
   cleanupExecutionWorkspaceForConversation
 } from "./workspace-cleanup";
 export type { ExecutionWorkspaceCleanupRunSummary } from "./workspace-cleanup";
+export { listConversationResources } from "./conversation-resources";
 export type {
   ChatServerOptions,
   OperationCalls,
