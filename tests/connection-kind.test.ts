@@ -623,7 +623,7 @@ describe("the module connections", () => {
 
   it("registers the kind on an assembled instance while it is on", async () => {
     const instance = await start(true);
-    expect(await kindsOf(instance)).toEqual(["agent", "skill", "connection"]);
+    expect(await kindsOf(instance)).toEqual(["agent", "skill", "connection", "guardrail"]);
     const listed = await instance.call("assets.list", { params: { kind: "connection" } });
     expect(listed.statusCode).toBe(200);
     expect(listed.json<{ items: unknown[] }>().items).toEqual([]);
@@ -656,7 +656,7 @@ describe("the module connections", () => {
     });
     for (const enabled of [false, undefined]) {
       const off = await start(enabled, true);
-      expect(await kindsOf(off)).toEqual(["agent", "skill"]);
+      expect(await kindsOf(off)).toEqual(["agent", "skill", "guardrail"]);
       const address = { params: { kind: "connection", name: "outside" } };
       const calls = [
         off.call("assets.list", { params: { kind: "connection" } }),

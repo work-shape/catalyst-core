@@ -136,7 +136,7 @@ export interface BuildSource {
  */
 export function useBuildSource(): BuildSource {
   const { apiBaseUrl, authScope, client, user, config } = useSettingsPage();
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const queryClient = useQueryClient();
   const contextQuery = usePlatformContextQuery({ apiBaseUrl, authScope, client, enabled: true });
   const context = contextQuery.data;
@@ -179,13 +179,14 @@ export function useBuildSource(): BuildSource {
     useList(kind, filter) {
       const text = filter.text.trim();
       const query = useInfiniteQuery({
-        queryKey: [...assetsKey, "list", kind, text, filter.namespace ?? ""],
+        queryKey: [...assetsKey, "list", kind, text, filter.namespace ?? "", locale],
         queryFn: ({ pageParam, signal }) =>
           client.assets.list({
             params: { kind },
             query: {
               limit: BUILD_LIST_PAGE_SIZE,
               cursor: pageParam,
+              locale,
               ...(text ? { text } : {}),
               ...(filter.namespace ? { prefix: filter.namespace } : {})
             },

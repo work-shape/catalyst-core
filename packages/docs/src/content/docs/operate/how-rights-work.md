@@ -484,7 +484,7 @@ Only a person's call can wait. A call made with an API key is refused with `POLI
 
 A call that carries a secret never waits. These are creating an API key, resetting a user's password, and creating a user with a first password. A held call would keep the secret and show it to whoever decides, and a key shown later reaches nobody. Under an instance default of `approval` such a call runs on the caller's own word. See [operation policy](/configure/release-config/#operation-policy).
 
-There is an older, separate approval that works without the policy. An agent can propose a change to one of its skills. That proposal is an Approval Request of the kind "Skill change", and the same people decide it. The operator can add **Approval Checks** to it, which are rules a model evaluates and which warn the approver or block the proposal. See [config assets](/configure/config-assets/#agent-skill-changes).
+There is an older, separate approval that works without the policy. An agent can propose a change to one of its skills. That proposal is an Approval Request of the kind "Skill change", and the same people decide it. The operator can bind **Guardrails** to it, which are rules a model evaluates and which warn the approver or block the proposal. Administrators see them and their hits in Build > Guardrails. See [config assets](/configure/config-assets/#agent-skill-changes).
 
 Agents and approvals do not go together yet. A run cannot pause for a person and continue later. So the instance refuses to start with a tool of the release whose calls would need an approval or a confirmation. Such a tool states `allow` or `deny`, unless the instance default for its kind of action already is one of the two.
 
@@ -492,7 +492,7 @@ Agents and approvals do not go together yet. A run cannot pause for a person and
 
 A guardrail is meant to be a rule that looks at an action just before it runs and can block it or send it to an approval. It sits at step 9, after the right and the first look at the policy, and it can only make the answer stricter.
 
-**No guardrail exists yet.** The step is built and every action on the full path passes it, but nothing is plugged in, so it always answers "no objection". The error `GUARDRAIL_BLOCKED` is in the API reference and does not occur today.
+**No guardrail runs at this step yet.** The step is built and every action on the full path passes it, but nothing is plugged in, so it always answers "no objection". The error `GUARDRAIL_BLOCKED` is in the API reference and does not occur today. The guardrails an operator sets in [release config](/configure/release-config/#guardrails) run at one other point so far: before a request for approval is filed. Administrators see them and their hits in Build > Guardrails.
 
 What protects an instance today are fixed limits that are not called guardrails:
 
@@ -501,7 +501,7 @@ What protects an instance today are fixed limits that are not called guardrails:
 | Module switches | A whole feature, for everybody | [release config](/configure/modules/) |
 | Tool and model lists of a Namespace | An agent with a tool or model off the list | Access, tab Namespaces |
 | Editable fields of an agent | A change in the interface to a field the release owns | [release config](/configure/config-assets/#interactive-editing-and-field-ownership) |
-| Approval Checks | A proposed skill change that breaks a rule | [release config](/configure/release-config/#approval-checks) |
+| Guardrails | A proposed skill change that breaks a rule | [release config](/configure/release-config/#guardrails) |
 | Usage limits and budgets | Model calls beyond a daily or monthly amount | [Capacity and limits](/operate/capacity-and-limits/) |
 | Rate limits | Too many requests in a short time | release config |
 

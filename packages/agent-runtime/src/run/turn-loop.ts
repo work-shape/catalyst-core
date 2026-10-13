@@ -10,6 +10,7 @@ import {
 } from "@vivd-catalyst/core";
 import {
   isModelProviderContinuationRejected,
+  withStorableToolInput,
   type ModelCompletion,
   type ModelMessage
 } from "@vivd-catalyst/model-provider";
@@ -25,7 +26,7 @@ import {
   ModelInput,
   getProviderCompactionThreshold,
   getSnapshotAgentConfig,
-  getSnapshotSkillMetadataForAgent
+  getSnapshotSkillMetadata
 } from "./model-input";
 import { isCancellationRequested, type RunEvents } from "./run-events";
 import type { ToolDispatch } from "./tool-dispatch";
@@ -132,14 +133,7 @@ export class TurnLoop {
       role: "system",
       content: createSystemInstructions(agent.instructions, context.locale, {
         currentDate: this.options.clock?.now() ?? systemClock.now(),
-        skills: [
-          ...getSnapshotSkillMetadataForAgent(assets, agent),
-          ...(offer?.skills ?? []).map(({ name, title, description }) => ({
-            name,
-            title,
-            description
-          }))
-        ],
+        skills: getSnapshotSkillMetadata(assets, agent, offer?.skillNames ?? []),
         agentToolNames: agent.toolNames,
         agentSkillChangesEnabled: this.options.agentSkillChangesEnabled,
         ...(offer?.subject ? { subject: { ...offer, subject: offer.subject } } : {})
@@ -205,6 +199,7 @@ export class TurnLoop {
       });
       carriesEarlierContinuation = false;
       const { completion, emittedDeltas, reasoning } = modelResult;
+      const toolCalls = completion.toolCalls.map(withStorableToolInput);
       providerContinuation = completion.continuation;
       const compactedThisCall = completion.contextManagement?.compacted === true;
       runCompacted ||= compactedThisCall;
@@ -224,7 +219,7 @@ export class TurnLoop {
             }
           : undefined;
 
-      if (completion.toolCalls.length === 0) {
+      if (toolCalls.length === 0) {
         if (context.signal?.aborted || isCancellationRequested(state.getStatus())) {
           return;
         }
@@ -258,7 +253,7 @@ export class TurnLoop {
       messages.push({
         role: "assistant",
         content: completion.text,
-        toolCalls: completion.toolCalls
+        toolCalls
       });
       await this.runEvents.beforeEffect("assistant_message", runId);
       await this.options.conversationHistory.appendAssistantMessage({
@@ -267,7 +262,7 @@ export class TurnLoop {
         text: completion.text,
         metadata: createAssistantToolCallsMetadata({
           runId,
-          toolCalls: completion.toolCalls,
+          toolCalls,
           reasoning,
           modelContext
         }),
@@ -280,7 +275,7 @@ export class TurnLoop {
           input,
           context,
           state,
-          completion.toolCalls,
+          toolCalls,
           repeatedToolCalls,
           messages,
           offeredDataTools

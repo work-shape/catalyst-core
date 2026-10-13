@@ -121,10 +121,12 @@ describe("a check by a schema an outside system wrote", () => {
     const cutOffAfterMs = performance.now() - began;
     expect(cutOffAfterMs).toBeGreaterThanOrEqual(390);
     expect(cutOffAfterMs).toBeLessThan(2_000);
-    // The second check was answered long before the first was cut off, by the other thread.
+    // The second check was answered before the first was cut off, by the other thread. A
+    // fixed limit below the deadline failed on a loaded runner; one thread would answer it
+    // only after the cut-off.
     const answered = await second;
     expect(answered.issues).toEqual([]);
-    expect(answered.afterMs).toBeLessThan(300);
+    expect(answered.afterMs).toBeLessThan(cutOffAfterMs);
     // And the thread that serves requests never waited for either.
     expect(stall).toBeLessThan(200);
     // The thread that was stopped is replaced: the same schema checks a short text at once.

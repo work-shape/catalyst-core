@@ -16,8 +16,10 @@ import {
   InlineError,
   KeyValue,
   KeyValueList,
-  SegmentedControl,
-  SegmentedControlItem
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger
 } from "@vivd-catalyst/ui";
 import { instanceSentence, PendingApprovalError } from "../build-area/build-refusals";
 import { useTranslation } from "../i18n";
@@ -347,7 +349,9 @@ export function AppEditFrame({
   const known = rights.write && draftRevision !== undefined;
   const ahead = appDraftIsAhead(draftRevision, publishedRevision);
   const missingRight = known && !rights.publish;
-  return (
+  // Preview, Files and Actions are views of the one App: tabs under its head.
+  const switchable = known && view !== undefined && onViewChange !== undefined;
+  const frame = (
     <AppFrame
       label={t("apps.draftArea", { name })}
       testId="app-edit"
@@ -367,34 +371,19 @@ export function AppEditFrame({
             backHref={workspaceRoutePath({ kind: "apps", collaborationWorkspaceId: workspace.id })}
             onBack={onBack}
             secondaryActions={
-              known ? (
-                <>
-                  {view !== undefined && onViewChange ? (
-                    <SegmentedControl
-                      size="sm"
-                      label={t("pages.view")}
-                      value={view}
-                      onValueChange={(next) =>
-                        onViewChange(
-                          APP_DRAFT_VIEWS.find((candidate) => candidate === next) ?? "preview"
-                        )
-                      }
-                    >
-                      <SegmentedControlItem value="preview">
-                        {t("pages.preview")}
-                      </SegmentedControlItem>
-                      <SegmentedControlItem value="files">{t("pages.files")}</SegmentedControlItem>
-                      <SegmentedControlItem value="actions">
-                        {t("apps.actions")}
-                      </SegmentedControlItem>
-                    </SegmentedControl>
-                  ) : null}
-                  {ahead && publishedRevision !== undefined ? (
-                    <Button variant="outline" onClick={onDiscard}>
-                      {t("apps.discard")}
-                    </Button>
-                  ) : null}
-                </>
+              known && ahead && publishedRevision !== undefined ? (
+                <Button variant="outline" onClick={onDiscard}>
+                  {t("apps.discard")}
+                </Button>
+              ) : undefined
+            }
+            tabs={
+              switchable ? (
+                <TabsList label={t("pages.view")}>
+                  <TabsTrigger value="preview">{t("pages.preview")}</TabsTrigger>
+                  <TabsTrigger value="files">{t("pages.files")}</TabsTrigger>
+                  <TabsTrigger value="actions">{t("apps.actions")}</TabsTrigger>
+                </TabsList>
               ) : undefined
             }
             primaryAction={
@@ -448,8 +437,27 @@ export function AppEditFrame({
         </>
       }
     >
-      {children}
+      {switchable ? (
+        <TabsContent value={view} className="h-full min-h-0">
+          {children}
+        </TabsContent>
+      ) : (
+        children
+      )}
     </AppFrame>
+  );
+  return switchable ? (
+    <Tabs
+      value={view}
+      onValueChange={(next) =>
+        onViewChange(APP_DRAFT_VIEWS.find((candidate) => candidate === next) ?? "preview")
+      }
+      className="contents"
+    >
+      {frame}
+    </Tabs>
+  ) : (
+    frame
   );
 }
 

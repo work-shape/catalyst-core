@@ -45,6 +45,7 @@ import { registerCollaborationWorkspaceRoutes } from "./routes/collaboration-wor
 import { registerAppRoutes } from "./routes/app-routes";
 import { registerAssetRoutes } from "./routes/asset-routes";
 import { registerConnectionRoutes } from "./routes/connection-routes";
+import { registerGuardrailRoutes } from "./routes/guardrail-routes";
 import { registerConversationFileRoutes } from "./routes/conversation-file-routes";
 import { registerConversationResourceRoutes } from "./routes/conversation-resource-routes";
 import { registerConversationRoutes } from "./routes/conversation-routes";
@@ -244,6 +245,7 @@ export async function createChatServer(
   registerAssetRoutes(route, options);
   registerAppRoutes(route, options);
   registerConnectionRoutes(route, options);
+  registerGuardrailRoutes(route, options);
   registerApprovalRequestRoutes(route, options);
   registerUserAccountRoutes(route, options);
   registerConversationRoutes(route, options);
@@ -265,8 +267,8 @@ export async function createChatServer(
   return runtime;
 }
 
-export { ApprovalCheckRunner } from "./approval-check-runner";
-export type { ApprovalCheckRunnerOptions } from "./approval-check-runner";
+export { GuardrailRunner } from "./guardrail-runner";
+export type { GuardrailCheckInput, GuardrailRunnerOptions } from "./guardrail-runner";
 
 export { ApprovalRequestWorkflow } from "./approval-request-workflow";
 export type {
@@ -280,6 +282,7 @@ export type { ConfigAssetWriterOptions } from "./config-asset-writer";
 export { createAgentAssetKind } from "./asset-kinds/agent";
 export type { AgentAssetKindOptions } from "./asset-kinds/agent";
 export { createSkillAssetKind } from "./asset-kinds/skill";
+export { seedShippedSkills } from "./shipped-skill-seed";
 export {
   APP_ACTIONS,
   APP_ASSET_KIND,
@@ -291,6 +294,8 @@ export {
 } from "./apps/app-kind";
 export { ASSET_PUT_BODY_LIMIT_BYTES } from "./asset-files";
 export { createConnectionAssetKind } from "./asset-kinds/connection";
+export { createGuardrailAssetKind } from "./asset-kinds/guardrail";
+export { seedReleaseGuardrails, type GuardrailSeedResult } from "./guardrail-release-seed";
 export type { ConnectionAssetKindOptions } from "./asset-kinds/connection";
 export type {
   ConnectionDiscoveryOutcome,

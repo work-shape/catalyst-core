@@ -35,6 +35,8 @@ export const agentKind: BuildAssetKind = {
   missingText: "build.agentMissing",
   icon: Bot,
   avatar: "agent",
+  // A row says what the agent does, as its card on the Agents page does, and never its id.
+  row: (asset) => ({ description: asset.description?.trim() || undefined }),
   badges: (asset, t) => (asset.isDefault ? <Badge>{t("configDefaultAgent")}</Badge> : null),
   Editor: AgentAssetEditor,
   startsInWorkspace: true

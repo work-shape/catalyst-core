@@ -8,7 +8,7 @@ import {
   type WorkflowStep
 } from "@vivd-catalyst/core";
 import type { WorkflowDefinitionRevision } from "./definition-source";
-import { jsonBytes, jsonObjectSchema } from "./json";
+import { jsonBytes, jsonObjectSchema, unstorableTextPaths } from "./json";
 import type { WorkflowRunLimits } from "./limits";
 import { secretOperationSteps, type WorkflowOperationCalls } from "./operation-step";
 import { workflowRunPrincipal } from "./run-identity";
@@ -55,6 +55,16 @@ export function createStartCheck(options: StartCheckOptions) {
     }
     const runInput = jsonObjectSchema.safeParse(given ?? {});
     const issues = runInput.success ? schema.validate(runInput.data) : [];
+    if (runInput.success && issues.length === 0) {
+      // The run stores its input as JSON, which holds no NUL character and no half of a
+      // surrogate pair: such a value is the caller's to mend, under the field that has it.
+      for (const path of unstorableTextPaths(runInput.data)) {
+        issues.push({
+          path,
+          message: "must not hold a NUL character or half of a surrogate pair"
+        });
+      }
+    }
     if (!runInput.success || issues.length > 0) {
       throw new AppError("VALIDATION_FAILED", "The input does not fit the Workflow's inputs", {
         reason: "input_invalid",

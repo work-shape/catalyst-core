@@ -1,4 +1,4 @@
-import { LayoutGrid, MoreHorizontal } from "lucide-react";
+import { CalendarDays, Calculator, LayoutGrid, MoreHorizontal } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { AssetSummary, LocaleCode } from "@vivd-catalyst/api-client";
 import {
@@ -10,7 +10,6 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-  Chip,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -21,7 +20,9 @@ import {
   InlineError,
   Page,
   PageHeader,
-  SkeletonList
+  SkeletonList,
+  Starter,
+  StarterList
 } from "@vivd-catalyst/ui";
 import { instanceSentence } from "../build-area/build-refusals";
 import { formatUpdated } from "../build-area/build-model";
@@ -222,14 +223,25 @@ export function AppsPageView({
                   </Button>
                 }
                 presets={
-                  <>
-                    <Chip onClick={() => onBuildInChat(t("apps.promptForm"))}>
-                      {t("apps.presetForm")}
-                    </Chip>
-                    <Chip onClick={() => onBuildInChat(t("apps.promptDashboard"))}>
-                      {t("apps.presetDashboard")}
-                    </Chip>
-                  </>
+                  // Two Apps a business builds, as the chat's starters show what an agent does.
+                  <StarterList label={t("apps.examples")} className="w-full">
+                    <Starter
+                      icon={
+                        <Calculator aria-hidden="true" className="size-5 text-muted-foreground" />
+                      }
+                      title={t("apps.exampleFeeTitle")}
+                      hint={t("apps.exampleFeeHint")}
+                      onClick={() => onBuildInChat(t("apps.exampleFeePrompt"))}
+                    />
+                    <Starter
+                      icon={
+                        <CalendarDays aria-hidden="true" className="size-5 text-muted-foreground" />
+                      }
+                      title={t("apps.exampleLeaveTitle")}
+                      hint={t("apps.exampleLeaveHint")}
+                      onClick={() => onBuildInChat(t("apps.exampleLeavePrompt"))}
+                    />
+                  </StarterList>
                 }
               >
                 {t("apps.empty")}

@@ -25,6 +25,8 @@ export interface BuildCreateStart {
  */
 export function BuildCreateDialog({
   entry,
+  heading,
+  initialTitle = "",
   namespaces,
   mayNameFreely,
   startsIn,
@@ -32,15 +34,20 @@ export function BuildCreateDialog({
   onStart
 }: {
   entry: BuildAssetKind;
+  /** The dialog's title where it starts something else than an empty asset, such as a copy. */
+  heading?: string;
+  /** The name the dialog starts with, such as the name of the asset a copy is made of. */
+  initialTitle?: string;
   namespaces: readonly BuildNamespace[];
   mayNameFreely: boolean;
   /** Present for a kind that starts in its workspace. */
   startsIn: BuildCreateStart | undefined;
   onClose(): void;
-  onStart(start: BuildAssetStart): void;
+  /** Hears the name and the id chosen. A copy adds the definition it starts from itself. */
+  onStart(start: Omit<BuildAssetStart, "copyOf">): void;
 }) {
   const { t } = useTranslation();
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(initialTitle);
   const [typedId, setTypedId] = useState<string>();
   const [prefix, setPrefix] = useState(
     mayNameFreely ? NO_NAMESPACE : (namespaces[0]?.prefix ?? NO_NAMESPACE)
@@ -70,7 +77,7 @@ export function BuildCreateDialog({
     <Dialog
       open
       size="sm"
-      title={t(entry.newLabel)}
+      title={heading ?? t(entry.newLabel)}
       onClose={onClose}
       footer={
         <>

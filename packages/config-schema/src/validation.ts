@@ -6,15 +6,21 @@ import { findDuplicates } from "./reference-validation";
 import { withoutRemovedWorkspaceSwitch } from "./removed-workspace-switch";
 import { getModelProviderConfigs } from "./infrastructure";
 import { refuseMovedInfrastructureKeys } from "./moved-infrastructure-keys";
+import { withApprovalChecksAsGuardrails } from "./approval-checks-transition";
+import { invalidConfigError } from "./config-errors";
 import {
   getModelSelectionForAgent,
   getModelSelectionForConversationTitles,
   resolveModelBinding
 } from "./selectors";
 
+export { invalidConfigError };
+
 export function parseClientInstanceConfig(input: unknown): ClientInstanceConfig {
   refuseMovedInfrastructureKeys(input);
-  const parsed = clientInstanceConfigSchema.safeParse(withoutRemovedUiSwitch(input));
+  const parsed = clientInstanceConfigSchema.safeParse(
+    withoutRemovedUiSwitch(withApprovalChecksAsGuardrails(input))
+  );
   if (!parsed.success) {
     throw invalidConfigError("Client instance config is invalid", parsed.error.issues);
   }
@@ -35,19 +41,6 @@ function withoutRemovedUiSwitch(input: unknown): unknown {
     return input;
   }
   return { ...input, ui: withoutRemovedWorkspaceSwitch(input.ui) };
-}
-
-/**
- * The message carries the first issue, so a log line or a terminal names the key that stopped
- * startup. Issue messages come from the schemas and quote no config value.
- */
-export function invalidConfigError(
-  summary: string,
-  issues: readonly { path: PropertyKey[]; message: string }[]
-): AppError {
-  const first = issues[0];
-  const detail = first ? `: ${first.path.map(String).join(".")}: ${first.message}` : "";
-  return new AppError("VALIDATION_FAILED", `${summary}${detail}`, { issues });
 }
 
 function assertProductionSafeAuthConfig(config: ClientInstanceConfig): void {
@@ -146,11 +139,11 @@ function assertConfigReferences(config: ClientInstanceConfig): void {
   }
 
   const modelBindingIds = new Set(config.modelBindings.map((binding) => binding.id));
-  for (const check of config.approvalChecks) {
-    if (!modelBindingIds.has(check.modelBindingId)) {
+  for (const [name, guardrail] of Object.entries(config.guardrails)) {
+    if (!modelBindingIds.has(guardrail.check.modelBindingId)) {
       throw new AppError(
         "VALIDATION_FAILED",
-        `Approval check '${check.id}' references missing model binding '${check.modelBindingId}'`
+        `Guardrail '${name}' references missing model binding '${guardrail.check.modelBindingId}'`
       );
     }
   }
@@ -273,8 +266,8 @@ export function assertSpendBudgetPricingCoverage(
     }
   }
 
-  for (const check of config.approvalChecks) {
-    const selection = resolveModelBinding(config, check.modelBindingId);
+  for (const guardrail of Object.values(config.guardrails)) {
+    const selection = resolveModelBinding(config, guardrail.check.modelBindingId);
     if (selection.provider.type !== "deterministic") {
       requiredPrices.add(createPricingKey(selection.provider.id, selection.model));
     }
