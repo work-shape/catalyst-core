@@ -4,6 +4,7 @@ import { AGENT_ASSET_KIND } from "../build-area/build-rights";
 import type { TranslationContextValue, TranslationKey } from "../i18n";
 import {
   ASSET_GET_TOOL_NAME,
+  ASSET_OPEN_TOOL_NAME,
   ASSET_OPERATIONS_TOOL_NAME,
   ASSET_PUT_TOOL_NAME,
   ASSET_VALIDATE_TOOL_NAME,
@@ -64,6 +65,16 @@ export function assetToolSentence(
   const answer = call.isError ? undefined : toolAnswer(call.result);
   const running = !call.isError && call.result === undefined;
   switch (call.toolName) {
+    case ASSET_OPEN_TOOL_NAME: {
+      if (call.isError) {
+        return t("assetToolOpenFailed");
+      }
+      if (running) {
+        return t("assetToolOpening", { kind: kindNoun(args.kind, t) });
+      }
+      const title = typeof answer?.title === "string" ? answer.title : answer?.name;
+      return typeof title === "string" ? t("assetToolOpened", { title }) : undefined;
+    }
     case ASSET_GET_TOOL_NAME: {
       if (call.isError) {
         return t("assetToolReadFailed");

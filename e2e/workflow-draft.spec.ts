@@ -276,10 +276,10 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     await expect(bar).toContainText("Entwurf weicht von der veröffentlichten Version ab");
     await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "en"));
 
-    // In a plain conversation of the builder's own workspace, the agent's first read of an
-    // asset makes it the subject and opens it beside the chat: the Workflow on its canvas,
-    // then, as the agent turns to it, an agent's saved state.
-    // A conversation shared with its workspace is refused the read: the asset would reach
+    // In a plain conversation of the builder's own workspace, a read of an asset moves
+    // nothing. Opening it makes it the subject and shows it beside the chat, with a line that
+    // names it: the Workflow on its canvas, then, as the agent opens it, an agent's form.
+    // A conversation shared with its workspace is refused the open: the asset would reach
     // every member who reads the conversation.
     const workspaces = workspaceListSchema.parse(
       await (await page.request.get(`${apiBaseUrl}/api/v1/workspaces?limit=100`)).json()
@@ -289,6 +289,11 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     await page.goto(`/w/${personal?.id ?? ""}`);
     await sendToolCall(page, "platform.assets.get", { kind: "workflow", name: id });
     const subject = page.getByTestId("conversation-subject");
+    await expect(await lastWorkLine(page)).toHaveText("Read the workflow");
+    await expect(subject).toHaveCount(0);
+    await expect(page.locator('[data-surface-kind="workflow_canvas"]')).toHaveCount(0);
+    await sendToolCall(page, "platform.assets.open", { kind: "workflow", name: id });
+    await expect(await lastWorkLine(page)).toHaveText(`Opened ${NAME}`);
     await expect(subject).toHaveAttribute("data-subject-kind", "workflow");
     await expect(subject).toContainText(NAME);
     const touched = page.locator('[data-surface-kind="workflow_canvas"]');
@@ -296,7 +301,7 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     await shootThemes(page, "workflow-from-chat", async () => {
       await expect(touched.getByText("What the run returns.")).toBeVisible();
     });
-    await sendToolCall(page, "platform.assets.get", {
+    await sendToolCall(page, "platform.assets.open", {
       kind: "agent",
       name: "research_assistant"
     });

@@ -14,7 +14,7 @@ import { useWorkflowNames } from "../workflows/workflow-data";
 import { agentTitle, useAgentAsset } from "./agent-surface";
 import {
   savedDraftCalls,
-  subjectReadInRun,
+  subjectOpenedInRun,
   subjectSurface,
   type SubjectAsset,
   type SubjectRunPart
@@ -60,11 +60,10 @@ function useSubjectTitle(subject: SubjectAsset | undefined, workspaceId: string 
 }
 
 /**
- * Shows the asset a conversation is about beside it: when the conversation opens, and when its
- * agent starts on an asset while the run goes, which makes that asset the subject. Each asset
- * opens by itself once for each time its conversation is opened: a reader who closed it keeps
- * it closed until the agent turns to another asset. Each saved draft drops the reads of the
- * assets, so what is shown is drawn again. Answers the asset the conversation is about now,
+ * Shows the asset a conversation is about beside it: when the conversation opens, and each
+ * time its agent opens an asset while the run goes, which makes that asset the subject. A
+ * reader who closed it keeps it closed until the agent opens an asset again. Each saved draft
+ * drops the reads of the assets, so what is shown is drawn again. Answers the asset the conversation is about now,
  * the name people read for it, and how to show it again where its surface is closed.
  *
  * The parent closes the surface as a layout effect when another conversation is selected, so
@@ -83,6 +82,7 @@ export function useSubjectSurface(input: {
   const watchedRunIds = useRef(new Set<string>());
   const handledSaves = useRef(new Set<string>());
   const opened = useRef<string | undefined>(undefined);
+  const handledOpens = useRef(new Set<string>());
 
   // Only a run seen while it went tells of a change: the replay of an earlier run says what
   // the stored subject already says.
@@ -91,7 +91,9 @@ export function useSubjectSurface(input: {
     (watchedRunIds.current.has(activeRun.run.id) ||
       !FINISHED_RUN_STATES.has(activeRun.projection.status));
   const parts = watched ? activeRun.projection.parts : undefined;
-  const subject = (parts ? subjectReadInRun(parts) : undefined) ?? storedSubject;
+  const openedInRun = parts ? subjectOpenedInRun(parts) : undefined;
+  const subject = openedInRun?.subject ?? storedSubject;
+  const openCall = openedInRun?.callId;
   const title = useSubjectTitle(subject, workspaceId);
 
   useEffect(() => {
@@ -126,6 +128,13 @@ export function useSubjectSurface(input: {
       return;
     }
     const openedKey = `${conversationId}|${surface.key}`;
+    // Each open of the agent shows the asset, also one its reader closed.
+    if (openCall !== undefined && !handledOpens.current.has(openCall)) {
+      handledOpens.current.add(openCall);
+      opened.current = openedKey;
+      panel.show(surface);
+      return;
+    }
     if (opened.current !== openedKey) {
       opened.current = openedKey;
       panel.show(surface);
@@ -135,7 +144,7 @@ export function useSubjectSurface(input: {
     if (panel.open && panel.entry?.key === surface.key && panel.entry.title !== surface.title) {
       panel.show(surface);
     }
-  }, [conversationId, panel, subject, title, workspaceId]);
+  }, [conversationId, openCall, panel, subject, title, workspaceId]);
 
   if (subject === undefined) {
     return undefined;

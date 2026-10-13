@@ -3,7 +3,7 @@ import { createTranslationContext } from "@vivd-catalyst/chat-ui";
 import { assetToolSentence } from "@vivd-catalyst/chat-ui/asset-tool-lines";
 import {
   savedDraftCalls,
-  subjectReadInRun,
+  subjectOpenedInRun,
   subjectSurface,
   type SubjectRunPart
 } from "@vivd-catalyst/chat-ui/subject-run";
@@ -11,34 +11,47 @@ import {
 const { t } = createTranslationContext("en");
 const de = createTranslationContext("de").t;
 
-function read(id: string, kind: string, name: string): SubjectRunPart {
+function call(toolName: string, id: string, kind: string, name: string): SubjectRunPart {
   return {
     type: "tool_call",
     toolCallId: id,
-    toolName: "platform.assets.get",
+    toolName,
     state: "output_available",
-    output: { kind, name, config: {}, revision: 1, shows: "draft" }
+    output: { kind, name, title: name, config: {}, revision: 1, shows: "draft" }
   };
 }
+const opened = (id: string, kind: string, name: string) =>
+  call("platform.assets.open", id, kind, name);
+const read = (id: string, kind: string, name: string) =>
+  call("platform.assets.get", id, kind, name);
 
-describe("the subject a run reads", () => {
-  it("is the asset of the last read that stood, whatever was refused after it", () => {
+describe("the subject a run opens", () => {
+  it("is the asset of the last open that stood, whatever was read or refused after it", () => {
     const parts: SubjectRunPart[] = [
-      read("1", "workflow", "intake"),
+      opened("1", "workflow", "intake"),
       { type: "text" },
-      read("2", "app", "calculator"),
-      // A read the server refused leaves the conversation about what it was.
+      opened("2", "app", "calculator"),
+      // A read opens nothing, and an open the server refused leaves the conversation about
+      // what it was.
+      read("3", "agent", "helper"),
       {
         type: "tool_call",
-        toolCallId: "3",
-        toolName: "platform.assets.get",
+        toolCallId: "4",
+        toolName: "platform.assets.open",
         state: "output_error",
         output: { code: "handler_failed", message: "There is no such asset" }
       }
     ];
 
-    expect(subjectReadInRun(parts)).toEqual({ kind: "app", name: "calculator" });
-    expect(subjectReadInRun([{ type: "text" }])).toBeUndefined();
+    expect(subjectOpenedInRun(parts)).toEqual({
+      subject: { kind: "app", name: "calculator" },
+      callId: "2"
+    });
+    expect(subjectOpenedInRun([{ type: "text" }])).toBeUndefined();
+  });
+
+  it("is nothing where the run only read assets", () => {
+    expect(subjectOpenedInRun([read("1", "workflow", "intake")])).toBeUndefined();
   });
 
   it("counts only the saves that stored a revision", () => {
@@ -79,6 +92,22 @@ describe("the subject a run reads", () => {
 });
 
 describe("the lines of the asset tools", () => {
+  it("say which asset the agent opened, by its title, in English and German", () => {
+    const answer = { kind: "workflow", name: "intake", title: "Customer intake" };
+    expect(
+      assetToolSentence({ toolName: "platform.assets.open", args: { kind: "workflow" } }, t)
+    ).toBe("Opening the workflow…");
+    expect(assetToolSentence({ toolName: "platform.assets.open", result: answer }, t)).toBe(
+      "Opened Customer intake"
+    );
+    expect(assetToolSentence({ toolName: "platform.assets.open", result: answer }, de)).toBe(
+      "Customer intake geöffnet"
+    );
+    expect(assetToolSentence({ toolName: "platform.assets.open", isError: true }, t)).toBe(
+      "The asset could not be opened"
+    );
+  });
+
   it("say what the agent did to the asset, in English and German", () => {
     expect(
       assetToolSentence(

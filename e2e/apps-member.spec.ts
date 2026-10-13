@@ -15,6 +15,9 @@ import { shootThemes } from "./surface-shots";
 import { expect, test } from "./test";
 import { apiOrigin, uiOrigin } from "./view-fixtures";
 
+/** The address of the draft of the App at `appPath`, outside the App's own addresses. */
+const draftPathOf = (appPath: string) => appPath.replace("/apps/", "/app-drafts/");
+
 // What a member who only uses an App is shown of it, beside what its builder is shown: the list
 // and the head name the App and leave out its revision, its id and its workspace, and the head
 // offers the link as one button where a builder has a menu. Fails without the member view: the
@@ -140,7 +143,7 @@ test("a member who uses an App is shown the App and a builder its revision", asy
   await saveDialog.getByRole("textbox", { name: /^Name/u }).fill(appName);
   await expect(saveDialog.getByRole("textbox", { name: /^ID/u })).toHaveValue(appId);
   await saveDialog.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`${appPath}/edit$`, "u"));
+  await expect(page).toHaveURL(new RegExp(`${draftPathOf(appPath)}$`, "u"));
   const edit = page.getByTestId("app-edit");
   await expect(appIn(page, "app-edit").getByRole("heading", { name: HEADING })).toBeVisible();
   // The App is open inside its workspace, so the head of its draft does not name it.
@@ -250,9 +253,9 @@ test("a member who uses an App is shown the App and a builder its revision", asy
   await draftReady();
   await shootThemes(page, "app-from-page", draftReady);
 
-  // In a plain conversation of the App's workspace that is the builder's own, the agent's
-  // first read of the App opens its draft beside the chat. An App is read in the workspace
-  // it belongs to, and a conversation shared with the workspace is refused the read.
+  // In a plain conversation of the App's workspace that is the builder's own, the agent
+  // opens the App and its draft shows beside the chat. An App is opened in the workspace it
+  // belongs to, and a conversation shared with the workspace is refused the open.
   const madePrivate = await requestWithOrigin(
     page,
     "patch",
@@ -261,7 +264,7 @@ test("a member who uses an App is shown the App and a builder its revision", asy
   );
   expect(madePrivate.ok(), await madePrivate.text()).toBe(true);
   await page.goto(`/w/${workspaceId}`);
-  await sendToolCall(page, "platform.assets.get", { kind: "app", name: appId });
+  await sendToolCall(page, "platform.assets.open", { kind: "app", name: appId });
   await expect(subject).toHaveAttribute("data-subject-kind", "app");
   await draftReady();
   await shootThemes(page, "app-from-chat", draftReady);
