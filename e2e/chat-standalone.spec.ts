@@ -4051,9 +4051,15 @@ test("panels at the right of the conversation open and close in one step, leave 
   expect(toggleBox.y + toggleBox.height).toBeLessThanOrEqual(header.y + header.height);
   for (const message of await page.locator(".group\\/message").all()) {
     const box = await message.boundingBox();
-    expect(box && box.y < toggleBox.y + toggleBox.height && box.y + box.height > toggleBox.y).toBe(
-      false
-    );
+    // A message may pass under the header's row once the thread scrolls: the answer is still
+    // streaming here. The button covers none of it.
+    const covered =
+      box !== null &&
+      box.y < toggleBox.y + toggleBox.height &&
+      box.y + box.height > toggleBox.y &&
+      box.x < toggleBox.x + toggleBox.width &&
+      box.x + box.width > toggleBox.x;
+    expect(covered).toBe(false);
   }
 
   // The file opens from the message while the card is closed, and Escape closes it.
