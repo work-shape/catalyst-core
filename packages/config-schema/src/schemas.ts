@@ -407,6 +407,35 @@ export const webAccessConfigSchema = z
     }
   });
 
+/**
+ * The sandbox of a Workflow's code step. A code step runs one script on the input its
+ * Workflow hands it, so its container gets far less than the container of an agent's command
+ * (`infrastructure.sandbox`): a script that needs more is a release's decision to raise here.
+ * The command worker runs the containers, so these are limits of its host.
+ */
+export const workflowsConfigSchema = z
+  .strictObject({
+    codeSteps: z
+      .strictObject({
+        /** How many code steps one command worker runs at once. */
+        slots: z.number().int().positive().max(64).default(4),
+        /** The memory of one code step's container, with no swap beyond it. */
+        memoryBytes: z
+          .number()
+          .int()
+          .min(64 * 1024 * 1024)
+          .default(512 * 1024 * 1024),
+        /** Half a core: four steps at once take two cores of the host at most. */
+        cpuCount: z.number().positive().default(0.5),
+        /** Room for an interpreter and its threads, and an end to a script that forks. */
+        pidsLimit: z.number().int().positive().default(64),
+        /** After this long a script is stopped and its step fails. */
+        timeoutSeconds: z.number().int().positive().max(900).default(60)
+      })
+      .prefault({})
+  })
+  .prefault({});
+
 export const executionWorkspacesConfigSchema = z
   .object({
     enabled: z.boolean().default(false),
@@ -819,6 +848,7 @@ export const clientInstanceConfigSchema = z.object({
   modelContext: modelContextConfigSchema,
   webAccess: webAccessConfigSchema,
   executionWorkspaces: executionWorkspacesConfigSchema,
+  workflows: workflowsConfigSchema,
   administration: administrationConfigSchema,
   modules: modulesConfigSchema,
   rateLimits: rateLimitsConfigSchema,
