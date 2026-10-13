@@ -151,19 +151,39 @@ guardrails:
       modelBindingId: guardrailCheck
       instruction: Check whether the proposed content contains personal data.
     outcome: warn
+  no_iban_in_assets:
+    displayName: No IBAN in assets
+    on: asset.before_write
+    check:
+      kind: pattern
+      pattern: '(?i)\bDE\d{2}(?:\s?\d{4}){4}\s?\d{2}\b'
+      reason: Assets hold no bank account numbers. Remove the IBAN and save again.
+    outcome: block
+  no_iban_in_apps:
+    displayName: No IBAN in published Apps
+    on: app.before_publish
+    check:
+      kind: pattern
+      pattern: '(?i)\bDE\d{2}(?:\s?\d{4}){4}\s?\d{2}\b'
+      reason: Apps hold no bank account numbers. Remove the IBAN and publish again.
+    outcome: block
 ```
 
-| Field                        | Meaning                                                                                                                                                |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `displayName`, `description` | What Build shows. Without `displayName` the name is shown.                                                                                             |
-| `on`                         | The event the guardrail answers. `approval_request.before_create` is the only one in this release: it runs before a request for approval is filed.     |
-| `filter.kind`                | The kind of request it applies to, such as `skill_change`. Without it, every kind. The kind needs a registered request handler.                        |
-| `check`                      | `model_judge`: a model of `modelBindingId` reads the content against `instruction` (at most 8,000 characters, any language) and answers with no tools. |
-| `outcome`                    | `warn` or `block`, what a hit does.                                                                                                                    |
+A guardrail answers one event. A rule that should hold wherever content can go live needs one entry per event: the IBAN rule above stops an asset write and, with its second entry, the publish of an App, so an App whose revision was written before the rule existed cannot go live with an IBAN either.
+
+| Field                        | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `displayName`, `description` | What Build shows. Without `displayName` the name is shown.                                                                                                                                                                                                                                                                                                                                                                                    |
+| `on`                         | The event the guardrail answers: `asset.before_write` (a save, a push, a revert, an App written from a Page, an agent's save and the skill change it proposes, again when that change is approved), `operation.before_call` (every call of an operation), `app.before_publish`, `workflow.before_publish`, `data_store.before_publish` (the revision a publish makes live, with its files) or `approval_request.before_create`.                   |
+| `filter`                     | Narrows the event: `kind` (the asset's kind, or the request's kind such as `skill_change`), `operation` (a name or a prefix ending in `.*`), `origin` (`agent`, `user`, `cli`, `mcp`, `app`, `workflow`, `schedule`) and `agent`, as far as the event knows them. Without it, everything at the event.                                                                                                                                          |
+| `check`                      | `pattern`: an RE2 expression (no backreferences, no lookaround), with the `reason` a person is shown. `model_judge`: a model of `modelBindingId` reads the content against `instruction` (at most 8,000 characters, any language) and answers with no tools. Either may name the event's `fields`: `name` and `content` of an asset, `input` of a call, `summary` and `newContent` of a request.                                                 |
+| `outcome`                    | What a hit does: `allow`, `warn`, `require_approval` (a changing call waits for an approval in the Inbox) or `block`. Every guardrail that applies runs, and the strictest answer wins.                                                                                                                                                                                                                                                       |
+
+Content a guardrail cannot read is not read in part: a field longer than 2 Mi characters, and an asset with a file that is no UTF-8 text, such as an image. A guardrail that blocks or asks for an approval answers such content as a match; one that warns warns. A `block` on `asset.before_write` without a `filter.kind` therefore also stops the save of an App or a Data Store that holds an image.
 
 All guardrails bound to an event run concurrently. For skill changes, the summary and proposed new text are sent to the configured model provider; existing skill text and replaced text are excluded. Select a provider and binding approved for that content. Each check is a model call of the instance: it counts toward the usage budgets and safeguards and leaves one usage record with the purpose `guardrail_judge`, also when it fails or times out. The record names the originating conversation when there is one and never an agent run.
 
-`warn` stores a visible warning and leaves the decision with the approver. `block` refuses a violating proposal and returns the reason to the agent without storing a request. If a check cannot be evaluated, including provider failures or the 60-second timeout, `warn` stores a neutral warning and `block` refuses the proposal, so a blocking guardrail never lets unchecked content through. When a usage limit of the instance refuses the check, the reason given to the agent says that the limit is reached. Guardrails are not run again when a request is decided. Request kinds without a proposed-content extractor are not checked.
+`warn` stores a visible warning and leaves the decision with the approver. `block` refuses a violating proposal and returns the reason to the agent without storing a request. If a check cannot be evaluated, including provider failures or the 60-second timeout, `warn` stores a neutral warning and `block` refuses the proposal, so a blocking guardrail never lets unchecked content through. When a usage limit of the instance refuses the check, the reason given to the agent says that the limit is reached. When a skill change is approved, the skill as the approval would write it is checked again at `asset.before_write`: a block then leaves the skill unchanged, and the request ends as not applied with the guardrail's reason. A call that waited for an approval is checked again before it runs. Request kinds without a proposed-content extractor are not checked.
 
 Every warning and block is kept as a hit: the guardrail, the outcome, its one-sentence reason and the kind of request, never the checked content and never the person. The judge is told to word its reason without quoting the content. Build > Guardrails lists the guardrails read-only, and a guardrail's page counts its hits for the last 7 and 30 days and lists the newest 50, for holders of `guardrail.read` (administrators). Hits are counted by rule and period and never listed by person, because a list of who tripped which rule would let the instance monitor employees, which in Germany needs the works council's co-determination (§87(1) no. 6 BetrVG). Who made a request is in the audit log: `approval_request.created` for a request a guardrail warned on, and `operation.failed` of the agent's `propose_skill_change` call for one it blocked. Hits are deleted with the audit events, after `retention.auditDays`. Creation audit metadata contains only guardrail names and statuses, never proposed content or reasons. Stored check messages remain part of the approval request.
 
