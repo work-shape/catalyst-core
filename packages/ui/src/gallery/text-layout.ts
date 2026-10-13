@@ -164,6 +164,9 @@ export interface LayoutGalleryText {
   codeCut: string;
   codeCutFooter: string;
   codeCutNumbered: string;
+  codeWrapped: string;
+  codeAsFile: string;
+  codeConfigName: string;
   codeOutputName: string;
   countPrimary: string;
   countMuted: string;
@@ -337,6 +340,9 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     codeCut: "Cut to six lines, without numbers, with a footer",
     codeCutFooter: "Shortened. The run keeps the whole output for 30 days.",
     codeCutNumbered: "Cut to four lines",
+    codeWrapped: "Long lines broken",
+    codeAsFile: "As a file, with colours and its controls",
+    codeConfigName: "agents/support.yaml",
     codeOutputName: "Output of the step",
     countPrimary: "Needs you",
     countMuted: "Plain count",
@@ -508,6 +514,9 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     codeCut: "Auf sechs Zeilen gekürzt, ohne Nummern, mit Fußzeile",
     codeCutFooter: "Gekürzt. Der Lauf bewahrt die ganze Ausgabe 30 Tage auf.",
     codeCutNumbered: "Auf vier Zeilen gekürzt",
+    codeWrapped: "Lange Zeilen umbrochen",
+    codeAsFile: "Als Datei, mit Farben und Bedienelementen",
+    codeConfigName: "agents/support.yaml",
     codeOutputName: "Ausgabe des Schritts",
     countPrimary: "Braucht dich",
     countMuted: "Einfache Anzahl",

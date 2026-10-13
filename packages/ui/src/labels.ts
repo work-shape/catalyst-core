@@ -13,6 +13,8 @@ export interface UiLabels {
   loading: string;
   copy: string;
   copied: string;
+  /** Beside the switch of a `CodeFile` that breaks long lines. */
+  wrapLines: string;
   showMore: string;
   showLess: string;
   expand: string;
@@ -63,6 +65,7 @@ export const uiLabelsEn: UiLabels = {
   loading: "Loading",
   copy: "Copy",
   copied: "Copied",
+  wrapLines: "Wrap lines",
   showMore: "Show more",
   showLess: "Show less",
   expand: "Expand",
@@ -102,6 +105,7 @@ export const uiLabelsDe: UiLabels = {
   loading: "Lädt",
   copy: "Kopieren",
   copied: "Kopiert",
+  wrapLines: "Zeilen umbrechen",
   showMore: "Mehr anzeigen",
   showLess: "Weniger anzeigen",
   expand: "Aufklappen",

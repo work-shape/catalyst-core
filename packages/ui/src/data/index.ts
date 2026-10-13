@@ -9,7 +9,8 @@ export {
   type ChartSeries
 } from "./chart-data";
 export type { ChartType } from "./chart-engine";
-export { CodeBlock, type CodeBlockProps } from "./code-block";
+export { CodeBlock, type CodeBlockProps, type CodeToken } from "./code-block";
+export { CodeFile, type CodeFileProps } from "./code-file";
 export { FilterBar, type FilterBarProps } from "./filter-bar";
 export {
   KeyValue,
