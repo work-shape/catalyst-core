@@ -233,6 +233,75 @@ test("the head of every asset page is one row as high as the header, and the id 
   }
 });
 
+// Fails with a head that cut the name first: at 390 px a run was named "Ru…" beside its chip
+// and the text of its way back.
+test("a narrowing head gives the chips, then the text of the way back, and cuts the name last", async ({
+  page
+}) => {
+  await page.setViewportSize(WIDE);
+  await signIn(page);
+  const run = randomUUID().slice(0, 8);
+  const connection = {
+    id: `cfga_${randomUUID()}`,
+    name: `frame-narrow-${run}`,
+    displayName: "Ledger of the quarter",
+    url: ALLOWED_URL,
+    authScheme: "none" as const
+  };
+  await plantConnection(connection);
+  try {
+    await page.goto(`/build/connections/${connection.name}`);
+    const head = page.locator('header[data-variant="detail"]');
+    const name = head.getByRole("heading", { level: 1 });
+    await expect(name).toBeVisible();
+    const read = () =>
+      head.evaluate(async (element) => {
+        // The head measures its row after a resize and draws again.
+        await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+        const title = element.querySelector("h1");
+        const back = element.querySelector("[data-slot=page-header-back]");
+        const text = element.querySelector("[data-slot=page-header-back-text]");
+        const chips = element.querySelector("[data-slot=page-header-chips]");
+        if (!title || !back || !text || !chips) {
+          throw new Error("The head misses a part.");
+        }
+        const firstLine = chips.getBoundingClientRect().bottom;
+        return {
+          cut: title.scrollWidth > title.clientWidth,
+          text: text.getBoundingClientRect().width > 0,
+          chips: [...chips.children].filter(
+            (chip) => chip.getBoundingClientRect().top < firstLine - 1
+          ).length,
+          // No gap is left where the text was: the name follows the way back at one distance.
+          gap: Math.round(title.getBoundingClientRect().left - back.getBoundingClientRect().right)
+        };
+      });
+    const wide = await read();
+    expect(wide).toEqual({ cut: false, text: true, chips: 2, gap: wide.gap });
+    const seen = [wide];
+    for (let width = 760; width >= 240; width -= 20) {
+      await page.setViewportSize({ width, height: 800 });
+      seen.push(await read());
+    }
+    for (const [index, now] of seen.entries()) {
+      const before = seen[Math.max(0, index - 1)] ?? now;
+      const where = `step ${index}: ${JSON.stringify(now)}`;
+      expect(now.gap, where).toBe(wide.gap);
+      expect(now.chips, where).toBeLessThanOrEqual(before.chips);
+      // The text stays while a chip could still go, and the name is whole while the text shows.
+      expect(now.text && before.text === false, where).toBe(false);
+      expect(now.text && now.cut, where).toBe(false);
+      expect(!now.text && now.chips > 0, where).toBe(false);
+    }
+    // Each part went, and the arrow stood alone beside the whole name before the name was cut.
+    expect(seen.some((now) => now.text && now.chips === 0)).toBe(true);
+    expect(seen.some((now) => !now.text && !now.cut)).toBe(true);
+    expect(seen.at(-1)).toMatchObject({ cut: true, text: false, chips: 0 });
+  } finally {
+    await removeConnection(connection.id);
+  }
+});
+
 async function signIn(page: Page): Promise<string> {
   const response = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
     data: { email: admin.email, password: admin.password, rememberMe: true }
