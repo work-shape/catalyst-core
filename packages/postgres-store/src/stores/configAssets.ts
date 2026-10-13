@@ -14,11 +14,11 @@ import {
   getConfigAsset as getPostgresConfigAsset,
   getConfigAssetState as getPostgresConfigAssetState,
   listActiveConfigAssets as listActivePostgresConfigAssets,
-  listConfigAssetPage as listPostgresConfigAssetPage,
   listConfigAssetsByKey as listPostgresConfigAssetsByKey,
   listPublishedConfigAssets as listPublishedPostgresConfigAssets,
   listConfigAssetRevisions as listPostgresConfigAssetRevisions
 } from "../postgres-config-asset-operations";
+import { listConfigAssetPage as listPostgresConfigAssetPage } from "../postgres-config-asset-page";
 import {
   getConfigAssetRevision as getPostgresConfigAssetRevision,
   getConfigAssetRevisionById as getPostgresConfigAssetRevisionById

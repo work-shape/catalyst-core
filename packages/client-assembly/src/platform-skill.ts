@@ -9,7 +9,7 @@ import { PAGE_SAVE_TOOL_NAME, PLATFORM_DISCOVERY_TOOLS } from "@vivd-catalyst/to
 
 const PLATFORM_SKILL_NAME = "platform-guide";
 
-const { context, listAssets } = PLATFORM_DISCOVERY_TOOLS;
+const { context, listAssets, listFiles } = PLATFORM_DISCOVERY_TOOLS;
 
 const content = `# How this platform works
 
@@ -33,7 +33,9 @@ Not every instance has every kind. Call \`${context.name}\` to see the kinds tha
 
 ## Finding things
 
-Call \`${listAssets.name}\` when the user names or means something on the platform, before you say it does not exist. Search by \`kind\` and by part of the name in \`text\`. You get names, titles and descriptions, never contents. What the user may not see is not listed: then say you know nothing of that name, never that it is hidden.
+Call \`${listAssets.name}\` when the user names or means something on the platform, before you say it does not exist. Search by \`kind\` and by part of the name or title in \`text\`. You get names, titles and descriptions, never contents. What the user may not see is not listed: then say you know nothing of that name, never that it is hidden.
+
+Pages and files from other conversations of this workspace you find with \`${listFiles.name}\`, by part of their name or of their conversation's title; it says which conversation holds each, and you can open only those of this one.
 
 ## When to use which
 
@@ -52,7 +54,7 @@ export const platformSkill: ShippedSkill = {
   name: PLATFORM_SKILL_NAME,
   title: "How this platform works",
   description:
-    "The kinds of things on this platform (agents, skills, Workflows, Apps, Pages, Data Stores, Knowledge Bases, Connections), what each is for, which to build for a request, how to find them and what you may change. Read it when the user asks what exists or what can be built, names something on the platform, or asks you to build an app, a tool or an automation.",
+    "The kinds of things on this platform (agents, skills, Workflows, Apps, Pages, Data Stores, Knowledge Bases, Connections), what each is for, which to build for a request, how to find them and the files of other conversations, and what you may change. Read it when the user asks what exists or what can be built, names something on the platform or a file from another chat, or asks you to build an app, a tool or an automation.",
   content,
   icon: "guide"
 };

@@ -1,6 +1,6 @@
 # Catalyst CLI
 
-`catalyst` is the command line tool for a Workshape Catalyst instance. It synchronizes agents and skills between a folder and an instance.
+`catalyst` is the command line tool for a Workshape Catalyst instance. It synchronizes agents and skills between a folder and an instance, and has one command for every asset operation, for every kind the instance registers (`catalyst <kind> <verb>`, `catalyst context`, `catalyst kinds`).
 
 ```sh
 npm install --global @work-shape/catalyst-cli
