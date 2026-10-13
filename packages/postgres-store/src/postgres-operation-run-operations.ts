@@ -170,7 +170,14 @@ export async function finishOperationRun(
       ...(end.status === "failed" ? { error: end.error } : {}),
       ...(end.status === "denied" ? { error: { ...end.error, denial: end.denial } } : {})
     })
-    .where(and(identity(input), eq(operationRuns.status, "running")))
+    .where(
+      and(
+        identity(input),
+        eq(operationRuns.status, "running"),
+        // The writer of an attempt that a later call took over ends nothing.
+        input.attempt === undefined ? undefined : eq(operationRuns.attempt, input.attempt)
+      )
+    )
     .returning();
   return row ? mapOperationRun(row) : undefined;
 }

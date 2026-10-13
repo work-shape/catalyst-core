@@ -154,6 +154,8 @@ export interface RunContext {
    * completes. Before-events are never held: a guardrail is asked for every call.
    */
   unrecorded?: { start: NewOperationRun; heldAfterEvents: (() => Promise<unknown>)[] };
+  /** Set once a later call took the run over: this call emits no further event of it. */
+  overtaken?: boolean;
   now(): Date;
   emit(
     name: PlatformEventName,
@@ -223,6 +225,7 @@ export function createRunContext(
             phase
           }
         );
+      if (context.overtaken) return Promise.resolve("allow");
       if (phase === "after" && context.unrecorded) {
         context.unrecorded.heldAfterEvents.push(send);
         return Promise.resolve("allow");
@@ -360,16 +363,24 @@ export async function endRun(context: RunContext, ended: OperationRunEnd): Promi
   const finished = await deps.runs.finish({
     clientInstanceId: deps.clientInstanceId,
     id: run.id,
+    attempt: run.attempt,
     end: ended
   });
-  if (!finished) {
-    // Something else ended the run meanwhile, such as the sweep for interrupted runs.
-    deps.logger.warn(
-      { operationRunId: run.id, operation: definition.name, status: ended.status },
-      "Operation run was no longer running when its call ended"
-    );
+  if (finished) return finished;
+  const current = await deps.runs.get({ clientInstanceId: deps.clientInstanceId, id: run.id });
+  if (current && current.attempt !== run.attempt) {
+    // A later call took the run under its key while this one was still on its way: this
+    // process was held up past its time. The run is that call's to end, and this one says
+    // nothing more of it: no outcome and no event.
+    context.overtaken = true;
+    return current;
   }
-  return finished ?? run;
+  // Something else ended the run meanwhile, such as the sweep for interrupted runs.
+  deps.logger.warn(
+    { operationRunId: run.id, operation: definition.name, status: ended.status },
+    "Operation run was no longer running when its call ended"
+  );
+  return run;
 }
 
 /**

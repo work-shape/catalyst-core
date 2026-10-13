@@ -195,10 +195,15 @@ export interface OperationRunStore {
    * takes no idempotency key.
    */
   recordEnded(run: EndedOperationRun): Promise<OperationRun>;
-  /** Ends a run that is still `running`. `undefined` when it is not running any more. */
+  /**
+   * Ends a run that is still `running`. `undefined` when it is not running any more, or when
+   * it is on another attempt than `attempt`: a later call took the run under its key, and
+   * only the writer of that attempt ends it. A writer names the attempt its call was given.
+   */
   finish(input: {
     clientInstanceId: ClientInstanceId;
     id: OperationRunId;
+    attempt?: number;
     end: OperationRunEnd;
   }): Promise<OperationRun | undefined>;
   findByIdempotencyKey(input: {
