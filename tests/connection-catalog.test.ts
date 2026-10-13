@@ -377,18 +377,13 @@ describe("the JSON Schema of an operation", () => {
     });
 
     expect(remote).toEqual({ ok: false });
-    // An operation with such a schema is not callable.
-    const withRemote = descriptor("revenue", {
-      inputSchema: { $ref: "https://schemas.example.test/input.json" }
-    });
-    const catalog = buildConnectionCatalog({
-      discovered: [withRemote],
-      accepted: [accepted("revenue")],
-      previous: undefined,
-      now: NOW
-    });
-    expect(statusOf(accepted("revenue"), catalog)).toEqual({ status: "unknown" });
-    expect(jsonSchemaAsZod(withRemote.inputSchema).safeParse({}).success).toBe(false);
+    // No value passes such a schema. An operation an outside system described with one is
+    // left out by the discovery and refused by a call, both in a worker thread
+    // (`connection-discovery-bounds.test.ts`, `connection-schema-check.test.ts`): the status
+    // compiles nothing an outside system wrote.
+    expect(
+      jsonSchemaAsZod({ $ref: "https://schemas.example.test/input.json" }).safeParse({}).success
+    ).toBe(false);
   });
 
   it("does not compile a malformed schema or an unknown dialect, and throws nothing", () => {

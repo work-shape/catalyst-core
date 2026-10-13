@@ -21,7 +21,11 @@ import { holdsSecret } from "./call";
 import { buildConnectionCatalog } from "./catalog";
 import { readConnection, type StoredConnection } from "./connection-reads";
 import { openConnectorContext } from "./connector-context";
-import { compileJsonSchema } from "./json-schema";
+import {
+  outsideSchemaChecker,
+  type OutsideSchemaChecker,
+  type OutsideSchemaRefusal
+} from "./schema-check";
 
 // One discovery of one Connection: ask the Connector type what the outside system offers,
 // bound the answer, and store it as the Connection's catalog. The answer is data of a system
@@ -78,6 +82,14 @@ export interface ConnectionDiscoveryResult {
   /** How many of those were left out because they held the credential. Only with `discovered`. */
   rejectedCount?: number;
   /**
+   * How many of those were left out because a schema of theirs was refused: over a bound of
+   * size, depth, `$ref` or pattern count, not compilable, or not compiled within the deadline
+   * of a check. Only with `discovered`.
+   */
+  schemaRefusedCount?: number;
+  /** Why the first of those was refused. Only where `schemaRefusedCount` is over zero. */
+  schemaRefusal?: OutsideSchemaRefusal;
+  /**
    * With `skipped`: the Connection changed while it was discovered. What was read belongs to
    * a revision that is no longer the Connection's, so nothing was written. The caller sees to
    * a discovery of the revision that is.
@@ -107,6 +119,8 @@ export interface DiscoverConnectionInput {
    */
   transaction?<Result>(write: (stores: PlatformStores) => Promise<Result>): Promise<Result>;
   logger?: Logger;
+  /** Instead of the checker of the process (`outsideSchemaChecker`). */
+  schemaChecker?: OutsideSchemaChecker;
   now?: () => Date;
   /** Instead of `CONNECTION_DISCOVERY_TIMEOUT_MS`. For tests. */
   timeoutMs?: number;
@@ -135,9 +149,21 @@ function storable(value: JsonValue): boolean {
   return Object.entries(value).every(([key, child]) => storableText(key) && storable(child));
 }
 
-/** Whether the validator can check the schema: it is within its bounds and it compiles. */
-function checkable(schema: JsonObject): boolean {
-  return compileJsonSchema(schema).ok && storable(schema);
+/**
+ * Why a listed schema is not taken, or nothing. It is measured against the bounds of a schema
+ * of an outside system first and compiled only then, in a worker thread with a deadline. A
+ * schema whose text cannot be stored is refused as one that does not compile.
+ */
+async function schemaRefusalOf(
+  schema: JsonObject,
+  checker: OutsideSchemaChecker,
+  deadline: DiscoveryDeadline
+): Promise<OutsideSchemaRefusal | undefined> {
+  const checking = checker.refusalOf(schema);
+  checking.catch(() => undefined);
+  const refusal = await Promise.race([checking, deadline.passed]);
+  if (refusal) return refusal;
+  return storable(schema) ? undefined : "schema_uncompilable";
 }
 
 /** The description as the catalog holds it. A cut never leaves half of a surrogate pair. */
@@ -264,10 +290,11 @@ function asStored(descriptor: ConnectorOperationDescriptor): ConnectorOperationD
  * by the search a call makes of its result: it would be stored in the clear and sent to a
  * model.
  *
- * Compiling a schema does not give other work a turn, and five hundred of them take seconds.
- * So the process gets a turn before each operation, and the deadline and the caller's signal
- * are asked there: requests are answered while an answer is worked on, and a discovery that
- * was stopped ends at the next operation.
+ * No schema is compiled where requests are served: each is handed to a worker thread, which is
+ * stopped where compiling one passes the deadline of a check, and that operation is left out
+ * as `schema_check_timeout`. The deadline of the discovery and the caller's signal are asked
+ * before each operation, so a discovery that was stopped ends at the next one. A discovery no
+ * thread could check for fails with `schema_check_unavailable` and the stored catalog stays.
  *
  * This bounds what is processed and stored. The answer is in memory when it arrives here:
  * bounding what is received from the outside system is the Connector type's transport.
@@ -275,11 +302,14 @@ function asStored(descriptor: ConnectorOperationDescriptor): ConnectorOperationD
 async function boundedOperations(
   discovered: readonly ConnectorOperationDescriptor[],
   secret: string | undefined,
-  deadline: DiscoveryDeadline
+  deadline: DiscoveryDeadline,
+  checker: OutsideSchemaChecker
 ): Promise<{
   operations: ConnectorOperationDescriptor[];
   leftOut: number;
   rejected: number;
+  schemaRefused: number;
+  schemaRefusal: OutsideSchemaRefusal | undefined;
 }> {
   if (discovered.length > CONNECTION_DISCOVERY_MAX_OPERATIONS) {
     throw connectionCallError("output_invalid");
@@ -297,20 +327,27 @@ async function boundedOperations(
   const operations: ConnectorOperationDescriptor[] = [];
   const names = new Set<string>();
   let rejected = 0;
+  let schemaRefused = 0;
+  let schemaRefusal: OutsideSchemaRefusal | undefined;
   for (const operation of listed) {
-    await new Promise<void>((resolve) => {
-      setImmediate(resolve);
-    });
     deadline.check();
     const { name, description, inputSchema, outputSchema } = operation;
     if (
       name.length > CONNECTION_OPERATION_NAME_MAX_LENGTH ||
       !CONNECTION_OPERATION_NAME_PATTERN.test(name) ||
       names.has(name) ||
-      !storableText(description) ||
-      !checkable(inputSchema) ||
-      (outputSchema !== undefined && !checkable(outputSchema))
+      !storableText(description)
     ) {
+      continue;
+    }
+    const refusal =
+      (await schemaRefusalOf(inputSchema, checker, deadline)) ??
+      (outputSchema === undefined
+        ? undefined
+        : await schemaRefusalOf(outputSchema, checker, deadline));
+    if (refusal) {
+      schemaRefused += 1;
+      schemaRefusal ??= refusal;
       continue;
     }
     // Both schemas are within the validator's bounds, so this serializes without surprise.
@@ -321,7 +358,13 @@ async function boundedOperations(
     names.add(name);
     operations.push(operation);
   }
-  return { operations, leftOut: discovered.length - operations.length, rejected };
+  return {
+    operations,
+    leftOut: discovered.length - operations.length,
+    rejected,
+    schemaRefused,
+    schemaRefusal
+  };
 }
 
 /** The health a failed discovery leaves, for the reasons that say the Connection is broken. */
@@ -401,14 +444,23 @@ export async function discoverConnection(
   // One deadline for the whole discovery: the wait for the answer, and bounding, compiling
   // and fingerprinting it.
   const deadline = openDeadline(input.signal, input.timeoutMs ?? CONNECTION_DISCOVERY_TIMEOUT_MS);
-  let found: { catalog: ConnectionCatalog; leftOut: number; rejected: number } | undefined;
+  let found:
+    | {
+        catalog: ConnectionCatalog;
+        leftOut: number;
+        rejected: number;
+        schemaRefused: number;
+        schemaRefusal: OutsideSchemaRefusal | undefined;
+      }
+    | undefined;
   let reason: ConnectionCallReason | undefined;
   try {
     const answer = await discoverOperations(input, connection, discover, type, deadline);
-    const { operations, leftOut, rejected } = await boundedOperations(
+    const { operations, ...counts } = await boundedOperations(
       answer.discovered,
       answer.secret,
-      deadline
+      deadline,
+      input.schemaChecker ?? outsideSchemaChecker()
     );
     const catalog = buildConnectionCatalog({
       discovered: operations,
@@ -417,7 +469,7 @@ export async function discoverConnection(
       now: (input.now?.() ?? new Date()).toISOString()
     });
     deadline.check();
-    found = { catalog, leftOut, rejected };
+    found = { catalog, ...counts };
   } catch (error) {
     // Only the reason is read. The text of the error is the type's or the outside system's.
     reason = connectionCallReasonOf(error);
@@ -464,11 +516,12 @@ export async function discoverConnection(
     if (!written) return { status: "skipped", superseded: true };
     return { status: "failed", ...(reason === undefined ? {} : { reason }) };
   }
-  const { catalog, leftOut, rejected } = found;
-  // A discovery that listed its tools reached the system with the credential.
+  const { catalog, leftOut, rejected, schemaRefused, schemaRefusal } = found;
+  // A discovery that listed its tools reached the system with the credential. The code names
+  // why an operation was left out: for the credential first, else for its schema.
   const written = await writeState({
     health: "ok",
-    lastErrorCode: rejected > 0 ? CONNECTION_DISCOVERY_REJECTED_CODE : null,
+    lastErrorCode: rejected > 0 ? CONNECTION_DISCOVERY_REJECTED_CODE : (schemaRefusal ?? null),
     catalog: {
       version: catalog.version,
       discoveredAt: catalog.discoveredAt,
@@ -479,7 +532,7 @@ export async function discoverConnection(
   if (!written) return { status: "skipped", superseded: true };
   if (leftOut > 0) {
     input.logger?.warn(
-      { connection: connectionName, leftOut, rejected },
+      { connection: connectionName, leftOut, rejected, schemaRefused, schemaRefusal },
       "A discovery listed operations that the catalog does not take"
     );
   }
@@ -487,6 +540,7 @@ export async function discoverConnection(
     status: "discovered",
     operationCount: catalog.entries.length,
     leftOutCount: leftOut,
-    ...(rejected > 0 ? { rejectedCount: rejected } : {})
+    ...(rejected > 0 ? { rejectedCount: rejected } : {}),
+    ...(schemaRefusal === undefined ? {} : { schemaRefusedCount: schemaRefused, schemaRefusal })
   };
 }

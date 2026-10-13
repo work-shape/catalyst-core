@@ -205,7 +205,8 @@ export async function appActionDefinition(
           { exposeMessage: true }
         );
       }
-      const mapped = target.inputSchema.safeParse(
+      // The schema of an operation an outside system described is checked in a worker thread.
+      const mapped = await target.inputSchema.safeParseAsync(
         applyAppActionMapping(action.input.mapping, parameters.parse(input))
       );
       if (!mapped.success) {

@@ -35,7 +35,9 @@ const REASONS: ConnectionCallReason[] = [
   "upstream_rate_limited",
   "upstream_timeout",
   "upstream_error",
-  "connection_busy"
+  "connection_busy",
+  "schema_check_timeout",
+  "schema_check_unavailable"
 ];
 
 /** What a caller can do next, as each sentence has to say it. */

@@ -12,7 +12,11 @@ import {
   type JsonValue
 } from "@vivd-catalyst/core";
 import { z } from "zod";
-import { compileJsonSchema, isJsonSchemaWithinBounds } from "./json-schema";
+import {
+  compileJsonSchema,
+  isJsonSchemaWithinBounds,
+  measureOutsideJsonSchema
+} from "./json-schema";
 
 // What a discovery leaves behind and what it makes callable. Pure: nothing here reads or
 // writes a store or opens a connection. A discovery never widens anything: a tool is callable
@@ -172,12 +176,36 @@ export function buildConnectionCatalog(input: {
   return { version: 1, discoveredAt: input.now, entries: [...entries.values()], pinned };
 }
 
-/** Whether both schemas of a descriptor can be checked. One that cannot is not callable. */
+/**
+ * Whether both schemas of a descriptor of the release can be checked. One that cannot is not
+ * callable. They are the release's own, so they are compiled here.
+ */
 function schemasCompile(descriptor: ConnectorOperationDescriptor): boolean {
   return (
     compileJsonSchema(descriptor.inputSchema).ok &&
     (descriptor.outputSchema === undefined || compileJsonSchema(descriptor.outputSchema).ok)
   );
+}
+
+/**
+ * Whether both schemas of a descriptor an outside system wrote are within the bounds of such
+ * a schema. Nothing is compiled here: that happens in a worker thread, at the discovery that
+ * stored the descriptor and again at a call (`schema-check.ts`).
+ */
+function schemasWithinOutsideBounds(descriptor: ConnectorOperationDescriptor): boolean {
+  return (
+    measureOutsideJsonSchema(descriptor.inputSchema).ok &&
+    (descriptor.outputSchema === undefined || measureOutsideJsonSchema(descriptor.outputSchema).ok)
+  );
+}
+
+/**
+ * Whether the operations of a type are described by an outside system: a type without a
+ * catalog of its own reads them at a discovery. Their schemas are untrusted and are compiled
+ * and checked in a worker thread only.
+ */
+export function describedByOutsideSystem(type: Pick<ConnectorTypeDefinition, "catalog">): boolean {
+  return type.catalog === undefined;
 }
 
 export interface ConnectionOperationState {
@@ -235,5 +263,8 @@ export function connectionOperationStatus(input: {
   if (accepted !== fingerprint) {
     return { status: "needs_review", descriptor, discoveredFingerprint: fingerprint };
   }
-  return schemasCompile(descriptor) ? { status: "ready", descriptor } : { status: "unknown" };
+  const checkable = describedByOutsideSystem(type)
+    ? schemasWithinOutsideBounds(descriptor)
+    : schemasCompile(descriptor);
+  return checkable ? { status: "ready", descriptor } : { status: "unknown" };
 }

@@ -19,6 +19,10 @@ export interface ConnectionDiscoveryOutcome {
   leftOutCount?: number;
   /** How many of those were left out because they held the Connection's credential. */
   rejectedCount?: number;
+  /** How many of those were left out because a schema of theirs was refused. */
+  schemaRefusedCount?: number;
+  /** The code of why the first of those was refused, such as `schema_too_large`. */
+  schemaRefusal?: string;
   /**
    * The Connection changed while it was discovered. Nothing was written, and a discovery of
    * the revision it has now is owed.

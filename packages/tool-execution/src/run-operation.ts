@@ -70,7 +70,7 @@ export async function runOperation(
   // The surface is asked before the input is read: a caller it does not admit learns nothing
   // of the operation's input from a refused input.
   const surface = await authorizeOrigin(call, definition, deps);
-  const input = parseInput(call, definition, runtime, surface);
+  const input = await parseInput(call, definition, runtime, surface);
   const idempotencyKey = readIdempotencyKey(call, definition);
   const resource = definition.resource(input);
   const now = deps.now ?? (() => new Date());
@@ -170,19 +170,29 @@ function withinInputDepth(input: unknown): boolean {
   return true;
 }
 
-/** The validated input, or the refusal of a call whose input no run can be started with. */
-function parseInput(
+/**
+ * The validated input, or the refusal of a call whose input no run can be started with. The
+ * schema is asked without blocking: an operation of an outside system checks its input in a
+ * worker thread, and its check can end with an error of its own instead of an answer. A caller
+ * the surface does not admit learns nothing of that either.
+ */
+async function parseInput(
   call: OperationCall,
   definition: OperationDefinition,
   runtime: OperationCallRuntime,
   surface: OperationAuthorization
-): unknown {
+): Promise<unknown> {
   const unreadable =
     runtime.unreadableInput ??
     (withinInputDepth(call.input)
       ? undefined
       : { code: "input_invalid", message: "Operation input is nested too deeply" });
-  const parsed = unreadable ? undefined : definition.inputSchema.safeParse(call.input);
+  const parsed = unreadable
+    ? undefined
+    : await definition.inputSchema.safeParseAsync(call.input).catch((error: unknown) => {
+        if (!surface.allowed) throw operationDenialError({ kind: "forbidden", ...surface });
+        throw error;
+      });
   if (parsed?.success) {
     return parsed.data;
   }

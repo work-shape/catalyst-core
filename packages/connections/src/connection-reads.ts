@@ -14,6 +14,7 @@ import {
   type PlatformStores
 } from "@vivd-catalyst/core";
 import { readConnectionCatalog } from "./catalog";
+import type { OutsideSchemaChecker } from "./schema-check";
 
 // How the operation source, a call and the Connection's page read a Connection: the active
 // revision of the asset, its runtime state and its Connector type. One Connection is two point
@@ -29,6 +30,11 @@ export interface ConnectionOperationSourceDeps {
   /** Missing while release config names no Connection: no credential can be resolved then. */
   credentials: ConnectionCredentialResolver | undefined;
   logger: Logger;
+  /**
+   * What checks by a schema an outside system wrote. Left out, the checker of the process
+   * (`outsideSchemaChecker`).
+   */
+  schemaChecker?: OutsideSchemaChecker;
 }
 
 /** One stored Connection as a reader of this package sees it. */

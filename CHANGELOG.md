@@ -1780,6 +1780,23 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- **Connections, schemas of an outside system:** a JSON Schema that an MCP server lists for a
+  tool can no longer hold the API process. Such a schema is compiled, and an input or a result
+  checked by it, in a worker thread: 2 threads per process, a check of at most 2 seconds, 500
+  compiled schemas per thread. A check that passes the deadline stops its thread, and the call
+  is refused with the new reason `schema_check_timeout` (`TIMEOUT`); a check no thread takes
+  within 5 seconds, or whose thread ends, is refused with `schema_check_unavailable`
+  (`CONFLICT`). That makes seventeen reasons in `details.reason`. A schema whose check passed
+  the deadline is refused for 30 seconds without a new check. A discovery also leaves out a
+  tool whose schema holds more than 200 `$ref`, more than 100 regular expressions or one longer
+  than 1,000 characters, beside the bounds of size and depth it had, and names why on the
+  Connection (`lastErrorCode`) and in the event `connection.discovered` (`reason` and
+  `schemaRefusedCount`): `schema_too_large`, `schema_too_deep`, `schema_too_many_refs`,
+  `schema_too_many_patterns`, `schema_pattern_too_long`, `schema_uncompilable` or
+  `schema_check_timeout`. The schemas of a Connector type's own catalog, such as `postgres`,
+  are checked as before. **Operators:** nothing to set. The package `@vivd-catalyst/connections`
+  now ships `dist/json-schema.js`, the file the threads run, beside `dist/index.js`; a build
+  that bundles the package into one file must keep it beside the bundle.
 - **Chat, attachments:** a file added to a message no longer stays on "Queued" while the
   browser tab is in the background. The composer asked for the file's state once a second
   only while the page was visible, so a file the instance had finished in two seconds still

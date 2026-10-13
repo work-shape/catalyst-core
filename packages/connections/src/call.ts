@@ -17,7 +17,7 @@ import {
   type JsonValue,
   type OperationExecutionContext
 } from "@vivd-catalyst/core";
-import { connectionOperationStatus } from "./catalog";
+import { connectionOperationStatus, describedByOutsideSystem } from "./catalog";
 import {
   readConnection,
   type ConnectionOperationSourceDeps,
@@ -25,6 +25,7 @@ import {
 } from "./connection-reads";
 import { openConnectorContext } from "./connector-context";
 import { compileJsonSchema } from "./json-schema";
+import { jsonOfCheckedValue, outsideSchemaChecker } from "./schema-check";
 
 // One call of one accepted operation of a Connection, from the point where the operations
 // layer has authorized it, resolved its policy and written its run. The order below is fixed:
@@ -406,9 +407,96 @@ function untilAborted(signal: AbortSignal): { promise: Promise<never>; stop(): v
   };
 }
 
-function issuesOf(descriptor: ConnectorOperationDescriptor, value: unknown): "input" | undefined {
-  const compiled = compileJsonSchema(descriptor.inputSchema);
-  return compiled.ok && compiled.validate(value).length === 0 ? undefined : "input";
+/** What a call found when it read its Connection. */
+interface Callable {
+  connection: StoredConnection;
+  type: ConnectorTypeDefinition;
+  descriptor: ConnectorOperationDescriptor;
+}
+
+/**
+ * A check by a schema an outside system wrote, in a worker thread. One that gives no answer
+ * is logged by the names of the Connection and the operation, never with what was checked,
+ * and leaves with its reason: `schema_check_timeout` or `schema_check_unavailable`.
+ */
+async function outsideCheck<Answer>(
+  deps: ConnectionOperationSourceDeps,
+  found: Callable,
+  checked: "input" | "output",
+  check: () => Promise<Answer>
+): Promise<Answer> {
+  try {
+    return await check();
+  } catch (error) {
+    deps.logger.warn(
+      {
+        connection: found.connection.config.name,
+        operation: found.descriptor.name,
+        checked,
+        reason: connectionCallReasonOf(error)
+      },
+      "A check by the schema of a Connection operation gave no answer"
+    );
+    throw error;
+  }
+}
+
+/**
+ * Refuses an input that does not fit the operation's schema. For an operation an outside
+ * system described, the output schema is compiled here too, before anything is sent: a call
+ * whose answer could not be checked is not made.
+ */
+async function checkInput(
+  deps: ConnectionOperationSourceDeps,
+  found: Callable,
+  input: unknown
+): Promise<void> {
+  const { descriptor, type } = found;
+  if (!describedByOutsideSystem(type)) {
+    const compiled = compileJsonSchema(descriptor.inputSchema);
+    if (!compiled.ok || compiled.validate(input).length > 0) {
+      throw connectionCallError("input_invalid");
+    }
+    return;
+  }
+  const serialized = jsonOfCheckedValue(input);
+  if (serialized === undefined) throw connectionCallError("input_invalid");
+  const checker = deps.schemaChecker ?? outsideSchemaChecker();
+  const { outputSchema } = descriptor;
+  const issues = await outsideCheck(deps, found, "input", async () => {
+    const fits = await checker.check(descriptor.inputSchema, serialized);
+    if (fits === "uncompilable") return fits;
+    if (outputSchema !== undefined && (await checker.check(outputSchema)) === "uncompilable") {
+      return "uncompilable";
+    }
+    return fits;
+  });
+  // A stored schema no thread compiles is no operation, as one the catalog never took.
+  if (issues === "uncompilable") throw connectionCallError("operation_unknown");
+  if (issues.length > 0) throw connectionCallError("input_invalid");
+}
+
+/** Refuses a result that does not fit the operation's output schema. */
+async function checkOutput(
+  deps: ConnectionOperationSourceDeps,
+  found: Callable,
+  result: JsonValue,
+  serialized: string
+): Promise<void> {
+  const { outputSchema } = found.descriptor;
+  if (outputSchema === undefined) return;
+  if (!describedByOutsideSystem(found.type)) {
+    const compiled = compileJsonSchema(outputSchema);
+    if (!compiled.ok || compiled.validate(result).length > 0) {
+      throw connectionCallError("output_invalid");
+    }
+    return;
+  }
+  const checker = deps.schemaChecker ?? outsideSchemaChecker();
+  const issues = await outsideCheck(deps, found, "output", () =>
+    checker.check(outputSchema, serialized)
+  );
+  if (issues === "uncompilable" || issues.length > 0) throw connectionCallError("output_invalid");
 }
 
 /** The Connection and the operation of a call as the source resolved them. */
@@ -428,11 +516,7 @@ export interface ConnectionCallTarget {
 function callable(
   connection: StoredConnection | undefined,
   target: ConnectionCallTarget
-): {
-  connection: StoredConnection;
-  type: ConnectorTypeDefinition;
-  descriptor: ConnectorOperationDescriptor;
-} {
+): Callable {
   if (
     !connection ||
     connection.assetId !== target.assetId ||
@@ -548,7 +632,7 @@ async function call(
       )?.effect;
     }
     const found = callable(stored, target);
-    if (issuesOf(found.descriptor, input)) throw connectionCallError("input_invalid");
+    await checkInput(deps, found, input);
     return found;
   };
   const first = await read();
@@ -562,11 +646,8 @@ async function call(
     // The Connection is read again now that the call has its slot, so it runs on the revision
     // and the state of that moment whether it waited or not. The read is inside the deadline
     // of the call: a store that does not answer costs the slot that long and no longer.
-    const { connection, type, descriptor } = await current(
-      read(),
-      aborted.promise,
-      deadline.signal
-    );
+    const found = await current(read(), aborted.promise, deadline.signal);
+    const { connection, type } = found;
     let result: JsonValue;
     let secret: string | undefined;
     try {
@@ -608,12 +689,7 @@ async function call(
     if (secret !== undefined && holdsSecret(serialized, secret)) {
       throw connectionCallError("output_rejected");
     }
-    if (descriptor.outputSchema !== undefined) {
-      const compiled = compileJsonSchema(descriptor.outputSchema);
-      if (!compiled.ok || compiled.validate(result).length > 0) {
-        throw connectionCallError("output_invalid");
-      }
-    }
+    await checkOutput(deps, found, result, serialized);
     return result;
   } finally {
     aborted.stop();

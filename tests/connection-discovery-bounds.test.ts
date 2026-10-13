@@ -3,6 +3,9 @@ import {
   CONNECTION_DISCOVERY_DESCRIPTION_MAX_CHARS,
   CONNECTION_DISCOVERY_MAX_OPERATIONS,
   CONNECTION_DISCOVERY_TIMEOUT_MS,
+  OUTSIDE_SCHEMA_MAX_PATTERNS,
+  OUTSIDE_SCHEMA_MAX_REFS,
+  OUTSIDE_SCHEMA_PATTERN_MAX_CHARS,
   fingerprintOperation
 } from "@vivd-catalyst/connections";
 import { type ConnectorOperationDescriptor } from "@vivd-catalyst/core";
@@ -43,7 +46,10 @@ describe("what a discovery takes from an outside system", () => {
     expect(await discoverDirectly(w)).toEqual({
       status: "discovered",
       operationCount: 2,
-      leftOutCount: 6
+      leftOutCount: 6,
+      // The two whose schema no thread compiles are counted by the code of that.
+      schemaRefusedCount: 2,
+      schemaRefusal: "schema_uncompilable"
     });
 
     const { catalog } = await storedState(instance);
@@ -220,6 +226,63 @@ describe("what a discovery takes from an outside system", () => {
       }
     ]);
     expect(findLeak(await dumpDatabaseText(), w.token)).toBeUndefined();
+  });
+
+  // Fails without the change: nothing counted the `$ref` or the expressions of a listed
+  // schema, such an operation was registered, and nothing named why another was left out.
+  it("refuses a schema over a bound at the discovery, by a named code", async () => {
+    const w = world();
+    const instance = await w.start();
+    const expressions = Object.fromEntries(
+      Array.from({ length: OUTSIDE_SCHEMA_MAX_PATTERNS + 1 }, (_unused, index) => [
+        `field_${index}`,
+        { type: "string", pattern: "^a$" }
+      ])
+    );
+    const references = Object.fromEntries(
+      Array.from({ length: OUTSIDE_SCHEMA_MAX_REFS + 1 }, (_unused, index) => [
+        `field_${index}`,
+        { $ref: "#/$defs/text" }
+      ])
+    );
+    w.connector.discover = () =>
+      Promise.resolve([
+        listedOperation("lookup", {
+          inputSchema: { type: "object", properties: expressions }
+        }),
+        listedOperation("list", {
+          outputSchema: {
+            $defs: { text: { type: "string" } },
+            type: "object",
+            properties: references
+          }
+        }),
+        listedOperation("long", {
+          inputSchema: {
+            type: "string",
+            pattern: "a".repeat(OUTSIDE_SCHEMA_PATTERN_MAX_CHARS + 1)
+          }
+        }),
+        listedOperation("third")
+      ]);
+
+    await runJobs(instance);
+
+    const { state, catalog } = await storedState(instance);
+    expect(required(catalog).entries.map((entry) => entry.name)).toEqual(["third"]);
+    // The code of the first one refused, on the Connection and in the event. No schema.
+    expect(state).toMatchObject({ health: "ok", lastErrorCode: "schema_too_many_patterns" });
+    expect(await statuses(instance)).toEqual({ lookup: "unknown", list: "unknown" });
+    const audited = await auditEvents(instance);
+    expect(audited).toMatchObject([
+      {
+        type: "connection.discovered",
+        status: "success",
+        reason: "schema_too_many_patterns",
+        metadata: { operationCount: 1, leftOutCount: 3, rejectedCount: 0, schemaRefusedCount: 3 }
+      }
+    ]);
+    expect(JSON.stringify(audited)).not.toMatch(/field_|\^a\$/u);
   });
 
   // Fails without the change: every schema of an answer was compiled in one turn of the

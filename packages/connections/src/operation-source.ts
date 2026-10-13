@@ -6,6 +6,7 @@ import {
   exposureOfOrigin,
   parseConnectionOperationName,
   type ConnectionOperationConfig,
+  type ConnectorOperationDescriptor,
   type DataToolDescriptor,
   type DataToolSource,
   type JsonValue,
@@ -25,14 +26,18 @@ import {
   callConnectionOperation,
   connectionCallLimits
 } from "./call";
-import { connectionOperationStatus, type ConnectionOperationState } from "./catalog";
+import {
+  connectionOperationStatus,
+  describedByOutsideSystem,
+  type ConnectionOperationState
+} from "./catalog";
 import {
   readConnection,
   readConnections,
   type ConnectionOperationSourceDeps,
   type StoredConnection
 } from "./connection-reads";
-import { jsonSchemaAsZod } from "./json-schema";
+import { jsonSchemaAsZod, outsideJsonSchemaAsZod, outsideSchemaChecker } from "./schema-check";
 
 export type { ConnectionOperationSourceDeps } from "./connection-reads";
 
@@ -140,6 +145,11 @@ function isCallable(connection: StoredConnection, state: ConnectionOperationStat
  * one, so that its call is authorized, recorded and refused with the reason. Such a
  * definition reads any input: a schema nobody accepted is never used to validate and never
  * told to a caller. `execute` refuses it before anything else happens.
+ *
+ * The input schema of an operation an outside system described is checked in a worker thread,
+ * so the definition's `inputSchema` is parsed with `safeParseAsync`. A check that is cut off
+ * rejects the parse with its reason and is logged here by the names of the Connection and the
+ * operation, never with the input.
  */
 function definitionOf(
   deps: ConnectionOperationSourceDeps,
@@ -169,7 +179,7 @@ function definitionOf(
     authorize: (_input, context) => authorizeCall(connection, operation, context),
     scope: null,
     auth: "principal",
-    inputSchema: descriptor ? jsonSchemaAsZod(descriptor.inputSchema) : z.unknown(),
+    inputSchema: inputSchemaOf(deps, connection, operation, descriptor),
     // The result is checked inside the call, where a failure has a reason of its own.
     outputSchema: z.unknown(),
     resource: () => resource,
@@ -177,6 +187,28 @@ function definitionOf(
     timeoutMs: limits.slotWaitMs + limits.callTimeoutMs + CONNECTION_RUN_GRACE_MS,
     execute: (input, context) => callConnectionOperation(deps, slots, target, input, context)
   };
+}
+
+function inputSchemaOf(
+  deps: ConnectionOperationSourceDeps,
+  connection: StoredConnection,
+  operation: ConnectionOperationConfig,
+  descriptor: ConnectorOperationDescriptor | undefined
+): z.ZodType {
+  if (!descriptor) return z.unknown();
+  if (!connection.type || !describedByOutsideSystem(connection.type)) {
+    return jsonSchemaAsZod(descriptor.inputSchema);
+  }
+  return outsideJsonSchemaAsZod(
+    descriptor.inputSchema,
+    deps.schemaChecker ?? outsideSchemaChecker(),
+    (reason) => {
+      deps.logger.warn(
+        { connection: connection.config.name, operation: operation.name, checked: "input", reason },
+        "A check by the schema of a Connection operation gave no answer"
+      );
+    }
+  );
 }
 
 /**

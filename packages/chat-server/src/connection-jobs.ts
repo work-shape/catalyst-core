@@ -152,19 +152,21 @@ export function createConnectionDiscoveryJobs(options: ConnectionDiscoveryJobOpt
           if (outcome.status === "discovered") {
             // What was found is counted. No name, description or schema of it is recorded.
             // An operation left out for the credential gives the event its fixed reason, by
-            // which the timeline shows it.
+            // which the timeline shows it. One left out for its schema gives the code of that.
             const rejected = (outcome.rejectedCount ?? 0) > 0;
+            const reason = rejected ? "output_rejected" : outcome.schemaRefusal;
             await options.auditRecorder.record({
               type: "connection.discovered",
               status: "success",
-              ...(rejected ? { reason: "output_rejected" } : {}),
+              ...(reason === undefined ? {} : { reason }),
               subject: connectionName,
               correlationId: job.correlationId,
               metadata: {
                 connectionName,
                 operationCount: outcome.operationCount ?? 0,
                 leftOutCount: outcome.leftOutCount ?? 0,
-                rejectedCount: outcome.rejectedCount ?? 0
+                rejectedCount: outcome.rejectedCount ?? 0,
+                schemaRefusedCount: outcome.schemaRefusedCount ?? 0
               }
             });
             return;

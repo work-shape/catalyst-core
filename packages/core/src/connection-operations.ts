@@ -137,7 +137,14 @@ export const CONNECTION_CALL_REASONS = {
   /** The outside system reported a failure. Its text is not passed on. */
   upstream_error: "CONFLICT",
   /** Every slot of the Connection stayed taken for as long as a call waits for one. */
-  connection_busy: "CONFLICT"
+  connection_busy: "CONFLICT",
+  /**
+   * Checking the input or the result by the schema the outside system gave the operation took
+   * longer than a check may. The check was stopped.
+   */
+  schema_check_timeout: "TIMEOUT",
+  /** No check by the outside system's schema could be made: none was free, or its thread ended. */
+  schema_check_unavailable: "CONFLICT"
 } as const satisfies Record<string, AppErrorCode>;
 
 export type ConnectionCallReason = keyof typeof CONNECTION_CALL_REASONS;
@@ -158,7 +165,9 @@ const CONNECTION_CALL_MESSAGES: Record<ConnectionCallReason, string> = {
   upstream_rate_limited: "the outside system limits the rate of calls",
   upstream_timeout: "the outside system did not answer in time",
   upstream_error: "the outside system reported a failure",
-  connection_busy: "too many calls of the Connection are running"
+  connection_busy: "too many calls of the Connection are running",
+  schema_check_timeout: "the check against the operation's schema took too long and was stopped",
+  schema_check_unavailable: "the check against the operation's schema could not be made now"
 };
 
 /**
@@ -230,7 +239,16 @@ const CONNECTION_CALL_SENTENCES: Record<
       : `${c} did not answer in time. If the action changes something, it is not known whether the change happened, so check before trying again. If it keeps failing, an administrator can check it under ${WHERE}.`,
   upstream_error: (c) =>
     `The outside system behind ${c} reported an error. Trying again later may work. If it keeps failing, an administrator can check it under ${WHERE}.`,
-  connection_busy: (c) => `Too many calls of ${c} are waiting right now. Try again in a moment.`
+  connection_busy: (c) => `Too many calls of ${c} are waiting right now. Try again in a moment.`,
+  // The check of the input stops a call before it is sent, the check of the answer after.
+  schema_check_timeout: (c, effect) =>
+    effect === "reading"
+      ? `Checking this action of ${c} against its description took too long, so the call was stopped. Trying again will not help for now. An administrator can check the action under ${WHERE}.`
+      : `Checking this action of ${c} against its description took too long, so the call was stopped. If the action changes something, the change may have happened, so check before trying again. An administrator can check the action under ${WHERE}.`,
+  schema_check_unavailable: (c, effect) =>
+    effect === "reading"
+      ? `This action of ${c} could not be checked against its description right now. Try again in a moment.`
+      : `This action of ${c} could not be checked against its description right now. If the action changes something, the change may have happened, so check before trying again.`
 };
 
 /** The display name as one word group of a sentence: one line, no control character, bounded. */
