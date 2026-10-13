@@ -319,6 +319,24 @@ describe("an App made from a Page", () => {
     expect(await stored(old, "old")).toBeUndefined();
   });
 
+  it("refuses with a reason an operator can act on when the worker's disk is full", async () => {
+    const full: AssetRepoCommitRunner = async () => ({
+      status: "refused",
+      code: "no_space",
+      message: "The worker that makes commits ran out of disk space."
+    });
+    const t = await setup({ commits: full });
+
+    const refused = await create(t, await t.storePage("no room"), "full");
+
+    expectStatus(refused, 409);
+    expect(errorSchema.parse(refused.json()).error).toMatchObject({
+      message: "The worker that makes commits ran out of disk space.",
+      details: { reason: "no_space" }
+    });
+    expect(await stored(t, "full")).toBeUndefined();
+  });
+
   it("refuses on an instance where no worker takes commits", async () => {
     const idle = await setup({ commits: false, worker: false });
     const unserved = await create(idle, await idle.storePage("no worker"), "idle");

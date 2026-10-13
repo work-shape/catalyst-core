@@ -1,15 +1,19 @@
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
-import { chmod, lstat, mkdir, mkdtemp, open, rm, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, open, rm, statfs, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
   ASSET_REPO_BUNDLES_DIRECTORY,
   ASSET_REPO_COMMAND,
+  ASSET_REPO_COMMIT_DISK_BYTES,
   ASSET_REPO_FOLDER_DIRECTORY,
   ASSET_REPO_MAX_BUNDLE_BYTES,
+  ASSET_REPO_NO_SPACE_MARK,
+  ASSET_REPO_NO_SPACE_MESSAGE,
   ASSET_REPO_OUTPUT_DIRECTORY,
   ASSET_REPO_REQUEST_FILE,
   ASSET_REPO_RESULT_FILE,
+  ASSET_REPO_WORK_DIRECTORY,
   treeRefusal,
   type AssetRepoRefusal,
   type CommitFolderRequest
@@ -30,6 +34,14 @@ import { removeStalePageBuilds } from "./page-build-sandbox";
 // The worker writes the request, the bundles and the files, runs the fixed command, and reads
 // `out/` back as data it does not trust: the result has to have its form, and the bundle has
 // to be a regular file with the size and the hash the result names.
+//
+// Everything a commit takes is on the disk of the worker, below the one directory the
+// container mounts: what the worker wrote and `work/`, where the command keeps its
+// repository and its copies. Nothing of it is in the `/tmp` of the sandbox, a tmpfs of 64 MiB
+// that counts against the memory of the container. So the memory of the container holds git
+// and the command alone, which read a file of at most `ASSET_REPO_MAX_FILE_BYTES` at a time,
+// and the room of a commit is `ASSET_REPO_COMMIT_DISK_BYTES` of disk, which is asked for
+// before the container starts.
 
 /** How long one commit may take. The command ends each git process after a minute itself. */
 export const ASSET_REPO_COMMAND_TIMEOUT_MS = 2 * 60 * 1000;
@@ -128,6 +140,13 @@ export type AssetRepoCommitRunner = (
 ) => Promise<AssetRepoCommitOutcome>;
 
 class OutputRefused extends Error {}
+
+/** The disk of the worker has no room for the commit: a refusal an operator can act on. */
+const NO_SPACE: AssetRepoRefusal = {
+  status: "refused",
+  code: "no_space",
+  message: ASSET_REPO_NO_SPACE_MESSAGE
+};
 
 /** Reads a file the command wrote: a regular file of at most `maxBytes`, never through a link. */
 async function readWritten(path: string, maxBytes: number, what: string): Promise<Uint8Array> {
@@ -232,6 +251,11 @@ export function createSandboxAssetRepo(options: SandboxAssetRepoOptions): AssetR
       return { status: "refused", ...refusal };
     }
     await mkdir(options.tempRoot, { recursive: true });
+    // A commit is not started where the disk cannot hold the largest one.
+    const disk = await statfs(options.tempRoot);
+    if (disk.bavail * disk.bsize < ASSET_REPO_COMMIT_DISK_BYTES) {
+      return NO_SPACE;
+    }
     if (Date.now() >= nextSweep) {
       nextSweep = Date.now() + ASSET_REPO_SWEEP_INTERVAL_MS;
       removeStalePageBuilds({
@@ -255,8 +279,11 @@ export function createSandboxAssetRepo(options: SandboxAssetRepoOptions): AssetR
       await mkdir(folder, { recursive: true });
       await mkdir(bundlesDirectory);
       await mkdir(outputDirectory);
+      const workDirectory = join(directory, ASSET_REPO_WORK_DIRECTORY);
+      await mkdir(workDirectory);
       // The command may run as another user than the worker.
       await chmod(outputDirectory, 0o777);
+      await chmod(workDirectory, 0o777);
       const bundles = input.bundles.map((bundle, index) => ({
         file: `${String(index).padStart(6, "0")}.bundle`,
         tip: bundle.tip,
@@ -327,6 +354,9 @@ export function createSandboxAssetRepo(options: SandboxAssetRepoOptions): AssetR
           detail: result.stderrPreview
         };
       }
+      if (result.exitCode !== 0 && result.stderrPreview.includes(ASSET_REPO_NO_SPACE_MARK)) {
+        return NO_SPACE;
+      }
       if (result.exitCode !== 0) {
         return {
           status: "failed",
@@ -347,6 +377,10 @@ export function createSandboxAssetRepo(options: SandboxAssetRepoOptions): AssetR
     } catch (error) {
       if (error instanceof OutputRefused) {
         return { status: "failed", reason: "crashed", message: error.message };
+      }
+      // The disk filled while the worker wrote the files of the commit.
+      if (error instanceof Error && "code" in error && error.code === "ENOSPC") {
+        return NO_SPACE;
       }
       throw error;
     } finally {

@@ -179,6 +179,14 @@ function requestRefusal(request: AssetRepoCommitRequest): Refused | undefined {
   return undefined;
 }
 
+function historyTooLarge(bytes: number): Refused {
+  return {
+    status: "refused",
+    code: "history_too_large",
+    message: `The repository would hold ${bytes} bytes of history. A repository takes at most ${ASSET_REPO_MAX_BUNDLE_BYTES} (ASSET_REPO_MAX_BUNDLE_BYTES). Nothing was saved.`
+  };
+}
+
 export interface AssetRepoJobsOptions {
   clientInstanceId: ClientInstanceId;
   stores: PlatformStores;
@@ -228,6 +236,13 @@ export function createAssetRepoJobs(options: AssetRepoJobsOptions): {
       request.baseCommit === null
         ? []
         : await saves.listAssetRepoBundles({ clientInstanceId, assetId });
+    // A save reads every bundle of the ledger: the new commit is made in a repository that
+    // holds the whole history. What that may weigh is the limit of a repository, so the room
+    // a save needs does not grow past it however long the history is.
+    const history = ledger.reduce((sum, row) => sum + row.bytes, 0);
+    if (history > ASSET_REPO_MAX_BUNDLE_BYTES) {
+      return historyTooLarge(history);
+    }
     if (request.baseCommit !== null && ledger.length === 0) {
       return {
         status: "refused",
@@ -299,6 +314,10 @@ export function createAssetRepoJobs(options: AssetRepoJobsOptions): {
       return { status: "failed", reason: outcome.reason, message: outcome.message };
     }
     const { sha256, bytes, kind, prerequisite } = outcome.bundle;
+    // The bundle of this save would be part of the history every later save reads.
+    if (history + bytes.byteLength > ASSET_REPO_MAX_BUNDLE_BYTES) {
+      return historyTooLarge(history + bytes.byteLength);
+    }
     const bundle: AssetRepoSaveBundle = {
       objectKey: assetRepoBundleObjectKey({ assetId, commit: outcome.commit, sha256 }),
       kind,

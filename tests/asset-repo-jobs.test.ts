@@ -10,6 +10,7 @@ import {
   createSandboxAssetRepo,
   type AssetRepoCommitRunner
 } from "@vivd-catalyst/chat-server";
+import { ASSET_REPO_MAX_BUNDLE_BYTES } from "@vivd-catalyst/asset-repo";
 import {
   createPlatformId,
   readObjectBytes,
@@ -73,7 +74,13 @@ describe("the commit of a save of an asset's repository as a job", () => {
 
   function arrange(
     label: string,
-    options: { worker?: boolean; now?: () => Date; unclaimedMs?: number } = {}
+    options: {
+      worker?: boolean;
+      now?: () => Date;
+      unclaimedMs?: number;
+      /** Makes the commits in place of the command. */
+      commit?: AssetRepoCommitRunner;
+    } = {}
   ) {
     const clientInstanceId = db.clientInstance(label);
     const assetId = createPlatformId("cfga");
@@ -86,7 +93,7 @@ describe("the commit of a save of an asset's repository as a job", () => {
     let commits = 0;
     const commit: AssetRepoCommitRunner = (input) => {
       commits += 1;
-      return sandboxed(input);
+      return (options.commit ?? sandboxed)(input);
     };
     const jobs = createAssetRepoJobs({
       clientInstanceId,
@@ -357,6 +364,33 @@ describe("the commit of a save of an asset's repository as a job", () => {
       (await save({ ...large, files: file ? [{ ...file, byteSize: 3 * 1024 * 1024 }] : [] })).result
     ).toMatchObject({ status: "refused", code: "file_too_large", path: "c.txt" });
   }, 60_000);
+
+  it("refuses a save that would leave more history than a repository takes, and puts nothing", async () => {
+    const { objects, folder, save, rows } = arrange("history", {
+      commit: async () => ({
+        status: "committed",
+        commit: "a".repeat(40),
+        tree: "b".repeat(40),
+        files: 1,
+        bundle: {
+          kind: "full",
+          prerequisite: null,
+          sha256: "c".repeat(64),
+          bytes: new Uint8Array(ASSET_REPO_MAX_BUNDLE_BYTES + 1)
+        }
+      })
+    });
+
+    const { result } = await save(await folder({ "a.txt": "1" }, null));
+
+    expect(result).toMatchObject({
+      status: "refused",
+      code: "history_too_large",
+      message: expect.stringContaining("ASSET_REPO_MAX_BUNDLE_BYTES")
+    });
+    expect(objects.keys().filter((key) => key.endsWith(".bundle"))).toEqual([]);
+    expect(await rows()).toMatchObject([{ state: "pending", object_key: null }]);
+  });
 
   it("says that no worker takes commits, and the run can try again", async () => {
     const waiting = arrange("no-worker", { worker: false, unclaimedMs: 100 });

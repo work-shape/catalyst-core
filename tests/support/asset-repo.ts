@@ -11,6 +11,7 @@ import {
   ASSET_REPO_OUTPUT_DIRECTORY,
   ASSET_REPO_REQUEST_FILE,
   ASSET_REPO_RESULT_FILE,
+  ASSET_REPO_WORK_DIRECTORY,
   type CommitFolderResult,
   type MaterialiseResult
 } from "@vivd-catalyst/asset-repo";
@@ -96,6 +97,7 @@ export async function commitFolder(
   const folder = join(directory, ASSET_REPO_FOLDER_DIRECTORY);
   await mkdir(folder);
   await mkdir(join(directory, ASSET_REPO_OUTPUT_DIRECTORY));
+  await mkdir(join(directory, ASSET_REPO_WORK_DIRECTORY));
   await mkdir(join(directory, ASSET_REPO_BUNDLES_DIRECTORY));
   for (const [path, content] of Object.entries(input.files)) {
     await mkdir(dirname(join(folder, path)), { recursive: true });
@@ -150,6 +152,7 @@ export async function materialise(
 ): Promise<{ result: MaterialiseResult; directory: string }> {
   const directory = await mkdtemp(join(scratch, "materialise-"));
   await mkdir(join(directory, ASSET_REPO_OUTPUT_DIRECTORY));
+  await mkdir(join(directory, ASSET_REPO_WORK_DIRECTORY));
   await mkdir(join(directory, ASSET_REPO_BUNDLES_DIRECTORY));
   for (const bundle of input.bundles) {
     if (!input.withhold?.includes(bundle.file)) {

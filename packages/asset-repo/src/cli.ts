@@ -3,15 +3,18 @@ import { lstat, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/pr
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { commitFolder } from "./commit-folder";
-import { createRepository, gitVersion, isSupportedGit, MINIMUM_GIT_VERSION } from "./git";
+import { createRepository, GitError, gitVersion, isSupportedGit, MINIMUM_GIT_VERSION } from "./git";
 import {
   ASSET_REPO_BUNDLES_DIRECTORY,
   ASSET_REPO_FOLDER_DIRECTORY,
   ASSET_REPO_MAX_REQUEST_BYTES,
+  ASSET_REPO_NO_SPACE_MARK,
+  ASSET_REPO_NO_SPACE_MESSAGE,
   ASSET_REPO_OUTPUT_DIRECTORY,
   ASSET_REPO_REPOSITORY_DIRECTORY,
   ASSET_REPO_REQUEST_FILE,
-  ASSET_REPO_RESULT_FILE
+  ASSET_REPO_RESULT_FILE,
+  ASSET_REPO_WORK_DIRECTORY
 } from "./limits";
 import { applyBundles, Refused, writeLedgerRefs } from "./materialise";
 import {
@@ -40,9 +43,17 @@ async function readRequest(directory: string): Promise<unknown> {
   return parsed;
 }
 
-/** Runs one sub-command in a scratch directory of its own, which is removed after it. */
-async function withScratch<Result>(run: (scratch: string) => Promise<Result>): Promise<Result> {
-  const scratch = await mkdtemp(join(tmpdir(), "catalyst-asset-repo-"));
+/**
+ * Runs one sub-command in a scratch directory of its own below `parent`, which is removed
+ * after it. A commit and a repository are made below the work directory the worker made in
+ * the command's directory: what they take is bounded by the limits of a repository, and the
+ * `/tmp` of the sandbox is smaller than that.
+ */
+async function withScratch<Result>(
+  parent: string,
+  run: (scratch: string) => Promise<Result>
+): Promise<Result> {
+  const scratch = await mkdtemp(join(parent, "catalyst-asset-repo-"));
   try {
     return await run(scratch);
   } finally {
@@ -52,7 +63,7 @@ async function withScratch<Result>(run: (scratch: string) => Promise<Result>): P
 
 async function runCommitFolder(directory: string): Promise<CommitFolderResult> {
   const request = parseCommitFolderRequest(await readRequest(directory));
-  return withScratch(async (scratch) =>
+  return withScratch(join(directory, ASSET_REPO_WORK_DIRECTORY), async (scratch) =>
     commitFolder({
       repository: await createRepository(join(scratch, "repo.git"), scratch),
       request,
@@ -80,7 +91,7 @@ async function runMaterialise(directory: string): Promise<MaterialiseResult> {
       ASSET_REPO_REPOSITORY_DIRECTORY
     );
   }
-  return withScratch(async (scratch) => {
+  return withScratch(join(directory, ASSET_REPO_WORK_DIRECTORY), async (scratch) => {
     const repository = await createRepository(target, scratch);
     await applyBundles(
       repository,
@@ -110,7 +121,7 @@ async function check(): Promise<void> {
       `catalyst-asset-repo needs git ${MINIMUM_GIT_VERSION.join(".")} or later on its path and found ${version ? version.join(".") : "none"}`
     );
   }
-  await withScratch(async (scratch) => {
+  await withScratch(tmpdir(), async (scratch) => {
     const directory = join(scratch, "check");
     const folder = join(directory, ASSET_REPO_FOLDER_DIRECTORY);
     const output = join(directory, ASSET_REPO_OUTPUT_DIRECTORY);
@@ -153,6 +164,14 @@ async function check(): Promise<void> {
   );
 }
 
+/** Whether the command or git ended because the disk it writes to is full. */
+function isOutOfSpace(error: unknown): boolean {
+  if (error instanceof GitError) {
+    return /no space left on device|out of diskspace/iu.test(error.stderr);
+  }
+  return error instanceof Error && "code" in error && error.code === "ENOSPC";
+}
+
 async function main(): Promise<void> {
   const [command, target] = process.argv.slice(2);
   if (command === "--version") {
@@ -173,14 +192,19 @@ async function main(): Promise<void> {
       ? runCommitFolder(directory)
       : runMaterialise(directory));
   } catch (error) {
-    if (!(error instanceof Refused) && !(error instanceof RequestError)) {
+    if (isOutOfSpace(error)) {
+      // Said on the error stream too: with a full disk the result below may not be written.
+      process.stderr.write(`${ASSET_REPO_NO_SPACE_MARK}\n`);
+      result = { status: "refused", code: "no_space", message: ASSET_REPO_NO_SPACE_MESSAGE };
+    } else if (error instanceof Refused || error instanceof RequestError) {
+      const refusal: AssetRepoRefusal =
+        error instanceof Refused
+          ? error.refusal
+          : { status: "refused", code: "request_invalid", message: error.message };
+      result = refusal;
+    } else {
       throw error;
     }
-    const refusal: AssetRepoRefusal =
-      error instanceof Refused
-        ? error.refusal
-        : { status: "refused", code: "request_invalid", message: error.message };
-    result = refusal;
   }
   await writeFile(
     join(directory, ASSET_REPO_OUTPUT_DIRECTORY, ASSET_REPO_RESULT_FILE),

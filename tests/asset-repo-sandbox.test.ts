@@ -1,12 +1,14 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createSandboxAssetRepo, type AssetRepoCommitOutcome } from "@vivd-catalyst/chat-server";
+import { ASSET_REPO_MAX_TREE_BYTES } from "@vivd-catalyst/asset-repo";
 import {
   DockerWorkspaceCommandProcessExecutor,
-  LocalWorkspaceCommandProcessExecutor
+  LocalWorkspaceCommandProcessExecutor,
+  type WorkspaceCommandProcessExecutor
 } from "@vivd-catalyst/tool-execution";
 import { assetRepoCommandFromSource } from "./support/asset-repo";
 
@@ -37,6 +39,14 @@ const request = (base: string | null, time = 1_760_000_000) => ({
   message: "Save rates"
 });
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
+
+const MIB = 1024 * 1024;
+/** `count` files of `bytes` random bytes each: nothing of them compresses. */
+const incompressible = (count: number, bytes: number) =>
+  Array.from({ length: count }, (_, index) => ({
+    path: `data/${String(index).padStart(3, "0")}.bin`,
+    bytes: new Uint8Array(randomBytes(bytes))
+  }));
 
 function committed(outcome: AssetRepoCommitOutcome) {
   if (outcome.status !== "committed") {
@@ -72,6 +82,50 @@ const claimed = (bundle: { sha256: string; bytes: number }) =>
   });
 
 describe("a commit to an asset's repository in the sandbox", () => {
+  it("refuses a tree over the cap by name before the sandbox starts", async () => {
+    let started = 0;
+    const sandbox: WorkspaceCommandProcessExecutor = {
+      execute() {
+        started += 1;
+        throw new Error("The sandbox was started");
+      }
+    };
+    const run = createSandboxAssetRepo({ sandbox, tempRoot });
+
+    const outcome = await run({
+      id: "over-cap",
+      request: request(null),
+      files: incompressible(ASSET_REPO_MAX_TREE_BYTES / MIB + 1, MIB),
+      bundles: [],
+      signal: signal()
+    });
+
+    expect(outcome).toMatchObject({ status: "refused", code: "tree_too_large" });
+    expect(started).toBe(0);
+  });
+
+  it("answers a command that ran out of disk as a refusal an operator can act on", async () => {
+    const full = await fake(
+      "full",
+      `process.stderr.write("catalyst-asset-repo: no space\\n"); process.exit(1);`
+    );
+    expect(
+      await (
+        await local(full)
+      )({
+        id: "full",
+        request: request(null),
+        files: files({ "a.txt": "a" }),
+        bundles: [],
+        signal: signal()
+      })
+    ).toMatchObject({
+      status: "refused",
+      code: "no_space",
+      message: expect.stringContaining("ran out of disk space")
+    });
+  });
+
   it("writes the folder in, runs the command and reads the commit and its bundle back", async () => {
     const run = await local();
     const first = committed(
@@ -339,6 +393,57 @@ describe.skipIf(!runnerImage)("a commit to an asset's repository in the runner i
     );
     expect(here.commit).toBe(first.commit);
   }, 120_000);
+
+  // A Page at its cap (25 MiB) and an App at the cap of a repository's tree (50 MiB), of bytes
+  // that do not compress: the repository, the copies and the bundle of each are larger than
+  // the 64 MiB `/tmp` of the sandbox, and the container has 1 GiB of memory.
+  it.each([
+    { name: "a Page at its cap", count: 25, bytes: MIB },
+    { name: "a tree at the cap of a repository", count: 25, bytes: 2 * MIB }
+  ])(
+    "commits $name of incompressible bytes, and a second save on top of it",
+    async ({ count, bytes }) => {
+      const run = container();
+      const tree = incompressible(count, bytes);
+      const first = committed(
+        await run({
+          id: `cap-first-${count * bytes}`,
+          request: request(null),
+          files: tree,
+          bundles: [],
+          signal: signal()
+        })
+      );
+      expect(first.files).toBe(count);
+      expect(first.bundle.bytes.byteLength).toBeGreaterThan(count * bytes);
+
+      // The second save reads the whole history and changes one file.
+      const [changed, ...rest] = tree;
+      const second = committed(
+        await run({
+          id: `cap-second-${count * bytes}`,
+          request: request(first.commit, 1_760_000_100),
+          files: [
+            { path: changed?.path ?? "", bytes: new Uint8Array(randomBytes(bytes)) },
+            ...rest
+          ],
+          bundles: [
+            {
+              tip: first.commit,
+              prerequisite: null,
+              sha256: first.bundle.sha256,
+              bytes: first.bundle.bytes
+            }
+          ],
+          signal: signal()
+        })
+      );
+      expect(second.bundle).toMatchObject({ kind: "incremental", prerequisite: first.commit });
+      expect(second.bundle.bytes.byteLength).toBeGreaterThan(bytes);
+      expect(second.bundle.bytes.byteLength).toBeLessThan(2 * bytes);
+    },
+    300_000
+  );
 
   it("names the runner image when it has no such command", async () => {
     expect(

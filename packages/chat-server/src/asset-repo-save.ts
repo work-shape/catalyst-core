@@ -73,6 +73,10 @@ export async function commitAssetFileSet(
       bundle: result.bundle
     };
   }
+  // The disk of the worker is full: the state of the instance, which an operator changes.
+  if (result.status === "refused" && result.code === "no_space") {
+    throw new AppError("CONFLICT", result.message, { reason: "no_space" });
+  }
   if (result.status === "refused") {
     throw new AppError(
       "VALIDATION_FAILED",
