@@ -352,9 +352,10 @@ function readSkillManifest(name: string, bytes: Uint8Array): Record<string, unkn
       `${error.message}.`,
       error.details
         ? {
-            issues: error.details.issues.map(({ message, path }) => ({
+            issues: error.details.issues.map(({ message, path, line, column }) => ({
               message,
-              path: path.map(String)
+              path: path.map(String),
+              ...(line === undefined || column === undefined ? {} : { line, column })
             }))
           }
         : {},

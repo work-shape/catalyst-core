@@ -1,5 +1,4 @@
 import yaml from "js-yaml";
-import type { z } from "zod";
 import {
   SKILL_FRONTMATTER_MAX_BYTES,
   SKILL_FRONTMATTER_MAX_DEPTH,
@@ -15,16 +14,27 @@ export type SkillFrontmatterRefusal =
   "skill_frontmatter_alias" | "skill_frontmatter_too_deep" | "skill_frontmatter_too_large";
 
 /**
+ * One thing that is wrong in a skill file: an invalid field by its path, or the place of the
+ * file, by line and column, where its frontmatter stops being YAML.
+ */
+interface SkillMarkdownIssue {
+  message: string;
+  path: PropertyKey[];
+  line?: number;
+  column?: number;
+}
+
+/**
  * A skill file that cannot be read as a skill. `details.issues` names each invalid field, and
  * `reason` what refused the frontmatter as a whole.
  */
 export class SkillMarkdownError extends Error {
-  readonly details?: { issues: z.core.$ZodIssue[] };
+  readonly details?: { issues: SkillMarkdownIssue[] };
   readonly reason?: SkillFrontmatterRefusal;
 
   constructor(
     message: string,
-    details?: { issues: z.core.$ZodIssue[] },
+    details?: { issues: SkillMarkdownIssue[] },
     reason?: SkillFrontmatterRefusal
   ) {
     super(message);
@@ -49,7 +59,7 @@ export function parseSkillMarkdown(
     throw new SkillMarkdownError(`Skill file '${skillFile}' must start with YAML frontmatter`);
   }
 
-  const frontmatterRaw = yaml.load(match[1] ?? "");
+  const frontmatterRaw = loadFrontmatter(match[1] ?? "", skillFile);
   // Before anything walks it: a few lines of nested aliases are a value of any size.
   const issue = yamlValueIssue(frontmatterRaw, SKILL_FRONTMATTER_MAX_DEPTH);
   if (issue) {
@@ -86,6 +96,34 @@ export function parseSkillMarkdown(
     content,
     ...(Object.keys(others).length > 0 ? { frontmatter: kept } : {})
   };
+}
+
+/**
+ * The frontmatter as YAML reads it. A text that is no YAML is a skill file that is refused,
+ * with the line and the column of the file the reader stopped at: a description with an
+ * unquoted colon, a key written twice, a tag the reader does not know. So is one nested deeper
+ * than the reader follows.
+ */
+function loadFrontmatter(text: string, skillFile: string): unknown {
+  try {
+    return yaml.load(text);
+  } catch (error) {
+    if (error instanceof RangeError) {
+      throw new SkillMarkdownError(
+        `Skill file '${skillFile}' frontmatter is not read: ${yamlValueIssueSentence("depth", SKILL_FRONTMATTER_MAX_DEPTH)}`,
+        undefined,
+        "skill_frontmatter_too_deep"
+      );
+    }
+    if (!(error instanceof yaml.YAMLException)) throw error;
+    // The frontmatter begins on the second line of its file, below the `---`.
+    const line = error.mark.line + 2;
+    const column = error.mark.column + 1;
+    throw new SkillMarkdownError(
+      `Skill file '${skillFile}' frontmatter is not valid YAML at line ${line}, column ${column}: ${error.reason}. A value that holds a colon and a space, as a description often does, is written in quotes: description: "Use this when: the user asks"`,
+      { issues: [{ message: error.reason, path: [], line, column }] }
+    );
+  }
 }
 
 /**

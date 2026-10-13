@@ -78,6 +78,22 @@ describe("a YAML file of nested aliases", () => {
     ).toBe(false);
   });
 
+  it("is refused, never thrown, where it is no YAML at all: workflow.yaml and app.yaml", () => {
+    for (const [shape, text] of [
+      ["an unquoted colon", "id: w\nname: Use this when: the user asks\n"],
+      ["a key written twice", "id: w\nname: W\nname: X\n"],
+      ["a tag the reader does not know", "id: w\nname: !!python/object:os.system x\n"],
+      ["5,000 levels", `id: w\nname: ${"[".repeat(5_000)}${"]".repeat(5_000)}\n`]
+    ] as const) {
+      const workflow = timed(() => readWorkflowManifest(text));
+      expect(workflow.error, shape).toBeUndefined();
+      expect(workflow.result, shape).toMatchObject({ ok: false });
+      const app = timed(() => parsePageManifest(new TextEncoder().encode(text)));
+      expect(app.error, shape).toBeUndefined();
+      expect(app.result, shape).toMatchObject({ status: "errors" });
+    }
+  });
+
   it.each(LEVELS)(
     "is refused as workflow.yaml and app.yaml at %i levels, at once (store.yaml: data-store-engine.test.ts)",
     (levels) => {

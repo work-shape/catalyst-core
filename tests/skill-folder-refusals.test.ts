@@ -157,6 +157,44 @@ describe("what a skill's folder may not hold", () => {
     expect(missing.statusCode).toBe(404);
   });
 
+  it("refuses a SKILL.md whose frontmatter is no YAML with the line and the column, and says to quote a value with a colon", async () => {
+    const world = await start();
+    const refused = async (frontmatter: string) =>
+      refusal(
+        put(world, {
+          files: [
+            { path: "SKILL.md", text: `---\nname: form-filler\n${frontmatter}\n---\n\nT.\n` }
+          ],
+          expectedRevision: null
+        })
+      );
+
+    const colon = await refused("description: Use this when: the user asks");
+    expect(colon.message).toContain("line 3, column");
+    expect(colon.message).toContain("in quotes");
+    expect(colon.details).toMatchObject({
+      reason: "skill_manifest_invalid",
+      path: "SKILL.md",
+      issues: [{ line: 3, column: expect.any(Number), message: expect.any(String) }]
+    });
+    for (const [shape, frontmatter] of [
+      ["a key written twice", "description: d\nlicense: MIT\nlicense: Apache-2.0"],
+      ["a tag the reader does not know", "description: d\nmetadata: !!python/object:os.system x"],
+      ["a tag of the file's own", "description: d\nmetadata: !mine x"]
+    ] as const) {
+      expect((await refused(frontmatter)).details, shape).toMatchObject({
+        reason: "skill_manifest_invalid",
+        issues: [{ line: expect.any(Number), column: expect.any(Number) }]
+      });
+    }
+    const deep = await refused(
+      `description: d\nmetadata: ${"[".repeat(5_000)}${"]".repeat(5_000)}`
+    );
+    expect(deep.details?.reason).toMatch(/^skill_(frontmatter_too_deep|manifest_invalid)$/u);
+
+    expect((await world.api.call("assets.get", { params: SKILL })).statusCode).toBe(404);
+  });
+
   it("takes a text that begins with the letters MZ, which a program for Windows begins with too", async () => {
     const world = await start();
     const notes = "MZ is the abbreviation the form uses for the reference number.\n";

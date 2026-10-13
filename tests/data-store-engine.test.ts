@@ -79,6 +79,16 @@ describe("a Data Store on Postgres", () => {
     expect(issuesOf([manifest("tables: []\n"), init])[0]).toContain("tables");
     expect(read([manifest("scope: instance\n"), init])).toMatchObject({ scope: "instance" });
     expect(issuesOf([manifest("scope: everyone\n"), init])[0]).toContain("scope");
+    // A `store.yaml` that is no YAML is refused like any other: an unquoted colon, a key
+    // written twice, a tag the reader does not know, 5,000 levels.
+    for (const broken of [
+      "description: Use this when: the user asks\n",
+      "name: Twice\n",
+      "sizeLimit: !!python/object:os.system x\n",
+      `sizeLimit: ${"[".repeat(5_000)}${"]".repeat(5_000)}\n`
+    ]) {
+      expect(issuesOf([manifest(broken), init]).length, broken.slice(0, 40)).toBeGreaterThan(0);
+    }
     // Nested aliases are a value of any size for whatever walks it: refused at once, unread.
     for (const levels of [5, 6, 7, 12]) {
       const lines = ["l0: &l0 [x, x, x, x, x, x, x, x, x, x]"];
