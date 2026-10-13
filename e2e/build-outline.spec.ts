@@ -44,14 +44,23 @@ test("an agent's sections are an outline right of the content: its mark follows 
     return headBox && box ? box.y - (headBox.y + headBox.height) : Number.NaN;
   };
 
-  // The column left of the content is free: the content starts at the page's gutter, and the
-  // outline is to the right of it. Nothing on the page looks like the kinds' rail any more.
+  // The column left of the content is free, and the outline is to the right of it at the page's
+  // edge: the content is centred in the room between the page's gutter and the outline's column.
+  // Nothing on the page looks like the kinds' rail any more.
   const headBox = await head.boundingBox();
   const contentBox = await page.locator("form").boundingBox();
   const outlineBox = await outline.boundingBox();
-  expect(contentBox?.x).toBe((headBox?.x ?? 0) + 24);
-  expect(contentBox?.width).toBeLessThanOrEqual(704);
-  expect(outlineBox?.x).toBeGreaterThanOrEqual((contentBox?.x ?? 0) + (contentBox?.width ?? 0));
+  if (!headBox || !contentBox || !outlineBox) {
+    throw new Error("The head, the content or the outline has no box.");
+  }
+  const gutter = 24;
+  const freeLeft = contentBox.x - (headBox.x + gutter);
+  const freeRight = outlineBox.x - gutter - (contentBox.x + contentBox.width);
+  expect(freeLeft).toBeGreaterThanOrEqual(0);
+  expect(Math.abs(freeLeft - freeRight)).toBeLessThanOrEqual(1);
+  expect(contentBox.width).toBeLessThanOrEqual(704);
+  expect(outlineBox.x + outlineBox.width).toBeLessThanOrEqual(headBox.x + headBox.width - gutter);
+  expect(outlineBox.x + outlineBox.width).toBeGreaterThan(headBox.x + headBox.width - gutter - 1);
   await expect(page.getByRole("navigation", { name: "Kinds in Studio" })).toHaveCount(0);
   await expect(current).toHaveText("Overview");
 
