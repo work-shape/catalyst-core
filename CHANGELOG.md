@@ -2053,6 +2053,13 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- **Outside hosts of an App on the viewer's own network:** `externalHosts` in `app.yaml` took a
+  name under `.localhost`, `.local`, `.internal`, `.lan` or `.home.arpa`, which reaches the
+  viewer's own machine or network. The build refuses one with "a host on the internet: a name
+  under .localhost, .local, .internal, .lan, .home.arpa reaches the viewer's own machine or
+  network", and a host listed twice with "lists the host '<host>' twice". The content policy of
+  a revision stored before leaves such a name out and names each host once. **Upgrade:** a Page
+  whose manifest lists one no longer builds until the entry is removed.
 - **A JSON request body the server does not read:** an empty body with a JSON content type, one
   that does not parse, and one that names `__proto__` or `constructor.prototype` as a key
   answered `500` on every operation. Each now answers `400` `BAD_REQUEST` with

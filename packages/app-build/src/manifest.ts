@@ -28,6 +28,20 @@ const relativeFile = z
     message: "a path inside the Page's folder"
   });
 
+/** Refuses a list that names one entry twice, by the key `keyOf` reads from each. */
+function eachOnce<Entry>(what: string, keyOf: (entry: Entry) => string) {
+  return (entries: Entry[], context: z.RefinementCtx) => {
+    const seen = new Set<string>();
+    for (const entry of entries) {
+      const key = keyOf(entry);
+      if (seen.has(key)) {
+        context.addIssue({ code: "custom", message: `lists ${what} '${key}' twice` });
+      }
+      seen.add(key);
+    }
+  };
+}
+
 const actionSchema = z.strictObject({
   name: identifier,
   file: relativeFile.optional(),
@@ -63,21 +77,14 @@ export const pageManifestSchema = z.strictObject({
   dataStores: z
     .array(dataStoreReferenceSchema)
     .max(MANIFEST_MAX_LIST_ENTRIES)
-    .superRefine((stores, context) => {
-      const seen = new Set<string>();
-      for (const { name: store } of stores) {
-        if (seen.has(store)) {
-          context.addIssue({
-            code: "custom",
-            message: `lists the Data Store '${store}' twice`
-          });
-        }
-        seen.add(store);
-      }
-    })
+    .superRefine(eachOnce("the Data Store", (store) => store.name))
     .optional(),
   actions: z.array(actionSchema).max(MANIFEST_MAX_LIST_ENTRIES).optional(),
-  externalHosts: z.array(externalHostSchema).max(MANIFEST_MAX_LIST_ENTRIES).optional()
+  externalHosts: z
+    .array(externalHostSchema)
+    .max(MANIFEST_MAX_LIST_ENTRIES)
+    .superRefine(eachOnce("the host", (host) => host))
+    .optional()
 });
 
 export type PageManifest = z.infer<typeof pageManifestSchema>;
