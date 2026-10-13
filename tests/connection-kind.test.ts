@@ -244,26 +244,33 @@ describe("the definition of a Connection", () => {
       }
     ]);
     // A name is accepted for what it says it is, and for nothing else.
-    for (const named of ["X-Request-Id", "Stripe-Idempotency-Key", "Acme-Request-Id", "x-key"]) {
+    for (const named of ["X-Request-Id", "Stripe-Idempotency-Key", "Acme-Request-Id"]) {
       expect(withHeader("changing", named)).toEqual([]);
     }
-    // Fails without the change: `Expect`, `Upgrade` and `X-Forwarded-For` were no names of a
-    // list of refused ones, so they passed.
+    // Fails without the change: every name that starts with `X-` passed, a credential's and
+    // a proxy's among them.
     for (const other of [
+      "X-Api-Key",
+      "X-HTTP-Method-Override",
+      "X-Original-URL",
+      "X-Amz-Security-Token",
+      "X-",
+      "X-Forwarded-For",
       "Expect",
       "Upgrade",
-      "X-Forwarded-For",
       "Authorization",
       "content-type",
       "Mcp-Session-Id",
       "Cookie",
-      "a header"
+      "-Request-Id",
+      "a header-Request-Id",
+      `${"a".repeat(60)}-Request-Id`
     ]) {
       expect(withHeader("changing", other)).toEqual([
         {
           path: "operations.0.idempotencyKeyHeader",
           message:
-            "The header of an idempotency key is 'Idempotency-Key', ends in '-Idempotency-Key' or '-Request-Id', or starts with 'X-' and not with 'X-Forwarded-', in at most 64 letters, digits and hyphens"
+            "The header of an idempotency key is 'Idempotency-Key' or a name of at most 64 letters, digits and hyphens that ends in '-Idempotency-Key' or '-Request-Id'"
         }
       ]);
     }

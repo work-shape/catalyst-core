@@ -202,27 +202,19 @@ function refuseReservedFields(
 
 /**
  * Whether a request header may carry the idempotency key of a call. A name is accepted for
- * what it says it is, never for not being on a list: `Idempotency-Key`, a name that ends in
- * `-Idempotency-Key` or `-Request-Id`, or a name that starts with `X-`. `X-Forwarded-` names
- * are a proxy's, and no header of HTTP itself, of a credential or of a connector fits the rule.
+ * what it says it is, never for not being on a list: `Idempotency-Key`, or a name that ends in
+ * `-Idempotency-Key` or in `-Request-Id`. No header of HTTP itself, of a proxy, of a credential
+ * or of a connector has such a name; `X-` alone says nothing of what a header carries.
  */
-function carriesIdempotencyKey(name: string): boolean {
-  const lower = name.toLowerCase();
-  if (lower.startsWith("x-forwarded-")) return false;
-  return (
-    lower === "idempotency-key" ||
-    lower.endsWith("-idempotency-key") ||
-    lower.endsWith("-request-id") ||
-    lower.startsWith("x-")
-  );
-}
+const IDEMPOTENCY_KEY_HEADER_PATTERN =
+  /^(?:Idempotency-Key|[A-Za-z0-9][A-Za-z0-9-]*-(?:Idempotency-Key|Request-Id))$/iu;
 
 /** The request header that carries the idempotency key of a changing call, by its name. */
 const idempotencyKeyHeaderSchema = z
   .string()
-  .refine((name) => /^[A-Za-z][A-Za-z0-9-]{0,63}$/u.test(name) && carriesIdempotencyKey(name), {
+  .refine((name) => name.length <= 64 && IDEMPOTENCY_KEY_HEADER_PATTERN.test(name), {
     message:
-      "The header of an idempotency key is 'Idempotency-Key', ends in '-Idempotency-Key' or '-Request-Id', or starts with 'X-' and not with 'X-Forwarded-', in at most 64 letters, digits and hyphens"
+      "The header of an idempotency key is 'Idempotency-Key' or a name of at most 64 letters, digits and hyphens that ends in '-Idempotency-Key' or '-Request-Id'"
   });
 
 const connectionOperationSchema = z
