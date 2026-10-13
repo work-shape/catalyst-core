@@ -4553,7 +4553,7 @@ test("superadmin creates a user with a password from the users panel", async ({ 
   await expect(createdPasswordInput).toHaveValue(createdUser.password);
   await page.getByRole("button", { name: "Open user" }).click();
   await expect(page.getByText(createdUser.displayLabel, { exact: true })).toBeVisible();
-  await expect(page.getByText("better-auth")).toBeVisible();
+  await expect(page.getByText("Password sign-in", { exact: true }).first()).toBeVisible();
 
   await page.getByRole("button", { name: "E2E Superadmin account" }).click();
   await page.getByRole("menuitem", { name: "Sign out" }).click();

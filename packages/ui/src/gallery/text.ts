@@ -551,7 +551,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     skipLinkHint: "Der Link erscheint, solange er den Fokus hat: von hier aus Tab drücken.",
     skipLinkTarget: "Inhalt",
     docsLinkSentence:
-      "Agenten und Fähigkeiten, deren Name mit dem Präfix beginnt, gehören zum Namespace.",
+      "Agenten und Skills, deren Name mit dem Präfix beginnt, gehören zum Namespace.",
     docsLinkLearnMore: "Mehr erfahren",
     docsLinkLearnMoreName: "Mehr erfahren über Namespaces, öffnet in neuem Tab",
     docsLinkNamed: "So funktionieren Rechte",

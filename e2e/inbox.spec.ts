@@ -586,7 +586,7 @@ test("a held skill save reads in the Inbox as the skill it creates, then as the 
     await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
     await page.reload();
     await expect(headline).toHaveText(
-      `E2E Superadmin möchte die Fähigkeit „${HELD_TITLE}“ im Namespace ${HELD_NAMESPACE} anlegen.`
+      `E2E Superadmin möchte den Skill „${HELD_TITLE}“ im Namespace ${HELD_NAMESPACE} anlegen.`
     );
     await page.evaluate(() => window.localStorage.removeItem("vivd-catalyst:locale"));
     await page.reload();

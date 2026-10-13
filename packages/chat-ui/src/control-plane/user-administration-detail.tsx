@@ -22,6 +22,7 @@ import {
 import { MaskedPasswordInput, UserFields } from "./user-administration-fields";
 import {
   STANDALONE_AUTH_SOURCE,
+  authSourceLabel,
   emptyIdentityForm,
   errorMessage,
   formToIdentityInput,
@@ -292,7 +293,7 @@ function IdentitiesCard({
               >
                 <div className="grid min-w-0 flex-1 gap-1">
                   <span className="flex flex-wrap items-center gap-2">
-                    <Badge appearance="outline">{identity.authSource}</Badge>
+                    <Badge appearance="outline">{authSourceLabel(identity.authSource, t)}</Badge>
                     {identity.emailVerified ? (
                       <Badge tone="success">{t("settings.userIdentityVerified")}</Badge>
                     ) : null}
@@ -332,7 +333,9 @@ function IdentitiesCard({
                     size="icon"
                     variant="ghost"
                     className="shrink-0 text-muted-foreground hover:text-destructive"
-                    aria-label={t("settings.userIdentityDelete", { source: identity.authSource })}
+                    aria-label={t("settings.userIdentityDelete", {
+                      source: authSourceLabel(identity.authSource, t)
+                    })}
                     disabled={mutating || Boolean(disabledReason)}
                     onClick={() => setConfirmingKey(key)}
                   >

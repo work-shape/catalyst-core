@@ -98,7 +98,7 @@ describe("compact approval request card in the thread", () => {
 
     expect(markup).toContain('data-variant="compact"');
     expect(markup).toContain("Bei Gehaltsabrechnungen auch die Steuerklasse prüfen.");
-    expect(markup).toContain("Fähigkeit: Gehaltsabrechnungen prüfen");
+    expect(markup).toContain("Skill: Gehaltsabrechnungen prüfen");
     expect(markup).toContain("Wartet auf Freigabe");
     expect(markup).toContain(">Details</button>");
     expect(markup).not.toContain("Bisher");
@@ -185,7 +185,7 @@ describe("compact approval request card in the thread", () => {
     const markup = renderCompact({ kind: "future_kind" });
 
     expect(markup).toContain("Bei Gehaltsabrechnungen auch die Steuerklasse prüfen.");
-    expect(markup).not.toContain("Fähigkeit:");
+    expect(markup).not.toContain("Skill:");
   });
 });
 
@@ -282,7 +282,7 @@ describe("first message of a reviewer's revision conversation", () => {
       "de"
     );
 
-    expect(message).toContain("Fähigkeit „Payroll“ (payroll)");
+    expect(message).toContain("Skill „Payroll“ (payroll)");
     expect(message).toContain("mit read_skill");
     expect(message).toContain(`Gewünschte Änderung: ${comment}`);
     expect(message).toContain(
@@ -435,7 +435,7 @@ describe("skill change body", () => {
       }
     });
 
-    expect(markup).toContain("Neue Fähigkeit");
+    expect(markup).toContain("Neuer Skill");
     expect(markup).toContain("Neue Mitarbeitende begleiten.");
     expect(markup).toContain("<details");
     expect(markup).toContain("Inhalt anzeigen");

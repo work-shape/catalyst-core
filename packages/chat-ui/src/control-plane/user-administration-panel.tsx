@@ -34,6 +34,7 @@ import {
   DEFAULT_ROWS_PER_PAGE,
   accessLevelLabel,
   createEmptyCreateUserForm,
+  authSourceLabel,
   distinctAuthSources,
   errorMessage,
   filterUsers,
@@ -349,7 +350,9 @@ export function UserAdministrationPanel({
                     </TableCell>
                     <TableCell className="px-4 text-muted-foreground">
                       {user.identities.length > 0
-                        ? distinctAuthSources(user.identities).join(", ")
+                        ? distinctAuthSources(user.identities)
+                            .map((source) => authSourceLabel(source, t))
+                            .join(", ")
                         : t("settings.userSignInMethodsNone")}
                     </TableCell>
                     <TableCell className="px-4 whitespace-nowrap text-muted-foreground">
