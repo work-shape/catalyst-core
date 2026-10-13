@@ -18,8 +18,22 @@ export interface SandboxCommand {
   >;
 }
 
+/**
+ * Limits of one command that are lower than the sandbox's own: a kind of command the platform
+ * runs itself, such as the script of a Workflow's code step, is given less than an agent's
+ * command. A sandbox that runs commands as processes of its worker has no such limits.
+ */
+export interface SandboxCommandLimits {
+  cpuCount: number;
+  /** The memory of the command, with no swap beyond it. */
+  memoryBytes: number;
+  pidsLimit: number;
+}
+
 export interface WorkspaceCommandProcessInput {
   command: SandboxCommand;
+  /** In place of the sandbox's own CPU, memory and process limits. */
+  sandboxLimits?: SandboxCommandLimits;
   workspaceDirectory: string;
   workspaceCwd: string;
   cwd: string;

@@ -252,6 +252,7 @@ export function createDockerRunInvocation(
       `${options.containerNamePrefix ?? "catalyst-workspace-command"}-${input.command.id}-${randomUUID()}`
   );
   const environment = filterDockerSandboxEnvironment(input.env);
+  const own = input.sandboxLimits;
   const args = [
     "run",
     "--rm",
@@ -260,11 +261,16 @@ export function createDockerRunInvocation(
     "--network",
     options.networkMode ?? "none",
     "--cpus",
-    String(options.cpuCount ?? 1),
+    String(own?.cpuCount ?? options.cpuCount ?? 1),
     "--memory",
-    String(options.memoryBytes ?? DEFAULT_DOCKER_WORKSPACE_COMMAND_MEMORY_BYTES),
+    String(
+      own?.memoryBytes ?? options.memoryBytes ?? DEFAULT_DOCKER_WORKSPACE_COMMAND_MEMORY_BYTES
+    ),
+    // A command with limits of its own gets no swap beyond its memory, so a script that
+    // allocates without end is ended at the limit and not after the host swapped for it.
+    ...(own ? ["--memory-swap", String(own.memoryBytes)] : []),
     "--pids-limit",
-    String(options.pidsLimit ?? 128),
+    String(own?.pidsLimit ?? options.pidsLimit ?? 128),
     "--user",
     `${user.uid}:${user.gid}`,
     "--cap-drop",
