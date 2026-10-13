@@ -384,7 +384,9 @@ export const workspaceExecInputJsonSchema: JsonObject = {
 export const workspacePreviewImagesInputJsonSchema: JsonObject = {
   type: "object",
   additionalProperties: false,
-  anyOf: [{ required: ["artifactId"] }, { required: ["path"] }, { required: ["paths"] }],
+  // No `anyOf` over the three sources here: a model provider refuses a combinator at the root
+  // of a tool's input schema. The description says to give exactly one, and the input schema
+  // refuses a call that gives none or several.
   properties: {
     artifactId: {
       type: "string",

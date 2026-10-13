@@ -2035,6 +2035,15 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- **Claude runs with `workspace.preview_images` or `structured_data.publish`:** the input schema
+  a model is shown for each of the two had a combinator at its root (`anyOf` over the three
+  preview sources, `oneOf` over replace and patch), which Anthropic's Messages format, also on
+  Amazon Bedrock, refuses, so every run of an agent that lists one of them failed at the first
+  model call. Both are now one object at the root. `workspace.preview_images` names the rule
+  "exactly one of `artifactId`, `path`, `paths`" in its description, and
+  `structured_data.publish` shows the fields of both operations with `operation` as the choice.
+  What each tool accepts is unchanged: a call with no source or several, or with a field of the
+  other operation, is still refused.
 - **Workflows, the agent's save and a policy on `assets.put`:** a central policy setting on
   `assets.put`, or on `assets.*`, that matches the Workflow of a conversation now holds for
   the agent's `platform.assets.put` too: `deny` refuses the save and `approval` holds it for

@@ -81,13 +81,17 @@ describe("workspace tools", () => {
     expect(promoteTool?.description).toContain(
       "automatically displays promoted artifacts as clickable download cards"
     );
-    expect(previewTool?.inputJsonSchema).toMatchObject({
-      anyOf: expect.arrayContaining([
-        { required: ["artifactId"] },
-        { required: ["path"] },
-        { required: ["paths"] }
-      ])
-    });
+    // The three sources are no `anyOf` at the root of the schema, which a model provider
+    // refuses there: the description names the rule and the input schema keeps it.
+    expect(previewTool?.inputJsonSchema).not.toHaveProperty("anyOf");
+    expect(previewTool?.description).toContain(
+      "Give exactly one source: artifactId, path, or paths."
+    );
+    expect(previewTool?.inputSchema.safeParse({}).success).toBe(false);
+    expect(
+      previewTool?.inputSchema.safeParse({ artifactId: "file_1", path: "previews/a.png" }).success
+    ).toBe(false);
+    expect(previewTool?.inputSchema.safeParse({ path: "previews/a.png" }).success).toBe(true);
     expect(applyPatchTool?.inputJsonSchema).toMatchObject({
       properties: {
         patch: {
