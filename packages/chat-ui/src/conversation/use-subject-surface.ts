@@ -1,8 +1,11 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
+import { APP_ASSET_KIND } from "@vivd-catalyst/api-client";
 import { WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
 import { useWorkspaceApiClient } from "../api/workspace-api-client";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
+import { useApp } from "../apps/app-data";
+import { appTitle } from "../apps/app-model";
 import { useToolDisplayPanel } from "../tool-display-panel";
 import { useWorkflowNames } from "../workflows/workflow-data";
 import {
@@ -37,8 +40,12 @@ function useSubjectTitle(subject: SubjectAsset | undefined, workspaceId: string 
     kind === WORKFLOW_ASSET_KIND ? workspaceId : undefined,
     kind === WORKFLOW_ASSET_KIND ? [name] : []
   );
+  const app = useApp(workspaceId ?? "", name, kind === APP_ASSET_KIND && workspaceId !== undefined);
   if (kind === WORKFLOW_ASSET_KIND) {
     return workflowTitle ?? name;
+  }
+  if (kind === APP_ASSET_KIND) {
+    return appTitle(app.app, name);
   }
   return name;
 }

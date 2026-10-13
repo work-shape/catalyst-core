@@ -1,4 +1,5 @@
-import { FileText, Workflow } from "lucide-react";
+import { AppWindow, FileText, Workflow } from "lucide-react";
+import { APP_ASSET_KIND } from "@vivd-catalyst/api-client";
 import { WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
 import { Banner, Button, TextLink } from "@vivd-catalyst/ui";
 import { useTranslation, type TranslationKey } from "../i18n";
@@ -19,18 +20,25 @@ function subjectRoute(
   if (workspaceId === undefined) {
     return undefined;
   }
-  return subject.kind === WORKFLOW_ASSET_KIND
-    ? { kind: "workflow", collaborationWorkspaceId: workspaceId, workflow: subject.name }
+  if (subject.kind === WORKFLOW_ASSET_KIND) {
+    return { kind: "workflow", collaborationWorkspaceId: workspaceId, workflow: subject.name };
+  }
+  return subject.kind === APP_ASSET_KIND
+    ? { kind: "app-edit", collaborationWorkspaceId: workspaceId, app: subject.name }
     : undefined;
 }
 
 const SUBJECT_LEADS: Readonly<Record<string, TranslationKey>> = {
-  [WORKFLOW_ASSET_KIND]: "conversationSubjectWorkflow"
+  [WORKFLOW_ASSET_KIND]: "conversationSubjectWorkflow",
+  [APP_ASSET_KIND]: "conversationSubjectApp"
 };
 
 function SubjectIcon({ kind }: { kind: string }) {
   if (kind === WORKFLOW_ASSET_KIND) {
     return <Workflow aria-hidden="true" />;
+  }
+  if (kind === APP_ASSET_KIND) {
+    return <AppWindow aria-hidden="true" />;
   }
   return <FileText aria-hidden="true" />;
 }

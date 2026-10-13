@@ -1,4 +1,5 @@
 import { createElement, type ReactNode } from "react";
+import { AppEditSurface, AppEditSurfaceActions } from "../apps/app-edit-surface";
 import { AppPreview } from "../apps/app-preview";
 import { InboxItemPanel } from "../inbox/inbox-item-panel";
 import { pageSurfaceRendering } from "../pages/page-surface";
@@ -45,12 +46,17 @@ export const surfaceRenderers: SurfaceRenderers = {
     }),
     flush: true
   }),
+  // The draft is loaded anew after each saved revision of the App.
   app_edit: (surface) => ({
-    content: createElement(AppPreview, {
+    actions: createElement(AppEditSurfaceActions, {
+      app: surface.app,
+      workspaceId: surface.workspaceId
+    }),
+    content: createElement(AppEditSurface, {
       key: surface.key,
       app: surface.app,
-      mode: "draft",
-      name: surface.title
+      name: surface.title,
+      workspaceId: surface.workspaceId
     }),
     flush: true
   }),

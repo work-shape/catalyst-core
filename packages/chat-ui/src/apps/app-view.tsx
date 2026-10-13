@@ -22,6 +22,7 @@ import {
 } from "./app-header";
 import { APP_START_ROUTE, appBuilder, appDraftShown, appTitle, type AppRights } from "./app-model";
 import { AppPreview } from "./app-preview";
+import { AppEditWithAgentAction } from "./app-edit-with-agent";
 import { useAppsHost, type AppsWorkspace } from "./apps-host";
 
 /**
@@ -175,10 +176,13 @@ export function AppViewFrame({
           onBack={onBack}
           secondaryActions={
             rights.write && draftShown ? (
-              <Button variant="outline" onClick={onEdit}>
-                <Pencil aria-hidden="true" />
-                {t("apps.edit")}
-              </Button>
+              <>
+                <AppEditWithAgentAction app={app} />
+                <Button variant="outline" onClick={onEdit}>
+                  <Pencil aria-hidden="true" />
+                  {t("apps.edit")}
+                </Button>
+              </>
             ) : undefined
           }
           overflow={

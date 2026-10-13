@@ -37,6 +37,7 @@ import {
   type AppManifestSummary,
   type AppRights
 } from "./app-model";
+import { AppEditWithAgentAction } from "./app-edit-with-agent";
 import { AppPreview, AppPreviewNotice } from "./app-preview";
 import { useAppsHost, type AppsWorkspace } from "./apps-host";
 import { RevisionsDrawer } from "./revisions-drawer";
@@ -136,6 +137,7 @@ export function AppEdit({ app }: { app: string }) {
     <>
       <AppEditFrame
         name={name}
+        app={app}
         workspace={workspace}
         rights={rights}
         draftRevision={draft}
@@ -296,6 +298,7 @@ export function appDraftIsAhead(
  */
 export function AppEditFrame({
   name,
+  app,
   workspace,
   rights,
   draftRevision,
@@ -310,6 +313,8 @@ export function AppEditFrame({
   onDelete
 }: {
   name: string;
+  /** The id of the App. With it the head offers "Edit with the agent". */
+  app?: string;
   workspace: AppsWorkspace;
   rights: AppRights;
   /** The number of the draft, once the record arrived. */
@@ -352,6 +357,7 @@ export function AppEditFrame({
             secondaryActions={
               known ? (
                 <>
+                  {app === undefined ? null : <AppEditWithAgentAction app={app} />}
                   {view !== undefined && onViewChange ? (
                     <SegmentedControl
                       size="sm"

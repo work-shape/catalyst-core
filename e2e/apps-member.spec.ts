@@ -7,9 +7,11 @@ import {
   pageSurface,
   patchThatAdds,
   savePage,
+  sendToolCall,
   writePageFiles
 } from "./page-surface-fixtures";
 import { requestWithOrigin } from "./request-with-origin";
+import { shootThemes } from "./surface-shots";
 import { expect, test } from "./test";
 import { apiOrigin, uiOrigin } from "./view-fixtures";
 
@@ -228,4 +230,39 @@ test("a member who uses an App is shown the App and a builder its revision", asy
   await expect(page.getByRole("menuitem", { name: "Copy link" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("menu")).toBeHidden();
+
+  // "Edit with the agent" opens a conversation about the App with its draft beside it.
+  await head.getByRole("button", { name: "Edit with the agent", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/c/[^/]+$`, "u"));
+  const subject = page.getByTestId("conversation-subject");
+  await expect(subject).toHaveAttribute("data-subject-kind", "app");
+  await expect(subject.getByRole("link", { name: appName, exact: true })).toBeVisible();
+  const draft = page.locator('[data-surface-kind="app_edit"]');
+  const draftReady = async () => {
+    await expect(
+      draft
+        .getByTestId("page-preview-frame")
+        .contentFrame()
+        .frameLocator("iframe")
+        .getByRole("heading", { name: HEADING })
+    ).toBeVisible();
+  };
+  await draftReady();
+  await shootThemes(page, "app-from-page", draftReady);
+
+  // In a plain conversation of the App's workspace that is the builder's own, the agent's
+  // first read of the App opens its draft beside the chat. An App is read in the workspace
+  // it belongs to, and a conversation shared with the workspace is refused the read.
+  const madePrivate = await requestWithOrigin(
+    page,
+    "patch",
+    `${apiOrigin}/api/v1/workspaces/${workspaceId}`,
+    { data: { defaultConversationVisibility: "private" } }
+  );
+  expect(madePrivate.ok(), await madePrivate.text()).toBe(true);
+  await page.goto(`/w/${workspaceId}`);
+  await sendToolCall(page, "platform.assets.get", { kind: "app", name: appId });
+  await expect(subject).toHaveAttribute("data-subject-kind", "app");
+  await draftReady();
+  await shootThemes(page, "app-from-chat", draftReady);
 });

@@ -1,3 +1,4 @@
+import { APP_ASSET_KIND } from "@vivd-catalyst/api-client";
 import { SUBJECT_TOOL_PREFIX, WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
 import type { Surface } from "../surface/surface";
 
@@ -77,9 +78,9 @@ function subjectSurfaceKey(subject: SubjectAsset): string {
 }
 
 /**
- * The surface of the asset a conversation is about: the canvas of a Workflow. Nothing for a
- * kind without one: a Page opens through its own card, and the other kinds show nothing beside
- * the chat yet.
+ * The surface of the asset a conversation is about: the canvas of a Workflow, the draft of an
+ * App. Nothing for a kind without one: a Page opens through its own card, and the other kinds
+ * show nothing beside the chat yet.
  */
 export function subjectSurface(input: {
   subject: SubjectAsset;
@@ -90,6 +91,9 @@ export function subjectSurface(input: {
   const key = subjectSurfaceKey(subject);
   if (subject.kind === WORKFLOW_ASSET_KIND && workspaceId !== undefined) {
     return { kind: "workflow_canvas", key, title, workspaceId, workflow: subject.name };
+  }
+  if (subject.kind === APP_ASSET_KIND && workspaceId !== undefined) {
+    return { kind: "app_edit", key, title, workspaceId, app: subject.name };
   }
   return undefined;
 }

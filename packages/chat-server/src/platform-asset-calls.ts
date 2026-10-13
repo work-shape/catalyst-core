@@ -184,14 +184,40 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
     };
   }
 
-  /** The asset the conversation is about, and the call as the asset operations take one. */
+  /**
+   * Where the operations find an asset. An asset of a workspace, such as an App, is read and
+   * saved in a conversation of that workspace, and is missing from every other one.
+   */
+  async function addressOf(
+    conversation: Conversation,
+    subject: ConversationSubject
+  ): Promise<ConversationSubject & { workspaceId?: string }> {
+    const row = await options.configAssets.store.getConfigAsset({
+      clientInstanceId: options.clientInstanceId,
+      kind: subject.kind,
+      name: subject.name
+    });
+    if (row?.scope.kind !== "workspace") return subject;
+    if (row.scope.workspaceId !== conversation.collaborationWorkspaceId) {
+      throw subjectUnavailable();
+    }
+    return { ...subject, workspaceId: row.scope.workspaceId };
+  }
+
+  /** The asset the conversation is about, where the operations find it, and the call. */
   async function bound(context: ToolExecutionContext): Promise<{
     subject: ConversationSubject;
+    address: ConversationSubject & { workspaceId?: string };
     call: AssetCall;
   }> {
-    const { subject } = await conversationOf(context);
+    const conversation = await conversationOf(context);
+    const subject = conversation.subject;
     if (!subject) throw withoutSubject();
-    return { subject, call: await callOf(context) };
+    return {
+      subject,
+      address: await addressOf(conversation, subject),
+      call: await callOf(context)
+    };
   }
 
   const allowed = (decision: OperationAuthorization): void => {
@@ -225,9 +251,10 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
         await requireReadableSubject(options, context.user, subject);
         await requireOwnTranscript(conversation);
       }
+      const address = await addressOf(conversation, subject);
       const call = await callOf(context);
-      allowed(await workflow.reads.authorizeGet(call.access, subject));
-      const read = await workflow.reads.get(call, subject);
+      allowed(await workflow.reads.authorizeGet(call.access, address));
+      const read = await workflow.reads.get(call, address);
       // Set once the read stood: a refused read leaves the conversation about what it was.
       if (moves) {
         await options.stores.conversations.setConversationSubject({
@@ -248,10 +275,14 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
     },
 
     async validate(context, config) {
-      const { subject, call } = await bound(context);
+      const { subject, address, call } = await bound(context);
       const mismatch = otherName(subject, config);
       if (mismatch) return { issues: [mismatch] };
-      const input = { kind: subject.kind, config };
+      const input = {
+        kind: subject.kind,
+        config,
+        ...(address.workspaceId === undefined ? {} : { workspaceId: address.workspaceId })
+      };
       allowed(await workflow.authorizeValidate(call.access, input));
       try {
         const { issues } = await workflow.validate(call, input);
@@ -271,7 +302,7 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
     },
 
     async put(context, input) {
-      const { subject, call } = await bound(context);
+      const { subject, address, call } = await bound(context);
       const kind = options.configAssets.kinds.kinds.find(
         (candidate) => candidate.kind === subject.kind
       );
@@ -290,7 +321,7 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       if (off !== undefined) throw moduleOffError(off);
       const mismatch = otherName(subject, input.config);
       if (mismatch) return { saved: false, issues: [mismatch] };
-      const write = { ...subject, config: input.config, expectedRevision: input.expectedRevision };
+      const write = { ...address, config: input.config, expectedRevision: input.expectedRevision };
       try {
         allowed(await workflow.authorizeRevisionWrite(call.access, write, "write"));
         const written = await workflow.put(call, write);

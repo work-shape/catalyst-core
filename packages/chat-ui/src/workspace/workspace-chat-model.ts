@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
-import type {
-  ApiClient,
-  ApiUser,
-  CollaborationWorkspaceAgents,
-  ConversationListItem,
-  DraftAttachment,
-  LocaleCode,
-  Message,
-  SafeConfig,
-  StartConversationRunResponse
+import {
+  APP_ASSET_KIND,
+  type ApiClient,
+  type ApiUser,
+  type CollaborationWorkspaceAgents,
+  type ConversationListItem,
+  type DraftAttachment,
+  type LocaleCode,
+  type Message,
+  type SafeConfig,
+  type StartConversationRunResponse
 } from "@vivd-catalyst/api-client";
 import { WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
 import type { ThemeInputs } from "@vivd-catalyst/ui/theme";
@@ -225,6 +226,11 @@ interface AppsModel {
   rights: AppRights;
   /** Opens a new conversation of the open workspace with this text in its composer. */
   startChat(prompt: string): void;
+  /**
+   * Starts a conversation of the open workspace about this App and opens it, with the App's
+   * draft beside it. Rejects where the instance refuses the conversation.
+   */
+  editWithAgent(app: string): Promise<void>;
 }
 
 export interface WorkspaceAuthModel {
@@ -1171,7 +1177,8 @@ export function useWorkspaceChatModel({
     apps: {
       enabled: appsEnabled,
       rights: appRights,
-      startChat: startNewConversationWith
+      startChat: startNewConversationWith,
+      editWithAgent: (app) => startConversationAbout({ kind: APP_ASSET_KIND, name: app })
     },
     workflows: {
       access: workflowsOpen,

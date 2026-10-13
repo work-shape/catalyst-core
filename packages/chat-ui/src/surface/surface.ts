@@ -38,8 +38,11 @@ interface SurfaceSources {
    * own route to open on; without it the App opens where it starts.
    */
   app_view: { app: string; appPath?: string };
-  /** The draft revision of an App, for whoever may write it. */
-  app_edit: { app: string };
+  /**
+   * The draft revision of an App, for whoever may write it. With `workspaceId` the frame is
+   * loaded anew after each saved revision of the App.
+   */
+  app_edit: { app: string; workspaceId?: string };
   /** One Workflow of a workspace on its canvas, as its draft stands, with the bar of the draft. */
   workflow_canvas: { workspaceId: string; workflow: string };
   /** One item of the Inbox, by its id. The renderer reads the item's live state itself. */

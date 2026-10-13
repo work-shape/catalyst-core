@@ -60,7 +60,7 @@ describe("the subject a run reads", () => {
     ).toEqual(["1", "4"]);
   });
 
-  it("opens the canvas of a Workflow", () => {
+  it("opens the canvas of a Workflow and the draft of an App", () => {
     const surface = (kind: string) =>
       subjectSurface({ subject: { kind, name: "x" }, workspaceId: "w1", title: "X" });
 
@@ -70,10 +70,10 @@ describe("the subject a run reads", () => {
       workspaceId: "w1",
       workflow: "x"
     });
+    expect(surface("app")).toMatchObject({ kind: "app_edit", app: "x", workspaceId: "w1" });
     // A Page opens through its own card; a kind without a surface opens nothing.
     expect(surface("page")).toBeUndefined();
     expect(surface("skill")).toBeUndefined();
-    expect(surface("app")).toBeUndefined();
   });
 });
 
