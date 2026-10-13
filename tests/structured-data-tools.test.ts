@@ -524,6 +524,37 @@ describe("structured_data.publish", () => {
       error: { code: "validation_failed" }
     });
   });
+
+  it("shows a model one object with both operations' fields and takes each operation's own", async () => {
+    const harness = await createHarness();
+    const section = { key: "person", label: "Person", fields: [] };
+
+    expect(harness.publishTool.inputJsonSchema).toMatchObject({
+      type: "object",
+      required: ["operation", "resourceKey"],
+      properties: {
+        operation: { enum: ["replace", "patch"] },
+        resourceKey: {},
+        title: {},
+        sections: {},
+        set: {},
+        remove: {}
+      }
+    });
+    // A replace without its title, a replace that carries a patch's field and a patch that
+    // carries a replace's field are refused, as they were when the schema was a union.
+    for (const input of [
+      { resourceKey: "claim_data", operation: "replace", sections: [section] },
+      { resourceKey: "claim_data", title: "Claim", operation: "replace", sections: [], set: [] },
+      { resourceKey: "claim_data", operation: "patch", sections: [section] },
+      { resourceKey: "claim_data", operation: "patch", title: "Claim" }
+    ]) {
+      await expect(harness.run(input)).resolves.toMatchObject({
+        status: "failed",
+        error: { code: "validation_failed" }
+      });
+    }
+  });
 });
 
 describe("structured_result.read", () => {
@@ -582,6 +613,8 @@ async function createHarness(publicationReviewer?: StructuredDataPublicationRevi
     retainedUntil: "2030-01-01T00:00:00.000Z"
   });
   const tools = createStructuredDataToolDefinitions({ store, publicationReviewer });
+  const publishTool = tools.find((tool) => tool.name === "structured_data.publish");
+  if (!publishTool) throw new Error("structured_data.publish is not defined");
   const runTool = createTestToolRunner({
     registry: new ToolRegistry({ tools }),
     getAgentToolNames: () => tools.map((tool) => tool.name)
@@ -603,6 +636,7 @@ async function createHarness(publicationReviewer?: StructuredDataPublicationRevi
     clientInstanceId,
     store,
     conversation,
+    publishTool,
     resources: () =>
       store.structuredData.listStructuredDataResources({
         clientInstanceId,
