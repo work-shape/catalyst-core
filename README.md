@@ -116,6 +116,10 @@ Storage code uses product-owned store interfaces at package boundaries. The Post
 
 Database schema changes must go through committed migrations. Use `pnpm db:generate` after changing Drizzle schema files, review the generated SQL, and commit the schema and migration together. Do not use `drizzle-kit push` or any `db push` workflow. Committed migrations never change, and a new migration expands before a later one contracts: `pnpm check:migrations` checks both against `packages/postgres-store/migration-policy.json`.
 
+Branches built side by side generate the same next migration number. `pnpm check:migrations` also
+stops a migration whose number `main` (and `origin/main`) already gives to another one, with the
+steps to renumber it onto `main`'s head; the hosted check runs it before the long suite.
+
 ## Changelog
 
 A change that users or operators of the packages notice gets an entry, and the entry is a file of

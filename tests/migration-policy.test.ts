@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   findMigrationHistoryChanges,
+  findMigrationNumberCollisions,
   lintNewMigrations,
   lintMigration,
   migrationsDirectory,
@@ -274,6 +275,31 @@ describe("a repository's migrations and release tags", () => {
     repo.journal("0000_first", "0001_second", "0002_third");
     repo.commit("add a migration");
     expect(findMigrationHistoryChanges({ repoRoot: repo.root, baseRef: "main" })).toEqual([]);
+  });
+
+  it("names a new migration whose number main gave out after the branch left it", () => {
+    const repo = repository();
+    repo.write(`${migrationsPath}/0002_third.sql`, "create table third (id text);");
+    repo.journal("0000_first", "0001_second", "0002_third");
+    repo.commit("add a migration");
+    const collisions = (ref: string) => findMigrationNumberCollisions({ repoRoot: repo.root, ref });
+    expect(collisions("main")).toEqual([]);
+    expect(collisions("no-such-ref")).toEqual([]);
+
+    repo.git("switch", "main");
+    repo.write(`${migrationsPath}/0002_landed.sql`, "create table landed (id text);");
+    repo.write(`${migrationsPath}/0003_later.sql`, "create table later (id text);");
+    repo.journal("0000_first", "0001_second", "0002_landed", "0003_later");
+    repo.commit("another branch landed first");
+    repo.git("switch", "change");
+    expect(collisions("main")).toEqual([{ migration: "0002_third", mainHead: "0003_later" }]);
+    // Merge-base checks still pass: the branch changed no committed migration.
+    expect(findMigrationHistoryChanges({ repoRoot: repo.root, baseRef: "main" })).toEqual([]);
+
+    rmSync(join(repo.root, migrationsPath, "0002_third.sql"));
+    repo.write(`${migrationsPath}/0004_third.sql`, "create table third (id text);");
+    repo.journal("0000_first", "0001_second", "0002_landed", "0003_later", "0004_third");
+    expect(collisions("main")).toEqual([]);
   });
 
   it("rejects a modified, a removed and a renamed committed migration", () => {
