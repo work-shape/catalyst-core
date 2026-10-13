@@ -252,6 +252,21 @@ still sets either is refused at startup with one message naming every such key; 
 An agent with `web_search` also needs a customer price for web search calls of its provider
 under `usage.costs.customer.webSearch`.
 
+## Links And Images In Replies
+
+A reply in the chat and a Markdown file in the preview load nothing from another address. An image, whether written in Markdown or as HTML, remote, relative or a `data:` address, is never loaded; its description is shown in its place. A link stays a link when it points to the instance itself, is a `#fragment` or a `mailto:` address. `replies.allowedLinkHosts` names the other hosts links may point to:
+
+```yaml
+replies:
+  allowedLinkHosts:
+    - example.com
+    - "*.example.com"
+```
+
+An entry is a host name, or `*.` and a domain for every subdomain of it but not the domain itself. A link to any other host is shown as text followed by its address, so a person can still read and copy it. The default is an empty list. The setting applies when a reply is shown, so it also governs replies written before a change.
+
+The renderer is not the only line. A Mermaid diagram draws into the page outside it, and a node label, an image shape or the diagram's theme CSS can name an image. The interface's page therefore carries a content policy in a meta tag that the chat UI's Vite plugin writes into `index.html` at build: images, media, fonts and connections come only from the interface itself, `data:` and `blob:` addresses, the API when the build names another origin (`VITE_CHAT_API_URL`, or `VITE_CHAT_API_PORT` on the page's host), and the hosts of `ui.logoUrl`, `ui.logoUrlDark` and `ui.faviconUrl`. A logo on another host therefore needs a new build of the interface image after a change. Scripts, styles and frames are not limited by it: generated views and Apps run in documents with policies of their own.
+
 ## Generated Views
 
 A view an agent shows with `show_view` loads Tailwind CSS and Lucide from the instance and no script from any other host. `views.allowedScriptSrc` names the hosts views may load scripts from besides the instance, as HTTPS origins or paths:

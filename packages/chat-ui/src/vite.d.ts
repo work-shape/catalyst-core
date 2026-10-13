@@ -5,10 +5,17 @@ export interface VivdCatalystChatUiPluginOptions {
   faviconPublicPath?: string;
   clientConfigPath?: string;
   brandingBootstrap?: boolean;
+  /**
+   * Writes the interface's content policy into the page as a meta tag: images, media, fonts
+   * and connections only from the interface, its API and the configured logos. Default true.
+   */
+  contentPolicy?: boolean;
 }
 
 interface ViteResolvedConfig {
   root: string;
+  command?: "build" | "serve";
+  env?: Record<string, string | undefined>;
   publicDir: string | false;
   build: {
     outDir: string;

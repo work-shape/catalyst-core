@@ -31,6 +31,7 @@ import { SurfaceSlot } from "./surface/surface-slot";
 import { useSplitArea } from "./surface/use-split-area";
 import { useToolDisplayPanel } from "./tool-display-panel";
 import { uiLabelsFor } from "./ui-labels";
+import { MarkdownLinkPolicyProvider } from "./markdown-text";
 import { ViewPolicyProvider } from "./view-policy";
 import { agentChipDisplayFor } from "./workspace/agent-selector";
 import { ClientBrandingHeader } from "./workspace/client-branding";
@@ -665,15 +666,28 @@ function ChatWorkspaceContent({
       </UiRoot>
     </TranslationProvider>
   );
-  // Every generated view below is shown under the instance's view policy of today, and every
-  // link into the documentation starts from the instance's docs address.
+  // Every generated view below is shown under the instance's view policy of today, every
+  // link in a reply or Markdown preview under its link hosts, and every link into the
+  // documentation starts from the instance's docs address.
   return (
     <ViewPolicyProvider allowedScriptSrc={model.config.config.views.allowedScriptSrc}>
-      <DocsAddressProvider address={model.config.config.ui.docsUrl}>
-        {workspace}
-      </DocsAddressProvider>
+      <MarkdownLinkPolicyProvider
+        allowedLinkHosts={model.config.config.replies.allowedLinkHosts}
+        ownOrigins={instanceOrigins(model.auth.apiBaseUrl)}
+      >
+        <DocsAddressProvider address={model.config.config.ui.docsUrl}>
+          {workspace}
+        </DocsAddressProvider>
+      </MarkdownLinkPolicyProvider>
     </ViewPolicyProvider>
   );
+}
+
+/** The page's origin and the API's, which may be another host of the same instance. */
+function instanceOrigins(apiBaseUrl: string): string[] {
+  const pageOrigin = window.location.origin;
+  const apiOrigin = new URL(apiBaseUrl, window.location.href).origin;
+  return apiOrigin === pageOrigin ? [pageOrigin] : [pageOrigin, apiOrigin];
 }
 
 const PASSWORD_SETUP_HASH_PREFIX = "#password-setup=";
