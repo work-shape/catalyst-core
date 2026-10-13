@@ -1,4 +1,3 @@
-import { compileJsonSchema } from "@vivd-catalyst/connections";
 import {
   AppError,
   WORKFLOW_LOOP_MAX_CONCURRENCY,
@@ -35,12 +34,7 @@ import {
 } from "@vivd-catalyst/core";
 import { z } from "zod";
 import { indexWorkflowSteps, type WorkflowStepIndex } from "./definition";
-import type {
-  WorkflowDefinitionRevision,
-  WorkflowDefinitionSource,
-  WorkflowDefinitionSummary
-} from "./definition-source";
-import { jsonBytes, jsonObjectSchema } from "./json";
+import type { WorkflowDefinitionSource, WorkflowDefinitionSummary } from "./definition-source";
 import {
   WORKFLOW_RUN_LIMITS,
   WORKFLOW_STEP_JOB_BACKOFF_BASE_MS,
@@ -50,10 +44,11 @@ import {
   WORKFLOW_STEP_JOB_SLOTS,
   type WorkflowRunLimits
 } from "./limits";
-import { secretOperationSteps, type WorkflowOperationCalls } from "./operation-step";
+import type { WorkflowOperationCalls } from "./operation-step";
 import { itemLabelOf } from "./references";
-import { principalActor, workflowRunPrincipal } from "./run-identity";
+import { principalActor } from "./run-identity";
 import { withEveryBodyStep } from "./run-view";
+import { createStartCheck, type PreparedStart } from "./run-start";
 import { createScheduleTrigger } from "./schedule-trigger";
 import { createStepExecutor, type StepEnd } from "./step-execution";
 
@@ -560,57 +555,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     }
   });
 
-  /**
-   * What every start checks before a run exists: the input against the definition, the
-   * operations of the steps, and the principal the run acts as. It throws the refusal.
-   */
-  async function prepareStart(published: WorkflowDefinitionRevision, given: unknown) {
-    const { manifest } = published;
-    const [trigger] = manifest.steps;
-    if (trigger?.type !== "trigger") {
-      throw new AppError("CONFLICT", `The Workflow '${manifest.id}' has no trigger`, {
-        reason: "no_trigger"
-      });
-    }
-    const schema = compileJsonSchema(manifest.inputs);
-    if (!schema.ok) {
-      throw new AppError("CONFLICT", "The Workflow's inputs are a schema that cannot be checked", {
-        reason: "inputs_unreadable"
-      });
-    }
-    const runInput = jsonObjectSchema.safeParse(given ?? {});
-    const issues = runInput.success ? schema.validate(runInput.data) : [];
-    if (!runInput.success || issues.length > 0) {
-      throw new AppError("VALIDATION_FAILED", "The input does not fit the Workflow's inputs", {
-        reason: "input_invalid",
-        issues: issues.map((issue) => ({ path: issue.path, message: issue.message }))
-      });
-    }
-    if (jsonBytes(runInput.data) > limits.stepDataMaxBytes) {
-      throw new AppError(
-        "VALIDATION_FAILED",
-        `The input of a run is at most ${limits.stepDataMaxBytes} bytes`,
-        { reason: "input_invalid" }
-      );
-    }
-    const secret = await secretOperationSteps(manifest, operationCalls.registry);
-    if (secret.length > 0) {
-      throw new AppError(
-        "VALIDATION_FAILED",
-        `The definition of the Workflow '${manifest.id}' cannot be run: ${secret[0]?.message ?? ""}`,
-        { reason: "operation_secret", issues: secret }
-      );
-    }
-    const principal = await workflowRunPrincipal(stores.apiAccess, clientInstanceId, manifest);
-    if (!principal) {
-      throw new AppError(
-        "CONFLICT",
-        `The instance has no active service principal named '${manifest.runAs}', which the Workflow '${manifest.id}' runs as`,
-        { reason: "principal_inactive" }
-      );
-    }
-    return { published, trigger, input: runInput.data, principal };
-  }
+  const prepareStart = createStartCheck({ clientInstanceId, stores, operationCalls, limits });
 
   /**
    * Writes a run with the step run of its trigger and the audit of its start. Answers
@@ -618,7 +563,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
    */
   async function openRun(
     tx: PlatformStores,
-    prepared: Awaited<ReturnType<typeof prepareStart>>,
+    prepared: PreparedStart,
     started: Pick<WorkflowRun, "trigger" | "startedBy" | "correlationId"> &
       Pick<Partial<WorkflowRun>, "operationRunId" | "scheduledFor"> & { actor: AuditActor }
   ): Promise<WorkflowRun | undefined> {
@@ -667,7 +612,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     timeZone: options.timeZone ?? "UTC",
     now,
     async prepare(published) {
-      let prepared: Awaited<ReturnType<typeof prepareStart>>;
+      let prepared: PreparedStart;
       try {
         // A schedule gives a run no input: a Workflow that needs one is not started by it.
         prepared = await prepareStart(published, {});
