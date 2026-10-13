@@ -288,6 +288,11 @@ const insert: StoreVerb = {
   effect: "changing",
   // An added row is removed again with a statement, and nothing outside is told of it.
   changeClass: "reversible",
+  // A step of a Workflow Run adds rows with nobody there to confirm, and the call path refuses
+  // a call that would have to wait for its own caller. So adding rows waits for nobody: the
+  // right on the rows of this one store, which is granted to the principal by name, is what
+  // lets it. A setting of the instance and a guardrail still tighten it.
+  defaultPolicy: "allow",
   inputSchema: insertInputSchema,
   outputSchema: dataStoreInsertResultSchema,
   use: `Adds rows to one table. Use it to record new rows; it changes and removes nothing that is stored. Name the table and send each row as an object of column name to value. All rows of one call name the same columns, and a column that is left out takes its default. "onConflict" says what happens to a row that a unique constraint of the table refuses: "fail", the default, adds no row of the call; "skip" leaves that row out and adds the others, which makes sending the same rows again safe. One call adds at most ${DATA_STORE_INSERT_MAX_ROWS} rows and ${DATA_STORE_INSERT_MAX_BYTES} bytes.`,
@@ -604,6 +609,7 @@ function operationOf(
     // A read of a customer's rows is recorded, every time.
     ...(verb.effect === "reading" ? { recordsEveryCall: true as const } : {}),
     ...(verb.changeClass ? { changeClass: verb.changeClass } : {}),
+    ...(verb.defaultPolicy ? { defaultPolicy: verb.defaultPolicy } : {}),
     ...rightsOf(store, verb),
     // What a key must carry to call the verb over HTTP. The grants of its holder still decide.
     scope: DATA_STORE_OPERATION_SCOPES[verb.verb],

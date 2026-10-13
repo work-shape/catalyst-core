@@ -5,7 +5,8 @@ import {
   type DataStoreRecord,
   type OperationChangeClass,
   type OperationEffect,
-  type OperationResource
+  type OperationResource,
+  type PolicyValue
 } from "@vivd-catalyst/core";
 import type { z } from "zod";
 import type { DataStoreDefinition } from "./definition";
@@ -40,6 +41,11 @@ export interface StoreVerb {
   outputSchema: z.ZodType;
   /** What an agent reads of the tool, after the sentence that names the store. Missing where no agent is offered it. */
   use?: string;
+  /**
+   * The policy of the verb where no setting of the instance names one. Without it the
+   * instance default of the effect applies.
+   */
+  defaultPolicy?: PolicyValue;
   /** The rights one call needs beside the verb's own, by what it asks for. */
   furtherRights?(input: unknown): readonly string[];
   /** How long one call may take, in milliseconds, where the statement timeout of the app role is not its bound. */

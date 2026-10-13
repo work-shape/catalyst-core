@@ -15,12 +15,14 @@ import {
   DATA_STORE_OPERATION_VERBS,
   asClientInstanceId,
   asUserId,
+  createPlatformId,
   dataStoreOperationName,
   type AuthenticatedUser,
   type DataStoreOperationVerb,
   type DataStoreRecord,
   type JsonObject,
-  type UserRole
+  type UserRole,
+  type WorkflowRunPrincipal
 } from "@vivd-catalyst/core";
 import { runOperation } from "@vivd-catalyst/tool-execution";
 import { eventually, required } from "./support/assertions";
@@ -446,7 +448,118 @@ describe("a Data Store on an assembled instance", () => {
     expect(await outcome("insert", insert)).toBe("done");
   });
 
-  it("declares for each verb the scope, the caller and the effect the contract names", async () => {
+  it("runs the step of a Workflow Run as the run's service principal, by that principal's grants and no one else's", async () => {
+    const instance = await start(true);
+    // Whoever starts the run and publishes the Workflow holds every right; no call is theirs.
+    const admin = await person(instance, "user-1", ["user", "admin", "superadmin"]);
+    const record = await publishStore(instance);
+    const principal = await instance.stores.apiAccess.createServicePrincipal({
+      clientInstanceId,
+      name: "monthly-check",
+      displayLabel: "Monthly check",
+      createdByUserId: asUserId(admin.id)
+    });
+    const workflowRunId = createPlatformId<"WorkflowRunId">("wfrun");
+    const actor: WorkflowRunPrincipal = {
+      kind: "service",
+      id: principal.id,
+      displayLabel: principal.displayLabel,
+      permissionRefs: principal.permissionRefs,
+      permissions: principal.permissions,
+      clientInstanceId,
+      authSource: "workflow",
+      scopes: [],
+      workflowRunId
+    };
+    const grant = (action: string) =>
+      instance.stores.access.createGrant({
+        clientInstanceId,
+        holderKind: "service_principal",
+        holderId: principal.id,
+        action,
+        effect: "allow",
+        scopeKind: "asset",
+        scopeId: record.id,
+        grantedBy: asUserId(admin.id)
+      });
+    const step = async (verb: DataStoreOperationVerb, input: unknown, stepRunId: string) => {
+      const outcome = await runOperation(
+        {
+          operation: dataStoreOperationName("findings", verb),
+          effect: verb === "insert" || verb === "load" ? "changing" : "reading",
+          input,
+          actor,
+          origin: { kind: "workflow", workflowRunId, stepRunId },
+          correlationId: "corr_monthly_check",
+          // The key of a step's changing call is the id of its step run.
+          idempotencyKey: stepRunId
+        },
+        instance.execution.operationCalls.deps
+      );
+      return {
+        ...outcome,
+        answer: outcome.result.status === "denied" ? outcome.result.reason : outcome.result.status
+      };
+    };
+    const denied = (action: string) => ({ kind: "forbidden", action, reason: "no_grant" });
+    const insert = { table: "findings", rows: [finding], onConflict: "fail" };
+    const count = { sql: "select count(*)::integer as count from findings" };
+    const dataset = { $dataset: "ds_findings", rowCount: 1, bytes: 100 };
+
+    expect((await step("query", count, "step_1")).answer).toEqual(denied(DATA_STORE_ACTIONS.read));
+    expect((await step("insert", insert, "step_2")).answer).toEqual(
+      denied(DATA_STORE_ACTIONS.insert)
+    );
+
+    await grant(DATA_STORE_ACTIONS.insert);
+    const added = await step("insert", insert, "step_3");
+    expect(added).toMatchObject({
+      answer: "done",
+      replayed: false,
+      run: {
+        effect: "changing",
+        actor: { kind: "service_principal", id: principal.id },
+        origin: { kind: "workflow", workflowRunId, stepRunId: "step_3" }
+      }
+    });
+    // The step run that is tried again is answered what it was answered, and adds nothing.
+    expect(await step("insert", insert, "step_3")).toMatchObject({
+      answer: "done",
+      replayed: true
+    });
+    // Adding rows does not read them.
+    expect((await step("query", count, "step_4")).answer).toEqual(denied(DATA_STORE_ACTIONS.read));
+
+    await grant(DATA_STORE_ACTIONS.read);
+    const read = await step("query", count, "step_5");
+    expect(read).toMatchObject({
+      answer: "done",
+      result: { output: { rows: [{ count: 1 }] } },
+      run: { effect: "reading", actor: { kind: "service_principal", id: principal.id } }
+    });
+
+    // A load that changes or removes rows that are stored needs more than adding rows.
+    for (const more of [
+      { key: ["run_id"], onConflict: "update" },
+      { key: ["run_id"], replace: { by: ["run_id"] } }
+    ]) {
+      expect(
+        (
+          await step(
+            "load",
+            { table: "findings", dataset, ...more },
+            `step_load_${more.onConflict ?? "replace"}`
+          )
+        ).answer
+      ).toEqual(denied(DATA_STORE_ACTIONS.execute));
+    }
+    // One that only adds is the principal's to make; no dataset of a run exists to read yet.
+    expect(await step("load", { table: "findings", dataset }, "step_load")).toMatchObject({
+      result: { status: "failed", error: { details: { reason: "not_supported_yet" } } }
+    });
+  });
+
+  it("declares for each verb the scope, the caller, the effect and the right the contract names, and what a call waits for", async () => {
     const instance = await start(true);
     await publishStore(instance);
 
@@ -457,7 +570,16 @@ describe("a Data Store on an assembled instance", () => {
             dataStoreOperationName("findings", verb)
           )
         );
-        return [verb, operation.scope, operation.auth, operation.effect];
+        return [
+          verb,
+          operation.scope,
+          operation.auth,
+          operation.effect,
+          // `load` asks its rights itself: which ones depends on what the call does.
+          operation.action,
+          operation.recordsEveryCall ?? false,
+          operation.defaultPolicy
+        ];
       })
     );
 
@@ -472,12 +594,39 @@ describe("a Data Store on an assembled instance", () => {
       DATA_STORE_OPERATION_SCOPES.describe,
       DATA_STORE_OPERATION_SCOPES.preview_rows
     ]);
+    const { read, insert } = DATA_STORE_ACTIONS;
+    // A read is recorded every time and waits for nobody. Adding rows waits for nobody either:
+    // a step of a Workflow Run has nobody there to confirm.
     expect(declared).toEqual([
-      ["query", DATA_STORE_OPERATION_SCOPES.query, "principal", "reading"],
-      ["insert", DATA_STORE_OPERATION_SCOPES.insert, "principal", "changing"],
-      ["load", DATA_STORE_OPERATION_SCOPES.load, "principal", "changing"],
-      ["describe", DATA_STORE_OPERATION_SCOPES.describe, "principal", "reading"],
-      ["preview_rows", DATA_STORE_OPERATION_SCOPES.preview_rows, "principal", "reading"]
+      ["query", DATA_STORE_OPERATION_SCOPES.query, "principal", "reading", read, true, undefined],
+      [
+        "insert",
+        DATA_STORE_OPERATION_SCOPES.insert,
+        "principal",
+        "changing",
+        insert,
+        false,
+        "allow"
+      ],
+      ["load", DATA_STORE_OPERATION_SCOPES.load, "principal", "changing", null, false, "allow"],
+      [
+        "describe",
+        DATA_STORE_OPERATION_SCOPES.describe,
+        "principal",
+        "reading",
+        read,
+        true,
+        undefined
+      ],
+      [
+        "preview_rows",
+        DATA_STORE_OPERATION_SCOPES.preview_rows,
+        "principal",
+        "reading",
+        read,
+        true,
+        undefined
+      ]
     ]);
   });
 
