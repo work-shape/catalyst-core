@@ -95,6 +95,7 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
       centralSettings: () => options.operations?.centralPolicySettings?.() ?? []
     },
     approvals: options.operations?.approvals ?? filer,
+    liveOnce: options.stores.liveOnceSwitches,
     modules: options.modules,
     agentToolNames: options.agentToolNames,
     workspaceMember: async ({ userId, workspaceId }) =>

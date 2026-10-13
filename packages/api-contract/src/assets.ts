@@ -276,6 +276,26 @@ export const assetPointersResponseSchema = z.object({
   replacedRevision: revisionNumberSchema.optional()
 });
 
+/** The bound of the name of an App action or a Workflow step that "Run live once" names. */
+export const LIVE_ONCE_PART_MAX_LENGTH = 200;
+
+export const runLiveOnceRequestSchema = z.object({
+  /** The App action or the Workflow step whose next call is made live. */
+  part: z.string().min(1).max(LIVE_ONCE_PART_MAX_LENGTH),
+  /**
+   * The draft revision the caller looks at. Required: the switch covers that revision only,
+   * and a draft saved since is refused, so nobody switches live what they have not seen.
+   */
+  expectedRevision: expectedRevisionSchema,
+  workspaceId: workspaceIdSchema
+});
+
+/** "Run live once", as it is set: for one action or step of one draft revision. */
+export const runLiveOnceResponseSchema = z.object({
+  draftRevision: revisionNumberSchema,
+  part: z.string()
+});
+
 export const deleteAssetRequestSchema = z.object({
   /** The revision the caller last read. A delete is never made blind. Required. */
   expectedRevision: expectedRevisionSchema,

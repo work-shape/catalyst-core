@@ -498,6 +498,20 @@
       "when": 1791883714424,
       "tag": "0070_conversation_subject",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1791926214427,
+      "tag": "0071_draft_call_targets",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1791926220776,
+      "tag": "0072_draft_call_targets_validate",
+      "breakpoints": true
     }
   ]
 }

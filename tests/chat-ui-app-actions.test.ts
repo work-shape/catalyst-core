@@ -522,6 +522,7 @@ describe("a run of an App in Instance > Operations", () => {
       id: "opr_1",
       operation: "app.orders.load",
       effect: "reading",
+      target: "live",
       status: "done",
       actor: { kind: "user", id: "user-anna", label: "Anna Beispiel" },
       origin: {

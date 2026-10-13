@@ -21,6 +21,7 @@ import { createPostgresExecutionWorkspacesStore } from "./stores/executionWorksp
 import { createPostgresStructuredDataStore } from "./stores/structuredData";
 import { createPostgresJobsStore, notifyJobsEnqueued } from "./jobs/store";
 import { createPostgresOperationRunsStore } from "./stores/operationRuns";
+import { createPostgresLiveOnceSwitchesStore } from "./stores/liveOnceSwitches";
 import { createPostgresInfrastructureChecksStore } from "./stores/infrastructure";
 import { createPostgresPagesStore } from "./stores/pages";
 import { createPostgresConnectionsStore } from "./stores/connections";
@@ -96,6 +97,7 @@ function bindStores(
     structuredData: createPostgresStructuredDataStore(db),
     jobs: createPostgresJobsStore(db, enqueued),
     operationRuns: createPostgresOperationRunsStore(db),
+    liveOnceSwitches: createPostgresLiveOnceSwitchesStore(db),
     infrastructureChecks: createPostgresInfrastructureChecksStore(db),
     pages: createPostgresPagesStore(db),
     connections: createPostgresConnectionsStore(db),

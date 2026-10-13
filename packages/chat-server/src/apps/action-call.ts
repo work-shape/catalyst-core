@@ -448,6 +448,9 @@ export class AppActionCalls {
         );
       case "pending_confirmation":
         throw new AppError("INTERNAL", "A call of a frame cannot wait for a confirmation");
+      // A frame's call carries no draft context until APP-4: a draft refuses a changing action.
+      case "dry_run":
+        throw new AppError("INTERNAL", "A call of a frame is not simulated before APP-4");
     }
   }
 

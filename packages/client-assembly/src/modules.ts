@@ -39,6 +39,7 @@ const assetManagementModule = defineModule({
     "assets.revert",
     "assets.publish",
     "assets.discard_draft",
+    "assets.run_live_once",
     "assets.set_default",
     "assets.set_availability"
   ],

@@ -34,7 +34,16 @@ export const operationRunOriginSchema = z.discriminatedUnion("kind", [
       ])
       .optional()
   }),
-  z.object({ kind: z.literal("workflow"), workflowRunId: z.string(), stepRunId: z.string() }),
+  z.object({
+    kind: z.literal("workflow"),
+    workflowRunId: z.string(),
+    stepRunId: z.string(),
+    /**
+     * In a test run of a Workflow draft, which acts as the person testing: the service
+     * principal whose rights bounded theirs.
+     */
+    boundBy: z.object({ id: z.string(), label: z.string() }).optional()
+  }),
   z.object({ kind: z.literal("schedule"), scheduleId: z.string() })
 ]);
 
@@ -63,6 +72,11 @@ export const operationRunSchema = z.object({
     label: z.string()
   }),
   origin: operationRunOriginSchema,
+  /**
+   * Where the call went: `live`, the asset it calls; `test`, that asset's test target; or
+   * `dry_run`, nowhere, a changing call of a draft that answered what it would have done.
+   */
+  target: z.enum(["live", "test", "dry_run"]),
   /**
    * The App a call with the origin `app` came from, as the instance holds it when the run is
    * read. Nothing of it is kept on the run. A run of a Page of a conversation has none.
