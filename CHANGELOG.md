@@ -12,7 +12,9 @@ contain breaking changes; a patch version does not.
   writes them at start: a changed one gets a revision in History, one a release no longer ships
   is deleted, and the same release writes nothing. They are read-only: a write, delete or revert
   of one is refused with `403` and the reason `shipped_skill`, and a skill that names `origin`
-  or `icon` is refused with `422`. Studio lists them with the label "Platform" and offers "Copy
+  or `icon` is refused with `422`. A skill of the instance's own under the name of either is
+  refused with `422` whether Workflows is on or not: "The platform ships a skill named '<name>',
+  also where its module is off: choose a name of your own". Studio lists them with the label "Platform" and offers "Copy
   to edit", which creates an ordinary skill. The config CLI neither pulls, diffs nor prunes
   them. **Upgrade:** an instance that holds a skill of its own named `platform-guide` or
   `workflow-authoring` stops at start with "The platform ships the skill '<name>', and a skill

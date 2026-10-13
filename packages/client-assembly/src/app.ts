@@ -18,8 +18,7 @@ import {
   createAppAssetKind,
   createConnectionAssetKind,
   createChatServer,
-  createChatServerJobs,
-  createSkillAssetKind
+  createChatServerJobs
 } from "@vivd-catalyst/chat-server";
 import type {
   ChatAttachmentService,
@@ -67,6 +66,7 @@ import { createInstanceAgentTools, createInstanceOperationCalls } from "./operat
 import { createClientInstanceAuth } from "./auth";
 import { createInstanceConnections, withConnections } from "./connections";
 import { seedInstance } from "./instance-seed";
+import { createInstanceSkillAssetKind } from "./shipped-skills";
 import { createClientInstanceMail } from "./mail";
 import type {
   ClientInstanceAttachmentHandler,
@@ -373,7 +373,7 @@ export async function createClientInstanceExecutionAssembly(
     // Every asset kind of this build. A later kind is one more registration in this list.
     kinds: createAssetKindRegistry([
       createAgentAssetKind({ config, validationRefs, validateAgents }),
-      createSkillAssetKind({ config }),
+      createInstanceSkillAssetKind(config),
       ...(connections
         ? [createConnectionAssetKind({ connectorTypes: connections.connectorTypes })]
         : []),

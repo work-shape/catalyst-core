@@ -1,4 +1,5 @@
-import { seedShippedSkills } from "@vivd-catalyst/chat-server";
+import { createSkillAssetKind, seedShippedSkills } from "@vivd-catalyst/chat-server";
+import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import {
   WORKFLOW_ASSET_KIND,
   type ClientInstanceId,
@@ -12,6 +13,17 @@ import { platformSkill } from "./platform-skill";
 
 // The skills that ship with the platform. The API process stores them at start as read-only
 // skills of origin `release`; a conversation is offered them by name.
+
+/**
+ * The skill kind of an instance. A skill of the instance's own takes the name of no skill this
+ * build ships, whichever modules are on.
+ */
+export function createInstanceSkillAssetKind(config: ClientInstanceConfig) {
+  return createSkillAssetKind({
+    config,
+    shippedSkillNames: [platformSkill, workflowAuthoringSkill].map((skill) => skill.name)
+  });
+}
 
 /** The skills the platform ships for the assets of one kind, offered where one is the subject. */
 function subjectSkillsOf(kind: string, modules: ModuleSnapshot): ShippedSkill[] {
