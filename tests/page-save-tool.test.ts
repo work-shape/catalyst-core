@@ -128,8 +128,7 @@ async function createSaveHarness(
   });
   const tool = createPageSaveTool({
     workspace: service.dependencies,
-    builds: options.builds?.(client) ?? client,
-    conversations: store.conversations
+    builds: options.builds?.(client) ?? client
   });
   const execution = createTestToolRunner({
     registry: new ToolRegistry({ tools: [tool] }),
@@ -320,8 +319,9 @@ describe("page.save", () => {
 
     expect(first).toMatchObject({ status: "success", output: { number: 1 } });
     expect(first.output?.errors).toBeUndefined();
-    // The saved Page is what the conversation is about from now on; a refused save is none.
-    expect(await harness.subject()).toEqual({ kind: "page", name: "Calculator" });
+    // A Page belongs to its conversation and is no subject of it: a save moves nothing the
+    // conversation is about, so it may still be moved into a shared workspace for everyone.
+    expect(await harness.subject()).toBeUndefined();
     const [page] = await harness.store.pages.listPages({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id

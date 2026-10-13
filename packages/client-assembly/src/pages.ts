@@ -104,8 +104,7 @@ export function createInstancePageSave(input: {
   }
   return {
     workspace: input.workspaceService.dependencies,
-    builds: createPageBuildClient({ stores: input.stores }),
-    conversations: input.stores.conversations
+    builds: createPageBuildClient({ stores: input.stores })
   };
 }
 
