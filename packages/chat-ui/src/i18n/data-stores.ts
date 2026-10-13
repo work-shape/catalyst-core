@@ -34,19 +34,29 @@ export const dataStores = defineTranslations({
       "This store is at 80 percent of its size limit or above. Over the limit it refuses new rows and still answers reads.",
     "dataStores.nextMigration": "Next migration",
     "dataStores.notReachable": "The tables show once the store is ready.",
+    "dataStores.refused": "You may not read this store.",
     "dataStores.rowEstimate": "about 1 row",
     "dataStores.rowEstimateHint": "The database's estimate, not a count.",
     "dataStores.rowEstimates": "about {count} rows",
-    "dataStores.rowsAll": "{count} rows. These are all rows of the table.",
-    "dataStores.rowsAllOne": "1 row. This is the only row of the table.",
     "dataStores.rowsDescription":
-      "The first rows of one table, read-only. A long value is cut and shows whole on demand.",
+      "The rows of one table, read-only and a page at a time. A long value is cut and opens whole on demand.",
     "dataStores.rowsEmpty": "This table holds no rows.",
+    "dataStores.rowsEnd": "This is the end of the table.",
     "dataStores.rowsFailed": "The rows could not be loaded.",
-    "dataStores.rowsFirst": "The first {count} rows. The table holds more.",
+    "dataStores.rowsMore": "The table holds more.",
+    "dataStores.rowsNext": "Next",
+    "dataStores.rowsNoMore":
+      "No rows follow here any more. The table changed since the page before.",
     "dataStores.rowsOf": "Rows of {table}",
+    "dataStores.rowsOrderKey": "Ordered by the key ({columns}).",
+    "dataStores.rowsOrderPhysical":
+      "In stored order: this table has no key. A change of a row can move it, and a page may then show a row twice or miss one.",
+    "dataStores.rowsRange": "Rows {from} to {to}.",
+    "dataStores.rowsRangeOne": "Row {from}.",
+    "dataStores.rowsRefused": "You may not read the rows of this store.",
     "dataStores.rowsTable": "Table",
     "dataStores.rowsTitle": "Rows",
+    "dataStores.rowsToStart": "Back to start",
     "dataStores.schemaFailed": "The tables could not be loaded.",
     "dataStores.schemaLevel": "Schema level",
     "dataStores.schemaLevelOf": "{level} of {published}",
@@ -74,11 +84,35 @@ export const dataStores = defineTranslations({
     "dataStores.stateReadyText": "The database is at the published level and its rows are reached.",
     "dataStores.statusDescription": "Where the store's migrations stand and how large it is.",
     "dataStores.statusTitle": "Status",
+    "dataStores.tableCount": "1 table",
+    "dataStores.tableCounts": "{count} tables",
     "dataStores.tablesDescription": "The tables of the store with their columns and types.",
     "dataStores.tablesEmpty": "This store has no tables yet.",
     "dataStores.tablesTitle": "Tables",
     "dataStores.updated": "Last change",
-    "dataStores.valueNull": "null"
+    "dataStores.usedByApp": "App",
+    "dataStores.usedByDescription":
+      "The published apps and workflows that read or add rows of this store.",
+    "dataStores.usedByEmpty": "No published app or workflow uses this store.",
+    "dataStores.usedByFailed": "What uses this store could not be loaded.",
+    "dataStores.usedByHidden": "and {count} more you cannot see",
+    "dataStores.usedByHiddenOnly": "{count} apps or workflows you cannot see use this store.",
+    "dataStores.usedByHiddenOnlyOne": "1 app or workflow you cannot see uses this store.",
+    "dataStores.usedByRefused": "You may not see what uses this store.",
+    "dataStores.usedByTitle": "Used by",
+    "dataStores.usedByTruncated":
+      "The instance has more published apps or workflows than one read looks through, so this list may be incomplete.",
+    "dataStores.usedByWorkflow": "Workflow",
+    "dataStores.valueFailed": "The value could not be loaded.",
+    "dataStores.valueGone":
+      "The row is not there any more: it was removed, or its key or its place changed. Go back to the start of the table.",
+    "dataStores.valueLength": "{count} characters",
+    "dataStores.valueNull": "null",
+    "dataStores.valueOf": "The whole value of one row of {table}.",
+    "dataStores.valueShow": "Show the whole value of {column}",
+    "dataStores.valueTooLarge":
+      "This value is larger than one read of a store answers, so it cannot be shown here. A query reads a part of it.",
+    "dataStores.valueUnread": "Not read"
   },
   de: {
     "dataStores.column": "Spalte",
@@ -113,19 +147,29 @@ export const dataStores = defineTranslations({
       "Dieser Speicher hat 80 Prozent seiner Größengrenze erreicht oder überschritten. Über der Grenze nimmt er keine neuen Zeilen an und beantwortet weiterhin Lesezugriffe.",
     "dataStores.nextMigration": "Nächste Migration",
     "dataStores.notReachable": "Die Tabellen erscheinen, sobald der Speicher bereit ist.",
+    "dataStores.refused": "Sie dürfen diesen Speicher nicht lesen.",
     "dataStores.rowEstimate": "etwa 1 Zeile",
     "dataStores.rowEstimateHint": "Die Schätzung der Datenbank, keine Zählung.",
     "dataStores.rowEstimates": "etwa {count} Zeilen",
-    "dataStores.rowsAll": "{count} Zeilen. Das sind alle Zeilen der Tabelle.",
-    "dataStores.rowsAllOne": "1 Zeile. Das ist die einzige Zeile der Tabelle.",
     "dataStores.rowsDescription":
-      "Die ersten Zeilen einer Tabelle, nur lesend. Ein langer Wert ist gekürzt und zeigt sich auf Wunsch ganz.",
+      "Die Zeilen einer Tabelle, nur lesend und seitenweise. Ein langer Wert ist gekürzt und öffnet sich auf Wunsch ganz.",
     "dataStores.rowsEmpty": "Diese Tabelle enthält keine Zeilen.",
+    "dataStores.rowsEnd": "Das ist das Ende der Tabelle.",
     "dataStores.rowsFailed": "Die Zeilen konnten nicht geladen werden.",
-    "dataStores.rowsFirst": "Die ersten {count} Zeilen. Die Tabelle enthält mehr.",
+    "dataStores.rowsMore": "Die Tabelle enthält mehr.",
+    "dataStores.rowsNext": "Weiter",
+    "dataStores.rowsNoMore":
+      "Hier folgen keine Zeilen mehr. Die Tabelle hat sich seit der Seite davor geändert.",
     "dataStores.rowsOf": "Zeilen von {table}",
+    "dataStores.rowsOrderKey": "Geordnet nach dem Schlüssel ({columns}).",
+    "dataStores.rowsOrderPhysical":
+      "In gespeicherter Reihenfolge: Diese Tabelle hat keinen Schlüssel. Eine Änderung kann eine Zeile verschieben, eine Seite zeigt sie dann doppelt oder gar nicht.",
+    "dataStores.rowsRange": "Zeilen {from} bis {to}.",
+    "dataStores.rowsRangeOne": "Zeile {from}.",
+    "dataStores.rowsRefused": "Sie dürfen die Zeilen dieses Speichers nicht lesen.",
     "dataStores.rowsTable": "Tabelle",
     "dataStores.rowsTitle": "Zeilen",
+    "dataStores.rowsToStart": "Zum Anfang",
     "dataStores.schemaFailed": "Die Tabellen konnten nicht geladen werden.",
     "dataStores.schemaLevel": "Schemastand",
     "dataStores.schemaLevelOf": "{level} von {published}",
@@ -154,10 +198,37 @@ export const dataStores = defineTranslations({
       "Die Datenbank ist auf dem veröffentlichten Stand, ihre Zeilen sind erreichbar.",
     "dataStores.statusDescription": "Wo die Migrationen des Speichers stehen und wie groß er ist.",
     "dataStores.statusTitle": "Status",
+    "dataStores.tableCount": "1 Tabelle",
+    "dataStores.tableCounts": "{count} Tabellen",
     "dataStores.tablesDescription": "Die Tabellen des Speichers mit ihren Spalten und Typen.",
     "dataStores.tablesEmpty": "Dieser Speicher hat noch keine Tabellen.",
     "dataStores.tablesTitle": "Tabellen",
     "dataStores.updated": "Letzte Änderung",
-    "dataStores.valueNull": "null"
+    "dataStores.usedByApp": "App",
+    "dataStores.usedByDescription":
+      "Die veröffentlichten Apps und Workflows, die Zeilen dieses Speichers lesen oder hinzufügen.",
+    "dataStores.usedByEmpty":
+      "Keine veröffentlichte App und kein veröffentlichter Workflow verwendet diesen Speicher.",
+    "dataStores.usedByFailed": "Was diesen Speicher verwendet, konnte nicht geladen werden.",
+    "dataStores.usedByHidden": "und {count} weitere, die Sie nicht sehen können",
+    "dataStores.usedByHiddenOnly":
+      "{count} Apps oder Workflows, die Sie nicht sehen können, verwenden diesen Speicher.",
+    "dataStores.usedByHiddenOnlyOne":
+      "1 App oder Workflow, den Sie nicht sehen können, verwendet diesen Speicher.",
+    "dataStores.usedByRefused": "Sie dürfen nicht sehen, was diesen Speicher verwendet.",
+    "dataStores.usedByTitle": "Verwendet von",
+    "dataStores.usedByTruncated":
+      "Die Instanz hat mehr veröffentlichte Apps oder Workflows, als ein Lesezugriff durchsieht. Diese Liste kann unvollständig sein.",
+    "dataStores.usedByWorkflow": "Workflow",
+    "dataStores.valueFailed": "Der Wert konnte nicht geladen werden.",
+    "dataStores.valueGone":
+      "Die Zeile gibt es nicht mehr: Sie wurde entfernt, oder ihr Schlüssel oder ihr Platz hat sich geändert. Gehen Sie zum Anfang der Tabelle zurück.",
+    "dataStores.valueLength": "{count} Zeichen",
+    "dataStores.valueNull": "null",
+    "dataStores.valueOf": "Der ganze Wert einer Zeile von {table}.",
+    "dataStores.valueShow": "Ganzen Wert von {column} anzeigen",
+    "dataStores.valueTooLarge":
+      "Dieser Wert ist größer, als ein Lesezugriff auf einen Speicher beantwortet, und lässt sich hier nicht anzeigen. Eine Abfrage liest einen Teil davon.",
+    "dataStores.valueUnread": "Nicht gelesen"
   }
 });

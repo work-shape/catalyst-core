@@ -92,3 +92,11 @@ export function cellText(value: unknown): string | undefined {
   }
   return typeof value === "string" ? value : JSON.stringify(value);
 }
+
+/** A value read whole as the text its dialog shows: a text as it is, everything else as JSON over lines. */
+export function wholeValueText(value: unknown): string | undefined {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+  return typeof value === "string" ? value : JSON.stringify(value, null, 2);
+}

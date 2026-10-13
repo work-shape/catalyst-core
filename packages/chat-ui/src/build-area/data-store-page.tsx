@@ -1,9 +1,8 @@
-import { Table2 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { LayoutGrid, Table2, Workflow } from "lucide-react";
+import type { ReactNode } from "react";
 import {
   Badge,
   Banner,
-  Button,
   Chip,
   EmptyState,
   InlineError,
@@ -22,31 +21,22 @@ import {
   TableCellDetail,
   TableHead,
   TableHeader,
-  TableRow,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger
+  TableRow
 } from "@vivd-catalyst/ui";
 import { formatDateTime } from "../control-plane/locale-format";
 import { useTranslation } from "../i18n";
 import { AssetIdentifier, usePageShown } from "./asset-editor-shell";
 import type { BuildAssetViewProps } from "./build-asset-kind";
 import {
-  cellText,
-  DATA_STORE_CELL_WIDTH,
   DATA_STORE_CONDITION_LABELS,
   DATA_STORE_STATE_VIEWS,
   dataStoreStateView,
   formatDataStoreSize,
   migrationNumber
 } from "./data-store-model";
-import type {
-  DataStoreRead,
-  DataStoreSchema,
-  DataStoreSource,
-  DataStoreState
-} from "./data-store-source";
+import { ReadState } from "./data-store-read-state";
+import { DataStoreRowsSection } from "./data-store-rows";
+import type { DataStoreSchema, DataStoreSource, DataStoreState } from "./data-store-source";
 
 type DataStoreTable = DataStoreSchema["tables"][number];
 
@@ -148,7 +138,20 @@ export function DataStorePage({
                 <EmptyState layout="inline">{t("dataStores.notReachable")}</EmptyState>
               )
           }
-        ])
+        ]),
+    // What uses the store is read from the published definitions, whatever state the store is in.
+    {
+      id: "used-by",
+      label: t("dataStores.usedByTitle"),
+      description: t("dataStores.usedByDescription"),
+      body: (
+        <DataStoreUsers
+          store={asset.name}
+          workspaceId={asset.scope.kind === "workspace" ? asset.scope.workspaceId : undefined}
+          source={source}
+        />
+      )
+    }
   ];
 
   return (
@@ -205,36 +208,6 @@ export function DataStorePage({
       </div>
     </Page>
   );
-}
-
-/** One read of the page before and after its answer: the rows of a skeleton, the error, the content. */
-function ReadState<Answer>({
-  read,
-  failedText,
-  rows,
-  children
-}: {
-  read: DataStoreRead<Answer>;
-  /** What the page says of a read that failed without a sentence of the instance. */
-  failedText: string;
-  rows: number;
-  children(answer: Answer): ReactNode;
-}) {
-  const { t } = useTranslation();
-  if (read.status === "loading") {
-    return <SkeletonList rows={rows} />;
-  }
-  if (read.status === "failed") {
-    return (
-      <InlineError className="flex flex-wrap items-center justify-between gap-2">
-        <span>{read.message ?? failedText}</span>
-        <Button variant="outline" size="sm" onClick={read.retry}>
-          {t("tryAgain")}
-        </Button>
-      </InlineError>
-    );
-  }
-  return children(read.data);
 }
 
 /** The state in a word and a sentence, then the migration level, the size and the last change. */
@@ -454,118 +427,106 @@ function DataStoreColumns({ table }: { table: DataStoreTable }) {
   );
 }
 
-/** The first rows of one table, with a tab per table of the store. */
-function DataStoreRowsSection({ store, source }: { store: string; source: DataStoreSource }) {
-  const { t } = useTranslation();
-  const [chosen, setChosen] = useState<string>();
-  return (
-    <ReadState read={source.useSchema(store)} failedText={t("dataStores.schemaFailed")} rows={3}>
-      {({ tables }) => {
-        const table = tables.find((candidate) => candidate.name === chosen) ?? tables[0];
-        if (!table) {
-          return <EmptyState layout="inline">{t("dataStores.tablesEmpty")}</EmptyState>;
-        }
-        return (
-          <Tabs value={table.name} onValueChange={setChosen} className="grid min-w-0 gap-3">
-            <TabsList label={t("dataStores.rowsTable")}>
-              {tables.map(({ name }) => (
-                <TabsTrigger key={name} value={name}>
-                  <code className="font-mono">{name}</code>
-                </TabsTrigger>
-              ))}
-            </TabsList>
-            <TabsContent value={table.name} className="grid min-w-0 gap-2">
-              <DataStoreRowsView store={store} table={table.name} source={source} />
-            </TabsContent>
-          </Tabs>
-        );
-      }}
-    </ReadState>
-  );
-}
-
-function DataStoreRowsView({
+/**
+ * The published Apps and Workflows that use the store. A row is a link where the interface has
+ * a page for what it names. Of the ones the reader may not see, the instance tells a number.
+ */
+function DataStoreUsers({
   store,
-  table,
+  workspaceId,
   source
 }: {
   store: string;
-  table: string;
+  workspaceId: string | undefined;
   source: DataStoreSource;
 }) {
   const { locale, t } = useTranslation();
+  const pageOf = source.useUsingPage(workspaceId);
   return (
-    <ReadState read={source.useRows(store, table)} failedText={t("dataStores.rowsFailed")} rows={4}>
-      {({ columns, rows, truncated }) =>
-        rows.length === 0 ? (
-          <EmptyState layout="inline">{t("dataStores.rowsEmpty")}</EmptyState>
-        ) : (
-          <>
-            <Table
-              density="compact"
-              stickyHeader
-              data-data-store-rows={table}
-              aria-label={t("dataStores.rowsOf", { table })}
-            >
-              <TableHeader>
-                <TableRow>
-                  {columns.map((column) => (
-                    <TableHead key={column.name} align={alignOf(column.type)}>
-                      <code className="font-mono">{column.name}</code>
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row, index) => (
-                  <TableRow key={index}>
-                    {columns.map((column) => (
-                      <RowCell key={column.name} value={row[column.name]} type={column.type} />
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            <p className="text-caption text-muted-foreground" data-data-store-rows-count="">
-              {t(
-                truncated
-                  ? "dataStores.rowsFirst"
-                  : rows.length === 1
-                    ? "dataStores.rowsAllOne"
-                    : "dataStores.rowsAll",
-                { count: new Intl.NumberFormat(locale).format(rows.length) }
-              )}
-            </p>
-          </>
-        )
-      }
-    </ReadState>
-  );
-}
-
-/** Numbers stand at the end of their column, so they compare down it. */
-function alignOf(type: string): "start" | "end" {
-  return type === "integer" || type === "number" ? "end" : "start";
-}
-
-/** One value of a row. A long one is cut and shows whole on demand; `null` is named as such. */
-function RowCell({ value, type }: { value: unknown; type: string }) {
-  const { t } = useTranslation();
-  const text = cellText(value);
-  if (text === undefined) {
-    return (
-      <TableCell align={alignOf(type)} className="text-muted-foreground">
-        {t("dataStores.valueNull")}
-      </TableCell>
-    );
-  }
-  return (
-    <TableCell
-      align={alignOf(type)}
-      className="whitespace-nowrap"
-      truncate={text.length > DATA_STORE_CELL_WIDTH ? DATA_STORE_CELL_WIDTH : undefined}
+    <ReadState
+      read={source.useUsedBy(store)}
+      failedText={t("dataStores.usedByFailed")}
+      refusedText={t("dataStores.usedByRefused")}
+      rows={2}
     >
-      {text}
-    </TableCell>
+      {({ apps, workflows, hidden, truncated }) => {
+        const users = [
+          ...apps.map((app) => ({ ...app, kind: "app" as const })),
+          ...workflows.map((workflow) => ({ ...workflow, kind: "workflow" as const }))
+        ];
+        const more = hidden.apps + hidden.workflows;
+        if (users.length === 0 && more === 0) {
+          return <EmptyState layout="inline">{t("dataStores.usedByEmpty")}</EmptyState>;
+        }
+        const count = new Intl.NumberFormat(locale).format(more);
+        return (
+          <>
+            {users.length > 0 ? (
+              <List aria-label={t("dataStores.usedByTitle")}>
+                {users.map((user) => {
+                  const page = pageOf(user.kind, user.name);
+                  const Icon = user.kind === "app" ? LayoutGrid : Workflow;
+                  return (
+                    <ListRow
+                      key={`${user.kind}:${user.name}`}
+                      data-data-store-used-by={user.kind}
+                      leading={<Icon aria-hidden="true" className="size-4 text-muted-foreground" />}
+                      title={user.title.trim() || user.name}
+                      description={<code className="font-mono">{user.name}</code>}
+                      chips={
+                        <Chip size="sm">
+                          {t(
+                            user.kind === "app"
+                              ? "dataStores.usedByApp"
+                              : "dataStores.usedByWorkflow"
+                          )}
+                        </Chip>
+                      }
+                      link={
+                        page === undefined ? undefined : (
+                          <a
+                            href={page.href}
+                            onClick={(event) => {
+                              // A plain press opens the page here. Any other opens the address.
+                              if (
+                                event.button === 0 &&
+                                !event.metaKey &&
+                                !event.ctrlKey &&
+                                !event.shiftKey &&
+                                !event.altKey
+                              ) {
+                                event.preventDefault();
+                                page.open();
+                              }
+                            }}
+                          />
+                        )
+                      }
+                    />
+                  );
+                })}
+              </List>
+            ) : null}
+            {more > 0 ? (
+              <p className="text-caption text-muted-foreground" data-data-store-used-by-hidden="">
+                {t(
+                  users.length === 0
+                    ? more === 1
+                      ? "dataStores.usedByHiddenOnlyOne"
+                      : "dataStores.usedByHiddenOnly"
+                    : "dataStores.usedByHidden",
+                  { count }
+                )}
+              </p>
+            ) : null}
+            {truncated ? (
+              <p className="text-caption text-muted-foreground">
+                {t("dataStores.usedByTruncated")}
+              </p>
+            ) : null}
+          </>
+        );
+      }}
+    </ReadState>
   );
 }

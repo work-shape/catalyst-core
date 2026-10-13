@@ -23,12 +23,16 @@ export type {
 } from "./connection-source";
 export { dataStoreKindOn } from "./data-store-kind";
 export { dataStoreStateView, formatDataStoreSize } from "./data-store-model";
+export { DataStoreValueDialog } from "./data-store-rows";
 export type {
+  DataStoreListed,
   DataStoreRead,
-  DataStoreRows,
+  DataStoreRowsPage,
   DataStoreSchema,
   DataStoreSource,
-  DataStoreState
+  DataStoreState,
+  DataStoreUsedBy,
+  DataStoreValue
 } from "./data-store-source";
 export { connectionToolsView, type ConnectionToolsRead } from "./connection-tools";
 export { toggleToolName } from "./tool-group";

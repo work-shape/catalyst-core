@@ -49,10 +49,48 @@ function DataStoreRowState({ name, useSource }: { name: string; useSource(): Dat
 }
 
 /**
+ * How many tables a store has and how many rows the database estimates in them, as the last
+ * measurement found them. The whole list is one read, which every row shares. A store that was
+ * never measured says neither, and a store whose tables the database never counted says no rows.
+ */
+function DataStoreRowMeasured({ name, useSource }: { name: string; useSource(): DataStoreSource }) {
+  const { locale, t } = useTranslation();
+  const read = useSource().useListed();
+  const listed =
+    read.status === "ready" ? read.data.items.find((item) => item.name === name) : undefined;
+  if (!listed) {
+    return null;
+  }
+  const { tableCount, rowEstimate } = listed;
+  const number = new Intl.NumberFormat(locale);
+  return (
+    <span className="hidden gap-1.5 md:inline-flex" data-data-store-row-measured={name}>
+      {tableCount === undefined ? null : (
+        <Chip size="sm">
+          {t(tableCount === 1 ? "dataStores.tableCount" : "dataStores.tableCounts", {
+            count: number.format(tableCount)
+          })}
+        </Chip>
+      )}
+      {rowEstimate === undefined || rowEstimate < 1 ? null : (
+        <span className="inline-flex" title={t("dataStores.rowEstimateHint")}>
+          <Chip size="sm">
+            {t(rowEstimate === 1 ? "dataStores.rowEstimate" : "dataStores.rowEstimates", {
+              count: number.format(rowEstimate)
+            })}
+          </Chip>
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
  * Data Stores in Build on the answers of `useSource`: a list, and a page that shows one store.
  * A store is made by its definition, which an agent or the API writes, so the kind has no
  * editor and no button that starts one. A row says what the definition says of the store, its
- * name and its description, whom it belongs to, and the store's state and size.
+ * name and its description, whom it belongs to, the store's state and size, and its tables and
+ * rows as last measured.
  */
 export function dataStoreKindOn(useSource: () => DataStoreSource): BuildListedKind {
   function DataStoreAssetPage(frame: BuildAssetViewProps) {
@@ -78,6 +116,7 @@ export function dataStoreKindOn(useSource: () => DataStoreSource): BuildListedKi
           )}
         </Chip>
         <DataStoreRowState name={asset.name} useSource={useSource} />
+        <DataStoreRowMeasured name={asset.name} useSource={useSource} />
       </>
     )
   };
