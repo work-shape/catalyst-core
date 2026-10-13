@@ -79,7 +79,7 @@ import {
 import { AssetReadWorkflow, scopeOf } from "./asset-read-workflow";
 import { requirePrecondition, revisionConflictOf } from "./asset-revision";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
-import type { ChatServerOptions } from "./types";
+import type { AssetWorkflowOptions } from "./types";
 
 type MutationBatch = Omit<
   Parameters<typeof applyValidatedConfigAssetMutations>[1],
@@ -91,13 +91,13 @@ type MutationBatch = Omit<
  * included, never reads or writes what a workspace owns, and the other way round.
  */
 export class AssetWorkflow {
-  private readonly options: ChatServerOptions;
+  private readonly options: AssetWorkflowOptions;
   /** The writes of a kind with a draft or with files. */
   readonly drafts: AssetDraftWorkflow;
   /** The list, the asset, one revision of it and its history. */
   readonly reads: AssetReadWorkflow;
 
-  constructor(options: ChatServerOptions) {
+  constructor(options: AssetWorkflowOptions) {
     this.options = options;
     this.reads = new AssetReadWorkflow(options, {
       target: (address) => this.target(address),

@@ -36,7 +36,7 @@ import {
 } from "./asset-target";
 import { loadStoredAssets, requireMatchingConfigName } from "./asset-write-rules";
 import { assertScopeCanOwn } from "./config-asset-writer";
-import type { ChatServerOptions } from "./types";
+import type { AssetWorkflowOptions } from "./types";
 
 /** What the writes below use of the workflow of every asset. */
 export interface AssetWorkflowHost {
@@ -68,10 +68,10 @@ export type PageRevisionOrigin = Extract<ConfigAssetRevisionOrigin, { kind: "pag
  * call; the checks of the asset set stay those of every write.
  */
 export class AssetDraftWorkflow {
-  private readonly options: ChatServerOptions;
+  private readonly options: AssetWorkflowOptions;
   private readonly host: AssetWorkflowHost;
 
-  constructor(options: ChatServerOptions, host: AssetWorkflowHost) {
+  constructor(options: AssetWorkflowOptions, host: AssetWorkflowHost) {
     this.options = options;
     this.host = host;
   }

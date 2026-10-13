@@ -5,7 +5,7 @@ import {
   type ConfigAssetRecord
 } from "@vivd-catalyst/core";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
-import type { ChatServerOptions } from "./types";
+import type { AssetWorkflowOptions } from "./types";
 
 // The precondition every write of an asset carries, and what a write is told that was made
 // against another revision. One shape on every surface: the single write and the batch.
@@ -48,7 +48,7 @@ export interface StaleAsset {
   untold?: true;
 }
 
-type RevisionReader = Pick<ChatServerOptions, "clientInstanceId" | "configAssets">;
+type RevisionReader = Pick<AssetWorkflowOptions, "clientInstanceId" | "configAssets">;
 
 /**
  * Whether the caller reads the history of the asset: the read right of the kind, or for a

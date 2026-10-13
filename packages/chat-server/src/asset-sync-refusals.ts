@@ -15,7 +15,7 @@ import {
   type StaleAsset
 } from "./asset-revision";
 import type { AssetSetIssue } from "./asset-set";
-import type { ChatServerOptions } from "./types";
+import type { AssetWorkflowOptions } from "./types";
 
 // The items of a batch as its checks plan them, and the one error of a batch that was not
 // applied: what each item was refused for, and what its caller may know of a stale asset.
@@ -140,7 +140,7 @@ export interface StaleItem {
 
 /** Refuses the batch for the items that were made against another revision, if any. */
 export async function refuseStale(
-  options: ChatServerOptions,
+  options: AssetWorkflowOptions,
   access: ActorAccess,
   stale: readonly StaleItem[]
 ): Promise<void> {
@@ -162,7 +162,7 @@ function itemResource(entry: ReadyItem) {
 
 /** The refusal of a batch the store found stale under its lock. */
 export async function staleBatch(
-  options: ChatServerOptions,
+  options: AssetWorkflowOptions,
   access: ActorAccess,
   planned: readonly PlannedItem[],
   stale: readonly StaleItem[]
@@ -176,7 +176,7 @@ export async function staleBatch(
 
 /** What the caller is told of each stale item, in the order of the items. */
 function conflictsOf(
-  options: ChatServerOptions,
+  options: AssetWorkflowOptions,
   access: ActorAccess,
   stale: readonly StaleItem[]
 ): Promise<RevisionConflict[]> {

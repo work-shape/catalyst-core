@@ -134,7 +134,7 @@ const issueSchema = z.object({
 const configSchema = z
   .record(z.string(), z.unknown())
   .describe(
-    "The whole definition as the read answered it under 'config', with your changes: for a Workflow { name, manifest }, where 'manifest' is workflow.yaml as an object."
+    "The whole config as the read answered it under 'config', with your changes: every field it had, in the shape it had. What a config holds is decided by the kind of the asset, not by this tool."
   );
 const jsonObjectSchema = z.record(z.string(), z.unknown());
 

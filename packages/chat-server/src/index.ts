@@ -315,3 +315,4 @@ function adaptLogger(logger: Logger): FastifyInstance["log"] {
   };
 }
 export { createPlatformAssetCalls } from "./platform-asset-calls";
+export type { AssetWorkflowOptions } from "./types";

@@ -1,3 +1,4 @@
+import { createPlatformAssetCalls, type AssetWorkflowOptions } from "@vivd-catalyst/chat-server";
 import {
   SUBJECT_TOOL_PREFIX,
   WORKFLOW_ASSET_KIND,
@@ -86,7 +87,14 @@ export function createSubjectTools(input: Pick<ConversationOfferInput, "stores" 
   const attached: { tools?: ToolRegistry } = {};
   const platformAssets: PlatformAssetBinding = createPlatformAssetBinding();
   return {
-    platformAssets,
+    /**
+     * Binds the tools to the workflow of the asset operations of this process: the one the
+     * API's own asset operations run, with the stores, kinds and audit of the instance. Every
+     * process that runs agents binds it, the API process and an agent-run worker alike.
+     */
+    bind(options: AssetWorkflowOptions): void {
+      platformAssets.bind(createPlatformAssetCalls(options));
+    },
     tools: createPlatformAssetTools(platformAssets.calls),
     conversationOffer: createConversationOffer({
       ...input,
@@ -95,12 +103,19 @@ export function createSubjectTools(input: Pick<ConversationOfferInput, "stores" 
     /**
      * The tool registry of the process. The tools of a subject are bound to a conversation by
      * the server and listed by no agent, so no release names them: they are enabled beside
-     * the tools the release names, and the switch of their module turns them off.
+     * the tools the release names, and the switch of their module turns them off. The tool
+     * that reads a skill is enabled with them, so that the skill the platform ships for a
+     * subject is readable in its conversation whatever the release enables: an agent's own
+     * definition still lists the tool only where the release names it.
      */
     registry(tools: AnyToolDefinition[], enabledByRelease: ReadonlySet<string>): ToolRegistry {
       attached.tools = new ToolRegistry({
         tools,
-        enabledToolNames: new Set([...enabledByRelease, ...PLATFORM_ASSET_TOOL_NAMES]),
+        enabledToolNames: new Set([
+          ...enabledByRelease,
+          ...PLATFORM_ASSET_TOOL_NAMES,
+          READ_SKILL_TOOL
+        ]),
         modules: input.modules
       });
       return attached.tools;

@@ -18,7 +18,6 @@ import {
   createAppAssetKind,
   createConnectionAssetKind,
   createChatServer,
-  createPlatformAssetCalls,
   createChatServerJobs,
   createSkillAssetKind
 } from "@vivd-catalyst/chat-server";
@@ -207,7 +206,6 @@ export async function createClientInstanceApp(
     sessionToken,
     serviceAccessToken
   };
-  execution.platformAssets.bind(createPlatformAssetCalls(serverOptions));
   const server = await createChatServer(serverOptions, { routes: execution.modulesStarted.routes });
   const serverJobs = createChatServerJobs(serverOptions);
   const jobs = createJobWorker({
@@ -393,7 +391,7 @@ export async function createClientInstanceExecutionAssembly(
     approvalRequestHandlers.set(handler.kind, handler);
   }
   const subjectTools = createSubjectTools({ stores: store, modules });
-  const { conversationOffer, platformAssets } = subjectTools;
+  const { conversationOffer } = subjectTools;
   const { authorizer, operationCalls, approvalRequestCreator } = createInstanceOperationCalls({
     clientInstanceId,
     conversationOffer,
@@ -409,6 +407,9 @@ export async function createClientInstanceExecutionAssembly(
     operations: input.operations
   });
   const handlers = operationCalls.approvalRequestHandlers;
+  // The agent's asset tools are carried out by the asset operations, in this process too.
+  const assetOptions = { logger, config, modules, clientInstanceId, stores: store, pages };
+  subjectTools.bind({ ...assetOptions, auditRecorder, configAssets, authorizer, operationCalls });
   const workspaceService = config.executionWorkspaces.enabled
     ? new WorkspaceCommandService({
         store,
@@ -554,7 +555,6 @@ export async function createClientInstanceExecutionAssembly(
     approvalRequestHandlers: handlers,
     connections,
     modulesStarted,
-    platformAssets,
     async close() {
       await modulesStarted.close();
       await closeCapabilityContributions(capabilityContributions);

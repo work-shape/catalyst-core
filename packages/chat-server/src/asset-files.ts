@@ -22,7 +22,7 @@ import {
   type PageFileInput
 } from "./page-file-sets";
 import { createPageBuildClient } from "./page-jobs";
-import type { ChatServerOptions } from "./types";
+import type { AssetWorkflowOptions } from "./types";
 
 // The files of an asset whose revisions hold files: a write hands over the whole source set,
 // the build of Pages builds it, and the file set it leaves is immutable and owned by the
@@ -40,12 +40,12 @@ const UNBUILT_FILE_SET_KIT_VERSION = "none";
 export const ASSET_PUT_BODY_LIMIT_BYTES =
   Math.ceil(ASSET_PUT_FILES_MAX_BYTES / 3) * 4 + 1024 * 1024;
 
-type FilesContext = Pick<ChatServerOptions, "clientInstanceId" | "stores" | "pages">;
+type FilesContext = Pick<AssetWorkflowOptions, "clientInstanceId" | "stores" | "pages">;
 
 /** One source file as a call carries it. */
 export type AssetFileInput = { path: string; text: string } | { path: string; base64: string };
 
-function requireObjects(options: FilesContext): NonNullable<ChatServerOptions["pages"]> {
+function requireObjects(options: FilesContext): NonNullable<AssetWorkflowOptions["pages"]> {
   if (!options.pages) {
     throw new AppError(
       "VALIDATION_FAILED",

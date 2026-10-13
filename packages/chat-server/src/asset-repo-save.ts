@@ -10,7 +10,7 @@ import {
   type OperationRunId
 } from "@vivd-catalyst/core";
 import { createAssetRepoCommitClient } from "./asset-repo-jobs";
-import type { ChatServerOptions } from "./types";
+import type { AssetWorkflowOptions } from "./types";
 
 // The save of an asset whose files are a repository, as the API process makes it: the source
 // files of a stored file set of the asset become one commit, made by the worker that reaches
@@ -19,7 +19,7 @@ import type { ChatServerOptions } from "./types";
 //
 // Nothing here knows a kind of asset.
 
-type SaveContext = Pick<ChatServerOptions, "clientInstanceId" | "stores" | "pages">;
+type SaveContext = Pick<AssetWorkflowOptions, "clientInstanceId" | "stores" | "pages">;
 
 /** Who the ledger names as the author of a commit: the opaque id of the caller. */
 function authorOf(actor: AuthenticatedIdentity): string {

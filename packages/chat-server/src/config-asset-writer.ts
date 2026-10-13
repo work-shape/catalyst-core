@@ -9,10 +9,10 @@ import {
 } from "@vivd-catalyst/core";
 import { assetSetOf, validateAssetSet, withDefaultAgentName, type AssetSet } from "./asset-set";
 import { readDefinitionName, type WorkflowAssetKind } from "./asset-kinds/shared";
-import type { ChatServerOptions } from "./types";
+import type { AssetWorkflowOptions } from "./types";
 
 export type ConfigAssetWriterOptions = Pick<
-  ChatServerOptions,
+  AssetWorkflowOptions,
   "config" | "configAssets" | "clientInstanceId" | "pages"
 >;
 

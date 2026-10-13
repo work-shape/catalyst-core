@@ -25,7 +25,7 @@ import { z } from "zod";
 import type { AssetCall } from "./asset-access";
 import { readDefinitionName } from "./asset-kinds/shared";
 import { AssetWorkflow } from "./asset-workflow";
-import type { ChatServerOptions } from "./types";
+import type { AssetWorkflowOptions } from "./types";
 
 // What carries the agent's asset tools out: the workflow of the asset operations of the API,
 // called for the person the agent acts for, on the subject of the conversation the call came
@@ -47,7 +47,7 @@ const CALLABLE_PREFIXES = [
 ];
 
 type AssetOptions = Pick<
-  ChatServerOptions,
+  AssetWorkflowOptions,
   "clientInstanceId" | "stores" | "authorizer" | "auditRecorder" | "configAssets" | "modules"
 >;
 
@@ -69,10 +69,22 @@ const subjectUnavailable = () =>
  * the same way, so the refusal says nothing of what is stored.
  */
 export async function requireReadableSubject(
-  options: ChatServerOptions,
+  options: AssetWorkflowOptions,
   actor: AuthenticatedIdentity,
   subject: ConversationSubject
 ): Promise<void> {
+  const kind = options.configAssets.kinds.kinds.find(
+    (candidate) => candidate.kind === subject.kind
+  );
+  // The kind says this, not an asset: it tells nothing of what is stored.
+  if (kind && kind.lifecycle !== "draft_published") {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `A conversation is about an asset that has a draft. An asset of the kind '${subject.kind}' has none: a save of it is live at once`,
+      { reason: "subject_without_draft" },
+      { exposeMessage: true }
+    );
+  }
   let decision: OperationAuthorization;
   try {
     decision = await new AssetWorkflow(options).authorizeRead(
@@ -107,7 +119,7 @@ function jsonSchemaOf(given: JsonObject | undefined, schema: z.ZodType): JsonObj
   }
 }
 
-export function createPlatformAssetCalls(options: ChatServerOptions): PlatformAssetCalls {
+export function createPlatformAssetCalls(options: AssetWorkflowOptions): PlatformAssetCalls {
   const workflow = new AssetWorkflow(options);
 
   /** The asset the call is bound to, and the call as the asset operations take one. */
