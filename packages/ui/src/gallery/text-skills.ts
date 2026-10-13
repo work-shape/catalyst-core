@@ -17,6 +17,14 @@ export interface SkillsGalleryText {
   skillPlainLanguage: string;
   skillPlainLanguageSummary: string;
   skillOfferStructure: string;
+  starterListLabel: string;
+  starterSheet: string;
+  starterSheetHint: string;
+  starterLetter: string;
+  starterLetterHint: string;
+  starterPlain: string;
+  starterPdf: string;
+  starterPdfHint: string;
 }
 
 export const skillsGalleryText: Record<"en" | "de", SkillsGalleryText> = {
@@ -38,7 +46,15 @@ export const skillsGalleryText: Record<"en" | "de", SkillsGalleryText> = {
     skillPdfSummary: "Knows how to read, fill and assemble PDFs, and to verify the result.",
     skillPlainLanguage: "Plain language",
     skillPlainLanguageSummary: "Knows how to write short, easy sentences in German and English.",
-    skillOfferStructure: "Offer structure"
+    skillOfferStructure: "Offer structure",
+    starterListLabel: "Suggestions to start with",
+    starterSheet: "Turn a list into a spreadsheet",
+    starterSheetHint: "With formulas and a chart",
+    starterLetter: "Draft a letter",
+    starterLetterHint: "As a document",
+    starterPlain: "Simplify a text",
+    starterPdf: "Pull figures out of a PDF",
+    starterPdfHint: "Into a table"
   },
   de: {
     skillIconSizes:
@@ -62,6 +78,14 @@ export const skillsGalleryText: Record<"en" | "de", SkillsGalleryText> = {
     skillPlainLanguage: "Einfache Sprache",
     skillPlainLanguageSummary:
       "Weiß, wie man kurze, einfache Sätze auf Deutsch und Englisch schreibt.",
-    skillOfferStructure: "Angebotsaufbau"
+    skillOfferStructure: "Angebotsaufbau",
+    starterListLabel: "Vorschläge für den Einstieg",
+    starterSheet: "Aus einer Liste eine Tabelle machen",
+    starterSheetHint: "Mit Formeln und einem Diagramm",
+    starterLetter: "Einen Brief entwerfen",
+    starterLetterHint: "Als Dokument",
+    starterPlain: "Einen Text vereinfachen",
+    starterPdf: "Zahlen aus einem PDF ziehen",
+    starterPdfHint: "In eine Tabelle"
   }
 };

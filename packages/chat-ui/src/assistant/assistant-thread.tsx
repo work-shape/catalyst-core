@@ -8,7 +8,7 @@ import {
 import { ArrowDown, CircleAlert, Lock } from "lucide-react";
 import { useLayoutEffect, useMemo, useRef, type RefObject } from "react";
 import type { DraftAttachment, SafeConfig } from "@vivd-catalyst/api-client";
-import { Banner, cn } from "@vivd-catalyst/ui";
+import { Banner, cn, SkillIcon, Starter, StarterList } from "@vivd-catalyst/ui";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
 import {
   agentChipDisplayFor,
@@ -279,7 +279,20 @@ export function AssistantThread({
               </div>
             </ThreadPrimitive.ViewportFooter>
 
-            {startPage ? <ThreadStartBlock initialPrompts={initialPrompts} /> : null}
+            {startPage ? (
+              <ThreadStartBlock
+                initialPrompts={initialPrompts}
+                starters={agent?.starters ?? []}
+                onStarterChosen={() => {
+                  // The request stands in the composer now: the person goes on writing there.
+                  window.requestAnimationFrame(() => {
+                    const input = composerRef.current?.querySelector("textarea");
+                    input?.focus({ preventScroll: true });
+                    input?.setSelectionRange(input.value.length, input.value.length);
+                  });
+                }}
+              />
+            ) : null}
           </div>
         </ThreadPrimitive.Viewport>
       </ThreadPrimitive.Root>
@@ -427,13 +440,39 @@ export function ThreadWelcomeHeading({
 const suggestionChipClassName =
   "inline-flex min-h-8 max-w-full items-center rounded-full border px-3 py-1 text-left text-body transition-colors hover:bg-state-hover focus-visible:focus-ring";
 
-function ThreadStartBlock({
-  initialPrompts
+/** What the start page offers under the composer: the starters, then the agent's own prompts. */
+export function ThreadStartBlock({
+  initialPrompts,
+  starters,
+  onStarterChosen
 }: {
   initialPrompts: Array<{ title: string; prompt: string }>;
+  starters: NonNullable<SafeConfig["agents"][number]["starters"]>;
+  onStarterChosen(): void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="grid flex-[3] basis-0 content-start gap-5 pb-8 pt-2">
+      {/* What the agent's skills offer to begin with. Choosing one fills the composer and
+          sends nothing, so the person reads and completes the request first. */}
+      {starters.length > 0 ? (
+        <StarterList label={t("chatStarters")}>
+          {starters.map((starter, index) => (
+            <ThreadPrimitive.Suggestion
+              key={`${index}:${starter.skillName}:${starter.title}`}
+              prompt={starter.prompt}
+              asChild
+            >
+              <Starter
+                icon={<SkillIcon icon={starter.icon} size="lg" />}
+                title={starter.title}
+                hint={starter.hint}
+                onClick={onStarterChosen}
+              />
+            </ThreadPrimitive.Suggestion>
+          ))}
+        </StarterList>
+      ) : null}
       {initialPrompts.length > 0 ? (
         <div className="flex flex-wrap justify-center gap-2">
           {initialPrompts.map((initialPrompt) => (
