@@ -649,11 +649,25 @@ skills:
     });
     const mergeRequests: unknown[] = [];
     const { fetchImpl, fixture } = await instanceHolding(remote, mergeRequests);
-    // A row of a kind no release carries, left by a module that is off.
+    // A row of a kind no release carries, left by a module that is off, and a skill that ships
+    // with the platform, which no working copy holds.
     await applyAtCurrentRevisions(fixture.store.configAssets, {
       clientInstanceId: fixture.clientInstanceId,
       mutations: [
-        { type: "upsert", kind: "connection", name: "crm", config: { name: "crm", title: "CRM" } }
+        { type: "upsert", kind: "connection", name: "crm", config: { name: "crm", title: "CRM" } },
+        {
+          type: "upsert",
+          kind: "skill",
+          name: "platform-guide",
+          config: {
+            name: "platform-guide",
+            title: "How this platform works",
+            description: "Shipped.",
+            content: "Shipped.",
+            origin: "release",
+            icon: "guide"
+          }
+        }
       ]
     });
     const mergeStdout: string[] = [];
@@ -720,13 +734,19 @@ skills:
       ]
     });
     expect(pruneStdout.join("")).not.toContain("crm");
-    expect(
-      await fixture.store.configAssets.getConfigAsset({
-        clientInstanceId: fixture.clientInstanceId,
-        kind: "connection",
-        name: "crm"
-      })
-    ).toMatchObject({ status: "active", revision: 1 });
+    expect(mergeStdout.join("") + pruneStdout.join("")).not.toContain("platform-guide");
+    for (const [kind, name] of [
+      ["connection", "crm"],
+      ["skill", "platform-guide"]
+    ] as const) {
+      expect(
+        await fixture.store.configAssets.getConfigAsset({
+          clientInstanceId: fixture.clientInstanceId,
+          kind,
+          name
+        })
+      ).toMatchObject({ status: "active", revision: 1 });
+    }
   });
 
   it("sends only selected assets on push and rejects --prune with --only", async () => {

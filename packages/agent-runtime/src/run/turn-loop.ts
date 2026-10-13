@@ -25,7 +25,7 @@ import {
   ModelInput,
   getProviderCompactionThreshold,
   getSnapshotAgentConfig,
-  getSnapshotSkillMetadataForAgent
+  getSnapshotSkillMetadata
 } from "./model-input";
 import { isCancellationRequested, type RunEvents } from "./run-events";
 import type { ToolDispatch } from "./tool-dispatch";
@@ -132,14 +132,7 @@ export class TurnLoop {
       role: "system",
       content: createSystemInstructions(agent.instructions, context.locale, {
         currentDate: this.options.clock?.now() ?? systemClock.now(),
-        skills: [
-          ...getSnapshotSkillMetadataForAgent(assets, agent),
-          ...(offer?.skills ?? []).map(({ name, title, description }) => ({
-            name,
-            title,
-            description
-          }))
-        ],
+        skills: getSnapshotSkillMetadata(assets, agent, offer?.skillNames ?? []),
         agentToolNames: agent.toolNames,
         agentSkillChangesEnabled: this.options.agentSkillChangesEnabled,
         ...(offer?.subject ? { subject: { ...offer, subject: offer.subject } } : {})
