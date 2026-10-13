@@ -182,6 +182,16 @@ guardrails:
       pattern: '(?i)\bDE\d{2}(?:\s?\d{4}){4}\s?\d{2}\b'
       reason: Assets hold no bank account numbers. Remove the IBAN and save again.
     outcome: block
+  # The same rule where an App goes live: an App written before the rule existed, or from a
+  # revision it never read, is checked when it is published.
+  no_iban_in_apps:
+    displayName: No IBAN in published Apps
+    on: app.before_publish
+    check:
+      kind: pattern
+      pattern: '(?i)\bDE\d{2}(?:\s?\d{4}){4}\s?\d{2}\b'
+      reason: Apps hold no bank account numbers. Remove the IBAN and publish again.
+    outcome: block
 usage:
   budget:
     dailySpendLimit: 50
