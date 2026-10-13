@@ -1,5 +1,5 @@
 {
-  "id": "fabe103c-0c65-4767-a40d-24a67f8a3da2",
+  "id": "92da596a-1dd9-4241-9f41-4af0da73112a",
   "prevId": "94a511d1-c480-49a9-b64d-1f7bd764f90b",
   "version": "7",
   "dialect": "postgresql",
@@ -7864,18 +7864,6 @@
         },
         "subject_kind": {
           "name": "subject_kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "actor_id": {
-          "name": "actor_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "actor_label": {
-          "name": "actor_label",
           "type": "text",
           "primaryKey": false,
           "notNull": true

@@ -7688,7 +7688,7 @@
     "/api/v1/guardrails/{name}/hits": {
       "get": {
         "operationId": "guardrails.list_hits",
-        "summary": "List the newest times one Guardrail warned or blocked",
+        "summary": "List the newest times one Guardrail warned or blocked, and count them by period",
         "tags": [
           "Guardrails"
         ],
@@ -7751,21 +7751,6 @@
                           "subjectKind": {
                             "type": "string"
                           },
-                          "actor": {
-                            "type": "object",
-                            "properties": {
-                              "id": {
-                                "type": "string"
-                              },
-                              "displayLabel": {
-                                "type": "string"
-                              }
-                            },
-                            "required": [
-                              "id",
-                              "displayLabel"
-                            ]
-                          },
                           "createdAt": {
                             "$ref": "#/components/schemas/Timestamp"
                           }
@@ -7776,18 +7761,37 @@
                           "outcome",
                           "message",
                           "subjectKind",
-                          "actor",
                           "createdAt"
                         ]
                       }
                     },
                     "hasMore": {
                       "type": "boolean"
+                    },
+                    "counts": {
+                      "type": "object",
+                      "properties": {
+                        "last7Days": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "last30Days": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "last7Days",
+                        "last30Days"
+                      ]
                     }
                   },
                   "required": [
                     "items",
-                    "hasMore"
+                    "hasMore",
+                    "counts"
                   ]
                 }
               }

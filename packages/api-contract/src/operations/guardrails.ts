@@ -2,8 +2,10 @@ import { z } from "zod";
 import { timestampSchema } from "../shared";
 import { defineRegisteredOperation, json } from "./define-operation";
 
-// What a Guardrail's page reads beyond the asset itself: the times it warned or blocked. The
-// asset, with its event, check and outcome, is read through `assets.get`.
+// What a Guardrail's page reads beyond the asset itself: the times it warned or blocked, and how
+// often. The asset, with its event, check and outcome, is read through `assets.get`. A hit names
+// no person: hits are counted by rule and period, never listed by person (works-council
+// co-determination, §87(1) no. 6 BetrVG). Who made a request is in the audit log.
 
 /** How many hits one read answers: the newest ones. The page says that older ones exist. */
 export const GUARDRAIL_HITS_LIMIT = 50;
@@ -17,14 +19,20 @@ export const guardrailHitSchema = z.object({
   message: z.string(),
   /** What was checked: for an approval request its kind, such as `skill_change`. */
   subjectKind: z.string(),
-  actor: z.object({ id: z.string(), displayLabel: z.string() }),
   createdAt: timestampSchema
+});
+
+/** How often the guardrail warned or blocked, by the instance's clock. */
+export const guardrailHitCountsSchema = z.object({
+  last7Days: z.number().int().nonnegative(),
+  last30Days: z.number().int().nonnegative()
 });
 
 export const guardrailHitsSchema = z.object({
   items: z.array(guardrailHitSchema),
   /** More hits exist than this answer holds. */
-  hasMore: z.boolean()
+  hasMore: z.boolean(),
+  counts: guardrailHitCountsSchema
 });
 
 export type GuardrailHitView = z.infer<typeof guardrailHitSchema>;
@@ -37,7 +45,7 @@ export const guardrailOperations = {
     id: "guardrails.list_hits",
     method: "GET",
     path: "/api/v1/guardrails/:name/hits",
-    summary: "List the newest times one Guardrail warned or blocked",
+    summary: "List the newest times one Guardrail warned or blocked, and count them by period",
     tag: "Guardrails",
     auth: "principal",
     scope: "config_assets:read",

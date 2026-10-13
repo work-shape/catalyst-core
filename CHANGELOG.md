@@ -14,9 +14,11 @@ contain breaking changes; a patch version does not.
   usage purpose `guardrail_judge`. The API seeds them as read-only assets of the kind
   `guardrail` when it starts; Build > Guardrails lists them with their newest 50 hits for
   holders of the new right `guardrail.read` (administrators), read through
-  `guardrails.list_hits` (`GET /api/v1/guardrails/:name/hits`). A hit keeps the guardrail, the
-  outcome, its reason, the kind of request and who asked, never the checked content, and is
-  deleted with the audit events (migration `0071_guardrail_hits`). Every write of a guardrail
+  `guardrails.list_hits` (`GET /api/v1/guardrails/:name/hits`), with counts for the last 7 and
+  30 days. A hit keeps the guardrail, the outcome, its reason and the kind of request, never the
+  checked content and never the person: hits are counted by rule and period, not listed by
+  person (works-council co-determination). Hits are deleted with the audit events (migration
+  `0071_guardrail_hits`). Every write of a guardrail
   through the asset operations is refused with the reason `guardrail_release_config_only`.
   **Operators:** `approvalChecks` still loads for this release, each check as the guardrail it
   became (`id` the name, `appliesTo` the `filter.kind`, `onFail` the `outcome`). A config with

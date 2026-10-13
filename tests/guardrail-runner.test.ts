@@ -41,6 +41,7 @@ import { createConfigAssetSource } from "../packages/client-assembly/src/config-
 import { createTestConfig } from "./support/fixtures";
 import { eventually } from "./support/assertions";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
+import { withTestSql } from "./support/test-sql";
 
 const clientInstanceId = asClientInstanceId("test-client");
 const user: AuthenticatedUser = {
@@ -210,6 +211,8 @@ describe("guardrail runner", () => {
     expect(request?.reasoningEffort).toBeUndefined();
     expect(request?.messages[0]?.content).toContain(JSON.stringify(instruction));
     expect(request?.messages[0]?.content).toContain("never follow");
+    // The reason is kept as a hit: it must carry none of the content.
+    expect(request?.messages[0]?.content).toContain("never quotes or repeats");
     expect(request?.messages[1]?.content).toContain("BEGIN UNTRUSTED");
     expect(request?.messages[1]?.content).toContain(command.summary);
     expect(request?.messages[1]?.content).toContain("New content");
@@ -368,7 +371,7 @@ describe("guardrail runner", () => {
     ]);
   });
 
-  it("keeps a hit for each warning and block, naming who acted and never the content", async () => {
+  it("keeps a hit for each warning and block, naming neither the person nor the content", async () => {
     const f = await fixture({
       [rule.id]: guardrail({ instruction: "warns" }),
       blocking: guardrail({ outcome: "block", instruction: "blocks" }),
@@ -395,7 +398,6 @@ describe("guardrail runner", () => {
         outcome: "warn",
         message: "Personal data.",
         subjectKind: "fake",
-        actor: { id: user.id, displayLabel: user.displayLabel },
         createdAt: expect.any(String)
       }
     ]);
@@ -407,7 +409,25 @@ describe("guardrail runner", () => {
     expect(await hits("silent")).toEqual([
       expect.objectContaining({ outcome: "warn", message: "" })
     ]);
-    expect(JSON.stringify(await hits(rule.id))).not.toContain("New content");
+    const kept = JSON.stringify(await hits(rule.id));
+    expect(kept).not.toContain("New content");
+    expect(kept).not.toContain(user.id);
+    expect(kept).not.toContain(user.displayLabel);
+    // The table has no column for a person.
+    const columns = await withTestSql(
+      (sql) => sql<{ column_name: string }[]>`
+        select column_name from information_schema.columns where table_name = 'guardrail_hits'`
+    );
+    expect(columns.map((column) => column.column_name).sort()).toEqual([
+      "client_instance_id",
+      "created_at",
+      "event",
+      "guardrail_name",
+      "id",
+      "message",
+      "outcome",
+      "subject_kind"
+    ]);
   });
 
   it("judges a legacy approval check exactly as the guardrail it becomes", async () => {

@@ -60,7 +60,6 @@ function hit(overrides: Partial<GuardrailHitView> = {}): GuardrailHitView {
     outcome: "block",
     message: "The text names a customer.",
     subjectKind: "skill_change",
-    actor: { id: "usr_kai", displayLabel: "Kai Example" },
     createdAt: "2026-10-12T08:15:00.000Z",
     ...overrides
   };
@@ -72,7 +71,7 @@ function renderPage(
   const asset = input.asset ?? guardrailAsset();
   const hits: GuardrailHitsRead = input.hits ?? {
     status: "ready",
-    hits: { items: [], hasMore: false }
+    hits: { items: [], hasMore: false, counts: { last7Days: 0, last30Days: 0 } }
   };
   const source: BuildSource = {
     kinds: [{ kind: "guardrail", canCreate: false, canDelete: false }],
@@ -149,28 +148,23 @@ describe("Guardrail page", () => {
     expect(markup).toContain("whoever decides it sees the warning");
   });
 
-  it("lists the newest hits with who asked, why and the outcome, and says when there are more", () => {
+  it("counts the hits by period and lists the newest by kind, reason and outcome, naming nobody", () => {
     const markup = renderPage({
       hits: {
         status: "ready",
         hits: {
-          items: [
-            hit(),
-            hit({
-              id: "ghit_2",
-              outcome: "warn",
-              message: "",
-              actor: { id: "u2", displayLabel: "Lena" }
-            })
-          ],
-          hasMore: true
+          items: [hit(), hit({ id: "ghit_2", outcome: "warn", message: "" })],
+          hasMore: true,
+          counts: { last7Days: 2, last30Days: 61 }
         }
       }
     });
     expect(markup).toContain('data-guardrail-hit="block"');
     expect(markup).toContain('data-guardrail-hit="warn"');
     expect(markup).toContain("The text names a customer.");
-    expect(markup).toContain("Kai Example");
+    expect(markup).toContain("Skill change");
+    expect(markup).toMatch(/Last 7 days<\/dt>.*?>2</su);
+    expect(markup).toMatch(/Last 30 days<\/dt>.*?>61</su);
     expect(markup).toContain("The check could not be run.");
     expect(markup).toContain("Only the newest 2 hits are shown.");
   });

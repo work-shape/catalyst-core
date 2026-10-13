@@ -6,8 +6,6 @@ CREATE TABLE "guardrail_hits" (
 	"outcome" text NOT NULL,
 	"message" text NOT NULL,
 	"subject_kind" text NOT NULL,
-	"actor_id" text NOT NULL,
-	"actor_label" text NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint

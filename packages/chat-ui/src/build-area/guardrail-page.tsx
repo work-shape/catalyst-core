@@ -161,7 +161,11 @@ export function GuardrailPage({
   );
 }
 
-/** The newest hits, the newest first: who acted, on what, why, and when. */
+/**
+ * How often the guardrail fired, by period, and the newest hits, the newest first: on what kind
+ * of request, why, and when. No hit names a person: hits are counted by rule and period, never
+ * listed by person (works-council co-determination, §87(1) no. 6 BetrVG).
+ */
 function GuardrailHitList({
   read,
   subjectLabel
@@ -183,12 +187,16 @@ function GuardrailHitList({
       </InlineError>
     );
   }
-  const { items, hasMore } = read.hits;
+  const { items, hasMore, counts } = read.hits;
   if (items.length === 0) {
     return <EmptyState layout="inline">{t("guardrails.hitsEmpty")}</EmptyState>;
   }
   return (
     <>
+      <KeyValueList className="pb-3" data-guardrail-hit-counts="">
+        <KeyValue label={t("guardrails.hitsLast7Days")}>{counts.last7Days}</KeyValue>
+        <KeyValue label={t("guardrails.hitsLast30Days")}>{counts.last30Days}</KeyValue>
+      </KeyValueList>
       <List aria-label={t("guardrails.hitsTitle")}>
         {items.map((hit: GuardrailHitView) => {
           const view = GUARDRAIL_OUTCOME_VIEWS[hit.outcome];
@@ -198,10 +206,7 @@ function GuardrailHitList({
               key={hit.id}
               data-guardrail-hit={hit.outcome}
               leading={<Icon aria-hidden="true" className="size-4 text-muted-foreground" />}
-              title={t("guardrails.hitTitle", {
-                actor: hit.actor.displayLabel,
-                subject: subjectLabel(hit.subjectKind)
-              })}
+              title={subjectLabel(hit.subjectKind)}
               chips={
                 <Badge tone={view.tone} size="sm">
                   {t(view.hitLabel)}

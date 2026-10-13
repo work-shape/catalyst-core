@@ -115,18 +115,18 @@ export async function plantReleaseAsset(asset: {
 /** Writes hits of one Guardrail, the newest first, each an hour before the one before it. */
 export async function plantGuardrailHits(
   guardrailName: string,
-  hits: readonly { outcome: "warn" | "block"; message: string; actor: string; kind: string }[]
+  hits: readonly { outcome: "warn" | "block"; message: string; kind: string }[]
 ): Promise<void> {
   await withSql(async (sql) => {
     for (const [index, hit] of hits.entries()) {
       await sql`
         insert into guardrail_hits
           (id, client_instance_id, guardrail_name, event, outcome, message, subject_kind,
-           actor_id, actor_label, created_at)
+           created_at)
         values
           (${`ghit_${randomUUID()}`}, ${clientInstanceId}, ${guardrailName},
            'approval_request.before_create', ${hit.outcome}, ${hit.message}, ${hit.kind},
-           ${`usr_${randomUUID()}`}, ${hit.actor}, now() - make_interval(hours => ${index}))`;
+           now() - make_interval(hours => ${index}))`;
     }
   });
 }

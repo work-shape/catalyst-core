@@ -114,16 +114,14 @@ test("Build lists the Guardrails read-only, and a Guardrail's page shows its new
       {
         outcome: "block",
         message: "The text names a customer and a file number.",
-        actor: "Kai Example",
         kind: "skill_change"
       },
       {
         outcome: "block",
         message: "The text contains an IBAN.",
-        actor: "Lena Example",
         kind: "skill_change"
       },
-      { outcome: "warn", message: "", actor: "Kai Example", kind: "skill_change" }
+      { outcome: "warn", message: "", kind: "skill_change" }
     ]);
 
     await test.step("the list says what each Guardrail does and offers nothing to create", async () => {
@@ -145,7 +143,7 @@ test("Build lists the Guardrails read-only, and a Guardrail's page shows its new
       });
     });
 
-    await test.step("a Guardrail's page shows its check and its hits, newest first", async () => {
+    await test.step("a Guardrail's page counts its hits and lists them newest first, naming nobody", async () => {
       await page.goto(`/build/guardrails/${privacy.name}`);
       await expect(
         page.getByRole("heading", { name: "No personal data in skills", level: 1 })
@@ -155,6 +153,12 @@ test("Build lists the Guardrails read-only, and a Guardrail's page shows its new
       await expect(hits).toHaveCount(3);
       await expect(hits.first()).toContainText("The text names a customer and a file number.");
       await expect(hits.nth(2)).toContainText("The check could not be run.");
+      // A hit says on what kind of request, not who asked.
+      await expect(hits.first()).toContainText("Skill change");
+      const counts = main.locator("[data-guardrail-hit-counts]");
+      await expect(counts).toContainText("Last 7 days");
+      await expect(counts).toContainText("Last 30 days");
+      await expect(counts.locator("dd")).toHaveText(["3", "3"]);
       await expect(main.getByRole("button", { name: /Save/u })).toHaveCount(0);
       await shoot("guardrail-page", async () => {
         await expect(main.locator("[data-guardrail-hit]")).toHaveCount(3);

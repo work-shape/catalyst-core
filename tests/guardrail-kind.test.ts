@@ -44,17 +44,20 @@ const listedSchema = z.object({
 
 const hitsSchema = z.object({
   items: z.array(
-    z.object({
-      id: z.string(),
-      event: z.string(),
-      outcome: z.enum(["warn", "block"]),
-      message: z.string(),
-      subjectKind: z.string(),
-      actor: z.object({ id: z.string(), displayLabel: z.string() }),
-      createdAt: z.string()
-    })
+    z
+      .object({
+        id: z.string(),
+        event: z.string(),
+        outcome: z.enum(["warn", "block"]),
+        message: z.string(),
+        subjectKind: z.string(),
+        createdAt: z.string()
+      })
+      // A hit names no person: an answer that carried one fails here.
+      .strict()
   ),
-  hasMore: z.boolean()
+  hasMore: z.boolean(),
+  counts: z.object({ last7Days: z.number(), last30Days: z.number() }).strict()
 });
 
 function hit(overrides: Partial<NewGuardrailHit> = {}): NewGuardrailHit {
@@ -64,7 +67,6 @@ function hit(overrides: Partial<NewGuardrailHit> = {}): NewGuardrailHit {
     outcome: "block",
     message: "Remove the personal data.",
     subjectKind: "skill_change",
-    actor: { id: "usr_kai", displayLabel: "Kai" },
     ...overrides
   };
 }
@@ -198,14 +200,37 @@ describe("the hits of a Guardrail", () => {
       event: "approval_request.before_create",
       outcome: "block",
       message: "Hit 50",
-      subjectKind: "skill_change",
-      actor: { id: "usr_kai", displayLabel: "Kai" }
+      subjectKind: "skill_change"
     });
+    expect(privacyHits.counts).toEqual({ last7Days: 51, last30Days: 51 });
     expect(privacyHits.items.at(-1)?.message).toBe("Hit 1");
     expect(await read("hits-tone")).toEqual({
       items: [expect.objectContaining({ outcome: "warn", message: "" })],
-      hasMore: false
+      hasMore: false,
+      counts: { last7Days: 1, last30Days: 1 }
     });
+  });
+
+  it("counts the hits of the last 7 and the last 30 days by the database's clock", async () => {
+    const t = await seeded({ counted: privacy });
+    await t.stores.guardrails.recordHits({
+      clientInstanceId,
+      hits: ["now", "ten days", "forty days"].map((message) =>
+        hit({ guardrailName: "counted", message })
+      )
+    });
+    await withTestSql(
+      (sql) => sql`
+        update guardrail_hits set created_at = now() - case message
+          when 'ten days' then interval '10 days' else interval '40 days' end
+        where client_instance_id = ${clientInstanceId} and guardrail_name = 'counted'
+          and message <> 'now'`
+    );
+    const answer = hitsSchema.parse(
+      (await t.expectOk(t.admin.id, "guardrails.list_hits", { params: { name: "counted" } })).json()
+    );
+    expect(answer.counts).toEqual({ last7Days: 1, last30Days: 2 });
+    expect(answer.items.map((item) => item.message)).toEqual(["now", "ten days", "forty days"]);
   });
 
   it("asks the Guardrail's read right, and knows no Guardrail release config does not hold", async () => {

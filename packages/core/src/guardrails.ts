@@ -68,8 +68,10 @@ export interface GuardrailConfig {
 }
 
 /**
- * One time a guardrail warned or blocked. It names who acted and what kind of thing was
- * checked, never the content: the reason is the guardrail's one sentence.
+ * One time a guardrail warned or blocked: the rule, when, the kind of what was checked and the
+ * reason. It names no person and holds no content. Hits are counted by rule and period, never
+ * listed by person: monitoring employees needs the works council's co-determination (§87(1)
+ * no. 6 BetrVG). Who made a request is in the audit log, under its own access and retention.
  */
 export interface GuardrailHit {
   id: string;
@@ -80,8 +82,13 @@ export interface GuardrailHit {
   message: string;
   /** What was checked: for `approval_request.before_create` the kind of the request. */
   subjectKind: string;
-  actor: { id: string; displayLabel: string };
   createdAt: ISODateString;
+}
+
+/** How often one guardrail warned or blocked in the last 7 and the last 30 days. */
+export interface GuardrailHitCounts {
+  last7Days: number;
+  last30Days: number;
 }
 
 export type NewGuardrailHit = Omit<GuardrailHit, "id" | "createdAt">;
@@ -100,6 +107,11 @@ export interface GuardrailStore {
     guardrailName: string;
     limit: number;
   }): Promise<GuardrailHit[]>;
+  /** How often one guardrail warned or blocked, by period, by the database's clock. */
+  countHits(input: {
+    clientInstanceId: ClientInstanceId;
+    guardrailName: string;
+  }): Promise<GuardrailHitCounts>;
   /** Deletes the hits older than the audit retention. Answers how many it deleted. */
   deleteHitsOlderThan(input: { clientInstanceId: ClientInstanceId; days: number }): Promise<number>;
 }

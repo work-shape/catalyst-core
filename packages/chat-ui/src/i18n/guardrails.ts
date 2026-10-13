@@ -28,11 +28,12 @@ export const guardrails = defineTranslations({
     "guardrails.rule": "Rule",
     "guardrails.hitsTitle": "Recent hits",
     "guardrails.hitsDescription":
-      "The newest times this guardrail warned or blocked. Hits are kept as long as the audit log.",
+      "How often and when this guardrail warned or blocked, without naming anyone. Hits are kept as long as the audit log.",
     "guardrails.hitsEmpty": "No hits yet. Every warning and every block shows here.",
     "guardrails.hitsFailed": "The hits of this guardrail could not be loaded.",
     "guardrails.hitsMore": "Only the newest {count} hits are shown.",
-    "guardrails.hitTitle": "{actor}: {subject}",
+    "guardrails.hitsLast7Days": "Last 7 days",
+    "guardrails.hitsLast30Days": "Last 30 days",
     "guardrails.hitWarned": "Warned",
     "guardrails.hitBlocked": "Blocked",
     "guardrails.hitUnevaluated": "The check could not be run."
@@ -66,11 +67,12 @@ export const guardrails = defineTranslations({
     "guardrails.rule": "Regel",
     "guardrails.hitsTitle": "Letzte Treffer",
     "guardrails.hitsDescription":
-      "Wann diese Leitplanke zuletzt gewarnt oder blockiert hat. Treffer bleiben so lange wie das Audit-Protokoll.",
+      "Wie oft und wann diese Leitplanke gewarnt oder blockiert hat, ohne Personen zu nennen. Treffer bleiben so lange wie das Audit-Protokoll.",
     "guardrails.hitsEmpty": "Noch keine Treffer. Jede Warnung und jede Blockade erscheint hier.",
     "guardrails.hitsFailed": "Die Treffer dieser Leitplanke konnten nicht geladen werden.",
     "guardrails.hitsMore": "Nur die neuesten {count} Treffer werden gezeigt.",
-    "guardrails.hitTitle": "{actor}: {subject}",
+    "guardrails.hitsLast7Days": "Letzte 7 Tage",
+    "guardrails.hitsLast30Days": "Letzte 30 Tage",
     "guardrails.hitWarned": "Gewarnt",
     "guardrails.hitBlocked": "Blockiert",
     "guardrails.hitUnevaluated": "Die Prüfung konnte nicht ausgeführt werden."

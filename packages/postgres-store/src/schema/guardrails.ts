@@ -2,9 +2,10 @@ import { index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import type { GuardrailEvent, GuardrailOutcome } from "@vivd-catalyst/core";
 
 /**
- * One time a guardrail warned or blocked. A row names who acted and the kind of what was
- * checked, never its content. Rows older than the audit retention are deleted with the audit
- * events. A guardrail that leaves release config keeps its rows until then.
+ * One time a guardrail warned or blocked. A row names the kind of what was checked, never its
+ * content and never the person: who made a request is in the audit log. Rows older than the
+ * audit retention are deleted with the audit events. A guardrail that leaves release config
+ * keeps its rows until then.
  */
 export const guardrailHits = pgTable(
   "guardrail_hits",
@@ -16,8 +17,6 @@ export const guardrailHits = pgTable(
     outcome: text("outcome").$type<GuardrailOutcome>().notNull(),
     message: text("message").notNull(),
     subjectKind: text("subject_kind").notNull(),
-    actorId: text("actor_id").notNull(),
-    actorLabel: text("actor_label").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
   },
   (table) => [

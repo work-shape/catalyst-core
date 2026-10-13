@@ -45,11 +45,15 @@ export function registerGuardrailRoutes(route: Route, options: ChatServerOptions
         throw new AppError("NOT_FOUND", `There is no Guardrail '${input.name}'`);
       }
       // One more than is answered tells whether older ones exist.
-      const hits = await options.stores.guardrails.listHits({
-        clientInstanceId,
-        guardrailName: input.name,
-        limit: GUARDRAIL_HITS_LIMIT + 1
-      });
+      const [hits, counts] = await Promise.all([
+        options.stores.guardrails.listHits({
+          clientInstanceId,
+          guardrailName: input.name,
+          limit: GUARDRAIL_HITS_LIMIT + 1
+        }),
+        options.stores.guardrails.countHits({ clientInstanceId, guardrailName: input.name })
+      ]);
+      // No hit names a person: hits are counted by rule and period, never listed by person.
       return {
         items: hits.slice(0, GUARDRAIL_HITS_LIMIT).map((hit) => ({
           id: hit.id,
@@ -57,9 +61,9 @@ export function registerGuardrailRoutes(route: Route, options: ChatServerOptions
           outcome: hit.outcome,
           message: hit.message,
           subjectKind: hit.subjectKind,
-          actor: hit.actor,
           createdAt: hit.createdAt
         })),
+        counts,
         hasMore: hits.length > GUARDRAIL_HITS_LIMIT
       };
     }

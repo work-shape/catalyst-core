@@ -1,4 +1,4 @@
-import { and, desc, eq, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { createPlatformId, type GuardrailHit, type GuardrailStore } from "@vivd-catalyst/core";
 import type { PostgresConnection } from "../postgres-database";
 import { guardrailHits } from "../schema/guardrails";
@@ -23,9 +23,7 @@ export function createPostgresGuardrailsStore(db: PostgresConnection): Guardrail
           event: hit.event,
           outcome: hit.outcome,
           message: hit.message,
-          subjectKind: hit.subjectKind,
-          actorId: hit.actor.id,
-          actorLabel: hit.actor.displayLabel
+          subjectKind: hit.subjectKind
         }))
       );
     },
@@ -48,9 +46,28 @@ export function createPostgresGuardrailsStore(db: PostgresConnection): Guardrail
         outcome: row.outcome,
         message: row.message,
         subjectKind: row.subjectKind,
-        actor: { id: row.actorId, displayLabel: row.actorLabel },
         createdAt: row.createdAt.toISOString()
       }));
+    },
+    async countHits({ clientInstanceId, guardrailName }) {
+      // The periods are the database's: its clock stamped the hits.
+      const [row] = await db
+        .select({
+          last7Days:
+            sql<number>`count(*) filter (where ${guardrailHits.createdAt} >= now() - interval '7 days')`.mapWith(
+              Number
+            ),
+          last30Days: sql<number>`count(*)`.mapWith(Number)
+        })
+        .from(guardrailHits)
+        .where(
+          and(
+            eq(guardrailHits.clientInstanceId, clientInstanceId),
+            eq(guardrailHits.guardrailName, guardrailName),
+            gte(guardrailHits.createdAt, sql`now() - interval '30 days'`)
+          )
+        );
+      return { last7Days: row?.last7Days ?? 0, last30Days: row?.last30Days ?? 0 };
     },
     async deleteHitsOlderThan({ clientInstanceId, days }) {
       // The cutoff is the database's: its clock stamped the hits.
