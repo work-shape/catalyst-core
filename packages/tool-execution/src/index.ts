@@ -22,7 +22,8 @@ export {
   PLATFORM_ASSET_LIST_MAX,
   createPlatformDiscoveryTools,
   type PlatformAssetFound,
-  type PlatformContextRead
+  type PlatformContextRead,
+  type PlatformFileFound
 } from "./platform-discovery-tools";
 export * from "./workspace-tools";
 export * from "./workspace-tool-schemas";

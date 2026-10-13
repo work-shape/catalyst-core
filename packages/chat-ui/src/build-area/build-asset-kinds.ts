@@ -3,6 +3,7 @@ import { agentKind } from "./agent-kind";
 import type { BuildKind } from "./build-asset-kind";
 import { connectionKind } from "./connection-kind";
 import { dataStoreKind } from "./data-store-kind";
+import { guardrailKind } from "./guardrail-kind";
 import { skillKind } from "./skill-kind";
 
 /**
@@ -14,7 +15,8 @@ export const buildAssetKinds: readonly BuildKind[] = [
   agentKind,
   skillKind,
   connectionKind,
-  dataStoreKind
+  dataStoreKind,
+  guardrailKind
 ];
 
 const BuildAssetKindsContext = createContext<readonly BuildKind[]>(buildAssetKinds);

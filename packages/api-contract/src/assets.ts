@@ -173,9 +173,14 @@ export const assetWarningSchema = z.object({ code: z.string(), message: z.string
 export const listAssetsQuerySchema = z.object({
   /** Only names that start with this text, such as a Namespace prefix. */
   prefix: nameText(z.string().min(1).max(200)).optional(),
-  /** Only names that contain this text, whatever the case. */
+  /** Only assets whose name or title contains this text, whatever the case. */
   text: nameText(z.string().min(1).max(200)).optional(),
-  workspaceId: workspaceIdSchema
+  workspaceId: workspaceIdSchema,
+  /**
+   * The language of the titles and descriptions, where a kind holds them in several. A
+   * language the instance does not offer, or none, answers its default.
+   */
+  locale: z.string().max(35).optional()
 });
 
 export const assetScopeQuerySchema = z.object({ workspaceId: workspaceIdSchema });

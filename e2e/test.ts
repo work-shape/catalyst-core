@@ -138,6 +138,18 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     ]
   },
   {
+    name: "start-input-refused",
+    reason:
+      "Chromium's own log line: the test publishes a Workflow again with a smaller limit while " +
+      "its start form is open, the instance answers the start with 422, and the form puts the " +
+      "refusal under the field, which the test asserts.",
+    matches: requestAnswered(422),
+    path: /^\/api\/v1\/workflows\/start-form-[0-9a-f]{8}\/runs$/u,
+    tests: [
+      "a member starts a Workflow with inputs from its form and sees the run end; a reader sees no start"
+    ]
+  },
+  {
     name: "grant-already-there",
     reason:
       "Chromium's own log line: the test asks for three grants of which two exist, the " +
@@ -586,10 +598,10 @@ export const test = base.extend<{
     { timeout: 2 * ACCESS_STATE_WAIT_MS + 10_000 }
   ],
   /**
-   * Asked for by a test that puts a Connection of origin `release` into the store by hand. An
-   * API process that starts makes the stored release Connections equal to its release config
-   * and deletes such a row, so a spec that starts an API takes the same turn while it starts
-   * (`takeTurn("release-connections", …)`).
+   * Asked for by a test that puts a Connection or a Guardrail of origin `release` into the
+   * store by hand. An API process that starts makes the stored release Connections and
+   * Guardrails equal to its release config and deletes such a row, so a spec that starts an API
+   * takes the same turn while it starts (`takeTurn("release-connections", …)`).
    */
   releaseConnections: [
     async ({ baseURL }, use) => {

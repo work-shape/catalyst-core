@@ -1,7 +1,8 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
+import { z } from "zod";
 import type { PageFile } from "@vivd-catalyst/app-build";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../packages/app-build");
@@ -11,19 +12,25 @@ let command: Promise<string> | undefined;
 /**
  * The build command as shell text, bundled from the sources as they are now. The package ships
  * `dist/cli.js`; a test that used it would test the last build of the package. The file lies
- * inside the package so that it finds the package's dependencies.
+ * inside the package so that it finds the package's own dependencies; the workspace packages
+ * are bundled from their sources, with the dependencies the package does not have itself.
  */
 export function pageBuildCommandFromSource(): Promise<string> {
   command ??= (async () => {
     const outfile = resolve(packageRoot, `.tmp/cli-${process.pid}.mjs`);
     await mkdir(dirname(outfile), { recursive: true });
+    const manifest = z
+      .object({ dependencies: z.record(z.string(), z.string()) })
+      .parse(JSON.parse(await readFile(resolve(packageRoot, "package.json"), "utf8")));
     await build({
       entryPoints: [resolve(packageRoot, "src/cli.ts")],
       outfile,
       bundle: true,
       platform: "node",
       format: "esm",
-      packages: "external",
+      external: Object.keys(manifest.dependencies).filter(
+        (name) => !name.startsWith("@vivd-catalyst/")
+      ),
       logLevel: "silent"
     });
     return `'${process.execPath}' '${outfile}'`;

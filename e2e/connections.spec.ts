@@ -22,9 +22,10 @@ const member = { email: "e2e-connections@example.test", password: "e2e-connectio
 const shotsDir = process.env.E2E_SHOTS_DIR;
 
 const EMPTY_EN = "No connections yet. A connection holds the access to an outside system.";
-const DESCRIPTION_EN = "Connections come from the release config and cannot be changed here.";
+const DESCRIPTION_EN =
+  "The operator of this instance sets up its connections. They cannot be changed here.";
 const DESCRIPTION_DE =
-  "Verbindungen kommen aus der Release-Konfiguration und lassen sich hier nicht ändern.";
+  "Der Betreiber dieser Instanz richtet ihre Verbindungen ein. Hier lassen sie sich nicht ändern.";
 const EMPTY_DE =
   "Noch keine Verbindungen. Eine Verbindung hält den Zugang zu einem externen System.";
 

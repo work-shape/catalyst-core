@@ -4,6 +4,7 @@ import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import yaml from "js-yaml";
 import {
   agentConfigSchema,
+  loadYamlData,
   parseSkillMarkdown,
   skillResourceMediaTypeForPath,
   skillConfigSchema,
@@ -83,7 +84,7 @@ export class WorkingCopyValidationError extends Error {
 }
 
 export function parseManifest(contents: string, source = MANIFEST_FILENAME): CatalystManifest {
-  const input = yaml.load(contents);
+  const input = loadYamlData(contents, source);
   if (!isRecord(input)) {
     throw new Error(`${source} must contain a YAML object`);
   }
@@ -113,6 +114,18 @@ export function parseManifest(contents: string, source = MANIFEST_FILENAME): Cat
 export async function readManifest(workingDir: string): Promise<CatalystManifest> {
   const path = resolve(workingDir, MANIFEST_FILENAME);
   return parseManifest(await readFile(path, "utf8"), path);
+}
+
+/** The manifest of the folder, or none where the folder is no working copy. */
+export async function readManifestIfPresent(
+  workingDir: string
+): Promise<CatalystManifest | undefined> {
+  try {
+    return await readManifest(workingDir);
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") return undefined;
+    throw error;
+  }
 }
 
 export function resolveInstance(
@@ -239,7 +252,7 @@ export async function readWorkingCopy(
   for (const path of agentFiles) {
     const file = toRelativePath(workingDir, path);
     try {
-      const input = yaml.load(await readFile(path, "utf8"));
+      const input = loadYamlData(await readFile(path, "utf8"), file);
       const parsed = agentConfigSchema.safeParse(input);
       if (parsed.success) {
         agents.push(parsed.data);
@@ -403,7 +416,11 @@ export async function updateManifestDefaultAgent(
   await writeFile(path, updated, "utf8");
 }
 
-async function walkFiles(root: string, directory: string, output: string[]): Promise<void> {
+/**
+ * Every file below `directory`, by absolute path. `.git` and `node_modules` directly in `root`
+ * are skipped.
+ */
+export async function walkFiles(root: string, directory: string, output: string[]): Promise<void> {
   let entries: Dirent[];
   try {
     entries = await readdir(directory, { withFileTypes: true });

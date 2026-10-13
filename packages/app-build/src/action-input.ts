@@ -197,6 +197,28 @@ export function declaredDataStoresOf(manifest: unknown): DataStoreReference[] {
   return read.success ? read.data.dataStores : [];
 }
 
+/** A host name and nothing else: no scheme, no port, no path and no wildcard. */
+export const externalHostSchema = z
+  .string()
+  .max(253)
+  .regex(
+    /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/u,
+    "an https host name such as 'api.example.com', without scheme, port, path or wildcard"
+  );
+
+/**
+ * The outside hosts a stored manifest lists. Each entry is read against the build's rule again,
+ * because a content policy is written from them: an entry that is no host name is left out.
+ */
+export function declaredExternalHostsOf(manifest: unknown): string[] {
+  const read = z.object({ externalHosts: z.array(z.unknown()) }).safeParse(manifest);
+  if (!read.success) return [];
+  return read.data.externalHosts.flatMap((entry) => {
+    const host = externalHostSchema.safeParse(entry);
+    return host.success ? [host.data] : [];
+  });
+}
+
 /** The Connections a stored manifest lists. */
 export function declaredConnectionsOf(manifest: unknown): string[] {
   const read = z.object({ connections: z.array(z.string()) }).safeParse(manifest);

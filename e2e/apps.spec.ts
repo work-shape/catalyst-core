@@ -14,6 +14,9 @@ import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 import { apiOrigin, uiOrigin } from "./view-fixtures";
 
+/** The address of the draft of the App at `appPath`, outside the App's own addresses. */
+const draftPathOf = (appPath: string) => appPath.replace("/apps/", "/app-drafts/");
+
 // The Apps of a workspace, from a Page built in chat to an App its members open: the Page is
 // saved as an App, its draft is published, a second member opens it across the full width and
 // follows a link to its second route, a builder without the publish right finds Publish held,
@@ -31,6 +34,8 @@ const builder = { email: "e2e-apps-builder@example.test", password: "e2e-apps-bu
 const WORKSPACE = "Sales team";
 const PUBLISHED_HEADING = "Revenue overview";
 const DRAFT_HEADING = "Revenue forecast";
+/** The outside host the draft adds and the published revision does not list. */
+const HELD_HOST = "rates.example.com";
 
 const idSchema = z.object({ id: z.string() });
 const contextSchema = z.looseObject({ actions: z.array(z.string()) });
@@ -192,7 +197,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await expect(saveDialog.getByRole("textbox", { name: /^ID/u })).toHaveValue(appId);
   await expect(saveDialog.getByRole("combobox")).toHaveCount(0);
   await saveDialog.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`${appPath}/edit$`, "u"));
+  await expect(page).toHaveURL(new RegExp(`${draftPathOf(appPath)}$`, "u"));
   const edit = page.getByTestId("app-edit");
   await expect(edit).toContainText("Draft · revision 1");
   await expect(
@@ -250,19 +255,20 @@ test("a Page is saved as an App, published, opened by a second member and deep l
     await expect(appIn(memberPage, "app-view").getByText("Paste rows to see them.")).toBeVisible();
   });
   // The draft is not the member's to see.
-  await memberPage.goto(`${appPath}/edit`);
+  await memberPage.goto(draftPathOf(appPath));
   await expect(memberPage.getByTestId("app-edit")).toContainText(
     "The draft of this app is not available to you."
   );
 
-  // A write moves the draft ahead of what is published.
+  // A write moves the draft ahead of what is published, with an outside host that nobody has
+  // reviewed yet.
   const written = await requestWithOrigin(page, "put", `${apiOrigin}/api/v1/assets/app/${appId}`, {
     data: {
       workspaceId,
       expectedRevision: 1,
       files: Object.entries({
         ...pageSource(PUBLISHED_HEADING),
-        "app.yaml": `id: ${appId}\nname: ${appName}\nkit: 1.0.0\n`,
+        "app.yaml": `id: ${appId}\nname: ${appName}\nkit: 1.0.0\nexternalHosts: [${HELD_HOST}]\n`,
         "src/routes/index.tsx": overviewRoute(DRAFT_HEADING)
       }).map(([path, text]) => ({ path, text }))
     },
@@ -310,15 +316,18 @@ test("a Page is saved as an App, published, opened by a second member and deep l
     await expect(
       appIn(page, "app-edit").getByRole("heading", { name: DRAFT_HEADING })
     ).toBeVisible();
+    // The host the draft added is held back until the draft is published.
+    await expect(edit.getByRole("status").filter({ hasText: HELD_HOST })).toBeVisible();
   };
   await draftReady();
+  await expect(edit).toContainText(`This draft cannot call ${HELD_HOST} until it is published.`);
   await expect(publish).toBeEnabled();
   const discard = edit.getByRole("button", { name: "Discard", exact: true });
   await expect(discard).toBeVisible();
   await shoot(page, "app-draft", MAIN, draftReady);
 
   // The files of the draft, with the one the draft changed marked and open.
-  await edit.getByRole("radio", { name: "Files" }).click();
+  await edit.getByRole("tab", { name: "Files" }).click();
   await expect(edit.getByRole("navigation", { name: "Files" })).toContainText(
     "src/routes/data.tsx"
   );
@@ -330,7 +339,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
       animations: "disabled"
     });
   }
-  await edit.getByRole("radio", { name: "Preview" }).click();
+  await edit.getByRole("tab", { name: "Preview" }).click();
 
   // The revisions of the App, with the way to publish one of them.
   const openRevisions = async () => {
@@ -369,7 +378,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
       json: { ...context, actions: context.actions.filter((action) => action !== "app.publish") }
     });
   });
-  await builderPage.goto(`${appPath}/edit`);
+  await builderPage.goto(draftPathOf(appPath));
   const builderEdit = builderPage.getByTestId("app-edit");
   await expect(builderEdit).toContainText("Draft · revision 2");
   await expect(builderEdit.getByRole("button", { name: "Publish", exact: true })).toBeDisabled();
@@ -392,7 +401,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   const card = area.getByRole("listitem").filter({ hasText: appName });
   await expect(card.getByRole("link", { name: "Edit", exact: true })).toHaveAttribute(
     "href",
-    `${appPath}/edit`
+    draftPathOf(appPath)
   );
   await card.getByRole("link", { name: "Open", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${appPath}$`, "u"));
@@ -421,7 +430,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await expect(page.getByRole("menu")).toBeHidden();
 
   // Discard asks once, and the draft shows what is published again.
-  await page.goto(`${appPath}/edit`);
+  await page.goto(draftPathOf(appPath));
   await draftReady();
   await discard.click();
   const discardDialog = page.getByRole("dialog", { name: `Discard the draft of “${appName}”?` });
@@ -432,4 +441,5 @@ test("a Page is saved as an App, published, opened by a second member and deep l
     appIn(page, "app-edit").getByRole("heading", { name: PUBLISHED_HEADING })
   ).toBeVisible();
   await expect(discard).toBeHidden();
+  await expect(edit).not.toContainText(HELD_HOST);
 });

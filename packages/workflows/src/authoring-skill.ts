@@ -20,9 +20,10 @@ import {
 } from "./limits";
 
 // The skill an agent reads before it changes the definition of a Workflow. It ships with the
-// engine and is no asset: what it says of the step types is made from the list of the types
-// this engine runs and from the fields the step type holds, so a release that runs another
-// step, or gives one another field, does not build until this file says what it is.
+// engine, and the release seed stores it as a read-only skill: what it says of the step types
+// is made from the list of the types this engine runs and from the fields the step type holds,
+// so a release that runs another step, or gives one another field, does not build until this
+// file says what it is.
 
 export const WORKFLOW_AUTHORING_SKILL_NAME = "workflow-authoring";
 
@@ -400,11 +401,12 @@ ${examples}
 `;
 }
 
-/** The skill as a conversation about a Workflow is offered it. */
+/** The skill as the platform ships it, offered to a conversation about a Workflow. */
 export const workflowAuthoringSkill: ShippedSkill = {
   name: WORKFLOW_AUTHORING_SKILL_NAME,
   title: "Writing a Workflow",
   description:
     "How to read, change, check and save the definition of a Workflow: what a manifest holds, the step types this engine runs, the scripts of its code steps, references between steps and what is not run yet. Read it before you change a Workflow.",
-  content: content()
+  content: content(),
+  icon: "workflow"
 };

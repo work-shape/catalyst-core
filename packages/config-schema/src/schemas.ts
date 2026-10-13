@@ -1,7 +1,6 @@
 import { z } from "zod";
 import type {
   AgentConfig,
-  ApprovalCheckConfig,
   DataSourceConfig,
   CapabilityConfigMap,
   LocalizationConfig,
@@ -32,6 +31,7 @@ import {
   secretStoreConfigSchema
 } from "./connection-schema";
 import { dataStoresConfigSchema } from "./data-store-schema";
+import { releaseGuardrailsConfigSchema } from "./guardrail-schema";
 import { infrastructureConfigSchema } from "./infrastructure";
 import { localizationConfigSchema, localizedStringSchema } from "./localization";
 
@@ -275,31 +275,6 @@ export const usageCostConfigSchema = z
     customer: usageRateCardConfigSchema.optional()
   })
   .default({});
-
-export const approvalCheckConfigSchema = z.object({
-  id: z.string().trim().min(1),
-  appliesTo: z.string().trim().min(1),
-  modelBindingId: z.string().trim().min(1),
-  instruction: z.string().trim().min(1),
-  onFail: z.enum(["warn", "block"])
-}) satisfies z.ZodType<ApprovalCheckConfig>;
-
-const approvalChecksConfigSchema = z
-  .array(approvalCheckConfigSchema)
-  .superRefine((checks, context) => {
-    const ids = new Set<string>();
-    checks.forEach((check, index) => {
-      if (ids.has(check.id)) {
-        context.addIssue({
-          code: "custom",
-          path: [index, "id"],
-          message: `Duplicate approval check id '${check.id}'`
-        });
-      }
-      ids.add(check.id);
-    });
-  })
-  .default([]);
 
 export const conversationTitleConfigSchema = z
   .object({
@@ -657,8 +632,9 @@ export const uiConfigSchema = z
     // The start page names the agent beside its icon; when false it shows the
     // icon alone, as a conversation always does.
     showAgentName: z.boolean().default(true),
-    // When true the agent list shows each agent's description under its name.
-    showAgentDescriptions: z.boolean().default(false),
+    // The agent list shows each agent's description under its name, so a person sees what
+    // each agent does before choosing it. False lists the names alone.
+    showAgentDescriptions: z.boolean().default(true),
     /** Legacy switch of the module `resources`; use `modules.resources.enabled`. */
     resources: z.object({ enabled: z.boolean().optional() }).default({}),
     accentColor: z.string().min(1).default(defaultLightUiTheme.accentColor),
@@ -670,7 +646,7 @@ export const uiConfigSchema = z
     title: "Workshape Catalyst",
     welcomeMessage: "How can I help?",
     showAgentName: true,
-    showAgentDescriptions: false,
+    showAgentDescriptions: true,
     resources: {},
     accentColor: defaultLightUiTheme.accentColor,
     logoInvertOnDark: false,
@@ -866,7 +842,8 @@ export const clientInstanceConfigSchema = z.object({
   modelBindings: z.array(modelBindingConfigSchema).default([]),
   localization: localizationConfigSchema,
   conversationTitles: conversationTitleConfigSchema,
-  approvalChecks: approvalChecksConfigSchema,
+  /** The release's guardrails: the operator's floor. Seeded as read-only assets when the API starts. */
+  guardrails: releaseGuardrailsConfigSchema,
   runtime: agentRuntimeConfigSchema,
   modelContext: modelContextConfigSchema,
   webAccess: webAccessConfigSchema,
@@ -940,7 +917,6 @@ export type StandaloneSeedUserConfig = z.infer<typeof standaloneSeedUserSchema>;
 export type ToolInstanceConfig = z.infer<typeof toolInstanceConfigSchema>;
 export type {
   AgentConfig,
-  ApprovalCheckConfig,
   DataSourceConfig,
   CapabilityConfigMap,
   ExecutionWorkspacesConfig,

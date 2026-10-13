@@ -1,7 +1,10 @@
-import { load, JSON_SCHEMA, YAMLException } from "js-yaml";
-import { fileSetPathIssue } from "@vivd-catalyst/core";
+import { fileSetPathIssue, readYamlData } from "@vivd-catalyst/core";
 import { z } from "zod";
-import { compiledAppActionSchema, dataStoreReferenceSchema } from "./action-input";
+import {
+  compiledAppActionSchema,
+  dataStoreReferenceSchema,
+  externalHostSchema
+} from "./action-input";
 import { RELEASED_KIT_VERSIONS } from "./kit";
 import type { PageBuildError } from "./errors";
 
@@ -16,14 +19,6 @@ const name = z.string().min(1).max(120);
 const identifier = z
   .string()
   .regex(/^[a-z0-9][a-z0-9_-]{0,62}$/u, "lowercase letters, digits, '-' and '_', at most 63");
-// A host name and nothing else: no scheme, no port, no path and no wildcard.
-const hostName = z
-  .string()
-  .max(253)
-  .regex(
-    /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/u,
-    "an https host name such as 'api.example.com', without scheme, port, path or wildcard"
-  );
 const relativeFile = z
   .string()
   .min(1)
@@ -81,7 +76,7 @@ export const pageManifestSchema = z.strictObject({
     })
     .optional(),
   actions: z.array(actionSchema).max(MANIFEST_MAX_LIST_ENTRIES).optional(),
-  externalHosts: z.array(hostName).max(MANIFEST_MAX_LIST_ENTRIES).optional()
+  externalHosts: z.array(externalHostSchema).max(MANIFEST_MAX_LIST_ENTRIES).optional()
 });
 
 export type PageManifest = z.infer<typeof pageManifestSchema>;
@@ -148,18 +143,17 @@ export function parsePageManifest(bytes: Uint8Array): ParsedPageManifest {
       `The manifest has ${bytes.byteLength} bytes. It has at most ${PAGE_MANIFEST_MAX_BYTES} (PAGE_MANIFEST_MAX_BYTES).`
     );
   }
-  let value: unknown;
+  let text: string;
   try {
-    value = load(new TextDecoder("utf-8", { fatal: true }).decode(bytes), {
-      schema: JSON_SCHEMA,
-      filename: PAGE_MANIFEST_FILE
-    });
-  } catch (error) {
-    if (error instanceof YAMLException) {
-      return fail(`The manifest is not valid YAML: ${error.reason}`, error.mark.line + 1);
-    }
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
     return fail("The manifest is not UTF-8 text.");
   }
+  const read = readYamlData(text, PAGE_MANIFEST_FILE);
+  if (!read.ok) {
+    return fail(read.issue.message, read.issue.line);
+  }
+  const value = read.value;
   const parsed = pageManifestSchema.safeParse(value);
   if (parsed.success) {
     return { status: "valid", manifest: parsed.data };

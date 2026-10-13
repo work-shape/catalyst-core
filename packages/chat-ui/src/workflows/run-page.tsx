@@ -76,7 +76,12 @@ export function WorkflowRunPage({ workflow, run: runId }: { workflow: string; ru
   const [cancelError, setCancelError] = useState<string>();
   const [stopping, setStopping] = useState(false);
   const now = useNow(read.run !== undefined && !read.run.ended);
-  const again = useStartRun({ workflow, name: definition.workflow?.name, again: true });
+  const again = useStartRun({
+    workflow,
+    name: definition.workflow?.name,
+    form: definition.workflow?.startForm,
+    again: true
+  });
 
   if (!host || workspaceId === undefined) {
     return null;

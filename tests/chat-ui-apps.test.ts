@@ -110,12 +110,14 @@ describe("addresses of the Apps area", () => {
     });
   });
 
-  it("opens an App on its start without a route, and never takes the draft's address for one", () => {
+  it("opens an App on its start without a route, and keeps every route below it the App's own", () => {
     const app = { kind: "app", collaborationWorkspaceId: "cw_1", app: "a" } as const;
 
     expect(workspaceRoutePath({ ...app, appPath: "/" })).toBe("/w/cw_1/apps/a");
-    expect(workspaceRoutePath({ ...app, appPath: "/edit" })).toBe("/w/cw_1/apps/a");
-    expect(workspaceRouteFromPath("/w/cw_1/apps/a/edit").kind).toBe("app-edit");
+    // The draft stands outside the App's addresses, so an App's own `/edit` is its.
+    expect(workspaceRoutePath({ ...app, appPath: "/edit" })).toBe("/w/cw_1/apps/a/edit");
+    expect(workspaceRouteFromPath("/w/cw_1/apps/a/edit")).toEqual({ ...app, appPath: "/edit" });
+    expect(workspaceRouteFromPath("/w/cw_1/app-drafts/a").kind).toBe("app-edit");
     expect(workspaceRouteFromPath("/w/cw_1/apps/a/edit/more")).toEqual({
       ...app,
       appPath: "/edit/more"
@@ -363,7 +365,7 @@ describe("the draft of an App (layout 3)", () => {
     expect(markup).not.toContain("revision 3");
   });
 
-  it("offers the files of the draft beside its preview", () => {
+  it("offers the views of the draft as tabs under its head, the open one selected", () => {
     const markup = render(
       createElement(AppEditFrame, {
         name: "Angebotsrechner",
@@ -378,8 +380,14 @@ describe("the draft of an App (layout 3)", () => {
       })
     );
 
-    expect(markup).toContain("Preview");
-    expect(markup).toContain("Files");
+    const tabs = [...markup.matchAll(/<button[^>]*role="tab"[^>]*>([^<]*)<\/button>/gu)];
+    expect(tabs.map((tab) => tab[1])).toEqual(["Preview", "Files", "Actions"]);
+    expect(tabs[0]?.[0]).toContain('aria-selected="true"');
+    expect(markup).toContain('role="tabpanel"');
+    expect(markup).not.toContain('role="radio"');
+    // The tabs stand under the head, before the view they show.
+    expect(markup.indexOf('role="tablist"')).toBeGreaterThan(markup.indexOf("</header>"));
+    expect(markup.indexOf("the draft")).toBeGreaterThan(markup.indexOf('role="tablist"'));
   });
 
   it("says in its own words that a revision lost its files or is too large to be held", () => {

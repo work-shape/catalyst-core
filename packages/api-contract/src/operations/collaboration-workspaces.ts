@@ -17,6 +17,7 @@ import {
   workspaceMembershipSchema
 } from "../collaboration-workspaces";
 import { collaborationWorkspaceAgentsSchema } from "../configuration";
+import { listWorkspaceFilesQuerySchema, workspaceFileSchema } from "../workspace-files";
 import { defineOperation, defineRegisteredOperation, json, page } from "./define-operation";
 
 // The ten changing operations but `workspaces.ensure_personal` are operations of the registry.
@@ -108,6 +109,25 @@ export const collaborationWorkspaceOperations = {
     effect: "reading",
     query: listQuerySchema.extend({ locale: z.string().optional() }),
     response: json(collaborationWorkspaceAgentsSchema),
+    errors: ["NOT_FOUND"],
+    rateClass: "read"
+  }),
+  // A read of the registry, so the agent's tool that projects it is checked and recorded as
+  // a call of the API is. Who may read a conversation may find its files: a member, of the
+  // conversations that are not another member's private ones.
+  "workspaces.files.list": defineRegisteredOperation({
+    id: "workspaces.files.list",
+    method: "GET",
+    path: "/api/v1/workspaces/:collaborationWorkspaceId/files",
+    summary:
+      "Find the Pages and files in the conversations of a workspace the caller may read, newest first, without their contents",
+    tag: "Collaboration Workspaces",
+    auth: "user",
+    scope: "conversation:read",
+    requires: [],
+    effect: "reading",
+    query: listWorkspaceFilesQuerySchema,
+    response: page(workspaceFileSchema, ["updatedAt", "id"], true),
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),

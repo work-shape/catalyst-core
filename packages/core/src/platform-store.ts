@@ -10,12 +10,14 @@ import type { ApprovalDecisionStore, ApprovalRequestStore } from "./approval-req
 import type { ConfigAssetStore } from "./config-assets";
 import type { ConnectionsStore } from "./connections";
 import type { DataStoreRecordsStore } from "./data-stores";
+import type { GuardrailStore } from "./guardrails";
 import type {
   ExecutionWorkspaceCleanupStore,
   ExecutionWorkspaceFileStore,
   ExecutionWorkspaceMetadataStore,
   WorkspaceCommandStore
 } from "./execution-workspace";
+import type { FileSearchStore } from "./file-search";
 import type { PlatformFileStore } from "./files";
 import type { AccessAdministrationStore } from "./permissions";
 import type { JobsStore } from "./jobs";
@@ -30,7 +32,11 @@ import type { WorkflowRunDatasetsStore } from "./workflows";
 import type { WorkflowRunsStore } from "./workflow-runs";
 
 export interface ConversationsStore
-  extends ConversationStore, ConversationRetentionStore, ModelProviderContinuationStore {}
+  extends
+    ConversationStore,
+    ConversationRetentionStore,
+    ModelProviderContinuationStore,
+    FileSearchStore {}
 
 export interface AgentRunsStore extends AgentRunStore, RunObservationStore {}
 
@@ -77,6 +83,7 @@ export interface PlatformStores {
   workflowRuns: WorkflowRunsStore;
   workflowRunDatasets: WorkflowRunDatasetsStore;
   dataStores: DataStoreRecordsStore;
+  guardrails: GuardrailStore;
   /** Resolves after commit; a rejected callback rolls back all domain writes. Nested calls use savepoints. */
   transaction<T>(fn: (stores: PlatformStores) => Promise<T>): Promise<T>;
   close?: () => Promise<void>;

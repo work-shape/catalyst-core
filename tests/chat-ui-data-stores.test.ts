@@ -496,7 +496,7 @@ describe("The rows of a Data Store", () => {
     expect(refused).toContain('data-data-store-refused=""');
     expect(refused).toContain("You may not read the rows of this store.");
     expect(render(address, { rows: { status: "refused" }, locale: "de" })).toContain(
-      "Sie dürfen die Zeilen dieses Speichers nicht lesen."
+      "Du darfst die Zeilen dieses Speichers nicht lesen."
     );
     const failed = render(address, {
       rows: { status: "failed", message: undefined, retry: noop }
@@ -588,9 +588,7 @@ describe("What uses a Data Store", () => {
     expect(page).not.toContain('nightly-rollup"');
     expect(page).toContain("and 3 more you cannot see");
 
-    expect(render(address, { locale: "de" })).toContain(
-      "und 3 weitere, die Sie nicht sehen können"
-    );
+    expect(render(address, { locale: "de" })).toContain("und 3 weitere, die du nicht sehen kannst");
   });
 
   it("says in one sentence that nothing uses a store, that only hidden ones do, and that the reader may not see it", () => {

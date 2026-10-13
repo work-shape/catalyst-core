@@ -81,7 +81,9 @@ const manifestSchema = z.object({
   name: z.string(),
   kit: z.string(),
   entry: z.string(),
-  connections: z.array(z.string()).optional()
+  connections: z.array(z.string()).optional(),
+  // Kept as written, a host that is none included: what is served must not trust the build.
+  externalHosts: z.array(z.string()).optional()
 });
 
 /**
@@ -151,8 +153,8 @@ export interface AppInstance extends AccessInstance {
   listed(
     name: string
   ): Promise<{ revision: number; draftRevision?: number; publishedRevision?: number }>;
-  /** The document a frame is answered at the address `apps.preview` gave. */
-  open(url: string): Promise<{ status: number; body: string }>;
+  /** The document a frame is answered at the address `apps.preview` gave, with its policy. */
+  open(url: string): Promise<{ status: number; body: string; policy: string }>;
   /**
    * A Page with one revision in a conversation of the administrator, stored as a save stores
    * it. With `conversationId` the Page of that conversation gets its next revision instead.
@@ -298,7 +300,11 @@ export async function setupAppInstance(options: AppInstanceOptions = {}): Promis
     },
     async open(url) {
       const response = await callTestPath(instance, "GET", url, { "sec-fetch-dest": "iframe" });
-      return { status: response.statusCode, body: response.body };
+      return {
+        status: response.statusCode,
+        body: response.body,
+        policy: String(response.headers["content-security-policy"] ?? "")
+      };
     },
     async storePage(marker, manifest = {}, options = {}) {
       const conversationId =
@@ -363,7 +369,8 @@ export const previewSchema = z.looseObject({
   fileSetId: z.string(),
   number: z.number(),
   revision: z.number(),
-  interfacePath: z.string()
+  interfacePath: z.string(),
+  heldBackHosts: z.array(z.string())
 });
 
 export function expectStatus(

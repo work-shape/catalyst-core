@@ -12,16 +12,18 @@ export type AppMode = z.infer<typeof appModeSchema>;
 
 /**
  * The path of the interface route that shows one App to a signed-in person: the published
- * revision, or with `/edit` the draft. The server answers it from `apps.preview` and the
- * interface builds its routes from it, so the two never disagree.
+ * revision under `/apps/`, or the draft under `/app-drafts/`. Every path below the published
+ * one is the App's own, so the draft stands outside it: an App may have any route, `/edit`
+ * among them. The server answers it from `apps.preview` and the interface builds its routes
+ * from it, so the two never disagree.
  */
 export function appInterfacePath(input: {
   workspaceId: string;
   app: string;
   mode: AppMode;
 }): string {
-  const path = `/w/${encodeURIComponent(input.workspaceId)}/apps/${encodeURIComponent(input.app)}`;
-  return input.mode === "draft" ? `${path}/edit` : path;
+  const area = input.mode === "draft" ? "app-drafts" : "apps";
+  return `/w/${encodeURIComponent(input.workspaceId)}/${area}/${encodeURIComponent(input.app)}`;
 }
 
 export const createAppFromPageRequestSchema = z
@@ -130,7 +132,13 @@ export const appPreviewRequestSchema = z.object({ mode: appModeSchema }).strict(
 export const appPreviewSchema = pagePreviewSchema.extend({
   /** The number of the asset revision shown. */
   revision: z.number().int().positive(),
-  interfacePath: z.string()
+  interfacePath: z.string(),
+  /**
+   * The outside hosts the shown revision's manifest lists that its frame may not connect to:
+   * those a draft adds to what is published, until it is published. Always empty for the
+   * published view.
+   */
+  heldBackHosts: z.array(z.string())
 });
 
 export type AppPreviewResponse = z.infer<typeof appPreviewSchema>;

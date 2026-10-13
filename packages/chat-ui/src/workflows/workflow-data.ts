@@ -325,7 +325,7 @@ export function workflowWriteRefusal(error: unknown): WorkflowWriteRefusal | und
 
 /** The two things a person does to a run from these screens. */
 export interface WorkflowWrites {
-  start(workflow: string): Promise<WorkflowRunView>;
+  start(workflow: string, input: Readonly<Record<string, unknown>>): Promise<WorkflowRunView>;
   cancel(runId: string): Promise<WorkflowRunView>;
 }
 
@@ -336,7 +336,7 @@ export function useWorkflowWrites(): WorkflowWrites {
   return useMemo(() => {
     const changed = () => queryClient.invalidateQueries({ queryKey: keys.runs });
     return {
-      start: async (workflow) => runsOf(runs).start(workflow).finally(changed),
+      start: async (workflow, input) => runsOf(runs).start(workflow, input).finally(changed),
       cancel: async (runId) => runsOf(runs).cancel(runId).finally(changed)
     };
   }, [keys, queryClient, runs]);

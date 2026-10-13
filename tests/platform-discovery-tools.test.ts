@@ -1,10 +1,22 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
+import {
+  WORKFLOW_ASSET_KIND,
+  asClientInstanceId,
+  asCollaborationWorkspaceId,
+  asConversationId,
+  asMessageId,
+  asUserId,
+  createFileSetId
+} from "@vivd-catalyst/core";
 import { createPlatformDiscoveryTools } from "@vivd-catalyst/tool-execution";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, type TestInstance } from "./support/test-instance";
+import { claimAttachmentsForStoredMessage } from "./support/test-store";
 
 // Every agent, in every conversation, finds what is on the platform with two tools and reads
 // how the platform works in one shipped skill. The tools answer with the rights of the person
@@ -36,6 +48,27 @@ const foundSchema = z.object({
   ),
   truncated: z.boolean()
 });
+const conversationSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  collaborationWorkspaceId: z.string(),
+  createdByUserId: z.string()
+});
+const fileSchema = z.object({
+  kind: z.string(),
+  id: z.string(),
+  name: z.string(),
+  mimeType: z.string().optional(),
+  bytes: z.number(),
+  updatedAt: z.string(),
+  conversation: z.object({ id: z.string(), title: z.string() }),
+  inThisConversation: z.literal(true).optional()
+});
+const filesSchema = z.object({ files: z.array(fileSchema), truncated: z.boolean() });
+const workspaceFilesSchema = z.object({
+  items: z.array(fileSchema),
+  nextCursor: z.string().optional()
+});
 const messagesSchema = z.object({
   items: z.array(z.object({ role: z.string(), text: z.string() }))
 });
@@ -59,13 +92,17 @@ const workflowConfig = {
 
 describe("the tools that find what is on the platform", () => {
   let open: TestInstance | undefined;
+  const roots: string[] = [];
   afterEach(async () => {
     await open?.close();
     open = undefined;
+    for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
   });
 
-  async function fixture(workflows: boolean) {
+  async function fixture(workflows: boolean, pages = false) {
     const config = createTestConfig({
+      // A Page is saved from an Execution Workspace, so Pages need them.
+      executionWorkspaces: { enabled: pages },
       developmentAuth: {
         enabled: true,
         defaultUserId: OWNER,
@@ -80,16 +117,42 @@ describe("the tools that find what is on the platform", () => {
         ]
       }
     });
-    config.modules = { assetManagement: { enabled: true }, workflows: { enabled: workflows } };
-    const app = await createTestInstance({ config, env: {}, tools: [] });
+    config.modules = {
+      assetManagement: { enabled: true },
+      workflows: { enabled: workflows },
+      apps: { enabled: pages }
+    };
+    if (pages) {
+      // Pages keep their files in the object store, and what serves one is signed with a key
+      // from the secret.
+      const root = await mkdtemp(join(tmpdir(), "platform-discovery-"));
+      roots.push(root);
+      config.infrastructure.objectStorage = {
+        ...config.infrastructure.objectStorage,
+        files: { provider: "filesystem", root }
+      };
+    }
+    const env = pages ? { CHAT_SESSION_TOKEN_SECRET: "platform-discovery-test-".repeat(2) } : {};
+    const app = await createTestInstance({ config, env, tools: [] });
     open = app;
-    /** A conversation about nothing, of `as`, and one tool call in it with what it answered. */
-    const conversationOf = async (as: string) => {
-      const created = await app.call("conversations.create", { payload: { title: "Ask" } }, as);
+    /**
+     * A conversation about nothing, of `as`, in its personal workspace or in `workspaceId`,
+     * and one tool call in it with what it answered.
+     */
+    const conversationOf = async (
+      as: string,
+      place: { workspaceId?: string; title?: string } = {}
+    ) => {
+      const payload = {
+        title: place.title ?? "Ask",
+        ...(place.workspaceId === undefined ? {} : { collaborationWorkspaceId: place.workspaceId })
+      };
+      const created = await app.call("conversations.create", { payload }, as);
       expect(created.statusCode, created.body).toBe(200);
-      const { id } = z.object({ id: z.string() }).parse(created.json());
+      const conversation = conversationSchema.parse(created.json());
+      const { id } = conversation;
       const headers = { "x-dev-user-id": as };
-      return async (tool: string, input: unknown = {}) => {
+      const ask = async (tool: string, input: unknown = {}) => {
         const started = await injectStartConversationRun(
           app,
           id,
@@ -106,8 +169,9 @@ describe("the tools that find what is on the platform", () => {
         const answer: unknown = text === undefined ? undefined : JSON.parse(text);
         return { events, answer };
       };
+      return Object.assign(ask, conversation);
     };
-    return { app, conversationOf };
+    return { app, conversationOf, clientInstanceId: asClientInstanceId(config.clientInstance.id) };
   }
 
   it("lets an agent in a conversation about nothing read the platform skill, see what the instance has and find the assets its user may read, and nothing of the others", async () => {
@@ -144,6 +208,11 @@ describe("the tools that find what is on the platform", () => {
       ],
       truncated: false
     });
+    // The title is searched as well as the name.
+    const byTitle = foundSchema.parse(
+      (await owner("platform.assets.list", { text: "Closing" })).answer
+    );
+    expect(byTitle.assets.map(({ name }) => name)).toEqual([WORKFLOW]);
     const everyKind = foundSchema.parse((await owner("platform.assets.list", {})).answer);
     expect(everyKind.assets.map(({ kind, name }) => `${kind}:${name}`)).toContain(
       `workflow:${WORKFLOW}`
@@ -194,10 +263,172 @@ describe("the tools that find what is on the platform", () => {
 
   it("refuses search text the store cannot hold before it reaches the store", () => {
     const unused = () => Promise.reject(new Error("The schema refuses the input first"));
-    const tools = createPlatformDiscoveryTools({ readContext: unused, listAssets: unused });
+    const tools = createPlatformDiscoveryTools({
+      readContext: unused,
+      listAssets: unused,
+      listFiles: unused
+    });
     const find = tools.find((tool) => tool.name === "platform.assets.list");
     expect(find?.inputSchema.safeParse({ text: "month\u0000end" }).success).toBe(false);
     expect(find?.inputSchema.safeParse({ kind: "work\u0000flow" }).success).toBe(false);
     expect(find?.inputSchema.safeParse({ kind: "workflow", text: "month" }).success).toBe(true);
+    const files = tools.find((tool) => tool.name === "platform.files.list");
+    expect(files?.inputSchema.safeParse({ text: "tax\u0000" }).success).toBe(false);
+    expect(files?.inputSchema.safeParse({ kind: "page", text: "tax" }).success).toBe(true);
   });
+
+  it("finds the Pages and files of every conversation of the workspace the user may read, from any chat, and nothing else", async () => {
+    const t = await fixture(false, true);
+    const { clientInstanceId } = t;
+    const stores = t.app.stores;
+    /** A file sent with a message of the conversation, as an upload leaves it. */
+    const upload = async (conversationId: string, filename: string) => {
+      const conversation = asConversationId(conversationId);
+      const file = await stores.files.createManagedFile({
+        clientInstanceId,
+        ownerUserId: "owner",
+        filename,
+        mimeType: "text/plain",
+        byteSize: 3,
+        checksum: `sha256:${filename}`,
+        objectKey: `private/${filename}`
+      });
+      await stores.files.createConversationAttachment({
+        clientInstanceId,
+        conversationId: conversation,
+        fileId: file.id,
+        filename,
+        mimeType: "text/plain",
+        byteSize: 3,
+        checksum: file.checksum,
+        status: "ready",
+        format: "txt"
+      });
+      await claimAttachmentsForStoredMessage(stores, {
+        clientInstanceId,
+        conversationId: conversation,
+        messageId: asMessageId(`msg_${filename}`),
+        claimedAt: new Date().toISOString()
+      });
+      return file.id;
+    };
+
+    // A Shared Workspace whose conversations start private: the owner's first one is theirs.
+    const created = await t.app.call(
+      "workspaces.create",
+      { payload: { name: "Finance", defaultConversationVisibility: "private" } },
+      OWNER
+    );
+    expect(created.statusCode, created.body).toBe(200);
+    const workspaceId = z.object({ id: z.string() }).parse(created.json()).id;
+    const memberHome = await t.conversationOf(MEMBER);
+    await stores.workspaces.addMembership({
+      clientInstanceId,
+      collaborationWorkspaceId: asCollaborationWorkspaceId(workspaceId),
+      userId: asUserId(memberHome.createdByUserId),
+      role: "member"
+    });
+    const privateChat = await t.conversationOf(OWNER, { workspaceId });
+    await upload(privateChat.id, "salaries.txt");
+    const opened = await t.app.call(
+      "workspaces.update",
+      {
+        params: { collaborationWorkspaceId: workspaceId },
+        payload: { defaultConversationVisibility: "workspace" }
+      },
+      OWNER
+    );
+    expect(opened.statusCode, opened.body).toBe(200);
+    const taxChat = await t.conversationOf(OWNER, { workspaceId, title: "Tax return 2026" });
+    const receipts = await upload(taxChat.id, "receipts.txt");
+    const page = await stores.pages.ensurePage({
+      clientInstanceId,
+      conversationId: asConversationId(taxChat.id),
+      name: "deductions",
+      createdAt: new Date().toISOString()
+    });
+    await stores.pages.createPageFileSet({
+      clientInstanceId,
+      pageId: page.id,
+      fileSet: {
+        id: createFileSetId(),
+        kitVersion: "2.0.0",
+        manifest: {},
+        sourceFiles: [],
+        builtFiles: [],
+        createdAt: new Date().toISOString()
+      }
+    });
+    // The owner's personal workspace is another workspace for the member.
+    const diary = await t.conversationOf(OWNER);
+    await upload(diary.id, "diary.txt");
+
+    // From another chat of the workspace, the owner's agent finds the Page of the tax chat.
+    const asker = await t.conversationOf(OWNER, { workspaceId });
+    const pages = filesSchema.parse((await asker("platform.files.list", { kind: "page" })).answer);
+    expect(pages).toEqual({
+      files: [
+        {
+          kind: "page",
+          id: page.id,
+          name: "deductions",
+          mimeType: "text/html",
+          bytes: 0,
+          updatedAt: expect.any(String),
+          conversation: { id: taxChat.id, title: "Tax return 2026" }
+        }
+      ],
+      truncated: false
+    });
+    // By the title of its conversation, whatever the case, and with the owner's private file.
+    const names = async (ask: typeof asker, input: object) =>
+      filesSchema
+        .parse((await ask("platform.files.list", input)).answer)
+        .files.map(({ name }) => name);
+    expect(await names(asker, { text: "TAX RETURN" })).toEqual(
+      expect.arrayContaining(["deductions", "receipts.txt"])
+    );
+    expect(await names(asker, {})).toEqual(
+      expect.arrayContaining(["deductions", "receipts.txt", "salaries.txt"])
+    );
+    expect(await names(asker, {})).not.toContain("diary.txt");
+    const here = filesSchema.parse(
+      (await taxChat("platform.files.list", { kind: "upload" })).answer
+    );
+    // What lives in the asking conversation is marked: that is what its agent can open.
+    expect(here.files.filter((file) => file.inThisConversation)).toEqual([
+      expect.objectContaining({ id: receipts, name: "receipts.txt" })
+    ]);
+
+    // A member finds what is shared, never the owner's private file nor another workspace's.
+    const memberChat = await t.conversationOf(MEMBER, { workspaceId });
+    const memberNames = await names(memberChat, {});
+    expect(memberNames).toEqual(expect.arrayContaining(["deductions", "receipts.txt"]));
+    expect(memberNames).not.toContain("salaries.txt");
+    expect(memberNames).not.toContain("diary.txt");
+    const hidden = await memberChat("platform.files.list", { text: "salaries" });
+    const missing = await memberChat("platform.files.list", { text: "no-such" });
+    expect(hidden.answer).toEqual({ files: [], truncated: false });
+    expect(hidden.answer).toEqual(missing.answer);
+
+    // The operation of the API answers the same, page by page.
+    const list = (
+      as: string,
+      collaborationWorkspaceId: string,
+      query: Record<string, string | number | undefined> = {}
+    ) => t.app.call("workspaces.files.list", { params: { collaborationWorkspaceId }, query }, as);
+    const first = await list(MEMBER, workspaceId, { limit: 1 });
+    expect(first.statusCode, first.body).toBe(200);
+    const firstPage = workspaceFilesSchema.parse(first.json());
+    expect(firstPage.items).toHaveLength(1);
+    const second = workspaceFilesSchema.parse(
+      (await list(MEMBER, workspaceId, { limit: 1, cursor: firstPage.nextCursor })).json()
+    );
+    expect([...firstPage.items, ...second.items].map(({ name }) => name).sort()).toEqual([
+      "deductions",
+      "receipts.txt"
+    ]);
+    expect((await list(MEMBER, diary.collaborationWorkspaceId)).statusCode).toBe(404);
+    expect((await list(MEMBER, workspaceId, { text: "tax\u0000" })).statusCode).toBe(422);
+  }, 180_000);
 });

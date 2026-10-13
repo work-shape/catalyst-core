@@ -29,6 +29,7 @@ const listSchema = z.object({
         z.strictObject({ code: z.string(), message: z.string(), path: z.string().optional() })
       ),
       actions: z.array(z.string()),
+      inputs: z.record(z.string(), z.unknown()).optional(),
       lastRun: z.object({ id: z.string(), status: z.string() }).loose().optional()
     })
   )
@@ -128,6 +129,8 @@ describe("a Workflow stored as an asset", () => {
         definitionRevisionId: revisionId,
         runnable: true,
         reasons: [],
+        // The published inputs, from which a page builds its start form.
+        inputs: notifyClients().inputs,
         actions: ["workflow.read", "workflow.use"]
       }
     ]);

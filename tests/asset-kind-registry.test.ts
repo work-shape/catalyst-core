@@ -204,6 +204,13 @@ describe("asset kind registry", () => {
       title: "Assistant",
       description: "Answers"
     });
+    // A list in another language names the agent in it, and falls back to the default.
+    expect(
+      agentKind.summarize(agent({ description: { en: "Answers", de: "Antwortet" } }), "de")
+    ).toEqual({ name: "assistant", title: "Assistentin", description: "Antwortet" });
+    expect(agentKind.summarize(agent({ displayName: "Assistant" }), "de")).toMatchObject({
+      title: "Assistant"
+    });
 
     expect(issuesOf(skillKind, withSkills(), skill)).toEqual([]);
     expect(issuesOf(skillKind, withSkills(), { ...skill, name: "1st" })).toEqual([

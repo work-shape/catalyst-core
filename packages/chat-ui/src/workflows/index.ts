@@ -30,6 +30,7 @@ export {
   workflowsAccess
 } from "./workflow-model";
 export { StartDialog } from "./start-run";
+export { checkStartForm, startFormOf, startRefusalByField } from "./start-form";
 export { DraftChangeDialog } from "./workflow-draft";
 export { WorkflowPageView } from "./workflow-page";
 export { WorkflowsPageView } from "./workflows-page";

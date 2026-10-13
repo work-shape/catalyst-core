@@ -301,8 +301,16 @@ export function getSnapshotAgentConfig(
   return agent;
 }
 
-export function getSnapshotSkillMetadataForAgent(assets: RuntimeAssetSnapshot, agent: AgentConfig) {
-  const skillNames = agent.skillNames ?? [];
+/**
+ * The skills an agent is told of in one conversation: those its definition lists, then those
+ * the conversation is offered, each once. A name no stored skill has is left out.
+ */
+export function getSnapshotSkillMetadata(
+  assets: RuntimeAssetSnapshot,
+  agent: AgentConfig,
+  offeredSkillNames: readonly string[]
+) {
+  const skillNames = [...new Set([...(agent.skillNames ?? []), ...offeredSkillNames])];
   if (skillNames.length === 0 || assets.skills.length === 0) {
     return [];
   }

@@ -59,7 +59,7 @@ const readSkillOutputSchema = z.object({
 
 export interface ReadSkillToolOptions {
   assetSource: ConfigAssetSource;
-  /** The skills the platform ships for the subject of a conversation. Read like any other. */
+  /** Which skills the platform ships to a conversation, beside those its agent lists. */
   conversationOffer?: ConversationOfferSource;
 }
 
@@ -77,8 +77,8 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
         return toolFailed("handler_failed", "read_skill requires an active agent run");
       }
 
-      // A skill the platform ships for the subject of this conversation: it is no asset, so
-      // no agent's definition lists it.
+      // The skills the platform ships are offered to a conversation, and no agent's definition
+      // needs to list them. They are stored skills, read like any other.
       const conversationId = context.toolRequest?.conversationId;
       const offer = conversationId
         ? await options.conversationOffer?.offerOf({
@@ -86,36 +86,12 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
             conversationId
           })
         : undefined;
-      const shipped = offer?.skills.find((candidate) => candidate.name === input.name);
-      if (shipped) {
-        if (input.resourcePath) {
-          return toolFailed(
-            "validation_failed",
-            `Skill '${input.name}' does not define resource '${input.resourcePath}'`
-          );
-        }
-        const sourceVersion = createSkillSourceVersion({ ...shipped, resources: [] });
-        return toolSuccess(
-          {
-            name: shipped.name,
-            title: shipped.title,
-            description: shipped.description,
-            content: shipped.content,
-            sourceVersion
-          },
-          {
-            auditSummary: {
-              action: "read_skill",
-              subject: shipped.name,
-              metadata: { agentName, sourceVersion, shipped: true }
-            }
-          }
-        );
-      }
-
       const assets = await options.assetSource.getSnapshot();
       const agent = assets.agents.find((candidate) => candidate.name === agentName);
-      const allowedSkillNames = new Set(agent?.skillNames ?? []);
+      const allowedSkillNames = new Set([
+        ...(agent?.skillNames ?? []),
+        ...(offer?.skillNames ?? [])
+      ]);
       if (!allowedSkillNames.has(input.name)) {
         return toolFailed(
           "not_allowed",

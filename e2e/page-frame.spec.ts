@@ -186,7 +186,7 @@ test("the head of every asset page is one row as high as the header, and the id 
       { path: `/build/connections/${connection.name}`, id: connection.name },
       { path: `/w/${workspaceId}/apps/${app}` },
       // At 768 px the conversation of a draft covers the draft and its head.
-      { path: `/w/${workspaceId}/apps/${app}/edit`, wideOnly: true }
+      { path: `/w/${workspaceId}/app-drafts/${app}`, wideOnly: true }
     ];
     for (const size of [WIDE, { width: 768, height: 900 }]) {
       await page.setViewportSize(size);

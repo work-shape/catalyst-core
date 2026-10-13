@@ -90,7 +90,7 @@ describe("the Apps page", () => {
     // An App without a description goes by its id, and one without a publish opens its draft.
     expect(markup).toContain(">urlaubsplaner</code>");
     expect(markup).toContain("Draft only");
-    expect(markup).toContain('href="/w/cw_1/apps/urlaubsplaner/edit"');
+    expect(markup).toContain('href="/w/cw_1/app-drafts/urlaubsplaner"');
   });
 
   it("shows each App as a card with one main action, and says when it last changed", () => {
@@ -108,12 +108,12 @@ describe("the Apps page", () => {
     // A published App opens, and its draft is edited beside it.
     expect(cards[0]).toMatch(/<a[^>]*href="\/w\/cw_1\/apps\/angebotsrechner"[^>]*>Open<\/a>/u);
     expect(cards[0]).toMatch(
-      /<a[^>]*href="\/w\/cw_1\/apps\/angebotsrechner\/edit"[^>]*>Edit<\/a>/u
+      /<a[^>]*href="\/w\/cw_1\/app-drafts\/angebotsrechner"[^>]*>Edit<\/a>/u
     );
     expect(cards[0]).toContain("Changed yesterday");
     // An App with a draft alone has the draft as its one action.
     expect(cards[1]?.match(/<a /gu)).toHaveLength(1);
-    expect(cards[1]).toMatch(/<a[^>]*href="\/w\/cw_1\/apps\/urlaubsplaner\/edit"[^>]*>Edit<\/a>/u);
+    expect(cards[1]).toMatch(/<a[^>]*href="\/w\/cw_1\/app-drafts\/urlaubsplaner"[^>]*>Edit<\/a>/u);
 
     // Whoever uses Apps gets Open and nothing a builder works with.
     const member = render(appsPage([summary(), draftOnly], NO_APP_RIGHTS));
@@ -168,15 +168,16 @@ describe("the Apps page", () => {
     expect(markup).toContain("Draft only");
   });
 
-  it("tells a builder how an App comes to be, with the way into the chat and two starts", () => {
+  it("tells a builder how an App comes to be, with the way into the chat and two examples", () => {
     const markup = render(appsPage([], ALL));
 
     expect(markup).toContain(
       "No apps in this workspace yet. Describe a tool in chat and the agent builds it as a page; save it as an app so everyone here can use it."
     );
     expect(markup).toContain(">Build an app in chat</button>");
-    expect(markup).toContain("A form that computes…");
-    expect(markup).toContain("A dashboard for…");
+    expect(markup).toContain('aria-label="Examples to start with"');
+    expect(markup).toContain("Fee calculator from hours and rate");
+    expect(markup).toContain("Leave request for the team");
   });
 
   it("tells everybody else who can add one, without an action", () => {
@@ -184,7 +185,7 @@ describe("the Apps page", () => {
 
     expect(markup).toContain("No apps yet. A builder of this workspace can add one.");
     expect(markup).not.toContain("Build an app in chat");
-    expect(markup).not.toContain("A form that computes…");
+    expect(markup).not.toContain("Fee calculator from hours and rate");
   });
 
   it("offers the next page while the instance holds more, and the way to ask again", () => {

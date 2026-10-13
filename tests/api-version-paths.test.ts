@@ -137,6 +137,7 @@ describe("the operation catalog", () => {
         "data_stores.used_by  GET /api/v1/data-stores/:store/used-by",
         "data_stores.value  GET /api/v1/data-stores/:store/value",
         "docs.get  GET /api/v1/docs",
+        "guardrails.list_hits  GET /api/v1/guardrails/:name/hits",
         "health.get  GET /health",
         "instance.infrastructure.check  POST /api/v1/instance/infrastructure/check",
         "instance.infrastructure.get  GET /api/v1/instance/infrastructure",
@@ -203,6 +204,7 @@ describe("the operation catalog", () => {
         "workspaces.deletion_impact.get  GET /api/v1/workspaces/:collaborationWorkspaceId/deletion-impact",
         "workspaces.directory.list  GET /api/v1/workspaces/directory",
         "workspaces.ensure_personal  POST /api/v1/workspaces/personal",
+        "workspaces.files.list  GET /api/v1/workspaces/:collaborationWorkspaceId/files",
         "workspaces.get  GET /api/v1/workspaces/:collaborationWorkspaceId",
         "workspaces.list  GET /api/v1/workspaces",
         "workspaces.member_candidates.list  GET /api/v1/workspaces/:collaborationWorkspaceId/member-candidates",
@@ -261,6 +263,7 @@ describe("the operation catalog", () => {
       "data-stores",
       "dev",
       "docs",
+      "guardrails",
       "instance",
       "me",
       "openapi.json",
@@ -398,7 +401,8 @@ describe("a running instance", () => {
     // and Namespaces came after it, then the background jobs, then a person's own Approval
     // Requests, then the list of modules, then the infrastructure and its check. The five
     // asset addresses moved once more, to `/api/v1/assets`, and the list, the check and the
-    // sync of assets came with them. Then the Pages of a conversation, and the check of a sync.
+    // sync of assets came with them. Then the Pages of a conversation, and the check of a sync,
+    // and the search of the Pages and files of a workspace.
     const added: readonly ApiOperationName[] = [
       "openapi.get",
       "docs.get",
@@ -433,6 +437,7 @@ describe("a running instance", () => {
       "connections.get",
       "connections.test",
       "connections.list_tools",
+      "guardrails.list_hits",
       "data_stores.query",
       "data_stores.insert",
       "data_stores.describe",
@@ -458,7 +463,8 @@ describe("a running instance", () => {
       "workflows.list_runs",
       "workflows.get_run",
       "workflows.list_step_runs",
-      "workflows.cancel_run"
+      "workflows.cancel_run",
+      "workspaces.files.list"
     ];
     // The export, import and validation of a release went when the CLI moved to `assets.sync`.
     const removed = 3;
