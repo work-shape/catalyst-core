@@ -198,8 +198,14 @@ describe("two passes of the job at once", () => {
     time.pass(DAYS + 1);
     // The statement of one batch, twice at once on the same rows, 20 rounds: the first
     // round prunes, and every later one meets rows that are pruned already.
+    const [id] = await t.stores.workflowRuns.listRunsWithDataEndedBefore({
+      clientInstanceId,
+      endedBefore: time.now().toISOString(),
+      limit: 1
+    });
+    if (id !== run.id) throw new Error("The run is not due");
     const statement = () =>
-      t.stores.workflowRuns.pruneStepRunData({ clientInstanceId, id: run.id, limit: 100 });
+      t.stores.workflowRuns.pruneStepRunData({ clientInstanceId, id, limit: 100 });
     for (let round = 0; round < 20; round++) {
       const [one, other] = await Promise.all([statement(), statement()]);
       expect(one + other).toBe(round === 0 ? 7 : 0);

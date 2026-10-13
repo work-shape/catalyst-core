@@ -725,7 +725,6 @@ export async function pruneWorkflowStepRunData(
   // A step run still has a value while it has an output or, a loop, its list. The rows of one
   // batch are locked for one short statement and no other row of the table is.
   const hasValue = sql`(${workflowStepRuns.output} is not null or ${workflowStepRuns.input} ? 'items')`;
-  // Two passes at once take different rows: one skips what the other holds.
   const due = db
     .select({ id: workflowStepRuns.id })
     .from(workflowStepRuns)
@@ -736,8 +735,7 @@ export async function pruneWorkflowStepRunData(
         hasValue
       )
     )
-    .limit(ref.limit)
-    .for("update", { skipLocked: true });
+    .limit(ref.limit);
   const pruned = await db
     .update(workflowStepRuns)
     .set({
