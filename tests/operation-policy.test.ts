@@ -275,6 +275,39 @@ describe("resolvePolicy: who can confirm and what can wait", () => {
     });
   });
 
+  it("takes the confirmation of a Workflow step, which has nobody to ask, as an approval", () => {
+    const origin = { kind: "workflow", workflowRunId: "wf", stepRunId: "step" } as const;
+    const step = { origin, callerCanConfirm: false, canPause: false };
+    expect(resolve(step)).toEqual({
+      value: "approval",
+      next: "await_approval",
+      source: "instance_default"
+    });
+    const instance = (value: "allow" | "approval" | "deny") =>
+      resolve({ ...step, instanceDefaults: { reading: "allow", changing: value } });
+    expect(instance("allow")).toMatchObject({ next: "run" });
+    expect(instance("approval")).toMatchObject({ next: "await_approval" });
+    expect(instance("deny")).toMatchObject({ next: "refuse" });
+    // An agent's call acts for a person, who is asked once the surface can pause.
+    expect(resolve({ callerCanConfirm: false, canPause: false })).toMatchObject({
+      source: "surface_cannot_pause"
+    });
+  });
+
+  it("says in a policy refusal that an approval was asked which the call cannot wait for", () => {
+    expect(
+      operationDenialError({
+        kind: "policy",
+        operation: "items.create",
+        reason: "approval_unavailable"
+      })
+    ).toMatchObject({
+      code: "POLICY_DENIED",
+      message: expect.stringContaining("put an approval step before the step"),
+      details: { operation: "items.create", reason: "approval_unavailable" }
+    });
+  });
+
   it("sends an approval to another person, also for a caller who could confirm", () => {
     const centralSettings = [{ operation: "items.create", value: "approval" }] as const;
     expect(resolve({ centralSettings })).toMatchObject({ next: "await_approval" });

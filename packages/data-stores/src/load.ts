@@ -225,9 +225,6 @@ export const load: StoreVerb = {
   effect: "changing",
   // A load that replaces or updates leaves nothing of the rows that were there.
   changeClass: "irreversible",
-  // Its caller is a step of a Workflow Run, with nobody there to confirm: as for an insert,
-  // the rights on this one store are what lets it, and a setting of the instance tightens it.
-  defaultPolicy: "allow",
   inputSchema: dataStoreLoadInputSchema,
   outputSchema: dataStoreLoadResultSchema,
   timeoutMs: DATA_STORE_LOAD_TIMEOUT_MS + DATA_STORE_LOAD_RUN_GRACE_MS,

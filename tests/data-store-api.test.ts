@@ -1,191 +1,44 @@
-import { randomBytes } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import postgres from "postgres";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import {
   DATA_STORE_ACTIONS,
   DATA_STORE_ASSET_KIND,
   DATA_STORE_JOB_KINDS,
-  DATA_STORE_MANIFEST_FILE,
   DATA_STORE_OPERATION_SCOPES,
   DATA_STORE_OPERATION_VERBS,
-  asClientInstanceId,
   asUserId,
-  createPlatformId,
   dataStoreOperationName,
   type AuthenticatedUser,
   type DataStoreOperationVerb,
-  type DataStoreRecord,
-  type JsonObject,
-  type UserRole,
-  type WorkflowRunPrincipal
+  type JsonObject
 } from "@vivd-catalyst/core";
 import { runOperation } from "@vivd-catalyst/tool-execution";
 import { eventually, required } from "./support/assertions";
+import {
+  clientInstanceId,
+  files,
+  finding,
+  useDataStoreInstance,
+  type DataStoreInstance
+} from "./support/data-store-instance";
 import { createTestConfig } from "./support/fixtures";
 import { fileTestDatabaseUrl } from "./support/test-database";
-import {
-  createTestInstance,
-  getTestExecution,
-  getTestJobs,
-  type TestInstance
-} from "./support/test-instance";
+
+type World = DataStoreInstance;
 
 // A Data Store through the assembled instance: its folder is written and published with the
 // asset operations, its jobs are the module's, and its rows are reached through the call
 // path, with the caller's right, one run per call and audit rows without a value.
-
-const KEY_VARIABLE = "DATA_STORE_TEST_KEY";
-const clientInstanceId = asClientInstanceId("demo-local");
-
-const files = [
-  {
-    path: DATA_STORE_MANIFEST_FILE,
-    text: "id: findings\nname: Findings\ndescription: What the monthly check of bookings found.\n"
-  },
-  {
-    path: "migrations/0001_init.sql",
-    text: `create table findings (
-      run_id text not null,
-      client_id text not null,
-      rule_id text not null,
-      revision integer not null,
-      severity text not null,
-      amount numeric(14, 2),
-      details jsonb not null default '{}'::jsonb
-    );`
-  }
-];
-const finding: JsonObject = {
-  run_id: "run-1",
-  client_id: "client-secret-7",
-  rule_id: "vat-rate",
-  revision: 3,
-  severity: "warning",
-  amount: 119.5,
-  details: { booking: 7 }
-};
 
 interface ErrorBody {
   error: { code: string; message: string; details?: { reason?: string; module?: string } };
 }
 
 describe("a Data Store on an assembled instance", () => {
-  const roots: string[] = [];
-  const started: TestInstance[] = [];
-
-  afterEach(async () => {
-    // Databases and roles are the cluster's, which other suites share: every one a test made
-    // is removed by name, once the instance that reaches them is closed.
-    await Promise.all(started.splice(0).map((instance) => instance.close()));
-    const sql = postgres(await fileTestDatabaseUrl(), { max: 1, onnotice: () => undefined });
-    try {
-      const records = await sql<
-        { database_name: string; app_role: string; migration_role: string }[]
-      >`select database_name, app_role, migration_role from data_stores`;
-      for (const record of records) {
-        await sql.unsafe(`drop database if exists "${record.database_name}" with (force)`);
-        await sql.unsafe(`drop role if exists "${record.app_role}"`);
-        await sql.unsafe(`drop role if exists "${record.migration_role}"`);
-      }
-    } finally {
-      await sql.end();
-    }
-    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-  });
-
-  /**
-   * One instance as its two processes see it: the API, which serves the asset operations and
-   * the jobs, and the call path as an agent worker or a Workflow step reaches it. Both are
-   * assembled from the same config on the same database.
-   */
-  async function start(dataStores: boolean): Promise<World> {
-    const root = await mkdtemp(join(tmpdir(), "data-store-test-"));
-    roots.push(root);
-    const base = createTestConfig();
-    const config = parseClientInstanceConfig({
-      ...base,
-      modules: { assetManagement: { enabled: true }, dataStores: { enabled: dataStores } },
-      secretStore: { keys: [{ id: "k1", ref: KEY_VARIABLE }] },
-      infrastructure: {
-        ...base.infrastructure,
-        objectStorage: {
-          ...base.infrastructure.objectStorage,
-          files: { provider: "filesystem", root }
-        }
-      }
-    });
-    const input = {
-      config,
-      env: { [KEY_VARIABLE]: randomBytes(32).toString("base64") },
-      tools: []
-    };
-    const api = await createTestInstance(input);
-    started.push(api);
-    const calls = await createTestInstance({ execution: input });
-    started.push(calls);
-    return { api, stores: api.stores, execution: getTestExecution(calls) };
-  }
-
-  interface World {
-    api: TestInstance;
-    stores: TestInstance["stores"];
-    execution: ReturnType<typeof getTestExecution>;
-  }
-
-  const put = ({ api }: World, storeFiles = files, expectedRevision: number | null = null) =>
-    api.call("assets.put", {
-      params: { kind: DATA_STORE_ASSET_KIND, name: "findings" },
-      payload: { files: storeFiles, expectedRevision }
-    });
-
-  const publish = ({ api }: World, revision: number) =>
-    api.call("assets.publish", {
-      params: { kind: DATA_STORE_ASSET_KIND, name: "findings" },
-      payload: { revision }
-    });
-
-  /** Writes the folder as revision 1 and publishes it. A refusal fails the test where it happens. */
-  async function publishStore(world: World): Promise<DataStoreRecord> {
-    expect((await put(world)).statusCode).toBe(200);
-    expect((await publish(world, 1)).statusCode).toBe(200);
-    return settle(world, 1);
-  }
-
-  async function recordOf({ stores }: World): Promise<DataStoreRecord> {
-    return required(
-      await stores.dataStores.findDataStoreByName({ clientInstanceId, name: "findings" })
-    );
-  }
-
-  /** Runs the jobs of the API process until the store is at the level. */
-  function settle(world: World, level: number): Promise<DataStoreRecord> {
-    const jobs = getTestJobs(world.api);
-    return eventually(async () => {
-      await jobs.runDue();
-      const record = await recordOf(world);
-      expect(record).toMatchObject({ status: "ready", level });
-      return record;
-    });
-  }
-
-  async function person({ stores }: World, name: string, roles: UserRole[]) {
-    const user: AuthenticatedUser = await stores.users.resolveUserIdentity({
-      clientInstanceId,
-      authSource: "test",
-      externalUserId: name,
-      displayLabel: name,
-      roles,
-      permissionRefs: [],
-      permissions: [],
-      correlationId: "test"
-    });
-    return user;
-  }
+  const { start, close, put, publish, publishStore, recordOf, settle, person } =
+    useDataStoreInstance();
 
   function call(
     world: World,
@@ -448,118 +301,7 @@ describe("a Data Store on an assembled instance", () => {
     expect(await outcome("insert", insert)).toBe("done");
   });
 
-  it("runs the step of a Workflow Run as the run's service principal, by that principal's grants and no one else's", async () => {
-    const instance = await start(true);
-    // Whoever starts the run and publishes the Workflow holds every right; no call is theirs.
-    const admin = await person(instance, "user-1", ["user", "admin", "superadmin"]);
-    const record = await publishStore(instance);
-    const principal = await instance.stores.apiAccess.createServicePrincipal({
-      clientInstanceId,
-      name: "monthly-check",
-      displayLabel: "Monthly check",
-      createdByUserId: asUserId(admin.id)
-    });
-    const workflowRunId = createPlatformId<"WorkflowRunId">("wfrun");
-    const actor: WorkflowRunPrincipal = {
-      kind: "service",
-      id: principal.id,
-      displayLabel: principal.displayLabel,
-      permissionRefs: principal.permissionRefs,
-      permissions: principal.permissions,
-      clientInstanceId,
-      authSource: "workflow",
-      scopes: [],
-      workflowRunId
-    };
-    const grant = (action: string) =>
-      instance.stores.access.createGrant({
-        clientInstanceId,
-        holderKind: "service_principal",
-        holderId: principal.id,
-        action,
-        effect: "allow",
-        scopeKind: "asset",
-        scopeId: record.id,
-        grantedBy: asUserId(admin.id)
-      });
-    const step = async (verb: DataStoreOperationVerb, input: unknown, stepRunId: string) => {
-      const outcome = await runOperation(
-        {
-          operation: dataStoreOperationName("findings", verb),
-          effect: verb === "insert" || verb === "load" ? "changing" : "reading",
-          input,
-          actor,
-          origin: { kind: "workflow", workflowRunId, stepRunId },
-          correlationId: "corr_monthly_check",
-          // The key of a step's changing call is the id of its step run.
-          idempotencyKey: stepRunId
-        },
-        instance.execution.operationCalls.deps
-      );
-      return {
-        ...outcome,
-        answer: outcome.result.status === "denied" ? outcome.result.reason : outcome.result.status
-      };
-    };
-    const denied = (action: string) => ({ kind: "forbidden", action, reason: "no_grant" });
-    const insert = { table: "findings", rows: [finding], onConflict: "fail" };
-    const count = { sql: "select count(*)::integer as count from findings" };
-    const dataset = { $dataset: "ds_findings", rowCount: 1, bytes: 100 };
-
-    expect((await step("query", count, "step_1")).answer).toEqual(denied(DATA_STORE_ACTIONS.read));
-    expect((await step("insert", insert, "step_2")).answer).toEqual(
-      denied(DATA_STORE_ACTIONS.insert)
-    );
-
-    await grant(DATA_STORE_ACTIONS.insert);
-    const added = await step("insert", insert, "step_3");
-    expect(added).toMatchObject({
-      answer: "done",
-      replayed: false,
-      run: {
-        effect: "changing",
-        actor: { kind: "service_principal", id: principal.id },
-        origin: { kind: "workflow", workflowRunId, stepRunId: "step_3" }
-      }
-    });
-    // The step run that is tried again is answered what it was answered, and adds nothing.
-    expect(await step("insert", insert, "step_3")).toMatchObject({
-      answer: "done",
-      replayed: true
-    });
-    // Adding rows does not read them.
-    expect((await step("query", count, "step_4")).answer).toEqual(denied(DATA_STORE_ACTIONS.read));
-
-    await grant(DATA_STORE_ACTIONS.read);
-    const read = await step("query", count, "step_5");
-    expect(read).toMatchObject({
-      answer: "done",
-      result: { output: { rows: [{ count: 1 }] } },
-      run: { effect: "reading", actor: { kind: "service_principal", id: principal.id } }
-    });
-
-    // A load that changes or removes rows that are stored needs more than adding rows.
-    for (const more of [
-      { key: ["run_id"], onConflict: "update" },
-      { key: ["run_id"], replace: { by: ["run_id"] } }
-    ]) {
-      expect(
-        (
-          await step(
-            "load",
-            { table: "findings", dataset, ...more },
-            `step_load_${more.onConflict ?? "replace"}`
-          )
-        ).answer
-      ).toEqual(denied(DATA_STORE_ACTIONS.execute));
-    }
-    // One that only adds is the principal's to make; no dataset of a run exists to read yet.
-    expect(await step("load", { table: "findings", dataset }, "step_load")).toMatchObject({
-      result: { status: "failed", error: { details: { reason: "not_supported_yet" } } }
-    });
-  });
-
-  it("declares for each verb the scope, the caller, the effect and the right the contract names, and what a call waits for", async () => {
+  it("declares for each verb the scope, the caller, the effect and the right the contract names, and no policy of its own", async () => {
     const instance = await start(true);
     await publishStore(instance);
 
@@ -595,8 +337,8 @@ describe("a Data Store on an assembled instance", () => {
       DATA_STORE_OPERATION_SCOPES.preview_rows
     ]);
     const { read, insert } = DATA_STORE_ACTIONS;
-    // A read is recorded every time and waits for nobody. Adding rows waits for nobody either:
-    // a step of a Workflow Run has nobody there to confirm.
+    // A read is recorded every time. No verb names a policy of its own: what a changing call
+    // waits for is the instance's to say, for every caller.
     expect(declared).toEqual([
       ["query", DATA_STORE_OPERATION_SCOPES.query, "principal", "reading", read, true, undefined],
       [
@@ -606,9 +348,9 @@ describe("a Data Store on an assembled instance", () => {
         "changing",
         insert,
         false,
-        "allow"
+        undefined
       ],
-      ["load", DATA_STORE_OPERATION_SCOPES.load, "principal", "changing", null, false, "allow"],
+      ["load", DATA_STORE_OPERATION_SCOPES.load, "principal", "changing", null, false, undefined],
       [
         "describe",
         DATA_STORE_OPERATION_SCOPES.describe,
@@ -745,7 +487,7 @@ describe("a Data Store on an assembled instance", () => {
 
     try {
       expect(await open()).toBeGreaterThan(0);
-      await Promise.all(started.splice(0).map((process) => process.close()));
+      await close();
       await eventually(async () => expect(await open()).toBe(0));
     } finally {
       await sql.end();

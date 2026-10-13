@@ -105,9 +105,12 @@ contain breaking changes; a patch version does not.
   exist it answers `not_supported_yet`. `data_stores.get` (`GET /api/v1/data-stores/:store`,
   `data_store.read`, scope `config_assets:read`) answers the state of a store in one read: its
   migration level and the published one, its size against its limit, each thing the server
-  leaves open with what an operator does about it, and how its last migration ended. `insert`
-  and `load` declare the policy `allow`, so a step of a Workflow Run, which has nobody there to
-  confirm, adds rows as its service principal by that principal's grants. Release
+  leaves open with what an operator does about it, and how its last migration ended. No verb
+  of a store names a policy of its own. A step of a Workflow Run calls `insert` and `load` as
+  its service principal, by that principal's grants; it has nobody to ask, so the instance
+  default `confirm` is an approval for it, which no call of a service principal can wait for
+  yet: such a call is refused as `POLICY_DENIED` with `details.reason: approval_unavailable`,
+  and runs where `policy.defaults.changing` is `allow`. Release
   config `dataStores.sizeLimit` (default `5GB`) is the most one store may hold and
   `dataStores.poolMaxConnections` (default 5) the connections one process holds to one store.
   Migration `0062_data_stores` adds the table `data_stores`, the platform's record of each

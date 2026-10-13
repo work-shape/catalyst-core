@@ -13,6 +13,7 @@ import {
   type OperationCall,
   type OperationCallRuntime,
   type OperationDefinition,
+  type OperationDenial,
   type OperationResult,
   type OperationRun,
   type OperationRunActor
@@ -411,8 +412,14 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     if (definition.secret) {
       return { ending: await denyRun(context, { kind: "policy", operation: definition.name }) };
     }
+    // The approval is asked and nothing can hold the call for it: the refusal says so.
+    const unavailable: OperationDenial = {
+      kind: "policy",
+      operation: definition.name,
+      reason: "approval_unavailable"
+    };
     if (!deps.approvals) {
-      return { ending: await denyRun(context, { kind: "policy", operation: definition.name }) };
+      return { ending: await denyRun(context, unavailable) };
     }
     const expiresAt = new Date(now().getTime() + PENDING_APPROVAL_EXPIRES_AFTER_MS).toISOString();
     const filed = await deps.approvals.request({
@@ -424,7 +431,7 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
       policySource: policy.source
     });
     if (!filed) {
-      return { ending: await denyRun(context, { kind: "policy", operation: definition.name }) };
+      return { ending: await denyRun(context, unavailable) };
     }
     const { approvalRequestId } = filed;
     const pending = await endRun(context, {

@@ -100,9 +100,10 @@ export type PolicyResolution = { source: PolicySource } & (
  * takes the strictest of what each target resolves to. An operation's `policyFloor` then
  * tightens what came of it and never loosens it. A guardrail can only tighten. `confirm` and `approval` are values of changing operations: on a reading operation
  * they do not apply, wherever they come from, so a reading operation resolves to `allow` or
- * `deny`. A surface that can neither confirm nor pause is refused a call that would have to
- * wait for its own caller's confirmation. A call that needs another person's approval waits
- * from every surface.
+ * `deny`. A step of a Workflow Run has nobody to ask and acts for nobody who could be asked
+ * later, so its `confirm` is an `approval`. A surface that can neither confirm nor pause is
+ * refused a call that would have to wait for its own caller's confirmation. A call that needs
+ * another person's approval waits from every surface.
  */
 export function resolvePolicy(input: PolicyInput): PolicyResolution {
   const { definition } = input;
@@ -181,6 +182,9 @@ export function resolvePolicy(input: PolicyInput): PolicyResolution {
             : {})
         };
       }
+      if (hasNobodyToAsk(input.origin)) {
+        return { value: "approval", next: "await_approval", source };
+      }
       return input.canPause
         ? { value, next: "await_confirmation", source }
         : { value: "deny", next: "refuse", source: "surface_cannot_pause" };
@@ -189,6 +193,15 @@ export function resolvePolicy(input: PolicyInput): PolicyResolution {
       // approver executes it. So an agent's call waits for one too.
       return { value, next: "await_approval", source };
   }
+}
+
+/**
+ * Whether a call that nobody present made also acts for no person who could confirm it later.
+ * A run of a Workflow acts as its service principal. An agent's call acts for the person of
+ * its conversation, who is asked.
+ */
+function hasNobodyToAsk(origin: OperationOrigin): boolean {
+  return origin.kind === "workflow";
 }
 
 function stricter(left: PolicyValue, right: PolicyValue): PolicyValue {
