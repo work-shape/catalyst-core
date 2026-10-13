@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { dirname, extname, resolve } from "node:path";
-import yaml from "js-yaml";
 import {
+  loadYamlData,
   parseSkillMarkdown as parseSkillFileMarkdown,
   SkillMarkdownError
 } from "@vivd-catalyst/asset-schemas";
@@ -69,7 +69,7 @@ async function loadUiConfigFile(baseDir: string, uiFile: string, overlay?: unkno
 async function readStructuredFile(path: string): Promise<unknown> {
   const contents = await readFile(path, "utf8");
   const extension = extname(path).toLowerCase();
-  return extension === ".json" ? JSON.parse(contents) : yaml.load(contents);
+  return extension === ".json" ? JSON.parse(contents) : loadYamlData(contents, path);
 }
 
 /**

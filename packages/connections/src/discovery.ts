@@ -2,8 +2,10 @@ import {
   CONNECTION_OPERATION_NAME_MAX_LENGTH,
   CONNECTION_OPERATION_NAME_PATTERN,
   CREDENTIAL_REFUSALS,
+  checkStorableTexts,
   connectionCallError,
   connectionCallReasonOf,
+  isStorableText,
   type ClientInstanceId,
   type ConnectionCallReason,
   type ConnectionCatalog,
@@ -131,24 +133,6 @@ const NO_CREDENTIALS: ConnectionCredentialResolver = {
   resolve: () => Promise.reject(connectionCallError(CREDENTIAL_REFUSALS.notConfigured))
 };
 
-/** Half of a surrogate pair. With a NUL it is text the Platform Store does not hold as JSON. */
-const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
-
-function storableText(text: string): boolean {
-  return !text.includes("\u0000") && !LONE_SURROGATE.test(text);
-}
-
-/**
- * Whether every key and every text of a value can be stored. Only called for a schema the
- * validator has measured, so the walk is within its bounds of depth and node count.
- */
-function storable(value: JsonValue): boolean {
-  if (typeof value === "string") return storableText(value);
-  if (typeof value !== "object" || value === null) return true;
-  if (Array.isArray(value)) return value.every(storable);
-  return Object.entries(value).every(([key, child]) => storableText(key) && storable(child));
-}
-
 /**
  * Why a listed schema is not taken, or nothing. It is measured against the bounds of a schema
  * of an outside system first and compiled only then, in a worker thread with a deadline. A
@@ -163,7 +147,10 @@ async function schemaRefusalOf(
   checking.catch(() => undefined);
   const refusal = await Promise.race([checking, deadline.passed]);
   if (refusal) return refusal;
-  return storable(schema) ? undefined : "schema_uncompilable";
+  // The validator measured the schema, so the walk is within its bounds of depth and nodes.
+  return checkStorableTexts(schema, Number.POSITIVE_INFINITY) === "storable"
+    ? undefined
+    : "schema_uncompilable";
 }
 
 /** The description as the catalog holds it. A cut never leaves half of a surrogate pair. */
@@ -336,7 +323,7 @@ async function boundedOperations(
       name.length > CONNECTION_OPERATION_NAME_MAX_LENGTH ||
       !CONNECTION_OPERATION_NAME_PATTERN.test(name) ||
       names.has(name) ||
-      !storableText(description)
+      !isStorableText(description)
     ) {
       continue;
     }

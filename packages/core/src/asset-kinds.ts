@@ -1,3 +1,4 @@
+import { isStorableText } from "@vivd-catalyst/asset-schemas";
 import { AppError } from "./errors";
 import type { CollaborationWorkspaceId } from "./ids";
 
@@ -25,11 +26,6 @@ const ASSET_TEXT_NOT_STORABLE = "text_not_storable";
 
 /** How many texts of one definition are named before the list ends. */
 const UNSTORABLE_TEXT_ISSUES_MAX = 20;
-
-/** A NUL character or half of a surrogate pair: what a revision, stored as JSON, cannot hold. */
-function isStorableText(text: string): boolean {
-  return !text.includes("\u0000") && !/\p{Surrogate}/u.test(text);
-}
 
 /**
  * Every text and every key of a definition that the store cannot hold, by the path of the

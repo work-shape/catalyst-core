@@ -4,6 +4,7 @@ import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import yaml from "js-yaml";
 import {
   agentConfigSchema,
+  loadYamlData,
   parseSkillMarkdown,
   skillResourceMediaTypeForPath,
   skillConfigSchema,
@@ -83,7 +84,7 @@ export class WorkingCopyValidationError extends Error {
 }
 
 export function parseManifest(contents: string, source = MANIFEST_FILENAME): CatalystManifest {
-  const input = yaml.load(contents);
+  const input = loadYamlData(contents, source);
   if (!isRecord(input)) {
     throw new Error(`${source} must contain a YAML object`);
   }
@@ -239,7 +240,7 @@ export async function readWorkingCopy(
   for (const path of agentFiles) {
     const file = toRelativePath(workingDir, path);
     try {
-      const input = yaml.load(await readFile(path, "utf8"));
+      const input = loadYamlData(await readFile(path, "utf8"), file);
       const parsed = agentConfigSchema.safeParse(input);
       if (parsed.success) {
         agents.push(parsed.data);
