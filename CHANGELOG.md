@@ -2053,6 +2053,10 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- **A JSON request body the server does not read:** an empty body with a JSON content type, one
+  that does not parse, and one that names `__proto__` or `constructor.prototype` as a key
+  answered `500` on every operation. Each now answers `400` `BAD_REQUEST` with
+  `details.reason` `invalid_json_body`.
 - **Claude runs with `workspace.preview_images` or `structured_data.publish`:** the input schema
   a model is shown for each of the two had a combinator at its root (`anyOf` over the three
   preview sources, `oneOf` over replace and patch), which Anthropic's Messages format, also on
