@@ -37,13 +37,16 @@ export interface ConversationSubject {
 
 /**
  * What the conversations of an instance are offered beyond what their agent's definition
- * lists: the tools the server binds to the subject of a conversation, and the skills the
- * platform ships for an asset of that kind. A conversation without a subject is offered
- * nothing here, and none of `SUBJECT_TOOL_PREFIX` either.
+ * lists: in every conversation the tools that find what is on the platform and the skill that
+ * says how it works, and in a conversation about an asset the tools the server binds to it and
+ * the skills the platform ships for an asset of that kind.
  */
 export interface ConversationOffer {
-  /** The asset the conversation is about: what its agent is told before the first turn. */
-  subject: ConversationSubject;
+  /**
+   * The asset the conversation is about: what its agent is told before the first turn.
+   * Missing on a conversation about none.
+   */
+  subject?: ConversationSubject;
   toolNames: readonly string[];
   skills: readonly ShippedSkill[];
 }
@@ -57,7 +60,7 @@ export interface ShippedSkill {
 }
 
 export interface ConversationOfferSource {
-  /** Nothing where the conversation has no subject, or is gone. */
+  /** Nothing where the conversation is gone. */
   offerOf(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
@@ -65,8 +68,10 @@ export interface ConversationOfferSource {
 }
 
 /**
- * The prefix of the tools the server binds to the subject of a conversation. An agent is
- * offered one only in a conversation that has a subject, whatever its definition lists.
+ * The prefix of the tools on the platform's assets. An agent is offered them only as the
+ * platform offers them to a conversation, whatever its definition lists: `platform.assets.list`
+ * in every conversation, the tools the server binds to a subject only in a conversation that
+ * has one.
  */
 export const SUBJECT_TOOL_PREFIX = "platform.assets.";
 

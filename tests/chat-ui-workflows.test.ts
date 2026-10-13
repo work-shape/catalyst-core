@@ -224,8 +224,13 @@ describe("the list of Workflows", () => {
     );
   });
 
-  it("says how the latest run of a Workflow stands, and nothing where it has none", () => {
-    expect(render(listPage([summary]))).not.toContain(t("workflows.run.failed"));
+  it("says how the latest run of a Workflow stands, as its last run, or that it has none", () => {
+    const never = render(listPage([summary]));
+    expect(never).not.toContain(t("workflows.run.failed"));
+    expect(never).toContain(t("workflows.noRunsPlain"));
+    expect(never).not.toContain(t("workflows.lastRun"));
+    // A Workflow that never ran has no runs to lead to.
+    expect(never).not.toContain('href="/w/cw_1/workflows/notify-clients/runs"');
     const markup = render(
       listPage([
         {
@@ -235,7 +240,17 @@ describe("the list of Workflows", () => {
       ])
     );
     expect(markup).toContain(t("workflows.run.failed"));
+    expect(markup).toContain(t("workflows.lastRun"));
     expect(markup).toContain('dateTime="2026-10-12T09:00:00.000Z"');
+    expect(markup).toContain('href="/w/cw_1/workflows/notify-clients/runs"');
+  });
+
+  it("warns that a Workflow cannot be started, but not one that only runs on its schedule", () => {
+    const issue = (code: string) => ({ code, message: "Refused." });
+    const scheduled = render(listPage([{ ...summary, reasons: [issue("no_manual_trigger")] }]));
+    expect(scheduled).not.toContain(t("workflows.notRunnable.badge"));
+    const refused = render(listPage([{ ...summary, reasons: [issue("not_supported_yet")] }]));
+    expect(refused).toContain(t("workflows.notRunnable.badge"));
   });
 
   it("shows placeholders while the list loads, and the head at once", () => {

@@ -115,6 +115,18 @@ export async function readManifest(workingDir: string): Promise<CatalystManifest
   return parseManifest(await readFile(path, "utf8"), path);
 }
 
+/** The manifest of the folder, or none where the folder is no working copy. */
+export async function readManifestIfPresent(
+  workingDir: string
+): Promise<CatalystManifest | undefined> {
+  try {
+    return await readManifest(workingDir);
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") return undefined;
+    throw error;
+  }
+}
+
 export function resolveInstance(
   manifest: CatalystManifest,
   requestedInstance?: string
@@ -403,7 +415,11 @@ export async function updateManifestDefaultAgent(
   await writeFile(path, updated, "utf8");
 }
 
-async function walkFiles(root: string, directory: string, output: string[]): Promise<void> {
+/**
+ * Every file below `directory`, by absolute path. `.git` and `node_modules` directly in `root`
+ * are skipped.
+ */
+export async function walkFiles(root: string, directory: string, output: string[]): Promise<void> {
   let entries: Dirent[];
   try {
     entries = await readdir(directory, { withFileTypes: true });
