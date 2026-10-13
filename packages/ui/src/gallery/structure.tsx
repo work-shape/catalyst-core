@@ -290,7 +290,7 @@ export const structureGallery: GalleryGroup = {
     },
     {
       name: "PageHeader",
-      components: ["PageHeader"],
+      components: ["PageHeader", "PageHeaderBack"],
       render: (text) => <PageHeaderSamples text={text} />
     },
     {
