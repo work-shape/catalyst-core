@@ -314,8 +314,14 @@ describe("a load into a Data Store", () => {
       many(1_000, { note: "n".repeat(700) }, part * 1_000)
     );
 
-    expect(await refusal(load(world, world.datasets.put("ds_large", parts)))).toMatchObject({
+    const refused: unknown = await load(world, world.datasets.put("ds_large", parts)).then(
+      () => undefined,
+      (error: unknown) => error
+    );
+    // It says that nothing of it stayed, so the call path runs the same step run again.
+    expect(refused).toMatchObject({
       code: "CONFLICT",
+      changedNothing: true,
       details: { reason: "data_store_size_limit", limit }
     });
     expect(await count(world)).toBe(0);

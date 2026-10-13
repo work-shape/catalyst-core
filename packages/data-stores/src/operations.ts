@@ -38,7 +38,15 @@ import { asStoreRole } from "./roles";
 import { quoteIdentifier } from "./server";
 import { storeSizeBytes } from "./size";
 import { DATA_STORE_STATE_VERB, stateOperation } from "./state";
-import { reclaim, storeFull, tableUnknown, type PublishedStore, type StoreVerb } from "./verbs";
+import {
+  CommitOutcomeUnknown,
+  changeWhole,
+  reclaim,
+  storeFull,
+  tableUnknown,
+  type PublishedStore,
+  type StoreVerb
+} from "./verbs";
 import { load } from "./load";
 
 // The operations on the rows of one store. Each is called through `runOperation` like every
@@ -368,7 +376,8 @@ const insert: StoreVerb = {
     let wrote = false;
     let inserted: number;
     try {
-      inserted = await runtime.server.executor.change(
+      inserted = await changeWhole(
+        runtime,
         { ...target, timeoutMs: POSTGRES_STATEMENT_TIMEOUT_MS },
         async (sql) => {
           if (keys.length > 0) {
@@ -549,16 +558,16 @@ async function runVerb(
   signal: AbortSignal | undefined
 ): Promise<unknown> {
   const { record } = store;
-  if (record.status !== "ready") {
-    throw new AppError(
-      "CONFLICT",
-      record.failure
-        ? `The Data Store '${record.name}' has no database: ${record.failure.message}`
-        : `The Data Store '${record.name}' is being provisioned. Try again shortly.`,
-      { reason: "data_store_not_ready" }
-    );
-  }
   try {
+    if (record.status !== "ready") {
+      throw new AppError(
+        "CONFLICT",
+        record.failure
+          ? `The Data Store '${record.name}' has no database: ${record.failure.message}`
+          : `The Data Store '${record.name}' is being provisioned. Try again shortly.`,
+        { reason: "data_store_not_ready" }
+      );
+    }
     // The app role as the platform gave it, before anything runs as that role.
     return await asStoreRole(runtime, record, signal, () =>
       verb.run(
@@ -571,9 +580,22 @@ async function runVerb(
       )
     );
   } catch (error) {
-    throw error instanceof AppError
-      ? error
-      : databaseFailureError(error, `The ${verb.effect === "changing" ? verb.verb : "query"}`);
+    const unknown = error instanceof CommitOutcomeUnknown;
+    const cause: unknown = unknown ? error.failure : error;
+    const failure =
+      cause instanceof AppError
+        ? cause
+        : databaseFailureError(cause, `The ${verb.effect === "changing" ? verb.verb : "query"}`);
+    // Everything a changing verb does to a store is one transaction. Whatever fails before
+    // that transaction is being kept leaves nothing of the call, so the call path may run the
+    // same call again under its key: a step that is tried again adds its rows once the cause
+    // is gone. A failure while it was being kept may have left the rows, and is not run again.
+    throw verb.effect === "changing" && !unknown
+      ? new AppError(failure.code, failure.message, failure.details, {
+          exposeMessage: failure.exposeMessage,
+          changedNothing: true
+        })
+      : failure;
   }
 }
 

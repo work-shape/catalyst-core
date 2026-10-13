@@ -70,8 +70,9 @@ export interface OperationRunError {
    */
   reason?: string;
   /**
-   * Set where the call failed before the operation's implementation was reached, so nothing
-   * was changed. Only such a failed run of a changing operation is run again under its key.
+   * Set where the call failed before the operation's implementation was reached, or the
+   * implementation said that nothing of it stayed (`AppError.changedNothing`). Only such a
+   * failed run of a changing operation is run again under its key.
    */
   unexecuted?: true;
 }

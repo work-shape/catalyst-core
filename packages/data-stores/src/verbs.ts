@@ -1,4 +1,8 @@
-import type { PostgresTarget } from "@vivd-catalyst/postgres-connector";
+import type {
+  PostgresChangeInput,
+  PostgresChangeStatements,
+  PostgresTarget
+} from "@vivd-catalyst/postgres-connector";
 import {
   AppError,
   type DataStoreOperationVerb,
@@ -51,6 +55,38 @@ export function tableUnknown(table: string): AppError {
   return new AppError("VALIDATION_FAILED", `The store has no table '${table}'`, {
     reason: "table_unknown"
   });
+}
+
+/**
+ * The failure of a change that had done all its work: its transaction was being kept when it
+ * failed, so whether its rows are stored is not known.
+ */
+export class CommitOutcomeUnknown extends Error {
+  constructor(readonly failure: unknown) {
+    super("The change failed while its transaction was being kept");
+  }
+}
+
+/**
+ * Runs the whole of a changing verb as one transaction. A failure inside `work` rolls all of
+ * it back and leaves here as it is. One that comes once `work` has ended leaves as
+ * `CommitOutcomeUnknown`: only that one may have changed the store.
+ */
+export async function changeWhole<Result>(
+  runtime: DataStoreRuntime,
+  input: PostgresChangeInput,
+  work: (sql: PostgresChangeStatements) => Promise<Result>
+): Promise<Result> {
+  let worked = false;
+  try {
+    return await runtime.server.executor.change(input, async (sql) => {
+      const result = await work(sql);
+      worked = true;
+      return result;
+    });
+  } catch (error) {
+    throw worked ? new CommitOutcomeUnknown(error) : error;
+  }
 }
 
 /** The refusal of rows for a store that is at its size limit, or that they would take past it. */

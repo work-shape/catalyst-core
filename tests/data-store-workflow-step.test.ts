@@ -16,7 +16,8 @@ import { required } from "./support/assertions";
 import { clientInstanceId, finding, useDataStoreInstance } from "./support/data-store-instance";
 
 // A step of a Workflow Run on a Data Store, through the call path of an assembled instance:
-// whose rights decide, and what the instance's policy asks of a call nobody is there to confirm.
+// whose rights decide, what the instance's policy asks of a call nobody is there to confirm,
+// and what a step run that is tried again is answered.
 
 const INSERT = dataStoreOperationName("findings", "insert");
 
@@ -212,5 +213,37 @@ describe("a step of a Workflow Run on a Data Store", () => {
     expect(asked("confirm")).toMatchObject({ next: "refuse", source: "surface_cannot_pause" });
     expect(asked("deny")).toMatchObject({ next: "refuse" });
     expect(asked("allow")).toMatchObject({ next: "run" });
+  });
+
+  it("runs a step run again under its key after a failure that changed nothing, and answers a kept one again", async () => {
+    const { instance, record, grant, step } = await monthlyCheck("allow");
+    await grant(DATA_STORE_ACTIONS.insert);
+    await grant(DATA_STORE_ACTIONS.read);
+    const limit = (bytes: number) =>
+      instance.stores.dataStores.putDataStore({ ...record, sizeLimitBytes: bytes });
+
+    await limit(1024);
+    const full = await step("insert", insert, "step_1");
+    expect(full).toMatchObject({
+      replayed: false,
+      result: { status: "failed", error: { code: "CONFLICT" } },
+      run: { status: "failed", error: { code: "CONFLICT", unexecuted: true } }
+    });
+
+    // Its cause is gone: the same step run, tried again, adds its rows.
+    await limit(record.sizeLimitBytes);
+    expect(await step("insert", insert, "step_1")).toMatchObject({
+      answer: "done",
+      replayed: false,
+      result: { output: { inserted: 1 } }
+    });
+    // What is kept is answered again and never added twice.
+    expect(await step("insert", insert, "step_1")).toMatchObject({
+      answer: "done",
+      replayed: true
+    });
+    expect(await step("query", count, "step_2")).toMatchObject({
+      result: { output: { rows: [{ count: 1 }] } }
+    });
   });
 });

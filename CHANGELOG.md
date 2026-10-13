@@ -110,7 +110,9 @@ contain breaking changes; a patch version does not.
   its service principal, by that principal's grants; it has nobody to ask, so the instance
   default `confirm` is an approval for it, which no call of a service principal can wait for
   yet: such a call is refused as `POLICY_DENIED` with `details.reason: approval_unavailable`,
-  and runs where `policy.defaults.changing` is `allow`. Release
+  and runs where `policy.defaults.changing` is `allow`. A changing call of a store that failed
+  and rolled back whole is run again under its idempotency key, so a step that is tried again
+  recovers once the cause is gone; an operation says so with `AppError.changedNothing`. Release
   config `dataStores.sizeLimit` (default `5GB`) is the most one store may hold and
   `dataStores.poolMaxConnections` (default 5) the connections one process holds to one store.
   Migration `0062_data_stores` adds the table `data_stores`, the platform's record of each

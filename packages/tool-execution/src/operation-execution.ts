@@ -3,6 +3,7 @@ import {
   AGENT_TOOL_ACTION_PREFIX,
   AppError,
   callerCanConfirm,
+  isAppError,
   isToolOperationAnswer,
   moduleOffError,
   operationDenialError,
@@ -575,7 +576,8 @@ export async function executeAdmitted(
         message: refused.data.message
       });
     }
-    return failRun(context, error, !started);
+    // An implementation that rolled back whole says so; every other one may have changed something.
+    return failRun(context, error, !started || (isAppError(error) && error.changedNothing));
   }
 }
 

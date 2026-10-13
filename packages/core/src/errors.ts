@@ -7,12 +7,19 @@ export class AppError extends Error {
   readonly statusCode: number;
   readonly details?: unknown;
   readonly exposeMessage: boolean;
+  /**
+   * Set by the implementation of a changing operation that failed and knows that nothing of
+   * it stayed: everything it did was one transaction that rolled back. Such a call is run
+   * again under its idempotency key, like one that failed before its implementation started.
+   * An implementation that cannot know leaves it unset.
+   */
+  readonly changedNothing: boolean;
 
   constructor(
     code: AppErrorCode,
     message: string,
     details?: unknown,
-    options?: { exposeMessage?: boolean }
+    options?: { exposeMessage?: boolean; changedNothing?: boolean }
   ) {
     super(message);
     this.name = "AppError";
@@ -20,6 +27,7 @@ export class AppError extends Error {
     this.statusCode = APP_ERROR_STATUS_CODES[code];
     this.details = details;
     this.exposeMessage = options?.exposeMessage ?? this.statusCode < 500;
+    this.changedNothing = options?.changedNothing ?? false;
   }
 }
 

@@ -12,7 +12,7 @@ import { z } from "zod";
 import { catalogTarget, readTables } from "./catalog";
 import { quoteIdentifier } from "./server";
 import { storeSizeBytes } from "./size";
-import { reclaim, storeFull, tableUnknown, type StoreVerb } from "./verbs";
+import { changeWhole, reclaim, storeFull, tableUnknown, type StoreVerb } from "./verbs";
 
 // `load`: the rows of a dataset of a Workflow Run into one table of a store, all in one
 // transaction as the app role. A reader of the table sees the rows as they were until the
@@ -326,7 +326,8 @@ export const load: StoreVerb = {
     }
 
     try {
-      await runtime.server.executor.change(
+      await changeWhole(
+        runtime,
         { ...target, timeoutMs: DATA_STORE_LOAD_TIMEOUT_MS },
         async (sql) => {
           try {
