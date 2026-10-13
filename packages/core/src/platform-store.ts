@@ -17,6 +17,7 @@ import type {
   ExecutionWorkspaceMetadataStore,
   WorkspaceCommandStore
 } from "./execution-workspace";
+import type { FileSearchStore } from "./file-search";
 import type { PlatformFileStore } from "./files";
 import type { AccessAdministrationStore } from "./permissions";
 import type { JobsStore } from "./jobs";
@@ -31,7 +32,11 @@ import type { WorkflowRunDatasetsStore } from "./workflows";
 import type { WorkflowRunsStore } from "./workflow-runs";
 
 export interface ConversationsStore
-  extends ConversationStore, ConversationRetentionStore, ModelProviderContinuationStore {}
+  extends
+    ConversationStore,
+    ConversationRetentionStore,
+    ModelProviderContinuationStore,
+    FileSearchStore {}
 
 export interface AgentRunsStore extends AgentRunStore, RunObservationStore {}
 

@@ -73,6 +73,8 @@ export function AppEdit({ app }: { app: string }) {
   const [revisionsOpen, setRevisionsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  // The outside hosts the shown draft lists that its frame may not call before a publish.
+  const [heldBackHosts, setHeldBackHosts] = useState<readonly string[]>([]);
 
   if (!host || !workspace || !rights) {
     return null;
@@ -182,7 +184,22 @@ export function AppEdit({ app }: { app: string }) {
               }
             />
           ) : (
-            <AppPreview app={app} mode="draft" name={name} turn={turn} />
+            <div className="flex size-full flex-col">
+              {heldBackHosts.length > 0 ? (
+                <Banner layout="page" className="shrink-0">
+                  {t("apps.heldBackHosts", { hosts: heldBackHosts.join(", ") })}
+                </Banner>
+              ) : null}
+              <div className="min-h-0 flex-1">
+                <AppPreview
+                  app={app}
+                  mode="draft"
+                  name={name}
+                  turn={turn}
+                  onShown={(shown) => setHeldBackHosts(shown.heldBackHosts)}
+                />
+              </div>
+            </div>
           )}
         </div>
         {view === "files" && draft !== undefined ? (
