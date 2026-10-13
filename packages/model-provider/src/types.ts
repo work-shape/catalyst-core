@@ -229,6 +229,31 @@ export interface ModelAdapter {
   capabilities(model: string): ModelCapabilities;
   complete(request: ModelAdapterRequest): Promise<ModelCompletion>;
   stream(request: ModelAdapterRequest): AsyncIterable<ModelAdapterStreamEvent>;
+  /** Present only where the provider turns text into vectors. Its absence declares that it does not. */
+  embed?(request: ModelAdapterEmbeddingRequest): Promise<ModelAdapterEmbedding>;
+}
+
+/** One batch of texts to one embedding model, as the gateway hands it to an adapter. */
+export interface ModelAdapterEmbeddingRequest {
+  model: string;
+  texts: readonly string[];
+  /** The length of every vector, as the binding states it. The adapter asks the model for it. */
+  dimensions: number;
+  /** Aborts when the caller stops the call or its deadline passes. The adapter stops with it. */
+  signal?: AbortSignal;
+  deadline?: Date;
+}
+
+/** What an adapter answers: one vector per text, in the order of the texts, and the usage. */
+export interface ModelAdapterEmbedding {
+  vectors: number[][];
+  usage: ModelTokenUsage;
+}
+
+/** What the gateway answers an embedding call: the vectors and the input tokens it settled. */
+export interface ModelEmbedding {
+  vectors: number[][];
+  inputTokens: number;
 }
 
 export function modelContentText(content: ModelContent): string {

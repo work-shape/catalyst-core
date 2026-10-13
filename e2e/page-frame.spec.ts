@@ -186,8 +186,23 @@ test("the head of every asset page is one row as high as the header, and the id 
       { path: `/build/connections/${connection.name}`, id: connection.name },
       { path: `/w/${workspaceId}/apps/${app}` },
       // At 768 px the conversation of a draft covers the draft and its head.
-      { path: `/w/${workspaceId}/apps/${app}/edit`, wideOnly: true }
+      { path: `/w/${workspaceId}/app-drafts/${app}`, wideOnly: true }
     ];
+    // Fails with a draft whose head was drawn a second time once its record arrived: on a slow
+    // runner a measure of the first head met an element that was gone.
+    const record = new RegExp(`/api/v1/assets/app/${app}\\?`, "u");
+    await page.route(record, async (route) => {
+      await new Promise((done) => setTimeout(done, 500));
+      await route.continue();
+    });
+    await page.goto(`/w/${workspaceId}/app-drafts/${app}`);
+    const draftHead = page.locator('header[data-variant="detail"]');
+    await expect(draftHead.getByRole("heading", { level: 1 })).toBeVisible();
+    const firstHead = await draftHead.elementHandle();
+    await expect(draftHead.getByRole("button", { name: "Publish" })).toBeVisible();
+    expect(await firstHead?.evaluate((element) => element.isConnected)).toBe(true);
+    await page.unroute(record);
+
     for (const size of [WIDE, { width: 768, height: 900 }]) {
       await page.setViewportSize(size);
       for (const { path, id, wideOnly } of editors) {

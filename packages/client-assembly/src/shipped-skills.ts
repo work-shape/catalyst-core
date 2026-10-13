@@ -13,6 +13,9 @@ import { platformSkill } from "./platform-skill";
 // The skills that ship with the platform. The API process stores them at start as read-only
 // skills of origin `release`; a conversation is offered them by name.
 
+/** The kinds the platform ships a skill for. */
+const SHIPPED_SKILL_KINDS = [WORKFLOW_ASSET_KIND];
+
 /** The skills the platform ships for the assets of one kind, offered where one is the subject. */
 function subjectSkillsOf(kind: string, modules: ModuleSnapshot): ShippedSkill[] {
   return kind === WORKFLOW_ASSET_KIND && modules.isEnabled(workflowsModule.name)
@@ -22,20 +25,24 @@ function subjectSkillsOf(kind: string, modules: ModuleSnapshot): ShippedSkill[] 
 
 /**
  * The names of the shipped skills a conversation is offered: the guide to the platform in every
- * one, and the skills for its subject in one about an asset.
+ * one, the skills for its subject in one about an asset, and in one about none yet those of every
+ * kind, since the agent may open any.
  */
 export function offeredSkillNames(
   subject: { kind: string } | undefined,
   modules: ModuleSnapshot
 ): string[] {
-  return [platformSkill, ...(subject ? subjectSkillsOf(subject.kind, modules) : [])].map(
-    (skill) => skill.name
-  );
+  return [
+    platformSkill,
+    ...(subject
+      ? subjectSkillsOf(subject.kind, modules)
+      : SHIPPED_SKILL_KINDS.flatMap((kind) => subjectSkillsOf(kind, modules)))
+  ].map((skill) => skill.name);
 }
 
 /** Every skill this build ships with the modules that are on. A module that is off ships none. */
 function shippedSkillsOf(modules: ModuleSnapshot): ShippedSkill[] {
-  return [platformSkill, ...subjectSkillsOf(WORKFLOW_ASSET_KIND, modules)];
+  return [platformSkill, ...SHIPPED_SKILL_KINDS.flatMap((kind) => subjectSkillsOf(kind, modules))];
 }
 
 /** Makes the stored shipped skills what this build ships, and logs what it changed. */

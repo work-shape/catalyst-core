@@ -69,10 +69,24 @@ export const AGENT_MODEL_SETTING_FIELDS = [
 ] as const;
 export type AgentModelSettingField = (typeof AGENT_MODEL_SETTING_FIELDS)[number];
 
+/**
+ * What a model binding is for. A `chat` binding answers agent runs and the product's own calls;
+ * an `embedding` binding turns text into vectors for Knowledge Bases and answers nothing else.
+ */
+export const MODEL_BINDING_KINDS = ["chat", "embedding"] as const;
+export type ModelBindingKind = (typeof MODEL_BINDING_KINDS)[number];
+
+/** The most dimensions an embedding binding may ask for: what pgvector's `vector` type stores. */
+export const MODEL_EMBEDDING_MAX_DIMENSIONS = 16_000;
+
 export interface ModelBindingConfig {
   id: string;
   providerId: string;
   model?: string;
+  /** Absent is `chat`. */
+  kind?: ModelBindingKind;
+  /** The length of every vector an `embedding` binding returns. Only an embedding binding has it. */
+  dimensions?: number;
   reasoningEffort?: ReasoningEffortConfig;
   agentSelectable?: boolean;
   /** Accepted for compatibility; no effect. Each agent lists the models its users may pick. */
@@ -219,14 +233,6 @@ export function isModelBindingUserSelectableForAgent(
       (binding) => binding.id === modelBindingId
     )
   );
-}
-
-export interface ApprovalCheckConfig {
-  id: string;
-  appliesTo: string;
-  modelBindingId: string;
-  instruction: string;
-  onFail: "warn" | "block";
 }
 
 export interface AgentSkillChangesPolicy {

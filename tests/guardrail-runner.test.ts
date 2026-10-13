@@ -9,7 +9,6 @@ import {
   asClientInstanceId,
   asConversationId,
   asToolCallId,
-  type ApprovalCheckConfig,
   type ApprovalRequest,
   type ApprovalRequestHandler,
   type AuthenticatedUser,
@@ -20,11 +19,16 @@ import {
 } from "@vivd-catalyst/core";
 
 import {
-  ApprovalCheckRunner,
+  GuardrailRunner,
   ApprovalRequestWorkflow,
   createSkillChangeApprovalHandler
 } from "@vivd-catalyst/chat-server";
-import { createSkillChangePreview, type SkillChangeOperation } from "@vivd-catalyst/config-schema";
+import {
+  createSkillChangePreview,
+  parseClientInstanceConfig,
+  type ReleaseGuardrailConfig,
+  type SkillChangeOperation
+} from "@vivd-catalyst/config-schema";
 import type { ModelCompletion } from "@vivd-catalyst/model-provider";
 import {
   createScriptedInstanceModelGateway,
@@ -37,6 +41,7 @@ import { createConfigAssetSource } from "../packages/client-assembly/src/config-
 import { createTestConfig } from "./support/fixtures";
 import { eventually } from "./support/assertions";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
+import { withTestSql } from "./support/test-sql";
 
 const clientInstanceId = asClientInstanceId("test-client");
 const user: AuthenticatedUser = {
@@ -49,13 +54,24 @@ const user: AuthenticatedUser = {
   authSource: "test"
 };
 const context: RuntimeCallContext = { user, clientInstanceId, correlationId: "check-correlation" };
-const rule: ApprovalCheckConfig = {
-  id: "no_personal_data",
-  appliesTo: "fake",
-  modelBindingId: "guardrailCheck",
-  instruction: "Prüfe, ob der neue Text personenbezogene Daten enthält.",
-  onFail: "warn"
-};
+const rule = { id: "no_personal_data" };
+const instruction = "Prüfe, ob der neue Text personenbezogene Daten enthält.";
+/** The guardrail `no_personal_data` on requests of kind `fake`, warning unless told otherwise. */
+function guardrail(
+  overrides: { outcome?: "warn" | "block"; kind?: string | null; instruction?: string } = {}
+): ReleaseGuardrailConfig {
+  const kind = overrides.kind === undefined ? "fake" : overrides.kind;
+  return {
+    on: "approval_request.before_create",
+    ...(kind === null ? {} : { filter: { kind } }),
+    check: {
+      kind: "model_judge",
+      modelBindingId: "guardrailCheck",
+      instruction: overrides.instruction ?? instruction
+    },
+    outcome: overrides.outcome ?? "warn"
+  };
+}
 const command: Pick<ApprovalRequest, "kind" | "summary" | "payload" | "origin"> = {
   kind: "fake",
   summary: "New summary",
@@ -96,7 +112,26 @@ function completion(text: string): ModelCompletion {
     }
   };
 }
-async function fixture(checks: ApprovalCheckConfig[] = [rule]) {
+/** The before-event the workflow raises for `command` under `handler`. */
+function proposal(
+  request: Pick<ApprovalRequest, "kind" | "summary" | "payload" | "origin"> = command,
+  requestHandler: ApprovalRequestHandler = handler
+) {
+  return {
+    event: "approval_request.before_create" as const,
+    subjectKind: request.kind,
+    content: () => {
+      const newContent = requestHandler.checkContent?.(request.payload);
+      return newContent === undefined
+        ? undefined
+        : JSON.stringify({ summary: request.summary, newContent });
+    },
+    ...(request.origin ? { origin: request.origin } : {})
+  };
+}
+async function fixture(
+  guardrails: Record<string, ReleaseGuardrailConfig> = { [rule.id]: guardrail() }
+) {
   const config = createTestConfig({
     modelBindings: [
       {
@@ -108,7 +143,7 @@ async function fixture(checks: ApprovalCheckConfig[] = [rule]) {
       }
     ]
   });
-  config.approvalChecks = checks;
+  config.guardrails = guardrails;
   const store = (await createTestInstance()).stores;
   // The requester exists: an event keeps its conversation only for a user that does.
   await ensureTestUser(clientInstanceId, user.id);
@@ -120,9 +155,10 @@ async function fixture(checks: ApprovalCheckConfig[] = [rule]) {
     budget: {},
     safeguards: {}
   });
-  const runner = new ApprovalCheckRunner({
+  const runner = new GuardrailRunner({
     config,
     clientInstanceId,
+    hits: store.guardrails,
     modelGateway: createScriptedInstanceModelGateway({
       config,
       modelProvider: { complete },
@@ -133,7 +169,7 @@ async function fixture(checks: ApprovalCheckConfig[] = [rule]) {
     clientInstanceId,
     store: store.approvals,
     handlers: new Map([[handler.kind, handler]]),
-    checkRunner: runner,
+    guardrails: runner,
     auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit })
   });
   return { config, store, complete, runner, workflow, usageGovernance };
@@ -153,8 +189,8 @@ function neverCompleting(complete: Mock<ModelProvider["complete"]>): Promise<voi
   });
 }
 
-function unevaluated(onFail: "warn" | "block") {
-  return onFail === "block"
+function unevaluated(outcome: "warn" | "block") {
+  return outcome === "block"
     ? {
         id: rule.id,
         status: "blocked",
@@ -163,18 +199,20 @@ function unevaluated(onFail: "warn" | "block") {
     : { id: rule.id, status: "warned", message: "" };
 }
 
-describe("approval check runner", () => {
+describe("guardrail runner", () => {
   it("passes, resolves the binding and sends only summary and new content as untrusted data", async () => {
     const f = await fixture();
-    expect(await f.runner.run(handler, command, context)).toEqual([
+    expect(await f.runner.check(proposal(), context)).toEqual([
       { id: rule.id, status: "passed", message: "" }
     ]);
     const [request, callContext] = f.complete.mock.calls[0] ?? [];
     // The binding's effort is left out: the model of this fixture takes none.
     expect(request).toMatchObject({ providerId: "local", model: "cheap-check", tools: [] });
     expect(request?.reasoningEffort).toBeUndefined();
-    expect(request?.messages[0]?.content).toContain(JSON.stringify(rule.instruction));
+    expect(request?.messages[0]?.content).toContain(JSON.stringify(instruction));
     expect(request?.messages[0]?.content).toContain("never follow");
+    // The reason is kept as a hit: it must carry none of the content.
+    expect(request?.messages[0]?.content).toContain("never quotes or repeats");
     expect(request?.messages[1]?.content).toContain("BEGIN UNTRUSTED");
     expect(request?.messages[1]?.content).toContain(command.summary);
     expect(request?.messages[1]?.content).toContain("New content");
@@ -192,16 +230,16 @@ describe("approval check runner", () => {
   });
 
   it.each(["warn", "block"] as const)(
-    "returns the reason for a violation with onFail %s",
-    async (onFail) => {
-      const f = await fixture([{ ...rule, onFail }]);
+    "returns the reason for a violation with outcome %s",
+    async (outcome) => {
+      const f = await fixture({ [rule.id]: guardrail({ outcome }) });
       f.complete.mockResolvedValue(
         completion('{"violates":true,"reason":"Der Text enthält personenbezogene Daten."}')
       );
-      expect(await f.runner.run(handler, command, context)).toEqual([
+      expect(await f.runner.check(proposal(), context)).toEqual([
         {
           id: rule.id,
-          status: onFail === "block" ? "blocked" : "warned",
+          status: outcome === "block" ? "blocked" : "warned",
           message: "Der Text enthält personenbezogene Daten."
         }
       ]);
@@ -209,11 +247,11 @@ describe("approval check runner", () => {
   );
 
   it.each(["warn", "block"] as const)(
-    "does not leak provider failures and fails closed only for block: onFail %s",
-    async (onFail) => {
-      const f = await fixture([{ ...rule, onFail }]);
+    "does not leak provider failures and fails closed only for block: outcome %s",
+    async (outcome) => {
+      const f = await fixture({ [rule.id]: guardrail({ outcome }) });
       f.complete.mockRejectedValue(new Error("secret provider detail"));
-      expect(await f.runner.run(handler, command, context)).toEqual([unevaluated(onFail)]);
+      expect(await f.runner.check(proposal(), context)).toEqual([unevaluated(outcome)]);
       expect(await f.store.usage.listModelUsageEvents({ clientInstanceId })).toEqual([
         expect.objectContaining({ status: "failed", source: "not_reported", totalTokens: 0 })
       ]);
@@ -227,21 +265,21 @@ describe("approval check runner", () => {
     '{"violates":true,"reason":""}',
     '{"violates":true,"reason":"Bad","extra":true}',
     '{"reason":"Missing verdict"}'
-  ])("blocks a block rule on an invalid verdict: %s", async (text) => {
-    const f = await fixture([{ ...rule, onFail: "block" }]);
+  ])("blocks a blocking guardrail on an invalid verdict: %s", async (text) => {
+    const f = await fixture({ [rule.id]: guardrail({ outcome: "block" }) });
     f.complete.mockResolvedValue(completion(text));
-    expect(await f.runner.run(handler, command, context)).toEqual([unevaluated("block")]);
+    expect(await f.runner.check(proposal(), context)).toEqual([unevaluated("block")]);
     expect(await f.store.usage.listModelUsageEvents({ clientInstanceId })).toHaveLength(1);
   });
 
   it.each(["warn", "block"] as const)(
-    "gives a slow check 60 seconds, then bounds a provider that ignores cancellation with onFail %s",
-    async (onFail) => {
-      const f = await fixture([{ ...rule, onFail }]);
+    "gives a slow check 60 seconds, then bounds a provider that ignores cancellation with outcome %s",
+    async (outcome) => {
+      const f = await fixture({ [rule.id]: guardrail({ outcome }) });
       const called = neverCompleting(f.complete);
       useFakeClockBesidePostgres();
       const startedAt = Date.now();
-      const result = f.runner.run(handler, command, context);
+      const result = f.runner.check(proposal(), context);
       await settleOnFakeClock(called);
       // No caller sets a deadline on the context, so the runner's own limit is the effective one.
       const deadline = f.complete.mock.calls[0]?.[1].deadline?.getTime() ?? 0;
@@ -251,7 +289,7 @@ describe("approval check runner", () => {
       expect(f.complete.mock.calls[0]?.[1].signal?.aborted).toBe(false);
       await vi.advanceTimersByTimeAsync(1_000);
       expect(await settleOnFakeClock(result)).toEqual([
-        onFail === "block"
+        outcome === "block"
           ? {
               id: rule.id,
               status: "blocked",
@@ -271,7 +309,7 @@ describe("approval check runner", () => {
     const f = await fixture();
     const called = neverCompleting(f.complete);
     useFakeClockBesidePostgres();
-    const result = f.runner.run(handler, command, {
+    const result = f.runner.check(proposal(), {
       ...context,
       deadline: new Date(Date.now() + 100)
     });
@@ -281,13 +319,11 @@ describe("approval check runner", () => {
   });
 
   it("runs checks concurrently, retains configured order and isolates a failed check", async () => {
-    const second: ApprovalCheckConfig = {
-      ...rule,
-      id: "second",
-      onFail: "block",
-      instruction: "Second instruction."
-    };
-    const f = await fixture([rule, second]);
+    const second = { instruction: "Second instruction." };
+    const f = await fixture({
+      [rule.id]: guardrail(),
+      second: guardrail({ outcome: "block", instruction: second.instruction })
+    });
     let releaseFirst: ((value: ModelCompletion) => void) | undefined;
     let releaseSecond: ((value: ModelCompletion) => void) | undefined;
     // Which check reaches the model first is not fixed: each is admitted in the database
@@ -302,7 +338,7 @@ describe("approval check runner", () => {
           }
         })
     );
-    const pending = f.runner.run(handler, command, context);
+    const pending = f.runner.check(proposal(), context);
     await eventually(() => expect(f.complete).toHaveBeenCalledTimes(2));
     releaseSecond?.(completion("invalid"));
     releaseFirst?.(completion('{"violates":false,"reason":"OK"}'));
@@ -317,21 +353,120 @@ describe("approval check runner", () => {
     expect(await f.store.usage.listModelUsageEvents({ clientInstanceId })).toHaveLength(2);
   });
 
-  it("ignores checks for another kind, empty configuration, and handlers without checkContent", async () => {
-    const f = await fixture([{ ...rule, appliesTo: "other" }]);
-    expect(await f.runner.run(handler, command, context)).toEqual([]);
-    f.config.approvalChecks = [];
-    expect(await f.runner.run(handler, command, context)).toEqual([]);
-    f.config.approvalChecks = [rule];
+  it("ignores guardrails for another kind, empty configuration, and handlers without checkContent", async () => {
+    const f = await fixture({ [rule.id]: guardrail({ kind: "other" }) });
+    expect(await f.runner.check(proposal(), context)).toEqual([]);
+    f.config.guardrails = {};
+    expect(await f.runner.check(proposal(), context)).toEqual([]);
+    f.config.guardrails = { [rule.id]: guardrail() };
     const { checkContent: _checkContent, ...withoutContent } = handler;
-    expect(await f.runner.run(withoutContent, command, context)).toEqual([]);
+    expect(await f.runner.check(proposal(command, withoutContent), context)).toEqual([]);
     expect(f.complete).not.toHaveBeenCalled();
+  });
+
+  it("applies a guardrail without a filter to every kind of request", async () => {
+    const f = await fixture({ [rule.id]: guardrail({ kind: null }) });
+    expect(await f.runner.check(proposal({ ...command, kind: "other" }), context)).toEqual([
+      { id: rule.id, status: "passed", message: "" }
+    ]);
+  });
+
+  it("keeps a hit for each warning and block, naming neither the person nor the content", async () => {
+    const f = await fixture({
+      [rule.id]: guardrail({ instruction: "warns" }),
+      blocking: guardrail({ outcome: "block", instruction: "blocks" }),
+      passing: guardrail({ instruction: "passes" }),
+      silent: guardrail({ instruction: "cannot run" })
+    });
+    f.complete.mockImplementation(async (request) => {
+      const rules = JSON.stringify(request.messages[0]?.content);
+      if (rules.includes("cannot run")) throw new Error("Unavailable");
+      return completion(
+        rules.includes("passes")
+          ? '{"violates":false,"reason":"OK"}'
+          : '{"violates":true,"reason":"Personal data."}'
+      );
+    });
+    await f.runner.check(proposal(), context);
+    const hits = async (guardrailName: string) =>
+      f.store.guardrails.listHits({ clientInstanceId, guardrailName, limit: 10 });
+    expect(await hits(rule.id)).toEqual([
+      {
+        id: expect.any(String),
+        guardrailName: rule.id,
+        event: "approval_request.before_create",
+        outcome: "warn",
+        message: "Personal data.",
+        subjectKind: "fake",
+        createdAt: expect.any(String)
+      }
+    ]);
+    expect(await hits("blocking")).toEqual([
+      expect.objectContaining({ outcome: "block", message: "Personal data." })
+    ]);
+    expect(await hits("passing")).toEqual([]);
+    // A warning guardrail that could not run is a hit without a reason.
+    expect(await hits("silent")).toEqual([
+      expect.objectContaining({ outcome: "warn", message: "" })
+    ]);
+    const kept = JSON.stringify(await hits(rule.id));
+    expect(kept).not.toContain("New content");
+    expect(kept).not.toContain(user.id);
+    expect(kept).not.toContain(user.displayLabel);
+    // The table has no column for a person.
+    const columns = await withTestSql(
+      (sql) => sql<{ column_name: string }[]>`
+        select column_name from information_schema.columns where table_name = 'guardrail_hits'`
+    );
+    expect(columns.map((column) => column.column_name).sort()).toEqual([
+      "client_instance_id",
+      "created_at",
+      "event",
+      "guardrail_name",
+      "id",
+      "message",
+      "outcome",
+      "subject_kind"
+    ]);
+  });
+
+  it("judges a legacy approval check exactly as the guardrail it becomes", async () => {
+    const legacy = parseClientInstanceConfig({
+      clientInstance: { id: "legacy", displayName: "Legacy" },
+      infrastructure: { models: { local: { provider: "deterministic" } } },
+      modelBindings: [{ id: "guardrailCheck", providerId: "local", agentSelectable: false }],
+      approvalChecks: [
+        {
+          id: rule.id,
+          appliesTo: "fake",
+          modelBindingId: "guardrailCheck",
+          instruction,
+          onFail: "warn"
+        }
+      ]
+    });
+    expect(legacy.guardrails).toEqual({ [rule.id]: guardrail() });
+    const translated = await fixture(legacy.guardrails);
+    const current = await fixture();
+    for (const f of [translated, current]) {
+      f.complete.mockResolvedValue(completion('{"violates":true,"reason":"Personal data."}'));
+    }
+    const results = [
+      await translated.runner.check(proposal(), context),
+      await current.runner.check(proposal(), context)
+    ];
+    expect(results[0]).toEqual(results[1]);
+    expect(translated.complete.mock.calls[0]?.[0].messages).toEqual(
+      current.complete.mock.calls[0]?.[0].messages
+    );
+    // One check, run once: the old key leaves no second check beside the guardrail.
+    expect(translated.complete).toHaveBeenCalledTimes(1);
   });
 
   it("evaluates a request without origin and records its usage without a conversation", async () => {
     const f = await fixture();
     expect(
-      (await f.runner.run(handler, { ...command, origin: undefined }, context))[0]?.status
+      (await f.runner.check(proposal({ ...command, origin: undefined }), context))[0]?.status
     ).toBe("passed");
     expect(f.complete).toHaveBeenCalledTimes(1);
     const events = await f.store.usage.listModelUsageEvents({ clientInstanceId });
@@ -343,9 +478,9 @@ describe("approval check runner", () => {
   });
 });
 
-describe("approval checks at creation", () => {
+describe("guardrails before an approval request is filed", () => {
   it("blocks before persistence and surfaces the reason without a creation audit", async () => {
-    const f = await fixture([{ ...rule, onFail: "block" }]);
+    const f = await fixture({ [rule.id]: guardrail({ outcome: "block" }) });
     f.complete.mockResolvedValue(
       completion('{"violates":true,"reason":"Remove the personal data."}')
     );
@@ -363,7 +498,7 @@ describe("approval checks at creation", () => {
   });
 
   it("does not let a proposal past a blocking rule when usage storage fails", async () => {
-    const f = await fixture([{ ...rule, onFail: "block" }]);
+    const f = await fixture({ [rule.id]: guardrail({ outcome: "block" }) });
     f.complete.mockResolvedValue(
       completion('{"violates":false,"reason":"Keine personenbezogenen Daten."}')
     );
@@ -412,7 +547,7 @@ describe("approval checks at creation", () => {
   });
 
   it("stores passed checks and refuses creation when a block rule cannot be evaluated", async () => {
-    const f = await fixture([{ ...rule, onFail: "block" }]);
+    const f = await fixture({ [rule.id]: guardrail({ outcome: "block" }) });
     expect((await f.workflow.createRequest(user, context, command)).checks[0]?.status).toBe(
       "passed"
     );
@@ -438,7 +573,9 @@ describe("approval checks at creation", () => {
 });
 
 async function skillFixture() {
-  const f = await fixture([{ ...rule, appliesTo: "skill_change", onFail: "block" }]);
+  const f = await fixture({
+    [rule.id]: guardrail({ kind: "skill_change", outcome: "block" })
+  });
   f.config.administration.agentConfiguration.agentSkillChanges = {
     enabled: true,
     allowSkillCreation: true
@@ -488,7 +625,7 @@ async function skillFixture() {
     clientInstanceId,
     store: f.store.approvals,
     handlers: new Map([[skillHandler.kind, skillHandler]]),
-    checkRunner: f.runner,
+    guardrails: f.runner,
     auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: f.store.audit })
   });
   const tool = createProposeSkillChangeTool({
@@ -499,7 +636,7 @@ async function skillFixture() {
   return { ...f, skill, skillHandler, tool, workflow };
 }
 
-describe("skill change approval checks", () => {
+describe("guardrails on a skill change", () => {
   it("extracts new text for every operation, excluding old text and the existing preview", async () => {
     const f = await skillFixture();
     const operations: SkillChangeOperation[] = [
