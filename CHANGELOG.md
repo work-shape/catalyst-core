@@ -348,8 +348,8 @@ contain breaking changes; a patch version does not.
     roles and rows stay, and its id is not free. Nothing drops a database yet.
   - **Rollback:** the previous release ignores the table `data_stores` and the store
     databases, so rolling back loses nothing and leaves them in place. The `CONNECT` taken from
-    `PUBLIC` on the platform database stays taken. Store databases are not part of the
-    platform's backup script yet: back them up with it before relying on a restore.
+    `PUBLIC` on the platform database stays taken. The backup holds the store databases, see
+    "Backups of the whole database server" under Fixed.
 - **Asset kinds that read their own files:** a kind may bring `manifestOfFiles`, which reads the
   source files of a write into the manifest of their file set without the build of Pages, and
   `onPublish` and `onRemove`, which run in the transaction of a publish and of a delete.
@@ -2052,6 +2052,18 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   the number of an item's count on its icon.
 
 ### Fixed
+
+- **Backups of the whole database server:** `backup-postgres.sh` of the deployment kit dumped
+  only `POSTGRES_DB`, so no Data Store database and no role was in a nightly or pre-deploy
+  backup. A backup is now one tar archive, `<instance>-<database>-<timestamp>[-<label>].tar`,
+  with `globals.sql` from `pg_dumpall --globals-only` and a custom-format `pg_dump` of every
+  database the server lists, except the templates, `postgres` and the scratch databases of
+  `restore-postgres.sh`. `restore-postgres.sh` lists, verifies and recovers both the archives
+  and the earlier `.sql.gz` dumps; a recovery from an archive creates the missing roles and
+  replaces every database it holds, and puts them all back if one fails. **Upgrade:** a deploy
+  of the release installs both scripts; nothing else changes. **Rollback:** the previous
+  scripts neither list nor restore a `.tar` backup; restore one with this release's
+  `restore-postgres.sh`.
 
 - **Hostile YAML and tool-call text:** every YAML file an author or an agent writes
   (`workflow.yaml`, `app.yaml`, App action files, `store.yaml`, `SKILL.md` frontmatter), the

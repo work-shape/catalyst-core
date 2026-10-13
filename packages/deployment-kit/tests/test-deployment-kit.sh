@@ -813,13 +813,26 @@ test_upload_check() {
 test_host_backup_scripts() {
   local capture="$scratch/deploy-capture" host="$scratch/backup-host"
   local scripts="$capture/host/opt/vivd-catalyst/fixture" log="$scratch/backup-host/log"
-  mkdir -p "$host/bin" "$host/app"
+  mkdir -p "$host/bin" "$host/app" "$host/uploads"
   cat > "$host/bin/docker" <<'SH'
 #!/usr/bin/env bash
 printf 'docker %s\n' "$*" >> "$HOST_LOG"
 case "$*" in
-  *"pg_dump"*) echo "-- dump" ;;
-  *"s3 ls s3://backups/postgres/") echo "2026-10-06 02:15:14 1234 fixture-agent_chat-20261006T021514Z.sql.gz" ;;
+  *" psql "*"pg_database"*) printf 'agent_chat\ncatalyst_ds_0123\n' ;;
+  *"pg_dumpall"*) echo "CREATE ROLE catalyst_ds_0123_app;" ;;
+  *"pg_dump"*) echo "-- dump of ${*: -1}" ;;
+  *"s3 cp /backup/"*)
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -v) mount="${2%%:*}"; shift ;;
+        cp) source="${2#/backup/}"; shift ;;
+      esac
+      shift
+    done
+    cp "$mount/$source" "$HOST_UPLOADS/" ;;
+  *"s3 ls s3://backups/postgres/")
+    echo "2026-10-06 02:15:14 1234 fixture-agent_chat-20261006T021514Z.sql.gz"
+    echo "2026-10-14 02:15:14 4321 fixture-agent_chat-20261014T021514Z.tar" ;;
   *"s3 ls s3://backups/pre-deploy/") echo "2026-10-05 10:00:00 99 fixture-agent_chat-20261005T100000Z-pre-deploy-v1.sql.gz" ;;
 esac
 SH
@@ -833,29 +846,47 @@ BACKUP_OBJECT_STORE_REGION=eu
 BACKUP_AWS_ACCESS_KEY_ID=key
 BACKUP_AWS_SECRET_ACCESS_KEY="secret value"
 ENV
-  local run=(env "PATH=$host/bin:$PATH" "HOST_LOG=$log" "APP_DIR=$host/app" "ENV_FILE=$host/app.env")
+  local run=(env "PATH=$host/bin:$PATH" "HOST_LOG=$log" "HOST_UPLOADS=$host/uploads"
+    "APP_DIR=$host/app" "ENV_FILE=$host/app.env")
 
+  # Every database the server lists is dumped, the roles with it, into one archive.
   "${run[@]}" "$scripts/backup-postgres.sh" > "$host/output"
-  assert_contains "$log" "docker compose --env-file $host/app.env -f $host/app/docker-compose.prod.yml exec -T postgres pg_dump -U catalyst agent_chat"
-  grep -Eq '^Backup uploaded: postgres/fixture-agent_chat-[0-9]{8}T[0-9]{6}Z\.sql\.gz \(' "$host/output" \
-    || fail "nightly dump is not named <instance>-<database>-<timestamp> under postgres/"
+  local compose="docker compose --env-file $host/app.env -f $host/app/docker-compose.prod.yml exec -T postgres"
+  assert_contains "$log" "$compose pg_dumpall -U catalyst --globals-only"
+  assert_contains "$log" "$compose pg_dump -U catalyst -Fc -d agent_chat"
+  assert_contains "$log" "$compose pg_dump -U catalyst -Fc -d catalyst_ds_0123"
+  grep -Eq '^Backup uploaded: postgres/fixture-agent_chat-[0-9]{8}T[0-9]{6}Z\.tar \(.*globals and 2 databases: agent_chat catalyst_ds_0123\)$' "$host/output" \
+    || fail "nightly backup is not named <instance>-<database>-<timestamp>.tar under postgres/"
   grep -Eq ' amazon/aws-cli:[0-9]+\.[0-9]+\.[0-9]+ --endpoint-url https://objects.example.test --region eu s3 cp /backup/fixture-.* s3://backups/postgres/fixture-' "$log" \
     || fail "backup did not upload with the pinned aws-cli image"
   assert_contains "$log" "-e AWS_SECRET_ACCESS_KEY=secret value"
+  local archive
+  archive="$(find "$host/uploads" -name 'fixture-agent_chat-*.tar' | head -n 1)"
+  [[ -n "$archive" ]] || fail "backup uploaded no archive"
+  [[ "$(tar -tf "$archive" | sed 's#^\./##' | grep -v '^$' | sort | paste -sd ' ' -)" \
+    == "agent_chat.dump catalyst_ds_0123.dump globals.sql" ]] \
+    || fail "the archive does not hold globals.sql and one dump per database"
+  mkdir "$host/unpacked" && tar -xf "$archive" -C "$host/unpacked"
+  assert_contains "$host/unpacked/catalyst_ds_0123.dump" "-- dump of catalyst_ds_0123"
+  assert_contains "$host/unpacked/globals.sql" "CREATE ROLE catalyst_ds_0123_app;"
 
   "${run[@]}" BACKUP_PREFIX=pre-deploy "$scripts/backup-postgres.sh" pre-deploy-v1 > "$host/output"
-  grep -Eq '^Backup uploaded: pre-deploy/fixture-agent_chat-[0-9TZ]+-pre-deploy-v1\.sql\.gz ' "$host/output" \
-    || fail "pre-deploy dump is not stored under pre-deploy/ with its label"
+  grep -Eq '^Backup uploaded: pre-deploy/fixture-agent_chat-[0-9TZ]+-pre-deploy-v1\.tar ' "$host/output" \
+    || fail "pre-deploy backup is not stored under pre-deploy/ with its label"
   expect_failure "${run[@]}" "$scripts/backup-postgres.sh" "bad label"
   assert_contains "$scratch/failure-output" "Invalid backup label"
+  expect_failure "${run[@]}" POSTGRES_DB=elsewhere "$scripts/backup-postgres.sh"
+  assert_contains "$scratch/failure-output" "The server has no database elsewhere."
 
-  if has_host_bash "restore-postgres.sh list"; then
-    "${run[@]}" "$scripts/restore-postgres.sh" list > "$host/output"
-    assert_contains "$host/output" "2026-10-05T10:00:00Z 99 pre-deploy/fixture-agent_chat-20261005T100000Z-pre-deploy-v1.sql.gz"
-    assert_contains "$host/output" "2026-10-06T02:15:14Z 1234 postgres/fixture-agent_chat-20261006T021514Z.sql.gz"
-    assert_contains "$log" "-e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY amazon/aws-cli:"
-  fi
+  # Backups of both layouts are listed: archives, and single dumps written before them.
+  "${run[@]}" "$scripts/restore-postgres.sh" list > "$host/output"
+  assert_contains "$host/output" "2026-10-05T10:00:00Z 99 pre-deploy/fixture-agent_chat-20261005T100000Z-pre-deploy-v1.sql.gz"
+  assert_contains "$host/output" "2026-10-06T02:15:14Z 1234 postgres/fixture-agent_chat-20261006T021514Z.sql.gz"
+  assert_contains "$host/output" "2026-10-14T02:15:14Z 4321 postgres/fixture-agent_chat-20261014T021514Z.tar"
+  assert_contains "$log" "-e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY amazon/aws-cli:"
   expect_failure "${run[@]}" "$scripts/restore-postgres.sh" verify "other/x.sql.gz"
+  assert_contains "$scratch/failure-output" "Invalid dump key"
+  expect_failure "${run[@]}" "$scripts/restore-postgres.sh" verify "postgres/x.zip"
   assert_contains "$scratch/failure-output" "Invalid dump key"
   expect_failure "${run[@]}" "$scripts/restore-postgres.sh" recover postgres/x.sql.gz \
     --replace-database not_the_live_database
@@ -1027,19 +1058,19 @@ test_digit_leading_instance() {
   run_remote_deploy "$capture" "$host" || { cat "$host/output" >&2; fail "remote deploy failed"; }
   assert_contains "$host/output" "All services run the images of staging-2026.10.06-1."
 
-  # The rendered backup script names its dumps after the instance.
+  # The rendered backup script names its backups after the instance.
   mkdir -p "$host/backup-bin"
-  printf '#!/usr/bin/env bash\n[[ "$*" != *pg_dump* ]] || echo "-- dump"\n' > "$host/backup-bin/docker"
+  printf '#!/usr/bin/env bash\n[[ "$*" != *pg_database* ]] || echo agent_chat\n' > "$host/backup-bin/docker"
   chmod +x "$host/backup-bin/docker"
   printf 'POSTGRES_USER=catalyst\nPOSTGRES_DB=agent_chat\nBACKUP_OBJECT_STORE_ENDPOINT=https://objects.example.test\nBACKUP_OBJECT_STORE_BUCKET=backups\nBACKUP_OBJECT_STORE_REGION=eu\nBACKUP_AWS_ACCESS_KEY_ID=key\nBACKUP_AWS_SECRET_ACCESS_KEY=secret\n' \
     > "$host/backup.env"
   local run=(env "PATH=$host/backup-bin:$PATH" "APP_DIR=$host/app" "ENV_FILE=$host/backup.env")
   "${run[@]}" "$capture/host$app_dir/backup-postgres.sh" > "$host/backup-output"
-  grep -Eq '^Backup uploaded: postgres/exampletax-agent_chat-[0-9]{8}T[0-9]{6}Z\.sql\.gz \(' \
-    "$host/backup-output" || fail "the dump of a digit-leading instance is not named after it"
-  # restore accepts that dump key and goes on to its next refusal.
+  grep -Eq '^Backup uploaded: postgres/exampletax-agent_chat-[0-9]{8}T[0-9]{6}Z\.tar \(' \
+    "$host/backup-output" || fail "the backup of a digit-leading instance is not named after it"
+  # restore accepts that key and goes on to its next refusal.
   expect_failure "${run[@]}" "$capture/host$app_dir/restore-postgres.sh" recover \
-    postgres/exampletax-agent_chat-20261006T021514Z.sql.gz --replace-database not_the_live_database
+    postgres/exampletax-agent_chat-20261006T021514Z.tar --replace-database not_the_live_database
   assert_contains "$scratch/failure-output" "must name the live database of this host"
 
   # manifest and publish, on the clean checkout.

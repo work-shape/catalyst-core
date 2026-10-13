@@ -9,17 +9,22 @@ Usage:
   restore-postgres.sh recover DUMP --replace-database NAME
 
 Runs on the VPS. DUMP is an object key as printed by "list", e.g.
-"postgres/<name>.sql.gz" (nightly) or "pre-deploy/<name>.sql.gz" (taken by a
-deploy). "verify" uses the newest dump when DUMP is omitted.
+"postgres/<name>.tar" (nightly) or "pre-deploy/<name>.tar" (taken by a deploy).
+A .tar backup holds every database of the server and its roles; a .sql.gz dump,
+written before backups held more, holds the platform database only. "verify"
+uses the newest backup when DUMP is omitted.
 
-  list     Print the dumps in the backup bucket (date, size in bytes, key),
-           oldest first, across both prefixes.
-  verify   Restore DUMP into a scratch database next to the live one, print row
-           counts per table for both, then drop the scratch database. Does not
-           touch the live database or the app containers.
-  recover  Restore DUMP into a new database and swap it in for the live one.
-           Refuses to run while app containers are up. NAME must be the live
-           database name. The replaced database is renamed and kept, not dropped.
+  list     Print the backups in the bucket (date, size in bytes, key), oldest
+           first, across both prefixes.
+  verify   Restore each database of DUMP into a scratch database next to the
+           live one, print row counts per table for both, then drop the scratch
+           database. Does not touch the live databases, the roles or the app
+           containers.
+  recover  Replace the live databases with the ones in DUMP. Refuses to run
+           while app containers are up. NAME must be the live platform database.
+           Each replaced database is renamed and kept, not dropped. A .tar
+           backup also creates the roles the server lacks and sets every role
+           as in the backup, except the one in POSTGRES_USER.
 USAGE
 }
 
@@ -70,8 +75,8 @@ if [[ $# -gt 0 ]]; then
   exit 2
 fi
 
-if [[ -n "$dump" && ! "$dump" =~ ^(postgres|pre-deploy)/[A-Za-z0-9_.-]+\.sql\.gz$ ]]; then
-  echo "Invalid dump key: $dump (expected postgres/<name>.sql.gz or pre-deploy/<name>.sql.gz)" >&2
+if [[ -n "$dump" && ! "$dump" =~ ^(postgres|pre-deploy)/[A-Za-z0-9_.-]+\.(tar|sql\.gz)$ ]]; then
+  echo "Invalid dump key: $dump (expected postgres/<name>.tar or pre-deploy/<name>.tar, or .sql.gz)" >&2
   exit 2
 fi
 
@@ -148,7 +153,7 @@ aws_cli() {
     docker run --rm \
       -e AWS_ACCESS_KEY_ID \
       -e AWS_SECRET_ACCESS_KEY \
-      "${docker_args[@]}" \
+      ${docker_args[@]+"${docker_args[@]}"} \
       "$aws_cli_image" \
       --endpoint-url "$BACKUP_OBJECT_STORE_ENDPOINT" \
       --region "$BACKUP_OBJECT_STORE_REGION" \
@@ -160,7 +165,7 @@ list_dumps() {
   for prefix in "${backup_prefixes[@]}"; do
     # "s3 ls" exits 1 for a prefix without objects.
     { aws_cli -- s3 ls "${bucket_url}${prefix}/" || true; } \
-      | awk -v prefix="$prefix" '$4 ~ /\.sql\.gz$/ { print $1 "T" $2 "Z", $3, prefix "/" $4 }'
+      | awk -v prefix="$prefix" '$4 ~ /\.(tar|sql\.gz)$/ { print $1 "T" $2 "Z", $3, prefix "/" $4 }'
   done | sort
 }
 
@@ -224,81 +229,262 @@ if [[ -z "$dump" ]]; then
 fi
 
 timestamp="$(date -u +%Y%m%dt%H%M%Sz)"
-target_db="${POSTGRES_DB}_restore_${timestamp}"
 tmp_dir="$(mktemp -d)"
-drop_target_on_exit="1"
+# Databases this script made and drops again on exit, also after a failure.
+scratch_databases=()
 
 cleanup() {
   rm -rf "$tmp_dir"
-  if [[ "$drop_target_on_exit" == "1" ]]; then
-    psql_sql postgres "drop database if exists \"$target_db\"" || true
-  fi
+  local database
+  for database in ${scratch_databases[@]+"${scratch_databases[@]}"}; do
+    if database_exists "$database"; then
+      psql_sql postgres "drop database \"$database\"" || true
+    fi
+  done
 }
 trap cleanup EXIT
+
+# The name of a database the script makes next to DATABASE: <database>_<kind>_<timestamp>.
+# Postgres would cut a name longer than 63 bytes and then not find it again.
+side_name() {
+  local name="$1_$2_${timestamp}"
+  if (( ${#name} > 63 )); then
+    echo "Database name longer than Postgres allows: $name" >&2
+    return 1
+  fi
+  printf '%s\n' "$name"
+}
+
+# Prints the row counts of a restored database next to the live one.
+compare_counts() {
+  local restored="$1" live="$2" live_name="$3"
+  echo "Row counts (restored vs. live database $live_name; live rows may have changed since the backup):"
+  awk '
+    NR == FNR { restored[$1] = $2; tables[$1] = 1; next }
+    { live[$1] = $2; tables[$1] = 1 }
+    END {
+      printf "%-60s %12s %12s\n", "table", "restored", "live"
+      for (table in tables) {
+        r = (table in restored) ? restored[table] : "missing"
+        l = (table in live) ? live[table] : "missing"
+        printf "%-60s %12s %12s%s\n", table, r, l, (r == l ? "" : "  <- differs")
+      }
+    }
+  ' "$restored" "$live" | { read -r header; echo "$header"; sort; }
+  echo "Tables: restored $(wc -l < "$restored" | tr -d ' '), live $(wc -l < "$live" | tr -d ' ')"
+  echo "Rows:   restored $(awk '{ s += $2 } END { print s + 0 }' "$restored"), live $(awk '{ s += $2 } END { print s + 0 }' "$live")"
+}
+
+live_counts() {
+  if database_exists "$1"; then
+    row_counts "$1"
+  fi
+}
 
 dump_file="${dump##*/}"
 echo "Downloading $dump"
 aws_cli --user "$(id -u):$(id -g)" -v "$tmp_dir:/backup" -- \
   s3 cp --only-show-errors "${bucket_url}${dump}" "/backup/$dump_file"
-gzip -t "$tmp_dir/$dump_file"
-echo "Dump size: $(wc -c < "$tmp_dir/$dump_file" | tr -d ' ') bytes, gzip integrity ok"
 
-echo "Restoring into database $target_db"
-restore_started="$(date +%s)"
-psql_sql postgres "create database \"$target_db\" owner \"$POSTGRES_USER\""
-gunzip -c "$tmp_dir/$dump_file" | psql_db "$target_db" --single-transaction > /dev/null
-echo "Restore finished in $(( $(date +%s) - restore_started ))s"
+# A backup before OPS-BK-1: one gzipped plain dump of the platform database.
+restore_single_dump() {
+  gzip -t "$tmp_dir/$dump_file"
+  echo "Dump size: $(wc -c < "$tmp_dir/$dump_file" | tr -d ' ') bytes, gzip integrity ok"
 
-row_counts "$target_db" > "$tmp_dir/restored.counts"
-if [[ ! -s "$tmp_dir/restored.counts" ]]; then
-  echo "Restored database contains no tables." >&2
-  exit 1
-fi
-if database_exists "$POSTGRES_DB"; then
-  row_counts "$POSTGRES_DB" > "$tmp_dir/live.counts"
-else
-  : > "$tmp_dir/live.counts"
-fi
+  local target_db
+  target_db="$(side_name "$POSTGRES_DB" restore)"
+  scratch_databases=("$target_db")
+  echo "Restoring into database $target_db"
+  local restore_started
+  restore_started="$(date +%s)"
+  psql_sql postgres "create database \"$target_db\" owner \"$POSTGRES_USER\""
+  gunzip -c "$tmp_dir/$dump_file" | psql_db "$target_db" --single-transaction > /dev/null
+  echo "Restore finished in $(( $(date +%s) - restore_started ))s"
 
-echo
-echo "Row counts (restored dump vs. live database $POSTGRES_DB; live rows may have changed since the dump):"
-awk '
-  NR == FNR { restored[$1] = $2; tables[$1] = 1; next }
-  { live[$1] = $2; tables[$1] = 1 }
-  END {
-    printf "%-60s %12s %12s\n", "table", "restored", "live"
-    for (table in tables) {
-      r = (table in restored) ? restored[table] : "missing"
-      l = (table in live) ? live[table] : "missing"
-      printf "%-60s %12s %12s%s\n", table, r, l, (r == l ? "" : "  <- differs")
+  row_counts "$target_db" > "$tmp_dir/restored.counts"
+  if [[ ! -s "$tmp_dir/restored.counts" ]]; then
+    echo "Restored database contains no tables." >&2
+    exit 1
+  fi
+  live_counts "$POSTGRES_DB" > "$tmp_dir/live.counts"
+  echo
+  compare_counts "$tmp_dir/restored.counts" "$tmp_dir/live.counts" "$POSTGRES_DB"
+
+  if [[ "$mode" == "verify" ]]; then
+    echo "Verification done. Dropping $target_db."
+    exit 0
+  fi
+
+  local replaced_db
+  replaced_db="$(side_name "$POSTGRES_DB" replaced)"
+  echo
+  echo "About to replace database $POSTGRES_DB on $(hostname) with $dump."
+  echo "The current database is kept as $replaced_db."
+  confirm_recovery
+
+  if database_exists "$POSTGRES_DB"; then
+    psql_sql postgres "alter database \"$POSTGRES_DB\" rename to \"$replaced_db\""
+  fi
+  psql_sql postgres "alter database \"$target_db\" rename to \"$POSTGRES_DB\""
+  scratch_databases=()
+
+  echo "Recovered $POSTGRES_DB from $dump."
+  echo "Start the app again, check it, then drop the old database when it is no longer needed:"
+  print_drop_command "$replaced_db"
+}
+
+confirm_recovery() {
+  local answer
+  read -r -p "Type the database name to continue: " answer
+  if [[ "$answer" != "$POSTGRES_DB" ]]; then
+    echo "Aborted. Nothing was replaced." >&2
+    exit 1
+  fi
+}
+
+print_drop_command() {
+  echo "  docker compose --env-file $env_file -f $app_dir/docker-compose.prod.yml exec -T postgres psql -U $POSTGRES_USER -d postgres -c 'drop database \"$1\"'"
+}
+
+pg_restore_db() {
+  compose exec -T postgres pg_restore -U "$POSTGRES_USER" "$@"
+}
+
+# Applies the roles of the backup: creates the ones the server lacks and sets attributes,
+# passwords, settings and memberships as in the backup. The role this script connects as is
+# left out: its password is the one in the env file.
+apply_globals() {
+  psql_sql postgres "select rolname from pg_catalog.pg_roles" > "$tmp_dir/existing.roles"
+  awk -v skip="$POSTGRES_USER" '
+    NR == FNR { have[$0] = 1; next }
+    /^(CREATE|ALTER) ROLE / {
+      rest = $0
+      sub(/^(CREATE|ALTER) ROLE /, "", rest)
+      if (substr(rest, 1, 1) == "\"") {
+        role = substr(rest, 2)
+        role = substr(role, 1, index(role, "\"") - 1)
+      } else {
+        role = rest
+        sub(/[ ;].*$/, "", role)
+      }
+      if (role == skip) next
+      if ($0 ~ /^CREATE ROLE / && (role in have)) next
     }
+    { print }
+  ' "$tmp_dir/existing.roles" "$archive/globals.sql" | psql_db postgres > /dev/null
+}
+
+# A backup since OPS-BK-1: a tar archive with globals.sql and one <database>.dump per database.
+restore_archive() {
+  archive="$tmp_dir/archive"
+  mkdir "$archive"
+  tar -xf "$tmp_dir/$dump_file" -C "$archive"
+  rm "$tmp_dir/$dump_file"
+  if [[ ! -s "$archive/globals.sql" ]]; then
+    echo "The backup holds no globals.sql." >&2
+    exit 1
+  fi
+  local databases=() file database
+  for file in "$archive"/*.dump; do
+    [[ -f "$file" ]] || continue
+    database="${file##*/}"
+    databases+=("${database%.dump}")
+  done
+  if [[ " ${databases[*]-} " != *" $POSTGRES_DB "* ]]; then
+    echo "The backup holds no dump of $POSTGRES_DB." >&2
+    exit 1
+  fi
+  for database in "${databases[@]}"; do
+    pg_restore_db -l < "$archive/$database.dump" > /dev/null
+  done
+  echo "Backup size: $(du -sk "$archive" | cut -f1) KiB unpacked; roles: $(grep -c '^CREATE ROLE ' "$archive/globals.sql" || true); databases: ${databases[*]}"
+
+  if [[ "$mode" == "verify" ]]; then
+    local scratch restore_started
+    for database in "${databases[@]}"; do
+      scratch="$(side_name "$database" restore)"
+      scratch_databases+=("$scratch")
+      echo
+      echo "== $database: restoring into $scratch"
+      restore_started="$(date +%s)"
+      psql_sql postgres "create database \"$scratch\" template template0"
+      # Owners and grants name roles, which a verify does not create; the recovery restores them.
+      pg_restore_db -d "$scratch" --no-owner --no-acl --single-transaction \
+        < "$archive/$database.dump"
+      echo "Restore finished in $(( $(date +%s) - restore_started ))s"
+      row_counts "$scratch" > "$tmp_dir/restored.counts"
+      if [[ "$database" == "$POSTGRES_DB" && ! -s "$tmp_dir/restored.counts" ]]; then
+        echo "Restored database contains no tables." >&2
+        exit 1
+      fi
+      live_counts "$database" > "$tmp_dir/live.counts"
+      compare_counts "$tmp_dir/restored.counts" "$tmp_dir/live.counts" "$database"
+      psql_sql postgres "drop database \"$scratch\""
+    done
+    echo
+    echo "Verification done. The scratch databases are dropped."
+    exit 0
+  fi
+
+  local replaced=() other_databases
+  echo
+  echo "About to replace these databases on $(hostname) with $dump:"
+  for database in "${databases[@]}"; do
+    replaced+=("$(side_name "$database" replaced)")
+    if database_exists "$database"; then
+      echo "  $database (the current one is kept as ${replaced[${#replaced[@]} - 1]})"
+    else
+      echo "  $database (not on the server)"
+    fi
+  done
+  other_databases="$(psql_sql postgres "
+    select datname from pg_catalog.pg_database
+    where not datistemplate and datname <> 'postgres'
+      and datname !~ '_(restore|replaced)_[0-9]{8}t[0-9]{6}z$'
+    order by datname" | grep -v -x -F "${databases[@]/#/-e}" || true)"
+  if [[ -n "$other_databases" ]]; then
+    echo "Not in the backup, so left as they are: $(paste -sd ' ' - <<< "$other_databases")"
+  fi
+  echo "Roles the server lacks are created, and every role is set as in the backup, except $POSTGRES_USER."
+  confirm_recovery
+
+  apply_globals
+  # Each database is moved aside and created again from its dump with its owner, grants
+  # and settings. A failure puts back every database moved so far.
+  local index swapped=0
+  undo_recovery() {
+    local i
+    for (( i = swapped - 1; i >= 0; i-- )); do
+      psql_sql postgres "drop database if exists \"${databases[i]}\"" || true
+      if database_exists "${replaced[i]}"; then
+        psql_sql postgres "alter database \"${replaced[i]}\" rename to \"${databases[i]}\"" || true
+      fi
+    done
   }
-' "$tmp_dir/restored.counts" "$tmp_dir/live.counts" | { read -r header; echo "$header"; sort; }
-echo
-echo "Tables: restored $(wc -l < "$tmp_dir/restored.counts" | tr -d ' '), live $(wc -l < "$tmp_dir/live.counts" | tr -d ' ')"
-echo "Rows:   restored $(awk '{ s += $2 } END { print s + 0 }' "$tmp_dir/restored.counts"), live $(awk '{ s += $2 } END { print s + 0 }' "$tmp_dir/live.counts")"
+  for (( index = 0; index < ${#databases[@]}; index++ )); do
+    database="${databases[index]}"
+    echo "Recovering $database"
+    if database_exists "$database"; then
+      psql_sql postgres "alter database \"$database\" rename to \"${replaced[index]}\""
+    fi
+    swapped=$((index + 1))
+    if ! pg_restore_db -d postgres --create --exit-on-error < "$archive/$database.dump"; then
+      echo "Recovering $database failed. Putting back the databases as they were." >&2
+      undo_recovery
+      exit 1
+    fi
+  done
 
-if [[ "$mode" == "verify" ]]; then
-  echo "Verification done. Dropping $target_db."
-  exit 0
-fi
+  echo "Recovered ${databases[*]} from $dump."
+  echo "Start the app again, check it, then drop the old databases when they are no longer needed:"
+  for (( index = 0; index < ${#databases[@]}; index++ )); do
+    if database_exists "${replaced[index]}"; then
+      print_drop_command "${replaced[index]}"
+    fi
+  done
+}
 
-replaced_db="${POSTGRES_DB}_replaced_${timestamp}"
-echo
-echo "About to replace database $POSTGRES_DB on $(hostname) with $dump."
-echo "The current database is kept as $replaced_db."
-read -r -p "Type the database name to continue: " answer
-if [[ "$answer" != "$POSTGRES_DB" ]]; then
-  echo "Aborted. Nothing was replaced." >&2
-  exit 1
-fi
-
-if database_exists "$POSTGRES_DB"; then
-  psql_sql postgres "alter database \"$POSTGRES_DB\" rename to \"$replaced_db\""
-fi
-psql_sql postgres "alter database \"$target_db\" rename to \"$POSTGRES_DB\""
-drop_target_on_exit="0"
-
-echo "Recovered $POSTGRES_DB from $dump."
-echo "Start the app again, check it, then drop the old database when it is no longer needed:"
-echo "  docker compose --env-file $env_file -f $app_dir/docker-compose.prod.yml exec -T postgres psql -U $POSTGRES_USER -d postgres -c 'drop database \"$replaced_db\"'"
+case "$dump_file" in
+  *.tar) restore_archive ;;
+  *) restore_single_dump ;;
+esac
