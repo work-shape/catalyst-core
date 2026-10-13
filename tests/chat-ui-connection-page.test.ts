@@ -441,7 +441,9 @@ describe("Connection page", () => {
       return markup.slice(start, markup.indexOf("</li>", start));
     };
 
-    expect(row("revenue_by_month")).toContain("connection.sample-business.revenue_by_month");
+    // A person reads the operation's name, never the id a tool call carries.
+    expect(row("revenue_by_month")).toContain(">Revenue by month<");
+    expect(row("revenue_by_month")).not.toContain("connection.sample-business.revenue_by_month");
     expect(row("revenue_by_month")).toContain("Returns the revenue of each month of one year.");
     expect(row("revenue_by_month")).toContain("Reading");
     expect(row("revenue_by_month")).toContain("Callable by");

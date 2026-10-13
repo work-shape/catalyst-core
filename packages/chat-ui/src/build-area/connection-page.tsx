@@ -506,6 +506,19 @@ function ConnectionStatus({
   );
 }
 
+/**
+ * An operation as a person reads it: its name in sentence case, such as "List customers" for
+ * `list_customers`. The outside system names operations; it gives them no title for people.
+ */
+function operationTitle(name: string): string {
+  const words = name
+    .replace(/([a-z0-9])([A-Z])/gu, "$1 $2")
+    .replace(/[_.-]+/gu, " ")
+    .trim()
+    .toLowerCase();
+  return words === "" ? name : `${words.slice(0, 1).toUpperCase()}${words.slice(1)}`;
+}
+
 function ConnectionOperations({ operations }: { operations: ConnectionOperationDetail[] }) {
   const { t } = useTranslation();
   if (operations.length === 0) {
@@ -523,7 +536,9 @@ function ConnectionOperations({ operations }: { operations: ConnectionOperationD
             className="grid min-w-0 gap-1.5 border-b py-3 first:pt-0 last:border-b-0 last:pb-0"
           >
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <code className="min-w-0 font-mono text-code break-all">{operation.name}</code>
+              <span className="min-w-0 text-label break-words">
+                {operationTitle(operation.name)}
+              </span>
               <Badge tone={operation.effect === "changing" ? "warning" : "neutral"}>
                 {t(
                   operation.effect === "changing"
@@ -535,9 +550,6 @@ function ConnectionOperations({ operations }: { operations: ConnectionOperationD
                 {t(status.label)}
               </Badge>
             </div>
-            <code className="font-mono text-caption break-all text-muted-foreground">
-              {operation.toolName}
-            </code>
             {operation.description ? (
               <p className="line-clamp-3 text-body whitespace-pre-line">{operation.description}</p>
             ) : null}
