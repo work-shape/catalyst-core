@@ -173,7 +173,7 @@ export const assetWarningSchema = z.object({ code: z.string(), message: z.string
 export const listAssetsQuerySchema = z.object({
   /** Only names that start with this text, such as a Namespace prefix. */
   prefix: nameText(z.string().min(1).max(200)).optional(),
-  /** Only names that contain this text, whatever the case. */
+  /** Only assets whose name or title contains this text, whatever the case. */
   text: nameText(z.string().min(1).max(200)).optional(),
   workspaceId: workspaceIdSchema
 });

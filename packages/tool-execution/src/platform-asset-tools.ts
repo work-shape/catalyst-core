@@ -152,7 +152,8 @@ export function createPlatformAssetBinding(): PlatformAssetBinding {
       putPolicyFloor: (conversationId) => required().putPolicyFloor(conversationId),
       listOperations: (context) => required().listOperations(context),
       readContext: (context) => required().readContext(context),
-      listAssets: (context, input) => required().listAssets(context, input)
+      listAssets: (context, input) => required().listAssets(context, input),
+      listFiles: (context, input) => required().listFiles(context, input)
     }
   };
 }

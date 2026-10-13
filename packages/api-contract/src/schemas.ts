@@ -18,3 +18,4 @@ export * from "./pages";
 export * from "./platform";
 export * from "./shared";
 export * from "./system";
+export * from "./workspace-files";

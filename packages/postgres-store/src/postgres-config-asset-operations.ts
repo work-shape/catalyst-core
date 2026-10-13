@@ -1,6 +1,6 @@
-import { containsPattern } from "./like-pattern";
+import { prefixPattern } from "./like-pattern";
 import { keysetFilter } from "./paging";
-import { and, asc, desc, eq, ilike, inArray, like, max, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, like, max, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
   AppError,
@@ -67,7 +67,7 @@ export async function listActiveConfigAssets(
   }
   if (input.namePrefix !== undefined) {
     // A constant pattern, so the planner reads it as a range of the prefix index.
-    conditions.push(like(configAssets.name, `${escapeLikePattern(input.namePrefix)}%`));
+    conditions.push(like(configAssets.name, prefixPattern(input.namePrefix)));
   }
   const rows = await db
     .select({ asset: configAssets, revision: configAssetRevisions })
@@ -76,94 +76,6 @@ export async function listActiveConfigAssets(
     .where(and(...conditions))
     .orderBy(asc(configAssets.kind), asc(configAssets.name));
   return rows.map((row) => mapConfigAsset(row.asset, row.revision));
-}
-
-/**
- * How many asset keys one read of a list takes while it looks for the rows its caller may
- * read. A caller who may read everything needs one read per page. A caller who may read
- * little needs one per this many assets that match the filter, until the page is full.
- */
-const ASSET_LIST_SCAN_BATCH = 1000;
-
-export async function listConfigAssetPage(
-  db: PostgresConnection,
-  input: Parameters<ConfigAssetStore["listConfigAssetPage"]>[0]
-): Promise<ConfigAssetRecord[]> {
-  const conditions = [
-    eq(configAssets.clientInstanceId, input.clientInstanceId),
-    eq(configAssets.kind, input.kind),
-    eq(configAssets.status, "active"),
-    input.scope.kind === "workspace"
-      ? and(
-          eq(configAssets.scopeKind, "workspace"),
-          eq(configAssets.scopeId, input.scope.workspaceId)
-        )
-      : eq(configAssets.scopeKind, "instance")
-  ];
-  if (input.namePrefix !== undefined) {
-    // A constant pattern, so the planner reads it as a range of the prefix index.
-    conditions.push(like(configAssets.name, `${escapeLikePattern(input.namePrefix)}%`));
-  }
-  if (input.nameContains !== undefined) {
-    conditions.push(ilike(configAssets.name, containsPattern(input.nameContains)));
-  }
-  // Byte order through the operators of the prefix index: one index range answers the
-  // filter, the cursor and the order, under any collation of the database.
-  const ids: string[] = [];
-  let afterName = input.afterName;
-  while (ids.length < input.limit) {
-    const keys = await db
-      .select({
-        id: configAssets.id,
-        kind: configAssets.kind,
-        name: configAssets.name,
-        scopeKind: configAssets.scopeKind,
-        scopeId: configAssets.scopeId,
-        publishedRevisionId: configAssets.publishedRevisionId
-      })
-      .from(configAssets)
-      .where(
-        and(
-          ...conditions,
-          afterName === undefined ? undefined : sql`${configAssets.name} ~>~ ${afterName}`
-        )
-      )
-      .orderBy(sql`${configAssets.name} using ~<~`)
-      .limit(ASSET_LIST_SCAN_BATCH);
-    for (const key of keys) {
-      if (
-        ids.length < input.limit &&
-        input.readable({
-          id: key.id,
-          kind: key.kind,
-          name: key.name,
-          scope: mapAssetScope(key),
-          published: key.publishedRevisionId !== null
-        })
-      ) {
-        ids.push(key.id);
-      }
-    }
-    const last = keys.at(-1);
-    if (keys.length < ASSET_LIST_SCAN_BATCH || !last) {
-      break;
-    }
-    afterName = last.name;
-  }
-  if (ids.length === 0) {
-    return [];
-  }
-  const rows = await db
-    .select({ asset: configAssets, revision: configAssetRevisions, published: publishedColumns })
-    .from(configAssets)
-    .innerJoin(configAssetRevisions, eq(configAssetRevisions.id, configAssets.activeRevisionId))
-    .leftJoin(publishedRevisions, eq(publishedRevisions.id, configAssets.publishedRevisionId))
-    .where(and(inArray(configAssets.id, ids), eq(configAssets.status, "active")));
-  const byId = new Map(rows.map((row) => [row.asset.id, row]));
-  return ids.flatMap((id) => {
-    const row = byId.get(id);
-    return row ? [mapConfigAsset(row.asset, row.revision, row.published)] : [];
-  });
 }
 
 export async function listPublishedConfigAssets(
@@ -753,10 +665,6 @@ export async function deleteWorkspaceOwnedAssets(
       updatedAt: new Date()
     })
     .where(eq(configAssetState.clientInstanceId, input.clientInstanceId));
-}
-
-function escapeLikePattern(text: string): string {
-  return text.replace(/[\\%_]/gu, (character) => `\\${character}`);
 }
 
 export async function findConfigAssetRow(
