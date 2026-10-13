@@ -9,6 +9,7 @@ import {
   type AppendAssistantMessageInput,
   type CreateConversationInput,
   type ExpireConversationResult,
+  type FoundFile,
   type CreateMessageInput,
   type ModelProviderContinuationCheckpoint,
   type ModelProviderContinuationStore
@@ -30,6 +31,7 @@ import {
   updateConversationTitle as updatePostgresConversationTitle
 } from "../postgres-conversation-operations";
 import { listConversationsWithActiveRun as listPostgresConversationsWithActiveRun } from "../postgres-conversation-list-operations";
+import { searchWorkspaceFiles as searchPostgresWorkspaceFiles } from "../postgres-file-search-operations";
 import {
   deleteModelProviderContinuation as deletePostgresModelProviderContinuation,
   getModelProviderContinuation as getPostgresModelProviderContinuation
@@ -56,6 +58,11 @@ export function createPostgresConversationsStore(db: PostgresConnection): Conver
       input: Parameters<ConversationStore["listConversationsWithActiveRun"]>[0]
     ): Promise<ConversationListItem[]> {
       return listPostgresConversationsWithActiveRun(db, input);
+    },
+    async searchWorkspaceFiles(
+      input: Parameters<ConversationsStore["searchWorkspaceFiles"]>[0]
+    ): Promise<FoundFile[]> {
+      return searchPostgresWorkspaceFiles(db, input);
     },
     async listPrivateConversationsCreatedByUser(
       input: Parameters<ConversationStore["listPrivateConversationsCreatedByUser"]>[0]

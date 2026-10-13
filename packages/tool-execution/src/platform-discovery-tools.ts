@@ -1,16 +1,17 @@
 import { z } from "zod";
-import type { ToolExecutionContext } from "@vivd-catalyst/core";
+import { FOUND_FILE_KINDS, type FoundFile, type ToolExecutionContext } from "@vivd-catalyst/core";
 import { defineTool, toolSuccess, type AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
 
 // The tools an agent finds what is on the platform with, in every conversation. Each is a
 // projection of an operation of the API, carried out for the person the agent acts for with
-// that person's rights: an asset the person may not read is not listed, as if it did not
-// exist. Both only read.
+// that person's rights: an asset or a file the person may not read is not listed, as if it
+// did not exist. All only read.
 
 /** One row per tool: its name for the agent, and the operation of the API it projects. */
 export const PLATFORM_DISCOVERY_TOOLS = {
   context: { name: "platform.context", operation: "platform.context.get", effect: "reading" },
-  listAssets: { name: "platform.assets.list", operation: "assets.list", effect: "reading" }
+  listAssets: { name: "platform.assets.list", operation: "assets.list", effect: "reading" },
+  listFiles: { name: "platform.files.list", operation: "workspaces.files.list", effect: "reading" }
 } as const;
 
 /** The names of the tools every conversation is offered to find what is on the platform. */
@@ -18,7 +19,10 @@ export const PLATFORM_DISCOVERY_TOOL_NAMES: readonly string[] = Object.values(
   PLATFORM_DISCOVERY_TOOLS
 ).map((tool) => tool.name);
 
-/** How many assets one search answers. It has no pages: a longer list asks a narrower search. */
+/**
+ * How many assets or files one search answers. It has no pages: a longer list asks a narrower
+ * search.
+ */
 export const PLATFORM_ASSET_LIST_MAX = 50;
 
 /** What this instance has and what the person the agent acts for may do on it. */
@@ -44,6 +48,12 @@ export interface PlatformAssetFound {
   description?: string;
 }
 
+/** One Page or file a search found, and the conversation it lives in. */
+export type PlatformFileFound = FoundFile & {
+  /** Set on what lives in the conversation the agent runs in, the one it can open. */
+  inThisConversation?: true;
+};
+
 /** What carries the tools out, for the person of `context`. */
 export interface PlatformDiscoveryCalls {
   readContext(context: ToolExecutionContext): Promise<PlatformContextRead>;
@@ -57,6 +67,15 @@ export interface PlatformDiscoveryCalls {
     context: ToolExecutionContext,
     input: { kind?: string; text?: string }
   ): Promise<{ assets: PlatformAssetFound[]; truncated: boolean }>;
+  /**
+   * The Pages and files of the conversations of the workspace of the conversation that the
+   * person may read, newest first, whose name or conversation title contains `text`. At most
+   * `PLATFORM_ASSET_LIST_MAX`; `truncated` says there are more.
+   */
+  listFiles(
+    context: ToolExecutionContext,
+    input: { kind?: FoundFile["kind"]; text?: string }
+  ): Promise<{ files: PlatformFileFound[]; truncated: boolean }>;
 }
 
 /** Text a search names. Postgres stores no NUL, so one is refused before it reaches the store. */
@@ -90,8 +109,24 @@ const listAssetsOutputSchema = z.object({
   truncated: z.boolean()
 });
 
+const listFilesOutputSchema = z.object({
+  files: z.array(
+    z.object({
+      kind: z.enum(FOUND_FILE_KINDS),
+      id: z.string(),
+      name: z.string(),
+      mimeType: z.string().optional(),
+      bytes: z.number(),
+      updatedAt: z.string(),
+      conversation: z.object({ id: z.string(), title: z.string() }),
+      inThisConversation: z.literal(true).optional()
+    })
+  ),
+  truncated: z.boolean()
+});
+
 export function createPlatformDiscoveryTools(calls: PlatformDiscoveryCalls): AnyToolDefinition[] {
-  const { context, listAssets } = PLATFORM_DISCOVERY_TOOLS;
+  const { context, listAssets, listFiles } = PLATFORM_DISCOVERY_TOOLS;
   return [
     defineTool({
       name: context.name,
@@ -119,8 +154,8 @@ export function createPlatformDiscoveryTools(calls: PlatformDiscoveryCalls): Any
       description: [
         "Find the assets the user may see on this platform: agents, skills, Workflows, Apps, Data Stores, Knowledge Bases and Connections.",
         "Answers the kind, the name, the title and the description of each, never what it holds. An asset the user may not see is not listed; say that you know none of that name, not that it is hidden.",
-        `Give 'kind' to search one kind, and 'text' for part of the name. Answers at most ${PLATFORM_ASSET_LIST_MAX}; 'truncated' says there are more, so search narrower.`,
-        "Pages are not assets: they belong to the conversation that saved them, and this tool does not find them."
+        `Give 'kind' to search one kind, and 'text' for part of the name or the title. Answers at most ${PLATFORM_ASSET_LIST_MAX}; 'truncated' says there are more, so search narrower.`,
+        `Pages and files are not assets: ${listFiles.name} finds them.`
       ].join(" "),
       inputSchema: z.object({
         kind: searchText(100)
@@ -130,7 +165,9 @@ export function createPlatformDiscoveryTools(calls: PlatformDiscoveryCalls): Any
           ),
         text: searchText(200)
           .optional()
-          .describe("Part of the name, whatever the case. Names use lowercase and hyphens.")
+          .describe(
+            "Part of the name or the title, whatever the case. Names use lowercase and hyphens."
+          )
       }),
       outputSchema: listAssetsOutputSchema,
       async execute(input, toolContext) {
@@ -141,6 +178,36 @@ export function createPlatformDiscoveryTools(calls: PlatformDiscoveryCalls): Any
             metadata: {
               ...(input.kind === undefined ? {} : { kind: input.kind }),
               assetCount: found.assets.length,
+              truncated: found.truncated
+            }
+          }
+        });
+      }
+    }),
+    defineTool({
+      name: listFiles.name,
+      effect: listFiles.effect,
+      description: [
+        "Find the Pages and files in the conversations of this workspace that the user may see: Pages saved with page.save ('page'), files people uploaded ('upload') and files an agent made in a workspace ('generated_file'). Newest first.",
+        "Answers the name, the type, the size, when it last changed and the conversation it lives in, never what it holds. What the user may not see is not listed; say that you know none of that name, not that it is hidden.",
+        `Give 'text' for part of the name or of the title of its conversation, and 'kind' for one kind. Answers at most ${PLATFORM_ASSET_LIST_MAX}; 'truncated' says there are more, so search narrower.`,
+        "You can read only what is marked 'inThisConversation', with the tools you read files with. For anything else, tell the user which conversation holds it, so they can open it there or add the file to this one."
+      ].join(" "),
+      inputSchema: z.object({
+        kind: z.enum(FOUND_FILE_KINDS).optional().describe("Only Pages, uploads or made files."),
+        text: searchText(200)
+          .optional()
+          .describe("Part of the name or of the conversation's title, whatever the case.")
+      }),
+      outputSchema: listFilesOutputSchema,
+      async execute(input, toolContext) {
+        const found = await calls.listFiles(toolContext, input);
+        return toolSuccess(found, {
+          auditSummary: {
+            action: listFiles.name,
+            metadata: {
+              ...(input.kind === undefined ? {} : { kind: input.kind }),
+              fileCount: found.files.length,
               truncated: found.truncated
             }
           }

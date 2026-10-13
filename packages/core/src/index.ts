@@ -22,6 +22,7 @@ export * from "./operation-runs";
 export * from "./infrastructure-checks";
 export * from "./modules";
 export * from "./pages";
+export * from "./file-search";
 export * from "./workflow-blocks";
 export * from "./workflows";
 export * from "./workflow-runs";
