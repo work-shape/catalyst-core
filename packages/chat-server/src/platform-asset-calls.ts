@@ -29,14 +29,15 @@ import type { AssetCall } from "./asset-access";
 import { readDefinitionName } from "./asset-kinds/shared";
 import { AssetWorkflow } from "./asset-workflow";
 import { readPlatformContext } from "./platform-context";
+import { findWorkspaceFiles } from "./workspace-files";
 import type { AssetWorkflowOptions } from "./types";
 
 // What carries the agent's asset tools out: the workflow of the asset operations of the API,
 // called for the person the agent acts for, on the subject of the conversation the call came
 // from, and the reads that find what is on the platform. Nothing of an asset is decided here:
 // the right, the checks of a definition, the revision and the audit rows are the ones a call
-// of `assets.get`, `assets.validate`, `assets.put`, `assets.list` and `platform.context.get`
-// has.
+// of `assets.get`, `assets.validate`, `assets.put`, `assets.list`, `workspaces.files.list` and
+// `platform.context.get` has.
 
 /** The module whose switch turns changing assets through `assets.put` on and off. */
 const ASSET_WRITE_OPERATION = "assets.put";
@@ -127,12 +128,17 @@ function jsonSchemaOf(given: JsonObject | undefined, schema: z.ZodType): JsonObj
 export function createPlatformAssetCalls(options: AssetWorkflowOptions): PlatformAssetCalls {
   const workflow = new AssetWorkflow(options);
 
+  /** The conversation the call came from. */
+  async function conversationOf(context: ToolExecutionContext) {
+    const conversationId = context.toolRequest?.conversationId;
+    return conversationId
+      ? options.stores.conversations.getConversation(options.clientInstanceId, conversationId)
+      : undefined;
+  }
+
   /** The conversation the call came from, and the call as the asset operations take one. */
   async function callOf(context: ToolExecutionContext) {
-    const conversationId = context.toolRequest?.conversationId;
-    const conversation = conversationId
-      ? await options.stores.conversations.getConversation(options.clientInstanceId, conversationId)
-      : undefined;
+    const conversation = await conversationOf(context);
     const runId = context.operationRun?.id;
     // The audit rows of the call carry its run, as those of a call of the API do.
     const audit: AuditRecorder = {
@@ -352,6 +358,28 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
         }
       }
       return { assets, truncated: false };
+    },
+
+    async listFiles(context, input) {
+      const conversation = await conversationOf(context);
+      if (!conversation) {
+        throw new AppError("NOT_FOUND", "This conversation is not available");
+      }
+      // One more than is answered says whether the list is cut.
+      const found = await findWorkspaceFiles(options, {
+        user: context.user,
+        collaborationWorkspaceId: conversation.collaborationWorkspaceId,
+        ...input,
+        page: { limit: PLATFORM_ASSET_LIST_MAX + 1 }
+      });
+      return {
+        files: found
+          .slice(0, PLATFORM_ASSET_LIST_MAX)
+          .map((file) =>
+            file.conversation.id === conversation.id ? { ...file, inThisConversation: true } : file
+          ),
+        truncated: found.length > PLATFORM_ASSET_LIST_MAX
+      };
     },
 
     async listOperations(context) {
