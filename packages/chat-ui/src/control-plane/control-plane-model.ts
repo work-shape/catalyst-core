@@ -249,7 +249,8 @@ export function useControlPlaneModel({
       canViewBuild && mayCreateAgents(buildRights, config?.features.configAssets)
         ? {
             namespaces: buildRights.creatableNamespaces(AGENT_ASSET_KIND),
-            mayNameFreely: buildRights.instanceWrite
+            mayNameFreely: buildRights.instanceWrite,
+            mayChooseAll: buildRights.instanceWrite
           }
         : undefined,
     showUiLibrary: view === "ui-library" && canViewUiLibrary,
