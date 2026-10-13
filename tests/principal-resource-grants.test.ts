@@ -440,9 +440,15 @@ describe("what a service principal's grant row may give", () => {
     const s = await setup();
     const { t } = s;
     const crm = await t.seed("crm", forWorkflows);
-    // The kinds of Data Stores, Knowledge Bases and Workflows are not loaded here. Their
-    // rights are in the list and are handed out once a kind registers them.
-    for (const action of PRINCIPAL_GRANTABLE_ACTIONS.filter((name) => name !== "connection.use")) {
+    // The kinds of Knowledge Bases and Workflows are not loaded here. Their rights are in the
+    // list and are handed out once a kind registers them.
+    const dataStoreRights = PRINCIPAL_GRANTABLE_ACTIONS.filter((name) =>
+      name.startsWith("data_store.")
+    );
+    expect(dataStoreRights).toHaveLength(3);
+    for (const action of PRINCIPAL_GRANTABLE_ACTIONS.filter(
+      (name) => name !== "connection.use" && !name.startsWith("data_store.")
+    )) {
       const error = await t.expectRefused(
         t.root.id,
         "permissions.grant",
@@ -450,6 +456,17 @@ describe("what a service principal's grant row may give", () => {
         { status: 422, code: "VALIDATION_FAILED" }
       );
       expect(error.details, action).toMatchObject({ reason: "action_not_grantable_to_principal" });
+    }
+    // The kind of Data Stores belongs to a module that is off here, so its rights are refused
+    // like everything else of that module.
+    for (const action of dataStoreRights) {
+      const error = await t.expectRefused(
+        t.root.id,
+        "permissions.grant",
+        { payload: s.payload(crm, { action }) },
+        { status: 404, code: "NOT_FOUND" }
+      );
+      expect(error.details, action).toMatchObject({ reason: "module_off", module: "dataStores" });
     }
     expect(await s.principalRows()).toEqual([]);
   });
