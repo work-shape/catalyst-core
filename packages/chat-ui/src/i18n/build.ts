@@ -15,6 +15,8 @@ export const build = defineTranslations({
     "build.assetRefused": "You may not read this asset.",
     "build.conflictDeleted":
       "Somebody deleted this while you were editing. Your text is still here, but it can no longer be saved.",
+    "build.copyTitle": "{title} (copy)",
+    "build.copyToEdit": "Copy to edit",
     "build.createContinue": "Continue",
     "build.createId": "Id",
     "build.createIdHint":
@@ -46,6 +48,7 @@ export const build = defineTranslations({
       "Studio is not available to you. It opens for people who hold a right on an agent or a skill.",
     "build.noMatchInNamespace": "Nothing in this Namespace.",
     "build.noSkillsChosen": "No skills chosen.",
+    "build.platform": "Platform",
     "build.pendingApproval":
       "This change waits for an approval. Nothing was changed yet and your text is still here.",
     "build.readOnly": "You can read this but not change it.",
@@ -53,6 +56,8 @@ export const build = defineTranslations({
       "Belongs to no Namespace. Only a person who may edit on the whole instance can change it.",
     "build.readOnlyNamespace":
       "Belongs to the Namespace {namespace}. Only a person who may edit in this Namespace can change it.",
+    "build.readOnlyPlatform":
+      "Ships with the platform and is updated with each release. To change it, copy it and edit the copy.",
     "build.restored": "Revision {number} restored.",
     "build.refusedModel": "The model {model} is not allowed in Namespace {namespace}.",
     "build.refusedModelRequired":
@@ -120,6 +125,8 @@ export const build = defineTranslations({
     "build.assetRefused": "Du darfst dieses Asset nicht lesen.",
     "build.conflictDeleted":
       "Jemand hat dies gelöscht, während du es bearbeitet hast. Dein Text steht noch hier, lässt sich aber nicht mehr speichern.",
+    "build.copyTitle": "{title} (Kopie)",
+    "build.copyToEdit": "Zum Bearbeiten kopieren",
     "build.createContinue": "Weiter",
     "build.createId": "Kennung",
     "build.createIdHint":
@@ -152,6 +159,7 @@ export const build = defineTranslations({
       "Studio steht dir nicht zur Verfügung. Es öffnet sich für Personen mit einem Recht an einem Agenten oder einem Skill.",
     "build.noMatchInNamespace": "Nichts in diesem Namespace.",
     "build.noSkillsChosen": "Keine Skills ausgewählt.",
+    "build.platform": "Plattform",
     "build.pendingApproval":
       "Diese Änderung wartet auf eine Freigabe. Es wurde noch nichts geändert und dein Text ist noch da.",
     "build.readOnly": "Du kannst dies lesen, aber nicht ändern.",
@@ -159,6 +167,8 @@ export const build = defineTranslations({
       "Gehört zu keinem Namespace. Ändern kann es nur, wer in der ganzen Instanz bearbeiten darf.",
     "build.readOnlyNamespace":
       "Gehört zum Namespace {namespace}. Ändern kann es nur, wer in diesem Namespace bearbeiten darf.",
+    "build.readOnlyPlatform":
+      "Kommt mit der Plattform und wird mit jedem Release aktualisiert. Um es zu ändern, kopieren Sie es und bearbeiten die Kopie.",
     "build.restored": "Version {number} wiederhergestellt.",
     "build.refusedModel": "Das Modell {model} ist im Namespace {namespace} nicht erlaubt.",
     "build.refusedModelRequired":

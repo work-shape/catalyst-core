@@ -37,7 +37,12 @@ import {
   type BuildKind
 } from "./build-asset-kind";
 import { useBuildAssetKinds } from "./build-asset-kinds";
-import { ExistingAssetPage, NewAssetPage, ViewedAssetPage } from "./build-asset-page";
+import {
+  ExistingAssetPage,
+  NewAssetPage,
+  ViewedAssetPage,
+  type BuildAssetCopy
+} from "./build-asset-page";
 import { BuildCreateDialog } from "./build-create-dialog";
 import { buildCreateRequested, clearBuildCreateRequest } from "./build-create-request";
 import { BUILD_SEARCH_DELAY_MS, type BuildListFilter, type BuildSource } from "./build-data";
@@ -87,10 +92,13 @@ export function BuildFrame({ source }: { source: BuildSource }) {
   );
   useEffect(clearBuildCreateRequest, []);
   const [start, setStart] = useState<BuildAssetStart>();
+  /** A shipped asset the reader asked to copy: the dialog that names the copy is open. */
+  const [copying, setCopying] = useState<BuildAssetCopy>();
   const [seenLocationKey, setSeenLocationKey] = useState(locationKey);
   if (seenLocationKey !== locationKey) {
     setSeenLocationKey(locationKey);
     setAsking(false);
+    setCopying(undefined);
     setStart(undefined);
   }
   const creating = start !== undefined;
@@ -272,6 +280,21 @@ export function BuildFrame({ source }: { source: BuildSource }) {
             back={back}
             onUnsavedChange={setUnsaved}
             onDeleted={() => leaveTo(undefined)}
+            onCopy={setCopying}
+          />
+        ) : null}
+        {copying && place.kind.state.canCreate ? (
+          <BuildCreateDialog
+            entry={entry}
+            heading={t("build.copyToEdit")}
+            initialTitle={t("build.copyTitle", { title: copying.title })}
+            namespaces={source.rights.creatableNamespaces(entry.kind)}
+            mayNameFreely={source.rights.instanceWrite}
+            onClose={() => setCopying(undefined)}
+            onStart={(chosen) => {
+              setCopying(undefined);
+              setStart({ ...chosen, copyOf: copying.config });
+            }}
           />
         ) : null}
         <ConfirmDialog

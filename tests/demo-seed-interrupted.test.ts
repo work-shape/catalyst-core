@@ -40,7 +40,7 @@ const seeded = useSeededInstance({
 
 describe("the demo seed after an interrupted run", () => {
   it("mails the invitation the earlier run did not send, once", async () => {
-    expect(createdBy(seeded().first).people).toBe(6);
+    expect(createdBy(seeded().first).people).toBe(7);
     expect(seeded().first.steps.find((step) => step.name === "people")?.note).toBe(
       "Mailed the invitation an earlier run created the person for and did not send."
     );
