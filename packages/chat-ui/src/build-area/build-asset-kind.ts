@@ -77,6 +77,8 @@ interface BuildKindBase {
    * own mark, and the line under the title. A row without a line shows the title alone.
    */
   row?(asset: BuildAssetRow): { leading: ReactNode; description?: string };
+  /** What a row says after the asset's id, on the same line: such as the asset's description. */
+  rowText?(asset: BuildAssetRow): string | undefined;
   /** The row's badges, such as the default marker. */
   badges?(asset: BuildAssetRow, t: (key: TranslationKey) => string): ReactNode;
 }
