@@ -1,5 +1,5 @@
 {
-  "id": "d6f2dec8-e33e-4f18-a3c3-6708a9fe13eb",
+  "id": "f4204e6f-8691-4087-86a4-c8d73229819c",
   "prevId": "48a6c9d9-0727-4504-a002-7d35079ea1ea",
   "version": "7",
   "dialect": "postgresql",
@@ -7270,34 +7270,6 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "workflow_runs_scheduled_for_idx": {
-          "name": "workflow_runs_scheduled_for_idx",
-          "columns": [
-            {
-              "expression": "client_instance_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "workflow",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "scheduled_for",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"workflow_runs\".\"scheduled_for\" is not null",
           "concurrently": false,
           "method": "btree",
           "with": {}

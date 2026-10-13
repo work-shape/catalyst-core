@@ -34,8 +34,8 @@ contain breaking changes; a patch version does not.
   `schedule` and its due time as `scheduledFor`, and names the Workflow's own service
   principal as its starter. `manual` and `schedule` may stand together. `missed: skip`,
   `missed: all` and `overlap: queue` are refused as `not_supported_yet`. A process plans the
-  schedules of what is published when it starts. **Migration `0063_workflow_run_schedule`**
-  adds the column `workflow_runs.scheduled_for` and a unique index on it per Workflow; the
+  schedules of what is published when it starts. **Migrations `0063_workflow_run_schedule` and `0064_workflow_run_schedule_index`**
+  add the column `workflow_runs.scheduled_for` and a unique index on it per Workflow; the
   previous release runs on the migrated database.
 - **Workflow loops, several items at once:** a loop with `concurrency` from 2 to 8 runs that
   many of its items at the same time, each as its own jobs on the job executor, and starts the
@@ -50,6 +50,11 @@ contain breaking changes; a patch version does not.
   right reads "The service principal '…', which the Workflow runs as, does not hold the right
   '…' to call '…'". A step whose worker was gone when its run ran out of its time says what
   its call did, as it does after a cancel.
+- **Workflow Runs, the outline of a run:** `GET /api/v1/workflow-runs/{runId}/steps?topLevel=true`
+  answers the step runs that stand in no block: the steps of the definition's own list, with a
+  loop's own step run and its counts and none of its items. It goes with `status` and pages
+  like the list, and is refused together with `containerStepRunId`. The reads there were
+  answer as before.
 - **Workflow Runs:** with the module `workflows` on, a Workflow is started by hand and runs to
   its end on the job executor. `POST /api/v1/workflows/{workflow}/runs` starts a run
   (`workflow.use`), `GET` on the same path lists the runs of a Workflow, `GET /api/v1/workflows`
