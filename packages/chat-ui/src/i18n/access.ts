@@ -99,6 +99,34 @@ export const access = defineTranslations({
     "access.actionUseConnectionDescription":
       "Let agents this person builds or runs call the outside system through it.",
     "access.actionUse": "Use",
+    "access.actionPublish": "Publish",
+    "access.actionOnWorkflow": "{action} workflows",
+    "access.actionReadWorkflowDescription": "See the Workflow, its steps and its runs.",
+    "access.actionUseWorkflowDescription":
+      "Start the Workflow. It then runs with the Workflow's own rights, not with this person's, so it can read and change what the person cannot.",
+    "access.actionWriteWorkflowDescription":
+      "Change the draft of the Workflow. A draft does not run until it is published.",
+    "access.actionPublishWorkflowDescription": "Make a draft the version that runs.",
+    "access.actionPublishWorkflowNote":
+      "Not enough on its own today: publishing a Workflow also needs the superadmin role and the right to manage API access. For anyone else this right changes nothing yet.",
+    "access.scopeWorkflow": "Workflow {name}",
+    "access.scopeInNamespaceWorkflowDescription":
+      "Every Workflow whose name starts with the prefix, future ones included.",
+    "access.scopeOnWorkflow": "On one Workflow",
+    "access.scopeOnWorkflowDescription": "One existing Workflow.",
+    "access.grantWorkflow": "Workflow",
+    "access.chooseWorkflow": "Choose a Workflow",
+    "access.noWorkflows": "This instance has no Workflow yet.",
+    "access.workflowsLoadFailed": "The Workflows could not be loaded.",
+    "access.noAssets": "This instance has none of this kind yet.",
+    "access.grantRightNotOffered":
+      "This right cannot be given in a Namespace or on one asset. Reload the page and choose one of the actions it offers.",
+    "access.grantModuleOff":
+      "The module of this kind is switched off on this instance, so it has no rights to give. Reload the page.",
+    "access.grantMissingManageRight":
+      "Your account lacks the right to manage users, so it cannot give or remove rights.",
+    "access.grantHolderIsSuperadmin":
+      "This person is a superadmin. Only a superadmin can give a superadmin a right or remove one.",
     "access.kindConnection": "Connections",
     "access.kindApp": "Apps",
     "access.kindWorkflow": "Workflows",
@@ -126,7 +154,7 @@ export const access = defineTranslations({
     "access.revokeFailed": "The right could not be revoked.",
     "access.grantDialogTitle": "New right",
     "access.grantDialogDescription":
-      "Gives one person a right in one place: a Namespace, a single agent or skill, or a shared workspace. Rights on the whole instance are set on the Users page.",
+      "Gives one person a right in one place: a Namespace, a single asset, or a shared workspace. Rights on the whole instance are set on the Users page.",
     "access.choosePerson": "Choose a person",
     "access.usersLoadFailed": "The users could not be loaded.",
     "access.grantKind": "Kind",
@@ -153,7 +181,8 @@ export const access = defineTranslations({
     "access.grantUserBeingDeleted": "User account is being deleted",
     "access.grantUnknownHolder": "This user no longer exists.",
     "access.grantUnknownNamespace": "This Namespace is no longer registered.",
-    "access.grantAssetGone": "This asset no longer exists or is of another kind.",
+    "access.grantAssetGone":
+      "This asset no longer exists, or the action cannot be given at this place. Reload the page and choose again.",
     "access.grantPartlyWritten": "{written} of {total} rows were written before this.",
 
     "access.checkDescription":
@@ -339,6 +368,34 @@ export const access = defineTranslations({
     "access.actionUseConnectionDescription":
       "Agenten, die diese Person baut oder ausführt, dürfen das externe System darüber aufrufen.",
     "access.actionUse": "Nutzen",
+    "access.actionPublish": "Veröffentlichen",
+    "access.actionOnWorkflow": "Workflows: {action}",
+    "access.actionReadWorkflowDescription": "Den Workflow, seine Schritte und seine Läufe sehen.",
+    "access.actionUseWorkflowDescription":
+      "Den Workflow starten. Er läuft dann mit den eigenen Rechten des Workflows, nicht mit denen dieser Person, und kann deshalb lesen und ändern, was die Person nicht darf.",
+    "access.actionWriteWorkflowDescription":
+      "Den Entwurf des Workflows ändern. Ein Entwurf läuft erst, wenn er veröffentlicht ist.",
+    "access.actionPublishWorkflowDescription": "Einen Entwurf zu der Version machen, die läuft.",
+    "access.actionPublishWorkflowNote":
+      "Reicht heute allein nicht: Einen Workflow zu veröffentlichen braucht zusätzlich die Superadmin-Rolle und das Recht, den API-Zugriff zu verwalten. Für alle anderen ändert dieses Recht noch nichts.",
+    "access.scopeWorkflow": "Workflow {name}",
+    "access.scopeInNamespaceWorkflowDescription":
+      "Jeder Workflow, dessen Name mit dem Präfix beginnt, auch künftige.",
+    "access.scopeOnWorkflow": "An einem Workflow",
+    "access.scopeOnWorkflowDescription": "Ein vorhandener Workflow.",
+    "access.grantWorkflow": "Workflow",
+    "access.chooseWorkflow": "Workflow wählen",
+    "access.noWorkflows": "Auf dieser Instanz gibt es noch keinen Workflow.",
+    "access.workflowsLoadFailed": "Die Workflows konnten nicht geladen werden.",
+    "access.noAssets": "Auf dieser Instanz gibt es davon noch nichts.",
+    "access.grantRightNotOffered":
+      "Dieses Recht lässt sich nicht in einem Namespace oder an einem einzelnen Asset vergeben. Lade die Seite neu und wähle eine der angebotenen Aktionen.",
+    "access.grantModuleOff":
+      "Das Modul dieser Art ist auf dieser Instanz abgeschaltet und hat deshalb keine Rechte zu vergeben. Lade die Seite neu.",
+    "access.grantMissingManageRight":
+      "Deinem Konto fehlt das Recht, Benutzer zu verwalten. Deshalb kann es keine Rechte vergeben oder entziehen.",
+    "access.grantHolderIsSuperadmin":
+      "Diese Person ist Superadmin. Nur ein Superadmin kann einem Superadmin ein Recht geben oder entziehen.",
     "access.kindConnection": "Verbindungen",
     "access.kindApp": "Apps",
     "access.kindWorkflow": "Workflows",
@@ -366,7 +423,7 @@ export const access = defineTranslations({
     "access.revokeFailed": "Das Recht konnte nicht entzogen werden.",
     "access.grantDialogTitle": "Neues Recht",
     "access.grantDialogDescription":
-      "Gibt einer Person ein Recht an einem Ort: in einem Namespace, an einem einzelnen Agenten oder Skill, oder in einem geteilten Arbeitsbereich. Rechte für die ganze Instanz setzt du auf der Seite Benutzer.",
+      "Gibt einer Person ein Recht an einem Ort: in einem Namespace, an einem einzelnen Asset oder in einem geteilten Arbeitsbereich. Rechte für die ganze Instanz setzt du auf der Seite Benutzer.",
     "access.choosePerson": "Person wählen",
     "access.usersLoadFailed": "Die Benutzer konnten nicht geladen werden.",
     "access.grantKind": "Art",
@@ -393,7 +450,8 @@ export const access = defineTranslations({
     "access.grantUserBeingDeleted": "Das Benutzerkonto wird gerade gelöscht",
     "access.grantUnknownHolder": "Diesen Benutzer gibt es nicht mehr.",
     "access.grantUnknownNamespace": "Dieser Namespace ist nicht mehr registriert.",
-    "access.grantAssetGone": "Dieses Asset gibt es nicht mehr oder es ist von anderer Art.",
+    "access.grantAssetGone":
+      "Dieses Asset gibt es nicht mehr, oder die Aktion lässt sich an diesem Ort nicht vergeben. Lade die Seite neu und wähle erneut.",
     "access.grantPartlyWritten": "Davor wurden {written} von {total} Zeilen geschrieben.",
 
     "access.checkDescription":

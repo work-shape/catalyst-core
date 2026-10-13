@@ -34,53 +34,119 @@ function checkedVerbs(actions: CheckedKind["actions"]): { verb: AccessVerb; acti
   });
 }
 
-/** The asset kinds a grant of this page names. A Connection is offered while its module is on. */
-export const GRANT_KINDS = ["agent", "skill", "connection"] as const;
-export type GrantKind = (typeof GRANT_KINDS)[number];
+/**
+ * The asset kinds a grant of this page names and what it allows or denies on them: the two
+ * halves of every action core writes a grant row for. A kind or a verb core adds is offered
+ * here without a list of this page's own; the page then owes it its words, which the label
+ * tables of the Rights tab are typed to ask for.
+ */
+export type GrantKind = GrantableAction extends `${infer Kind}.${string}` ? Kind : never;
+export type GrantVerb = GrantableAction extends `${string}.${infer Verb}` ? Verb : never;
 
-/** What a grant allows or denies, in the order the page lists it. */
-const GRANT_VERBS = ["read", "use", "write", "delete"] as const;
-export type GrantVerb = (typeof GRANT_VERBS)[number];
+/**
+ * The order the page lists the verbs in: from seeing to changing to removing. It is the one
+ * thing about a verb core does not say.
+ */
+const GRANT_VERB_RANK: Record<GrantVerb, number> = {
+  read: 0,
+  use: 1,
+  write: 2,
+  publish: 3,
+  delete: 4
+};
+
+function isGrantKind(kind: string): kind is GrantKind {
+  return GRANTABLE_ACTIONS.some((action) => action.startsWith(`${kind}.`));
+}
+
+function isGrantVerb(verb: string): verb is GrantVerb {
+  return Object.hasOwn(GRANT_VERB_RANK, verb);
+}
+
+/** One right a grant row can be written for: its action, and the kind and verb it is made of. */
+interface GrantRight {
+  action: GrantableAction;
+  kind: GrantKind;
+  verb: GrantVerb;
+}
+
+/** Every right core writes a grant row for, the kinds in core's order and each kind's verbs in the page's. */
+const GRANT_RIGHTS: readonly GrantRight[] = GRANTABLE_ACTIONS.flatMap((action) => {
+  const dot = action.indexOf(".");
+  const kind = action.slice(0, dot);
+  const verb = action.slice(dot + 1);
+  return isGrantKind(kind) && isGrantVerb(verb) ? [{ action, kind, verb }] : [];
+});
+
+/** The kinds a grant can name, in core's order. The dialog offers those the instance has. */
+export const GRANT_KINDS: readonly GrantKind[] = [
+  ...new Set(GRANT_RIGHTS.map((right) => right.kind))
+];
 
 /** Where a grant row applies, in the order the dialog offers the places. */
 const GRANT_SCOPE_KINDS = ["namespace", "asset", "workspace"] as const;
 export type GrantScopeKind = (typeof GRANT_SCOPE_KINDS)[number];
 
+/** The rights of one kind, in the order the page lists them. */
+function grantRights(kind: GrantKind): GrantRight[] {
+  return GRANT_RIGHTS.filter((right) => right.kind === kind).sort(
+    (left, right) => GRANT_VERB_RANK[left.verb] - GRANT_VERB_RANK[right.verb]
+  );
+}
+
 /** The action of a kind and a verb, where a grant row can be written for it. */
-function grantAction(kind: GrantKind, verb: GrantVerb): GrantableAction | undefined {
-  const name = `${kind}.${verb}`;
-  return GRANTABLE_ACTIONS.find((action) => action === name);
+export function grantAction(kind: GrantKind, verb: GrantVerb): GrantableAction | undefined {
+  return GRANT_RIGHTS.find((right) => right.kind === kind && right.verb === verb)?.action;
 }
 
 /** The verbs a grant of the kind can name: what the server writes a row for. */
 export function grantVerbs(kind: GrantKind): GrantVerb[] {
-  return GRANT_VERBS.filter((verb) => grantAction(kind, verb) !== undefined);
+  return grantRights(kind).map((right) => right.verb);
 }
 
-/** The places a grant of the kind can be written at. Every action of a kind has the same. */
+/**
+ * The places a grant of the kind can be written at: those every action of the kind has, so
+ * the dialog offers no place one of the ticked actions would be refused at.
+ */
 export function grantScopeKinds(kind: GrantKind): GrantScopeKind[] {
-  const action = grantVerbs(kind)
-    .map((verb) => grantAction(kind, verb))
-    .find((candidate) => candidate !== undefined);
-  if (action === undefined) {
-    return [];
-  }
-  const scopes: readonly string[] = GRANTABLE_ACTION_SCOPES[action];
-  return GRANT_SCOPE_KINDS.filter((scopeKind) => scopes.includes(scopeKind));
+  const scopes = grantRights(kind).map(
+    (right): readonly string[] => GRANTABLE_ACTION_SCOPES[right.action]
+  );
+  return scopes.length === 0
+    ? []
+    : GRANT_SCOPE_KINDS.filter((scopeKind) => scopes.every((of) => of.includes(scopeKind)));
+}
+
+/** Whether a grant of any of the kinds can be written on what a Shared Workspace owns. */
+export function grantsNameWorkspaces(kinds: readonly GrantKind[]): boolean {
+  return kinds.some((kind) => grantScopeKinds(kind).includes("workspace"));
 }
 
 /** The kind and verb of an action this page writes; nothing for any other action. */
 export function splitGrantableAction(
   action: string
 ): { kind: GrantKind; verb: GrantVerb } | undefined {
-  for (const kind of GRANT_KINDS) {
-    for (const verb of GRANT_VERBS) {
-      if (grantAction(kind, verb) === action) {
-        return { kind, verb };
-      }
-    }
-  }
-  return undefined;
+  const right = GRANT_RIGHTS.find((candidate) => candidate.action === action);
+  return right && { kind: right.kind, verb: right.verb };
+}
+
+/** Where a right stands among all of them: the kinds in order, each kind's verbs in order. */
+function grantRightPosition(action: string): number {
+  const parts = splitGrantableAction(action);
+  return parts
+    ? GRANT_KINDS.indexOf(parts.kind) * GRANT_RIGHTS.length + GRANT_VERB_RANK[parts.verb]
+    : GRANT_KINDS.length * GRANT_RIGHTS.length;
+}
+
+/**
+ * The kinds beyond agents and skills a grant can name on an instance: each one core writes a
+ * grant row for that the instance registers, which it does while the kind's module is on.
+ * Agents and skills are on every instance and come with the agent configuration.
+ */
+export function furtherGrantKinds(registered: readonly string[] | undefined): GrantKind[] {
+  return GRANT_KINDS.filter(
+    (kind) => kind !== "agent" && kind !== "skill" && (registered?.includes(kind) ?? false)
+  );
 }
 
 /** Why a prefix cannot be registered, as far as the page can tell before it asks the server. */
@@ -266,9 +332,9 @@ export function grantRequests(form: GrantForm): CreatePermissionGrantRequest[] |
           ? undefined
           : { scopeKind: "asset" as const, scopeId: form.assetId };
   const holderId = form.holderId;
-  const actions = grantVerbs(form.kind)
-    .filter((verb) => form.verbs.includes(verb))
-    .flatMap((verb) => grantAction(form.kind, verb) ?? []);
+  const actions = grantRights(form.kind)
+    .filter((right) => form.verbs.includes(right.verb))
+    .map((right) => right.action);
   if (holderId === undefined || scope === undefined || actions.length === 0) {
     return undefined;
   }
@@ -332,12 +398,7 @@ export function groupGrants(
   }
   const place = ({ scope }: GrantGroup) =>
     `${scope.scopeKind} ${scope.namespace ?? scope.scopeAsset?.name ?? scope.scopeId ?? ""}`;
-  const position = (grant: PermissionGrantRow) => {
-    const parts = splitGrantableAction(grant.action);
-    return parts
-      ? GRANT_KINDS.indexOf(parts.kind) * GRANT_VERBS.length + GRANT_VERBS.indexOf(parts.verb)
-      : GRANT_KINDS.length * GRANT_VERBS.length;
-  };
+  const position = (grant: PermissionGrantRow) => grantRightPosition(grant.action);
   return [...groups.values()]
     .map((group) => ({
       ...group,
@@ -384,6 +445,10 @@ export type AccessWriteFailure =
   | "unknownHolder"
   | "unknownNamespace"
   | "assetGone"
+  | "rightNotOffered"
+  | "moduleOff"
+  | "missingManageRight"
+  | "holderIsSuperadmin"
   | "namespaceOverlap"
   | "namespaceInUse"
   | "unknownListEntry"
@@ -401,6 +466,11 @@ export function accessWriteFailure(error: unknown): AccessWriteFailure {
       return "unknownNamespace";
     case "invalid_scope":
       return "assetGone";
+    case "unknown_action":
+    case "action_not_grantable":
+      return "rightNotOffered";
+    case "module_off":
+      return "moduleOff";
     case "namespace_overlap":
       return "namespaceOverlap";
     case "namespace_in_use":
@@ -417,6 +487,15 @@ export function accessWriteFailure(error: unknown): AccessWriteFailure {
   // A grant for a user whose deletion was requested is the one conflict without a reason.
   if (error.code === "CONFLICT") {
     return "userBeingDeleted";
+  }
+  if (error.status === 403) {
+    // The caller lacks the right to manage users, or holds it and the row is a superadmin's:
+    // that refusal names the operation, because no right a caller can be given opens it.
+    const action = refusalDetail(error, "action");
+    if (action === "users.manage") {
+      return "missingManageRight";
+    }
+    return action?.startsWith("permissions.") ? "holderIsSuperadmin" : "other";
   }
   return error.code === "NOT_FOUND" ? "notFound" : "other";
 }

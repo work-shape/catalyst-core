@@ -1,5 +1,6 @@
 export { CheckTab } from "./check-tab";
-export { GrantsTab, assetKindLabelKey } from "./grants-tab";
+export { assetKindLabelKey } from "./grant-words";
+export { GrantsTab } from "./grants-tab";
 export { NamespacesTab } from "./namespaces-tab";
 export {
   accessWriteFailure,
@@ -8,6 +9,8 @@ export {
   checkedAssetId,
   checkState,
   emptyGrantForm,
+  furtherGrantKinds,
+  GRANT_KINDS,
   grantRequests,
   grantScopeKinds,
   grantVerbs,
@@ -15,6 +18,7 @@ export {
   namespaceLockedLists,
   namespacePrefixProblem,
   namespaceRequest,
+  splitGrantableAction,
   withGrantKind
 } from "./access-model";
 export { PrincipalRights, type PrincipalRightsProps } from "./principal-rights";

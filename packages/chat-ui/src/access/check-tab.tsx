@@ -39,7 +39,7 @@ import {
   type CheckedKind,
   type LoadFailure
 } from "./access-model";
-import { assetKindLabelKey, verbLabelKeys } from "./grants-tab";
+import { assetKindLabelKey, verbLabelKeys } from "./grant-words";
 
 /** From this many entries on, a picker of the check shows its search field. */
 const PICKER_SEARCH_FROM_COUNT = 8;
