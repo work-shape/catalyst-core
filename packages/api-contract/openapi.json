@@ -22572,6 +22572,23 @@
               "allowedScriptSrc"
             ]
           },
+          "replies": {
+            "default": {
+              "allowedLinkHosts": []
+            },
+            "type": "object",
+            "properties": {
+              "allowedLinkHosts": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "allowedLinkHosts"
+            ]
+          },
           "modules": {
             "default": {},
             "type": "object",
@@ -22939,6 +22956,7 @@
           "retention",
           "usage",
           "views",
+          "replies",
           "modules",
           "features",
           "agents",

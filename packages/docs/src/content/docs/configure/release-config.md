@@ -232,6 +232,19 @@ still sets either is refused at startup with one message naming every such key; 
 An agent with `web_search` also needs a customer price for web search calls of its provider
 under `usage.costs.customer.webSearch`.
 
+## Links And Images In Replies
+
+A reply in the chat and a Markdown file in the preview load nothing from another address. An image, whether written in Markdown or as HTML, remote, relative or a `data:` address, is never loaded; its description is shown in its place. A link stays a link when it points to the instance itself, is a `#fragment` or a `mailto:` address. `replies.allowedLinkHosts` names the other hosts links may point to:
+
+```yaml
+replies:
+  allowedLinkHosts:
+    - example.com
+    - "*.example.com"
+```
+
+An entry is a host name, or `*.` and a domain for every subdomain of it but not the domain itself. A link to any other host is shown as text followed by its address, so a person can still read and copy it. The default is an empty list. The setting applies when a reply is shown, so it also governs replies written before a change.
+
 ## Generated Views
 
 A view an agent shows with `show_view` loads Tailwind CSS and Lucide from the instance and no script from any other host. `views.allowedScriptSrc` names the hosts views may load scripts from besides the instance, as HTTPS origins or paths:
