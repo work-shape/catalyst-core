@@ -73,6 +73,61 @@ describe("the Connections an agent list names", () => {
     expect(safeConfigSchema.safeParse(safe).success).toBe(true);
   });
 
+  // The bound of what a person offered an agent learns of its Connections: the name people
+  // read and what picks the tile, with the agent's own tools of it. Nothing else of the
+  // Connection travels, whatever the caller hands in.
+  it("tells the title and the tile of a Connection and nothing else of it", () => {
+    const stored = {
+      ...connections[0],
+      name: "books",
+      title: "Books",
+      tools: [
+        {
+          toolName: "connection.books.list_invoices",
+          effect: "reading" as const,
+          description: "Lists invoices.",
+          inputSchema: { type: "object" }
+        }
+      ],
+      description: "The ledger of the house.",
+      settings: { url: "https://ledger.example.test/mcp" },
+      secretHandle: "secret-handle-1",
+      authScheme: "bearer",
+      origin: "release",
+      enabled: true
+    };
+    const safe = view(["connection.books.list_invoices"], [stored]);
+    const told = safe.agents[0]?.connections ?? [];
+
+    expect(told.map((connection) => Object.keys(connection).sort())).toEqual([
+      ["connectorType", "name", "service", "title", "tools"]
+    ]);
+    expect(told[0]?.tools.map((tool) => Object.keys(tool).sort())).toEqual([
+      ["effect", "toolName"]
+    ]);
+    for (const hidden of [
+      "ledger of the house",
+      "example.test",
+      "secret-handle-1",
+      "bearer",
+      "Lists invoices",
+      "inputSchema"
+    ]) {
+      expect(JSON.stringify(safe)).not.toContain(hidden);
+    }
+    // The contract holds the same bound: it names these fields and no other.
+    const agentShape = safeConfigSchema.shape.agents.element.shape;
+    const connectionShape = agentShape.connections.unwrap().element.shape;
+    expect(Object.keys(connectionShape).sort()).toEqual([
+      "connectorType",
+      "name",
+      "service",
+      "title",
+      "tools"
+    ]);
+    expect(Object.keys(connectionShape.tools.element.shape).sort()).toEqual(["effect", "toolName"]);
+  });
+
   it("names none for an agent that holds no tool of a Connection, and none unasked", () => {
     expect(view(["workspace.read_file"], connections).agents[0]?.connections).toEqual([]);
     expect(view(["connection.books.list_invoices"]).agents[0]?.connections).toEqual([]);
