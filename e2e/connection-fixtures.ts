@@ -102,3 +102,18 @@ export async function plantConnection(connection: PlantedConnection): Promise<vo
 export async function removeConnection(assetId: string): Promise<void> {
   await withSql((sql) => sql`delete from config_assets where id = ${assetId}`);
 }
+
+/** Removes a service principal a spec created, with the rows it holds. */
+export async function removeServicePrincipal(principalId: string): Promise<void> {
+  await withSql(async (sql) => {
+    await sql`delete from permission_grants where holder_kind = 'service_principal' and holder_id = ${principalId}`;
+    await sql`delete from service_principals where id = ${principalId}`;
+  });
+}
+
+/** Removes the rows that name one asset, such as the rights a spec gave on a Connection. */
+export async function removeGrantsOn(assetId: string): Promise<void> {
+  await withSql(
+    (sql) => sql`delete from permission_grants where scope_kind = 'asset' and scope_id = ${assetId}`
+  );
+}

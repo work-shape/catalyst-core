@@ -17,3 +17,15 @@ export {
   namespaceRequest,
   withGrantKind
 } from "./access-model";
+export { PrincipalRights, type PrincipalRightsProps } from "./principal-rights";
+export {
+  grantableResources,
+  principalGrantFailure,
+  PrincipalGrantHeldError,
+  principalGrantKinds,
+  principalGrantRequest,
+  principalGrantViews,
+  principalHref,
+  principalOfSearch,
+  resourceHolders
+} from "./principal-grants-model";

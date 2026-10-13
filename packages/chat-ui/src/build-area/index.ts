@@ -17,6 +17,7 @@ export { BuildFrame } from "./build-frame";
 export { ConnectionPage } from "./connection-page";
 export type {
   ConnectionDetailRead,
+  ConnectionHoldersRead,
   ConnectionSource,
   ConnectionTestRun
 } from "./connection-source";

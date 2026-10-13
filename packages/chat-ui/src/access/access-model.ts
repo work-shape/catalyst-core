@@ -373,7 +373,7 @@ function readField(value: unknown, field: string): unknown {
 }
 
 /** The `details.reason` the server names in a refusal. */
-function refusalReason(error: unknown): string | undefined {
+export function refusalReason(error: unknown): string | undefined {
   return refusalDetail(error, "reason");
 }
 

@@ -1,6 +1,7 @@
-import { Bot } from "lucide-react";
+import { Bot, KeyRound } from "lucide-react";
 import type { ReactNode } from "react";
 import {
+  Avatar,
   Badge,
   Banner,
   Button,
@@ -30,7 +31,11 @@ import { agentKind } from "./agent-kind";
 import { AssetIdentifier, usePageShown } from "./asset-editor-shell";
 import type { BuildAssetViewProps } from "./build-asset-kind";
 import { useBuildNavigation } from "./build-route";
-import type { ConnectionSource, ConnectionTestRun } from "./connection-source";
+import type {
+  ConnectionHoldersRead,
+  ConnectionSource,
+  ConnectionTestRun
+} from "./connection-source";
 
 /** What the Status section says of a Connection: one word and one sentence each. */
 type HealthView =
@@ -219,6 +224,7 @@ export function ConnectionPage({
   const { t } = useTranslation();
   usePageShown(page, "asset");
   const read = source.useDetail(asset.name);
+  const holders = source.useHolders(asset.id);
   const detail = read.status === "ready" ? read.detail : undefined;
   const { config } = asset;
   const title = textOf(config, "displayName") ?? asset.name;
@@ -311,6 +317,18 @@ export function ConnectionPage({
             description: t("connections.agentsDescription"),
             count: detail?.usedBy.length,
             body: detail ? <ConnectionAgents usedBy={detail.usedBy} /> : <SkeletonList rows={2} />
+          }
+        ]),
+    // Who was given this Connection is shown to who is shown rights at all.
+    ...(holders.status === "hidden"
+      ? []
+      : [
+          {
+            id: "access",
+            label: t("connections.accessTitle"),
+            description: t("connections.accessDescription"),
+            count: holders.status === "ready" ? holders.holders.length : undefined,
+            body: <ConnectionHolders read={holders} principalHref={source.principalHref} />
           }
         ])
   ];
@@ -549,6 +567,80 @@ function ConnectionOperations({ operations }: { operations: ConnectionOperationD
               </p>
             ) : null}
           </li>
+        );
+      })}
+    </List>
+  );
+}
+
+/**
+ * The people and the service principals that were given this Connection by itself. A person is
+ * a round avatar with an address; a service principal is a square one with a key, says what it
+ * is in words, and opens its own page.
+ */
+function ConnectionHolders({
+  read,
+  principalHref
+}: {
+  read: Exclude<ConnectionHoldersRead, { status: "hidden" }>;
+  principalHref(principalId: string): string;
+}) {
+  const { t } = useTranslation();
+  if (read.status === "loading") {
+    return <SkeletonList rows={2} />;
+  }
+  if (read.status === "failed") {
+    return (
+      <InlineError className="flex flex-wrap items-center justify-between gap-2">
+        <span>{t("connections.accessFailed")}</span>
+        <Button variant="outline" size="sm" onClick={read.retry}>
+          {t("tryAgain")}
+        </Button>
+      </InlineError>
+    );
+  }
+  if (read.holders.length === 0) {
+    return <EmptyState layout="inline">{t("connections.accessEmpty")}</EmptyState>;
+  }
+  return (
+    <List aria-label={t("connections.accessTitle")}>
+      {read.holders.map((holder) => {
+        if (holder.kind === "person") {
+          const name = holder.name ?? t("connections.accessUnknownPerson");
+          return (
+            <ListRow
+              key={holder.grantId}
+              data-holder-kind="person"
+              leading={<Avatar kind="person" size="sm" name={name} />}
+              title={name}
+              description={holder.detail}
+            />
+          );
+        }
+        const name = holder.name ?? t("connections.accessUnknownPrincipal");
+        return (
+          <ListRow
+            key={holder.grantId}
+            data-holder-kind="service_principal"
+            leading={
+              <Avatar kind="service" size="sm" name={name} icon={<KeyRound aria-hidden="true" />} />
+            }
+            title={name}
+            chips={
+              <>
+                <Chip size="sm">{t("connections.accessServicePrincipal")}</Chip>
+                {holder.disabled ? (
+                  <Badge tone="neutral" size="sm">
+                    {t("connections.accessPrincipalDisabled")}
+                  </Badge>
+                ) : null}
+              </>
+            }
+            description={
+              holder.detail ? <code className="font-mono">{holder.detail}</code> : undefined
+            }
+            link={holder.name === undefined ? undefined : <a href={principalHref(holder.id)} />}
+          />
         );
       })}
     </List>
