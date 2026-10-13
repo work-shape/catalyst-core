@@ -32,6 +32,7 @@ export const GUARDRAIL_EVENTS = [
   "operation.before_call",
   "app.before_publish",
   "workflow.before_publish",
+  "data_store.before_publish",
   "approval_request.before_create"
 ] as const;
 export type GuardrailEvent = (typeof GUARDRAIL_EVENTS)[number];
@@ -50,6 +51,7 @@ export const GUARDRAIL_CHECKABLE_FIELDS = {
   "operation.before_call": ["input"],
   "app.before_publish": ["name", "content"],
   "workflow.before_publish": ["name", "content"],
+  "data_store.before_publish": ["name", "content"],
   "approval_request.before_create": ["summary", "newContent"]
 } as const satisfies Record<GuardrailEvent, readonly string[]>;
 
@@ -63,6 +65,7 @@ export const GUARDRAIL_FILTER_KEYS = {
   "operation.before_call": ["operation", "origin", "agent"],
   "app.before_publish": ["origin", "agent"],
   "workflow.before_publish": ["origin", "agent"],
+  "data_store.before_publish": ["origin", "agent"],
   "approval_request.before_create": ["kind"]
 } as const satisfies Record<GuardrailEvent, readonly (keyof GuardrailFilter)[]>;
 
@@ -87,14 +90,15 @@ export type GuardrailOutcome = (typeof GUARDRAIL_OUTCOMES)[number];
 
 /**
  * The events where something can wait for an approval: a call of an operation, which an
- * asset write, an App's publish and a Workflow's publish are too. A request for an approval
+ * asset write and the publish of an App, a Workflow or a Data Store are too. A request for an approval
  * cannot wait for another.
  */
 export const GUARDRAIL_APPROVAL_EVENTS = [
   "asset.before_write",
   "operation.before_call",
   "app.before_publish",
-  "workflow.before_publish"
+  "workflow.before_publish",
+  "data_store.before_publish"
 ] as const satisfies readonly GuardrailEvent[];
 
 /**
@@ -159,8 +163,9 @@ export interface OperationBeforeEvent {
 }
 
 /**
- * The fields of a before-event by the names it declares checkable. `null` is a field too large
- * to be read: a guardrail that stops or holds answers on it as on a match.
+ * The fields of a before-event by the names it declares checkable. `null` is a field that
+ * cannot be read, as it is too large or holds a file that is no text, such as an image: a
+ * guardrail that stops or holds answers on it as on a match, one that warns warns.
  */
 export type GuardrailFields = Partial<Record<string, string | null>>;
 

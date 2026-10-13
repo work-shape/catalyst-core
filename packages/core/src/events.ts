@@ -260,6 +260,15 @@ export const EVENTS = {
     name: "conversation.title_generation_failed",
     subject: "conversation"
   },
+  // Guardrails answer here before a Data Store's revision goes live, which applies its
+  // migrations. The subject is the store.
+  "data_store.before_publish": {
+    name: "data_store.before_publish",
+    subject: "config_asset",
+    legacy: false,
+    audited: false,
+    phases: ["before"]
+  },
   "data_store.migrated": {
     ...LEGACY_AUDIT,
     name: "data_store.migrated",

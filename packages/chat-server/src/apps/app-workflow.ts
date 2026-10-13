@@ -14,11 +14,13 @@ import {
   type ConfigAssetRecord,
   type FileSet,
   type OperationAuthorization,
+  type OperationBeforeEvent,
   type Page
 } from "@vivd-catalyst/core";
 import { accessResource, decide, type AssetCall } from "../asset-access";
 import { APP_CONTENT_TOKEN_TTL_SECONDS, appContentPath, mintAppContentToken } from "../app-content";
 import type { WorkflowAssetKind } from "../asset-kinds/shared";
+import { fileSetWriteEvent } from "../asset-guardrail-events";
 import { recordAssetEvent } from "../asset-target";
 import { requireAssetKindModuleOn } from "../asset-write-rules";
 import type { PageRevisionOrigin } from "../asset-draft-workflow";
@@ -67,21 +69,93 @@ export class AppWorkflow {
     this.conversations = new ConversationWorkflow(options);
   }
 
-  /** The write right on the workspace the App is to belong to. */
-  authorizeCreate(access: ActorAccess, input: CreateAppFromPageInput): OperationAuthorization {
-    return decide(access, APP_ACTIONS.write, {
+  /**
+   * The write right on the workspace the App is to belong to, and the Page read by the caller.
+   * The Page is asked here, before the guardrails read it: they never read one the caller
+   * cannot.
+   */
+  async authorizeCreate(
+    actor: AssetCall["actor"],
+    access: ActorAccess,
+    input: CreateAppFromPageInput
+  ): Promise<OperationAuthorization> {
+    const decision = decide(access, APP_ACTIONS.write, {
       kind: APP_ASSET_KIND,
       name: input.name,
       workspaceId: input.workspaceId
     });
+    if (decision.allowed) await this.requireReadablePage(actor, input);
+    return decision;
   }
 
-  /** The write right on the App, as a write of its draft with `assets.put` asks it. */
-  authorizeUpdate(
+  /**
+   * The write right on the App, as a write of its draft with `assets.put` asks it, and the Page
+   * read by the caller, as for a new App.
+   */
+  async authorizeUpdate(
+    actor: AssetCall["actor"],
     access: ActorAccess,
     input: UpdateAppFromPageInput
   ): Promise<OperationAuthorization> {
-    return this.assets.authorizeWrite(access, appAddress(input.app, input.workspaceId));
+    const decision = await this.assets.authorizeWrite(
+      access,
+      appAddress(input.app, input.workspaceId)
+    );
+    if (decision.allowed) await this.requireReadablePage(actor, input);
+    return decision;
+  }
+
+  /**
+   * `asset.before_write` of the App a Page is saved as or written into: its definition and the
+   * files of the Page's newest revision, as the write copies them. Asked after `authorize`, so
+   * the caller reads the Page.
+   */
+  writeEventFromPage(input: {
+    app: string;
+    title?: string;
+    conversationId: string;
+    pageId: string;
+  }): OperationBeforeEvent {
+    return fileSetWriteEvent(this.options, {
+      kind: APP_ASSET_KIND,
+      name: input.app,
+      read: async () => {
+        const page = isPageId(input.pageId)
+          ? await this.options.stores.pages.getPage({
+              clientInstanceId: this.options.clientInstanceId,
+              conversationId: asConversationId(input.conversationId),
+              pageId: input.pageId
+            })
+          : undefined;
+        const fileSet =
+          page &&
+          (await this.options.stores.pages.getPageFileSet({
+            clientInstanceId: this.options.clientInstanceId,
+            pageId: page.id
+          }));
+        if (!fileSet) return undefined;
+        const title = input.title ?? (await this.currentTitle(input.app));
+        return {
+          fileSet,
+          config: appConfigOf({
+            name: input.app,
+            manifest: fileSet.manifest,
+            ...(title === undefined ? {} : { title })
+          })
+        };
+      }
+    });
+  }
+
+  /** The title an App keeps when it is written from a Page again. */
+  private async currentTitle(name: string): Promise<string | undefined> {
+    const asset = await this.options.configAssets.store.getConfigAsset({
+      clientInstanceId: this.options.clientInstanceId,
+      kind: APP_ASSET_KIND,
+      name
+    });
+    const title = asset?.config?.title;
+    return typeof title === "string" ? title : undefined;
   }
 
   /**
@@ -247,10 +321,7 @@ export class AppWorkflow {
     actor: AssetCall["actor"],
     input: { conversationId: string; pageId: string }
   ): Promise<{ source: FileSet; origin: PageRevisionOrigin }> {
-    if (isAuthenticatedServicePrincipal(actor)) {
-      throw new AppError("FORBIDDEN", "A Page is read by a person");
-    }
-    const page = await this.requirePage(actor, input);
+    const page = await this.requireReadablePage(actor, input);
     const source = await this.options.stores.pages.getPageFileSet({
       clientInstanceId: this.options.clientInstanceId,
       pageId: page.id
@@ -267,6 +338,17 @@ export class AppWorkflow {
         fileSetNumber: source.number
       }
     };
+  }
+
+  /** The Page of a conversation the caller may read. A service principal reads none. */
+  private requireReadablePage(
+    actor: AssetCall["actor"],
+    input: { conversationId: string; pageId: string }
+  ): Promise<Page> {
+    if (isAuthenticatedServicePrincipal(actor)) {
+      throw new AppError("FORBIDDEN", "A Page is read by a person");
+    }
+    return this.requirePage(actor, input);
   }
 
   /** The Page of a conversation the caller may read. */

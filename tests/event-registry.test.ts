@@ -383,6 +383,7 @@ describe("event registry", () => {
       ["app.before_publish", false, "before"],
       ["approval_request.before_create", false, "before"],
       ["asset.before_write", false, "before"],
+      ["data_store.before_publish", false, "before"],
       ["operation.authorization_checked", true, "after"],
       ["operation.before_call", false, "before"],
       ["operation.completed", true, "after"],

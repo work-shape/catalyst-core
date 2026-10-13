@@ -74,7 +74,8 @@ export interface GuardrailCallContext {
   signal?: AbortSignal;
   /**
    * Set where the event is asked again for the same action, as before a call that waited for
-   * an approval is executed: its hits were kept when it was first asked.
+   * an approval is executed: its hits were kept when it was first asked, and only a block,
+   * which is new, is kept again.
    */
   repeated?: boolean;
 }
@@ -151,10 +152,15 @@ export class GuardrailRunner {
       for (const answer of judged) results.set(answer.guardrailName, answer);
     }
     const answers = bound.flatMap((entry) => results.get(entry.name) ?? []);
-    if (!context.repeated) {
+    // Asked again, the hits of the first ask are kept already. A block is new: a block then
+    // would have refused the action, so it never waited to be asked again.
+    const recorded = context.repeated
+      ? answers.filter((answer) => answer.outcome === "block")
+      : answers;
+    if (recorded.length > 0) {
       await this.options.hits.recordHits({
         clientInstanceId: this.options.clientInstanceId,
-        hits: answers.flatMap((answer) => {
+        hits: recorded.flatMap((answer) => {
           const outcome = hitOutcome(answer.outcome);
           return outcome
             ? [
@@ -223,8 +229,8 @@ export class GuardrailRunner {
     if (check.kind !== "model_judge") {
       throw new Error(`Guardrail '${name}' is no model judge`);
     }
-    if (content.some(([, text]) => text === null)) {
-      return unchecked(entry, tooLargeMessage(GUARDRAIL_CHECKED_FIELD_MAX_CHARS));
+    for (const read of content) {
+      if (read[1] === null) return unchecked(entry, read[2]);
     }
     // The check's own limit, unless the caller's deadline comes first.
     const ownDeadline = new Date(Date.now() + GUARDRAIL_CHECK_TIMEOUT_MS);
@@ -315,18 +321,21 @@ function checked(fields: GuardrailFields, event: GuardrailEvent, { guardrail }: 
   return names.flatMap((name) => {
     const value = fields[name];
     if (value === undefined) return [];
+    if (value === null) return [[name, null, UNREADABLE_CAUSE] as const];
     // A field longer than a check reads is not read in part.
     return [
-      [
-        name,
-        value === null || value.length > GUARDRAIL_CHECKED_FIELD_MAX_CHARS ? null : value
-      ] as const
+      value.length > GUARDRAIL_CHECKED_FIELD_MAX_CHARS
+        ? ([name, null, tooLargeMessage(GUARDRAIL_CHECKED_FIELD_MAX_CHARS)] as const)
+        : ([name, value] as const)
     ];
   });
 }
 
-/** A field a check reads, `null` where it is too large to be read. */
-type Checked = readonly [string, string | null];
+/** A field a check reads, `null` with the cause where it cannot be read. */
+type Checked = readonly [string, string] | readonly [string, null, string];
+
+/** Why a field its event could not hand over is not read: too large, or a file that is no text. */
+const UNREADABLE_CAUSE = "could not read content that is too large or is no text";
 
 /** The answer of a guardrail on content it could not read or judge. */
 function unchecked(entry: Bound, cause: string): GuardrailAnswer {
@@ -346,9 +355,13 @@ function matchPattern(
 ): GuardrailAnswer | undefined {
   const { guardrail } = entry;
   if (content.length === 0 || guardrail.check.kind !== "pattern") return undefined;
-  for (const [field, text] of content) {
+  for (const read of content) {
+    if (read[1] === null) {
+      return unchecked(entry, read[2]);
+    }
+    const [field, text] = read;
     // A pattern reads less of a field the larger its program is, so no check holds the server.
-    if (text === null || text.length > pattern.maxChars) {
+    if (text.length > pattern.maxChars) {
       return unchecked(entry, tooLargeMessage(pattern.maxChars));
     }
     if (pattern.test(text)) {

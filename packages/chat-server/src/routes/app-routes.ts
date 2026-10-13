@@ -20,7 +20,7 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
   const actionList = new AppActionList(options);
 
   route.operation(apiOperations["apps.create_from_page"], {
-    authorize: (input, { access }) => workflow.authorizeCreate(access, input),
+    authorize: (input, { actor, access }) => workflow.authorizeCreate(actor, access, input),
     resource: (input) => ({
       kind: APP_ASSET_KIND,
       id: input.name,
@@ -29,6 +29,7 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
     }),
     changeClass: "reversible",
     module: APPS_MODULE,
+    beforeEvents: (input) => [workflow.writeEventFromPage({ ...input, app: input.name })],
     execute: (input, context) => workflow.createFromPage(context, input)
   });
 
@@ -43,7 +44,7 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
   });
 
   route.operation(apiOperations["apps.update_from_page"], {
-    authorize: (input, { access }) => workflow.authorizeUpdate(access, input),
+    authorize: (input, { actor, access }) => workflow.authorizeUpdate(actor, access, input),
     resource: (input) => ({
       kind: APP_ASSET_KIND,
       id: input.app,
@@ -52,6 +53,7 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
     }),
     changeClass: "reversible",
     module: APPS_MODULE,
+    beforeEvents: (input) => [workflow.writeEventFromPage(input)],
     execute: (input, context) => workflow.updateFromPage(context, input)
   });
 
