@@ -32,6 +32,7 @@ import {
   type CreateMessageInput,
   type ExpireConversationResult,
   type MoveConversationInput,
+  type SetConversationSubjectInput,
   type UserId,
   createPlatformId
 } from "@vivd-catalyst/core";
@@ -443,6 +444,24 @@ export async function updateConversationTitle(
     throw new AppError("NOT_FOUND", "Conversation is not available");
   }
   return mapConversation(row);
+}
+
+export async function setConversationSubject(
+  db: PostgresConnection,
+  input: SetConversationSubjectInput
+): Promise<Conversation | undefined> {
+  const [row] = await db
+    .update(conversations)
+    .set({ subjectKind: input.subject.kind, subjectName: input.subject.name })
+    .where(
+      and(
+        eq(conversations.clientInstanceId, input.clientInstanceId),
+        eq(conversations.id, input.conversationId),
+        eq(conversations.status, "active")
+      )
+    )
+    .returning();
+  return row ? mapConversation(row) : undefined;
 }
 
 /** Called inside the approval transaction; the public hook reuses this idempotently. */

@@ -117,7 +117,7 @@ export const areaRoutes: readonly AreaRoute[] = [
     area: "apps",
     paths: [
       { path: "/w/$collaborationWorkspaceId/apps", route: "apps" },
-      // The draft's address stands before the App's own routes: `edit` is never one of those.
+      // The draft's address stands outside the App's own: every path below an App is its.
       { path: appPattern("draft"), route: "app-edit" },
       { path: appPattern("published"), route: "app" },
       { path: `${appPattern("published")}/$`, route: "app" }
@@ -257,11 +257,11 @@ function pathWith(pattern: string, params: Record<string, string>): string {
 
 /**
  * The App's own route as the address carries it: without its first slash. Nothing for the
- * route an App starts on, and nothing for `/edit`, which the address of the draft has taken.
+ * route an App starts on.
  */
 function appSplat(appPath: string | undefined): string | undefined {
   const splat = appPath?.replace(/^\/+/u, "") ?? "";
-  return splat === "" || splat === "edit" ? undefined : splat;
+  return splat === "" ? undefined : splat;
 }
 
 function routeOf(

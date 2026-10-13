@@ -1,7 +1,13 @@
 import { createElement, type ReactNode } from "react";
+import { AppEditSurface, AppEditSurfaceActions } from "../apps/app-edit-surface";
 import { AppPreview } from "../apps/app-preview";
+import { AgentSurface, AgentSurfaceActions } from "../conversation/agent-surface";
 import { InboxItemPanel } from "../inbox/inbox-item-panel";
 import { pageSurfaceRendering } from "../pages/page-surface";
+import {
+  WorkflowCanvasSurface,
+  WorkflowSurfaceActions
+} from "../workflows/workflow-canvas-surface";
 import type { Surface, SurfaceKind, SurfaceOf } from "./surface";
 
 /** What a renderer gives the frame: the content and the actions of its kind. */
@@ -41,13 +47,35 @@ export const surfaceRenderers: SurfaceRenderers = {
     }),
     flush: true
   }),
+  // The draft is loaded anew after each saved revision of the App.
   app_edit: (surface) => ({
-    content: createElement(AppPreview, {
+    actions: createElement(AppEditSurfaceActions, {
+      app: surface.app,
+      workspaceId: surface.workspaceId
+    }),
+    content: createElement(AppEditSurface, {
       key: surface.key,
       app: surface.app,
-      mode: "draft",
-      name: surface.title
+      name: surface.title,
+      workspaceId: surface.workspaceId
     }),
+    flush: true
+  }),
+  workflow_canvas: (surface) => ({
+    actions: createElement(WorkflowSurfaceActions, {
+      workspaceId: surface.workspaceId,
+      workflow: surface.workflow
+    }),
+    content: createElement(WorkflowCanvasSurface, {
+      key: surface.key,
+      workspaceId: surface.workspaceId,
+      workflow: surface.workflow
+    }),
+    flush: true
+  }),
+  agent: (surface) => ({
+    actions: createElement(AgentSurfaceActions, { agent: surface.agent }),
+    content: createElement(AgentSurface, { key: surface.key, agent: surface.agent }),
     flush: true
   })
 };
