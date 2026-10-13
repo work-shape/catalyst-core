@@ -38,7 +38,11 @@ import {
 } from "@vivd-catalyst/core";
 
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import type { FakeModelProvider as ModelProvider } from "./support/model-gateway";
+import {
+  createScriptedInstanceModelGateway,
+  type FakeModelProvider as ModelProvider
+} from "./support/model-gateway";
+import { GuardrailRunner, createAuditingEventEmitter } from "@vivd-catalyst/chat-server";
 import { ModelUsageGovernance } from "@vivd-catalyst/usage-governance";
 import {
   STATE_FILENAME,
@@ -879,6 +883,62 @@ skills:
     const placed = await push();
     expect(placed).toContain("Pushed 1 agent, 0 skills, version 5.");
     expect(placed).not.toContain("Hidden in every workspace");
+  });
+
+  // Fails without the change: no guardrail ran at `asset.before_write`, and the skill with the
+  // IBAN was pushed.
+  it("prints the guardrail, the skill and the reason when a guardrail blocks a push", async () => {
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    await mkdir(resolve(directory, "skills", "kunden-faq"), { recursive: true });
+    await writeFile(
+      resolve(directory, "skills", "kunden-faq", "SKILL.md"),
+      serializeSkillMarkdown({
+        name: "kunden-faq",
+        title: "Kunden-FAQ",
+        description: "Fragen von Kunden",
+        content: "Überweisungen gehen an DE89 3704 0044 0532 0130 00."
+      }),
+      "utf8"
+    );
+    const { fetchImpl, fixture } = await instanceHolding(
+      { agents: [], skills: [] },
+      [],
+      heldAssetId,
+      {
+        no_iban: {
+          displayName: "No IBAN in skills",
+          on: "asset.before_write",
+          filter: { kind: "skill" },
+          check: {
+            kind: "pattern",
+            pattern: "\\bDE\\d{2}(?:\\s?\\d{4}){4}\\s?\\d{2}\\b",
+            reason: "Skills hold no bank account."
+          },
+          outcome: "block"
+        }
+      }
+    );
+    await recordEmptyPull(directory);
+    const stderr: string[] = [];
+    const exitCode = await runCli(["config", "push"], {
+      cwd: directory,
+      env: { CATALYST_API_KEY: "cat_guarded" },
+      stderr: (text) => stderr.push(text),
+      fetchImpl
+    });
+    expect(exitCode).toBe(1);
+    expect(stderr.join("")).toContain(
+      "Guardrail 'No IBAN in skills' blocked skill 'kunden-faq': Skills hold no bank account."
+    );
+    expect(stderr.join("")).not.toContain("3704");
+    expect(
+      await fixture.store.configAssets.getConfigAsset({
+        clientInstanceId: fixture.clientInstanceId,
+        kind: "skill",
+        name: "kunden-faq"
+      })
+    ).toBeUndefined();
   });
 
   it("rewrites only selected pull files without changing the recorded version", async () => {
@@ -2539,7 +2599,8 @@ async function createTemporaryDirectory(): Promise<string> {
   return directory;
 }
 
-async function createFixture() {
+/** An instance behind the CLI. `guardrails` are its release config's, run at every call. */
+async function createFixture(guardrails: Record<string, unknown> = {}) {
   const clientInstanceId = asClientInstanceId("config-cli-test");
   const store = (await createTestInstance()).stores;
   const config = parseClientInstanceConfig({
@@ -2551,7 +2612,8 @@ async function createFixture() {
     },
     auth: {},
     infrastructure: { models: { local: { provider: "deterministic", model: "local" } } },
-    tools: [{ name: "known.tool", enabled: true }]
+    tools: [{ name: "known.tool", enabled: true }],
+    guardrails
   });
   const authOptions = {
     secret: "a-development-session-token-secret",
@@ -2577,10 +2639,27 @@ async function createFixture() {
     scopes: ["config_assets:read", "config_assets:release"]
   });
   const auditRecorder = new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit });
+  const usageGovernance = new ModelUsageGovernance({
+    store: store.usage,
+    budget: config.usage.budget,
+    safeguards: config.usage.safeguards,
+    costs: config.usage.costs
+  });
+  const guardrailRunner = new GuardrailRunner({
+    clientInstanceId,
+    config,
+    hits: store.guardrails,
+    modelGateway: createScriptedInstanceModelGateway({
+      config,
+      modelProvider: createUnusedModelProvider(),
+      usageGovernance
+    })
+  });
   const server = await createTestInstance({
     server: {
       config,
       clientInstanceId,
+      operations: { events: createAuditingEventEmitter(auditRecorder, guardrailRunner) },
       authAdapter: new IdentityResolvingAuthAdapter(
         new CompositeAuthAdapter([
           new HmacServiceAccessTokenAuthAdapter(serviceAccessOptions),
@@ -2589,12 +2668,7 @@ async function createFixture() {
         store.users
       ),
       stores: store,
-      usageGovernance: new ModelUsageGovernance({
-        store: store.usage,
-        budget: config.usage.budget,
-        safeguards: config.usage.safeguards,
-        costs: config.usage.costs
-      }),
+      usageGovernance,
       auditRecorder,
       configAssets: {
         store: store.configAssets,
@@ -2700,9 +2774,10 @@ async function instanceHolding(
   remote: HeldAssets,
   syncs: unknown[] = [],
   /** The id each asset gets. Another one makes the instance another database's. */
-  idOf: (key: string) => string = heldAssetId
+  idOf: (key: string) => string = heldAssetId,
+  guardrails: Record<string, unknown> = {}
 ) {
-  const fixture = await createFixture();
+  const fixture = await createFixture(guardrails);
   const mutations = [
     ...remote.agents.map((config) => ({
       type: "upsert" as const,

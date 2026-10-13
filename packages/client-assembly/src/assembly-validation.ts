@@ -30,7 +30,9 @@ export function assertClientAssemblyValid(input: {
   const issues = [
     ...findDuplicateToolImplementations(input.tools),
     ...Object.entries(input.config.guardrails).flatMap(([name, guardrail]) => {
-      const kind = guardrail.filter?.kind;
+      // On an approval request the kind is the request's; on an asset write it is the asset's.
+      const kind =
+        guardrail.on === "approval_request.before_create" ? guardrail.filter?.kind : undefined;
       return kind === undefined || input.approvalRequestHandlers?.has(kind)
         ? []
         : [

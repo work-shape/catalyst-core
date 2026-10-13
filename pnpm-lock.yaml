@@ -746,6 +746,9 @@ importers:
       js-yaml:
         specifier: ^4.2.0
         version: 4.2.0
+      re2js:
+        specifier: ^2.8.6
+        version: 2.8.6
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -7235,6 +7238,10 @@ packages:
 
   rbush@4.0.1:
     resolution: {integrity: sha512-IP0UpfeWQujYC8Jg162rMNc01Rf0gWMMAb2Uxus/Q0qOFw4lCcq6ZnQEZwUoJqWyUGJ9th7JjwI4yIWo+uvoAQ==}
+
+  re2js@2.8.6:
+    resolution: {integrity: sha512-xLgQil4kIUCrAzVk9fRSkxkFNwmygLFjVxXrLc65aE1F0+Zsb8rxumFBy4XKyvgMCTL6kilDq3EZ0piE2dP/Dg==}
+    engines: {node: '>=18.0.0'}
 
   react-dom@19.2.7:
     resolution: {integrity: sha512-t0BRVXvbiE/o20Hfw669rLbMCDWtYZLvmJigy2f0MxsXF+71pxhR3xOkspmsO8h3ZlNzyibAmtCa3l4lYKk6gQ==}
@@ -15118,6 +15125,8 @@ snapshots:
   rbush@4.0.1:
     dependencies:
       quickselect: 3.0.0
+
+  re2js@2.8.6: {}
 
   react-dom@19.2.7(react@19.2.7):
     dependencies:

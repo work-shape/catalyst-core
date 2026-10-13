@@ -120,11 +120,9 @@ function proposal(
   return {
     event: "approval_request.before_create" as const,
     subjectKind: request.kind,
-    content: () => {
+    fields: () => {
       const newContent = requestHandler.checkContent?.(request.payload);
-      return newContent === undefined
-        ? undefined
-        : JSON.stringify({ summary: request.summary, newContent });
+      return newContent === undefined ? undefined : { summary: request.summary, newContent };
     },
     ...(request.origin ? { origin: request.origin } : {})
   };
@@ -426,7 +424,9 @@ describe("guardrail runner", () => {
       "id",
       "message",
       "outcome",
-      "subject_kind"
+      "subject_id",
+      "subject_kind",
+      "subject_name"
     ]);
   });
 

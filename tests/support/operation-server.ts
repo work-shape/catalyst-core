@@ -71,7 +71,10 @@ export async function createServer(input: ServerInput = {}) {
             emitted.push(`${name}:${context.phase}`);
             return name === failingEvent
               ? Promise.reject(new Error(secret))
-              : Promise.resolve(name === guardrail?.event ? guardrail.outcome : "allow");
+              : Promise.resolve({
+                  outcome: name === guardrail?.event ? guardrail.outcome : "allow",
+                  guardrails: []
+                });
           }
         }
       : undefined;

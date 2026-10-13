@@ -26,6 +26,7 @@ import {
 } from "@vivd-catalyst/tool-execution";
 import { z } from "zod";
 import type { AssetCall } from "./asset-access";
+import { assetWriteEvent } from "./asset-guardrail-events";
 import { readDefinitionName } from "./asset-kinds/shared";
 import { AssetWorkflow } from "./asset-workflow";
 import { readPlatformContext } from "./platform-context";
@@ -292,6 +293,17 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
         canPause: true
       });
       return asked.source === "central_setting" ? asked.value : undefined;
+    },
+
+    async putBeforeEvents(conversationId, config) {
+      const conversation = await options.stores.conversations.getConversation(
+        options.clientInstanceId,
+        conversationId
+      );
+      const subject = conversation?.subject;
+      // A conversation without a subject saves nothing: the save itself refuses it.
+      if (!subject) return [];
+      return [assetWriteEvent({ kind: subject.kind, name: subject.name, config })];
     },
 
     async readContext(context) {

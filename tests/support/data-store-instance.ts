@@ -78,7 +78,9 @@ export function useDataStoreInstance(): {
     dataStores: boolean,
     changing?: PolicyValue,
     /** Who may sign in, where a test needs more than the administrator. */
-    developmentAuth?: unknown
+    developmentAuth?: unknown,
+    /** The guardrails of release config on the call path, as `guardrails` holds them. */
+    guardrails?: Record<string, unknown>
   ): Promise<DataStoreInstance>;
   /** Closes the processes of every instance the test started. */
   close(): Promise<unknown>;
@@ -124,7 +126,8 @@ export function useDataStoreInstance(): {
   async function start(
     dataStores: boolean,
     changing?: PolicyValue,
-    developmentAuth?: unknown
+    developmentAuth?: unknown,
+    guardrails?: Record<string, unknown>
   ): Promise<DataStoreInstance> {
     const root = await mkdtemp(join(tmpdir(), "data-store-test-"));
     roots.push(root);
@@ -152,7 +155,8 @@ export function useDataStoreInstance(): {
       execution: {
         config: parseClientInstanceConfig({
           ...settings,
-          ...(changing ? { policy: { defaults: { reading: "allow", changing } } } : {})
+          ...(changing ? { policy: { defaults: { reading: "allow", changing } } } : {}),
+          ...(guardrails ? { guardrails } : {})
         }),
         env,
         tools: []

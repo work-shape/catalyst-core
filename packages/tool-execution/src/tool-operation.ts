@@ -122,6 +122,12 @@ export function toolOperation(
             origin.kind === "agent" ? tool.policyFloor?.(origin) : undefined
         }
       : {}),
+    ...(tool.beforeEvents
+      ? {
+          beforeEvents: (input, origin) =>
+            origin.kind === "agent" ? (tool.beforeEvents?.(input, origin) ?? []) : []
+        }
+      : {}),
     action: null,
     authorize(_input, context) {
       for (const permissionRef of requiredPermissionRefs) {

@@ -25,6 +25,7 @@ import {
   type ClientInstanceId,
   type OperationAuthorization,
   type OperationAuthorizeContext,
+  type OperationBeforeEvent,
   type OperationOrigin,
   type OperationResource,
   type OperationScope,
@@ -163,10 +164,14 @@ type RightsCheck<Op extends Operation> = Op["requires"] extends readonly [unknow
 /** What a registration adds to the descriptor: what the call touches and what it does. */
 type OperationBindingOf<Op extends Operation, Sent> = Omit<
   AssembledOperationBinding,
-  "resource" | "policyTargets" | "execute" | "authorize" | "inputWithoutSecrets"
+  "resource" | "policyTargets" | "beforeEvents" | "execute" | "authorize" | "inputWithoutSecrets"
 > &
   RightsCheck<Op> & {
     resource?(input: OperationInput<Op>): OperationResource | undefined;
+    beforeEvents?(
+      input: OperationInput<Op>,
+      origin: OperationOrigin
+    ): readonly OperationBeforeEvent[] | Promise<readonly OperationBeforeEvent[]>;
     inputWithoutSecrets?(input: OperationInput<Op>): OperationInput<Op> | undefined;
     policyTargets?(
       input: OperationInput<Op>

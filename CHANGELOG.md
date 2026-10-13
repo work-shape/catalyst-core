@@ -28,6 +28,32 @@ contain breaking changes; a patch version does not.
   ignores the table `guardrail_hits` and the stored guardrails, and it does not read
   `guardrails`: roll back with the config that still has `approvalChecks`, or the instance runs
   no checks.
+- **Guardrails answer at every before-event:** a guardrail of release config binds to
+  `asset.before_write` (each asset `assets.put` and `assets.sync` save, and an agent's save of
+  its conversation's subject), `operation.before_call` (every call), `app.before_publish`,
+  `workflow.before_publish` or `approval_request.before_create`. The before-events of a call go
+  through the event emitter, which runs the guardrails bound to them. A `filter` narrows by
+  what its event knows: `kind` (an asset's or a request's), `operation` (a name or a prefix
+  ending in `.*`), `origin` (`agent`, `user`, `cli`, `mcp`, `app`, `workflow`, `schedule`) and
+  `agent`. A new check kind `pattern` matches an RE2 expression (no backreferences, no
+  lookaround, linear time; `re2js`) over the fields the event declares checkable: `name` and
+  `content` of an asset, `input` of a call, `summary` and `newContent` of a request; a check may
+  name `fields`, and a pattern a `reason` it is shown with. A new outcome `require_approval`
+  holds a changing call for an approval in the Inbox and refuses a read; an outcome `allow`
+  lets the action go on and never overrides another answer. Patterns run first, and a block
+  among them skips the judges. Every guardrail that applies runs and the strictest answer wins.
+  A refusal names the guardrail, the asset and the reason, as `GUARDRAIL_BLOCKED` with
+  `details.guardrailId`, and `catalyst config push` prints it. Content longer than 2 Mi
+  characters is not read in part: a guardrail that blocks or holds answers as on a match. A hit
+  now names its subject (the asset's kind, id and name, or the operation's name, never the run
+  and never a person), and Build > Guardrails links an asset's hit to its page (migration
+  `0072_guardrail_hit_subject`). A call that waited for an approval is asked again before it is
+  executed without keeping a second hit. **Operators:** release config refuses at start a
+  pattern RE2 does not compile, one longer than 2,000 characters, a filter key or a field its
+  event does not have, and `require_approval` on `approval_request.before_create`.
+  **Rollback:** an earlier release ignores the two new columns, and refuses a config with a
+  guardrail it does not know: remove guardrails on the new events, of kind `pattern` or with
+  the new outcomes before rolling back.
 - **Skills that ship with the platform:** the guide to the platform (`platform-guide`) and, with
   Workflows on, `workflow-authoring` are stored skills of origin `release`. The API process
   writes them at start: a changed one gets a revision in History, one a release no longer ships

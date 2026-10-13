@@ -139,11 +139,11 @@ function assertConfigReferences(config: ClientInstanceConfig): void {
   }
 
   const modelBindingIds = new Set(config.modelBindings.map((binding) => binding.id));
-  for (const [name, guardrail] of Object.entries(config.guardrails)) {
-    if (!modelBindingIds.has(guardrail.check.modelBindingId)) {
+  for (const [name, { check }] of Object.entries(config.guardrails)) {
+    if (check.kind === "model_judge" && !modelBindingIds.has(check.modelBindingId)) {
       throw new AppError(
         "VALIDATION_FAILED",
-        `Guardrail '${name}' references missing model binding '${guardrail.check.modelBindingId}'`
+        `Guardrail '${name}' references missing model binding '${check.modelBindingId}'`
       );
     }
   }
@@ -266,8 +266,9 @@ export function assertSpendBudgetPricingCoverage(
     }
   }
 
-  for (const guardrail of Object.values(config.guardrails)) {
-    const selection = resolveModelBinding(config, guardrail.check.modelBindingId);
+  for (const { check } of Object.values(config.guardrails)) {
+    if (check.kind !== "model_judge") continue;
+    const selection = resolveModelBinding(config, check.modelBindingId);
     if (selection.provider.type !== "deterministic") {
       requiredPrices.add(createPricingKey(selection.provider.id, selection.model));
     }

@@ -56,7 +56,7 @@ describe("guardrails in release config", () => {
 
   it.each([
     ["a name that is no machine name", { "No Personal": guardrail }],
-    ["an event no guardrail runs at", { [name]: { ...guardrail, on: "asset.before_write" } }],
+    ["an event no guardrail runs at", { [name]: { ...guardrail, on: "message.before_send" } }],
     ["an unknown outcome", { [name]: { ...guardrail, outcome: "ignore" } }],
     [
       "an unknown check",
