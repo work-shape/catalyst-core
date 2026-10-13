@@ -4078,13 +4078,15 @@ test("panels at the right of the conversation open and close in one step, leave 
   // height: the button is beside the column of the messages and none reaches under it.
   for (const message of await page.locator(".group\\/message").all()) {
     const box = await message.boundingBox();
-    expect(
-      box &&
-        box.x < toggleBox.x + toggleBox.width &&
-        box.x + box.width > toggleBox.x &&
-        box.y < toggleBox.y + toggleBox.height &&
-        box.y + box.height > toggleBox.y
-    ).toBe(false);
+    // A message without a box would pass as uncovered without having been measured.
+    expect(box).not.toBeNull();
+    const covered =
+      box !== null &&
+      box.y < toggleBox.y + toggleBox.height &&
+      box.y + box.height > toggleBox.y &&
+      box.x < toggleBox.x + toggleBox.width &&
+      box.x + box.width > toggleBox.x;
+    expect(covered).toBe(false);
   }
 
   // The file opens from the message while the card is closed, and Escape closes it.
