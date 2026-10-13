@@ -63,6 +63,14 @@ export interface SkillConfig {
 /** The most characters a skill's `summary` holds. */
 export const SKILL_SUMMARY_MAX_LENGTH = 120;
 
+/**
+ * Who ships a skill, as a list says it. Every stored skill is the instance's own; `release`
+ * is kept for the skills a module ships, which the release seed alone will write.
+ */
+export const SKILL_ORIGINS = ["instance", "release"] as const;
+
+export type SkillOrigin = (typeof SKILL_ORIGINS)[number];
+
 export const SKILL_RESOURCE_MEDIA_TYPES = [
   "text/markdown",
   "text/plain",

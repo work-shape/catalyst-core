@@ -209,10 +209,12 @@ describe("asset kind registry", () => {
     expect(issuesOf(skillKind, withSkills(), { ...skill, name: "1st" })).toEqual([
       expect.objectContaining({ path: ["name"] })
     ]);
+    // A list says who ships the skill: every stored skill is the instance's own.
     expect(skillKind.summarize(skill)).toEqual({
       name: "research",
       title: "Research",
-      description: "How to"
+      description: "How to",
+      attributes: { origin: "instance" }
     });
     // The sentence for people reaches a list beside the name. No skill names an icon itself.
     expect(skillKind.summarize({ ...skill, summary: "Knows how to research a question." })).toEqual(
@@ -220,7 +222,7 @@ describe("asset kind registry", () => {
         name: "research",
         title: "Research",
         description: "How to",
-        attributes: { summary: "Knows how to research a question." }
+        attributes: { origin: "instance", summary: "Knows how to research a question." }
       }
     );
   });
