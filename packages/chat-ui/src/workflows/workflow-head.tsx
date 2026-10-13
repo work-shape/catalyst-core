@@ -1,14 +1,14 @@
 import { Bot, Play } from "lucide-react";
-import { Button, PageHeader, TabsLink, TabsNav } from "@vivd-catalyst/ui";
+import { Button, PageHeader, PageLead, TabsLink, TabsNav } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
 import type { WorkflowEdit } from "./workflow-draft";
 import type { WorkflowView } from "./workflow-views";
 import { BackLink, TitlePlaceholder, routeLink, type OpenRoute } from "./workflows-frame";
 
 /**
- * The head of a Workflow, on its canvas and on the list of its runs: the way back, the name
- * and the description, "Edit with the agent", "Start now", and the two tabs. The tabs are addresses. Without runs on
- * the instance there is one view and no tabs.
+ * The head of a Workflow, on its canvas and on the list of its runs: the way back, the name,
+ * "Edit with the agent", "Start now", and the two tabs. The tabs are addresses. Without runs on
+ * the instance there is one view and no tabs. The description is the first paragraph under them.
  */
 export function WorkflowHead({
   workspaceId,
@@ -60,7 +60,6 @@ export function WorkflowHead({
         // Until the record arrived a placeholder stands for the name: the way back already
         // names the area, and the Workflow's id is never shown.
         title={workflow?.name ?? <TitlePlaceholder>{t("workflows.title")}</TitlePlaceholder>}
-        description={workflow?.description}
         secondaryActions={
           edit === undefined ? undefined : (
             <Button variant="outline" loading={edit.busy} onClick={edit.start}>
@@ -93,6 +92,10 @@ export function WorkflowHead({
         </TabsNav>
       ) : (
         <div aria-hidden="true" className="shrink-0 border-b" />
+      )}
+      {/* What the Workflow does is the first paragraph of the page, not a part of its head. */}
+      {workflow?.description === undefined || workflow.description === "" ? null : (
+        <PageLead className="shrink-0 pb-3">{workflow.description}</PageLead>
       )}
     </>
   );
