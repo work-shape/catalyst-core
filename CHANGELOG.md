@@ -30,7 +30,8 @@ contain breaking changes; a patch version does not.
   no checks.
 - **Guardrails answer at every before-event:** a guardrail of release config binds to
   `asset.before_write` (each asset `assets.put` and `assets.sync` save, an agent's save of its
-  conversation's subject, and the skill a `propose_skill_change` would write), `operation.before_call` (every call), `app.before_publish`,
+  conversation's subject, and the skill a `propose_skill_change` would write), `operation.before_call` (every call, and the operation an App's or a Page's action calls,
+  such as a Data Store's insert, with that operation's name), `app.before_publish`,
   `workflow.before_publish` or `approval_request.before_create`. The before-events of a call go
   through the event emitter, which runs the guardrails bound to them. A `filter` narrows by
   what its event knows: `kind` (an asset's or a request's), `operation` (a name or a prefix

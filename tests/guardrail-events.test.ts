@@ -31,6 +31,8 @@ import {
 } from "./support/data-store-instance";
 import { OPERATION_CALL_APPROVAL_KIND, runOperation } from "@vivd-catalyst/tool-execution";
 import { askBeforeEvents } from "../packages/tool-execution/src/before-events";
+import { resultSchema as appActionResultSchema } from "./support/app-actions";
+import { setupFindingsApp } from "./support/findings-app";
 
 // The guardrails of release config at every before-event of a call: what a pattern and a judge
 // answer and in which order, how the strictest answer wins, what a hit names, and what a person
@@ -544,5 +546,58 @@ describe("the input a call's guardrails read", () => {
       }
     });
     expect(read).toEqual([{ input: '{"email":"ada@example.test","password":"[secret]"}' }]);
+  });
+});
+
+describe("a guardrail on the operation an App's action calls", () => {
+  // Fails without the change: the action ran the store's insert past that insert's guardrails,
+  // and the row was added at once.
+  it("holds an App's insert that a guardrail on the store's insert holds, and adds no row yet", async () => {
+    const operation = dataStoreOperationName("findings", "insert");
+    const t = await setupFindingsApp();
+    // The fixture builds its own call path, which runs no guardrail: its events are swapped.
+    t.operationCalls.deps.events = guardedEvents(t.stores, {
+      inserts_need_approval: {
+        displayName: "Findings are approved",
+        on: "operation.before_call",
+        filter: { operation },
+        check: { kind: "pattern", pattern: "client-new", fields: ["input"] },
+        outcome: "require_approval"
+      }
+    }).events;
+    try {
+      const before = await t.findingRows();
+      const frame = await t.openApp(t.kai.id, "published", "findings");
+      const response = await t.callAction(
+        t.kai.id,
+        frame,
+        "add_finding",
+        {
+          run: "run-7",
+          client: "client-new",
+          rule: "vat-rate",
+          revision: 2,
+          severity: "error",
+          amount: 12.5
+        },
+        { "idempotency-key": "guarded-insert" }
+      );
+      expect(response.statusCode).toBe(200);
+      expect(appActionResultSchema.parse(response.json()).status).toBe("pending_approval");
+      expect(await t.findingRows()).toEqual(before);
+      const [hit] = await t.stores.guardrails.listHits({
+        clientInstanceId: accessInstanceId,
+        guardrailName: "inserts_need_approval",
+        limit: 5
+      });
+      expect(hit).toMatchObject({
+        event: "operation.before_call",
+        outcome: "require_approval",
+        subjectKind: "operation",
+        subjectName: operation
+      });
+    } finally {
+      await t.closeAll();
+    }
   });
 });

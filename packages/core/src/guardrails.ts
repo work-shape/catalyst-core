@@ -146,11 +146,13 @@ export interface GuardrailSubject {
 }
 
 /**
- * One before-event of a call about one of its subjects, beside `operation.before_call`: an
- * asset it writes, an App or a Workflow it makes live. A filter's `kind` is the subject's.
+ * One before-event of a call about one of its subjects, beside its own `operation.before_call`:
+ * an asset it writes, an App or a Workflow it makes live, or the operation it calls in turn, as
+ * an App's action calls a Data Store's insert. A filter's `kind` is the subject's, its
+ * `operation` the name of the operation called in turn.
  */
 export interface OperationBeforeEvent {
-  name: Exclude<GuardrailEvent, "operation.before_call" | "approval_request.before_create">;
+  name: Exclude<GuardrailEvent, "approval_request.before_create">;
   subject: GuardrailSubject;
   /** The event's checkable fields, read only where a guardrail applies and never kept. */
   checkable(): GuardrailFields | Promise<GuardrailFields>;

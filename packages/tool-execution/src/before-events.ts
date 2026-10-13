@@ -58,7 +58,14 @@ export async function askBeforeEvents(context: BeforeEventsOf): Promise<SubjectA
       event.name,
       "before",
       { subjectKind: event.subject.kind },
-      { subject: event.subject, checkable: event.checkable, filterBy: { kind: event.subject.kind } }
+      {
+        subject: event.subject,
+        checkable: event.checkable,
+        filterBy:
+          event.name === "operation.before_call"
+            ? { operation: event.subject.name }
+            : { kind: event.subject.kind }
+      }
     );
     answers.push({ ...answer, subject: event.subject });
   }
