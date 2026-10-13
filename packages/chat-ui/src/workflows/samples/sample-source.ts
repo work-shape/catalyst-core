@@ -1,4 +1,5 @@
 import { ApiError, type LocaleCode } from "@vivd-catalyst/api-client";
+import { startFormOf } from "../start-form";
 import { toWorkflow, toWorkflowRun, toWorkflowStepRun } from "../workflow-mapping";
 import type { WorkflowRunsSource, WorkflowsSource } from "../source-shapes";
 import {
@@ -151,7 +152,10 @@ export function createSampleSource(
             name: manifest.name,
             description: manifest.description,
             published: true,
+            startsByHand: true,
             refusedFor: [],
+            mayStart,
+            startForm: startFormOf(manifest.inputs),
             updatedAt: new Date(now - 86_400_000).toISOString(),
             ...(last === undefined
               ? {}
@@ -174,7 +178,7 @@ export function createSampleSource(
       return Promise.resolve(
         toWorkflow(
           { name: sample.manifest.id, config: withReadings(sample), publishedRevision: 2 },
-          { revisionId: SAMPLE_REVISION, mayStart }
+          { revisionId: SAMPLE_REVISION, mayStart, startForm: startFormOf(sample.manifest.inputs) }
         )
       );
     },

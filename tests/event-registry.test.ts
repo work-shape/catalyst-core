@@ -14,7 +14,8 @@ import {
 type Callable = ts.FunctionDeclaration | ts.MethodDeclaration;
 type EventArgument = { index: number; path: string[] };
 
-// Follow only AuditRecorder.record / AuditEventStore.appendAuditEvent inputs.
+// Follow only AuditRecorder.record / AuditEventStore.appendAuditEvent inputs and the event a
+// GuardrailRunner.check answers before an action.
 // Discover wrappers from parameter forwarding, including forwarding through wrappers.
 function emittedNames(sources: readonly string[]): Set<string> {
   const files = sources.map((source, index) =>
@@ -148,6 +149,8 @@ function emittedNames(sources: readonly string[]): Set<string> {
       )
         return [{ index: 0, path: ["type"] }];
       if (callee.name.text === "appendAuditEvent") return [{ index: 0, path: ["type"] }];
+      if (callee.name.text === "check" && receiverName === "guardrails")
+        return [{ index: 0, path: ["event"] }];
     }
     if (ts.isIdentifier(callee) && callee.text === "appendAuditEvent")
       return [{ index: 0, path: ["type"] }];
@@ -361,13 +364,14 @@ describe("event registry", () => {
       expect(definition.audited).toBe(true);
       expect(definition.phases).toEqual(["after"]);
     }
-    // The events added since: those of an operation's call. Only the question the guardrails
-    // answer before a call is no audit row.
+    // The events added since: those of an operation's call and the question the guardrails
+    // answer before an approval request is filed. The before-events are no audit row.
     expect(
       definitions
         .filter(([, definition]) => !definition.legacy)
         .map(([name, { audited, phases }]) => [name, audited, phases.join()])
     ).toEqual([
+      ["approval_request.before_create", false, "before"],
       ["operation.authorization_checked", true, "after"],
       ["operation.before_call", false, "before"],
       ["operation.completed", true, "after"],

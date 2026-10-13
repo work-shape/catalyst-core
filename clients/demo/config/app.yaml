@@ -167,12 +167,17 @@ conversationTitles:
   enabled: true
   modelProviderId: openai
   model: gpt-5-nano
-approvalChecks:
-  - id: no_personal_data
-    appliesTo: skill_change
-    modelBindingId: guardrailCheck
-    instruction: Check whether the text contains personal data or details about a specific customer, case or person. General rules and obviously fictional examples are allowed.
-    onFail: warn
+guardrails:
+  no_personal_data:
+    displayName: No personal data in skills
+    on: approval_request.before_create
+    filter:
+      kind: skill_change
+    check:
+      kind: model_judge
+      modelBindingId: guardrailCheck
+      instruction: Check whether the text contains personal data or details about a specific customer, case or person. General rules and obviously fictional examples are allowed.
+    outcome: warn
 usage:
   budget:
     dailySpendLimit: 50

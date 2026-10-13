@@ -349,7 +349,7 @@ describe("the definitions a folder holds", () => {
 
   it("refuses a file that is not YAML, and a folder whose definition names another id", async () => {
     expect((await read({}, "steps: [unclosed")).issues).toEqual([
-      "workflow.yaml is not valid YAML"
+      expect.stringContaining("'workflow.yaml' is not valid YAML")
     ]);
     const root = await mkdtemp(join(tmpdir(), "workflow-definitions-"));
     folders.push(root);

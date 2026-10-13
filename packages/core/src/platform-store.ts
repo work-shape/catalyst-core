@@ -10,6 +10,7 @@ import type { ApprovalDecisionStore, ApprovalRequestStore } from "./approval-req
 import type { ConfigAssetStore } from "./config-assets";
 import type { ConnectionsStore } from "./connections";
 import type { DataStoreRecordsStore } from "./data-stores";
+import type { GuardrailStore } from "./guardrails";
 import type {
   ExecutionWorkspaceCleanupStore,
   ExecutionWorkspaceFileStore,
@@ -84,6 +85,7 @@ export interface PlatformStores {
   workflowRuns: WorkflowRunsStore;
   workflowRunDatasets: WorkflowRunDatasetsStore;
   dataStores: DataStoreRecordsStore;
+  guardrails: GuardrailStore;
   /** Resolves after commit; a rejected callback rolls back all domain writes. Nested calls use savepoints. */
   transaction<T>(fn: (stores: PlatformStores) => Promise<T>): Promise<T>;
   close?: () => Promise<void>;

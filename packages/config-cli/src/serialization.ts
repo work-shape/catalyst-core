@@ -1,6 +1,7 @@
 import yaml from "js-yaml";
 import {
   agentConfigSchema,
+  loadYamlData,
   parseSkillMarkdown,
   skillConfigSchema,
   type AgentConfig,
@@ -22,7 +23,7 @@ const yamlDumpOptions: yaml.DumpOptions = {
 };
 
 export function parseAgentYaml(contents: string): AgentConfig {
-  return agentConfigSchema.parse(yaml.load(contents));
+  return agentConfigSchema.parse(loadYamlData(contents, "agent YAML"));
 }
 
 export function canonicalizeAgentConfig(input: unknown): AgentConfig {

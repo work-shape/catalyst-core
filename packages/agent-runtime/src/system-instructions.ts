@@ -36,7 +36,8 @@ export interface CreateSystemInstructionsOptions {
   agentSkillChangesEnabled?: boolean;
   /**
    * What a conversation about an asset is offered. The agent is told the asset before the
-   * first turn: a person who opened the conversation from the asset's page names it no more.
+   * first turn: a person who opened the conversation from the asset's page, or who had the
+   * agent open it, names it no more.
    */
   subject?: SubjectOffer;
 }
@@ -84,23 +85,24 @@ export function createSystemInstructions(
 
 /**
  * What the agent is told of the asset its conversation is about, for an asset of any kind. It
- * names only the tools and the skills this conversation is offered.
+ * names only the tools and the skills this conversation is offered. When an agent opens an
+ * asset and how is said by the tool that opens one and by the platform's skill, not here.
  */
 function createSubjectContext({ subject, toolNames, skillNames }: SubjectOffer): string {
   const kind = subject.kind.replaceAll("_", " ");
   const offered = (tool: string) => toolNames.includes(`${SUBJECT_TOOL_PREFIX}${tool}`);
   const lines = [
-    `This conversation is about one ${kind}, named '${subject.name}'. The user opened it from the page of that ${kind} to work on it with you.`,
+    `This conversation is about one ${kind}, named '${subject.name}'. The user sees it beside the chat.`,
     `When the user says "the ${kind}", "it" or "this", they mean '${subject.name}'. Never ask which ${kind} they mean.`
   ];
   if (offered("get")) {
     lines.push(
-      `Read it with ${SUBJECT_TOOL_PREFIX}get before you answer a question about it or change it. The tool takes no name: it always reads '${subject.name}'.`
+      `Read it with ${SUBJECT_TOOL_PREFIX}get, naming no asset, before you answer a question about it or change it.`
     );
   }
   if (offered("put")) {
     lines.push(
-      `${SUBJECT_TOOL_PREFIX}put saves your change as a draft. A draft runs nowhere until a person publishes it on the page of the ${kind}; say so after a save.`
+      `${SUBJECT_TOOL_PREFIX}put saves your change as a draft. A draft runs nowhere until a person publishes it; say so after a save.`
     );
   }
   if (skillNames.length > 0 && toolNames.includes("read_skill")) {

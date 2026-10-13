@@ -50,8 +50,8 @@ export interface WorkflowRunsSource {
     },
     signal: AbortSignal
   ): Promise<SourcePage<WorkflowStepRunView>>;
-  /** Starts a run of the published revision of a Workflow that takes no input. */
-  start(workflow: string): Promise<WorkflowRunView>;
+  /** Starts a run of the published revision of a Workflow with the input its form gave. */
+  start(workflow: string, input: Readonly<Record<string, unknown>>): Promise<WorkflowRunView>;
   cancel(runId: string): Promise<WorkflowRunView>;
 }
 

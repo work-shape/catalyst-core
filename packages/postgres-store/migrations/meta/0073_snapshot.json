@@ -1,6 +1,6 @@
 {
-  "id": "ec418ace-b0d2-4cc9-88f2-4b3d44c38633",
-  "prevId": "d7e4141e-a90c-45ab-9811-6414042741cc",
+  "id": "6ff7d744-1c78-4d8d-b8dd-81cce6aabf19",
+  "prevId": "a544c9c5-5d00-46d5-beb8-7228dc947ff2",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -8084,6 +8084,102 @@
           "value": "\"data_stores\".\"level\" >= 0"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.guardrail_hits": {
+      "name": "guardrail_hits",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "client_instance_id": {
+          "name": "client_instance_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "guardrail_name": {
+          "name": "guardrail_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event": {
+          "name": "event",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "message": {
+          "name": "message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "subject_kind": {
+          "name": "subject_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "guardrail_hits_client_guardrail_created_idx": {
+          "name": "guardrail_hits_client_guardrail_created_idx",
+          "columns": [
+            {
+              "expression": "client_instance_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "guardrail_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.account": {

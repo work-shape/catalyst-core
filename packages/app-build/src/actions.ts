@@ -1,10 +1,10 @@
 import {
   APP_ACTION_NAME_PATTERN,
   DATA_STORE_SCALAR_TYPES,
+  readYamlData,
   type JsonObject,
   type JsonValue
 } from "@vivd-catalyst/core";
-import { load, JSON_SCHEMA, YAMLException } from "js-yaml";
 import { z } from "zod";
 import {
   APP_ACTION_DESCRIPTION_MAX_CHARS,
@@ -375,21 +375,17 @@ function compileActionFile(
       `The action file has ${file.bytes.byteLength} bytes. It has at most ${APP_ACTION_FILE_MAX_BYTES} (APP_ACTION_FILE_MAX_BYTES).`
     );
   }
-  let value: unknown;
+  let text: string;
   try {
-    value = load(new TextDecoder("utf-8", { fatal: true }).decode(file.bytes), {
-      schema: JSON_SCHEMA,
-      filename: file.path
-    });
-  } catch (error) {
-    return error instanceof YAMLException
-      ? fail(
-          `The action file is not valid YAML: ${error.reason}`,
-          "action_invalid",
-          error.mark.line + 1
-        )
-      : fail("The action file is not UTF-8 text.");
+    text = new TextDecoder("utf-8", { fatal: true }).decode(file.bytes);
+  } catch {
+    return fail("The action file is not UTF-8 text.");
   }
+  const read = readYamlData(text, file.path);
+  if (!read.ok) {
+    return fail(read.issue.message, "action_invalid", read.issue.line);
+  }
+  const value = read.value;
   const parsed = actionFileSchema.safeParse(value);
   if (!parsed.success) {
     return {

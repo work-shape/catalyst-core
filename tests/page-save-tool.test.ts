@@ -173,6 +173,8 @@ async function createSaveHarness(
     ...harness,
     files,
     worker,
+    subject: async () =>
+      (await store.conversations.getConversation(clientInstanceId, conversation.id))?.subject,
     /** Writes files of the workspace as the agent's file tools do: bytes, then the row. */
     async write(folder: string, contents: Record<string, string | { declaredBytes: number }>) {
       for (const [path, content] of Object.entries(contents)) {
@@ -317,6 +319,9 @@ describe("page.save", () => {
 
     expect(first).toMatchObject({ status: "success", output: { number: 1 } });
     expect(first.output?.errors).toBeUndefined();
+    // A Page belongs to its conversation and is no subject of it: a save moves nothing the
+    // conversation is about, so it may still be moved into a shared workspace for everyone.
+    expect(await harness.subject()).toBeUndefined();
     const [page] = await harness.store.pages.listPages({
       clientInstanceId: harness.clientInstanceId,
       conversationId: harness.conversation.id
@@ -379,6 +384,7 @@ export const Route = createFileRoute("/history")({
       expect.objectContaining({ file: "src/routes/history.tsx", line: 4 })
     ]);
     expect(refused.output?.pageId).toBeUndefined();
+    expect(await harness.subject()).toBeUndefined();
     expect(await harness.fileSets()).toEqual([]);
     expect([...(await everyKey(harness.files))]).toEqual([]);
 

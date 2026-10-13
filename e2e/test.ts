@@ -37,6 +37,15 @@ const BESIDE_TOP_ANCHORED_TURN = " (beside a turn anchored to the top)";
 
 const allowedPageErrors: readonly AllowedPageError[] = [
   {
+    name: "reply-remote-image-refused",
+    reason:
+      "Chromium's own log line for an image the interface's content policy refused. The test " +
+      "plants remote images in a Mermaid diagram of a reply and asserts no request left.",
+    matches:
+      /^Loading the image 'https:\/\/outside-pixel\.example\.test\/[^']*' violates the following Content Security Policy directive: "img-src [^"]*"\. The action has been blocked\.\s*$/u,
+    tests: ["a reply with remote images, also in a Mermaid diagram, makes no request outside"]
+  },
+  {
     name: "signed-out-session",
     reason:
       "Chromium's own log line, written by no script: every page asks who is signed in, and " +
@@ -135,6 +144,18 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     path: /^\/api\/v1\/instance\/access\/grants$/u,
     tests: [
       "a superadmin gives a service principal a Connection, is refused one that is gone, and removes the right"
+    ]
+  },
+  {
+    name: "start-input-refused",
+    reason:
+      "Chromium's own log line: the test publishes a Workflow again with a smaller limit while " +
+      "its start form is open, the instance answers the start with 422, and the form puts the " +
+      "refusal under the field, which the test asserts.",
+    matches: requestAnswered(422),
+    path: /^\/api\/v1\/workflows\/start-form-[0-9a-f]{8}\/runs$/u,
+    tests: [
+      "a member starts a Workflow with inputs from its form and sees the run end; a reader sees no start"
     ]
   },
   {
@@ -575,10 +596,10 @@ export const test = base.extend<{
     { timeout: 2 * ACCESS_STATE_WAIT_MS + 10_000 }
   ],
   /**
-   * Asked for by a test that puts a Connection of origin `release` into the store by hand. An
-   * API process that starts makes the stored release Connections equal to its release config
-   * and deletes such a row, so a spec that starts an API takes the same turn while it starts
-   * (`takeTurn("release-connections", …)`).
+   * Asked for by a test that puts a Connection or a Guardrail of origin `release` into the
+   * store by hand. An API process that starts makes the stored release Connections and
+   * Guardrails equal to its release config and deletes such a row, so a spec that starts an API
+   * takes the same turn while it starts (`takeTurn("release-connections", …)`).
    */
   releaseConnections: [
     async ({ baseURL }, use) => {

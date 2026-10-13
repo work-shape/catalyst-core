@@ -72,6 +72,14 @@ export const EVENTS = {
   },
   "app.created": { ...LEGACY_AUDIT, name: "app.created", subject: "config_asset" },
   "app.published": { ...LEGACY_AUDIT, name: "app.published", subject: "config_asset" },
+  // Guardrails bound to it answer before a request is filed. The subject is the request's kind.
+  "approval_request.before_create": {
+    name: "approval_request.before_create",
+    subject: "approval_request",
+    legacy: false,
+    audited: false,
+    phases: ["before"]
+  },
   "approval_request.created": {
     ...LEGACY_AUDIT,
     name: "approval_request.created",

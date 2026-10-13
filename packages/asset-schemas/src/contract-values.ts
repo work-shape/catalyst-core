@@ -83,6 +83,9 @@ export const ACTIONS = [
   "knowledge_base.publish",
   "knowledge_base.delete",
   "knowledge_base.use",
+  "guardrail.read",
+  "guardrail.write",
+  "guardrail.delete",
   "operations.approve",
   "users.manage",
   "usage.view",
@@ -182,6 +185,13 @@ export type ProviderCheckErrorClass = (typeof PROVIDER_CHECK_ERROR_CLASSES)[numb
  */
 export const CONNECTION_NAME_PATTERN = /^[a-z][a-z0-9]*([_-][a-z0-9]+)*$/u;
 export const CONNECTION_NAME_MAX_LENGTH = 64;
+
+/**
+ * The immutable machine name of a Guardrail. An approval request keeps it as the id of the
+ * check that answered, and its hits are kept under it.
+ */
+export const GUARDRAIL_NAME_PATTERN = /^[a-z][a-z0-9]*([_-][a-z0-9]+)*$/u;
+export const GUARDRAIL_NAME_MAX_LENGTH = 64;
 
 /** Who may call an accepted operation. An operation exposed to nobody is callable by nobody. */
 export const CONNECTION_EXPOSURES = ["agent", "bridge", "workflow"] as const;
