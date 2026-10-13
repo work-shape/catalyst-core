@@ -15,7 +15,8 @@ const rendered: Record<Surface["kind"], boolean> = {
   page: true,
   app_view: true,
   app_edit: true,
-  workflow_canvas: false,
+  workflow_canvas: true,
+  agent: true,
   inbox_item: true
 };
 
@@ -40,25 +41,10 @@ const toolDisplay: Surface = {
   node: createElement("p", null, "display content")
 };
 
-/** A surface of a kind that carries no source fields yet. */
-function bareSurface(kind: string): Surface | undefined {
-  const base = { key: `${kind}:1`, title: "Brutto-Netto-Rechner" };
-  switch (kind) {
-    case "workflow_canvas":
-      return { kind, ...base };
-    default:
-      return undefined;
-  }
-}
-
 describe("surface slot frame", () => {
-  it("declares seven kinds and renders six of them", () => {
-    expect(Object.keys(rendered)).toHaveLength(7);
-    expect(
-      Object.entries(rendered)
-        .filter(([, hasRenderer]) => hasRenderer)
-        .map(([kind]) => kind)
-    ).toEqual(["tool_display", "file_preview", "page", "app_view", "app_edit", "inbox_item"]);
+  it("declares eight kinds and renders each of them", () => {
+    expect(Object.keys(rendered)).toHaveLength(8);
+    expect(Object.values(rendered).every((hasRenderer) => hasRenderer)).toBe(true);
   });
 
   it("renders a tool display and a file preview with their own actions", () => {
@@ -129,20 +115,22 @@ describe("surface slot frame", () => {
     });
   });
 
-  it.each(["workflow_canvas"])(
-    "shows the frame with a sentence for %s, which has no renderer",
-    (kind) => {
-      const surface = bareSurface(kind);
-      if (!surface) {
-        throw new Error(`${kind} is not a kind without source fields`);
-      }
-      const markup = renderFrame(surface);
+  it("shows the frame with a sentence for a kind its renderers do not render", () => {
+    const markup = renderToStaticMarkup(
+      createElement(SurfaceSlotFrame, {
+        surface: { ...toolDisplay, title: "Brutto-Netto-Rechner" },
+        renderers: {},
+        mode: "beside",
+        onClose() {},
+        onShowChat() {},
+        onToggleFullscreen() {}
+      })
+    );
 
-      expect(markup).toContain("Brutto-Netto-Rechner");
-      expect(markup).toContain("This content cannot be shown yet.");
-      expect(markup).toContain('aria-label="Close display panel"');
-    }
-  );
+    expect(markup).toContain("Brutto-Netto-Rechner");
+    expect(markup).toContain("This content cannot be shown yet.");
+    expect(markup).toContain('aria-label="Close display panel"');
+  });
 
   it("offers fullscreen and close beside the conversation, and no Show chat", () => {
     const markup = renderFrame(toolDisplay, "beside");

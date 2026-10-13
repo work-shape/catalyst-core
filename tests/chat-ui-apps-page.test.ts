@@ -90,7 +90,7 @@ describe("the Apps page", () => {
     // An App without a description goes by its id, and one without a publish opens its draft.
     expect(markup).toContain(">urlaubsplaner</code>");
     expect(markup).toContain("Draft only");
-    expect(markup).toContain('href="/w/cw_1/apps/urlaubsplaner/edit"');
+    expect(markup).toContain('href="/w/cw_1/app-drafts/urlaubsplaner"');
   });
 
   it("shows each App as a card with one main action, and says when it last changed", () => {
@@ -108,12 +108,12 @@ describe("the Apps page", () => {
     // A published App opens, and its draft is edited beside it.
     expect(cards[0]).toMatch(/<a[^>]*href="\/w\/cw_1\/apps\/angebotsrechner"[^>]*>Open<\/a>/u);
     expect(cards[0]).toMatch(
-      /<a[^>]*href="\/w\/cw_1\/apps\/angebotsrechner\/edit"[^>]*>Edit<\/a>/u
+      /<a[^>]*href="\/w\/cw_1\/app-drafts\/angebotsrechner"[^>]*>Edit<\/a>/u
     );
     expect(cards[0]).toContain("Changed yesterday");
     // An App with a draft alone has the draft as its one action.
     expect(cards[1]?.match(/<a /gu)).toHaveLength(1);
-    expect(cards[1]).toMatch(/<a[^>]*href="\/w\/cw_1\/apps\/urlaubsplaner\/edit"[^>]*>Edit<\/a>/u);
+    expect(cards[1]).toMatch(/<a[^>]*href="\/w\/cw_1\/app-drafts\/urlaubsplaner"[^>]*>Edit<\/a>/u);
 
     // Whoever uses Apps gets Open and nothing a builder works with.
     const member = render(appsPage([summary(), draftOnly], NO_APP_RIGHTS));
