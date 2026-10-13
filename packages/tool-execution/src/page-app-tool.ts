@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { PAGE_NAME_MAX_CHARS, type ToolExecutionContext } from "@vivd-catalyst/core";
+import {
+  PAGE_NAME_MAX_CHARS,
+  type ConversationId,
+  type PolicyValue,
+  type ToolExecutionContext
+} from "@vivd-catalyst/core";
 import { defineTool, toolSuccess, type AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
 
 // A Page becoming an App from the conversation it was built in, and the saves of that Page
@@ -47,6 +52,17 @@ export interface PageAppCalls {
     context: ToolExecutionContext,
     input: { pageId: string }
   ): Promise<PageSaveIntoApp | undefined>;
+  /**
+   * What an administrator set for the App write a call of this conversation makes: `create`
+   * for `page.save_as_app`, which projects `apps.create_from_page` and `assets.put` of an App
+   * in the conversation's workspace; `draft` for `page.save` in a conversation about an App,
+   * which projects `apps.update_from_page` and `assets.put` of that App. The strictest of what
+   * was set; nothing where no setting names them, or where a save of a Page writes no App.
+   */
+  pageAppPolicyFloor(
+    conversationId: ConversationId,
+    write: "create" | "draft"
+  ): Promise<PolicyValue | undefined>;
 }
 
 const inputSchema = z.object({
@@ -71,7 +87,9 @@ const outputSchema = z.object({
   revision: z.number().int()
 });
 
-export function createPageSaveAsAppTool(calls: Pick<PageAppCalls, "saveAsApp">): AnyToolDefinition {
+export function createPageSaveAsAppTool(
+  calls: Pick<PageAppCalls, "saveAsApp" | "pageAppPolicyFloor">
+): AnyToolDefinition {
   return defineTool({
     name: PAGE_SAVE_AS_APP_TOOL_NAME,
     // A new App with a draft. Nothing is published and nothing runs.
@@ -87,6 +105,8 @@ export function createPageSaveAsAppTool(calls: Pick<PageAppCalls, "saveAsApp">):
     outputSchema,
     // A draft changes nothing that runs, as a save of the Page does not.
     permission: { mode: "allow" },
+    // A setting on the operations this projects holds for the agent's call too.
+    policyFloor: ({ conversationId }) => calls.pageAppPolicyFloor(conversationId, "create"),
     async execute(input, context) {
       const created = await calls.saveAsApp(context, input);
       return toolSuccess(created, {

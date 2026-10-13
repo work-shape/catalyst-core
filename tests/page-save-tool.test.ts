@@ -413,7 +413,8 @@ export const Route = createFileRoute("/")({ component: () => <p>never</p> });
         saveIntoSubjectApp: async (_context, input) => {
           written.push(input.pageId);
           return { name: "offers", title: "Offers", saved: true, revision: 2 };
-        }
+        },
+        pageAppPolicyFloor: async () => undefined
       }
     });
     await harness.write("offers", reactPage({ "index.tsx": fileRoute("/") }));

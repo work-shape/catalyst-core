@@ -10,6 +10,7 @@ import {
   moduleOffError,
   normalizePageName,
   operationDenialError,
+  POLICY_VALUES,
   resolvePolicy,
   unknownToJsonValue,
   type ActorAccess,
@@ -21,6 +22,7 @@ import {
   type OperationAuthorization,
   type OperationDefinition,
   type Page,
+  type PolicyValue,
   type ToolExecutionContext
 } from "@vivd-catalyst/core";
 import {
@@ -43,14 +45,26 @@ import type { AssetWorkflowOptions } from "./types";
 
 // What carries the agent's asset tools out: the workflow of the asset operations of the API,
 // called for the person the agent acts for, on the subject of the conversation the call came
-// from, and the reads that find what is on the platform. Opening an asset makes it the subject;
-// nothing else does. Nothing of an asset is decided here: the right, the checks of a
+// from, and the reads that find what is on the platform. Opening an asset makes it the subject,
+// and so does keeping a Page of the conversation as an App; nothing else does. Nothing of an
+// asset is decided here: the right, the checks of a
 // definition, the revision and the audit rows are the ones a call of `assets.get`,
 // `assets.validate`, `assets.put`, `assets.list`, `workspaces.files.list` and
 // `platform.context.get` has.
 
 /** The module whose switch turns changing assets through `assets.put` on and off. */
 const ASSET_WRITE_OPERATION = "assets.put";
+/** The operations a Page's way into an App projects, beside `assets.put` of the App. */
+const APP_FROM_PAGE_OPERATIONS = {
+  create: "apps.create_from_page",
+  draft: "apps.update_from_page"
+} as const;
+
+/** How many revisions of an App back a save of a Page looks for one written from that Page. */
+const APP_REVISIONS_LOOKED_BACK = 200;
+
+const stricterOf = (left: PolicyValue | undefined, right: PolicyValue): PolicyValue =>
+  left === undefined || POLICY_VALUES.indexOf(right) > POLICY_VALUES.indexOf(left) ? right : left;
 
 /** How many operations one list answers. The list has no pages, so this is its bound. */
 const CALLABLE_OPERATION_LIST_MAX = 200;
@@ -146,6 +160,35 @@ const draftNotWritten = (
   message
 });
 
+const DRAFT_CHANGED_ELSEWHERE =
+  "The App's draft was changed elsewhere since this Page last wrote it, so this save did not write over it; the Page is saved. Tell the person: Update app on the Page replaces the draft with the Page.";
+const DRAFT_MOVED_TO_OTHER_PAGE =
+  "Another Page was put into this App since this Page last wrote it, so its draft is now written from that Page and this save did not change it; the Page is saved. Tell the person: Update app on this Page puts this Page into the App again.";
+
+/**
+ * Why a write of the App's draft after a stored Page did not happen, in words the agent may
+ * pass on. A refusal of the App's own checks says what it found; whatever else failed is named
+ * by its kind only, and logged without content.
+ */
+function draftRefusal(error: unknown, logger: AssetWorkflowOptions["logger"]): string {
+  if (isAppError(error)) {
+    if (error.code === "REVISION_CONFLICT") return DRAFT_CHANGED_ELSEWHERE;
+    if (error.code === "FORBIDDEN") {
+      return "The person may not write this App, so its draft was not written; the Page is saved.";
+    }
+    if (error.code === "VALIDATION_FAILED") return error.message;
+    if (error.code === "TIMEOUT") {
+      return "Writing the App's draft took too long, so it was not written; the Page is saved. Save the Page again in a moment.";
+    }
+  } else {
+    logger.error(
+      { error: error instanceof Error ? error.message : "" },
+      "The draft of an App could not be written from its Page"
+    );
+  }
+  return "The App's draft could not be written right now; the Page is saved. Save the Page again in a moment; if it fails again, tell the person to use Update app on the Page.";
+}
+
 export function createPlatformAssetCalls(options: AssetWorkflowOptions): PlatformAssetCalls {
   const workflow = new AssetWorkflow(options);
   const pageApps = new PageApps(options);
@@ -211,6 +254,50 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       { reason: "subject_conversation_shared" },
       { exposeMessage: true }
     );
+  }
+
+  /**
+   * The strictest value an administrator set on any of `operations` for the asset at
+   * `address`, read as the value that was set: a tool's own mode stands where no setting names
+   * the operation, since the instance default for changes is one an agent's call cannot meet.
+   */
+  async function centralFloor(
+    operations: readonly string[],
+    address: { kind: string; name?: string; workspaceId?: string }
+  ): Promise<PolicyValue | undefined> {
+    const policy = options.operationCalls?.deps.policy;
+    if (!policy) return undefined;
+    const centralSettings = await policy.centralSettings();
+    const targets = await workflow.policyTargets(address);
+    let floor: PolicyValue | undefined;
+    for (const name of operations) {
+      const asked = resolvePolicy({
+        definition: { name, effect: "changing", defaultPolicy: "allow" },
+        origin: { kind: "user" },
+        instanceDefaults: policy.instanceDefaults,
+        centralSettings,
+        targets,
+        callerCanConfirm: true,
+        canPause: true
+      });
+      if (asked.source === "central_setting") floor = stricterOf(floor, asked.value);
+    }
+    return floor;
+  }
+
+  /** Whether a revision of the App `name` was ever written from the Page `fromPage` names. */
+  async function wasWrittenFrom(
+    name: string,
+    fromPage: (origin: { pageId: string; conversationId: string }) => boolean
+  ): Promise<boolean> {
+    const revisions = await options.configAssets.store.listConfigAssetRevisions({
+      clientInstanceId: options.clientInstanceId,
+      kind: APP_ASSET_KIND,
+      name,
+      newestFirst: true,
+      page: { limit: APP_REVISIONS_LOOKED_BACK }
+    });
+    return revisions.some(({ origin }) => origin?.kind === "page" && fromPage(origin));
   }
 
   /** The call as the asset operations take one. */
@@ -455,29 +542,28 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       ) {
         return undefined;
       }
+      const app = { name: row.name, title: titleOf(APP_ASSET_KIND, row.name, row.config ?? {}) };
       // Only the App this Page became, or was put into, is written by the Page's saves.
       const origin = await options.configAssets.store.getConfigAssetPageOrigin({
         clientInstanceId: options.clientInstanceId,
         assetId: row.id
       });
-      if (
-        origin?.pageId !== input.pageId ||
-        origin.conversationId !== conversation.id ||
-        !isPageId(origin.pageId)
-      ) {
-        return undefined;
+      const fromThisPage = (named: { pageId: string; conversationId: string } | undefined) =>
+        named?.pageId === input.pageId && named.conversationId === conversation.id;
+      if (!fromThisPage(origin) || !isPageId(input.pageId)) {
+        // Another Page was put into the App since this one wrote it: the draft moved away.
+        return (await wasWrittenFrom(row.name, fromThisPage))
+          ? draftNotWritten(app, DRAFT_MOVED_TO_OTHER_PAGE)
+          : undefined;
       }
       const page = await options.stores.pages.getPage({
         clientInstanceId: options.clientInstanceId,
         conversationId: conversation.id,
-        pageId: origin.pageId
+        pageId: input.pageId
       });
       if (!page) return undefined;
-      const app = { name: row.name, title: titleOf(APP_ASSET_KIND, row.name, row.config ?? {}) };
-      const elsewhere =
-        "The App's draft was changed elsewhere since this Page last wrote it, so this save did not write over it; the Page is saved. Tell the person: Update app on the Page replaces the draft with the Page.";
       if (row.revisionOrigin?.kind !== "page" || row.revisionOrigin.pageId !== page.id) {
-        return draftNotWritten(app, elsewhere);
+        return draftNotWritten(app, DRAFT_CHANGED_ELSEWHERE);
       }
       try {
         const updated = await pageApps.update(await callOf(context), page, {
@@ -488,41 +574,41 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
         });
         return { ...app, saved: true, revision: updated.revision };
       } catch (error) {
-        // The Page is saved either way: a refusal of the App's write is the answer's, not a
-        // failed save.
-        if (!isAppError(error)) throw error;
-        if (error.code === "REVISION_CONFLICT") return draftNotWritten(app, elsewhere);
-        if (error.code === "FORBIDDEN") {
-          return draftNotWritten(
-            app,
-            "The person may not write this App, so its draft was not written; the Page is saved."
-          );
-        }
-        if (error.code === "VALIDATION_FAILED") return draftNotWritten(app, error.message);
-        throw error;
+        // The Page is saved either way: a write of the App that did not happen is the answer's,
+        // not a failed save.
+        return draftNotWritten(app, draftRefusal(error, options.logger));
       }
     },
 
     async putPolicyFloor(conversationId) {
-      const policy = options.operationCalls?.deps.policy;
       const conversation = await options.stores.conversations.getConversation(
         options.clientInstanceId,
         conversationId
       );
       const subject = conversation?.subject;
-      if (!policy || !subject) return undefined;
-      // Read as the value that was set: the tool's own mode stands where no setting names the
-      // operation, since the instance default for changes is one an agent's call cannot meet.
-      const asked = resolvePolicy({
-        definition: { name: ASSET_WRITE_OPERATION, effect: "changing", defaultPolicy: "allow" },
-        origin: { kind: "user" },
-        instanceDefaults: policy.instanceDefaults,
-        centralSettings: await policy.centralSettings(),
-        targets: await workflow.policyTargets(subject),
-        callerCanConfirm: true,
-        canPause: true
+      return subject ? centralFloor([ASSET_WRITE_OPERATION], subject) : undefined;
+    },
+
+    async pageAppPolicyFloor(conversationId, write) {
+      const conversation = await options.stores.conversations.getConversation(
+        options.clientInstanceId,
+        conversationId
+      );
+      if (!conversation) return undefined;
+      const workspaceId = conversation.collaborationWorkspaceId;
+      if (write === "create") {
+        return centralFloor([APP_FROM_PAGE_OPERATIONS.create, ASSET_WRITE_OPERATION], {
+          kind: APP_ASSET_KIND,
+          workspaceId
+        });
+      }
+      // A save of a Page writes an App only where the conversation is about one.
+      const subject = conversation.subject;
+      if (subject?.kind !== APP_ASSET_KIND) return undefined;
+      return centralFloor([APP_FROM_PAGE_OPERATIONS.draft, ASSET_WRITE_OPERATION], {
+        ...subject,
+        workspaceId
       });
-      return asked.source === "central_setting" ? asked.value : undefined;
     },
 
     async readContext(context) {

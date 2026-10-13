@@ -6,6 +6,7 @@ import {
   normalizePageName,
   PAGE_NAME_MAX_CHARS,
   requireFileSetWithinLimits,
+  type ConversationId,
   type PageBuildClient,
   type PageBuildIssue,
   type ToolExecutionContext,
@@ -31,9 +32,10 @@ export interface PageSaveToolOptions {
   builds: PageBuildClient;
   /**
    * Where a save also writes the App the conversation is about, when that App's draft is the
-   * Page's. Without it a save writes the Page alone.
+   * Page's, and what an administrator set for that write. Without it a save writes the Page
+   * alone.
    */
-  apps?: Pick<PageAppCalls, "saveIntoSubjectApp">;
+  apps?: Pick<PageAppCalls, "saveIntoSubjectApp" | "pageAppPolicyFloor">;
 }
 
 const pageSaveInputSchema = z.object({
@@ -85,6 +87,7 @@ const pageSaveOutputSchema = z.union([
 type PageSaveOutput = z.infer<typeof pageSaveOutputSchema>;
 
 export function createPageSaveTool(options: PageSaveToolOptions): AnyToolDefinition {
+  const { apps } = options;
   return defineTool({
     name: PAGE_SAVE_TOOL_NAME,
     // A saved revision outlives the call and shows beside the conversation.
@@ -105,6 +108,14 @@ export function createPageSaveTool(options: PageSaveToolOptions): AnyToolDefinit
     // Runs on the agent's own call, like the workspace tools that wrote the folder. Without a
     // mode the instance default for changes would apply.
     permission: { mode: "allow" },
+    // In a conversation about an App the save writes that App's draft: a setting on the
+    // operations that write it holds for the save too.
+    ...(apps
+      ? {
+          policyFloor: ({ conversationId }: { conversationId: ConversationId }) =>
+            apps.pageAppPolicyFloor(conversationId, "draft")
+        }
+      : {}),
     execute(input, context) {
       return savePage(options, input, context);
     }
