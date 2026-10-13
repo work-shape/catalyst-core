@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
@@ -64,6 +65,11 @@ const e2eConfigPath = resolve(repoRoot, process.env.E2E_CONFIG_PATH ?? generated
 const e2eSessionTokenSecret = "e2e-session-token-secret-with-at-least-24-characters";
 const e2eServerCredential = "e2e-server-to-server-credential";
 const e2eServiceAccessTokenSecret = "e2e-service-access-token-secret-with-32-characters";
+/** The port the sample MCP server of the connection editor spec listens on. */
+const e2eSampleMcpPort = process.env.E2E_SAMPLE_MCP_PORT ?? "4219";
+// The key of the Secret Store of one run. Every API the suite starts inherits it, a second API
+// of a spec too, because the config names it.
+process.env.E2E_SECRET_STORE_KEY ??= randomBytes(32).toString("base64");
 
 const children = new Set();
 let cleanupStarted = false;
@@ -166,6 +172,7 @@ Environment:
                         (user, password and database agent_chat); start no container
   E2E_SKIP_BUILD=1      Skip package/server builds
   E2E_KEEP_STACK=1      Leave services running for debugging
+  E2E_SAMPLE_MCP_PORT   Port of the sample MCP server a spec starts, default 4219
 
 Examples:
   node scripts/run-chat-e2e.mjs --state
@@ -180,7 +187,11 @@ async function prepareConfig() {
   const fixture = await readFile(fixturePath, "utf8");
   const generated = fixture
     .replaceAll("http://127.0.0.1:4210", e2eApiUrl)
-    .replaceAll("http://127.0.0.1:5273", e2eUiUrl);
+    .replaceAll("http://127.0.0.1:5273", e2eUiUrl)
+    .replace(
+      "protocol: http, host: 127.0.0.1, port: 4219",
+      `protocol: http, host: 127.0.0.1, port: ${e2eSampleMcpPort}`
+    );
   await writeFile(e2eConfigPath, generated);
 }
 
@@ -370,7 +381,8 @@ async function runPlaywright() {
       E2E_API_URL: e2eApiUrl,
       E2E_UI_URL: e2eUiUrl,
       E2E_CONFIG_PATH: e2eConfigPath,
-      E2E_SERVER_CREDENTIAL: e2eServerCredential
+      E2E_SERVER_CREDENTIAL: e2eServerCredential,
+      E2E_SAMPLE_MCP_PORT: e2eSampleMcpPort
     }
   });
 }

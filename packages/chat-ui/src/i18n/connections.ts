@@ -8,7 +8,7 @@ export const connections = defineTranslations({
       "This connection is defined in the release config. The operator changes it there; it cannot be changed here.",
     "connections.new": "New connection",
     "connections.titleLabel": "Name",
-    "connections.deleteTitle": "Delete connection {name}?",
+    "connections.deleteTitle": "Delete connection '{name}'?",
     "connections.deleteDescription":
       "Its credential is deleted with it, and nothing can call it afterwards. The account in the outside system stays as it is.",
     "connections.emptyReadOnly": "No connections yet.",
@@ -198,7 +198,7 @@ export const connections = defineTranslations({
       "Diese Verbindung ist in der Release-Konfiguration festgelegt. Der Betreiber ändert sie dort; hier lässt sie sich nicht ändern.",
     "connections.new": "Neue Verbindung",
     "connections.titleLabel": "Name",
-    "connections.deleteTitle": "Verbindung {name} löschen?",
+    "connections.deleteTitle": "Verbindung „{name}“ löschen?",
     "connections.deleteDescription":
       "Ihre Zugangsdaten werden mit ihr gelöscht, und danach kann nichts sie aufrufen. Das Konto im externen System bleibt, wie es ist.",
     "connections.emptyReadOnly": "Noch keine Verbindungen.",
