@@ -4021,6 +4021,13 @@ test("panels at the right of the conversation open and close in one step, leave 
       ].join("\n")
     )
   });
+  // The chip says the size once the upload stands; a message sent before that goes without the file.
+  await expect(
+    page
+      .locator("form")
+      .filter({ has: page.getByPlaceholder("Message") })
+      .getByText(/ · \d+ B$/u)
+  ).toBeVisible();
   await page
     .getByPlaceholder("Message")
     .fill(
@@ -4067,11 +4074,17 @@ test("panels at the right of the conversation open and close in one step, leave 
     throw new Error("The header or the Resources button has no box.");
   }
   expect(toggleBox.y + toggleBox.height).toBeLessThanOrEqual(header.y + header.height);
+  // The thread scrolls under the header's row, so a message may well stand at the button's
+  // height: the button is beside the column of the messages and none reaches under it.
   for (const message of await page.locator(".group\\/message").all()) {
     const box = await message.boundingBox();
-    expect(box && box.y < toggleBox.y + toggleBox.height && box.y + box.height > toggleBox.y).toBe(
-      false
-    );
+    expect(
+      box &&
+        box.x < toggleBox.x + toggleBox.width &&
+        box.x + box.width > toggleBox.x &&
+        box.y < toggleBox.y + toggleBox.height &&
+        box.y + box.height > toggleBox.y
+    ).toBe(false);
   }
 
   // The file opens from the message while the card is closed, and Escape closes it.
