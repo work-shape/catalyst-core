@@ -1,5 +1,5 @@
 import { ShieldCheck } from "lucide-react";
-import { Badge, Chip } from "@vivd-catalyst/ui";
+import { Badge } from "@vivd-catalyst/ui";
 import type { BuildAssetViewProps, BuildListedKind } from "./build-asset-kind";
 import { GUARDRAIL_OUTCOME_VIEWS } from "./guardrail-model";
 import { GuardrailPage } from "./guardrail-page";
@@ -28,21 +28,15 @@ export const guardrailKind: BuildListedKind = {
   icon: ShieldCheck,
   view: { Page: GuardrailAssetPage, missingText: "guardrails.missing" },
   rowText: (asset) => asset.description,
+  // Only what a hit does: every Guardrail is checked by a model so far, and its page says so.
   badges: (asset, t) => {
-    const { outcome, checkKind } = asset.attributes ?? {};
+    const outcome = asset.attributes?.outcome;
     const view =
       outcome === "block" || outcome === "warn" ? GUARDRAIL_OUTCOME_VIEWS[outcome] : undefined;
-    return (
-      <>
-        {checkKind === "model_judge" ? (
-          <Chip size="sm">{t("guardrails.checkModelJudge")}</Chip>
-        ) : null}
-        {view ? (
-          <Badge tone={view.tone} dot>
-            {t(view.label)}
-          </Badge>
-        ) : null}
-      </>
-    );
+    return view ? (
+      <Badge tone={view.tone} dot>
+        {t(view.label)}
+      </Badge>
+    ) : null;
   }
 };
