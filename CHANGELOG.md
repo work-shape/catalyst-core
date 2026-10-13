@@ -29,8 +29,8 @@ contain breaking changes; a patch version does not.
   `guardrails`: roll back with the config that still has `approvalChecks`, or the instance runs
   no checks.
 - **Guardrails answer at every before-event:** a guardrail of release config binds to
-  `asset.before_write` (each asset `assets.put` and `assets.sync` save, and an agent's save of
-  its conversation's subject), `operation.before_call` (every call), `app.before_publish`,
+  `asset.before_write` (each asset `assets.put` and `assets.sync` save, an agent's save of its
+  conversation's subject, and the skill a `propose_skill_change` would write), `operation.before_call` (every call), `app.before_publish`,
   `workflow.before_publish` or `approval_request.before_create`. The before-events of a call go
   through the event emitter, which runs the guardrails bound to them. A `filter` narrows by
   what its event knows: `kind` (an asset's or a request's), `operation` (a name or a prefix

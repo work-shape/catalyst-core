@@ -57,6 +57,22 @@ export function guardrailPatternError(pattern: string): string | undefined {
     return `The pattern is no RE2 expression, which has no backreferences and no lookaround: ${error instanceof Error ? error.message : String(error)}`;
   }
   return compiled.maxChars < GUARDRAIL_PATTERN_MIN_READ_CHARS
-    ? `The pattern is too complex to check ${GUARDRAIL_PATTERN_MIN_READ_CHARS} characters in time; it reads ${compiled.maxChars}. Split it into several guardrails or use fewer and smaller repetitions such as {1,1000}`
+    ? `The pattern is too complex to check ${GUARDRAIL_PATTERN_MIN_READ_CHARS} characters in time; it reads ${compiled.maxChars}. Split it into several guardrails, or repeat less than in {1000}`
     : undefined;
+}
+
+/** Every string of a definition, keys and values, in document order, as a guardrail reads it. */
+export function guardrailStringsOf(value: unknown): string[] {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(guardrailStringsOf);
+  if (value !== null && typeof value === "object") {
+    return Object.entries(value).flatMap(([key, entry]) => [key, ...guardrailStringsOf(entry)]);
+  }
+  return [];
+}
+
+/** The texts of one field joined, or `null` where they are more than a check reads. */
+export function guardrailFieldOf(texts: readonly string[]): string | null {
+  const text = texts.join("\n");
+  return text.length > GUARDRAIL_CHECKED_FIELD_MAX_CHARS ? null : text;
 }

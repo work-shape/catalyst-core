@@ -6,7 +6,11 @@ import {
   type OperationBeforeEvent
 } from "@vivd-catalyst/core";
 import type { AssetSyncItem } from "@vivd-catalyst/api-contract";
-import { GUARDRAIL_CHECKED_FIELD_MAX_CHARS } from "@vivd-catalyst/config-schema";
+import {
+  GUARDRAIL_CHECKED_FIELD_MAX_CHARS,
+  guardrailFieldOf,
+  guardrailStringsOf
+} from "@vivd-catalyst/config-schema";
 import { readSourceFiles, type AssetFileInput } from "./asset-files";
 import { readDefinitionName } from "./asset-kinds/shared";
 import type { AssetWorkflowOptions } from "./types";
@@ -30,8 +34,8 @@ export function assetWriteEvent(input: {
     subject: { kind: input.kind, name: input.name },
     checkable: () => ({
       name: input.name,
-      content: textOf([
-        ...(input.config === undefined ? [] : stringsOf(input.config)),
+      content: guardrailFieldOf([
+        ...(input.config === undefined ? [] : guardrailStringsOf(input.config)),
         ...(input.files ?? []).flatMap((file) => {
           const text = "text" in file ? file.text : decodedText(file.base64);
           return text === undefined ? [] : [text];
@@ -106,7 +110,7 @@ async function revisionText(
   options: Parameters<typeof publishEvents>[0],
   revision: Pick<ConfigAssetRevisionRecord, "assetId" | "fileSetId"> & { config: JsonObject }
 ): Promise<string | null> {
-  const texts = stringsOf(revision.config);
+  const texts = guardrailStringsOf(revision.config);
   if (revision.fileSetId) {
     const fileSet = await options.stores.pages.getAssetFileSet({
       clientInstanceId: options.clientInstanceId,
@@ -128,17 +132,7 @@ async function revisionText(
       }
     }
   }
-  return textOf(texts);
-}
-
-/** Every string of a definition, keys and values, in document order. */
-function stringsOf(value: unknown): string[] {
-  if (typeof value === "string") return [value];
-  if (Array.isArray(value)) return value.flatMap(stringsOf);
-  if (value !== null && typeof value === "object") {
-    return Object.entries(value).flatMap(([key, entry]) => [key, ...stringsOf(entry)]);
-  }
-  return [];
+  return guardrailFieldOf(texts);
 }
 
 /** The text of a file sent as bytes, where it is UTF-8 without a NUL, as a read answers it. */
@@ -150,9 +144,4 @@ function decodedText(base64: string): string | undefined {
   } catch {
     return undefined;
   }
-}
-
-function textOf(texts: readonly string[]): string | null {
-  const text = texts.join("\n");
-  return text.length > GUARDRAIL_CHECKED_FIELD_MAX_CHARS ? null : text;
 }

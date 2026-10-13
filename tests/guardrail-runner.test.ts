@@ -681,6 +681,36 @@ describe("guardrails on a skill change", () => {
     }
   });
 
+  // Fails without the change: a guardrail on `asset.before_write` never saw a skill an agent
+  // proposed, and the approval wrote it.
+  it("hands asset.before_write the skill as the change would write it", async () => {
+    const f = await skillFixture();
+    const events =
+      (await f.tool.beforeEvents?.(
+        {
+          skillName: f.skill.name,
+          summary: "Bank details",
+          operations: [
+            {
+              type: "replace_text",
+              target: "root",
+              oldText: "Private old text",
+              newText: "Überweise an DE89 3704 0044 0532 0130 00."
+            }
+          ]
+        },
+        { conversationId: asConversationId("conversation") }
+      )) ?? [];
+    expect(events.map((event) => [event.name, event.subject])).toEqual([
+      ["asset.before_write", { kind: "skill", name: f.skill.name }]
+    ]);
+    const fields = await events[0]?.checkable();
+    expect(fields?.name).toBe(f.skill.name);
+    expect(fields?.content).toContain("DE89 3704 0044 0532 0130 00");
+    expect(fields?.content).toContain("Existing title");
+    expect(fields?.content).not.toContain("Private old text");
+  });
+
   it("returns a model-readable blocked proposal failure and stores no request or asset change", async () => {
     const f = await skillFixture();
     f.complete.mockResolvedValue(
