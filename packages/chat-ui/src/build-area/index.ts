@@ -21,6 +21,15 @@ export type {
   ConnectionSource,
   ConnectionTestRun
 } from "./connection-source";
+export { dataStoreKindOn } from "./data-store-kind";
+export { dataStoreStateView, formatDataStoreSize } from "./data-store-model";
+export type {
+  DataStoreRead,
+  DataStoreRows,
+  DataStoreSchema,
+  DataStoreSource,
+  DataStoreState
+} from "./data-store-source";
 export { connectionToolsView, type ConnectionToolsRead } from "./connection-tools";
 export { toggleToolName } from "./tool-group";
 export { assetIdFromTitle, resolveBuildPlace, visibleBuildKinds } from "./build-model";

@@ -11,6 +11,7 @@ import { common } from "./common";
 import { configAssets } from "./config-assets";
 import { connections } from "./connections";
 import { conversation } from "./conversation";
+import { dataStores } from "./data-stores";
 import { files } from "./files";
 import { inbox } from "./inbox";
 import { navigation } from "./navigation";
@@ -40,6 +41,7 @@ export const translations = combineTranslations(common)
   .and(configAssets)
   .and(connections)
   .and(conversation)
+  .and(dataStores)
   .and(files)
   .and(inbox)
   .and(navigation)
