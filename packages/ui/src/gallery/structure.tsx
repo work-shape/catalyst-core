@@ -99,6 +99,24 @@ function PageHeaderSamples({ text }: { text: GalleryText }) {
           </Page>
         </div>
       </Samples>
+      <Samples label="descriptionPlacement: inline">
+        <div className="w-full overflow-hidden rounded-lg border">
+          <PageHeader
+            variant="detail"
+            headingLevel={2}
+            className="static border-b-0"
+            back={
+              <IconButton label={text.headerBack}>
+                <ArrowLeft aria-hidden="true" />
+              </IconButton>
+            }
+            title={text.rowAgent}
+            description={text.headerListDescription}
+            descriptionPlacement="inline"
+            {...actions}
+          />
+        </div>
+      </Samples>
       <Samples label={text.headerDetailBreadcrumb}>
         <div className="w-full overflow-hidden rounded-lg border">
           <PageHeader

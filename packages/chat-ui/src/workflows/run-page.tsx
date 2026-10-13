@@ -170,6 +170,11 @@ export function WorkflowRunPageView({
       ? undefined
       : t("workflows.run.title", { date: formatMoment(run.createdAt, locale) });
   const duration = run === undefined ? undefined : durationText(run, now, translation);
+  // Who started the run and how long it took or has been going.
+  const secondary =
+    run === undefined
+      ? undefined
+      : [startedByText(run, t), duration].filter((part) => part !== undefined).join(" · ");
   // A step that failed says why itself. Until the page holds that step, the run says it.
   const failedStepHeld = (read.stepRuns ?? []).some((stepRun) => stepRun.failure !== undefined);
   const parent = run?.parent;
@@ -220,25 +225,23 @@ export function WorkflowRunPageView({
         state={run ? <RunStateBadge status={run.status} stopping={stopping} /> : undefined}
         description={
           run ? (
-            // On a narrow page the Workflow's name has a line of its own; beside each other
-            // a dot stands between the name and who started the run.
-            <span className="flex min-w-0 flex-col gap-x-1.5 sm:flex-row sm:flex-wrap">
+            <>
               {workflow ? (
                 <>
                   <TextLink {...routeLink({ kind: "workflow", ...address }, onOpenRoute)}>
                     {workflow.name}
                   </TextLink>
-                  <span aria-hidden="true" className="max-sm:hidden">
-                    ·
-                  </span>
+                  <span aria-hidden="true"> · </span>
                 </>
               ) : null}
-              <span>
-                {[startedByText(run, t), duration].filter((part) => part !== undefined).join(" · ")}
-              </span>
-            </span>
+              {secondary}
+            </>
           ) : undefined
         }
+        descriptionPlacement="inline"
+        descriptionTooltip={[workflow?.name, secondary]
+          .filter((part) => part !== undefined && part !== "")
+          .join(" · ")}
         primaryAction={
           run === undefined ? undefined : !run.ended ? (
             canCancel && !stopping ? (

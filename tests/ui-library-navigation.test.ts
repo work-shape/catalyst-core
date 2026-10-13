@@ -433,6 +433,31 @@ describe("navigation, page structure and data components", () => {
     expect(markup).toMatch(/<h1[^>]*>NAME<\/h1>/u);
   });
 
+  it("puts an inline description on the name's row of a detail head", () => {
+    const head = (descriptionPlacement: "below" | "inline") =>
+      render(
+        createElement(PageHeader, {
+          variant: "detail",
+          title: "NAME",
+          state: "STATE",
+          description: "ABOUT",
+          descriptionPlacement,
+          primaryAction: "PRIMARY"
+        })
+      );
+    const inline = head("inline");
+    const order = ["NAME", "STATE", "ABOUT", "PRIMARY"].map((slot) => inline.indexOf(slot));
+
+    expect([...order].sort((left, right) => left - right)).toEqual(order);
+    // The row never wraps: the name is cut after the description gave way.
+    expect(inline).toMatch(/<h1[^>]*class="[^"]*truncate[^"]*"[^>]*>NAME<\/h1>/u);
+    expect(inline).toMatch(/data-slot="page-header-description"[^>]*>ABOUT</u);
+    expect(inline).not.toMatch(/<header[^>]*class="[^"]*flex-wrap/u);
+    // Without the prop the description keeps its own line under the name.
+    expect(head("below")).not.toContain("page-header-description");
+    expect(head("below")).toMatch(/<header[^>]*class="[^"]*flex-wrap/u);
+  });
+
   it("keeps a section flat and gives it its anchor, count and action", () => {
     const markup = render(
       createElement(
