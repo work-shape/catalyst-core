@@ -14,11 +14,13 @@ import {
   type IconFamily
 } from "../status/registry-icon";
 import { IconTile } from "../status/icon-tile";
+import { ConnectionIcon, type ConnectionIconSize } from "../status/connection-icon";
 import { KnowsHowTo, SkillIcon, type SkillIconSize } from "../status/skill-icon";
 import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
 
 const skillIconSizes: readonly SkillIconSize[] = ["sm", "md", "lg"];
+const connectionIconSizes: readonly ConnectionIconSize[] = ["sm", "md", "lg"];
 const shippedSkillIcons = ["spreadsheet", "document", "presentation", "pdf"] as const;
 
 const iconFamilies: readonly IconFamily[] = ["file", "service", "skill", "tool"];
@@ -340,6 +342,33 @@ export const statusGallery: GalleryGroup = {
                 </span>
               ))}
             </IconRegistryProvider>
+          </Samples>
+        </>
+      )
+    },
+    {
+      name: "ConnectionIcon",
+      components: ["ConnectionIcon"],
+      render: (text) => (
+        <>
+          <Samples label={text.connectionIconSizes}>
+            {connectionIconSizes.map((size) => (
+              <span
+                key={size}
+                data-gallery-sample={`connection-icon-${size}`}
+                className="flex items-center gap-2"
+              >
+                <ConnectionIcon size={size} />
+                <ConnectionIcon size={size} category="database" />
+                <ConnectionIcon size={size} category="mail" />
+                <ConnectionIcon size={size} category="files" />
+                <ConnectionIcon size={size} category="web" />
+              </span>
+            ))}
+          </Samples>
+          <Samples label={text.connectionIconUnknownService}>
+            <ConnectionIcon service="not-registered" category="database" />
+            <ConnectionIcon service="not-registered" />
           </Samples>
         </>
       )

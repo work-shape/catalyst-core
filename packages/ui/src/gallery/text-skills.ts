@@ -17,6 +17,8 @@ export interface SkillsGalleryText {
   skillPlainLanguage: string;
   skillPlainLanguageSummary: string;
   skillOfferStructure: string;
+  connectionIconSizes: string;
+  connectionIconUnknownService: string;
   starterListLabel: string;
   starterSheet: string;
   starterSheetHint: string;
@@ -47,6 +49,8 @@ export const skillsGalleryText: Record<"en" | "de", SkillsGalleryText> = {
     skillPlainLanguage: "Plain language",
     skillPlainLanguageSummary: "Knows how to write short, easy sentences in German and English.",
     skillOfferStructure: "Offer structure",
+    connectionIconSizes: "The generic Connection and the four categories, in the three sizes",
+    connectionIconUnknownService: "A service nobody registered: its category, else the generic one",
     starterListLabel: "Suggestions to start with",
     starterSheet: "Turn a list into a spreadsheet",
     starterSheetHint: "With formulas and a chart",
@@ -79,6 +83,9 @@ export const skillsGalleryText: Record<"en" | "de", SkillsGalleryText> = {
     skillPlainLanguageSummary:
       "Weiß, wie man kurze, einfache Sätze auf Deutsch und Englisch schreibt.",
     skillOfferStructure: "Angebotsaufbau",
+    connectionIconSizes: "Die allgemeine Connection und die vier Kategorien, in den drei Größen",
+    connectionIconUnknownService:
+      "Ein Dienst, den niemand registriert hat: seine Kategorie, sonst das allgemeine Symbol",
     starterListLabel: "Vorschläge für den Einstieg",
     starterSheet: "Aus einer Liste eine Tabelle machen",
     starterSheetHint: "Mit Formeln und einem Diagramm",

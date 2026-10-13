@@ -13,6 +13,11 @@ export {
   type BadgeTone
 } from "./badge";
 export { Chip, ScopeChip, type ChipProps, type ChipSize, type ScopeChipProps } from "./chip";
+export {
+  ConnectionIcon,
+  type ConnectionIconProps,
+  type ConnectionIconSize
+} from "./connection-icon";
 export { CountBadge, type CountBadgeProps, type CountBadgeTone } from "./count-badge";
 export { IconTile, type IconTileProps, type IconTileSize } from "./icon-tile";
 export {

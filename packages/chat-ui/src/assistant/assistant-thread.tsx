@@ -24,6 +24,7 @@ import { useKeepReadingPlace } from "./reading-place";
 import type { SendBlock } from "./send-block";
 import { useMoveWithPanels } from "../surface/panel-move";
 import { findRunActivity, shouldShowRunActivity } from "./thread-activity";
+import { ToolSubjectsProvider } from "./tool-subjects";
 
 /** How long the composer takes to settle at the bottom after the first message. */
 const COMPOSER_SETTLE_MS = 220;
@@ -137,6 +138,12 @@ export function AssistantThread({
   const { t } = useTranslation();
   const agent = getSelectedAgent(config, selectedAgentName);
   const initialPrompts = agent?.initialPrompts ?? [];
+  // A conversation names what a tool call touched from the agents the person is offered,
+  // here and in their own workspace.
+  const toolSubjectAgents = useMemo(
+    () => [...(config?.agents ?? []), ...agents],
+    [config?.agents, agents]
+  );
   const startPage =
     useAuiState((state) => state.thread.isEmpty) &&
     messagesLoaded &&
@@ -198,15 +205,17 @@ export function AssistantThread({
 
             {messagesEnabled ? (
               <div className="flex flex-col gap-6 pb-12 empty:hidden md:pb-16">
-                <ThreadPrimitive.Messages>
-                  {() => (
-                    <ThreadMessage
-                      conversationRunning={conversationRunning}
-                      activeRunId={activeRunId}
-                      optimisticPending={optimisticPending}
-                    />
-                  )}
-                </ThreadPrimitive.Messages>
+                <ToolSubjectsProvider agents={toolSubjectAgents}>
+                  <ThreadPrimitive.Messages>
+                    {() => (
+                      <ThreadMessage
+                        conversationRunning={conversationRunning}
+                        activeRunId={activeRunId}
+                        optimisticPending={optimisticPending}
+                      />
+                    )}
+                  </ThreadPrimitive.Messages>
+                </ToolSubjectsProvider>
                 <RunActivityRow
                   activeRunId={activeRunId}
                   conversationRunning={conversationRunning}
