@@ -1,21 +1,22 @@
 import { seedReleaseGuardrails } from "@vivd-catalyst/chat-server";
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import type { ClientInstanceId, Logger, PlatformStores } from "@vivd-catalyst/core";
+import type { PlatformStores } from "@vivd-catalyst/core";
 import type { InstanceConnections } from "./connections";
+import { seedInstanceShippedSkills } from "./shipped-skills";
 
 /**
- * Makes the stored assets that release config defines equal to it: its Connections, then its
- * Guardrails. Only the API process seeds, before it takes a request; a worker reads what is
- * stored. A seed that fails closes what the start had opened.
+ * What the API process writes before it takes a request: the Connections and Guardrails
+ * release config defines and the skills the platform ships. A worker reads what is stored. A
+ * seed that fails closes what the start had opened.
  */
-export async function seedReleaseAssets(execution: {
-  config: ClientInstanceConfig;
-  clientInstanceId: ClientInstanceId;
-  store: PlatformStores;
-  logger: Logger;
-  connections?: InstanceConnections | undefined;
-  close(): Promise<void>;
-}): Promise<void> {
+export async function seedInstance(
+  execution: Parameters<typeof seedInstanceShippedSkills>[0] & {
+    config: ClientInstanceConfig;
+    store: PlatformStores;
+    connections?: InstanceConnections | undefined;
+    close(): Promise<void>;
+  }
+): Promise<void> {
   try {
     await execution.connections?.seed();
     const guardrails = await seedReleaseGuardrails({
@@ -27,6 +28,7 @@ export async function seedReleaseAssets(execution: {
       // Names only. No instruction of a guardrail is logged.
       execution.logger.info({ guardrails }, "Release Guardrails reconciled");
     }
+    await seedInstanceShippedSkills(execution);
   } catch (error) {
     await execution.close();
     throw error;

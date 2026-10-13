@@ -211,6 +211,10 @@ export function WorkspaceMembersView({
   const [addOpen, setAddOpen] = useState(false);
   const [memberPendingRemoval, setMemberPendingRemoval] = useState<WorkspaceMember | undefined>();
   const actorRole = workspace.role;
+  const isRemovable = (member: WorkspaceMember) =>
+    member.userId !== currentUserId &&
+    canRemoveCollaborationWorkspaceMember(actorRole, member.role);
+  const anyRemovable = members?.some(isRemovable) ?? false;
   // Only a workspace people can find gets requests; one that still holds some shows them too.
   const showRequests = workspace.visibility === "discoverable" || (accessRequests?.length ?? 0) > 0;
 
@@ -320,9 +324,7 @@ export function WorkspaceMembersView({
           ) : (
             <List>
               {members.map((member) => {
-                const removable =
-                  member.userId !== currentUserId &&
-                  canRemoveCollaborationWorkspaceMember(actorRole, member.role);
+                const removable = isRemovable(member);
                 return (
                   <ListRow
                     key={member.userId}
@@ -372,6 +374,9 @@ export function WorkspaceMembersView({
                           >
                             <Trash2 aria-hidden="true" />
                           </IconButton>
+                        ) : anyRemovable ? (
+                          // Holds the remove button's place so the role selects stay in one column.
+                          <span aria-hidden="true" className="size-8 shrink-0" />
                         ) : null}
                       </>
                     }

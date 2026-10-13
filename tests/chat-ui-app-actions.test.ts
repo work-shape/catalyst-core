@@ -112,7 +112,7 @@ describe("the Actions side of a draft", () => {
       })
     );
 
-    expect([...head.matchAll(/role="radio"[^>]*>([^<]*)</gu)].map((match) => match[1])).toEqual([
+    expect([...head.matchAll(/role="tab"[^>]*>([^<]*)</gu)].map((match) => match[1])).toEqual([
       "Preview",
       "Files",
       "Actions"

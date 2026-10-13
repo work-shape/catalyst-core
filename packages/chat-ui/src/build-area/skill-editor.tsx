@@ -1,5 +1,5 @@
 import { FileText, Plus, X } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { SKILL_RESOURCE_MEDIA_TYPES, SKILL_SUMMARY_MAX_LENGTH } from "@vivd-catalyst/core";
 import { Button, Field, Input, List, ListRow, Select, Textarea } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
@@ -17,12 +17,15 @@ type SkillResource = SkillFormState["resources"][number];
 export function SkillEditor({
   frame,
   initialForm,
-  editable: instanceEditable
+  editable: instanceEditable,
+  badges
 }: {
   frame: BuildAssetEditorProps;
   initialForm: SkillFormState;
   /** The instance lets people change skills here. */
   editable: boolean;
+  /** What the page head says of the skill beside its title, such as who ships it. */
+  badges?: ReactNode;
 }) {
   const { t } = useTranslation();
   const state = useAssetForm(initialForm);
@@ -175,6 +178,7 @@ export function SkillEditor({
     <AssetEditorShell
       frame={{ ...frame, canWrite: editable }}
       title={form.title.trim() || form.name}
+      badges={badges}
       sections={sections}
       control={{
         changes: countChangedFields(form, state.baseline),

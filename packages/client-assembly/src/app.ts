@@ -62,7 +62,7 @@ import { createInstanceAgentTools, createInstanceOperationCalls } from "./operat
 import { createClientInstanceAuth } from "./auth";
 import { createInstanceConnections, withConnections } from "./connections";
 import { createInstanceAssetKinds } from "./instance-asset-kinds";
-import { seedReleaseAssets } from "./release-seed";
+import { seedInstance } from "./instance-seed";
 import { createClientInstanceMail } from "./mail";
 import type {
   ClientInstanceAttachmentHandler,
@@ -138,7 +138,7 @@ export async function createClientInstanceApp(
     modelGateway
   } = execution;
   // Only the API process seeds, before it takes a request. A worker reads what is stored.
-  await seedReleaseAssets(execution);
+  await seedInstance(execution);
   // A run is a row and a job. The API reads its events from the store; a worker executes it.
   // Where that worker is in this process, the two tell each other and need not poll.
   const inProcess =

@@ -26,6 +26,17 @@ contain breaking changes; a patch version does not.
   ignores the table `guardrail_hits` and the stored guardrails, and it does not read
   `guardrails`: roll back with the config that still has `approvalChecks`, or the instance runs
   no checks.
+- **Skills that ship with the platform:** the guide to the platform (`platform-guide`) and, with
+  Workflows on, `workflow-authoring` are stored skills of origin `release`. The API process
+  writes them at start: a changed one gets a revision in History, one a release no longer ships
+  is deleted, and the same release writes nothing. They are read-only: a write, delete or revert
+  of one is refused with `403` and the reason `shipped_skill`, and a skill that names `origin`
+  or `icon` is refused with `422`. Studio lists them with the label "Platform" and offers "Copy
+  to edit", which creates an ordinary skill. The config CLI neither pulls, diffs nor prunes
+  them. **Upgrade:** an instance that holds a skill of its own named `platform-guide` or
+  `workflow-authoring` stops at start with "The platform ships the skill '<name>', and a skill
+  of that name was created on the instance"; rename that skill before the upgrade. A rollback
+  leaves the stored shipped skills in place until the next start of a release that ships them.
 - **Data Stores, the reads of a store's page:** `data_stores.list` (`GET /api/v1/data-stores`)
   lists the stores a caller may read with the size, the number of tables and the estimate of
   rows of the last measurement (migration `0069_data_store_table_counts` adds the two columns;
@@ -938,6 +949,13 @@ id from config_assets where status = 'deleted')`.
 
 ### Changed
 
+- **Studio:** the list of agents names each agent in the reader's language and shows what it
+  does under its name, in place of its id. `assets.list` takes an optional `locale`; an agent's
+  title and description answer in it where the agent holds that language, and in the
+  instance's default otherwise.
+- **Chat:** the agent list shows each agent's description under its name by default:
+  `ui.showAgentDescriptions` is now `true` unless release config sets it. An instance that
+  wants the names alone sets `ui.showAgentDescriptions: false`.
 - **Chat:** the usage consumption on a model card has six steps in place of four: `very_low`,
   `low`, `moderate`, `elevated`, `high` and `very_high`, and its filled steps take a colour that
   goes from cool to warm with the level. The tier still comes from the model's Customer Rate

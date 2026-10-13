@@ -439,6 +439,26 @@ describe("skill change body", () => {
     expect(markup).toContain("Neue Mitarbeitende begleiten.");
     expect(markup).toContain("<details");
     expect(markup).toContain("Inhalt anzeigen");
+    // Content that is new as a whole is no change to mark: it stands in a neutral block.
+    expect(markup).not.toContain("border-primary");
+  });
+
+  it("marks with the accent only the text that changes", () => {
+    const markup = renderReady({
+      preview: {
+        skillName: "payroll",
+        skillTitle: "Payroll",
+        isNewSkill: false,
+        changes: [
+          { type: "replace", target: "root", before: "Alt", after: "Neu" },
+          { type: "new_resource", target: "references/a.md", after: "Ganz neu" }
+        ]
+      }
+    });
+    const accented = markup.split("border-primary").slice(1);
+
+    expect(accented).toHaveLength(1);
+    expect(accented[0]).toMatch(/^[^<]*"><pre[^>]*>Neu<\/pre>/u);
   });
 
   it("keeps readable changes and drops malformed ones", () => {

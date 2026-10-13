@@ -8,9 +8,15 @@ import {
   type SkillChangePreviewNewSkill
 } from "./skill-change-preview";
 
+/** A block of content that is new as a whole: neutral, with no accent. */
+const WHOLE_CONTENT_CLASS = "rounded-md border border-border bg-card px-3 py-2 text-foreground";
+
 /**
  * Plain-language view of a proposed skill change for people who never see the
  * skill source: whole paragraphs as "before" and "new", never a unified diff.
+ * The accent marks only what changes in text that is already there. Content that
+ * is new as a whole, a new skill or a new file, stands in a neutral block, so it
+ * does not read as a warning.
  * The text itself is shown as source, not rendered Markdown: the agent reads the
  * source, so comments, link definitions and raw HTML must stay visible to the reviewer.
  * Renders nothing for a preview it cannot read; the card's summary remains.
@@ -61,7 +67,7 @@ function SkillChange({
 
   if (change.type === "new_resource") {
     return (
-      <ChangeBlock label={t("skillChangeNewResource")} detail={resource} tone="new">
+      <ChangeBlock label={t("skillChangeNewResource")} detail={resource} tone="whole">
         <FullContent expanded={expanded}>{change.after}</FullContent>
       </ChangeBlock>
     );
@@ -104,7 +110,7 @@ function SkillChange({
 
 function NewSkill({ skill, expanded }: { skill: SkillChangePreviewNewSkill; expanded: boolean }) {
   return (
-    <div className="grid min-w-0 gap-2 rounded-md border-l-2 border-primary bg-primary/5 px-3 py-2">
+    <div className={cn("grid min-w-0 gap-2", WHOLE_CONTENT_CLASS)}>
       <div className="grid min-w-0 gap-0.5">
         <strong className="font-medium text-foreground">{skill.title}</strong>
         {skill.description ? (
@@ -124,7 +130,8 @@ function ChangeBlock({
 }: {
   label: string;
   detail?: string;
-  tone: "before" | "new";
+  /** `before` is the text a change replaces, `new` its replacement, `whole` all-new content. */
+  tone: "before" | "new" | "whole";
   children: ReactNode;
 }) {
   return (
@@ -135,10 +142,15 @@ function ChangeBlock({
       </div>
       <div
         className={cn(
-          "min-w-0 rounded-md px-3 py-2",
-          tone === "new"
-            ? "border-l-2 border-primary bg-primary/5 text-foreground"
-            : "bg-muted/60 text-muted-foreground"
+          "min-w-0",
+          tone === "whole"
+            ? WHOLE_CONTENT_CLASS
+            : cn(
+                "rounded-md px-3 py-2",
+                tone === "new"
+                  ? "border-l-2 border-primary bg-primary/5 text-foreground"
+                  : "bg-muted/60 text-muted-foreground"
+              )
         )}
       >
         {children}
