@@ -1,15 +1,30 @@
 import type { TranslationContextValue } from "../i18n";
-import type { PageBuildError, SurfaceOf } from "../surface/surface";
+import type { PageBuildError, Surface, SurfaceOf } from "../surface/surface";
 
 // What the thread knows of a Page: the calls of `page.save`. A call names the Page, and its
 // answer is the revision it stored or the findings of the build that refused it.
 
 export const PAGE_SAVE_TOOL_NAME = "page.save";
 
+/**
+ * What a stored save did to the App the conversation is about, where the Page is that App's:
+ * the App's draft revision it wrote, or why it wrote none.
+ */
+export type PageSaveApp =
+  | { title: string; saved: true; revision: number }
+  | { title: string; saved: false; message: string };
+
 /** How one call of `page.save` stands. */
 export type PageSave =
   | { state: "building"; name: string | undefined }
-  | { state: "built"; name: string | undefined; pageId: string; fileSetId: string; number: number }
+  | {
+      state: "built";
+      name: string | undefined;
+      pageId: string;
+      fileSetId: string;
+      number: number;
+      app?: PageSaveApp;
+    }
   | { state: "errors"; name: string | undefined; errors: PageBuildError[] }
   | { state: "failed"; name: string | undefined };
 
@@ -32,6 +47,18 @@ function readBuildErrors(value: unknown): PageBuildError[] | undefined {
         ]
       : []
   );
+}
+
+function readSaveApp(value: unknown): PageSaveApp | undefined {
+  if (!isRecord(value) || typeof value.title !== "string") {
+    return undefined;
+  }
+  if (value.saved === true && typeof value.revision === "number") {
+    return { title: value.title, saved: true, revision: value.revision };
+  }
+  return value.saved === false && typeof value.message === "string"
+    ? { title: value.title, saved: false, message: value.message }
+    : undefined;
 }
 
 /**
@@ -63,7 +90,8 @@ export function readPageSave(input: {
     Number.isInteger(number) &&
     number > 0
   ) {
-    return { state: "built", name, pageId, fileSetId, number };
+    const app = readSaveApp(output.app);
+    return { state: "built", name, pageId, fileSetId, number, ...(app ? { app } : {}) };
   }
   const errors = readBuildErrors(output.errors);
   return errors ? { state: "errors", name, errors } : { state: "failed", name };
@@ -107,26 +135,54 @@ interface RunToolCall {
   state?: string;
 }
 
+/** The surface a Page's first save takes while it builds. One per call. */
+export function pageBuildingSurface(
+  callId: string,
+  save: { name: string | undefined },
+  t: TranslationContextValue["t"]
+): SurfaceOf<"page_building"> {
+  return {
+    kind: "page_building",
+    key: `page-building:${callId}`,
+    title: save.name ?? t("pages.unnamed"),
+    callId
+  };
+}
+
+/** What a run's saves of Pages may change in the surface slot. */
+export type PageRunSurface = SurfaceOf<"page"> | SurfaceOf<"page_building">;
+
 /**
- * What the calls of `page.save` in a run ask of the surface slot, in the order they were made:
- * a stored revision opens, and findings go under the revision of the same Page that is shown.
- * `current` is the surface the slot holds. Each call is answered once: `handled` keeps the
- * calls that were.
+ * What the calls of `page.save` in a run ask of the surface slot, in the order they were made.
+ *
+ * - A save that starts takes the slot with its building Page, so the surface opens at the
+ *   agent's first write, unless the slot shows a revision of the same Page, which stays until
+ *   the new one replaces it, or the conversation is about an App: the save writes the App's
+ *   draft, which is shown as the App.
+ * - A stored revision opens, except one that wrote the draft of the App the conversation is
+ *   about: the App's surface shows it.
+ * - Findings go under the revision of the same Page that is shown, or onto its building Page.
+ *
+ * `current` is the surface the slot holds. Each start and each answer counts once: `handled`
+ * keeps the ones that did.
  */
 export function pageSurfaceAfterRunCalls(input: {
   conversationId: string;
   parts: readonly RunToolCall[];
   handled: Set<string>;
-  current: SurfaceOf<"page"> | undefined;
+  current: Surface | undefined;
+  /** The conversation is about an App. */
+  aboutApp?: boolean;
   t: TranslationContextValue["t"];
-}): SurfaceOf<"page"> | undefined {
-  let next: SurfaceOf<"page"> | undefined;
+}): PageRunSurface | undefined {
+  let next: PageRunSurface | undefined;
   for (const part of input.parts) {
+    const callId = part.toolCallId;
     if (
       part.type !== "tool_call" ||
       part.toolName !== PAGE_SAVE_TOOL_NAME ||
-      part.toolCallId === undefined ||
-      input.handled.has(part.toolCallId)
+      callId === undefined ||
+      input.handled.has(callId)
     ) {
       continue;
     }
@@ -135,16 +191,43 @@ export function pageSurfaceAfterRunCalls(input: {
       result: part.state === "output_available" ? part.output : undefined,
       failed: part.state === "output_error"
     });
-    if (save.state === "building") {
-      continue;
-    }
-    input.handled.add(part.toolCallId);
-    if (save.state === "built") {
-      next = pageSurface(input.conversationId, save, input.t);
-      continue;
-    }
     const shown = next ?? input.current;
-    if (save.state === "errors" && shown && save.name !== undefined && shown.title === save.name) {
+    const building = shown?.kind === "page_building" && shown.callId === callId ? shown : undefined;
+    if (save.state === "building") {
+      const startKey = `${callId}:start`;
+      if (input.handled.has(startKey)) {
+        continue;
+      }
+      input.handled.add(startKey);
+      const samePageShown =
+        shown?.kind === "page" && save.name !== undefined && shown.title === save.name;
+      if (!input.aboutApp && !samePageShown) {
+        next = pageBuildingSurface(callId, save, input.t);
+      }
+      continue;
+    }
+    input.handled.add(callId);
+    if (save.state === "built") {
+      // A save that wrote the App's draft is seen as the App. Its building Page, where one was
+      // shown, gives way to the revision rather than stay on.
+      if (save.app === undefined || building) {
+        next = pageSurface(input.conversationId, save, input.t);
+      }
+      continue;
+    }
+    if (building) {
+      next =
+        save.state === "errors"
+          ? { ...building, buildErrors: save.errors }
+          : { ...building, failed: true };
+      continue;
+    }
+    if (
+      save.state === "errors" &&
+      shown?.kind === "page" &&
+      save.name !== undefined &&
+      shown.title === save.name
+    ) {
       next = { ...shown, buildErrors: save.errors };
     }
   }

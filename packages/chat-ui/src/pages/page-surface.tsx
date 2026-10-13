@@ -131,6 +131,42 @@ export function pageSurfaceRendering(surface: SurfaceOf<"page">): {
   };
 }
 
+/**
+ * What the surface frame shows while a Page's first save builds: the place of its preview,
+ * and what the build found when it refused the save.
+ */
+export function pageBuildingSurfaceRendering(surface: SurfaceOf<"page_building">): {
+  content: ReactNode;
+  flush: true;
+} {
+  return { content: <PageBuildingSurface surface={surface} />, flush: true };
+}
+
+function PageBuildingSurface({ surface }: { surface: SurfaceOf<"page_building"> }) {
+  const { t } = useTranslation();
+  const errors = surface.buildErrors ?? [];
+  const refused = surface.failed === true || surface.buildErrors !== undefined;
+  return (
+    <div className="flex h-full min-h-0 flex-col" data-testid="page-building-surface">
+      <div className="min-h-0 flex-1">
+        <PreviewPane
+          source={undefined}
+          state={refused ? "failed" : "starting"}
+          title={t("pages.previewOf", { name: surface.title })}
+          message={t(
+            surface.failed === true
+              ? "pages.cardFailed"
+              : refused
+                ? "pages.cardErrors"
+                : "pages.cardBuilding"
+          )}
+        />
+      </div>
+      {errors.length > 0 ? <PageBuildErrors errors={errors} /> : null}
+    </div>
+  );
+}
+
 /** An address of the instance as the frame needs it: absolute, on the API's origin. */
 export function pageFrameAddress(path: string, apiBaseUrl: string, pageAddress: string): string {
   return new URL(path, new URL(apiBaseUrl, pageAddress)).toString();

@@ -16,6 +16,8 @@ import {
   PageFilesView,
   pageFrameAddress,
   PageSaveCardView,
+  pageBuildingSurface,
+  pageBuildingSurfaceRendering,
   pageSurface,
   pageSurfaceAfterRunCalls,
   PageSurfaceView,
@@ -109,6 +111,25 @@ describe("a call of page.save", () => {
   });
 });
 
+describe("the building Page beside the conversation", () => {
+  const shown = (surface: ReturnType<typeof pageBuildingSurface>, locale?: "de") =>
+    render(pageBuildingSurfaceRendering(surface).content, locale);
+  const building = pageBuildingSurface("call-1", { name: "Offers" }, t);
+
+  it("holds the place of the preview while the first save builds, in English and German", () => {
+    expect(shown(building)).toContain('data-preview-state="starting"');
+    expect(shown(building)).toContain("Building the Page");
+    expect(shown(building, "de")).toContain("Die Page wird gebaut");
+  });
+
+  it("says what refused the save, or that it failed", () => {
+    const refusedMarkup = shown({ ...building, buildErrors: refused.output.errors });
+    expect(refusedMarkup).toContain("The Page could not be built");
+    expect(refusedMarkup).toContain("2 build errors");
+    expect(shown({ ...building, failed: true })).toContain("The Page could not be saved");
+  });
+});
+
 describe("the calls of a run and the surface slot", () => {
   const call = (toolCallId: string, state: string, output?: unknown, name = "Offers") => ({
     type: "tool_call",
@@ -139,10 +160,16 @@ describe("the calls of a run and the surface slot", () => {
     expect(ask(parts, handled)).toBeUndefined();
   });
 
-  it("waits for a call that is still running and opens the newest of several", () => {
+  it("opens the building Page once when a call starts, and the newest of several revisions", () => {
     const handled = new Set<string>();
     const third = { output: { pageId: "page-1", number: 3, fileSetId: "set-3" } };
 
+    expect(ask([call("call-1", "input_available")], handled)).toEqual({
+      kind: "page_building",
+      key: "page-building:call-1",
+      title: "Offers",
+      callId: "call-1"
+    });
     expect(ask([call("call-1", "input_available")], handled)).toBeUndefined();
     expect(
       ask(
@@ -179,6 +206,73 @@ describe("the calls of a run and the surface slot", () => {
     expect(
       ask([{ ...call("call-4", "output_available", built), toolName: "workspace.exec" }])
     ).toBeUndefined();
+  });
+
+  it("leaves the shown revision of the same Page in place while its next save builds", () => {
+    const save = readPageSave({ args: { name: "Offers" }, result: built });
+    if (save.state !== "built") {
+      throw new Error("expected a revision");
+    }
+
+    expect(
+      ask([call("call-2", "input_available")], new Set(), pageSurface("conv-1", save, t))
+    ).toBeUndefined();
+    // Another Page takes the slot as soon as it starts building.
+    expect(
+      ask(
+        [call("call-3", "input_available", undefined, "Prices")],
+        new Set(),
+        pageSurface("conv-1", save, t)
+      )
+    ).toMatchObject({ kind: "page_building", title: "Prices" });
+  });
+
+  it("puts what refused the first save onto its building Page", () => {
+    const building = pageBuildingSurface("call-1", { name: "Offers" }, t);
+
+    const errors = pageSurfaceAfterRunCalls({
+      conversationId: "conv-1",
+      parts: [call("call-1", "output_available", refused)],
+      handled: new Set(["call-1:start"]),
+      current: building,
+      t
+    });
+    expect(errors).toMatchObject({ key: building.key, kind: "page_building" });
+    expect(errors?.kind === "page_building" ? errors.buildErrors : undefined).toHaveLength(2);
+
+    const failed = pageSurfaceAfterRunCalls({
+      conversationId: "conv-1",
+      parts: [call("call-1", "output_error")],
+      handled: new Set(["call-1:start"]),
+      current: building,
+      t
+    });
+    expect(failed).toMatchObject({ key: building.key, failed: true });
+  });
+
+  it("opens no Page for the saves of a conversation about an App: they write the App's draft", () => {
+    const intoApp = {
+      output: {
+        ...built.output,
+        app: { name: "offers", title: "Offers", saved: true, revision: 2 }
+      }
+    };
+    const handled = new Set<string>();
+    const about = (parts: Parameters<typeof ask>[0]) =>
+      pageSurfaceAfterRunCalls({ conversationId: "conv-1", parts, handled, aboutApp: true, t });
+
+    expect(about([call("call-1", "input_available")])).toBeUndefined();
+    expect(about([call("call-1", "output_available", intoApp)])).toBeUndefined();
+    // Where the save's building Page was shown, its revision replaces it.
+    expect(
+      pageSurfaceAfterRunCalls({
+        conversationId: "conv-1",
+        parts: [call("call-2", "output_available", intoApp)],
+        handled: new Set(["call-2:start"]),
+        current: pageBuildingSurface("call-2", { name: "Offers" }, t),
+        t
+      })
+    ).toMatchObject({ kind: "page", key: "page:page-1:set-2" });
   });
 
   it("drops the findings when the next save of the Page succeeds", () => {
@@ -675,6 +769,37 @@ describe("the card of a page.save call", () => {
     expect(
       card({ state: "errors", name: "Offers", errors: refused.output.errors }, {}, "de")
     ).toContain("Es wurde nichts gespeichert. Bitte den Agenten, die Fehler zu beheben.");
+  });
+
+  it("says that the save wrote the draft of the App, which is shown as the App and not opened here", () => {
+    const intoApp = readPageSave({
+      args: { name: "Offers" },
+      result: {
+        output: {
+          ...built.output,
+          app: { name: "offers", title: "Offer desk", saved: true, revision: 3 }
+        }
+      }
+    });
+    expect(intoApp).toMatchObject({ app: { title: "Offer desk", saved: true, revision: 3 } });
+
+    const markup = card(intoApp, { onOpen: () => undefined });
+    expect(markup).toContain("Revision 2, saved to the draft of Offer desk");
+    expect(markup).not.toContain("<button");
+    expect(card(intoApp, {}, "de")).toContain("Revision 2, im Entwurf von Offer desk gespeichert");
+
+    const notWritten = readPageSave({
+      args: { name: "Offers" },
+      result: {
+        output: {
+          ...built.output,
+          app: { name: "offers", title: "Offer desk", saved: false, message: "Changed elsewhere" }
+        }
+      }
+    });
+    expect(card(notWritten, { onOpen: () => undefined })).toContain(
+      "The draft of Offer desk was not changed. The agent says why."
+    );
   });
 
   it("says that the save failed, and names a Page without a name as a Page", () => {
