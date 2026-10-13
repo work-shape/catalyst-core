@@ -1,5 +1,6 @@
 import {
   AppError,
+  ObjectNotFound,
   type AssetScope,
   type ConfigAssetRecord,
   type ConfigAssetState,
@@ -12,7 +13,7 @@ import type { ChatServerOptions } from "./types";
 
 export type ConfigAssetWriterOptions = Pick<
   ChatServerOptions,
-  "config" | "configAssets" | "clientInstanceId"
+  "config" | "configAssets" | "clientInstanceId" | "pages"
 >;
 
 /**
@@ -77,8 +78,22 @@ export async function applyValidatedConfigAssetMutations(
     validateMutations(kinds.kinds, input.mutations, stored);
   validate({ state, assets });
   const read = new Set(assets.map((asset) => asset.activeRevisionId));
+  // The `files` store, which holds the bundle of a write that adds a commit to a repository.
+  const objects = options.pages?.objects;
   return options.configAssets.store.applyConfigAssetMutations({
     ...input,
+    ...(objects
+      ? {
+          repositoryObjectSize: (key: string) =>
+            objects.head(key).then(
+              (head) => head.size,
+              (error: unknown) => {
+                if (error instanceof ObjectNotFound) return undefined;
+                throw error;
+              }
+            )
+        }
+      : {}),
     async validate(locked) {
       const ids = await locked.listActiveRevisionIds();
       const unchanged =

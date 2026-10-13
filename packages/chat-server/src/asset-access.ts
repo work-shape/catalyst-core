@@ -9,6 +9,7 @@ import {
   type AuditRecorder,
   type AuthenticatedIdentity,
   type OperationAuthorization,
+  type OperationRunId,
   type ServedFileSetAsset
 } from "@vivd-catalyst/core";
 import { z } from "zod";
@@ -22,6 +23,11 @@ export interface AssetCall {
   /** Writes audit rows that carry the run's id. */
   audit: AuditRecorder;
   correlationId: string;
+  /**
+   * The Operation Run of the call. A save to a repository is keyed by it, so a call that has
+   * none cannot write an asset that has a repository.
+   */
+  runId?: OperationRunId;
 }
 
 /** What a right on one asset is decided on: its kind, its name, its id and its owner. */

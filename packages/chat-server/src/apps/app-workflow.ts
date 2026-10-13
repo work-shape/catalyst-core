@@ -16,6 +16,7 @@ import {
 import { accessResource, decide, type AssetCall } from "../asset-access";
 import { APP_CONTENT_TOKEN_TTL_SECONDS, appContentPath, mintAppContentToken } from "../app-content";
 import type { WorkflowAssetKind } from "../asset-kinds/shared";
+import { recordAssetEvent } from "../asset-target";
 import { requireAssetKindModuleOn } from "../asset-write-rules";
 import { AssetWorkflow } from "../asset-workflow";
 import { ConversationWorkflow } from "../conversations/conversation-workflow";
@@ -87,9 +88,19 @@ export class AppWorkflow {
       { kind: APP_ASSET_KIND, name: input.name, workspaceId: input.workspaceId },
       {
         source,
-        config: appConfigOf({ name: input.name, title: input.title, manifest: source.manifest })
+        config: appConfigOf({ name: input.name, title: input.title, manifest: source.manifest }),
+        firstCommit: "Create from a Page"
       }
     );
+    // The App's own event: the asset, its revision and the commit it names. No content.
+    await recordAssetEvent(call, "app.created", {
+      kind: APP_ASSET_KIND,
+      name: input.name,
+      assetId: created.id,
+      workspaceId: input.workspaceId,
+      revision: created.revision,
+      ...(created.commit === undefined ? {} : { commit: created.commit })
+    });
     return {
       id: created.id,
       name: input.name,

@@ -50,6 +50,7 @@ export const EVENTS = {
     name: "api_access.service_principals_viewed",
     subject: "api_access"
   },
+  "app.created": { ...LEGACY_AUDIT, name: "app.created", subject: "config_asset" },
   "app.published": { ...LEGACY_AUDIT, name: "app.published", subject: "config_asset" },
   "approval_request.created": {
     ...LEGACY_AUDIT,

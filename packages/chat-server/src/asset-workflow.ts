@@ -9,6 +9,7 @@ import {
   type ActorAccess,
   type ConfigAssetMutation,
   type ConfigAssetStore,
+  type AssetRepoWrite,
   type FileSet,
   type JsonObject,
   type OperationAuthorization,
@@ -518,6 +519,8 @@ export class AssetWorkflow {
       audit: "config_asset.updated" | "config_asset.reverted";
       /** The stored file set of the revision, with the id its asset has or gets. */
       fileSet?: { assetId: string; fileSetId: FileSet["id"] };
+      /** The commit the revision names, for an asset whose files are a repository. */
+      repository?: AssetRepoWrite;
     }
   ) {
     const { kind, name } = target;
@@ -564,7 +567,8 @@ export class AssetWorkflow {
         ...(write.operation ? { operation: write.operation } : {}),
         // A kind with a published revision moves its draft with a write and nothing else.
         ...(kind.lifecycle === "draft_published" ? { draft: true as const } : {}),
-        ...(write.fileSet ?? {})
+        ...(write.fileSet ?? {}),
+        ...(write.repository ? { repository: write.repository } : {})
       }
     ];
     if (setsDefault) {

@@ -5,6 +5,7 @@ import {
   getSubjectUserId,
   isAppError,
   isAuthenticatedServicePrincipal,
+  type AssetRepoWrite,
   type ConfigAssetStore,
   type FileSet
 } from "@vivd-catalyst/core";
@@ -19,6 +20,7 @@ import {
   type AssetFileInput
 } from "./asset-files";
 import type { WorkflowAssetKind } from "./asset-kinds/shared";
+import { commitAssetFileSet } from "./asset-repo-save";
 import { requirePrecondition, revisionConflictOf } from "./asset-revision";
 import { validateAssetSet, withDefinition, withoutDefinition } from "./asset-set";
 import {
@@ -46,6 +48,7 @@ export interface AssetWorkflowHost {
       expectedRevision: number | null;
       audit: "config_asset.updated";
       fileSet?: { assetId: string; fileSetId: FileSet["id"] };
+      repository?: AssetRepoWrite;
     }
   ): Promise<{ version: number; revision: number; warnings: never[] }>;
   authorizeEditing(call: AssetCall, surface: "put"): Promise<void>;
@@ -105,7 +108,7 @@ export class AssetDraftWorkflow {
         ? {}
         : { requestedByUserId: asUserId(getSubjectUserId(call.actor)) })
     });
-    return this.writeFilesRevision(call, target.address, {
+    const { written } = await this.writeFilesRevision(call, target.address, {
       assetId,
       fileSet,
       config: configOf({
@@ -115,12 +118,21 @@ export class AssetDraftWorkflow {
       }),
       expectedRevision: input.expectedRevision
     });
+    return written;
   }
 
   /**
    * Makes the revision that names a stored file set the draft of its asset. The file set was
    * stored for this write alone: a refused revision takes it along. A failure after the
    * revision was committed leaves the files, which are that revision's from then on.
+   *
+   * What a kind checks of a write has two phases, and a refusal in either writes nothing a
+   * reader can see. In the container: what the files alone decide. The build that left the
+   * file set read the manifest, which reached here as data, and for a repository the command
+   * that makes the commit checks the tree. In this process, before the compare-and-swap of
+   * the store: what the instance decides, which is the kind's `validateWrite` in the write
+   * below. A commit whose revision is refused there stays a pending bundle, which the sweeper
+   * removes.
    */
   private async writeFilesRevision(
     call: AssetCall,
@@ -130,19 +142,26 @@ export class AssetDraftWorkflow {
       fileSet: FileSet;
       config: Record<string, unknown>;
       expectedRevision: number | null;
+      /** Starts the repository of a new asset, with the one line its first commit carries. */
+      firstCommit?: string;
     }
   ) {
     const target = await this.host.target(address);
     try {
+      const repository = await this.commit(call, target, write);
       const written = await this.host.upsert(call, target, write.config, {
         expectedRevision: write.expectedRevision,
         audit: "config_asset.updated",
-        fileSet: { assetId: write.assetId, fileSetId: write.fileSet.id }
+        fileSet: { assetId: write.assetId, fileSetId: write.fileSet.id },
+        ...(repository ? { repository } : {})
       });
       return {
-        ...written,
-        fileSetId: write.fileSet.id,
-        files: sourceFileEntries(write.fileSet)
+        written: {
+          ...written,
+          fileSetId: write.fileSet.id,
+          files: sourceFileEntries(write.fileSet)
+        },
+        commit: repository?.commit
       };
     } catch (error) {
       await removeUnnamedAssetFileSet(this.options, write.assetId, write.fileSet.id).catch(
@@ -153,14 +172,49 @@ export class AssetDraftWorkflow {
   }
 
   /**
+   * The commit of a write to an asset whose files are a repository: the source files of the
+   * file set, on the commit of the draft. An asset of such a kind that has no repository yet
+   * gets one where its write says so; until then its revisions name file sets alone.
+   */
+  private async commit(
+    call: AssetCall,
+    target: AssetTarget,
+    write: { assetId: string; fileSet: FileSet; firstCommit?: string }
+  ): Promise<AssetRepoWrite | undefined> {
+    const baseCommit = target.asset?.commit ?? null;
+    if (
+      target.kind.content !== "repository" ||
+      (baseCommit === null && write.firstCommit === undefined)
+    ) {
+      return undefined;
+    }
+    if (call.runId === undefined) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `The files of ${target.kind.kind} '${target.name}' are a repository, which is written by an Operation Run`,
+        { reason: "repository_write_without_commit" }
+      );
+    }
+    return commitAssetFileSet(this.options, {
+      assetId: write.assetId,
+      operationRunId: call.runId,
+      fileSet: write.fileSet,
+      baseCommit,
+      actor: call.actor,
+      message: write.firstCommit ?? `Write ${target.kind.kind} '${target.name}'`
+    });
+  }
+
+  /**
    * Creates an asset of a `files` kind from a file set that is stored already, such as the
    * revision of a Page: the files are copied below the asset's own prefix, as they are, and
-   * the revision that names the copy is the draft. Nothing is published.
+   * the revision that names the copy is the draft. Nothing is published. Where the files of
+   * the kind are a repository, the copy is its first commit.
    */
   async createFromFileSet(
     call: AssetCall,
     address: AssetAddress,
-    input: { source: FileSet; config: Record<string, unknown> }
+    input: { source: FileSet; config: Record<string, unknown>; firstCommit: string }
   ) {
     const target = await this.host.target(address);
     const { kind } = target;
@@ -182,13 +236,14 @@ export class AssetDraftWorkflow {
         ? {}
         : { createdByUserId: asUserId(getSubjectUserId(call.actor)) })
     });
-    const written = await this.writeFilesRevision(call, address, {
+    const { written, commit } = await this.writeFilesRevision(call, address, {
       assetId,
       fileSet,
       config: input.config,
-      expectedRevision: null
+      expectedRevision: null,
+      firstCommit: input.firstCommit
     });
-    return { ...written, id: assetId };
+    return { ...written, id: assetId, commit };
   }
 
   /**

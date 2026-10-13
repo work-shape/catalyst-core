@@ -6,11 +6,15 @@ import { expect } from "vitest";
 import { z } from "zod";
 import {
   createAppAssetKind,
+  createAssetRepoCommitClient,
+  createAssetRepoJobs,
   createPageBuildClient,
   createPageBundleJobs,
+  createSandboxAssetRepo,
   createSandboxPageBuild,
   deriveAppContentKey,
   storePageFileSet,
+  type AssetRepoCommitRunner,
   type PageBuildRunner,
   type WorkflowAssetKind
 } from "@vivd-catalyst/chat-server";
@@ -33,6 +37,7 @@ import {
 } from "./access-instance";
 import { MemoryObjectStorage } from "./memory-object-storage";
 import type { TestCallInput } from "./operations";
+import { assetRepoCommandFromSource } from "./asset-repo";
 import { pageBuildCommandFromSource } from "./page-build";
 import { callTestPath, type TestServerOptions } from "./test-instance";
 
@@ -101,6 +106,14 @@ export interface AppInstanceOptions {
   build?: "sandbox" | PageBuildRunner;
   /** Without a worker nothing serves `page.bundle`. */
   worker?: boolean;
+  /**
+   * What makes the commits of repositories: the real command with the git of this machine when
+   * left out, a runner of the test's own, or `false` for an instance where nothing serves
+   * `asset_repo.commit`.
+   */
+  commits?: AssetRepoCommitRunner | false;
+  /** The `files` store, where a test watches or fails what is put. */
+  objects?: MemoryObjectStorage;
   /** Replaces `APP_BUILD_WAIT_MS`. */
   assetWaitMs?: number;
   /**
@@ -139,7 +152,10 @@ export interface AppInstance extends AccessInstance {
   /** The document a frame is answered at the address `apps.preview` gave. */
   open(url: string): Promise<{ status: number; body: string }>;
   /** A Page with one revision in a conversation of the workspace, stored as a save stores it. */
-  storePage(marker: string): Promise<{ conversationId: string; pageId: string }>;
+  storePage(
+    marker: string,
+    manifest?: Record<string, unknown>
+  ): Promise<{ conversationId: string; pageId: string }>;
   /** Every object below the prefix of one asset. */
   objectKeys(assetId: string): string[];
   close(): Promise<void>;
@@ -157,7 +173,7 @@ const listedSchema = z.object({
 });
 
 export async function setupAppInstance(options: AppInstanceOptions = {}): Promise<AppInstance> {
-  const objects = new MemoryObjectStorage();
+  const objects = options.objects ?? new MemoryObjectStorage();
   const pages = { objects, contentKey: deriveAppContentKey("content-secret-".repeat(4)) };
   const access = await setupAccessInstance({
     modules: { ...options.modules, apps: { enabled: true } },
@@ -169,6 +185,14 @@ export async function setupAppInstance(options: AppInstanceOptions = {}): Promis
           stores,
           pollIntervalMs: 20,
           ...(options.assetWaitMs === undefined ? {} : { assetWaitMs: options.assetWaitMs })
+        }),
+        assetRepo: createAssetRepoCommitClient({
+          stores,
+          pollIntervalMs: 20,
+          // An instance without the worker says so at once.
+          ...(options.commits === false
+            ? { unclaimedMs: 100, workerCheckIntervalMs: 20, waitMs: 5_000 }
+            : {})
         })
       },
       allowedOrigins: ["https://ui.example.test"],
@@ -208,6 +232,30 @@ export async function setupAppInstance(options: AppInstanceOptions = {}): Promis
     });
     worker.start();
   }
+  let committer: JobWorker | undefined;
+  if (options.commits !== false) {
+    scratch ??= await mkdtemp(join(tmpdir(), "app-build-test-"));
+    committer = createPostgresJobWorker({
+      stores,
+      clientInstanceId,
+      logger: silent,
+      handlers: createAssetRepoJobs({
+        clientInstanceId,
+        stores,
+        objects,
+        workspaceObjects: undefined,
+        logger: silent,
+        commit:
+          options.commits ??
+          createSandboxAssetRepo({
+            sandbox: new LocalWorkspaceCommandProcessExecutor(),
+            tempRoot: join(scratch, "commits"),
+            command: `'${process.execPath}' '${await assetRepoCommandFromSource()}'`
+          })
+      }).handlers
+    });
+    committer.start();
+  }
   const workspaceId = await access.sharedWorkspace("Sales");
   await stores.workspaces.addMembership({
     clientInstanceId,
@@ -244,7 +292,7 @@ export async function setupAppInstance(options: AppInstanceOptions = {}): Promis
       const response = await callTestPath(instance, "GET", url, { "sec-fetch-dest": "iframe" });
       return { status: response.statusCode, body: response.body };
     },
-    async storePage(marker) {
+    async storePage(marker, manifest = {}) {
       const created = await access.expectOk(admin.id, "conversations.create", {
         payload: { title: "Offers" }
       });
@@ -256,9 +304,15 @@ export async function setupAppInstance(options: AppInstanceOptions = {}): Promis
           conversationId: asConversationId(conversation.id),
           pageName: "Offers",
           kitVersion: "1.0.0",
-          manifest: { id: "offers-page", name: "Offers", kit: "1.0.0", entry: "index.html" },
+          manifest: {
+            id: "offers-page",
+            name: "Offers",
+            kit: "1.0.0",
+            entry: "index.html",
+            ...manifest
+          },
           sourceFiles: [
-            { path: "app.yaml", bytes: text(appManifest({ id: "offers-page" })) },
+            { path: "app.yaml", bytes: text(appManifest({ id: "offers-page", ...manifest })) },
             { path: "index.html", bytes: html }
           ],
           builtFiles: [{ path: "index.html", bytes: html }]
@@ -270,6 +324,7 @@ export async function setupAppInstance(options: AppInstanceOptions = {}): Promis
       objects.keys().filter((key) => key.startsWith(assetObjectPrefix(assetId))),
     async close() {
       await worker?.stop();
+      await committer?.stop();
       await instance.close();
       if (scratch) await rm(scratch, { recursive: true, force: true });
     }

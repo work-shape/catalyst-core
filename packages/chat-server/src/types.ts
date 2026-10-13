@@ -36,6 +36,7 @@ import type { InfrastructureWorkflow } from "./infrastructure-workflow";
 import type { ConnectionManagementPort } from "./connection-management-port";
 import type { SystemModelGateway } from "./system-model-call";
 import type { ApprovalRequestWorkflowOptions } from "./approval-request-workflow";
+import type { AssetRepoCommitClient } from "./asset-repo-jobs";
 
 export interface ConversationRetentionOptions {
   batchSize?: number;
@@ -137,6 +138,11 @@ export interface ChatServerOptions {
      * a save of a Page does. A test hands in one with a shorter wait.
      */
     assetBuilds?: AssetBuildClient;
+    /**
+     * Has the commit of a save to an asset's repository made. Without one the server queues
+     * the commit itself. A test hands in one with a shorter wait.
+     */
+    assetRepo?: AssetRepoCommitClient;
   };
   /** What the server's own model calls go through, and what tells it what a model can do. */
   modelGateway: SystemModelGateway;
