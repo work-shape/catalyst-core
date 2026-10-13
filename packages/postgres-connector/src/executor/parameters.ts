@@ -87,7 +87,11 @@ function bind(parameter: PostgresParameter): BoundPostgresParameter | undefined 
   const array = /^(.*)\[\]$/u.exec(parameter.type);
   const type = SCALAR_TYPES.find((name) => name === (array?.[1] ?? parameter.type));
   if (type === undefined) return undefined;
-  if (array) return isArray(parameter.value) ? bindArray(type, parameter.value) : undefined;
+  if (array) {
+    // No value of a list type is a null of that type, as it is for one value.
+    if (parameter.value === null) return { oid: WIRE_TYPES[type].arrayOid, text: null };
+    return isArray(parameter.value) ? bindArray(type, parameter.value) : undefined;
+  }
   if (isArray(parameter.value)) return undefined;
   const text = parameter.value === null ? null : WIRE_TYPES[type].write(parameter.value);
   return text === undefined ? undefined : { oid: WIRE_TYPES[type].oid, text };
