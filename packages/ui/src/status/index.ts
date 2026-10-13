@@ -24,3 +24,11 @@ export {
   type IconRegistry,
   type RegistryIconProps
 } from "./registry-icon";
+export {
+  KnowsHowTo,
+  SkillIcon,
+  type KnowsHowToItem,
+  type KnowsHowToProps,
+  type SkillIconProps,
+  type SkillIconSize
+} from "./skill-icon";

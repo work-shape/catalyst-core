@@ -13,8 +13,12 @@ import {
   RegistryIcon,
   type IconFamily
 } from "../status/registry-icon";
+import { KnowsHowTo, SkillIcon, type SkillIconSize } from "../status/skill-icon";
 import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
+
+const skillIconSizes: readonly SkillIconSize[] = ["sm", "md", "lg"];
+const shippedSkillIcons = ["spreadsheet", "document", "presentation", "pdf"] as const;
 
 const iconFamilies: readonly IconFamily[] = ["file", "service", "skill", "tool"];
 const fileTypeKeys = Object.keys(fileTypeIcons);
@@ -315,6 +319,52 @@ export const statusGallery: GalleryGroup = {
                 </span>
               ))}
             </IconRegistryProvider>
+          </Samples>
+        </>
+      )
+    },
+    {
+      name: "SkillIcon",
+      components: ["SkillIcon", "KnowsHowTo"],
+      render: (text) => (
+        <>
+          <Samples label={text.skillIconSizes}>
+            {skillIconSizes.map((size) => (
+              <span
+                key={size}
+                data-gallery-sample={`skill-icon-${size}`}
+                className="flex items-center gap-2"
+              >
+                {shippedSkillIcons.map((icon) => (
+                  <SkillIcon key={icon} icon={icon} size={size} />
+                ))}
+                <SkillIcon size={size} />
+              </span>
+            ))}
+          </Samples>
+          <Samples label={text.skillIconInChip}>
+            <Chip leading={<SkillIcon icon="spreadsheet" size="sm" />} onRemove={() => undefined}>
+              {text.skillSpreadsheets}
+            </Chip>
+            <Chip leading={<SkillIcon icon="pdf" size="sm" />} onRemove={() => undefined}>
+              {text.skillPdf}
+            </Chip>
+            <Chip leading={<SkillIcon size="sm" />} onRemove={() => undefined}>
+              {text.skillPlainLanguage}
+            </Chip>
+            <Chip size="sm" leading={<SkillIcon icon="document" size="sm" />}>
+              {text.skillDocuments}
+            </Chip>
+          </Samples>
+          <Samples label={text.skillKnowsHowTo}>
+            <KnowsHowTo
+              label={text.skillKnowsHowToLabel}
+              skills={[
+                { title: text.skillSpreadsheets, icon: "spreadsheet" },
+                { title: text.skillDocuments, icon: "document" },
+                { title: text.skillPlainLanguage }
+              ]}
+            />
           </Samples>
         </>
       )

@@ -4,6 +4,7 @@ import { Popover as PopoverPrimitive } from "radix-ui";
 import {
   forwardRef,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -28,6 +29,8 @@ export interface PickerOption {
   label: string;
   /** One line under the name. It is shown as text and searched. */
   description?: string;
+  /** Text the search finds the option by and nobody reads here, such as the object's id. */
+  keywords?: string;
   /** An avatar or an icon before the name. */
   leading?: ReactNode;
   /** A chip or a badge after the name. */
@@ -77,6 +80,11 @@ interface PickerBaseProps {
   openOnHover?: boolean;
   /** A last row, pinned under the list, that creates a new object. */
   create?: PickerCreateRow;
+  /**
+   * One sentence pinned under the list that says what the listed objects are, such as that a
+   * skill adds no tools. It is read out with the picker.
+   */
+  note?: string;
   open?: boolean;
   defaultOpen?: boolean;
   onOpenChange?(open: boolean): void;
@@ -135,6 +143,7 @@ export function Picker(props: PickerProps) {
     wrapDescriptions = false,
     openOnHover = false,
     create,
+    note,
     open,
     defaultOpen = false,
     onOpenChange,
@@ -144,6 +153,7 @@ export function Picker(props: PickerProps) {
   } = props;
   const labels = useUiLabels("Picker");
   const container = useOverlayContainer("Picker");
+  const noteId = useId();
   const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
   const [query, setQueryState] = useState("");
   const setQuery = (next: string) => {
@@ -361,6 +371,7 @@ export function Picker(props: PickerProps) {
               className
             )}
             ref={contentRef}
+            aria-describedby={note === undefined ? undefined : noteId}
             {...hoverContentProps}
             onOpenAutoFocus={(event) => {
               // Without a search field the list itself takes the keys.
@@ -423,6 +434,14 @@ export function Picker(props: PickerProps) {
                     </p>
                   ) : null}
                 </div>
+                {note === undefined ? null : (
+                  <p
+                    id={noteId}
+                    className="shrink-0 border-t px-3 py-2 text-caption text-muted-foreground"
+                  >
+                    {note}
+                  </p>
+                )}
                 {create === undefined ? null : (
                   <div className="shrink-0 border-t p-1">
                     <Command.Item
@@ -614,7 +633,7 @@ function isGroup(entry: PickerOption | PickerOptionGroup): entry is PickerOption
   return "options" in entry;
 }
 
-/** The entries whose name or description contains the query, in the caller's order. */
+/** The entries whose name, description or keywords contain the query, in the caller's order. */
 function filterEntries(
   entries: readonly (PickerOption | PickerOptionGroup)[],
   query: string
@@ -622,8 +641,9 @@ function filterEntries(
   const needle = query.trim().toLocaleLowerCase();
   const matches = (option: PickerOption) =>
     needle === "" ||
-    option.label.toLocaleLowerCase().includes(needle) ||
-    (option.description?.toLocaleLowerCase().includes(needle) ?? false);
+    [option.label, option.description, option.keywords].some(
+      (text) => text?.toLocaleLowerCase().includes(needle) ?? false
+    );
   const visible: (PickerOption | PickerOptionGroup)[] = [];
   for (const entry of entries) {
     if (!isGroup(entry)) {
