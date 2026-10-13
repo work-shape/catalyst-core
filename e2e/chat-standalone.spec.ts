@@ -2931,10 +2931,10 @@ test("users, usage, audit and API access follow the German locale", async ({ pag
   await expect(panel.getByRole("searchbox", { name: "Benutzer suchen" })).toBeVisible();
   await expect(panel.getByRole("columnheader", { name: "Anmeldemethoden" })).toBeVisible();
   await expect(panel.getByRole("button", { name: "Nächste Seite" })).toBeVisible();
-  // The sign-in above is the superadmin's last activity, written as a German date.
+  // The sign-in above is the superadmin's last activity, written as a German date, without seconds.
   await searchUsers(page, superadminUser.email, "Benutzer suchen");
   await expect(panel.getByRole("row", { name: /E2E Superadmin/u })).toContainText(
-    /\d{1,2}\.\d{1,2}\.\d{4}, \d{2}:\d{2}:\d{2}/u
+    /\d{1,2}\.\d{1,2}\.\d{4}, \d{2}:\d{2}(?!:\d)/u
   );
 
   await page.goto("/settings/instance/usage");
@@ -3091,13 +3091,14 @@ test("Studio opens on a list, and a list and an asset each have an address", asy
   await signInViaApi(page, superadminUser);
   await page.goto("/");
 
-  // Studio lands on the Agents list: names as titles, the id beneath, nothing to select first.
+  // Studio lands on the Agents list: names as titles, what each does beneath and never its id,
+  // nothing to select first.
   await page.getByRole("button", { name: "Studio", exact: true }).click();
   await expect(page).toHaveURL(/\/build\/agents$/u);
   await expect(page.getByRole("heading", { name: "Agents", level: 1 })).toBeVisible();
   const agents = page.getByRole("list", { name: "Agents" });
   const research = agents.getByRole("link", { name: /Research Assistant/u });
-  await expect(research).toContainText("research_assistant");
+  await expect(research).not.toContainText("research_assistant");
   await expect(agents.getByRole("link", { name: /Application Assistant/u })).toBeVisible();
   await expect(page.getByText(/Version \d+/u)).toHaveCount(0);
   await expect(page.getByText("Also editable with the catalyst CLI.")).toHaveCount(0);
@@ -3262,7 +3263,7 @@ test("superadmin config follows the German locale", async ({ page }) => {
 
   await page
     .getByRole("list", { name: "Agenten" })
-    .getByRole("link", { name: /research_assistant/u })
+    .getByRole("link", { name: /Research Assistant/u })
     .click();
   await expect(page).toHaveURL(/\/build\/agents\/research_assistant$/u);
 
@@ -3363,7 +3364,7 @@ test("superadmin manages config assets with validation and conflict protection",
     await openList("Agents");
     await page
       .getByRole("list", { name: "Agents" })
-      .getByRole("link", { name: /research_assistant/u })
+      .getByRole("link", { name: /Research Assistant/u })
       .click();
     await expect(page).toHaveURL(/\/build\/agents\/research_assistant$/u);
     await expect(form()).toBeVisible();
