@@ -14,6 +14,9 @@ import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 import { apiOrigin, uiOrigin } from "./view-fixtures";
 
+/** The address of the draft of the App at `appPath`, outside the App's own addresses. */
+const draftPathOf = (appPath: string) => appPath.replace("/apps/", "/app-drafts/");
+
 // The Apps of a workspace, from a Page built in chat to an App its members open: the Page is
 // saved as an App, its draft is published, a second member opens it across the full width and
 // follows a link to its second route, a builder without the publish right finds Publish held,
@@ -192,7 +195,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await expect(saveDialog.getByRole("textbox", { name: /^ID/u })).toHaveValue(appId);
   await expect(saveDialog.getByRole("combobox")).toHaveCount(0);
   await saveDialog.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`${appPath}/edit$`, "u"));
+  await expect(page).toHaveURL(new RegExp(`${draftPathOf(appPath)}$`, "u"));
   const edit = page.getByTestId("app-edit");
   await expect(edit).toContainText("Draft · revision 1");
   await expect(
@@ -250,7 +253,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
     await expect(appIn(memberPage, "app-view").getByText("Paste rows to see them.")).toBeVisible();
   });
   // The draft is not the member's to see.
-  await memberPage.goto(`${appPath}/edit`);
+  await memberPage.goto(draftPathOf(appPath));
   await expect(memberPage.getByTestId("app-edit")).toContainText(
     "The draft of this app is not available to you."
   );
@@ -369,7 +372,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
       json: { ...context, actions: context.actions.filter((action) => action !== "app.publish") }
     });
   });
-  await builderPage.goto(`${appPath}/edit`);
+  await builderPage.goto(draftPathOf(appPath));
   const builderEdit = builderPage.getByTestId("app-edit");
   await expect(builderEdit).toContainText("Draft · revision 2");
   await expect(builderEdit.getByRole("button", { name: "Publish", exact: true })).toBeDisabled();
@@ -392,7 +395,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   const card = area.getByRole("listitem").filter({ hasText: appName });
   await expect(card.getByRole("link", { name: "Edit", exact: true })).toHaveAttribute(
     "href",
-    `${appPath}/edit`
+    draftPathOf(appPath)
   );
   await card.getByRole("link", { name: "Open", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${appPath}$`, "u"));
@@ -421,7 +424,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await expect(page.getByRole("menu")).toBeHidden();
 
   // Discard asks once, and the draft shows what is published again.
-  await page.goto(`${appPath}/edit`);
+  await page.goto(draftPathOf(appPath));
   await draftReady();
   await discard.click();
   const discardDialog = page.getByRole("dialog", { name: `Discard the draft of “${appName}”?` });
