@@ -1,5 +1,7 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { createSecretStore, loadSecretKeyring } from "@vivd-catalyst/connections";
+import { SHARED_CREDENTIAL_SUBJECT } from "@vivd-catalyst/core";
 import { errorSchema } from "./support/access-instance";
 import { required } from "./support/assertions";
 import { URL_OF_HOST, fixture } from "./support/connection-operations";
@@ -13,7 +15,7 @@ import {
   storedState,
   world
 } from "./support/connection-discovery-world";
-import { generateTestSecret } from "./support/test-connector";
+import { generateSecretStoreKey, generateTestSecret } from "./support/test-connector";
 import type { TestInstance } from "./support/test-instance";
 import { withTestSql } from "./support/test-sql";
 
@@ -319,6 +321,41 @@ describe("the rights over a Connection made on the instance", () => {
     const written = runs.filter((run) => run.operation === "connections.set_secret");
     expect(written.map((run) => run.status).sort()).toEqual(["denied", "denied", "done"]);
     expect(JSON.stringify(written)).not.toContain("replaced");
+  });
+
+  it("refuses a key over a version another writer stored after it was read", async () => {
+    const t = await fixture();
+    const connectionAssetId = await t.seed("crm", { origin: "runtime" });
+    const binding = { connectionAssetId, subject: SHARED_CREDENTIAL_SUBJECT };
+    // The other writer: its own key, so its row is one the instance cannot open.
+    const other = createSecretStore({
+      clientInstanceId,
+      keyring: await loadSecretKeyring({
+        keys: [{ id: "other", ref: "OTHER_KEY" }],
+        secrets: { resolve: () => Promise.resolve(generateSecretStoreKey()) }
+      }),
+      store: t.stores.connections
+    });
+    const find = t.stores.connections.findSecret.bind(t.stores.connections);
+    let lands = true;
+    vi.spyOn(t.stores.connections, "findSecret").mockImplementation(async (input) => {
+      const found = await find(input);
+      if (lands) {
+        // Version 2 lands right after this writer read version 1.
+        lands = false;
+        await other.put({ binding, value: generateTestSecret(), source: "runtime" });
+      }
+      return found;
+    });
+    const refused = await t.call(t.admin.id, "connections.set_secret", {
+      params: { name: "crm" },
+      payload: { value: generateTestSecret(), expectedVersion: 1 }
+    });
+    expect(refused.statusCode).toBe(409);
+    expect(errorSchema.parse(refused.json()).error.details).toEqual({
+      reason: "secret_write_conflict"
+    });
+    expect(await find({ clientInstanceId, binding })).toMatchObject({ version: 2 });
   });
 
   it("are refused on a surface that is not allowed the target, before anything is stored", async () => {

@@ -237,13 +237,16 @@ export interface SecretStore {
    * Stores the value for the binding, encrypted, and answers its handle and version. A value
    * equal to the stored one changes nothing and keeps the version. `handle` is the handle a
    * first write takes, for a caller that named it in a revision already; a stored secret
-   * keeps the handle it has.
+   * keeps the handle it has. `expectedVersion`, where given, is the version the writer saw,
+   * `null` for none: a stored version that is another refuses the write with
+   * `secret_write_conflict`, decided on the same read the new version follows.
    */
   put(input: {
     binding: SecretBinding;
     value: string;
     source: SecretSource;
     handle?: ConnectionSecretHandle;
+    expectedVersion?: number | null;
   }): Promise<{ handle: ConnectionSecretHandle; version: number; changed: boolean }>;
   status(binding: SecretBinding): Promise<SecretStatus>;
   delete(binding: SecretBinding): Promise<void>;

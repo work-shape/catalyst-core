@@ -3,7 +3,6 @@ import {
   CONNECTION_ASSET_KIND,
   CONNECTION_REFUSALS,
   CREDENTIAL_REFUSALS,
-  SECRET_WRITE_CONFLICT,
   EGRESS_DENIED,
   SHARED_CREDENTIAL_SUBJECT,
   connectionCallError,
@@ -332,21 +331,19 @@ export function createConnectionManagement(
         );
       }
       const binding = { connectionAssetId: connection.assetId, subject: SHARED_CREDENTIAL_SUBJECT };
-      const stored = await deps.stores.connections.findSecret({
-        clientInstanceId: deps.clientInstanceId,
-        binding
-      });
-      if ((stored?.version ?? null) !== expectedVersion) {
-        throw secretWriteRefusal(
-          SECRET_WRITE_CONFLICT,
-          "the secret was changed by somebody else since it was read. Nothing was stored; read the Connection again"
-        );
-      }
+      // The version is compared on the read the write follows: a check before it here would
+      // let a write that lands in between be replaced unseen.
       const written = await createSecretStore({
         clientInstanceId: deps.clientInstanceId,
         keyring: deps.keyring,
         store: deps.stores.connections
-      }).put({ binding, value, source: "runtime", handle: config.secretHandle });
+      }).put({
+        binding,
+        value,
+        source: "runtime",
+        handle: config.secretHandle,
+        expectedVersion
+      });
       if (written.changed) {
         // What a test found was found with the secret before.
         await deps.stores.connections.putConnectionState({

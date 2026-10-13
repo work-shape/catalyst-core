@@ -227,7 +227,7 @@ function openRecord(
 export function createSecretStore(options: SecretStoreOptions): SecretStore {
   const { clientInstanceId, keyring, store } = options;
   return {
-    async put({ binding, value, source, handle: firstHandle }) {
+    async put({ binding, value, source, handle: firstHandle, expectedVersion }) {
       const plaintext = Buffer.from(value, "utf8");
       try {
         if (plaintext.length === 0 || plaintext.length > SECRET_VALUE_MAX_BYTES) {
@@ -237,6 +237,13 @@ export function createSecretStore(options: SecretStoreOptions): SecretStore {
           );
         }
         const current = await store.findSecret({ clientInstanceId, binding });
+        if (expectedVersion !== undefined && (current?.version ?? null) !== expectedVersion) {
+          throw new AppError(
+            "CONFLICT",
+            `${SECRET_WRITE_CONFLICT}: the secret was changed by somebody else since it was read. Nothing was stored; read the Connection again`,
+            { reason: SECRET_WRITE_CONFLICT }
+          );
+        }
         if (current) {
           const stored = openRecord(options, current, binding);
           try {
