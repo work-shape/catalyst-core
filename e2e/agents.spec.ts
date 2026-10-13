@@ -29,6 +29,8 @@ const startPageAgent = (page: Page) =>
   page.getByRole("region", { name: "Chat" }).getByRole("button", { name: "Select agent" });
 
 async function openAgents(page: Page): Promise<void> {
+  // The row has an address once the workspace is open: a click before that stays on the start page.
+  await expect(page).toHaveURL(/\/w\/[^/]+/u);
   await rail(page).getByRole("button", { name: "Agents", exact: true }).click();
   await expect(page).toHaveURL(/\/w\/[^/]+\/agents$/u);
   await expect(card(page, DEFAULT_AGENT)).toBeVisible();

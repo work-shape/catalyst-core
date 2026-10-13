@@ -102,7 +102,7 @@ test("navigation items, list rows, sections and the save bar keep their measures
   const root = await openGallery(page, "Navigation");
 
   const navItems = root.locator('[data-gallery-entry="NavItem"]');
-  const resting = navItems.getByRole("button", { name: "Chat" });
+  const resting = navItems.getByRole("button", { name: "Chat", exact: true });
   const selected = navItems.getByRole("button", { name: "Apps" });
   expect((await resting.boundingBox())?.height).toBe(32);
   expect(await style(resting, "font-weight")).toBe("400");

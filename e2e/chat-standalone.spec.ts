@@ -3367,7 +3367,7 @@ test("superadmin manages config assets with validation and conflict protection",
     await openList("Skills");
     await page
       .getByRole("list", { name: "Skills" })
-      .getByRole("link", { name: /config_e2e_skill/u })
+      .getByRole("link", { name: /^Config E2E skill/u })
       .click();
     await expect(page).toHaveURL(/\/build\/skills\/config_e2e_skill$/u);
     await expect(form()).toBeVisible();
@@ -4077,7 +4077,7 @@ test("panels at the right of the conversation open and close in one step, leave 
   expectOneStep(await frames.stop(), "the card opens");
 
   // A view opens in the same slot, here in a conversation without resources.
-  await page.getByRole("button", { name: "New chat" }).click();
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
   await expect(resources).toBeHidden();
   await page
     .getByPlaceholder("Message")

@@ -37,7 +37,7 @@ test("a file carries the icon of its type in the composer, above the message and
   page
 }) => {
   await signIn(page, member);
-  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  await page.getByRole("button", { name: "New chat", exact: true }).first().click();
   await expect(page.getByRole("button", { name: "Add attachment" })).toBeVisible();
 
   await page.locator('input[type="file"]').setInputFiles(

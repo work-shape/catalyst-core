@@ -52,7 +52,7 @@ test("an agent's sections are an outline right of the content: its mark follows 
   expect(contentBox?.x).toBe((headBox?.x ?? 0) + 24);
   expect(contentBox?.width).toBeLessThanOrEqual(704);
   expect(outlineBox?.x).toBeGreaterThanOrEqual((contentBox?.x ?? 0) + (contentBox?.width ?? 0));
-  await expect(page.getByRole("navigation", { name: "Kinds in Build" })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Kinds in Studio" })).toHaveCount(0);
   await expect(current).toHaveText("Overview");
 
   // A click scrolls the section up to the page's head and hands its heading the focus.

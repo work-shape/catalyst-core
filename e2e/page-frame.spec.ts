@@ -66,7 +66,7 @@ test("an editor's head is the top band from the start, and it and the section li
   const detail = page.locator('header[data-variant="detail"]');
   await expect(detail.getByRole("heading", { level: 1 })).toBeVisible();
   const back = detail.getByRole("button", { name: "Back to Agents" });
-  const sections = page.getByRole("navigation", { name: "Sections of this page" });
+  const sections = page.getByRole("navigation", { name: "On this page" });
   const field = page.getByLabel("Display name");
 
   expect(await top(detail)).toBe(0);
