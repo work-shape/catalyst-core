@@ -41,7 +41,11 @@ export interface BedrockMessagesRequest {
   messages: BedrockRequestMessage[];
   /** The model decides whether and how much it thinks; `output_config.effort` guides it. */
   thinking?: { type: "adaptive" };
-  output_config?: { effort?: BedrockEffort };
+  output_config?: {
+    effort?: BedrockEffort;
+    /** The answer is one text block of JSON that follows the schema. */
+    format?: { type: "json_schema"; schema: Record<string, unknown> };
+  };
   tools?: { name: string; description: string; input_schema: Record<string, unknown> }[];
 }
 

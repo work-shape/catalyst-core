@@ -75,11 +75,11 @@ function bedrockModelRefusal(model: string, accountId: string): string | undefin
 
 /**
  * What Claude on Bedrock does through this adapter. Web search is not declared: Bedrock has
- * none. A PDF is sent as a document block within the limits `assertBedrockDocuments` holds.
- * Answer formats are not mapped yet, so a call that asks for one is refused before it is sent. The continuation carries the thinking of a run's tool-use turns to
- * the run's next request and nothing else. The adapter sets no cache breakpoint and asks for no
- * cache. Every token is billed to the consumer's profile, so a model without a price is not
- * called.
+ * none. A PDF is sent as a document block within the limits `assertBedrockDocuments` holds. An
+ * answer format is sent as the Messages format's own `output_config.format`. The continuation
+ * carries the thinking of a run's tool-use turns to the run's next request and nothing else.
+ * The adapter sets no cache breakpoint and asks for no cache. Every token is billed to the
+ * consumer's profile, so a model without a price is not called.
  */
 export const BEDROCK_CAPABILITIES: ModelCapabilities = {
   reasoningEfforts: BEDROCK_REASONING_EFFORTS,
@@ -90,7 +90,7 @@ export const BEDROCK_CAPABILITIES: ModelCapabilities = {
   fastTier: false,
   imageInput: true,
   documentInput: true,
-  structuredOutput: false,
+  structuredOutput: true,
   streaming: true,
   priceRequired: true
 };

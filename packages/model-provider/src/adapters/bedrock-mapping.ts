@@ -3,6 +3,7 @@ import { MODEL_CALL_RESERVED_OUTPUT_TOKENS } from "@vivd-catalyst/core";
 import { createProviderToolMetadata, type ProviderToolNames } from "../openai-compatible-mapping";
 import type { ModelAdapterRequest, ModelCompletion, ModelContent, ModelToolCall } from "../types";
 import { assertBedrockDocuments, toBedrockDocumentBlock } from "./bedrock-documents";
+import { toBedrockOutputFormat } from "./bedrock-output";
 import {
   bedrockThinkingSettings,
   findBedrockThinkingTurn,
@@ -120,6 +121,12 @@ export function toBedrockRequest(
     }
   }
 
+  const { thinking, output_config: effort } = bedrockThinkingSettings(request.reasoningEffort);
+  const outputConfig = {
+    ...effort,
+    ...(request.output ? { format: toBedrockOutputFormat(request.output.jsonSchema) } : {})
+  };
+
   return {
     toolNames: tools,
     thinkingTurns,
@@ -128,7 +135,8 @@ export function toBedrockRequest(
       max_tokens: BEDROCK_MAX_OUTPUT_TOKENS,
       ...(system.length > 0 ? { system } : {}),
       messages,
-      ...bedrockThinkingSettings(request.reasoningEffort),
+      ...(thinking ? { thinking } : {}),
+      ...(Object.keys(outputConfig).length > 0 ? { output_config: outputConfig } : {}),
       ...(tools.providerTools.length > 0
         ? {
             tools: tools.providerTools.map(({ tool, providerName }) => ({

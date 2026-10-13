@@ -219,12 +219,12 @@ describe("Bedrock adapter behind the gateway: what names the model", () => {
     const { gateway, call, warnings } = await bedrockGateway();
 
     const refused = await gateway
-      .complete({ ...call, output: { jsonSchema: { type: "object" } } })
+      .complete({ ...call, fastTier: true })
       .catch((error: unknown) => error);
     await gateway.complete(call).catch(() => undefined);
 
     expect(refused).toMatchObject({
-      message: "Model binding 'claude' of provider 'bedrock' does not support: structured output"
+      message: "Model binding 'claude' of provider 'bedrock' does not support: fast tier"
     });
     expect(warnings).toEqual([
       expect.objectContaining({ type: "model_provider.error", bindingId: "claude", status: 403 })

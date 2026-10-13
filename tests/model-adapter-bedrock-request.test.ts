@@ -268,6 +268,100 @@ describe("Bedrock adapter: documents", () => {
   });
 });
 
+describe("Bedrock adapter: answer formats", () => {
+  it("sends the format as the Messages format's own structured output, beside the effort", async () => {
+    const sent = answerWith(() => Response.json(message([{ type: "text", text: "{}" }])));
+
+    await (
+      await bedrock()
+    ).complete({
+      model: RECORDED_BEDROCK_PROFILE,
+      messages: [user("Extract.")],
+      tools: [weatherTool],
+      reasoningEffort: "low",
+      output: {
+        jsonSchema: {
+          type: "object",
+          required: ["findings"],
+          additionalProperties: true,
+          properties: {
+            // A property may carry the name of a keyword. It is a name here and stays.
+            maximum: { type: "integer", minimum: 0, maximum: 9, multipleOf: 3 },
+            label: { type: "string", minLength: 1, maxLength: 80, enum: ["a", "b"] },
+            findings: {
+              type: "array",
+              minItems: 1,
+              maxItems: 20,
+              uniqueItems: true,
+              items: {
+                type: ["object", "null"],
+                properties: {
+                  pages: { type: "array", minItems: 2, items: { $ref: "#/$defs/page" } }
+                }
+              }
+            },
+            either: { anyOf: [{ type: "object", properties: {} }, { type: "null" }] }
+          },
+          $defs: { page: { type: "integer", exclusiveMinimum: 0 } }
+        }
+      }
+    });
+
+    const body = sent[0]?.body;
+    expect(body).toMatchObject({
+      thinking: { type: "adaptive" },
+      output_config: {
+        effort: "low",
+        format: {
+          type: "json_schema",
+          schema: {
+            type: "object",
+            required: ["findings"],
+            // The one value Bedrock takes, on every object of the schema.
+            additionalProperties: false,
+            properties: {
+              maximum: { type: "integer" },
+              label: { type: "string", enum: ["a", "b"] },
+              findings: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: ["object", "null"],
+                  additionalProperties: false,
+                  properties: { pages: { type: "array", items: { $ref: "#/$defs/page" } } }
+                }
+              },
+              either: {
+                anyOf: [
+                  { type: "object", properties: {}, additionalProperties: false },
+                  { type: "null" }
+                ]
+              }
+            },
+            $defs: { page: { type: "integer" } }
+          }
+        }
+      }
+    });
+    // Nothing Bedrock refuses to compile is left, and no tool is forced for the format.
+    expect(JSON.stringify(body)).not.toMatch(
+      /"(minimum|multipleOf|minLength|maxLength|maxItems|uniqueItems|exclusiveMinimum)":/u
+    );
+    expect(body).not.toHaveProperty("tool_choice");
+    expect(records(body, "tools")).toHaveLength(1);
+  });
+
+  it("sends no output setting for a call without a format and without an effort", async () => {
+    const sent = answerWith(() => Response.json(message([{ type: "text", text: "Hello." }])));
+
+    await (
+      await bedrock()
+    ).complete({ model: RECORDED_BEDROCK_PROFILE, messages: [user("Say hello.")], tools: [] });
+
+    expect(sent[0]?.body).not.toHaveProperty("output_config");
+  });
+});
+
 /** A PDF in outline only: a page tree and that many page objects. No reader opens it. */
 function syntheticPdf(pages: number): Uint8Array {
   const kids = Array.from({ length: pages }, (_unused, index) => `${index + 3} 0 R`).join(" ");
