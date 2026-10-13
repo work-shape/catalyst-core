@@ -361,11 +361,15 @@ describe("Bedrock adapter: failures", () => {
 
   it.each([
     ["throttlingException", "rate_limit", 429, true],
+    ["modelNotReadyException", "rate_limit", 429, true],
     ["modelStreamErrorException", "server_error", 424, true],
+    ["modelErrorException", "server_error", 424, true],
     ["serviceUnavailableException", "server_error", 503, true],
     ["modelTimeoutException", "timeout", 408, true],
     ["validationException", "invalid_request", 400, false],
     ["accessDeniedException", "invalid_request", 403, false],
+    ["serviceQuotaExceededException", "invalid_request", 400, false],
+    ["resourceNotFoundException", "invalid_request", 404, false],
     ["exceptionOfALaterRelease", "server_error", undefined, false]
   ] as const)(
     "types %s inside a stream that had begun as %s",
@@ -536,7 +540,8 @@ describe("Bedrock adapter: failures", () => {
 
   it.each([
     ["a wrong message checksum", (frame: Uint8Array) => flipByte(frame, frame.byteLength - 2)],
-    ["a wrong prelude checksum", (frame: Uint8Array) => flipByte(frame, 9)],
+    // The message's checksum is made to hold, so only the prelude's own check refuses this.
+    ["a wrong prelude checksum", (frame: Uint8Array) => withMessageChecksum(flipByte(frame, 9))],
     // The prelude's own checksum holds, so only the bound on the length refuses these two.
     ["a length above the largest message", () => prelude(0x7fffffff, 0)],
     ["a length below its own headers", () => prelude(20, 64)]
@@ -552,6 +557,33 @@ describe("Bedrock adapter: failures", () => {
       retryable: false,
       message: "Model provider returned a malformed stream"
     });
+  });
+
+  it("refuses a wrong prelude checksum from the prelude alone, before the message has arrived", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    let cancelled = 0;
+    const frame = flipByte(bedrockChunk({ type: "message_stop" }), 9);
+    // Twelve bytes and then silence: a decoder that trusted the lengths would wait for the rest.
+    answerWith(() =>
+      bedrockEventStream([frame.subarray(0, 12)], {
+        staysOpen: true,
+        onCancel: () => {
+          cancelled += 1;
+        }
+      })
+    );
+
+    const pending = collect(
+      (await bedrock()).stream({ model: RECORDED_BEDROCK_PROFILE, ...hello })
+    ).catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(await pending).toMatchObject({
+      kind: "invalid_response",
+      retryable: false,
+      message: "Model provider returned a malformed stream"
+    });
+    expect(cancelled).toBe(1);
   });
 
   it("refuses a request above Bedrock's size before it is sent", async () => {
@@ -603,6 +635,13 @@ function flipByte(frame: Uint8Array, index: number): Uint8Array {
   const copy = Uint8Array.from(frame);
   copy[index] = (copy[index] ?? 0) ^ 0xff;
   return copy;
+}
+
+/** The frame with the checksum of the whole message written again over what it holds now. */
+function withMessageChecksum(frame: Uint8Array): Uint8Array {
+  const bytes = Buffer.from(frame);
+  bytes.writeUInt32BE(crc32(bytes.subarray(0, bytes.byteLength - 4)), bytes.byteLength - 4);
+  return Uint8Array.from(bytes);
 }
 
 /** The first twelve bytes of a stream message: two lengths and their checksum. */

@@ -8,6 +8,7 @@ import {
   createTestConfig,
   personalConversationListInput
 } from "./support/fixtures";
+import { silentTestLogger } from "./support/model-gateway";
 import { createRetentionOptions } from "./support/retention-harness";
 import { withTestSql as withSql } from "./support/test-sql";
 import { createTestInstance, getTestJobs, type TestInstance } from "./support/test-instance";
@@ -200,7 +201,9 @@ describe("the title job and a rename by the user", () => {
 
   async function titledConversation(
     renameDuringGeneration: string | undefined,
-    titleBinding?: { id: string; providerId: string; model: string }
+    titleBinding?: { id: string; providerId: string; model: string },
+    /** Set to fail the model call of the title with this error. */
+    generationFailure?: Error
   ) {
     const store = (await createTestInstance()).stores;
     const conversation = await store.createConversationForTesting({
@@ -225,6 +228,7 @@ describe("the title job and a rename by the user", () => {
       modelProvider: {
         // The job has read the conversation and has not written the title yet.
         async complete() {
+          if (generationFailure) throw generationFailure;
           if (renameDuringGeneration)
             await store.conversations.updateConversationTitle({
               clientInstanceId: titleInstance,
@@ -249,7 +253,10 @@ describe("the title job and a rename by the user", () => {
     const worker = createJobWorker({
       stores: store,
       clientInstanceId: titleInstance,
-      logger: createFailingTestLogger("The title job failed"),
+      // A model call that is made to fail fails its job, and the worker logs that.
+      logger: generationFailure
+        ? silentTestLogger
+        : createFailingTestLogger("The title job failed"),
       ...createChatServerJobs(options)
     });
     await store.jobs.enqueue(
@@ -265,7 +272,8 @@ describe("the title job and a rename by the user", () => {
       store,
       conversation,
       title: stored?.title,
-      generatedEvents: audit.filter((event) => event.type === "conversation.title_generated")
+      generatedEvents: audit.filter((event) => event.type === "conversation.title_generated"),
+      failedEvents: audit.filter((event) => event.type === "conversation.title_generation_failed")
     };
   }
 
@@ -286,6 +294,31 @@ describe("the title job and a rename by the user", () => {
 
     const unbound = await titledConversation(undefined);
     expect(unbound.generatedEvents.map((event) => event.metadata)).toContainEqual(
+      expect.objectContaining({ providerId: "local", model: "local" })
+    );
+  });
+
+  it("names the model of a title that failed in the audit by its binding, and by its id without one", async () => {
+    const model = "arn:aws:bedrock:eu-central-1:000000000000:application-inference-profile/p";
+    const bound = await titledConversation(
+      undefined,
+      { id: "titles", providerId: "local", model },
+      new Error("The model failed")
+    );
+    expect(bound.title).toBe("please summarize the release notes");
+    expect(bound.generatedEvents).toHaveLength(0);
+    expect(bound.failedEvents.length).toBeGreaterThan(0);
+    for (const event of bound.failedEvents) {
+      expect(event).toMatchObject({
+        status: "failed",
+        metadata: { providerId: "local", modelBindingId: "titles" }
+      });
+      expect(event.metadata).not.toHaveProperty("model");
+    }
+    expect(JSON.stringify(bound.failedEvents)).not.toMatch(/arn:aws|000000000000/u);
+
+    const unbound = await titledConversation(undefined, undefined, new Error("The model failed"));
+    expect(unbound.failedEvents.map((event) => event.metadata)).toContainEqual(
       expect.objectContaining({ providerId: "local", model: "local" })
     );
   });

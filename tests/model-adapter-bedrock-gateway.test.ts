@@ -48,6 +48,7 @@ describe("Bedrock adapter behind the gateway: what is sent again", () => {
       "a model that failed while it streamed",
       bedrockStreamException("modelStreamErrorException", "x")
     ],
+    ["a model that failed", bedrockStreamException("modelErrorException", "x")],
     ["an unavailable service", bedrockStreamException("serviceUnavailableException", "x")],
     ["a model that timed out", bedrockStreamException("modelTimeoutException", "x")]
   ])("sends a stream that reports %s three times and then fails", async (_name, piece) => {
@@ -58,10 +59,14 @@ describe("Bedrock adapter behind the gateway: what is sent again", () => {
     expect(sent).toBe(3);
   });
 
-  it("sends a throttled stream again within a minute and then tells the user", async () => {
+  it.each([
+    ["a throttled stream", "throttlingException"],
+    // A model that is still loading is ready a moment later: sent again like a throttled call.
+    ["a stream whose model is not ready", "modelNotReadyException"]
+  ])("sends %s again within a minute and then tells the user", async (_name, type) => {
     const { sent, failure } = await failureOfStream([
       streamStart,
-      bedrockStreamException("throttlingException", "x")
+      bedrockStreamException(type, "x")
     ]);
 
     expect(failure).toMatchObject({
@@ -83,6 +88,18 @@ describe("Bedrock adapter behind the gateway: what is sent again", () => {
       bedrockStreamException("validationException", "x"),
       "invalid_request",
       400
+    ],
+    [
+      "a quota that is used up",
+      bedrockStreamException("serviceQuotaExceededException", "x"),
+      "invalid_request",
+      400
+    ],
+    [
+      "a profile Bedrock does not find",
+      bedrockStreamException("resourceNotFoundException", "x"),
+      "invalid_request",
+      404
     ],
     [
       "an error type of a later release",
@@ -231,6 +248,30 @@ describe("Bedrock adapter behind the gateway: what names the model", () => {
     ]);
     expect(JSON.stringify(warnings)).not.toMatch(/arn:aws/u);
     expect(JSON.stringify(warnings)).not.toContain(BEDROCK_TEST_ACCOUNT_ID);
+  });
+});
+
+describe("Bedrock adapter behind the gateway: usage that cannot be recorded", () => {
+  it("names the binding, never the profile, in the log line of a failed call that could not be settled", async () => {
+    answerWith(() => bedrockRefusal(403, "AccessDeniedException", "Denied."));
+    const { gateway, call, errors, governance } = await bedrockGateway();
+    governance.failSettlement = new Error("The usage store is down");
+
+    const failure = await gateway.complete(call).catch((error: unknown) => error);
+
+    // The caller reads why the call failed, not why its usage was not recorded.
+    expect(failure).toMatchObject({ kind: "invalid_request", status: 403 });
+    expect(governance.settled).toBe(1);
+    expect(errors).toEqual([
+      expect.objectContaining({
+        type: "model_usage.record_failed",
+        providerId: "bedrock",
+        bindingId: "claude"
+      })
+    ]);
+    expect(errors[0]).not.toHaveProperty("model");
+    expect(JSON.stringify(errors)).not.toMatch(/arn:aws/u);
+    expect(JSON.stringify(errors)).not.toContain(BEDROCK_TEST_ACCOUNT_ID);
   });
 });
 

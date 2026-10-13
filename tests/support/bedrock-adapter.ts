@@ -11,7 +11,11 @@ import {
   type ModelAdapterStreamEvent
 } from "@vivd-catalyst/model-provider";
 import { RECORDED_BEDROCK_PROFILE } from "./model-adapter-recordings";
-import { createRecordingGovernance, silentTestLogger } from "./model-gateway";
+import {
+  createRecordingGovernance,
+  silentTestLogger,
+  type RecordingGovernance
+} from "./model-gateway";
 
 /** What the tests of the Bedrock adapter share: an adapter with a test key and a scripted `fetch`. */
 
@@ -141,9 +145,14 @@ export function bedrockEventStream(
 export async function bedrockGateway(): Promise<{
   gateway: ModelGateway;
   warnings: Record<string, unknown>[];
+  /** What the gateway logged as an error. */
+  errors: Record<string, unknown>[];
+  governance: RecordingGovernance;
   call: ModelCall;
 }> {
   const warnings: Record<string, unknown>[] = [];
+  const errors: Record<string, unknown>[] = [];
+  const governance = createRecordingGovernance();
   const provider = {
     id: "bedrock",
     type: "aws-bedrock",
@@ -152,15 +161,20 @@ export async function bedrockGateway(): Promise<{
   };
   return {
     warnings,
+    errors,
+    governance,
     gateway: createModelGateway({
       providers: [provider],
       bindings: [{ id: "claude", providerId: "bedrock", model: RECORDED_BEDROCK_PROFILE }],
       adapters: new Map([["bedrock", await bedrock()]]),
-      governance: createRecordingGovernance(),
+      governance,
       logger: {
         ...silentTestLogger,
         warn(input: unknown) {
           if (typeof input === "object" && input !== null) warnings.push({ ...input });
+        },
+        error(input: unknown) {
+          if (typeof input === "object" && input !== null) errors.push({ ...input });
         }
       }
     }),
