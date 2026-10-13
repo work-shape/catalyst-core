@@ -559,7 +559,7 @@ function parseOperationName(name: string): { store: string; verb: StoreVerb } | 
 async function runVerb(
   runtime: DataStoreRuntime,
   store: PublishedStore,
-  verb: Pick<StoreVerb, "effect" | "run"> & { verb: string },
+  verb: Pick<StoreVerb, "effect" | "run" | "outputSchema"> & { verb: string },
   input: unknown,
   context: OperationExecutionContext
 ): Promise<unknown> {
@@ -571,7 +571,7 @@ async function runVerb(
       ? keyedCall(
           context.actor,
           context.idempotencyKey,
-          dataStoreOperationName(record.name, verb.verb),
+          `${DATA_STORE_OPERATION_PREFIX}${record.name}.${verb.verb}`,
           input
         )
       : undefined;
@@ -695,9 +695,9 @@ function readOperation(
       runVerb(
         runtime,
         store,
-        { verb: read.part, effect: "reading", run: read.run },
+        { verb: read.part, effect: "reading", run: read.run, outputSchema: read.outputSchema },
         input,
-        context.runtime.signal
+        context
       )
   };
 }
