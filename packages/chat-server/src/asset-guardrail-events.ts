@@ -1,4 +1,5 @@
 import {
+  WORKFLOW_ASSET_KIND,
   type ConfigAssetRevisionRecord,
   type GuardrailFields,
   type JsonObject,
@@ -68,7 +69,7 @@ export async function publishEvents(
   const name =
     input.kind === "app"
       ? "app.before_publish"
-      : input.kind === "workflow"
+      : input.kind === WORKFLOW_ASSET_KIND
         ? "workflow.before_publish"
         : undefined;
   if (name === undefined) {
