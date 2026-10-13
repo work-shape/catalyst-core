@@ -335,6 +335,10 @@ export interface SelectedChatModel {
   selectedConversationId: string | undefined;
   /** The open conversation's retention date, once its thread has loaded. */
   selectedConversationRetainedUntil: string | undefined;
+  /** The asset the open conversation is about, once its thread has loaded. */
+  selectedConversationSubject: { kind: string; name: string } | undefined;
+  /** Goes to a route of the interface, such as the page of that asset. */
+  openRoute(route: WorkspaceRoute): void;
   messages: Message[] | undefined;
   completedRunProjections: ConversationControllerState["completedRunProjections"];
   messagesLoaded: boolean;
@@ -1171,6 +1175,8 @@ export function useWorkspaceChatModel({
           "private",
       selectedConversationId,
       selectedConversationRetainedUntil: selectedThread?.conversation.retainedUntil,
+      selectedConversationSubject: selectedThread?.conversation.subject,
+      openRoute: routeState.showRoute,
       messages,
       completedRunProjections: controller.completedRunProjections,
       messagesLoaded,

@@ -11,6 +11,8 @@ export const conversation = defineTranslations({
     conversationPrivate: "Private, only you can open it",
     conversationRetentionNotice: "{hint}.",
     conversationRetentionNoticeKeptByMessage: "{hint}. A new message keeps this conversation.",
+    conversationSubjectOther: "This conversation is about “{name}”.",
+    conversationSubjectWorkflow: "The agent edits the workflow",
     conversationUnread: "New response",
     renameConversationField: "Conversation title",
     renameConversationMenuItem: "Rename conversation",
@@ -31,6 +33,8 @@ export const conversation = defineTranslations({
     conversationRetentionNotice: "{hint}.",
     conversationRetentionNoticeKeptByMessage:
       "{hint}. Mit einer neuen Nachricht bleibt diese Unterhaltung erhalten.",
+    conversationSubjectOther: "In dieser Unterhaltung geht es um „{name}“.",
+    conversationSubjectWorkflow: "Der Agent bearbeitet den Workflow",
     conversationUnread: "Neue Antwort",
     renameConversationField: "Titel der Unterhaltung",
     renameConversationMenuItem: "Unterhaltung umbenennen",

@@ -17,6 +17,7 @@ import { dedupeToolSurfaceRefs, readToolSurfaceRefs } from "../tool-surfaces";
 import { AssistantThread, type StartComposerPosition } from "./assistant-thread";
 import { AssistantToolRegistry } from "./assistant-tool-registry";
 import { useRegisterToolDisplayActions } from "../domain-ui-widgets";
+import { ConversationSubjectLine } from "../conversation/conversation-subject";
 import { useTranslation } from "../i18n";
 import { useAutoOpenPageSurface } from "../pages/page-card";
 import { useOpenConversationFile } from "../conversation-file-presentation";
@@ -78,6 +79,8 @@ function AssistantRuntimePane({
     newConversationPrivate,
     selectedConversationId,
     selectedConversationRetainedUntil,
+    selectedConversationSubject,
+    openRoute,
     messagesLoaded,
     snapshotStatus,
     notice,
@@ -365,6 +368,15 @@ function AssistantRuntimePane({
           contextSnapshot={contextSnapshot}
           notice={visibleNotice}
           newConversationPrivate={newConversationPrivate}
+          subjectLine={
+            selectedConversationSubject === undefined ? undefined : (
+              <ConversationSubjectLine
+                subject={selectedConversationSubject}
+                workspaceId={collaborationWorkspaceId}
+                onOpenRoute={openRoute}
+              />
+            )
+          }
           retainedUntil={selectedConversationRetainedUntil}
           draftAttachments={draftAttachments}
           localUploadingAttachments={localUploadingAttachments}

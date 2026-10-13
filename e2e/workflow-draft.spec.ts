@@ -183,6 +183,13 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     );
     expect(thread.conversation.subject).toEqual({ kind: "workflow", name: id });
     expect(thread.conversation.collaborationWorkspaceId).toBe(workspaceId);
+    // The conversation says what it is about before its first message, and leads back.
+    const subjectLine = page.getByTestId("conversation-subject");
+    await expect(subjectLine).toContainText(NAME);
+    await expect(subjectLine.getByRole("link", { name: NAME, exact: true })).toHaveAttribute(
+      "href",
+      workflowPath
+    );
 
     // A draft is saved while the builder is in the conversation, as its agent saves one. Back
     // on the page of the Workflow the bar says that the draft differs.
