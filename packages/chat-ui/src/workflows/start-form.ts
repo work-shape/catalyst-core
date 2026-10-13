@@ -169,7 +169,9 @@ export function startFormOf(inputs: unknown): StartForm {
     return NO_START_FORM;
   }
   const required = new Set(
-    Array.isArray(inputs.required) ? inputs.required.filter((name) => typeof name === "string") : []
+    Array.isArray(inputs.required)
+      ? inputs.required.filter((name): name is string => typeof name === "string")
+      : []
   );
   const fields: StartField[] = [];
   const unsupported: { name: string; required: boolean }[] = [];
@@ -189,11 +191,14 @@ export function startFormOf(inputs: unknown): StartForm {
     });
   }
   // The instance stores a definition as JSON whose keys it orders by itself, so the order of
-  // `properties` is not the author's. The fields a start needs come first; within each group
-  // the order is the one that arrived.
+  // `properties` is not the author's. A list keeps its order: the fields a start needs come
+  // first, as `required` names them, and the others follow in the order that arrived.
+  const position = [...required];
   return {
     fields: [
-      ...fields.filter((field) => field.required),
+      ...fields
+        .filter((field) => field.required)
+        .sort((a, b) => position.indexOf(a.name) - position.indexOf(b.name)),
       ...fields.filter((field) => !field.required)
     ],
     unsupported

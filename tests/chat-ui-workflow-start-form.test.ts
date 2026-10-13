@@ -15,22 +15,15 @@ const inputs = {
     notify: { type: "boolean" },
     contact: { type: "string", format: "email" }
   },
-  required: ["month", "client_id", "region"]
+  // Not the order of `properties`: an instance stores those in an order of its own.
+  required: ["client_id", "month", "region"]
 };
 
 describe("the start form of a Workflow", () => {
-  it("has one field per input, the required ones first, with its rules and its default", () => {
+  it("has one field per input, the required ones first as `required` names them, with its rules and its default", () => {
     const form = startFormOf(inputs);
     expect(form.unsupported).toEqual([]);
     expect(form.fields).toEqual([
-      {
-        name: "month",
-        label: "Month",
-        hint: "The first day.",
-        control: "date",
-        required: true,
-        initial: ""
-      },
       {
         name: "client_id",
         label: "Client id",
@@ -40,6 +33,14 @@ describe("the start form of a Workflow", () => {
         minLength: 3,
         maxLength: 8,
         pattern: "^K[0-9]+$"
+      },
+      {
+        name: "month",
+        label: "Month",
+        hint: "The first day.",
+        control: "date",
+        required: true,
+        initial: ""
       },
       {
         name: "region",
