@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cn, DocsAddressProvider, SkipLink, Spinner, UiRoot, useExit } from "@vivd-catalyst/ui";
 import { DEFAULT_THEME_INPUTS } from "@vivd-catalyst/ui/theme";
+import { startNewAgent } from "./agents/agents-model";
 import { AgentsPage } from "./agents/agents-page";
 import { ApprovalRevisionHostProvider } from "./approvals/approval-revision-host";
 import { AssistantRuntimePanel } from "./assistant/assistant-runtime-panel";
@@ -514,6 +515,11 @@ function ChatWorkspaceContent({
                         onOpenStudio={
                           model.controlPlane.canOpenAgentsInBuild
                             ? model.route.showRoute
+                            : undefined
+                        }
+                        onNewAgent={
+                          model.controlPlane.canCreateAgentsInBuild
+                            ? () => startNewAgent(model.route.showRoute)
                             : undefined
                         }
                       />

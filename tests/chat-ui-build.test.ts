@@ -5,11 +5,14 @@ import { DocsAddressProvider } from "@vivd-catalyst/ui";
 import {
   buildAssetKinds,
   BuildAssetKindsProvider,
+  buildCreateRequested,
   BuildFrame,
   buildLocationOfRoute,
   BuildNavigationProvider,
   buildRouteOfLocation,
+  clearBuildCreateRequest,
   isEditableKind,
+  requestBuildCreate,
   resolveBuildPlace,
   resolveBuildRights,
   SkillEditor,
@@ -206,6 +209,30 @@ const skillPages: BuildAssetKind = {
 const pageKinds = [agentKind, skillPages];
 
 describe("Studio frame", () => {
+  it("opens the dialog of a new agent on the list when a page outside Studio asked for it", () => {
+    const dialog = '<form id="build-create-form"';
+    try {
+      expect(render({ kindPath: "agents" })).not.toContain(dialog);
+
+      requestBuildCreate("agents");
+      expect(buildCreateRequested("agents")).toBe(true);
+      expect(buildCreateRequested("skills")).toBe(false);
+      expect(render({ kindPath: "agents" })).toContain(dialog);
+      // The wish names one kind's list: no other list and no asset's page opens with it.
+      expect(render({ kindPath: "skills" })).not.toContain(dialog);
+      expect(render({ kindPath: "agents", name: "workflow_assistant" })).not.toContain(dialog);
+      // A reader who may not create is asked nothing.
+      expect(
+        render({ kindPath: "agents" }, { source: source({ permissions: ["config_assets.read"] }) })
+      ).not.toContain(dialog);
+
+      clearBuildCreateRequest();
+      expect(render({ kindPath: "agents" })).not.toContain(dialog);
+    } finally {
+      clearBuildCreateRequest();
+    }
+  });
+
   it("lands on the Agents list, titled by the name with the id beneath", () => {
     const markup = render({});
 

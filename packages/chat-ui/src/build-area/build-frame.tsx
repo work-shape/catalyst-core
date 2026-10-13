@@ -39,6 +39,7 @@ import {
 import { useBuildAssetKinds } from "./build-asset-kinds";
 import { ExistingAssetPage, NewAssetPage, ViewedAssetPage } from "./build-asset-page";
 import { BuildCreateDialog } from "./build-create-dialog";
+import { buildCreateRequested, clearBuildCreateRequest } from "./build-create-request";
 import { BUILD_SEARCH_DELAY_MS, type BuildListFilter, type BuildSource } from "./build-data";
 import {
   formatUpdated,
@@ -80,7 +81,11 @@ export function BuildFrame({ source }: { source: BuildSource }) {
   const [listViews, setListViews] = useState<Record<string, ListView>>({});
   // A new asset has no address yet: it is written on the list's address and ends with it.
   const locationKey = `${location.kindPath ?? ""}/${location.name ?? ""}`;
-  const [asking, setAsking] = useState(false);
+  // A page outside Build may have asked for the dialog: the list it leads to opens with it.
+  const [asking, setAsking] = useState(
+    () => location.name === undefined && buildCreateRequested(location.kindPath)
+  );
+  useEffect(clearBuildCreateRequest, []);
   const [start, setStart] = useState<BuildAssetStart>();
   const [seenLocationKey, setSeenLocationKey] = useState(locationKey);
   if (seenLocationKey !== locationKey) {
@@ -321,7 +326,7 @@ export function BuildFrame({ source }: { source: BuildSource }) {
         onOpen={(asset) => open({ kindPath: entry.path, name: asset.name })}
         onNew={() => setAsking(true)}
       />
-      {asking && isEditableKind(entry) ? (
+      {asking && isEditableKind(entry) && place.kind.state.canCreate ? (
         <BuildCreateDialog
           entry={entry}
           namespaces={source.rights.creatableNamespaces(entry.kind)}

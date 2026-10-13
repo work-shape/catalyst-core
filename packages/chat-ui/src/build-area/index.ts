@@ -43,7 +43,12 @@ export {
   refusalsOf,
   type BuildWriteOutcome
 } from "./build-refusals";
-export { resolveBuildRights } from "./build-rights";
+export {
+  buildCreateRequested,
+  clearBuildCreateRequest,
+  requestBuildCreate
+} from "./build-create-request";
+export { mayCreateAgents, resolveBuildRights } from "./build-rights";
 export {
   buildLocationOfRoute,
   BuildNavigationProvider,

@@ -1,4 +1,4 @@
-import { Bot } from "lucide-react";
+import { Bot, Plus } from "lucide-react";
 import { useId } from "react";
 import {
   Avatar,
@@ -42,6 +42,8 @@ export interface AgentsPageProps {
   onStartChat(agentName: string, prompt?: string): void;
   /** Present for a person who may open the agents in Studio: the way to a place there. */
   onOpenStudio?(route: WorkspaceRoute): void;
+  /** Present for a person who may create an agent: starts a new one in Studio. */
+  onNewAgent?(): void;
 }
 
 /**
@@ -54,7 +56,8 @@ export function AgentsPage({
   status,
   onRetry,
   onStartChat,
-  onOpenStudio
+  onOpenStudio,
+  onNewAgent
 }: AgentsPageProps) {
   const { t } = useTranslation();
   const areaRef = useAreaTitleFocus(true);
@@ -62,7 +65,18 @@ export function AgentsPage({
   return (
     <AreaFrame ref={areaRef} label={t("agents.title")}>
       <Page>
-        <PageHeader title={t("agents.title")} description={t("agents.description")} />
+        <PageHeader
+          title={t("agents.title")}
+          description={t("agents.description")}
+          primaryAction={
+            onNewAgent ? (
+              <Button onClick={onNewAgent}>
+                <Plus aria-hidden="true" />
+                {t("configNewAgent")}
+              </Button>
+            ) : undefined
+          }
+        />
         {status === "loading" ? (
           <SkeletonList rows={3} />
         ) : status === "failed" ? (

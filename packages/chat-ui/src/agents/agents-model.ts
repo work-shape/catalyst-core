@@ -1,4 +1,5 @@
 import type { SafeConfig } from "@vivd-catalyst/api-client";
+import { requestBuildCreate } from "../build-area/build-create-request";
 import { AGENTS_BUILD_PATH, buildRouteOfLocation } from "../build-area/build-route";
 import type { WorkspaceRoute } from "../routes";
 
@@ -29,6 +30,15 @@ export function agentCardPrompts(agent: Pick<OfferedAgent, "initialPrompts">) {
 /** The page of an agent in Studio. */
 export function agentStudioRoute(agentName: string): WorkspaceRoute {
   return buildRouteOfLocation({ kindPath: AGENTS_BUILD_PATH, name: agentName });
+}
+
+/**
+ * Leads to the list of the agents in Studio with the dialog that starts a new one open. The
+ * agent is named and written there, where every agent is.
+ */
+export function startNewAgent(showRoute: (route: WorkspaceRoute) => void): void {
+  requestBuildCreate(AGENTS_BUILD_PATH);
+  showRoute(agentsStudioRoute());
 }
 
 /** The list of the agents in Studio. */

@@ -92,3 +92,15 @@ export function resolveBuildRights(
 function toBuildNamespace(namespace: BuildNamespace): BuildNamespace {
   return { prefix: namespace.prefix, displayName: namespace.displayName };
 }
+
+/**
+ * The reader may start a new agent: the instance lets agents be created in the interface, and
+ * the reader holds the right to write one somewhere. The list of agents in Build offers its
+ * button by the same two.
+ */
+export function mayCreateAgents(
+  rights: Pick<BuildRights, "mayCreate">,
+  management: { allowAgentCreation: boolean } | undefined
+): boolean {
+  return management?.allowAgentCreation === true && rights.mayCreate(AGENT_ASSET_KIND);
+}

@@ -10,10 +10,12 @@ import {
   areaOfRoute,
   railSections,
   shownRailSections,
+  startNewAgent,
   workspaceRouteFromPath,
   workspaceRoutePath,
   type AgentsPageProps
 } from "@vivd-catalyst/chat-ui/agents";
+import { buildCreateRequested, clearBuildCreateRequest } from "@vivd-catalyst/chat-ui/build-area";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // The Agents page: its address, its row in the rail, and what a card shows of an agent to a
@@ -182,6 +184,29 @@ describe("the Agents page", () => {
     expect(taxCard).toMatch(
       /<a[^>]*href="\/build\/agents\/tax\.vat-helper"[^>]*aria-describedby="[^"]+"[^>]*>Edit in Studio<\/a>/u
     );
+  });
+
+  it("offers New agent in the page head to a person who may create one, and to nobody else", () => {
+    const button = /<button[^>]*>(?:<svg.*?<\/svg>)?New agent<\/button>/u;
+
+    expect(page({ onOpenStudio: noop, onNewAgent: noop })).toMatch(button);
+    expect(page({ agents: [], onOpenStudio: noop, onNewAgent: noop })).toMatch(button);
+    expect(page({ onNewAgent: noop }, "de")).toContain("Neuer Agent</button>");
+    // A builder who may read agents and not create one keeps the links and gets no button.
+    expect(page({ onOpenStudio: noop })).not.toContain("New agent");
+    expect(page()).not.toContain("New agent");
+  });
+
+  it("starts a new agent on the list of agents in Studio, with its dialog asked for", () => {
+    const opened: string[] = [];
+    try {
+      startNewAgent((route) => opened.push(workspaceRoutePath(route)));
+
+      expect(opened).toEqual(["/build/agents"]);
+      expect(buildCreateRequested("agents")).toBe(true);
+    } finally {
+      clearBuildCreateRequest();
+    }
   });
 
   it("writes an agent's own words as text, never as markup", () => {

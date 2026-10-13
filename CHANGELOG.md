@@ -383,6 +383,9 @@ contain breaking changes; a patch version does not.
   card shows the description whatever `ui.showAgentDescriptions` says. Nothing is edited there:
   a person who may read agents in Studio gets "Edit in Studio" on each card. The page reads the
   list the agent picker already reads and adds no call. `@vivd-catalyst/ui` gains `CardFooter`.
+  A person who may create an agent (`allowAgentCreation` and the right to write one) finds
+  "New agent" in the page head: it opens the list of agents in Studio with the dialog that
+  starts one.
 - **Workflows, the pages on the canvas:** a Workflow opens as a drawing of its steps, left to
   right on a wide page and top to bottom on a phone, fitted to the page when it opens. A loop
   and a parallel part are frames around their steps, a condition is a step with one exit per

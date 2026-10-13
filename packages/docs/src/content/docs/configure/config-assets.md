@@ -142,7 +142,9 @@ opens a new conversation with that agent selected, and a starter prompt opens
 one with its text in the composer. The card always shows the description,
 whatever `ui.showAgentDescriptions` says, and it marks the workspace's default
 agent. A person who may read agents in Studio also finds **Edit in Studio** on
-each card.
+each card. A person who may create one finds **New agent** in the page head: it
+opens the list of agents in Studio with the dialog that starts an agent, when
+`allowAgentCreation` is on and the person holds the right to write one.
 
 People with the `config_assets.write` permission, or with a grant in a Namespace, edit assets in [Studio](/configure/build/). The module `assetManagement` turns that on, and release config decides how much of an agent is interactively editable:
 

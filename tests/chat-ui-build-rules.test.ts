@@ -4,6 +4,7 @@ import { createTranslationContext } from "@vivd-catalyst/chat-ui";
 import {
   assetIdFromTitle,
   PendingApprovalError,
+  mayCreateAgents,
   readBuildRefusal,
   refusalsOf,
   resolveBuildRights
@@ -87,6 +88,21 @@ describe("Studio rights", () => {
     expect(
       rights([], [{ ...taxNamespace, actions: ["agent.write"] }]).may("delete", taxAgent)
     ).toBe(false);
+  });
+
+  it("lets an agent be started by a writer on an instance that lets agents be created", () => {
+    const on = { allowAgentCreation: true };
+
+    expect(mayCreateAgents(rights(["config_assets.write"]), on)).toBe(true);
+    expect(mayCreateAgents(rights([], [taxNamespace]), on)).toBe(true);
+    // The right alone is not enough: the instance has its own switch.
+    expect(mayCreateAgents(rights(["config_assets.write"]), { allowAgentCreation: false })).toBe(
+      false
+    );
+    expect(mayCreateAgents(rights(["config_assets.write"]), undefined)).toBe(false);
+    // Nor is the switch: a reader, and a writer of another kind's Namespace, start nothing.
+    expect(mayCreateAgents(rights(["config_assets.read"]), on)).toBe(false);
+    expect(mayCreateAgents(rights([], [legalNamespace]), on)).toBe(false);
   });
 
   it("names the Namespaces a new asset of a kind may be named in", () => {
