@@ -1,5 +1,5 @@
 import { createHash, createHmac, hkdfSync, timingSafeEqual } from "node:crypto";
-import type { ClientInstanceId, FileSetId } from "@vivd-catalyst/core";
+import type { ClientInstanceId, FileSetId, ServedFileSetAsset } from "@vivd-catalyst/core";
 import { z } from "zod";
 
 // Serving a Page: the files of one file set, to the frame that shows it and to nobody else.
@@ -61,7 +61,24 @@ export interface AppContentClaims {
 }
 
 /** The two views of an App an address can be minted for. */
-type AppContentMode = "draft" | "published";
+export type AppContentMode = "draft" | "published";
+
+/**
+ * The view of an App a frame shows. The file set does not say it: right after a publish or a
+ * discarded draft the draft and the published revision are one file set. An address that asked
+ * for the published view counts as that only while its file set is still what is published,
+ * and an address that names no view is taken as a draft.
+ */
+export function appContentView(
+  mode: AppContentMode | undefined,
+  asset: Pick<ServedFileSetAsset, "publishedRevisionId" | "revisionIds">
+): AppContentMode {
+  return mode === "published" &&
+    asset.publishedRevisionId !== undefined &&
+    asset.revisionIds.includes(asset.publishedRevisionId)
+    ? "published"
+    : "draft";
+}
 
 export type AppContentTokenRefusal = "token_invalid" | "token_expired";
 
@@ -251,13 +268,27 @@ export function isAppContentAddress(url: string | undefined): boolean {
 }
 
 /**
+ * What a shell document adds to the policy: the one inline script it may run, and the outside
+ * hosts its Page may connect to. The hosts are host names as `declaredExternalHostsOf` reads
+ * them, which the policy names with `https://` and nothing else.
+ */
+export interface AppContentDocument {
+  pageScriptHash: string;
+  outsideHosts: readonly string[];
+}
+
+/**
  * The policy of every answer of the content route. It is the policy of the shell document and,
  * by inheritance, of the Page inside it. There is no setting that removes a part of it.
  *
  * `frameAncestors` are the origins the interface runs on. The shell is framed by the interface
  * and by no other site.
  */
-function appContentPolicy(frameAncestors: readonly string[], pageScriptHash?: string): string {
+function appContentPolicy(
+  frameAncestors: readonly string[],
+  document: AppContentDocument | undefined
+): string {
+  const outsideHosts = document?.outsideHosts ?? [];
   return [
     // No origin: the Page cannot read the instance's cookies or storage. Scripts run. Forms,
     // popups, downloads, top navigation and same-origin are not allowed, each of them is a way
@@ -267,12 +298,15 @@ function appContentPolicy(frameAncestors: readonly string[], pageScriptHash?: st
     // 'self' is the instance. It takes no path; see `view-shell.ts` for why none is named.
     // No inline script and no eval: the build moves inline scripts into files. The one hash is
     // that of the platform's own script of this answer, which holds the Page.
-    pageScriptHash ? `script-src 'self' 'sha256-${pageScriptHash}'` : "script-src 'self'",
+    document ? `script-src 'self' 'sha256-${document.pageScriptHash}'` : "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
-    // No host at all. A manifest's `externalHosts` are reviewed when an App is published; a
-    // Page in a conversation is never published, so nothing has reviewed its list.
-    "connect-src 'none'",
+    // Only the outside hosts someone reviewed: those of a published revision of an App
+    // (`app-outside-hosts.ts`). A Page in a conversation is never published and connects to
+    // none, and neither does the instance: the kit reaches it through the frame's parent.
+    outsideHosts.length > 0
+      ? `connect-src ${outsideHosts.map((host) => `https://${host}`).join(" ")}`
+      : "connect-src 'none'",
     // What holds the Page in its frame: it refuses every address the frame could move to.
     "frame-src 'none'",
     "base-uri 'none'",
@@ -294,14 +328,14 @@ function isPolicySource(origin: string): boolean {
 
 /**
  * What every answer below the prefix of the content route carries, an error included.
- * `pageScriptHash` is given with a shell document and names the one inline script it may run.
+ * `document` is given with a shell document.
  */
 export function appContentHeaders(
   frameAncestors: readonly string[],
-  pageScriptHash?: string
+  document?: AppContentDocument
 ): Record<string, string> {
   return {
-    "content-security-policy": appContentPolicy(frameAncestors, pageScriptHash),
+    "content-security-policy": appContentPolicy(frameAncestors, document),
     "x-content-type-options": "nosniff",
     // The address holds the token. No request the Page causes names it to anyone.
     "referrer-policy": "no-referrer",

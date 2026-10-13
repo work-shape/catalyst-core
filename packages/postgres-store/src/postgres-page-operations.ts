@@ -15,6 +15,7 @@ import {
   type PagesStore,
   type ServedFileSet
 } from "@vivd-catalyst/core";
+import { publishedRevisions } from "./postgres-config-asset-operations";
 import type { PostgresConnection } from "./postgres-database";
 import { configAssetRevisions, configAssets } from "./schema/configAssets";
 import { conversations } from "./schema/conversations";
@@ -328,8 +329,9 @@ async function getServedAssetFileSet(
   db: PostgresConnection,
   fileSet: FileSetRow
 ): Promise<ServedFileSet | undefined> {
-  // The asset with whichever of its two pointers names a revision of this file set: one
-  // read by the asset's key that reaches at most two revisions by theirs.
+  // The asset with whichever of its two pointers names a revision of this file set, and the
+  // file set of its published revision: one read by the asset's key that reaches at most three
+  // revisions by theirs.
   const rows = await db
     .select({
       id: configAssets.id,
@@ -338,9 +340,11 @@ async function getServedAssetFileSet(
       scopeId: configAssets.scopeId,
       activeRevisionId: configAssets.activeRevisionId,
       publishedRevisionId: configAssets.publishedRevisionId,
+      publishedFileSetId: publishedRevisions.fileSetId,
       revisionId: configAssetRevisions.id
     })
     .from(configAssets)
+    .leftJoin(publishedRevisions, eq(publishedRevisions.id, configAssets.publishedRevisionId))
     .leftJoin(
       configAssetRevisions,
       and(
@@ -372,6 +376,7 @@ async function getServedAssetFileSet(
       ...(asset.scopeId ? { workspaceId: asset.scopeId } : {}),
       activeRevisionId: asset.activeRevisionId,
       ...(asset.publishedRevisionId ? { publishedRevisionId: asset.publishedRevisionId } : {}),
+      ...(asset.publishedFileSetId ? { publishedFileSetId: asset.publishedFileSetId } : {}),
       revisionIds: rows.flatMap((row) => row.revisionId ?? [])
     }
   };
