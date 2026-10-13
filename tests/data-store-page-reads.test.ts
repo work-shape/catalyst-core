@@ -54,7 +54,8 @@ const person = (id: string, roles: AuthenticatedUser["roles"]): AuthenticatedUse
 const admin = person("usr_page_admin", ["admin"]);
 
 describe("the reads of a Data Store's page", () => {
-  const { db, published, call, connect, recordOf } = useDataStoreWorld("data_store_page_reads");
+  const { db, setup, publish, settle, published, call, connect, recordOf } =
+    useDataStoreWorld("data_store_page_reads");
 
   type World = Awaited<ReturnType<typeof published>>;
 
@@ -153,6 +154,100 @@ describe("the reads of a Data Store's page", () => {
       "note 5"
     ]);
     expect(second.next).toBeUndefined();
+  });
+
+  it("answers every row once for every kind of table and every page size, also where no key holds for all its rows", async () => {
+    const kinds: StoreFile = {
+      path: "migrations/0002_kinds.sql",
+      text: `create table plain (n integer not null, label text);
+        create table parted (n integer not null, label text) partition by range (n);
+        create table parted_low partition of parted for values from (0) to (60);
+        create table parted_high partition of parted for values from (60) to (1000);
+        create table keyed_parted (n integer primary key, label text) partition by hash (n);
+        create table keyed_parted_0 partition of keyed_parted for values with (modulus 2, remainder 0);
+        create table keyed_parted_1 partition of keyed_parted for values with (modulus 2, remainder 1);
+        create table parent (n integer primary key, label text);
+        create table child () inherits (parent);`
+    };
+    const world = await published("kinds", [manifest(), init, kinds]);
+    const store = connect(world.record.location.database);
+    // 113 rows each: no multiple of a page size. The child repeats keys of its parent.
+    for (const table of ["plain", "parted", "keyed_parted"]) {
+      await store.unsafe(
+        `insert into ${table} select n, 'row ' || n from generate_series(0, 112) n`
+      );
+    }
+    await store`insert into parent select n, 'parent ' || n from generate_series(0, 59) n`;
+    await store`insert into child select n, 'child ' || n from generate_series(0, 52) n`;
+    const expected: Record<string, [string, number]> = {
+      plain: ["physical", 113],
+      parted: ["physical", 113],
+      keyed_parted: ["key", 113],
+      // The key of the parent does not hold for the rows of its child.
+      parent: ["physical", 113],
+      child: ["physical", 53],
+      parted_low: ["physical", 60]
+    };
+
+    for (const [table, [by, count]] of Object.entries(expected)) {
+      for (const limit of [1, 7, 50]) {
+        const labels: unknown[] = [];
+        const places = new Set<string>();
+        let after: string | undefined;
+        do {
+          const answer = await page(world, { table, limit, ...(after ? { after } : {}) });
+          expect(answer.order, table).toMatchObject({ by });
+          expect(answer.rows.length, `${table} by ${limit}`).toBeLessThanOrEqual(limit);
+          for (const row of answer.rows) {
+            labels.push(row.values.label);
+            places.add(row.at);
+          }
+          after = answer.next;
+        } while (after !== undefined);
+        expect(labels, `${table} by ${limit}`).toHaveLength(count);
+        expect(new Set(labels).size, `${table} by ${limit}`).toBe(count);
+        expect(places.size, `${table} by ${limit}`).toBe(count);
+      }
+    }
+    // A row of a part of a table is found again by its part and its place in it.
+    const firstPage = await page(world, { table: "parted", limit: 50 });
+    const [beyond] = (
+      await page(world, { table: "parted", limit: 50, after: required(firstPage.next) })
+    ).rows.slice(-1);
+    expect(
+      await read(world, "value", { table: "parted", column: "label", at: required(beyond).at })
+    ).toEqual({ value: beyond?.values.label });
+  });
+
+  it("never reads a long value for a page: a text by its beginning, another value above the read bound not at all", async () => {
+    const world = await published("long", [manifest(), init, notes]);
+    const store = connect(world.record.location.database);
+    // Text that does not shrink when it is stored, 6 MB a row, and a JSON value of 300 kB.
+    await store`insert into notes
+      select (select string_agg(md5((n * 1000000 + i)::text), '') from generate_series(1, 190000) i)
+      from generate_series(1, 4) n`;
+    await store`insert into findings (run_id, client_id, rule_id, revision, severity, details)
+      select 'run', 'client', 'rule', 1, 'info',
+        jsonb_build_object('text', (select string_agg(md5(i::text), '') from generate_series(1, 9000) i))`;
+
+    const texts = await page(world, { table: "notes" });
+    expect(texts.rows).toHaveLength(4);
+    for (const row of texts.rows) {
+      expect(row.cut).toEqual(["body"]);
+      expect(row.values.body).toHaveLength(1_000);
+    }
+    // The JSON value is named as cut and answered empty: it was not read. One read has it whole.
+    const [finding] = (await page(world, { table: "findings" })).rows;
+    expect(finding?.cut).toEqual(["details"]);
+    expect(finding?.values.details).toBe("");
+    const whole = z.object({ value: z.object({ text: z.string() }) }).parse(
+      await read(world, "value", {
+        table: "findings",
+        column: "details",
+        at: required(finding).at
+      })
+    );
+    expect(whole.value.text).toHaveLength(9_000 * 32);
   });
 
   it("cuts a long value at a thousand characters, names the column, and reads the value whole by one more read", async () => {
@@ -256,6 +351,55 @@ describe("the reads of a Data Store's page", () => {
       []
     );
     expect(await recordOf(world, world.id)).toMatchObject({ status: "ready" });
+  });
+
+  it("neither lists nor opens a store of another Namespace to a holder of the read in one Namespace", async () => {
+    const world = await setup("namespaces");
+    const storeOf = (name: string): StoreFile[] => [
+      { ...manifest(), text: `id: ${name}\nname: ${name}\n` },
+      init
+    ];
+    const sales = await publish(world, storeOf("sales-ledger"), "sales-ledger");
+    const hr = await publish(world, storeOf("hr-ledger"), "hr-ledger");
+    await settle(world, sales, 1);
+    await settle(world, hr, 1);
+    const member = person("usr_page_sales", ["user"]);
+    const access = accessOf(member, {
+      grants: [
+        {
+          id: "grant_sales",
+          clientInstanceId: member.clientInstanceId,
+          holderKind: "user",
+          holderId: member.id,
+          action: "data_store.read",
+          effect: "allow",
+          scopeKind: "namespace",
+          namespace: "sales-",
+          grantedBy: asUserId(admin.id),
+          createdAt: new Date().toISOString()
+        }
+      ]
+    });
+
+    expect((await world.dataStores.list(access)).items.map(({ name }) => name)).toEqual([
+      "sales-ledger"
+    ]);
+    expect((await world.dataStores.list(accessOf(admin))).items.map(({ name }) => name)).toEqual([
+      "hr-ledger",
+      "sales-ledger"
+    ]);
+    // Every read of a store asks the right on that store, as the call path asks it.
+    for (const part of ["rows", "value", "used_by", "state", "preview_rows"]) {
+      const allowed = async (store: string) => {
+        const operation = required(
+          await world.dataStores.operationSource.resolve(`data_store.${store}.${part}`)
+        );
+        expect(operation.action, part).toBe("data_store.read");
+        return access.authorize("data_store.read", operation.resource({})).allowed;
+      };
+      expect(await allowed("sales-ledger"), part).toBe(true);
+      expect(await allowed("hr-ledger"), part).toBe(false);
+    }
   });
 
   it("answers the published Apps and Workflows that use a store, and of those the caller may not be shown a count alone", async () => {
@@ -369,6 +513,83 @@ describe("the reads of a Data Store's page", () => {
     });
     expect(JSON.stringify(answer)).not.toContain("report");
     expect(JSON.stringify(answer)).not.toContain("yearly");
+    // The blocks a later engine runs, and an agent step that may call the store as a tool.
+    const inBlock = (name: string, block: JsonObject, tools?: string[]): JsonObject => ({
+      manifest: {
+        id: name,
+        name: `Workflow ${name}`,
+        ...(tools ? { tools } : {}),
+        steps: [block]
+      }
+    });
+    const calling = (operation: string): JsonObject => ({
+      id: "call",
+      name: "Call",
+      type: "operation",
+      operation,
+      input: {}
+    });
+    const other = calling("connection.crm.echo");
+    const blocks: [string, JsonObject, string[]?][] = [
+      [
+        "in-then",
+        {
+          id: "if",
+          name: "If",
+          type: "condition",
+          when: {},
+          then: [calling("data_store.findings.query")],
+          else: [other]
+        }
+      ],
+      [
+        "in-else",
+        {
+          id: "if",
+          name: "If",
+          type: "condition",
+          when: {},
+          then: [other],
+          else: [
+            {
+              id: "each",
+              name: "Each",
+              type: "loop",
+              steps: [calling("data_store.findings.insert")]
+            }
+          ]
+        }
+      ],
+      [
+        "in-branch",
+        {
+          id: "both",
+          name: "Both",
+          type: "parallel",
+          branches: [
+            { id: "a", name: "A", steps: [other] },
+            { id: "b", name: "B", steps: [calling("data_store.findings.load")] }
+          ]
+        }
+      ],
+      ["as-tool", other, ["connection.crm.echo", "data_store.findings.query"]],
+      ["not-in-blocks", { id: "if", name: "If", type: "condition", when: {}, then: [other] }]
+    ];
+    for (const [name, block, tools] of blocks) {
+      await publishAsset("workflow", name, inBlock(name, block, tools));
+    }
+    const everyBlock = z
+      .object({ workflows: z.array(z.object({ name: z.string() })) })
+      .parse(await read(world, "used_by", {}));
+    expect(everyBlock.workflows.map(({ name }) => name)).toEqual([
+      "as-tool",
+      "in-branch",
+      "in-else",
+      "in-then",
+      "monthly",
+      "yearly"
+    ]);
+
     expect(
       await world.dataStores.operationSource.resolve("data_store.findings.used_by")
     ).toMatchObject({ effect: "reading", action: "data_store.read", scope: "config_assets:read" });
