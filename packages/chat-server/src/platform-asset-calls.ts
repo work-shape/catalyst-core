@@ -18,21 +18,25 @@ import {
   type ToolExecutionContext
 } from "@vivd-catalyst/core";
 import {
+  PLATFORM_ASSET_LIST_MAX,
   platformAssetWriteRefusal,
   type PlatformAssetCalls,
+  type PlatformAssetFound,
   type PlatformCallableOperation
 } from "@vivd-catalyst/tool-execution";
 import { z } from "zod";
 import type { AssetCall } from "./asset-access";
 import { readDefinitionName } from "./asset-kinds/shared";
 import { AssetWorkflow } from "./asset-workflow";
+import { readPlatformContext } from "./platform-context";
 import type { AssetWorkflowOptions } from "./types";
 
 // What carries the agent's asset tools out: the workflow of the asset operations of the API,
 // called for the person the agent acts for, on the subject of the conversation the call came
-// from. Nothing of an asset is decided here: the right, the checks of a definition, the
-// revision and the audit rows are the ones a call of `assets.get`, `assets.validate` and
-// `assets.put` has.
+// from, and the reads that find what is on the platform. Nothing of an asset is decided here:
+// the right, the checks of a definition, the revision and the audit rows are the ones a call
+// of `assets.get`, `assets.validate`, `assets.put`, `assets.list` and `platform.context.get`
+// has.
 
 /** The module whose switch turns changing assets through `assets.put` on and off. */
 const ASSET_WRITE_OPERATION = "assets.put";
@@ -123,24 +127,12 @@ function jsonSchemaOf(given: JsonObject | undefined, schema: z.ZodType): JsonObj
 export function createPlatformAssetCalls(options: AssetWorkflowOptions): PlatformAssetCalls {
   const workflow = new AssetWorkflow(options);
 
-  /** The asset the call is bound to, and the call as the asset operations take one. */
-  async function bound(context: ToolExecutionContext): Promise<{
-    subject: ConversationSubject;
-    call: AssetCall;
-  }> {
+  /** The conversation the call came from, and the call as the asset operations take one. */
+  async function callOf(context: ToolExecutionContext) {
     const conversationId = context.toolRequest?.conversationId;
     const conversation = conversationId
       ? await options.stores.conversations.getConversation(options.clientInstanceId, conversationId)
       : undefined;
-    const subject = conversation?.subject;
-    if (!subject) {
-      throw new AppError(
-        "CONFLICT",
-        "This conversation is about no asset, so there is none to read or save here",
-        { reason: "conversation_without_subject" },
-        { exposeMessage: true }
-      );
-    }
     const runId = context.operationRun?.id;
     // The audit rows of the call carry its run, as those of a call of the API do.
     const audit: AuditRecorder = {
@@ -151,17 +143,39 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
           metadata: { ...input.metadata, ...(runId ? { operationRunId: runId } : {}) }
         })
     };
-    return {
-      subject,
-      call: {
-        actor: context.user,
-        access: await accessOf(options, context.user),
-        audit,
-        correlationId: context.correlationId,
-        ...(runId ? { runId } : {})
-      }
+    const call: AssetCall = {
+      actor: context.user,
+      access: await accessOf(options, context.user),
+      audit,
+      correlationId: context.correlationId,
+      ...(runId ? { runId } : {})
     };
+    return { conversation, call };
   }
+
+  /** The asset the call is bound to, and the call as the asset operations take one. */
+  async function bound(context: ToolExecutionContext): Promise<{
+    subject: ConversationSubject;
+    call: AssetCall;
+  }> {
+    const { conversation, call } = await callOf(context);
+    const subject = conversation?.subject;
+    if (!subject) {
+      throw new AppError(
+        "CONFLICT",
+        "This conversation is about no asset, so there is none to read or save here",
+        { reason: "conversation_without_subject" },
+        { exposeMessage: true }
+      );
+    }
+    return { subject, call };
+  }
+
+  /** The kinds that exist here: a kind of a module that is off does not. */
+  const existingKinds = () =>
+    options.configAssets.kinds.kinds.filter(
+      (kind) => options.modules.offModuleOf("kind", kind.kind) === undefined
+    );
 
   const allowed = (decision: OperationAuthorization): void => {
     if (!decision.allowed) {
@@ -272,6 +286,72 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
         canPause: true
       });
       return asked.source === "central_setting" ? asked.value : undefined;
+    },
+
+    async readContext(context) {
+      const { call } = await callOf(context);
+      const read = await readPlatformContext(options, call);
+      const kinds = existingKinds();
+      const existing = new Set<string>(kinds.flatMap((kind) => Object.values(kind.actions)));
+      const ofExisting = (actions: string[]) => actions.filter((action) => existing.has(action));
+      return {
+        instance: { name: read.instance.name },
+        modules: options.modules.modules.filter((module) => module.enabled).map(({ name }) => name),
+        kinds: kinds.map((kind) => ({
+          kind: kind.kind,
+          plural: kind.plural,
+          hasDraft: kind.lifecycle === "draft_published"
+        })),
+        actions: ofExisting(read.actions),
+        assetActions: ofExisting(read.assetActions),
+        namespaces: read.namespaces.flatMap((namespace) => {
+          const actions = ofExisting(namespace.actions);
+          return actions.length > 0 ? [{ ...namespace, actions }] : [];
+        })
+      };
+    },
+
+    async listAssets(context, input) {
+      const { conversation, call } = await callOf(context);
+      const kinds = existingKinds().filter(
+        (kind) => input.kind === undefined || kind.kind === input.kind
+      );
+      if (kinds.length === 0) {
+        throw new AppError(
+          "NOT_FOUND",
+          `This platform has no kind '${input.kind}'. platform.context lists the kinds it has`,
+          { reason: "unknown_kind" },
+          { exposeMessage: true }
+        );
+      }
+      // What the instance owns, and what the workspace of the conversation owns.
+      const workspaces = [undefined, conversation?.collaborationWorkspaceId];
+      const assets: PlatformAssetFound[] = [];
+      for (const kind of kinds) {
+        for (const workspaceId of workspaces) {
+          const room = PLATFORM_ASSET_LIST_MAX - assets.length;
+          // One more than there is room for says whether the list is cut.
+          const listed = await workflow.reads.list(
+            call,
+            {
+              kind: kind.kind,
+              ...(input.text === undefined ? {} : { text: input.text }),
+              ...(workspaceId === undefined ? {} : { workspaceId })
+            },
+            { limit: room + 1 }
+          );
+          for (const asset of listed.slice(0, room)) {
+            assets.push({
+              kind: asset.kind,
+              name: asset.name,
+              title: asset.title,
+              ...(asset.description === undefined ? {} : { description: asset.description })
+            });
+          }
+          if (listed.length > room) return { assets, truncated: true };
+        }
+      }
+      return { assets, truncated: false };
     },
 
     async listOperations(context) {

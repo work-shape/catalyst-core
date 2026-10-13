@@ -9,6 +9,7 @@ import {
   type ToolExecutionContext
 } from "@vivd-catalyst/core";
 import { defineTool, toolSuccess, type AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
+import type { PlatformDiscoveryCalls } from "./platform-discovery-tools";
 
 // The tools an agent reads and saves the draft of an asset with. Each is a projection of an
 // operation of the API under the name the agent calls it by: the same implementation carries
@@ -73,11 +74,11 @@ export interface PlatformCallableOperation {
 
 /**
  * What carries the tools out: the asset operations of the instance, on the subject of the
- * conversation the call came from. Every method asks the right of the person of `context`
- * as the operation of the API does, and throws its refusal. A conversation without a subject
- * is refused by each.
+ * conversation the call came from, and those that find what is on the platform. Every method
+ * asks the right of the person of `context` as the operation of the API does, and throws its
+ * refusal. A conversation without a subject is refused by each method on the subject.
  */
-export interface PlatformAssetCalls {
+export interface PlatformAssetCalls extends PlatformDiscoveryCalls {
   get(context: ToolExecutionContext): Promise<PlatformAssetRead>;
   validate(
     context: ToolExecutionContext,
@@ -113,7 +114,7 @@ export function createPlatformAssetBinding(): PlatformAssetBinding {
     if (!bound) {
       throw new AppError(
         "CONFLICT",
-        "The asset of this conversation cannot be read or saved from this process",
+        "The assets of this platform cannot be read or saved from this process",
         { reason: "asset_tools_unbound" },
         { exposeMessage: true }
       );
@@ -129,7 +130,9 @@ export function createPlatformAssetBinding(): PlatformAssetBinding {
       validate: (context, config) => required().validate(context, config),
       put: (context, input) => required().put(context, input),
       putPolicyFloor: (conversationId) => required().putPolicyFloor(conversationId),
-      listOperations: (context) => required().listOperations(context)
+      listOperations: (context) => required().listOperations(context),
+      readContext: (context) => required().readContext(context),
+      listAssets: (context, input) => required().listAssets(context, input)
     }
   };
 }

@@ -57,6 +57,7 @@ describe("the input schema a model is shown for a tool", () => {
           "web_fetch",
           "read_skill",
           "platform.assets.put",
+          "platform.assets.list",
           "propose_skill_change"
         ])
       );
