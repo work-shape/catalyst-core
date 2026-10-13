@@ -62,7 +62,10 @@ export async function seedShippedSkills(
   try {
     return await reconcile(input);
   } catch (error) {
-    if (!isAppError(error) || error.code !== "CONFLICT") throw error;
+    // A write against revisions another start changed answers REVISION_CONFLICT.
+    if (!isAppError(error) || (error.code !== "REVISION_CONFLICT" && error.code !== "CONFLICT")) {
+      throw error;
+    }
     return reconcile(input);
   }
 }

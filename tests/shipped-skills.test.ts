@@ -195,6 +195,29 @@ describe("the skills that ship with the platform", () => {
     expect(replaced.config.content).toBe("# The next release's guide");
   });
 
+  it("is stored once by starts that run at the same time", async () => {
+    const app = await start(true);
+    const next = {
+      name: GUIDE,
+      title: "How this platform works",
+      description: "The next release's guide.",
+      content: "# The next release's guide",
+      icon: "guide"
+    };
+    const seeds = await Promise.allSettled(
+      Array.from({ length: 3 }, () =>
+        seedShippedSkills({ clientInstanceId, stores: app.stores, skills: [next] })
+      )
+    );
+    expect(seeds.map((seed) => seed.status)).toEqual(["fulfilled", "fulfilled", "fulfilled"]);
+    const revisions = await app.stores.configAssets.listConfigAssetRevisions({
+      clientInstanceId,
+      kind: "skill",
+      name: GUIDE
+    });
+    expect(revisions).toHaveLength(2);
+  });
+
   it("stops the start where a skill of the instance holds a name the platform ships", async () => {
     const app = await start(false);
     const created = await app.call("assets.put", {
