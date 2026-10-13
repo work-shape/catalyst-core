@@ -222,7 +222,8 @@ contain breaking changes; a patch version does not.
   recovers once the cause is gone; an operation says so with `AppError.changedNothing`. A changing
   call of a store that carries an idempotency key records the key in the store's database with
   its rows (`catalyst.calls`: hashes of key and input, the operation and the counts it
-  answered; kept 30 days): the same key with the same input changes nothing and is answered
+  answered; kept 30 days; the app role reaches it through two functions and holds nothing
+  on the table, so a query or an `sql` action of an App reads no record): the same key with the same input changes nothing and is answered
   again, with another input it is refused as `data_store_key_reused`. `insert` and `load`
   declare `repeatsUnderKey`, so a step whose worker died is made again under its key and its
   run ends `done` with each row once. Release

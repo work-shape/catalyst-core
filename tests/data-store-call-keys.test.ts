@@ -201,21 +201,53 @@ describe("a changing call of a Data Store that carries an idempotency key", () =
     expect(await countOf(world)).toBe(2);
   });
 
-  it("lets the app role read and add records and neither change nor remove one", async () => {
+  it("closes the records to every statement of a query, which is what an `sql` action of an App runs: it reads none and adds none", async () => {
     const world = await published("privileges");
     await insert(world, 1, "step-kept");
+    const [kept] = await records(world);
     const attempt = (sql: string) => refusal(call(world, "query", { sql }));
+    const denied = { details: { sqlState: "42501" } };
 
+    // The app role holds nothing on the table: the records are read and added through two
+    // functions of the platform's, by the key of one call.
     expect(
       await connect(world.record.location.database)<{ privilege: string }[]>`
         select privilege_type as privilege from information_schema.role_table_grants
         where table_schema = 'catalyst' and table_name = 'calls'
           and grantee = ${world.record.roles.app} order by 1`
-    ).toEqual([{ privilege: "INSERT" }, { privilege: "SELECT" }]);
+    ).toEqual([]);
+    expect(await attempt("select * from catalyst.calls")).toMatchObject(denied);
+    expect(await attempt("select count(*)::integer as count from catalyst.calls")).toMatchObject(
+      denied
+    );
+    expect(await attempt("table catalyst.calls")).toBeDefined();
+    expect(
+      await attempt(
+        `with made as (
+           insert into catalyst.calls (key, operation, input_hash, outcome)
+           values ('forged', 'data_store.findings.insert', 'forged', '{"inserted":0}')
+           returning 1
+         ) select count(*)::integer as count from made`
+      )
+    ).toBeDefined();
+    // A query is read-only, so the function that adds a record adds none from one.
+    expect(
+      await attempt(
+        `select catalyst.record_call('forged', 'data_store.findings.insert', 'forged', '{"inserted":0}')`
+      )
+    ).toBeDefined();
+    // An insert names a table of the schema `public` and no other.
+    expect(
+      await refusal(
+        call(world, "insert", {
+          table: "catalyst.calls",
+          rows: [{ key: "forged", operation: "o", input_hash: "h", outcome: "{}" }]
+        })
+      )
+    ).toMatchObject({ details: { reason: "table_unknown" } });
+    expect(await records(world)).toEqual([kept]);
     // The ledger of the migrations stays closed to it.
-    expect(await attempt("select * from catalyst.migrations")).toMatchObject({
-      details: { sqlState: "42501" }
-    });
+    expect(await attempt("select * from catalyst.migrations")).toMatchObject(denied);
   });
 
   it("removes the records that are older than 30 days with the daily measurement and keeps the others", async () => {

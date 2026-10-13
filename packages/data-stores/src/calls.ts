@@ -19,7 +19,10 @@ import { quoteIdentifier } from "./server";
 // answered what the first call was answered.
 //
 // The table is the platform's, in the schema the store's migrations may not name. The app
-// role reads it and adds to it and neither changes nor removes a row.
+// role holds nothing on it: it reads the record of one key and adds one through two functions
+// of the platform's, which run with their owner's rights. A statement that runs as the app
+// role, such as the one of a query or of an `sql` action of an App, therefore reads no record
+// it does not hold the key of, and the read-only transaction of a query adds none.
 
 /**
  * For how many days a store keeps the record of a call: as long as the data of a step is kept.
@@ -34,8 +37,9 @@ const DATA_STORE_CALL_RECORDS_SETUP_TIMEOUT_MS = 30_000;
 const DATA_STORE_CALL_RECORDS_PRUNE_TIMEOUT_MS = 60_000;
 
 /**
- * The statements that make the table of the records and give the app role its part of it.
- * Each finds what is there and adds what is missing.
+ * The statements that make the table of the records and the two functions the app role reaches
+ * it through. Each finds what is there and adds what is missing, and takes from the app role
+ * what an earlier version of this gave it on the table itself.
  */
 export function callRecordsSetup(appRole: string): string {
   const app = quoteIdentifier(appRole);
@@ -48,8 +52,34 @@ export function callRecordsSetup(appRole: string): string {
       made_at timestamp with time zone not null default now()
     );
     create index if not exists calls_made_at on catalyst.calls (made_at);
+    revoke all on catalyst.calls from ${app};
+    create or replace function catalyst.recorded_call(call_key pg_catalog.text)
+      returns table (operation pg_catalog.text, input_hash pg_catalog.text, outcome pg_catalog.jsonb)
+      language sql stable security definer set search_path = pg_catalog
+      as $recorded$
+        select c.operation, c.input_hash, c.outcome from catalyst.calls c where c.key = call_key
+      $recorded$;
+    create or replace function catalyst.record_call(
+      call_key pg_catalog.text,
+      call_operation pg_catalog.text,
+      call_input_hash pg_catalog.text,
+      call_outcome pg_catalog.jsonb
+    )
+      returns pg_catalog.void
+      language sql security definer set search_path = pg_catalog
+      as $record$
+        insert into catalyst.calls (key, operation, input_hash, outcome)
+        values (call_key, call_operation, call_input_hash, call_outcome)
+      $record$;
+    revoke all on function catalyst.recorded_call(pg_catalog.text) from public;
+    revoke all on function
+      catalyst.record_call(pg_catalog.text, pg_catalog.text, pg_catalog.text, pg_catalog.jsonb)
+      from public;
     grant usage on schema catalyst to ${app};
-    grant select, insert on catalyst.calls to ${app};`;
+    grant execute on function catalyst.recorded_call(pg_catalog.text) to ${app};
+    grant execute on function
+      catalyst.record_call(pg_catalog.text, pg_catalog.text, pg_catalog.text, pg_catalog.jsonb)
+      to ${app};`;
 }
 
 /** One changing call that carried a key, as the store records it. */
@@ -100,7 +130,7 @@ const recordRow = z.object({
 });
 
 const RECORDED = `
-  select operation, input_hash, outcome from catalyst.calls where key = $1`;
+  select operation, input_hash, outcome from catalyst.recorded_call($1::pg_catalog.text)`;
 
 /**
  * What the first call under the key was answered, or nothing where the store has no record of
@@ -159,8 +189,9 @@ export async function recordCall(
   outcome: JsonObject
 ): Promise<void> {
   await sql.run(
-    `insert into catalyst.calls (key, operation, input_hash, outcome)
-     values ($1, $2, $3, $4::pg_catalog.jsonb)`,
+    `select catalyst.record_call(
+       $1::pg_catalog.text, $2::pg_catalog.text, $3::pg_catalog.text, $4::pg_catalog.jsonb
+     )::pg_catalog.text as recorded`,
     [call.key, call.operation, call.inputHash, JSON.stringify(outcome)]
   );
 }
