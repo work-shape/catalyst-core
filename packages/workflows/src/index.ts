@@ -56,6 +56,12 @@ export {
 } from "./step-job";
 export type { WorkflowCodeRunner } from "./step-execution";
 
+export {
+  WORKFLOW_AUTHORING_EXAMPLES,
+  WORKFLOW_AUTHORING_SKILL_NAME,
+  workflowAuthoringSkill,
+  workflowStepTypesNotRun
+} from "./authoring-skill";
 export { lastDueWithin, nextDueAfter, parseCron } from "./cron";
 export {
   WORKFLOW_EXECUTED_STEP_TYPES,
