@@ -48,5 +48,7 @@ export interface DataStoreRuntime {
   auditRecorder: AuditRecorder;
   /** Where `load` reads the rows of a dataset from. Missing until the datasets of Workflow Runs exist. */
   datasets?: DataStoreDatasetReader;
+  /** The stores this process has seen to hold the table of their call records, by id. */
+  callRecords: Map<string, Promise<void>>;
   logger: Logger;
 }

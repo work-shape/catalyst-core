@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { DataStoreRecord, JobControl, PlatformStores } from "@vivd-catalyst/core";
+import { pruneCallRecords } from "./calls";
 import { readStoreConditions } from "./provisioning";
 import type { DataStoreRuntime } from "./runtime";
 import type { DataStoreServer } from "./server";
@@ -98,6 +99,10 @@ export async function measureDataStores(
         })
       )
       .catch(() => undefined);
+    // The records of calls that carried a key are kept as long as the data of a step is.
+    await pruneCallRecords(runtime, record, control.signal).catch(() =>
+      logger.warn({ storeId: record.id }, "The old call records of a Data Store were not removed")
+    );
     const measured = await recordStoreSize(
       runtime,
       (work) => control.transaction(work),

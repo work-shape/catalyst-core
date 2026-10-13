@@ -123,6 +123,7 @@ export function createDataStores(input: {
     credentials,
     auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: stores.audit }),
     ...(input.datasets ? { datasets: input.datasets } : {}),
+    callRecords: new Map(),
     logger
   };
   const jobs = createDataStoreJobs(runtime);

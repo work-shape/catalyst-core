@@ -26,9 +26,11 @@ import {
   type DataToolSource,
   type JsonObject,
   type OperationDefinition,
+  type OperationExecutionContext,
   type OperationSource
 } from "@vivd-catalyst/core";
 import { z } from "zod";
+import { ensureCallRecords, keyedCall, readRecordedCall } from "./calls";
 import { catalogTarget, readTables, rowsOf } from "./catalog";
 import { dataStoreDefinitionSchema } from "./definition";
 import { databaseFailureError } from "./failures";
@@ -39,6 +41,7 @@ import { quoteIdentifier } from "./server";
 import { storeSizeBytes } from "./size";
 import { DATA_STORE_STATE_VERB, stateOperation } from "./state";
 import {
+  AnsweredBefore,
   CommitOutcomeUnknown,
   changeWhole,
   reclaim,
@@ -300,7 +303,7 @@ const insert: StoreVerb = {
   inputSchema: insertInputSchema,
   outputSchema: dataStoreInsertResultSchema,
   use: `Adds rows to one table. Use it to record new rows; it changes and removes nothing that is stored. Name the table and send each row as an object of column name to value. All rows of one call name the same columns, and a column that is left out takes its default. "onConflict" says what happens to a row that a unique constraint of the table refuses: "fail", the default, adds no row of the call; "skip" leaves that row out and adds the others, which makes sending the same rows again safe. One call adds at most ${DATA_STORE_INSERT_MAX_ROWS} rows and ${DATA_STORE_INSERT_MAX_BYTES} bytes.`,
-  async run({ runtime, store, target }, call) {
+  async run({ runtime, store, target, keyed }, call) {
     const input = insertInputSchema.parse(call);
     const { record } = store;
     const columns = sharedColumns(input.rows);
@@ -374,10 +377,9 @@ const insert: StoreVerb = {
       throw error;
     };
     let wrote = false;
-    let inserted: number;
     try {
-      inserted = await changeWhole(
-        runtime,
+      return await changeWhole(
+        { runtime, keyed },
         { ...target, timeoutMs: POSTGRES_STATEMENT_TIMEOUT_MS },
         async (sql) => {
           if (keys.length > 0) {
@@ -402,7 +404,12 @@ const insert: StoreVerb = {
           await sql.script("set constraints all immediate");
           const after = await size();
           if (after > record.sizeLimitBytes) refuse(full(after));
-          return insertedRow.parse(counted).count;
+          const inserted = insertedRow.parse(counted).count;
+          return {
+            table: table.name,
+            inserted,
+            skipped: input.rows.length - inserted
+          } satisfies DataStoreInsertResult;
         }
       );
     } catch (error) {
@@ -413,11 +420,6 @@ const insert: StoreVerb = {
       if (wrote && (sizeRefusal || timedOut)) await reclaim(runtime, record);
       throw refusal ?? error;
     }
-    return {
-      table: table.name,
-      inserted,
-      skipped: input.rows.length - inserted
-    } satisfies DataStoreInsertResult;
   }
 };
 
@@ -555,9 +557,20 @@ async function runVerb(
   store: PublishedStore,
   verb: StoreVerb,
   input: unknown,
-  signal: AbortSignal | undefined
+  context: OperationExecutionContext
 ): Promise<unknown> {
   const { record } = store;
+  const { signal } = context.runtime;
+  // A changing call that carried a key is recorded in the store with its rows.
+  const keyed =
+    verb.effect === "changing" && context.idempotencyKey !== undefined
+      ? keyedCall(
+          context.actor,
+          context.idempotencyKey,
+          dataStoreOperationName(record.name, verb.verb),
+          input
+        )
+      : undefined;
   try {
     if (record.status !== "ready") {
       throw new AppError(
@@ -569,17 +582,20 @@ async function runVerb(
       );
     }
     // The app role as the platform gave it, before anything runs as that role.
-    return await asStoreRole(runtime, record, signal, () =>
-      verb.run(
-        {
-          runtime,
-          store,
-          target: { ...runtime.server.asRole(record, "app"), ...(signal ? { signal } : {}) }
-        },
-        input
-      )
-    );
+    return await asStoreRole(runtime, record, signal, async () => {
+      const target = { ...runtime.server.asRole(record, "app"), ...(signal ? { signal } : {}) };
+      if (keyed) {
+        await ensureCallRecords(runtime, record, signal);
+        // Asked before anything of the call is checked: what the first call was answered
+        // stands, also where the store has since become full or its table has changed.
+        const before = await readRecordedCall(runtime, target, keyed);
+        if (before) return verb.outputSchema.parse(before);
+      }
+      return verb.run({ runtime, store, target, ...(keyed ? { keyed } : {}) }, input);
+    });
   } catch (error) {
+    // A call under the same key was kept while this one waited for it.
+    if (error instanceof AnsweredBefore) return verb.outputSchema.parse(error.outcome);
     const unknown = error instanceof CommitOutcomeUnknown;
     const cause: unknown = unknown ? error.failure : error;
     const failure =
@@ -589,8 +605,9 @@ async function runVerb(
     // Everything a changing verb does to a store is one transaction. Whatever fails before
     // that transaction is being kept leaves nothing of the call, so the call path may run the
     // same call again under its key: a step that is tried again adds its rows once the cause
-    // is gone. A failure while it was being kept may have left the rows, and is not run again.
-    throw verb.effect === "changing" && !unknown
+    // is gone. A failure while it was being kept may have left the rows, and is not run again,
+    // unless the call carried a key: then the store itself answers a second call.
+    throw verb.effect === "changing" && (!unknown || keyed !== undefined)
       ? new AppError(failure.code, failure.message, failure.details, {
           exposeMessage: failure.exposeMessage,
           changedNothing: true
@@ -633,6 +650,9 @@ function operationOf(
     // A read of a customer's rows is recorded, every time.
     ...(verb.effect === "reading" ? { recordsEveryCall: true as const } : {}),
     ...(verb.changeClass ? { changeClass: verb.changeClass } : {}),
+    // The store records the key of a changing call with its rows and carries out one call per
+    // key, so a call that was cut off is made again under its key.
+    ...(verb.effect === "changing" ? { repeatsUnderKey: true as const } : {}),
     ...rightsOf(store, verb),
     // What a key must carry to call the verb over HTTP. The grants of its holder still decide.
     scope: DATA_STORE_OPERATION_SCOPES[verb.verb],
@@ -642,7 +662,7 @@ function operationOf(
     resource: () => store.resource,
     module: DATA_STORES_MODULE,
     timeoutMs: verb.timeoutMs ?? RUN_TIMEOUT_MS,
-    execute: (input, context) => runVerb(runtime, store, verb, input, context.runtime.signal)
+    execute: (input, context) => runVerb(runtime, store, verb, input, context)
   };
 }
 
