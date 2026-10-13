@@ -1,7 +1,25 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { AgentAvailability, ApiClient } from "@vivd-catalyst/api-client";
 import { completedOutput } from "@vivd-catalyst/api-client";
 import { workspaceQueryKeys } from "./workspace-query-keys";
+
+/**
+ * Asks again for the agents people are offered: the workspaces' lists, which the Agents page
+ * and the agent picker read, and the instance's configuration. They hold each agent's name,
+ * description and default mark, so every change of an agent made in this session ends here.
+ */
+export function invalidateOfferedAgents(
+  queryClient: QueryClient,
+  apiBaseUrl: string,
+  authScope: string
+): Promise<unknown> {
+  return Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: workspaceQueryKeys.collaborationWorkspaceAgentsScope(apiBaseUrl, authScope)
+    }),
+    queryClient.invalidateQueries({ queryKey: ["config", apiBaseUrl, authScope] })
+  ]);
+}
 
 interface AgentPlacementMutationInput {
   apiBaseUrl: string;
@@ -42,7 +60,11 @@ export function useAgentPlacementMutations(input: AgentPlacementMutationInput) {
         }),
         input.heldMessage
       ),
-    onSuccess: invalidateAssets
+    onSuccess: () =>
+      Promise.all([
+        invalidateAssets(),
+        invalidateOfferedAgents(queryClient, input.apiBaseUrl, input.authScope)
+      ])
   });
   const setAgentAvailability = useMutation({
     mutationFn: async (mutationInput: {
@@ -67,13 +89,7 @@ export function useAgentPlacementMutations(input: AgentPlacementMutationInput) {
     onSuccess: () =>
       Promise.all([
         invalidateAssets(),
-        queryClient.invalidateQueries({
-          queryKey: workspaceQueryKeys.collaborationWorkspaceAgentsScope(
-            input.apiBaseUrl,
-            input.authScope
-          )
-        }),
-        queryClient.invalidateQueries({ queryKey: ["config", input.apiBaseUrl, input.authScope] })
+        invalidateOfferedAgents(queryClient, input.apiBaseUrl, input.authScope)
       ])
   });
 
