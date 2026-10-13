@@ -97,7 +97,32 @@ export async function runOperation(
     definition = { ...definition, secret: true };
   }
   const secretInput = withoutSecrets !== undefined;
-  const target = await decideTarget({ call, definition, actor, idempotencyKey, deps });
+  if (call.draft && definition.effect !== "reading" && idempotencyKey !== undefined) {
+    // A changing call of a draft sent again under the key of a call that went live or to a
+    // test target is answered by that call's run. It never carries that run out again: a
+    // changing call of a draft goes live only through "Run live once" (ADR-0031).
+    const held = await deps.runs.findByIdempotencyKey({
+      clientInstanceId: deps.clientInstanceId,
+      actor,
+      idempotencyKey
+    });
+    if (held && !runsAgain(held, definition)) {
+      return {
+        result: replay(held, definition, actor, inputHash, secretInput),
+        run: held,
+        replayed: true
+      };
+    }
+  }
+  const target = await decideTarget({
+    call,
+    definition,
+    deps,
+    admitted: async () =>
+      surface.allowed &&
+      (await authorizeRights({ definition, call: frozen, resource }, await rightsOf(frozen, deps)))
+        .allowed
+  });
   // A dry run holds no key: it would only ever answer a simulation again, and the same key
   // stays free for the live call (ADR-0031).
   const heldKey = target === "dry_run" ? undefined : idempotencyKey;

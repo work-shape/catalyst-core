@@ -8,7 +8,6 @@ import {
   type OperationAuthorization,
   type OperationCall,
   type OperationDefinition,
-  type OperationRunActor,
   type OperationTarget,
   type PlatformEventName,
   type PolicyResolution
@@ -43,31 +42,22 @@ export function draftCallOf(call: OperationCall): OperationCall {
  * Where the call goes. A call of what is live goes live, and so does every reading call of a
  * draft, with the rights of the person testing. A changing call of a draft is simulated,
  * unless "Run live once" is switched on for its action or step of its revision, which it then
- * uses up, or it is a call sent again under the key of one that already went somewhere: that
- * one's run answers it. A test target of the called asset (a Data Store's test copy, a
- * Connection's test credential) will send every call of a draft there; DT-2 and DT-3 add it
- * here.
+ * uses up. Only a call that may be made takes the switch: a caller the surface or the right
+ * refuses leaves it for the next call, so nobody without the right uses up a builder's switch.
+ * A test target of the called asset (a Data Store's test copy, a Connection's test
+ * credential) will send every call of a draft there; DT-2 and DT-3 add it here.
  */
 export async function decideTarget(input: {
   call: OperationCall;
   definition: OperationDefinition;
-  actor: OperationRunActor;
-  idempotencyKey: string | undefined;
   deps: RunOperationDeps;
+  /** Whether the surface and the right admit the call, asked only where a switch could apply. */
+  admitted: () => Promise<boolean>;
 }): Promise<OperationTarget> {
-  const { call, definition, actor, idempotencyKey, deps } = input;
+  const { call, definition, deps, admitted } = input;
   const { draft } = call;
   if (!draft || definition.effect === "reading") return "live";
-  if (idempotencyKey !== undefined) {
-    // A dry run holds no key, so a run that holds this one went live or to a test target.
-    const held = await deps.runs.findByIdempotencyKey({
-      clientInstanceId: deps.clientInstanceId,
-      actor,
-      idempotencyKey
-    });
-    if (held) return held.target;
-  }
-  if (!deps.liveOnce) return "dry_run";
+  if (!deps.liveOnce || !(await admitted())) return "dry_run";
   const { taken, cleared } = await deps.liveOnce.take({
     clientInstanceId: deps.clientInstanceId,
     assetId: draft.asset.id,

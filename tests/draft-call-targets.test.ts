@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  createPlatformId,
   WORKFLOW_ASSET_KIND,
   type AuthenticatedIdentity,
   type OperationDraftContext,
@@ -43,6 +44,8 @@ interface DraftCall {
   key?: string;
   /** The principal that bounds the call, where it is not the Workflow's own. */
   principal?: ServicePrincipalRecord;
+  /** A call of what is live, which carries no draft context. */
+  live?: true;
 }
 
 describe("a call made by a draft", () => {
@@ -111,7 +114,9 @@ describe("a call made by a draft", () => {
         origin: workflowOrigin,
         correlationId: "corr_draft",
         ...(operation === "write" ? { idempotencyKey: call.key ?? crypto.randomUUID() } : {}),
-        draft: { ...draft, boundBy: runIdentity(call.principal ?? t.principal) }
+        ...(call.live
+          ? {}
+          : { draft: { ...draft, boundBy: runIdentity(call.principal ?? t.principal) } })
       },
       t.operationCalls.deps
     );
@@ -261,6 +266,104 @@ describe("a call made by a draft", () => {
     const again = await stepCall(t, { key: "send-anna" });
     expect(again).toMatchObject({ replayed: true, run: { id: live.run.id, target: "live" } });
     expect(t.executed).toEqual([]);
+  });
+
+  // A draft goes live only through "Run live once": a key a live call left free to run again
+  // is no way around it.
+  it("never carries a draft's call out live under the key of a live call", async () => {
+    const t = await ready();
+    // A live call under the key failed before it reached the outside system, so its run is
+    // taken again by the next call under the key. The dry run before it has the same input.
+    const simulated = await stepCall(t, { key: "send-anna" });
+    const same = simulated.run;
+    const started = await t.stores.operationRuns.create({
+      id: createPlatformId<"OperationRunId">("oprun"),
+      clientInstanceId,
+      operation: same.operation,
+      effect: same.effect,
+      actor: same.actor,
+      origin: same.origin,
+      target: "live",
+      idempotencyKey: "send-anna",
+      inputHash: same.inputHash,
+      correlationId: same.correlationId,
+      startedAt: new Date().toISOString()
+    });
+    if (!started) throw new Error("The live run was not started");
+    const failed = await t.stores.operationRuns.finish({
+      clientInstanceId,
+      id: started.id,
+      end: {
+        status: "failed",
+        finishedAt: new Date().toISOString(),
+        error: { code: "unavailable", message: "Not reached", unexecuted: true }
+      }
+    });
+    expect(failed).toMatchObject({ target: "live", status: "failed" });
+
+    const draft = await stepCall(t, { key: "send-anna" });
+    expect(draft.result.status).toBe("dry_run");
+    expect(draft.run.target).toBe("dry_run");
+    expect(t.executed).toEqual([]);
+
+    // A done live call under the key answers the draft's call again and is not made twice.
+    const live = await stepCall(t, { key: "send-anna", live: true });
+    expect(live.result.status).toBe("done");
+    const again = await stepCall(t, { key: "send-anna" });
+    expect(again).toMatchObject({ replayed: true, run: { id: live.run.id, target: "live" } });
+    expect(t.executed).toEqual([]);
+  });
+
+  // A switch is the builder's: a call refused for a right it lacks leaves it for the next.
+  it("keeps the switch when the call that would use it is refused for a right", async () => {
+    const t = await ready();
+    await switchOn(t, 1);
+
+    // Lena may not use the Connection: her call is refused and does not use up the switch.
+    const refused = await stepCall(t, { tester: t.lena });
+    expect(refused.result).toMatchObject({ status: "denied", reason: { kind: "forbidden" } });
+    // The principal that bounds the call lacks the right: the switch stays too.
+    const bookkeeping = await t.stores.apiAccess.createServicePrincipal({
+      clientInstanceId,
+      displayLabel: "Bookkeeping"
+    });
+    const bounded = await stepCall(t, { principal: bookkeeping });
+    expect(bounded.result).toMatchObject({
+      status: "denied",
+      reason: { boundBy: { id: bookkeeping.id } }
+    });
+    expect(t.executed).toEqual([]);
+
+    const live = await stepCall(t);
+    expect(live.run.target).toBe("live");
+    expect(t.executed.map((call) => call.operation)).toEqual(["write"]);
+    expect((await switchRows(t)).map(({ type }) => type)).toEqual([
+      "live_once.switched_on",
+      "live_once.used"
+    ]);
+  });
+
+  // A dry run answers its input, and an input that holds a secret is not handed back.
+  it("answers a simulated call whose input holds a secret without its input", async () => {
+    const t = await ready();
+    const draft = await draftOf(t, "send");
+    const password = "a-new-password-for-kai";
+    const { result, run } = await runOperation(
+      {
+        operation: "users.password.reset",
+        effect: "changing",
+        input: { userId: t.kai.id, password },
+        actor: identityOf(t.root),
+        origin: workflowOrigin,
+        correlationId: "corr_draft",
+        idempotencyKey: "reset-kai",
+        draft
+      },
+      t.operationCalls.deps
+    );
+    expect(result).toEqual({ status: "dry_run", runId: run.id, wouldAsk: expect.any(String) });
+    expect(JSON.stringify(result)).not.toContain(password);
+    expect(JSON.stringify(run)).not.toContain(password);
   });
 
   it("allows a call of a test run only where the tester and the principal both hold the right", async () => {
