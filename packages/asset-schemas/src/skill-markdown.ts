@@ -37,29 +37,63 @@ export function parseSkillMarkdown(
   }
 
   const content = (match[2] ?? "").trim();
+  const { name: named, title, description, ...others } = frontmatter.data;
+  const name = named ?? deriveSkillName(skillPath);
+  // What the platform does not read is kept as JSON: a date of the YAML becomes its text.
+  const kept: unknown = JSON.parse(JSON.stringify(others));
   return {
-    ...frontmatter.data,
-    name: frontmatter.data.name ?? deriveSkillName(skillPath),
-    content
+    name,
+    title: title ?? deriveSkillTitle(name, content),
+    description,
+    content,
+    ...(Object.keys(others).length > 0 ? { frontmatter: kept } : {})
   };
 }
 
 /**
- * A `SKILL.md` of a skill's name, title, description and content: what `parseSkillMarkdown`
- * reads back as the same four. It is what a skill that was written as its config has for a
- * file.
+ * The title a skill is shown under where its `SKILL.md` names none, as the public skill
+ * convention does not: the first Markdown heading of its content, or else its name with
+ * spaces for hyphens and underscores and a capital first letter.
+ */
+export function deriveSkillTitle(name: string, content: string): string {
+  let fence: string | undefined;
+  for (const line of content.split(/\r?\n/u)) {
+    const marker = /^\s{0,3}(`{3,}|~{3,})/u.exec(line)?.[1];
+    if (marker) {
+      fence = fence === undefined ? marker : marker.startsWith(fence) ? undefined : fence;
+      continue;
+    }
+    const heading = fence === undefined ? /^ {0,3}#{1,6}\s+(.+?)(?:\s+#+)?\s*$/u.exec(line) : null;
+    if (heading?.[1]) return heading[1];
+  }
+  const words = name.replace(/[-_]+/gu, " ").trim();
+  return words === "" ? name : words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/**
+ * A `SKILL.md` of a skill's config: what `parseSkillMarkdown` reads back as the same name,
+ * title, description, content and further frontmatter. A title the content or the name gives
+ * anyway is left out, as a file of the public skill convention has none. It is what a skill
+ * that was written as its config has for a file.
  */
 export function formatSkillMarkdown(skill: {
   name: string;
   title: string;
   description: string;
   content: string;
+  frontmatter?: Record<string, unknown>;
 }): string {
+  const content = skill.content.trim();
   const frontmatter = yaml.dump(
-    { name: skill.name, title: skill.title, description: skill.description },
+    {
+      name: skill.name,
+      ...(skill.title === deriveSkillTitle(skill.name, content) ? {} : { title: skill.title }),
+      description: skill.description,
+      ...skill.frontmatter
+    },
     { lineWidth: -1, noCompatMode: true, noRefs: true, sortKeys: false }
   );
-  return `---\n${frontmatter}---\n\n${skill.content.trim()}\n`;
+  return `---\n${frontmatter}---\n\n${content}\n`;
 }
 
 function deriveSkillName(skillPath: string): string {

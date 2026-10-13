@@ -20,9 +20,50 @@ const localizedStringMapSchema = z
 
 export const localizedStringSchema = z.union([z.string().min(1), localizedStringMapSchema]);
 
-export const SKILL_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_.-]*$/u;
+// Every name of the public skill convention is one: lowercase letters, digits and hyphens.
+// What a skill of this platform could be named before stays a name too.
+export const SKILL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/u;
 export const SKILL_NAME_RULE =
-  "Skill name must start with a letter and contain only letters, numbers, dots, underscores, or hyphens";
+  "Skill name must start with a letter or a number and contain only letters, numbers, dots, underscores, or hyphens";
+
+/** How long a name of the public skill convention is at most, in characters. */
+export const SKILL_PORTABLE_NAME_MAX_CHARS = 64;
+/** How long a description of the public skill convention is at most, in characters. */
+export const SKILL_PORTABLE_DESCRIPTION_MAX_CHARS = 1_024;
+const SKILL_PORTABLE_NAME_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/u;
+
+/**
+ * What keeps a skill from being taken as it is into a tool that reads the public skill
+ * convention: a name that is not lowercase letters, digits and single hyphens or is longer
+ * than 64 characters, and a description longer than 1,024. Each is a warning with a code and
+ * refuses nothing: such a skill works here.
+ */
+export function skillPortabilityIssues(skill: {
+  name?: unknown;
+  description?: unknown;
+}): { code: string; message: string }[] {
+  const issues: { code: string; message: string }[] = [];
+  if (
+    typeof skill.name === "string" &&
+    (!SKILL_PORTABLE_NAME_PATTERN.test(skill.name) ||
+      skill.name.length > SKILL_PORTABLE_NAME_MAX_CHARS)
+  ) {
+    issues.push({
+      code: "skill_name_not_portable",
+      message: `The name '${skill.name}' is outside the public skill convention: lowercase letters, digits and single hyphens, at most ${SKILL_PORTABLE_NAME_MAX_CHARS} characters. The skill works here and may not be taken as it is elsewhere.`
+    });
+  }
+  if (
+    typeof skill.description === "string" &&
+    skill.description.length > SKILL_PORTABLE_DESCRIPTION_MAX_CHARS
+  ) {
+    issues.push({
+      code: "skill_description_not_portable",
+      message: `The description has ${skill.description.length} characters. The public skill convention takes at most ${SKILL_PORTABLE_DESCRIPTION_MAX_CHARS}.`
+    });
+  }
+  return issues;
+}
 
 export const skillNameSchema = z
   .string()
@@ -142,7 +183,8 @@ const skillConfigObjectSchema = z.object({
     .optional(),
   content: z.string().min(1),
   resources: z.array(skillResourceConfigSchema).optional(),
-  files: z.array(skillFileEntrySchema).optional()
+  files: z.array(skillFileEntrySchema).optional(),
+  frontmatter: z.record(z.string(), z.unknown()).optional()
 });
 
 export const skillConfigSchema = skillConfigObjectSchema.superRefine((skill, context) => {
@@ -160,15 +202,17 @@ export const skillConfigSchema = skillConfigObjectSchema.superRefine((skill, con
   }
 });
 
-export const skillFileFrontmatterSchema = skillConfigObjectSchema
-  .omit({
-    content: true,
-    resources: true,
-    files: true
-  })
-  .extend({
-    name: skillNameSchema.optional()
-  });
+/**
+ * The frontmatter of a `SKILL.md`. `description` is required. `name` may be left to the folder
+ * and `title` to the content. Every other key is kept as it is and never refused: the public
+ * skill convention has keys of its own, such as `license` and `metadata`, and a library may
+ * add more.
+ */
+export const skillFileFrontmatterSchema = z.looseObject({
+  name: skillNameSchema.optional(),
+  title: z.string().min(1).optional(),
+  description: z.string().min(1)
+});
 
 const welcomeSubtitleSchema = z.union([
   z.string(),

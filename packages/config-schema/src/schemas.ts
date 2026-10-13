@@ -199,6 +199,7 @@ export {
   skillConfigSchema,
   skillFileEntrySchema,
   skillFileFrontmatterSchema,
+  skillPortabilityIssues,
   skillNameSchema,
   skillResourceConfigSchema,
   skillResourceMediaTypeForPath,

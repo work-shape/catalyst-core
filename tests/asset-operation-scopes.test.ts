@@ -250,7 +250,7 @@ describe("the validation of a set of assets", () => {
         agent("fourth", { modelProviderId: undefined, modelBindingId: "gone" }),
         agent("fifth", { modelBindingId: "plain" })
       ],
-      skills: [skill("guide"), { ...skill("empty"), content: "" }, skill("1st")],
+      skills: [skill("guide"), { ...skill("empty"), content: "" }, skill("-first")],
       defaultAgentName: "nobody"
     };
     const issuesOf = (error: unknown) =>

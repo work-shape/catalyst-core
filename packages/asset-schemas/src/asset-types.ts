@@ -66,6 +66,12 @@ export interface SkillConfig {
    * content. The platform writes it with the files; what a caller sends here is not read.
    */
   files?: SkillFileEntry[];
+  /**
+   * The keys of the frontmatter of `SKILL.md` that are not the skill's name, title and
+   * description, such as `license`, `metadata` and `allowed-tools` of the public skill
+   * convention, as JSON values. They are kept and returned and never read by the platform.
+   */
+  frontmatter?: Record<string, unknown>;
 }
 
 /** One file of a skill's folder as its index names it. */

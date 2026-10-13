@@ -206,7 +206,7 @@ describe("asset kind registry", () => {
     });
 
     expect(issuesOf(skillKind, withSkills(), skill)).toEqual([]);
-    expect(issuesOf(skillKind, withSkills(), { ...skill, name: "1st" })).toEqual([
+    expect(issuesOf(skillKind, withSkills(), { ...skill, name: "-first" })).toEqual([
       expect.objectContaining({ path: ["name"] })
     ]);
     // A list says who ships the skill: every stored skill is the instance's own.
