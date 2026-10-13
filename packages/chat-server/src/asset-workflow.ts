@@ -22,7 +22,6 @@ import type { AssetFileInput } from "./asset-files";
 import { readDefinitionName, type WorkflowAssetKind } from "./asset-kinds/shared";
 import {
   INVALID_ASSET_SET_MESSAGE,
-  definitionsOf,
   findAssetSetIssues,
   findDefinition,
   validateAssetSet,
@@ -405,7 +404,10 @@ export class AssetWorkflow {
       return this.drafts.remove(call, target, expectedRevision);
     }
     const stored = await loadStoredAssets(this.options);
-    kind.assertRemovable?.({ name, definitions: (other) => definitionsOf(stored.set, other) });
+    kind.assertRemovable?.({
+      name,
+      assets: (other) => stored.assets.filter((asset) => asset.kind === other)
+    });
     const clearsDefault = clearsLastDefault(stored.set, kind, name);
     requireInstanceDefaultChange(call.access, kind, clearsDefault);
     /** The set as the delete would leave it. */

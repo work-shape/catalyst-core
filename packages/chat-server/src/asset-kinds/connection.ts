@@ -38,6 +38,8 @@ export interface ConnectionAssetKindOptions {
 const AUTH_SCHEME_NONE = "none";
 /** The kind of the assets that carry a Connection's tools. */
 const AGENT_ASSET_KIND = "agent";
+/** The kind of the assets whose manifest names Connections. */
+const APP_ASSET_KIND = "app";
 
 /**
  * The refusal of a write to a Connection that release config defines. It is changed in
@@ -62,6 +64,14 @@ function refuseBatch(surface: AssetWriteSurface): void {
     `${CONNECTION_REFUSALS.batchUnavailable}: a Connection is written one at a time, with assets.put. A batch cannot hold one yet`,
     { reason: CONNECTION_REFUSALS.batchUnavailable }
   );
+}
+
+/** The Connections the manifest of an App's config names, or none. */
+function manifestConnectionsOf(config: unknown): string[] {
+  const connections = readDefinitionField(readDefinitionField(config, "manifest"), "connections");
+  return Array.isArray(connections)
+    ? connections.filter((name): name is string => typeof name === "string")
+    : [];
 }
 
 /** The tool names of an agent definition, or none. */
@@ -251,19 +261,31 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
     },
     assertInteractiveUpsertAllowed: ({ surface }) => refuseBatch(surface),
     assertInteractiveDeleteAllowed: ({ surface }) => refuseBatch(surface),
-    // An App names its Connections in its manifest, which its own check holds against the
-    // set. An agent names tools, which no check of the agent holds, so a delete asks here.
-    assertRemovable({ name, definitions }) {
-      const carrying = definitions(AGENT_ASSET_KIND).filter((agent) =>
-        toolNamesOf(agent).some(
+    // An agent names tools and an App names Connections in its manifest. Neither is checked
+    // again when the Connection goes, so a delete asks here: of an App, its draft and what it
+    // serves now.
+    assertRemovable({ name, assets }) {
+      const carrying = assets(AGENT_ASSET_KIND).filter((agent) =>
+        toolNamesOf(agent.config).some(
           (toolName) => parseConnectionOperationName(toolName)?.connection === name
         )
       ).length;
-      if (carrying === 0) return;
+      const naming = assets(APP_ASSET_KIND).filter((app) =>
+        [app.config, app.publishedConfig].some((config) =>
+          manifestConnectionsOf(config).includes(name)
+        )
+      ).length;
+      if (carrying === 0 && naming === 0) return;
+      const users = [
+        ...(carrying === 0
+          ? []
+          : [carrying === 1 ? "an agent carries its tools" : `${carrying} agents carry its tools`]),
+        ...(naming === 0 ? [] : [naming === 1 ? "an App names it" : `${naming} Apps name it`])
+      ];
       throw new AppError(
         "CONFLICT",
-        `${CONNECTION_REFUSALS.inUse}: ${carrying === 1 ? "an agent carries" : `${carrying} agents carry`} tools of this Connection. Take the tools off the agents first`,
-        { reason: CONNECTION_REFUSALS.inUse, agentCount: carrying }
+        `${CONNECTION_REFUSALS.inUse}: ${users.join(" and ")}. Take it off them first`,
+        { reason: CONNECTION_REFUSALS.inUse, agentCount: carrying, appCount: naming }
       );
     },
     // A change of where or how the Connection reaches its system makes what a test found

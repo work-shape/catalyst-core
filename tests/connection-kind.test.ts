@@ -23,6 +23,7 @@ import {
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, getTestConfig } from "./support/test-instance";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
+import { setupAppActions } from "./support/app-actions";
 
 // The Connection kind: what its definition may hold, that a secret has no place in it, that
 // the asset operations write a Connection made on the instance and never one of release
@@ -468,12 +469,37 @@ describe("a Connection through the asset operations", () => {
       {
         status: 409,
         code: "CONFLICT",
-        details: { reason: "connection_in_use", agentCount: 1 }
+        details: { reason: "connection_in_use", agentCount: 1, appCount: 0 }
       }
     );
     // The agent's name is not told: the caller may not read it.
     expect(refused.message).not.toContain("helper");
     expect(await stored(t, "made-here")).toMatchObject({ origin: "runtime" });
+  });
+
+  it("refuses the delete of a Connection an App names, in its draft or what it serves", async () => {
+    const t = await setupAppActions();
+    // `orders` names `crm` and `erp` in its draft and in its published revision.
+    await t.seed("crm", { origin: "runtime" });
+    const crm = { params: { kind: "connection", name: "crm" } };
+    await t.expectRefused(
+      t.admin.id,
+      "assets.delete",
+      { ...crm, payload: { expectedRevision: 2 } },
+      {
+        status: 409,
+        code: "CONFLICT",
+        details: { reason: "connection_in_use", agentCount: 0, appCount: 1 }
+      }
+    );
+    expect(
+      await t.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: "connection",
+        name: "crm"
+      })
+    ).toMatchObject({ status: "active" });
+    await t.closeAll();
   });
 
   it("says in validate what a put would be refused for", async () => {
