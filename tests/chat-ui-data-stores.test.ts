@@ -8,23 +8,28 @@ import {
   BuildNavigationProvider,
   dataStoreKindOn,
   dataStoreStateView,
+  DataStoreValueDialog,
   formatDataStoreSize,
   resolveBuildRights,
   type BuildAsset,
   type BuildAssetRow,
   type BuildLocation,
   type BuildSource,
+  type DataStoreListed,
   type DataStoreRead,
-  type DataStoreRows,
+  type DataStoreRowsPage,
   type DataStoreSchema,
   type DataStoreSource,
-  type DataStoreState
+  type DataStoreState,
+  type DataStoreUsedBy,
+  type DataStoreValue
 } from "@vivd-catalyst/chat-ui/build-area";
 import { platformContext } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // The Data Store list and page against the answers of the contract (`data_stores.get`,
-// `.describe`, `.preview_rows`), handed in where the instance's answers will stand. Every test
+// `.describe`, `.list`, `.rows`, `.value`, `.used_by`), handed in where the instance's answers
+// will stand. Every test
 // here fails without the kind: before it, the address of Data Stores showed Agents.
 
 const noop = () => undefined;
@@ -96,18 +101,54 @@ const schema: DataStoreSchema = {
 
 const LONG_REFERRER = `https://example.test/search?q=${"catalyst+".repeat(12)}`;
 
-const visitRows: DataStoreRows = {
+/** The first thousand characters of a note the instance cut. */
+const CUT_NOTE = "A long note. ".repeat(77).slice(0, 1000);
+
+const visitRows: DataStoreRowsPage = {
+  table: "visits",
   columns: [
     { name: "id", type: "integer", nativeType: "bigint" },
     { name: "path", type: "text", nativeType: "text" },
     { name: "referrer", type: "text", nativeType: "text" },
-    { name: "tags", type: "other", nativeType: "jsonb" }
+    { name: "tags", type: "other", nativeType: "jsonb" },
+    { name: "note", type: "text", nativeType: "text" },
+    { name: "body", type: "other", nativeType: "bytea" }
   ],
+  order: { by: "key", columns: ["id"] },
   rows: [
-    { id: 1, path: "/pricing", referrer: LONG_REFERRER, tags: { campaign: "autumn" } },
-    { id: 2, path: "/docs", referrer: null, tags: null }
+    {
+      at: "at_1",
+      values: {
+        id: 1,
+        path: "/pricing",
+        referrer: LONG_REFERRER,
+        tags: { campaign: "autumn" },
+        note: CUT_NOTE,
+        body: ""
+      },
+      cut: ["note", "body"]
+    },
+    {
+      at: "at_2",
+      values: { id: 2, path: "/docs", referrer: null, tags: null, note: null, body: null }
+    }
   ],
-  truncated: true
+  next: "at_2",
+  valueMaxChars: 1000
+};
+
+const usedBy: DataStoreUsedBy = {
+  apps: [{ id: "asset_visits_board", name: "visits-board", title: "Visits board" }],
+  workflows: [{ id: "asset_nightly", name: "nightly-rollup", title: "Nightly rollup" }],
+  hidden: { apps: 1, workflows: 2 },
+  truncated: false
+};
+
+const nothingUses: DataStoreUsedBy = {
+  apps: [],
+  workflows: [],
+  hidden: { apps: 0, workflows: 0 },
+  truncated: false
 };
 
 function ready<Answer>(data: Answer): DataStoreRead<Answer> {
@@ -117,14 +158,23 @@ function ready<Answer>(data: Answer): DataStoreRead<Answer> {
 interface StoreAnswers {
   states?: Record<string, DataStoreRead<DataStoreState>>;
   schema?: DataStoreRead<DataStoreSchema>;
-  rows?: DataStoreRead<DataStoreRows>;
+  rows?: DataStoreRead<DataStoreRowsPage>;
+  listed?: DataStoreRead<DataStoreListed>;
+  value?: DataStoreRead<DataStoreValue>;
+  usedBy?: DataStoreRead<DataStoreUsedBy>;
 }
 
 function storeSource(answers: StoreAnswers = {}): DataStoreSource {
   return {
     useStoreState: (store) => answers.states?.[store] ?? ready(storeState(store)),
     useSchema: () => answers.schema ?? ready(schema),
-    useRows: () => answers.rows ?? ready(visitRows)
+    useListed: () => answers.listed ?? ready({ items: [], truncated: false }),
+    useRowsPage: () => answers.rows ?? ready(visitRows),
+    useValue: () => answers.value ?? { status: "loading" },
+    useUsedBy: () => answers.usedBy ?? ready(usedBy),
+    // An App has a page in the interface. A Workflow has none yet.
+    useUsingPage: () => (kind, name) =>
+      kind === "app" ? { href: `/w/ws_1/apps/${name}`, open: noop } : undefined
   };
 }
 
@@ -159,10 +209,9 @@ function storeAsset(name: string): BuildAsset {
 }
 
 interface RenderInput extends StoreAnswers {
-  rows?: DataStoreRead<DataStoreRows>;
   list?: BuildAssetRow[];
   /** The instance has the module on and the reader may read stores. */
-  listed?: boolean;
+  on?: boolean;
   locale?: LocaleCode;
 }
 
@@ -172,7 +221,7 @@ function render(location: BuildLocation, input: RenderInput = {}): string {
   const source: BuildSource = {
     kinds: [
       { kind: "agent", canCreate: false, canDelete: false },
-      ...(input.listed === false ? [] : [{ kind: "data_store", canCreate: true, canDelete: true }])
+      ...(input.on === false ? [] : [{ kind: "data_store", canCreate: true, canDelete: true }])
     ],
     rights: resolveBuildRights({ permissions: ["config_assets.write"] }, context),
     loading: false,
@@ -237,6 +286,32 @@ describe("Data Stores in Build", () => {
           }),
           storeRow("orders", { title: "Orders", scope: { kind: "workspace", workspaceId: "ws_1" } })
         ],
+        listed: ready({
+          items: [
+            {
+              id: "asset_visit-log",
+              name: "visit-log",
+              title: "Visit log",
+              status: "ready",
+              level: 2,
+              sizeBytes: 8 * MB,
+              sizeLimitBytes: 500 * MB,
+              tableCount: 2,
+              rowEstimate: 1240,
+              measuredAt: "2026-10-12T03:00:00.000Z"
+            },
+            // Never measured: the row says neither tables nor rows.
+            {
+              id: "asset_orders",
+              name: "orders",
+              title: "Orders",
+              status: "ready",
+              level: 1,
+              sizeLimitBytes: 500 * MB
+            }
+          ],
+          truncated: false
+        }),
         states: {
           orders: ready(
             storeState("orders", {
@@ -265,10 +340,16 @@ describe("Data Stores in Build", () => {
       "8 MB",
       'data-data-store-row-state="migrations_pending"',
       "Migrations pending",
-      "2 open on the server"
+      "2 open on the server",
+      'data-data-store-row-measured="visit-log"',
+      ">2 tables<",
+      ">about 1,240 rows<"
     ]) {
       expect(list, said).toContain(said);
     }
+    const orders = list.slice(list.indexOf('data-data-store-row-measured="orders"'));
+    expect(orders).not.toContain("tables<");
+    expect(orders).not.toContain("about ");
     // Nothing is started here: a store is made by an agent or through the API.
     expect(list).not.toContain(">New ");
     expect(list).not.toContain("More actions");
@@ -283,7 +364,7 @@ describe("Data Stores in Build", () => {
     expect(empty).toContain("An agent or the API creates one.");
     expect(empty).not.toContain(">New ");
 
-    const off = render({ kindPath: "data-stores" }, { listed: false });
+    const off = render({ kindPath: "data-stores" }, { on: false });
     expect(off).not.toContain("Data stores");
 
     expect(render({ kindPath: "data-stores" }, { locale: "de" })).toContain(
@@ -291,7 +372,7 @@ describe("Data Stores in Build", () => {
     );
   });
 
-  it("shows a store's state, its tables with columns, types and row estimates, and the first rows of a table with long values cut", () => {
+  it("shows a store's state, its tables with columns, types and row estimates, and the first page of a table with long values cut", () => {
     const page = render({ kindPath: "data-stores", name: "visit-log" });
 
     expect(page).toContain(">Visit log</h1>");
@@ -327,7 +408,7 @@ describe("Data Stores in Build", () => {
     expect(page).toContain("max-width:40ch");
     expect(page).toContain("{&quot;campaign&quot;:&quot;autumn&quot;}");
     expect(page).toContain(">null<");
-    expect(page).toContain("The first 2 rows. The table holds more.");
+    expect(page).toContain("Rows 1 to 2. The table holds more. Ordered by the key (id).");
     // The page reads and changes nothing.
     expect(page).not.toContain(">Save<");
     expect(page).not.toContain("History");
@@ -366,6 +447,145 @@ describe("Data Stores in Build", () => {
     expect(german).toContain("Bereit");
     expect(german).toContain("8 MB von 500 MB");
     expect(german).toContain("etwa 1.240 Zeilen");
+  });
+});
+
+describe("The rows of a Data Store", () => {
+  const address = { kindPath: "data-stores", name: "visit-log" };
+
+  it("pages a table with Next and Back to start, without page numbers, and says how the rows are ordered", () => {
+    const first = render(address);
+    expect(first).toContain('data-data-store-rows-order="key"');
+    expect(first).toMatch(/<button[^>]*disabled=""[^>]*>Back to start<\/button>/u);
+    expect(first).toMatch(/<button(?![^>]*disabled="")[^>]*>Next<\/button>/u);
+    expect(first).not.toContain('aria-current="page"');
+
+    // The last page of a table without a key: nothing follows, and the order is the stored one.
+    const last = render(address, {
+      rows: ready({ ...visitRows, order: { by: "physical" }, next: undefined })
+    });
+    expect(last).toContain('data-data-store-rows-order="physical"');
+    expect(last).toContain("This is the end of the table. In stored order: this table has no key.");
+    expect(last).toMatch(/<button[^>]*disabled=""[^>]*>Next<\/button>/u);
+
+    const german = render(address, {
+      locale: "de",
+      rows: ready({ ...visitRows, order: { by: "physical" }, next: undefined })
+    });
+    expect(german).toContain("Zeilen 1 bis 2. Das ist das Ende der Tabelle. In gespeicherter");
+    expect(german).toContain(">Zum Anfang<");
+    expect(german).toContain(">Weiter<");
+  });
+
+  it("shows a cut value by its first characters and a value read by no page as not read, each with the button that reads it whole", () => {
+    const page = render(address);
+    expect(page).toContain('data-data-store-cut="text"');
+    expect(page).toContain(CUT_NOTE);
+    expect(page).toContain('aria-label="Show the whole value of note"');
+    expect(page).toContain('data-data-store-cut="unread"');
+    expect(page).toContain(">Not read<");
+    expect(page).toContain('aria-label="Show the whole value of body"');
+  });
+
+  it("names an empty table, rows the reader may not read and rows that could not be read", () => {
+    expect(render(address, { rows: ready({ ...visitRows, rows: [], next: undefined }) })).toContain(
+      "This table holds no rows."
+    );
+    const refused = render(address, { rows: { status: "refused" } });
+    expect(refused).toContain('data-data-store-refused=""');
+    expect(refused).toContain("You may not read the rows of this store.");
+    expect(render(address, { rows: { status: "refused" }, locale: "de" })).toContain(
+      "Sie dürfen die Zeilen dieses Speichers nicht lesen."
+    );
+    const failed = render(address, {
+      rows: { status: "failed", message: undefined, retry: noop }
+    });
+    expect(failed).toContain("The rows could not be loaded.");
+    expect(failed).toContain(">Try again<");
+  });
+
+  it("opens a value whole, and says so where the instance answers that it is too large or that its row is gone", () => {
+    const dialog = (value: DataStoreRead<DataStoreValue>, locale: LocaleCode = "en") =>
+      renderToStaticMarkup(
+        createElement(
+          TranslationProvider,
+          { children: null, locale },
+          createElement(DataStoreValueDialog, {
+            store: "visit-log",
+            place: { table: "visits", column: "note", at: "at_1" },
+            source: storeSource({ value }),
+            onClose: noop
+          })
+        )
+      );
+    const whole = "A long note. ".repeat(400);
+    const shown = dialog(ready({ value: whole }));
+    expect(shown).toContain('data-data-store-value="whole"');
+    expect(shown).toContain(whole);
+    expect(shown).toContain("5,200 characters");
+    expect(shown).toContain("The whole value of one row of visits.");
+    // A value that is no text shows as the JSON it is.
+    expect(dialog(ready({ value: { campaign: "autumn" } }))).toContain("&quot;campaign&quot;: ");
+
+    const tooLarge = dialog({
+      status: "failed",
+      message: "This value is larger than one read of a store answers.",
+      reason: "value_too_large",
+      retry: noop
+    });
+    expect(tooLarge).toContain('data-data-store-value="too_large"');
+    expect(tooLarge).toContain("it cannot be shown here. A query reads a part of it.");
+    expect(tooLarge).not.toContain("Try again");
+    expect(
+      dialog({ status: "failed", message: "x", reason: "value_too_large", retry: noop }, "de")
+    ).toContain("lässt sich hier nicht anzeigen");
+
+    const gone = dialog({ status: "failed", message: "x", reason: "row_gone", retry: noop });
+    expect(gone).toContain('data-data-store-value="gone"');
+    expect(dialog({ status: "failed", message: undefined, retry: noop })).toContain(
+      "The value could not be loaded."
+    );
+  });
+});
+
+describe("What uses a Data Store", () => {
+  const address = { kindPath: "data-stores", name: "visit-log" };
+
+  it("lists the Apps and Workflows that use a store, links the ones that have a page and counts the ones the reader cannot see", () => {
+    const page = render(address);
+    expect(page).toContain(">Used by</h2>");
+    expect(page).toContain('data-data-store-used-by="app"');
+    expect(page).toContain(">Visits board<");
+    expect(page).toContain('href="/w/ws_1/apps/visits-board"');
+    expect(page).toContain('data-data-store-used-by="workflow"');
+    expect(page).toContain(">Nightly rollup<");
+    expect(page).not.toContain('nightly-rollup"');
+    expect(page).toContain("and 3 more you cannot see");
+
+    expect(render(address, { locale: "de" })).toContain(
+      "und 3 weitere, die Sie nicht sehen können"
+    );
+  });
+
+  it("says in one sentence that nothing uses a store, that only hidden ones do, and that the reader may not see it", () => {
+    expect(render(address, { usedBy: ready(nothingUses) })).toContain(
+      "No published app or workflow uses this store."
+    );
+    expect(
+      render(address, { usedBy: ready({ ...nothingUses, hidden: { apps: 1, workflows: 0 } }) })
+    ).toContain("1 app or workflow you cannot see uses this store.");
+    expect(render(address, { usedBy: { status: "refused" } })).toContain(
+      "You may not see what uses this store."
+    );
+    expect(
+      render(address, { usedBy: { status: "failed", message: undefined, retry: noop } })
+    ).toContain("What uses this store could not be loaded.");
+    // What uses a store is read from the definitions, so a store that is not ready shows it too.
+    expect(
+      render(address, {
+        states: { "visit-log": ready(storeState("visit-log", { status: "provisioning" })) }
+      })
+    ).toContain(">Visits board<");
   });
 });
 
