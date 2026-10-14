@@ -37,7 +37,7 @@ export function isConnectionToolName(toolName: string): boolean {
 }
 
 /** One Connection as the Tools section shows it. */
-export interface ConnectionToolGroupView extends ConnectionToolGroup {
+interface ConnectionToolGroupView extends ConnectionToolGroup {
   /** How many of its tools the agent holds. */
   selectedCount: number;
   startsOpen: boolean;

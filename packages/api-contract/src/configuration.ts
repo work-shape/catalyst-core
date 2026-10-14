@@ -299,6 +299,36 @@ export const configAssetRevisionSchema = z.object({
   createdAt: timestampSchema
 });
 
+/** Where the agent page shows a tool among the instance's tools; `instance` is its own tools. */
+export const toolGroupSchema = z.enum([
+  "documents",
+  "web",
+  "files",
+  "results",
+  "skills",
+  "platform",
+  "instance"
+]);
+
+const toolTextSchema = z.object({ en: z.string(), de: z.string() });
+
+/**
+ * One tool an agent can be given, with what it tells people. The interface shows the name where
+ * the title is missing and puts a tool without a group among the instance's own.
+ */
+export const agentToolReferenceSchema = z.object({
+  name: z.string(),
+  title: toolTextSchema.optional(),
+  summary: toolTextSchema.optional(),
+  group: toolGroupSchema.optional(),
+  /** A key of the icon registry of the UI library. */
+  icon: z.string().optional(),
+  /** Missing for a tool the instance enables and no code registers. */
+  effect: z.enum(["reading", "changing"]).optional(),
+  /** The module whose switch governs the tool. A core tool has none. */
+  module: z.string().optional()
+});
+
 /** What a definition may refer to on this instance: its models, efforts and tools. */
 export const configAssetReferencesSchema = z.object({
   modelProviderIds: z.array(z.string()),
@@ -314,6 +344,8 @@ export const configAssetReferencesSchema = z.object({
   fastModeModelBindingIds: z.array(z.string()),
   reasoningEfforts: z.array(reasoningEffortSchema),
   enabledToolNames: z.array(z.string()),
+  /** The tools of `enabledToolNames`, in their order, with what each tells people. */
+  tools: z.array(agentToolReferenceSchema).optional(),
   /**
    * Tools the instance enables whose module is off. No agent can use one. An agent that
    * still names one shows it as unavailable, so it can be removed.
@@ -347,6 +379,8 @@ export type ConfigAssetSummary = z.infer<typeof configAssetSummarySchema>;
 export type ConfigAssetRevision = z.infer<typeof configAssetRevisionSchema>;
 export type ConfigAssetsOverview = z.infer<typeof configAssetsOverviewSchema>;
 export type ConfigAssetReferences = z.infer<typeof configAssetReferencesSchema>;
+export type AgentToolReference = z.infer<typeof agentToolReferenceSchema>;
+export type ToolGroupName = z.infer<typeof toolGroupSchema>;
 export type AgentAvailability = z.infer<typeof agentAvailabilitySchema>;
 export type CollaborationWorkspaceAgents = z.infer<typeof collaborationWorkspaceAgentsSchema>;
 export type AdministeredCollaborationWorkspace = z.infer<

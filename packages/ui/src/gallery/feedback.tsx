@@ -6,7 +6,7 @@ import { EmptyState } from "../feedback/empty-state";
 import { FormNotice } from "../feedback/form-notice";
 import { InlineError } from "../feedback/inline-error";
 import { Progress } from "../feedback/progress";
-import { Skeleton, SkeletonList, SkeletonPage } from "../feedback/skeleton";
+import { Skeleton, SkeletonChips, SkeletonList, SkeletonPage } from "../feedback/skeleton";
 import { Spinner, type SpinnerSize } from "../feedback/spinner";
 import { Chip } from "../status/chip";
 import { Samples, type GalleryGroup } from "./entry";
@@ -216,7 +216,7 @@ export const feedbackGallery: GalleryGroup = {
     },
     {
       name: "Skeleton",
-      components: ["Skeleton", "SkeletonList", "SkeletonPage"],
+      components: ["Skeleton", "SkeletonChips", "SkeletonList", "SkeletonPage"],
       render: (text) => (
         <>
           <Samples label={text.skeletonShapes}>
@@ -226,6 +226,7 @@ export const feedbackGallery: GalleryGroup = {
           </Samples>
           <Samples label={text.skeletonList}>
             <SkeletonList className="w-full max-w-md" rows={3} />
+            <SkeletonChips className="w-full max-w-md" />
           </Samples>
           <Samples label={text.skeletonPage}>
             <SkeletonPage className="w-full max-w-md" />

@@ -252,6 +252,15 @@ export const statusGallery: GalleryGroup = {
             </Samples>
           ))}
           <RemovableChips text={text} />
+          <Samples label={text.chipWithPanel}>
+            <Chip
+              leading={<Shield aria-hidden="true" />}
+              trailing="1/3"
+              popover={{ content: <p className="text-body">{text.chipPanelText}</p> }}
+            >
+              {text.roleAdmin}
+            </Chip>
+          </Samples>
           <Samples label="ScopeChip">
             <ScopeChip scope="instance" name={text.instanceName} />
             <ScopeChip scope="instance" name={text.instanceName} readOnlyLabel={text.readOnly} />
