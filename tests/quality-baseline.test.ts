@@ -179,6 +179,43 @@ describe("quality baseline", () => {
       expect(added.status).toBe(1);
       expect(added.stderr).toContain("lint|test/rule|packages/other: entry added with count 2");
     });
+
+    it("passes a raise the head accepts to exactly its count, and fails any other rise", () => {
+      const accepted = {
+        key: "lint|test/rule|packages/example",
+        to: 3,
+        reason: "A test of the accepted raise.",
+        acceptedBy: "manager",
+        date: "2026-10-13"
+      };
+      const raisedTo = (count: number, raise: object = accepted) => ({
+        version: 1,
+        entries: [{ ...entry, count }],
+        acceptedRaises: [raise]
+      });
+
+      const exact = guardBranch(baseline, raisedTo(3));
+      expect(exact.stderr).toBe("");
+      expect(exact.status).toBe(0);
+
+      const higher = guardBranch(baseline, raisedTo(4));
+      expect(higher.status).toBe(1);
+      expect(higher.stderr).toContain("lint|test/rule|packages/example: count raised from 2 to 4");
+
+      const otherKey = guardBranch(
+        baseline,
+        raisedTo(3, { ...accepted, key: "lint|test/rule|packages/other" })
+      );
+      expect(otherKey.status).toBe(1);
+      expect(otherKey.stderr).toContain(
+        "lint|test/rule|packages/example: count raised from 2 to 3"
+      );
+
+      // An accepted raise without its reason is no acceptance.
+      const unexplained = guardBranch(baseline, raisedTo(3, { ...accepted, reason: " " }));
+      expect(unexplained.status).not.toBe(0);
+      expect(unexplained.stderr).toContain("Invalid accepted raise");
+    });
   });
 
   it("holds a recorded test type error count in both directions", () => {

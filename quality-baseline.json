@@ -645,5 +645,14 @@
       "count": 2,
       "owner": "EW-1"
     }
+  ],
+  "acceptedRaises": [
+    {
+      "key": "operations|plain-changing|identity",
+      "to": 4,
+      "reason": "connect_codes.start and connect_codes.redeem (PK-1) change identity data by design; accepted 2026-10-13",
+      "acceptedBy": "manager",
+      "date": "2026-10-13"
+    }
   ]
 }
