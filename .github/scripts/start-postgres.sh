@@ -2,23 +2,18 @@
 # Starts the database a job of the Check workflow tests against and waits until it accepts
 # connections.
 #
-# A service container pulls from one registry and gives up after three tries within ten
-# seconds; public.ecr.aws answered "toomanyrequests: Data limit exceeded" to a hosted runner
-# and the job failed before its first step. This pulls the same image, by digest, from the
-# first registry of its list that serves it without a sign-in, and tries the list three times.
+# A service container pulls once and fails the job before its first step when the registry
+# does not answer. This pulls the instance's Postgres image, by the digest of
+# docker/postgres/pinned-image, from the organisation's registry and tries three times. The job
+# signs in to ghcr.io before, since the package is the repository's.
 set -euo pipefail
 
 [[ $# -eq 4 ]] || { echo "usage: start-postgres.sh USER PASSWORD DATABASE HOST_PORT" >&2; exit 2; }
 user=$1 password=$2 database=$3 port=$4
 name=${CHECK_POSTGRES_NAME:-check-postgres}
 
-# postgres:17.6 by the digest of .github/mirrored-images, the same index on every registry. The
-# organisation's own copy comes first: it is public, so a pull request from a fork reads it too,
-# and it has no limit for shared runner addresses. The public registries stay behind it.
-digest=$(awk '$1 == "postgres:17.6" { print $2 }' "$(dirname "${BASH_SOURCE[0]}")/../mirrored-images")
-[[ $digest == sha256:* ]] || { echo "start-postgres: .github/mirrored-images names no postgres:17.6" >&2; exit 2; }
-# CHECK_POSTGRES_REGISTRIES replaces the list, for trying this script out.
-read -r -a registries <<<"${CHECK_POSTGRES_REGISTRIES:-ghcr.io/vivd-solutions/mirror public.ecr.aws/docker/library mirror.gcr.io/library docker.io/library}"
+image=$(grep -v '^#' "$(dirname "${BASH_SOURCE[0]}")/../../docker/postgres/pinned-image" | grep . | head -n 1)
+[[ $image == *@sha256:* ]] || { echo "start-postgres: docker/postgres/pinned-image names no image by digest" >&2; exit 2; }
 
 # On a hosted runner the line is also an annotation on the run's summary page.
 fail() {
@@ -27,21 +22,17 @@ fail() {
   exit 1
 }
 
-image=""
+pulled=""
 for round in 1 2 3; do
-  for registry in "${registries[@]}"; do
-    candidate="$registry/postgres@$digest"
-    if docker pull --quiet "$candidate" >/dev/null; then
-      image=$candidate
-      echo "start-postgres: postgres 17.6 served by $registry (round $round)"
-      break 2
-    fi
-    echo "start-postgres: $registry did not serve the image (round $round)" >&2
-  done
+  if docker pull --quiet "$image" >/dev/null; then
+    pulled=yes
+    echo "start-postgres: pulled $image (round $round)"
+    break
+  fi
+  echo "start-postgres: the registry did not serve $image (round $round)" >&2
   [[ $round -eq 3 ]] || sleep $((round * 15))
 done
-[[ -n $image ]] \
-  || fail "no registry served postgres 17.6 in three rounds: ${registries[*]}; the reason each gave is above"
+[[ -n $pulled ]] || fail "the registry did not serve $image in three rounds; the reason it gave is above"
 
 # Room for as many test files side by side as Vitest runs on this machine: one per core but
 # one, and vitest.config.ts runs no more files than the server has connections for. Postgres's
@@ -65,4 +56,4 @@ for _ in $(seq 60); do
   sleep 2
 done
 docker logs "$name" >&2
-fail "postgres 17.6 from $image started but did not accept connections on port $port within two minutes"
+fail "$image started but did not accept connections on port $port within two minutes"
