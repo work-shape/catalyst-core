@@ -29,13 +29,20 @@ async function signIn(page: Page): Promise<void> {
   expect(response.ok()).toBe(true);
 }
 
+/** The person's own workspace, which the instance makes when the person first opens it. */
 async function personalWorkspaceId(page: Page): Promise<string> {
-  const workspaces = workspaceListSchema.parse(
-    await (await page.request.get(`${apiBaseUrl}/api/v1/workspaces?limit=100`)).json()
-  );
-  const personal = workspaces.items.find((workspace) => workspace.kind === "personal");
-  expect(personal).toBeDefined();
-  return personal?.id ?? "";
+  await page.goto("/");
+  let id = "";
+  await expect
+    .poll(async () => {
+      const workspaces = workspaceListSchema.parse(
+        await (await page.request.get(`${apiBaseUrl}/api/v1/workspaces?limit=100`)).json()
+      );
+      id = workspaces.items.find((workspace) => workspace.kind === "personal")?.id ?? "";
+      return id;
+    })
+    .not.toBe("");
+  return id;
 }
 
 const composerOf = (page: Page) => page.getByPlaceholder(/^(?:Message|Nachricht)$/u);
@@ -145,10 +152,16 @@ test("New agent in a workspace's Studio opens the dock, and the first save creat
   const before = await offered();
 
   // The workspace is the open one and Studio's scope: what is made here, it owns.
+  const workspaceName = `Studio ${name.slice(-8)}`;
   await page.goto(`/w/${workspaceId}`);
-  await page.goto("/build/agents");
+  await expect(page.getByRole("button", { name: "Switch workspace" })).toContainText(workspaceName);
+  await page.getByRole("button", { name: "Studio", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "Kinds in Studio" })
+    .getByRole("button", { name: "Agents", exact: true })
+    .click();
   await page.getByRole("button", { name: /^Scope: / }).click();
-  await page.getByRole("option", { name: `Studio ${name.slice(-8)}` }).click();
+  await page.getByRole("option", { name: workspaceName }).click();
   await page.getByRole("button", { name: "New agent", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "New agent", exact: true })).toHaveCount(0);
   await expect(composerOf(page)).toHaveValue("Build a new agent that ");
