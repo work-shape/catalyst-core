@@ -98,13 +98,16 @@ export function createInstancePageSave(input: {
   modules: ModuleSnapshot;
   stores: PlatformStores;
   workspaceService: WorkspaceCommandService | undefined;
+  /** What writes the App a conversation is about from its Page. */
+  apps: PageSaveToolOptions["apps"];
 }): PageSaveToolOptions | undefined {
   if (!input.modules.isEnabled("apps") || !input.workspaceService) {
     return undefined;
   }
   return {
     workspace: input.workspaceService.dependencies,
-    builds: createPageBuildClient({ stores: input.stores })
+    builds: createPageBuildClient({ stores: input.stores }),
+    ...(input.apps ? { apps: input.apps } : {})
   };
 }
 

@@ -1,7 +1,6 @@
-import type { LucideIcon } from "lucide-react";
 import type { ComponentType, ReactNode, Ref } from "react";
 import type { Asset, AssetSummary } from "@vivd-catalyst/api-client";
-import type { AvatarKind } from "@vivd-catalyst/ui";
+import type { AvatarKind, GenericIconKey } from "@vivd-catalyst/ui";
 import type { TranslationKey } from "../i18n";
 import type { BuildWriteOutcome } from "./build-refusals";
 
@@ -71,7 +70,8 @@ interface BuildKindBase {
   description?: TranslationKey;
   /** The sentence of the empty list. An editable kind says it to a person who may create. */
   emptyText: TranslationKey;
-  icon: LucideIcon;
+  /** The kind's key in the icon registry: one icon per kind, the same everywhere. */
+  icon: GenericIconKey;
   /** Rows show an avatar with the name's initials. Without it they show the kind's icon. */
   avatar?: AvatarKind;
   /**
