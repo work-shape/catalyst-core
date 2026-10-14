@@ -22,8 +22,15 @@ contain breaking changes; a patch version does not.
   `platform-guide` is retired: the release seed deletes it at the next start. On an agent's page
   in Studio a read-only disclosure "Platform instructions" shows the rules and, for an agent that
   holds a platform tool, the orientation; the references API returns them as
-  `platformInstructions`. **Upgrade:** a conversation is offered only the platform tools its
-  agent lists, and `platform-docs` and `workflow-authoring` only with them, where before every
+  `platformInstructions`. The snapshot every turn and tool call reads carries no skill's
+  resources: the store leaves them out, and `read_skill` and skill changes read the one skill
+  whole (`ConfigAssetSource.getSkill`, and `withoutSkillResources` on
+  `listActiveConfigAssets`). **Upgrade:** a skill a release stops shipping, such as
+  `platform-guide`, is first taken off every agent that lists it, as a revision of that agent by
+  "System" with the audit event `config_asset.shipped_skill_unlisted` naming the agent and the
+  skill, and then deleted, so no reference is left that refuses later writes. A copy made with
+  "Copy to edit" keeps its own name and stays on its agents. A conversation is offered only the
+  platform tools its agent lists, and `platform-docs` and `workflow-authoring` only with them, where before every
   conversation got them all. Add the platform tools to the `toolNames` of each builder agent and
   push the config to each environment, or that agent loses them. Agents may list them without
   the release config naming them. An instance skill named `platform-docs` stops startup; rename
