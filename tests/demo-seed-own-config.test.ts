@@ -57,6 +57,7 @@ describe("the demo seed on the demo's own config", () => {
       "connection grant rows": 3,
       workspaces: 1,
       "workspace members": 4,
+      "workspace assets": 2,
       apps: 3,
       workflows: 1
     });
@@ -78,24 +79,35 @@ describe("the demo seed on the demo's own config", () => {
     const { client } = seeded().after;
     const { items } = await client.workflows.list();
     expect(items).toMatchObject([
-      { id: "agent-inventory", name: "Agent inventory", runnable: true, reasons: [] }
+      { id: "accounting-clients", name: "Accounting clients", runnable: true, reasons: [] }
     ]);
     const asset = await client.assets.get({
-      params: { kind: "workflow", name: "agent-inventory" }
+      params: { kind: "workflow", name: "accounting-clients" }
     });
     expect(asset).toMatchObject({ revision: 1, publishedRevision: 1 });
     // The page starts it without an input.
     const started = await client.workflows.start({
-      params: { workflow: "agent-inventory" },
+      params: { workflow: "accounting-clients" },
       body: {}
     });
     if (started.status !== "done") throw new Error("The start was held for an approval");
     expect(started.output).toMatchObject({
-      workflow: "agent-inventory",
+      workflow: "accounting-clients",
       status: "queued",
       definitionRevisionId: items[0]?.definitionRevisionId,
       principal: { name: "workflow-demo" }
     });
+    // Its principal holds one grant, the use of the Connection the Workflow reads.
+    const connection = await client.assets.get({
+      params: { kind: "connection", name: "sample-accounting" }
+    });
+    const { grants, principals } = seeded().before;
+    const runner = principals.find((principal) => principal.displayLabel === "Workflow demo");
+    expect(
+      grants
+        .filter((row) => row.holderId === runner?.id)
+        .map(({ action, scopeKind, scopeId }) => ({ action, scopeKind, scopeId }))
+    ).toEqual([{ action: "connection.use", scopeKind: "asset", scopeId: connection.id }]);
   });
 
   it("lists both models the seed names for the tax Namespace", () => {
@@ -137,8 +149,14 @@ describe("the demo seed on the demo's own config", () => {
     });
     expect(rowsOf("Sven Olsen")).toEqual([row("connection.read"), row("connection.use")]);
     expect(rowsOf("Tobias Keller")).toEqual([row("connection.use")]);
-    // Nobody else holds a row: the admins hold the rights by their role, a user holds none.
-    expect(grants.filter((entry) => entry.action.startsWith("connection."))).toHaveLength(3);
+    // No other person holds a row: the admins hold the rights by their role, a user holds none.
+    // The fourth row is the Workflows' principal's, on the other Connection.
+    expect(grants.filter((entry) => entry.action.startsWith("connection."))).toHaveLength(4);
+    expect(
+      grants.filter(
+        (entry) => entry.action.startsWith("connection.") && entry.holderKind === "user"
+      )
+    ).toHaveLength(3);
     for (const [label, held] of [
       ["Sven Olsen", true],
       ["Mara Lindqvist", true],

@@ -505,6 +505,76 @@
       "when": 1791908014554,
       "tag": "0071_guardrail_hits",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1791927116354,
+      "tag": "0072_guardrail_hit_subject",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1791945065665,
+      "tag": "0073_draft_call_targets",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1791945073684,
+      "tag": "0074_draft_call_targets_validate",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1791949512147,
+      "tag": "0075_personal_api_keys",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1791949512826,
+      "tag": "0076_personal_api_keys_validate",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1791949513500,
+      "tag": "0077_personal_api_keys_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1791952052556,
+      "tag": "0078_secret_origin",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1791957135019,
+      "tag": "0079_legacy_permission_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1791960053373,
+      "tag": "0080_guardrail_hits_converted_from",
+      "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1791965346286,
+      "tag": "0081_test_run_targets",
+      "breakpoints": true
     }
   ]
 }

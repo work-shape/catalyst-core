@@ -45,7 +45,7 @@ const validationRefs = {
   enabledToolNames: ["read_skill"]
 };
 const agentKind = createAgentAssetKind({ config, validationRefs });
-const skillKind = createSkillAssetKind({ config });
+const skillKind = createSkillAssetKind({ config, shippedSkillNames: [] });
 const skill = { name: "research", title: "Research", description: "How to", content: "Read." };
 const withSkills = (...skills: unknown[]): AssetValidationContext => ({
   definitions: (kind) => (kind === "skill" ? skills : []),
@@ -213,7 +213,7 @@ describe("asset kind registry", () => {
     });
 
     expect(issuesOf(skillKind, withSkills(), skill)).toEqual([]);
-    expect(issuesOf(skillKind, withSkills(), { ...skill, name: "1st" })).toEqual([
+    expect(issuesOf(skillKind, withSkills(), { ...skill, name: "-first" })).toEqual([
       expect.objectContaining({ path: ["name"] })
     ]);
     // A list says who ships the skill: every stored skill is the instance's own.

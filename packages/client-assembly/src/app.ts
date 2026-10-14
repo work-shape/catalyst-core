@@ -63,6 +63,7 @@ import { createClientInstanceAuth } from "./auth";
 import { createInstanceConnections, withConnections } from "./connections";
 import { createInstanceAssetKinds } from "./instance-asset-kinds";
 import { seedInstance } from "./instance-seed";
+import { shippedSkillNamesOf, shippedSkillsOf } from "./shipped-skills";
 import { createClientInstanceMail } from "./mail";
 import type {
   ClientInstanceAttachmentHandler,
@@ -77,6 +78,7 @@ import { createInProcessAgentRunWorker, type AgentRunWorkerPlacement } from "./a
 import { createInstancePageSave, createInstancePages } from "./pages";
 import { createJobWorker } from "./job-worker";
 import { createPlatformTools } from "./conversation-offer";
+import { PLATFORM_INSTRUCTIONS, agentListableToolNames } from "./platform-orientation";
 import { assembleModules, endResolveOnlyRun, resolveInstanceModules } from "./modules";
 import { createRuntimeFailureReporter } from "./runtime-error-logging";
 import { createPlatformStore } from "./store";
@@ -153,6 +155,7 @@ export async function createClientInstanceApp(
       secrets: execution.infrastructure.secrets,
       clientInstanceId,
       userStore: store,
+      personalApiKeys: execution.modules.isEnabled("personalApiKeys"),
       allowedOrigins: input.allowedOrigins
     });
   const serverOptions: ChatServerOptions = {
@@ -352,7 +355,7 @@ export async function createClientInstanceExecutionAssembly(
       }),
     fastModeModelBindingIds: fastModeModelBindingIds(config),
     reasoningEfforts: [...REASONING_EFFORTS],
-    enabledToolNames: [...getEnabledToolNames(config)]
+    enabledToolNames: agentListableToolNames(getEnabledToolNames(config))
   };
   // A write is refused for an agent it adds or changes that names a tool of a module that is
   // off. A stored agent that still names one starts and runs without it, and does not stand in
@@ -368,12 +371,13 @@ export async function createClientInstanceExecutionAssembly(
     source: assetSource,
     kinds: createInstanceAssetKinds({
       agent: { config, validationRefs, validateAgents },
-      skill: { config },
+      skill: { config, shippedSkillNames: shippedSkillNamesOf(capabilities) },
       connections,
       modules,
       moduleKinds: moduleAssembly.assetKinds
     }),
-    validationRefs
+    validationRefs,
+    platformInstructions: PLATFORM_INSTRUCTIONS
   };
   const approvalRequestHandlers = new Map(input.approvalRequestHandlers ?? []);
   const skillPolicy = config.administration.agentConfiguration.agentSkillChanges;
@@ -424,7 +428,8 @@ export async function createClientInstanceExecutionAssembly(
           : undefined
       })
     : undefined;
-  const pageSave = createInstancePageSave({ modules, stores: store, workspaceService });
+  const apps = platformTools.pageApps;
+  const pageSave = createInstancePageSave({ modules, stores: store, workspaceService, apps });
   const tools = createToolDefinitions({
     config,
     tools: [
@@ -456,6 +461,11 @@ export async function createClientInstanceExecutionAssembly(
   });
   assertClientAssemblyValid({ config, tools, approvalRequestHandlers: handlers, modules });
   const toolRegistry = platformTools.registry(tools, getEnabledToolNames(config));
+  const shippedSkills = shippedSkillsOf({
+    modules,
+    capabilities,
+    hasTool: (toolName) => toolRegistry.has(toolName)
+  });
   const modulesStarted = await moduleAssembly.start({
     operationCalls,
     authorizer,
@@ -512,7 +522,7 @@ export async function createClientInstanceExecutionAssembly(
         .filter((binding) => binding.agentSelectable !== false)
         .map((binding) => binding.id),
       fastModeModelBindingIds: fastModeModelBindingIds(config),
-      enabledToolNames: [...getEnabledToolNames(config)]
+      enabledToolNames: agentListableToolNames(getEnabledToolNames(config))
     }
   });
 
@@ -533,6 +543,7 @@ export async function createClientInstanceExecutionAssembly(
     modules,
     clientInstanceId,
     store,
+    shippedSkills,
     attachments,
     managedObjects,
     jobRetries: [...jobRetries, ...modulesStarted.jobRetries],
@@ -651,10 +662,10 @@ function createCompositeAttachmentService(
       }
       return {
         attachmentCount: deletions.reduce((count, deletion) => count + deletion.attachmentCount, 0),
-        fileObjectKeys: uniqueStrings(deletions.flatMap((deletion) => deletion.fileObjectKeys)),
-        artifactObjectKeys: uniqueStrings(
-          deletions.flatMap((deletion) => deletion.artifactObjectKeys)
-        )
+        fileObjectKeys: [...new Set(deletions.flatMap((deletion) => deletion.fileObjectKeys))],
+        artifactObjectKeys: [
+          ...new Set(deletions.flatMap((deletion) => deletion.artifactObjectKeys))
+        ]
       };
     },
     async deleteOrphanedFileObjects(input) {
@@ -662,7 +673,7 @@ function createCompositeAttachmentService(
       for (const handler of handlers) {
         removed.push(...((await handler.deleteOrphanedFileObjects?.(input)) ?? []));
       }
-      return uniqueStrings(removed);
+      return [...new Set(removed)];
     },
     async adoptLegacyAttachments(input) {
       let adopted = 0;
@@ -763,10 +774,6 @@ function fastModeModelBindingIds(config: ClientInstanceConfig): string[] {
 
 function uniqueById<T extends { id: string }>(records: T[]): T[] {
   return [...new Map(records.map((record) => [record.id, record])).values()];
-}
-
-function uniqueStrings(values: string[]): string[] {
-  return [...new Set(values)];
 }
 
 function uniqueManifestEntries<T extends { kind: string; attachmentId: string }>(

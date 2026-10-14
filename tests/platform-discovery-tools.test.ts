@@ -8,22 +8,25 @@ import {
   asClientInstanceId,
   asCollaborationWorkspaceId,
   asConversationId,
+  asManagedArtifactId,
   asMessageId,
   asUserId,
   createFileSetId
 } from "@vivd-catalyst/core";
+import { PLATFORM_TOOL_NAMES } from "@vivd-catalyst/client-assembly";
 import { createPlatformDiscoveryTools } from "@vivd-catalyst/tool-execution";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, type TestInstance } from "./support/test-instance";
 import { claimAttachmentsForStoredMessage } from "./support/test-store";
 
-// Every agent, in every conversation, finds what is on the platform with two tools and reads
-// how the platform works in one shipped skill. The tools answer with the rights of the person
-// the agent acts for: an asset that person may not read is answered as one that does not
-// exist. The model is the scripted one of the tests, which makes the one tool call each
-// message names. Each test fails without the change: no agent could list the platform's
-// assets, and a conversation about nothing was offered no tool and no skill of the platform.
+// An agent that holds the platform's tools finds what is on the platform with them and reads the
+// product's documentation in one shipped skill; an agent that lists none of them gets neither.
+// The tools answer with the rights of the person the agent acts for: an asset that person may
+// not read is answered as one that does not exist. The model is the scripted one of the tests,
+// which makes the one tool call each message names. Each test fails without the change: no
+// agent could list the platform's assets, and the platform's tools and skill reached every
+// agent whatever its definition listed.
 
 const OWNER = "owner";
 const MEMBER = "member";
@@ -99,8 +102,13 @@ describe("the tools that find what is on the platform", () => {
     for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
   });
 
-  async function fixture(workflows: boolean, pages = false) {
+  async function fixture(
+    workflows: boolean,
+    pages = false,
+    toolNames: string[] = [...PLATFORM_TOOL_NAMES]
+  ) {
     const config = createTestConfig({
+      toolNames,
       // A Page is saved from an Execution Workspace, so Pages need them.
       executionWorkspaces: { enabled: pages },
       developmentAuth: {
@@ -183,10 +191,30 @@ describe("the tools that find what is on the platform", () => {
     expect(written.statusCode, written.body).toBe(200);
 
     const owner = await t.conversationOf(OWNER);
-    const skill = z
-      .object({ name: z.string(), content: z.string() })
-      .parse((await owner("read_skill", { name: "platform-guide" })).answer);
-    expect(skill.content).toContain("platform.assets.list");
+    // The documentation lists its pages, and each listed path answers that page.
+    const docs = z
+      .object({
+        name: z.string(),
+        content: z.string(),
+        resources: z.array(z.object({ path: z.string(), mediaType: z.string() }))
+      })
+      .parse((await owner("read_skill", { name: "platform-docs" })).answer);
+    expect(docs.content).toContain("`references/configure/cli.md`: The Catalyst CLI.");
+    expect(docs.resources).toContainEqual({
+      path: "references/configure/cli.md",
+      mediaType: "text/markdown"
+    });
+    const page = z.object({ resourcePath: z.string(), content: z.string() }).parse(
+      (
+        await owner("read_skill", {
+          name: "platform-docs",
+          resourcePath: "references/configure/cli.md"
+        })
+      ).answer
+    );
+    expect(page.resourcePath).toBe("references/configure/cli.md");
+    expect(page.content.startsWith("# The Catalyst CLI\n")).toBe(true);
+    expect(page.content).toContain("@work-shape/catalyst-cli");
 
     const context = contextSchema.parse((await owner("platform.context")).answer);
     expect(context.modules).toContain("workflows");
@@ -228,6 +256,21 @@ describe("the tools that find what is on the platform", () => {
     expect(hidden.answer).toEqual(missing.answer);
     const memberEveryKind = foundSchema.parse((await member("platform.assets.list", {})).answer);
     expect(memberEveryKind.assets.map(({ kind }) => kind)).not.toContain("workflow");
+  }, 120_000);
+
+  it("gives an agent that lists none of the platform's tools neither the tools nor the documentation", async () => {
+    // It reads skills, but none of the platform's tools.
+    const t = await fixture(true, false, ["read_skill"]);
+    const owner = await t.conversationOf(OWNER);
+    for (const tool of ["platform.context", "platform.assets.list", "platform.files.list"]) {
+      const { events, answer } = await owner(tool);
+      expect(answer).toBeUndefined();
+      expect(events).toContain(`Tool '${tool}' is not available to this agent`);
+    }
+    expect((await owner("read_skill", { name: "platform-docs" })).answer).toEqual({
+      code: "not_allowed",
+      message: "Agent 'test_agent' is not allowed to read skill 'platform-docs'"
+    });
   }, 120_000);
 
   it("lists no kind of a module that is off, and refuses it as a kind that does not exist", async () => {
@@ -275,6 +318,71 @@ describe("the tools that find what is on the platform", () => {
     const files = tools.find((tool) => tool.name === "platform.files.list");
     expect(files?.inputSchema.safeParse({ text: "tax\u0000" }).success).toBe(false);
     expect(files?.inputSchema.safeParse({ kind: "page", text: "tax" }).success).toBe(true);
+  });
+
+  it("finds files the agent made for the person and none it only rendered to check its work", async () => {
+    const t = await fixture(false, true);
+    const { clientInstanceId } = t;
+    const stores = t.app.stores;
+    const chat = await t.conversationOf(OWNER);
+    const conversationId = asConversationId(chat.id);
+    const workspaceFile = (path: string) => ({
+      clientInstanceId,
+      conversationId,
+      kind: "image.png",
+      objectKey: `execution-workspaces/private/${path}`,
+      filename: path.replace(/^.*\//, ""),
+      mimeType: "image/png",
+      byteSize: 3,
+      checksum: `sha256:${path}`
+    });
+    // A render the agent looked at, as workspace.preview_images stores it.
+    await stores.files.createManagedArtifact({
+      ...workspaceFile("previews/contoso_daten.png"),
+      metadata: {
+        source: "execution_workspace",
+        purpose: "inspection",
+        workspaceId: "ws-1",
+        workspacePath: "previews/contoso_daten.png"
+      }
+    });
+    // One stored before the purpose was recorded, known by its id.
+    await stores.files.ensureManagedArtifact({
+      ...workspaceFile("previews/contoso_start.png"),
+      id: asManagedArtifactId("art_workspace_preview_stored_before_the_purpose"),
+      metadata: {
+        source: "execution_workspace",
+        workspaceId: "ws-1",
+        workspacePath: "previews/contoso_start.png"
+      }
+    });
+    // A chart promoted for the person, then looked at again: the look is the newer row.
+    const promoted = await stores.files.createManagedArtifact({
+      ...workspaceFile("artifacts/umsatz_chart.png"),
+      metadata: {
+        source: "execution_workspace",
+        workspaceId: "ws-1",
+        workspacePath: "artifacts/umsatz_chart.png"
+      }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await stores.files.ensureManagedArtifact({
+      ...workspaceFile("artifacts/umsatz_chart.png"),
+      id: asManagedArtifactId("art_workspace_preview_looked_at_the_chart"),
+      metadata: {
+        source: "execution_workspace",
+        purpose: "inspection",
+        workspaceId: "ws-1",
+        workspacePath: "artifacts/umsatz_chart.png"
+      }
+    });
+
+    const found = filesSchema.parse(
+      (await chat("platform.files.list", { kind: "generated_file" })).answer
+    );
+    expect(found.files.map(({ id, name }) => ({ id, name }))).toEqual([
+      { id: promoted.id, name: "umsatz_chart.png" }
+    ]);
   });
 
   it("finds the Pages and files of every conversation of the workspace the user may read, from any chat, and nothing else", async () => {

@@ -15,6 +15,9 @@ export const build = defineTranslations({
     "build.assetRefused": "You may not read this asset.",
     "build.conflictDeleted":
       "Somebody deleted this while you were editing. Your text is still here, but it can no longer be saved.",
+    "build.createAvailableHidden": "Hidden until an instance admin makes it available",
+    "build.createAvailableWorkspaceHint":
+      "Only members of this workspace can choose it. An instance admin can make it available in more.",
     "build.copyTitle": "{title} (copy)",
     "build.copyToEdit": "Copy to edit",
     "build.createContinue": "Continue",
@@ -43,10 +46,13 @@ export const build = defineTranslations({
     "build.nameTaken": "The id {name} is taken. Go back and choose another one.",
     "build.openHistory": "Open history",
     "build.namespaceAll": "All Namespaces",
+    "build.scopeFilter": "Scope",
+    "build.scopeInstance": "Instance",
     "build.namespaceFilter": "Namespace",
     "build.noAccess":
       "Studio is not available to you. It opens for people who hold a right on an agent or a skill.",
     "build.noMatchInNamespace": "Nothing in this Namespace.",
+    "build.noneInScope": "Nothing in {scope} yet.",
     "build.noSkillsChosen": "No skills chosen.",
     "build.platform": "Platform",
     "build.pendingApproval":
@@ -56,6 +62,8 @@ export const build = defineTranslations({
       "Belongs to no Namespace. Only a person who may edit on the whole instance can change it.",
     "build.readOnlyNamespace":
       "Belongs to the Namespace {namespace}. Only a person who may edit in this Namespace can change it.",
+    "build.readOnlyWorkspace":
+      "Belongs to the workspace {workspace}. Only a person who may edit in this workspace can change it.",
     "build.readOnlyPlatform":
       "Ships with the platform and is updated with each release. To change it, copy it and edit the copy.",
     "build.restored": "Revision {number} restored.",
@@ -125,6 +133,9 @@ export const build = defineTranslations({
     "build.assetRefused": "Du darfst dieses Asset nicht lesen.",
     "build.conflictDeleted":
       "Jemand hat dies gelöscht, während du es bearbeitet hast. Dein Text steht noch hier, lässt sich aber nicht mehr speichern.",
+    "build.createAvailableHidden": "Ausgeblendet, bis ein Instanz-Admin ihn verfügbar macht",
+    "build.createAvailableWorkspaceHint":
+      "Nur Mitglieder dieses Arbeitsbereichs können ihn auswählen. Ein Instanz-Admin kann ihn in weiteren verfügbar machen.",
     "build.copyTitle": "{title} (Kopie)",
     "build.copyToEdit": "Zum Bearbeiten kopieren",
     "build.createContinue": "Weiter",
@@ -154,10 +165,13 @@ export const build = defineTranslations({
     "build.nameTaken": "Die Kennung {name} ist vergeben. Geh zurück und wähle eine andere.",
     "build.openHistory": "Verlauf öffnen",
     "build.namespaceAll": "Alle Namespaces",
+    "build.scopeFilter": "Geltungsbereich",
+    "build.scopeInstance": "Instanz",
     "build.namespaceFilter": "Namespace",
     "build.noAccess":
       "Studio steht dir nicht zur Verfügung. Es öffnet sich für Personen mit einem Recht an einem Agenten oder einem Skill.",
     "build.noMatchInNamespace": "Nichts in diesem Namespace.",
+    "build.noneInScope": "Noch nichts in {scope}.",
     "build.noSkillsChosen": "Keine Skills ausgewählt.",
     "build.platform": "Plattform",
     "build.pendingApproval":
@@ -167,6 +181,8 @@ export const build = defineTranslations({
       "Gehört zu keinem Namespace. Ändern kann es nur, wer in der ganzen Instanz bearbeiten darf.",
     "build.readOnlyNamespace":
       "Gehört zum Namespace {namespace}. Ändern kann es nur, wer in diesem Namespace bearbeiten darf.",
+    "build.readOnlyWorkspace":
+      "Gehört zum Arbeitsbereich {workspace}. Ändern kann es nur, wer in diesem Arbeitsbereich bearbeiten darf.",
     "build.readOnlyPlatform":
       "Kommt mit der Plattform und wird mit jedem Release aktualisiert. Um es zu ändern, kopieren Sie es und bearbeiten die Kopie.",
     "build.restored": "Version {number} wiederhergestellt.",

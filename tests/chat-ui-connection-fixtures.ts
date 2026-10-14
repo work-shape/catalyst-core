@@ -55,6 +55,7 @@ export function connectionDetail(
     health: "unknown",
     secret: { state: "set", version: 2 },
     sharedCredential: true,
+    discovered: [],
     operations: [
       {
         name: "revenue_by_month",
@@ -69,7 +70,7 @@ export function connectionDetail(
         name: "list_customers",
         toolName: `connection.${name}.list_customers`,
         effect: "reading",
-        exposure: ["agent", "bridge", "workflow"],
+        exposure: ["agent", "bridge", "workflow", "outside"],
         enabled: true,
         status: "awaiting_discovery"
       },

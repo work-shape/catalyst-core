@@ -12,12 +12,14 @@ import { configAssets } from "./config-assets";
 import { connections } from "./connections";
 import { conversation } from "./conversation";
 import { dataStores } from "./data-stores";
+import { dock } from "./dock";
 import { files } from "./files";
 import { guardrails } from "./guardrails";
 import { inbox } from "./inbox";
 import { navigation } from "./navigation";
 import { operations } from "./operations";
 import { pages } from "./pages";
+import { personalApiKeys } from "./personal-api-keys";
 import { settings } from "./settings";
 import { signIn } from "./sign-in";
 import { tools } from "./tools";
@@ -43,12 +45,14 @@ export const translations = combineTranslations(common)
   .and(connections)
   .and(conversation)
   .and(dataStores)
+  .and(dock)
   .and(files)
   .and(guardrails)
   .and(inbox)
   .and(navigation)
   .and(operations)
   .and(pages)
+  .and(personalApiKeys)
   .and(settings)
   .and(signIn)
   .and(tools)

@@ -31,7 +31,7 @@ import {
 import {
   combineDataToolSources,
   createAppActionToolSource,
-  enqueueConnectionDiscovery,
+  requestConnectionDiscovery,
   type ChatServerOptions
 } from "@vivd-catalyst/chat-server";
 import type { ClientInstanceConfig } from "@vivd-catalyst/config-schema";
@@ -157,8 +157,10 @@ async function buildInstanceConnections(
     createMcpConnectorType({ logger }),
     ...types
   ]);
+  // Named keys are needed: a release Connection's secret or one entered on the instance is
+  // stored under them.
   let keyring: SecretKeyring | undefined;
-  if (configured) {
+  if (configured || config.secretStore.keys.length > 0) {
     keyring = await loadSecretKeyring({
       keys: config.secretStore.keys,
       secrets,
@@ -182,8 +184,16 @@ async function buildInstanceConnections(
       "The address of the Platform Store could not be read as host and port, so no Connection can be told apart from it. Every 'postgres' egress target is refused on this instance. Give the database address as postgres://host:port/database"
     );
   }
+  if (config.egress.allowPublicHttps === true) {
+    // Said once, at start: the list is no longer the whole of where a Connection may go.
+    logger.warn(
+      { module: "connections" },
+      "egress.allowPublicHttps is on: a Connection may reach any https host on port 443 whose addresses are all public"
+    );
+  }
   const egress = createEgressChecker({
     allow: config.egress.allow,
+    allowPublicHttps: config.egress.allowPublicHttps === true,
     platformStore: platformStore ?? [],
     platformStoreUnknown: platformStore === undefined
   });
@@ -198,7 +208,7 @@ async function buildInstanceConnections(
     operationSource: createConnectionOperationSource(operations),
     toolSource: createConnectionToolSource(operations),
     management: {
-      ...createConnectionManagement(operations),
+      ...createConnectionManagement({ ...operations, ...(keyring ? { keyring } : {}) }),
       discover: (connectionName, attempt) =>
         discoverConnection({ ...operations, connectionName, ...attempt })
     },
@@ -242,13 +252,12 @@ async function enqueueDiscoveries(
   try {
     for (const connection of await readConnections(deps)) {
       if (!connection.config.enabled || !connection.type?.discover) continue;
-      const discovery = { clientInstanceId, connectionName: connection.config.name };
-      const job = await enqueueConnectionDiscovery(stores.jobs, discovery);
-      // A discovery that runs now may have read the Connection before this seed changed it.
-      // One is queued behind it, so a discovery always starts after a seed.
-      if (job.status === "running") {
-        await enqueueConnectionDiscovery(stores.jobs, { ...discovery, behind: job });
-      }
+      // A discovery that runs now may have read the Connection before this seed changed it,
+      // so one always starts after a seed.
+      await requestConnectionDiscovery(stores.jobs, {
+        clientInstanceId,
+        connectionName: connection.config.name
+      });
     }
   } catch (error) {
     logger.warn(

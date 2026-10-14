@@ -5,6 +5,7 @@ import {
   assertOperationChecksRights,
   isDataToolName,
   type AuthenticatedIdentity,
+  type JsonObject,
   type OperationCall,
   type OperationDefinition,
   type OperationDenial,
@@ -20,13 +21,13 @@ import {
   deniedEnd,
   executeAdmitted,
   failRun,
-  hashInput,
   OperationNotBegunError,
   requireModuleOn,
   resolveGuardedPolicy,
   type RunContext,
   type RunOperationDeps
 } from "./operation-execution";
+import { hashInput } from "./input-hash";
 
 /** The frozen call of a run that waits for an approval, as its approval request keeps it. */
 export interface WaitingOperationCall {
@@ -36,6 +37,13 @@ export interface WaitingOperationCall {
    * actor no longer exists or may not act any more.
    */
   call: Omit<OperationCall, "actor"> & { actor: AuthenticatedIdentity | undefined };
+  /**
+   * What the call's before-events held beside its input, such as the revision of a Page it
+   * copies. Merged into the input once the input's hash is checked, in the keys the operation
+   * declares (`heldInputKeys`), so the call the approval answers is asked about and executes
+   * what the approval was asked about.
+   */
+  heldInput?: JsonObject;
 }
 
 /** Who decided on a waiting call. */
@@ -235,7 +243,7 @@ async function admitAgain(
   // The input was validated when the call was made and is not read through the schema again:
   // a schema that changes what it reads would refuse its own output. The hash says that what
   // is executed is what was asked for.
-  if (hashInput(call.input) !== run.inputHash) {
+  if (hashInput(waiting.call.input) !== run.inputHash) {
     const error = {
       code: "VALIDATION_FAILED",
       message: "The input of this call is no longer valid"
@@ -360,7 +368,21 @@ async function waitingContext(
   if (!actor) {
     return { actorGone: true, definition };
   }
-  const call: OperationCall = { ...waiting.call, actor };
+  // What the approval was asked about is read and executed again: only in the keys the
+  // operation declares, so nothing held can change another field of the input.
+  const held = Object.fromEntries(
+    (definition.heldInputKeys ?? []).flatMap((key) => {
+      const value = waiting.heldInput?.[key];
+      return value === undefined ? [] : [[key, value] as const];
+    })
+  );
+  const call: OperationCall = {
+    ...waiting.call,
+    actor,
+    ...(Object.keys(held).length > 0 && isRecord(waiting.call.input)
+      ? { input: { ...waiting.call.input, ...held } }
+      : {})
+  };
   requireModuleOn(call, deps.modules);
   return createRunContext({
     run,
@@ -370,7 +392,10 @@ async function waitingContext(
     deps,
     // The call is executed later and elsewhere than it was made: nothing of the live call is
     // left. Its time and its signal are set where it is executed.
-    runtime: {}
+    runtime: {},
+    // Its guardrails answer again before it is executed, and their hits were kept when it was
+    // made.
+    repeated: true
   });
 }
 
@@ -552,4 +577,8 @@ export async function refuseWaitingOperation(
 /** Whether a waiting call was taken for execution: it ran, runs, or was cut off while running. */
 export function wasTakenForExecution(run: OperationRun | undefined): boolean {
   return run?.decision?.mode === "approved";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

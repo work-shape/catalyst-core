@@ -2,8 +2,8 @@ import { z } from "zod";
 import { listQuerySchema, timestampSchema } from "../shared";
 import { defineRegisteredOperation, json, page } from "./define-operation";
 
-// The Workflows of an instance and their runs: the list, the start by hand, the reads and the
-// cancel. A read answers states,
+// The Workflows of an instance and their runs: the list, the start by hand, the test run of a
+// draft, the reads and the cancel. A read answers states,
 // times and errors, and of what a run or a step returned only a cut preview. It never answers
 // an input.
 
@@ -67,7 +67,10 @@ export const workflowRunSchema = z.object({
   mode: z.enum(["live", "test"]),
   trigger: z.enum(["manual", "schedule", "parent"]),
   status: runStatusSchema,
-  /** The service principal the run acts as. Its rights are the rights of every step. */
+  /**
+   * The service principal the run acts as. Its rights are the rights of every step. A test run
+   * (`mode: test`) acts as the person who started it, bounded by this principal.
+   */
   principal: z.object({ id: z.string(), name: z.string(), displayLabel: z.string() }),
   startedBy: z.object({
     kind: z.enum(["user", "service_principal"]),
@@ -125,6 +128,17 @@ export const workflowStepRunSchema = z.object({
   effect: z.enum(["reading", "changing"]).optional(),
   source: z.string().optional(),
   /**
+   * On the step run of an operation step: where its call went (ADR-0031). `live` on every step
+   * of a run of the published revision; in a test run `dry_run` for a changing step that was
+   * simulated, `test` for a call to a test target, `live` for a read and for "Run live once".
+   */
+  target: z.enum(["live", "test", "dry_run"]).optional(),
+  /**
+   * On a step run of a test run: the tester's start satisfied the step's `confirm`, and a run
+   * of the published revision asks for an approval here.
+   */
+  publishedWouldAsk: z.enum(["approval"]).optional(),
+  /**
    * On the step run of a code step that ran: what its script wrote to its output and error
    * streams beside its result, each cut to 16 KiB.
    */
@@ -162,7 +176,8 @@ export const listWorkflowStepRunsQuerySchema = listQuerySchema.extend({
 /**
  * One thing a start by hand of a Workflow is refused for, under the code the refusal of the
  * start carries as its `reason`: a code of the definition (`not_supported_yet`,
- * `block_depth`, `reference_out_of_scope`, `duplicate_step_id`, `definition_invalid`) or of
+ * `block_depth`, `reference_out_of_scope`, `duplicate_step_id`, `operation_not_callable`,
+ * `definition_invalid`) or of
  * the start (`no_manual_trigger`, `inputs_unreadable`, `operation_secret`,
  * `principal_inactive`). A later engine may name further codes.
  */
@@ -242,6 +257,22 @@ export const workflowOperations = {
     body: startWorkflowRunRequestSchema,
     response: json(workflowRunSchema),
     errors: ["NOT_FOUND", "CONFLICT"],
+    rateClass: "write"
+  }),
+  "workflows.test": defineRegisteredOperation({
+    id: "workflows.test",
+    method: "POST",
+    path: "/api/v1/workflows/:workflow/test-runs",
+    summary:
+      "Start a test run of a Workflow's draft; it acts as the person testing, bounded by the Workflow's principal, and simulates changing steps",
+    tag: "Workflows",
+    auth: "principal",
+    scope: "config_assets:write",
+    requires: [],
+    effect: "changing",
+    body: startWorkflowRunRequestSchema,
+    response: json(workflowRunSchema),
+    errors: ["NOT_FOUND", "CONFLICT", "VALIDATION_FAILED"],
     rateClass: "write"
   }),
   "workflows.list_runs": defineRegisteredOperation({

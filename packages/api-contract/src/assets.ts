@@ -233,7 +233,17 @@ export const putAssetRequestSchema = z
     files: z.array(assetFileInputSchema).min(1).max(FILE_SET_MAX_FILES).optional(),
     /** The revision the caller last read, or `null` to create the asset. Required. */
     expectedRevision: expectedRevisionOrNewSchema,
-    workspaceId: workspaceIdSchema
+    workspaceId: workspaceIdSchema,
+    /**
+     * Where a new agent starts available: the shared workspace it is made in, or `all`, which
+     * needs the agent write right on the whole instance. An agent's call in a conversation is
+     * made in the conversation's workspace without naming it. A new agent made in no shared
+     * workspace is hidden until an instance admin makes it available, and the answer warns of
+     * it. Only a write that creates an agent takes it.
+     */
+    availableIn: z
+      .union([z.literal("all"), z.object({ workspaceId: z.string().min(1) })])
+      .optional()
   })
   .refine((value) => (value.config === undefined) !== (value.files === undefined), {
     message: "A write carries the config of the asset or its files, one of the two"
@@ -274,6 +284,43 @@ export const assetPointersResponseSchema = z.object({
   publishedRevision: revisionNumberSchema,
   /** The revision that was published before a publish, left out on the first one. */
   replacedRevision: revisionNumberSchema.optional()
+});
+
+/** The bound of the name of an App action or a Workflow step that "Run live once" names. */
+export const LIVE_ONCE_PART_MAX_LENGTH = 200;
+
+export const runLiveOnceRequestSchema = z.object({
+  /** The App action or the Workflow step whose next call is made live. */
+  part: z.string().min(1).max(LIVE_ONCE_PART_MAX_LENGTH),
+  /**
+   * The draft revision the caller looks at. Required: the switch covers that revision only,
+   * and a draft saved since is refused, so nobody switches live what they have not seen.
+   */
+  expectedRevision: expectedRevisionSchema,
+  workspaceId: workspaceIdSchema
+});
+
+/** "Run live once", as it is set: for one action or step of one draft revision. */
+export const runLiveOnceResponseSchema = z.object({
+  draftRevision: revisionNumberSchema,
+  part: z.string()
+});
+
+export const listLiveOnceQuerySchema = z.object({ workspaceId: workspaceIdSchema });
+
+/**
+ * The caller's own "Run live once" switches on the asset's current draft. A switch a Workflow
+ * test run used names that run and when; it covers no later run until it is set again.
+ */
+export const liveOnceListSchema = z.object({
+  items: z.array(
+    z.object({
+      part: z.string(),
+      switchedAt: timestampSchema,
+      usedByRunId: z.string().optional(),
+      usedAt: timestampSchema.optional()
+    })
+  )
 });
 
 export const deleteAssetRequestSchema = z.object({
@@ -372,6 +419,14 @@ export const syncAssetsRequestSchema = z.object({
    */
   namespace: nameText(z.string().min(1)).optional(),
   /**
+   * The workspace that owns every asset the batch names, as a CLI root bound with
+   * `--workspace` sends it. Left out, the batch names the instance's own assets. A batch
+   * names a Namespace or a workspace, never both, and one that names a workspace is no
+   * release: its agents start hidden and its writer holds the rights on what the workspace
+   * owns.
+   */
+  workspaceId: workspaceIdSchema,
+  /**
    * At most `ASSET_SYNC_MAX_ITEMS` items, or `ASSET_RELEASE_SYNC_MAX_ITEMS` for a holder of
    * the release right. A batch without items names the default agent.
    */
@@ -411,7 +466,7 @@ export const assetSyncAppliedItemSchema = z.discriminatedUnion("status", [
 export const syncAssetsResponseSchema = z.object({
   version: z.number().int().positive(),
   items: z.array(assetSyncAppliedItemSchema),
-  /** Agents a release wrote that are available in no workspace afterwards. */
+  /** Agents the batch wrote that are available in no workspace afterwards. */
   hiddenAgentNames: z.array(z.string()).optional(),
   warnings: z.array(assetWarningSchema)
 });

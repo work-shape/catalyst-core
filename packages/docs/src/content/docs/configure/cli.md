@@ -29,29 +29,74 @@ catalyst config validate
 catalyst config push
 ```
 
-## One command per asset operation
+## Log in
 
-Every operation on assets has a command, for every kind the instance registers: agents, skills, Apps, Workflows, Connections, Data Stores. The kind is the first word, by its id, its plural or with dashes (`data-store`). The instance names its kinds; a kind a later release adds works without a new CLI.
+On an instance with the module `personalApiKeys` on, a person logs the tool in with a key of their own:
 
 ```sh
-catalyst context                  # the instance, your rights and Namespaces, its kinds
+catalyst login --instance https://chat.example.com
+```
+
+The tool prints an address and a code such as `BCDF-GHJK`. Open the address, signed in as yourself; it leads to **Settings > You > API keys** (German: **Einstellungen › Du › API-Schlüssel**). Check that the code is the one your terminal shows, choose what the key may do and until when, and confirm. The tool then collects the key and saves it. Nothing is pasted anywhere: the code you confirm cannot be used to sign in, and the key travels only from the instance to the tool. A code expires after 15 minutes and is collected once.
+
+A key acts as you, narrowed to its scopes. A scope is a right such as `agent.write`, optionally limited to one Namespace: `agent.write:tax-`. A key never does more than you may at the moment of each call: a right an administrator takes from you is gone from the key on its next call. A key lives at most a year. A new key starts with no scope ticked: tick the ones the key needs. **Settings > You > API keys** lists your keys and revokes them; a revoked key is refused on its next call. Whoever administers API access sees and revokes every person's keys. No key issues another key.
+
+`catalyst logout --instance <address>` removes the saved key from this machine. It stays valid until you revoke it under **Settings > You > API keys**.
+
+A working copy that belongs to one Namespace names it beside the instance:
+
+```yaml
+instances:
+  production:
+    url: https://chat.example.com
+    namespace: tax-
+defaultInstance: production
+```
+
+Its `push` names the Namespace, as the instance asks of everyone but the holder of the release right, and never changes the instance's default agent. Its `pull`, `diff` and `list` read only the agents and skills the key may read, and neither the instance's version nor its default agent, which only a reader of every agent and skill may read; a key of one Namespace pulls, diffs and lists its Namespace.
+
+A working copy can instead belong to one Shared Workspace: then the agents and skills it pushes are the workspace's own, and a pull reads only what the workspace owns. Bind an empty working copy once with its first pull:
+
+```sh
+catalyst config pull --workspace <workspace-id>
+```
+
+The pull writes `workspace: <workspace-id>` beside the instance's `url` in `catalyst.yaml`, and every later command of that working copy names the workspace. A working copy is bound once: one bound to another workspace, one of a Namespace and one that already pulled the instance's own assets are refused, so pull another workspace into a directory of its own. Its `push` is never a release and never changes the instance's default agent, which only an agent of the instance can be; an agent it creates starts hidden until an instance admin offers it, and a guardrail it creates belongs to the workspace as well. A workspace's agent may name the workspace's skills and the instance's skills you may read; no agent outside the workspace may name the workspace's skills.
+
+## One command per asset operation
+
+Every operation on assets has a command, for every kind the instance registers: agents, skills, Apps, Workflows, Connections, Data Stores, guardrails. The kind is the first word, by its id, its plural or with dashes (`data-store`). The instance names its kinds; a kind a later release adds works without a new CLI.
+
+```sh
+catalyst context                  # the instance, your rights in Namespaces and workspaces, its kinds
 catalyst kinds                    # each kind: lifecycle, folder or definition, rights
 catalyst references               # models, efforts and tools a definition may name
-catalyst agent list --prefix kai-
-catalyst agent show kai-tax
-catalyst agent history kai-tax
-catalyst skill validate --from skills/kai-guide
-catalyst skill put kai-guide --from skills/kai-guide --if-revision new
-catalyst agent put kai-tax --from agents/kai-tax.agent.yaml --if-revision 3
+catalyst agent list --prefix tax-
+catalyst agent show tax-vat
+catalyst agent history tax-vat
+catalyst skill validate --from skills/tax-guide
+catalyst skill put tax-guide --from skills/tax-guide --if-revision new
+catalyst agent put tax-vat --from agents/tax-vat.agent.yaml --if-revision 3
 catalyst app put offers --from offers --if-revision 4 --workspace <workspace-id>
 catalyst app publish offers --revision 5 --workspace <workspace-id>
-catalyst agent revert kai-tax --to 2 --if-revision 4
-catalyst agent delete kai-tax --if-revision 5
+catalyst agent revert tax-vat --to 2 --if-revision 4
+catalyst agent delete tax-vat --if-revision 5
 ```
 
 `--from` takes the forms of the working copy: an `.agent.yaml` or any YAML or JSON definition, a skill's folder with its `SKILL.md`, or the folder of a kind whose revisions hold files, such as an App. A write names the revision it was made against with `--if-revision`, or `new` to create; read it with `show` or `history`. `discard-draft`, `set-availability` and `set-default` complete the list; `catalyst --help` shows each with its options. `--json` prints the instance's answer as it came.
 
-The instance decides every right, revision and check. A refusal is printed as the instance gave it, with each asset, issue or item it names:
+Guardrails have four commands of their own beside `put`:
+
+```sh
+catalyst guardrail test no-iban --text "DE89 3704 0044 0532 0130 00"   # or --from <file>, --asset skill:<name>
+catalyst guardrail dry-run no-iban                 # what the draft would have done in the last 14 days
+catalyst guardrail publish no-iban --revision 2    # shows the dry run first
+catalyst guardrail unpublish no-iban               # stops it; the draft stays
+```
+
+`test` checks the draft, or `--revision <n>`, and keeps no hit. A first `publish` of a guardrail that would have blocked or held actions asks for `--confirm <n>` with the number the dry run counted. [Guardrails as assets](/configure/config-assets/#guardrails-as-assets) says who may do what.
+
+The instance decides every right, revision and check. A `revert` needs the read right on the asset beside the write right, as it restores content. A refusal is printed as the instance gave it, with each asset, issue or item it names:
 
 ```text
 Refused by the instance (HTTP 403 FORBIDDEN): Missing the right 'agent.write'
@@ -61,11 +106,12 @@ The exit code is 0 when the call was applied, 1 when it was refused or failed, 2
 
 ## The key
 
-The tool reads its key from the variable `CATALYST_API_KEY`. It never takes a key as an argument and never writes one into the working copy.
+The tool takes its key from the variable `CATALYST_API_KEY` when it is set, which is how automation runs it, and otherwise from the key `catalyst login` saved for the instance's address. It never takes a key as an argument and never writes one into the working copy.
 
+- A saved key is kept in `~/.config/catalyst/credentials.json` (`$XDG_CONFIG_HOME/catalyst`, or `$CATALYST_CONFIG_HOME`), readable by you alone. A file others may read is refused until you `chmod 600` it.
 - The key is sent only to the instance you name, and only over HTTPS. Plain HTTP is accepted for `localhost`, `127.0.0.0/8` and `::1`.
 - The key is exchanged once for a short-lived access token. Every other request carries the token, not the key.
-- An error message never repeats the key.
+- An error message never repeats the key, and the tool never prints it.
 
 ## What is not in it
 

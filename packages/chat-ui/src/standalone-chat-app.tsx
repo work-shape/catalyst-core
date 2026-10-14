@@ -1,4 +1,4 @@
-import { StrictMode, useSyncExternalStore } from "react";
+import { StrictMode, useState, useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
 import {
   createRoute,
@@ -18,7 +18,14 @@ import { ToolActivityLabelsProvider, type ToolActivityLabels } from "./assistant
 import { hasLeaveGuard, mayLeave, subscribeLeaveGuard } from "./leave-guard";
 import { installStaleChunkRecovery } from "./stale-chunk-recovery";
 import { applyDocumentThemeMode } from "./theme";
-import { areaRoutePaths, workspaceRouteFromPath, workspaceRouteNavigation } from "./routes";
+import {
+  areaRoutePaths,
+  workspaceRouteFromPath,
+  workspaceRouteNavigation,
+  workspaceRoutePath
+} from "./routes";
+import { dockViewTransition, dockViewTransitionsSupported } from "./dock/dock-motion";
+import { dockConversationOfSearch, searchWithDock } from "./workspace/dock-state";
 import type { WorkspaceRoute, WorkspaceRouteChangeOptions } from "./workspace/workspace-route";
 
 export interface StandaloneChatAppOptions {
@@ -97,6 +104,9 @@ function StandaloneChatRouteBridge({ options }: { options: StandaloneChatRouterO
   const router = useRouter();
   const location = useLocation();
   const route = workspaceRouteFromPath(location.pathname);
+  // The dock's conversation rides in the search; the chat route has no dock and ignores it.
+  const chat = dockConversationOfSearch(location.search);
+  const [viewTransitions] = useState(dockViewTransitionsSupported);
   // A page with unsaved changes is asked before any navigation, the browser's Back included.
   const guarded = useSyncExternalStore(subscribeLeaveGuard, hasLeaveGuard, () => false);
   useBlocker({
@@ -109,9 +119,17 @@ function StandaloneChatRouteBridge({ options }: { options: StandaloneChatRouterO
     nextRoute: WorkspaceRoute,
     navigationOptions?: WorkspaceRouteChangeOptions
   ) {
+    // On the same page the other parameters of its search stay; a new page starts without them.
+    const samePage = workspaceRoutePath(nextRoute) === router.state.location.pathname;
+    const viewTransition = viewTransitions
+      ? dockViewTransition(navigationOptions?.motion)
+      : undefined;
     void router.navigate({
       ...workspaceRouteNavigation(nextRoute),
-      replace: navigationOptions?.replace
+      search: (previous: Record<string, unknown>) =>
+        searchWithDock(samePage ? previous : undefined, navigationOptions?.chat),
+      replace: navigationOptions?.replace,
+      ...(viewTransition === undefined ? {} : { viewTransition })
     });
   }
 
@@ -125,6 +143,8 @@ function StandaloneChatRouteBridge({ options }: { options: StandaloneChatRouterO
         manageDocumentTitle
         onThemeModeChange={applyDocumentThemeMode}
         route={route}
+        chat={chat}
+        viewTransitions={viewTransitions}
         onRouteChange={onRouteChange}
       />
     </ToolActivityLabelsProvider>

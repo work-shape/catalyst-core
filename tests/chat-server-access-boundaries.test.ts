@@ -81,15 +81,21 @@ describe("a deny and the deletion of its asset", () => {
     const rows = await t.stores.access.listGrants({ clientInstanceId });
     expect(rows.some((row) => row.id === allowId)).toBe(false);
     expect(rows.some((row) => row.id === denyId)).toBe(true);
-    // Kai could not read the skill before and cannot read its history now, nor bring it back
-    // to read it.
+    // Kai could not read the skill before and cannot read its history now, nor bring back a
+    // revision of it: a revert restores content, which its guardrails would answer about.
     await t.expectRefused(
       t.kai.id,
       "assets.revisions.list",
       { params: { kind: "skill", name: "kai-secret" } },
       t.forbidden("skill.read", "denied")
     );
-    await t.expectOk(t.kai.id, "assets.revert", {
+    await t.expectRefused(
+      t.kai.id,
+      "assets.revert",
+      { params: { kind: "skill", name: "kai-secret" }, payload: { revision: 1 } },
+      t.forbidden("skill.read", "denied")
+    );
+    await t.expectOk(t.admin.id, "assets.revert", {
       params: { kind: "skill", name: "kai-secret" },
       payload: { revision: 1 }
     });

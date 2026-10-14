@@ -145,6 +145,20 @@ export function adapterFromFakeProvider(
   const stream = provider.stream?.bind(provider);
   return {
     capabilities: () => declared,
+    // Every entry embeds, as the built-in adapters of a test config do: a unit vector per text.
+    async embed(request) {
+      return {
+        vectors: request.texts.map(() =>
+          Array.from({ length: request.dimensions }, (_value, index) => (index === 0 ? 1 : 0))
+        ),
+        usage: {
+          inputTokens: request.texts.length,
+          outputTokens: 0,
+          totalTokens: request.texts.length,
+          source: "provider_reported"
+        }
+      };
+    },
     complete: (request) =>
       provider.complete(
         {

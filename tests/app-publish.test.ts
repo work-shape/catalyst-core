@@ -279,8 +279,15 @@ describe("an App with a draft and a published revision", () => {
     );
 
     // An agent adds a host to the draft. A stored manifest is the build's answer and is read
-    // again: an entry that is no host name never reaches the policy.
-    const second = await write(["api.example.com", "collect.example.net", "x.test; script-src *"]);
+    // again: an entry that is no host name, or a name on the viewer's own network, never reaches
+    // the policy, and a host listed twice is one host.
+    const second = await write([
+      "api.example.com",
+      "collect.example.net",
+      "x.test; script-src *",
+      "printer.local",
+      "collect.example.net"
+    ]);
     const draft = await shown(t.admin.id, "rates", "draft");
     expect(draft.heldBackHosts).toEqual(["collect.example.net"]);
     expect(connects(draft.document.policy)).toBe("https://api.example.com");
@@ -509,7 +516,9 @@ describe("an App with a draft and a published revision", () => {
     const bySession = await shapeOf("by-session", {});
     const byToken = await shapeOf("by-token", { authorization: "Bearer person-token" });
 
-    expect([bySession.origin, byToken.origin]).toEqual([["user"], ["cli"]]);
+    // A token that is no API credential is the person, as a session is: only a personal API
+    // key or a service principal's credential is the CLI.
+    expect([bySession.origin, byToken.origin]).toEqual([["user"], ["user"]]);
     expect(byToken.shape).toEqual(bySession.shape);
   });
 });

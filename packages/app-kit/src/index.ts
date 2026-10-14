@@ -4,18 +4,19 @@ export * from "@vivd-catalyst/ui";
 export {
   AppCallError,
   actions,
-  connections,
   createAppClient,
   createFrameTransport,
   getContext,
   navigate,
   onThemeChange,
   resize,
+  workflowRuns,
   type AppCallOptions,
   type AppClient,
   type Transport
 } from "./client";
 export { mountApp } from "./mount";
+export { useWorkflowRun, workflowRunEnded, type FollowedWorkflowRun } from "./workflow-run";
 export type {
   AppActionPermission,
   AppCallFailure,
@@ -24,6 +25,8 @@ export type {
   AppTheme,
   AppThemeChange,
   AppThemeMode,
+  AppWorkflowRun,
+  AppWorkflowRunStatus,
   HostMessage,
   PageMessage
 } from "./protocol";

@@ -1,7 +1,7 @@
-import type { LucideIcon } from "lucide-react";
 import type { ComponentType, ReactNode, Ref } from "react";
 import type { Asset, AssetSummary } from "@vivd-catalyst/api-client";
-import type { AvatarKind } from "@vivd-catalyst/ui";
+import type { AvatarKind, GenericIconKey } from "@vivd-catalyst/ui";
+import type { AvailableIn } from "../api/asset-writes";
 import type { TranslationKey } from "../i18n";
 import type { BuildWriteOutcome } from "./build-refusals";
 
@@ -17,6 +17,8 @@ export interface BuildAssetStart {
   name: string;
   /** The name people read. */
   title: string;
+  /** Where a new asset of a kind that `startsInWorkspace` starts available. */
+  availableIn?: AvailableIn;
   /** The definition a copy starts from. A new asset without it starts empty. */
   copyOf?: Record<string, unknown>;
 }
@@ -45,6 +47,11 @@ export interface BuildAssetEditorProps {
   saveBlocked?: boolean;
   /** The reader may change what belongs to the instance: its default and where an agent shows. */
   instanceWrite: boolean;
+  /**
+   * The workspace that owns the asset, or that a new one is made for, by its id. Absent for
+   * the instance's own. What the asset may name is read from it and from the instance.
+   */
+  owner?: string;
   /** The way back to the kind's list, for the start of the page head. */
   back: ReactNode;
   /** The page's own actions, for the end of the page head: History and the menu with Delete. */
@@ -71,7 +78,8 @@ interface BuildKindBase {
   description?: TranslationKey;
   /** The sentence of the empty list. An editable kind says it to a person who may create. */
   emptyText: TranslationKey;
-  icon: LucideIcon;
+  /** The kind's key in the icon registry: one icon per kind, the same everywhere. */
+  icon: GenericIconKey;
   /** Rows show an avatar with the name's initials. Without it they show the kind's icon. */
   avatar?: AvatarKind;
   /**
@@ -82,6 +90,12 @@ interface BuildKindBase {
   row?(asset: BuildAssetRow): { leading?: ReactNode; description?: string };
   /** What a row says after the asset's id, on the same line: such as the asset's description. */
   rowText?(asset: BuildAssetRow): string | undefined;
+  /**
+   * The line under a row's title in the kind's own words, in place of the asset's id and
+   * `rowText`, shown whole: a component, so it may read what the page knows, such as
+   * workspace names.
+   */
+  RowLine?: ComponentType<{ asset: BuildAssetRow }>;
   /** The row's badges, such as the default marker. */
   badges?(asset: BuildAssetRow, t: (key: TranslationKey) => string): ReactNode;
 }
@@ -108,11 +122,18 @@ export interface BuildAssetKind extends BuildKindBase {
   /** The body of the asset page, for an existing asset and for a new one. */
   Editor: ComponentType<BuildAssetEditorProps>;
   /**
+   * A new asset is available in the shared workspace it is made in: the dialog that starts
+   * it says where, and offers every workspace to whoever may change that.
+   */
+  startsInWorkspace?: true;
+  /**
    * The name people read of an asset that ships with the platform, and nothing for one of the
    * instance's own. Nobody changes or deletes a shipped asset here, because a release replaces
    * it: a person who may create one of the kind copies it and edits the copy.
    */
   shippedTitle?(asset: BuildAsset): string | undefined;
+  /** The CLI does not write the kind yet, so its list offers no CLI entry. */
+  withoutCli?: true;
 }
 
 /** What the frame hands a page that shows one asset and changes nothing of it. */
@@ -122,6 +143,8 @@ export interface BuildAssetViewProps {
   back: ReactNode;
   /** The open asset, as loaded. */
   asset: BuildAsset;
+  /** The kinds the reader sees in Build, for a page that names an asset of another kind. */
+  kinds: readonly BuildKind[];
 }
 
 /**

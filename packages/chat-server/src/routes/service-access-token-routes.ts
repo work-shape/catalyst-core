@@ -1,6 +1,11 @@
 import { apiOperations } from "@vivd-catalyst/api-contract";
 import { extractApiKey } from "@vivd-catalyst/auth";
-import { AppError, auditActorFromServicePrincipal } from "@vivd-catalyst/core";
+import {
+  AppError,
+  auditActorFromServicePrincipal,
+  auditActorFromUser,
+  isAuthenticatedServicePrincipal
+} from "@vivd-catalyst/core";
 import type { Route } from "../http/route";
 import type { ChatServerOptions } from "../types";
 
@@ -28,18 +33,30 @@ export function registerServiceAccessTokenRoutes(route: Route, options: ChatServ
       });
       throw error;
     }
-    await options.auditRecorder.record({
-      type: "auth.service_access_token_issued",
-      status: "success",
-      actor: auditActorFromServicePrincipal(issued.principal),
-      subject: issued.principal.credentialId,
-      correlationId,
-      metadata: {
-        servicePrincipalId: issued.principal.id,
-        credentialId: issued.principal.credentialId,
-        scopes: issued.principal.scopes
-      }
-    });
+    const { identity } = issued;
+    await options.auditRecorder.record(
+      isAuthenticatedServicePrincipal(identity)
+        ? {
+            type: "auth.service_access_token_issued",
+            status: "success",
+            actor: auditActorFromServicePrincipal(identity),
+            subject: identity.credentialId,
+            correlationId,
+            metadata: {
+              servicePrincipalId: identity.id,
+              credentialId: identity.credentialId,
+              scopes: identity.scopes
+            }
+          }
+        : {
+            type: "auth.personal_access_token_issued",
+            status: "success",
+            actor: auditActorFromUser(identity),
+            subject: identity.delegatedActor?.id,
+            correlationId,
+            metadata: { scopes: identity.keyScopes ? [...identity.keyScopes] : [] }
+          }
+    );
     return {
       accessToken: issued.accessToken,
       expiresAt: issued.expiresAt

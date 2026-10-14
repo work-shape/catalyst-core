@@ -225,6 +225,14 @@ describe("the list of Workflows", () => {
     expect(markup).toContain("Notify clients");
     expect(markup).toContain("Reads the clients and sends each of them a note.");
     expect(markup).toContain('href="/w/cw_1/workflows/notify-clients"');
+    // The card's target is named as one sentence with the Workflow's name, in either language.
+    expect(markup).toContain('aria-label="Open Notify clients"');
+    expect(render(listPage([summary]), "de")).toContain('aria-label="Notify clients öffnen"');
+    // The whole card opens the Workflow: the link to its page is the card's one target.
+    expect(markup.match(/data-card-target=""/gu)).toHaveLength(1);
+    expect(markup).toMatch(
+      /<a[^>]*data-card-target=""[^>]*href="\/w\/cw_1\/workflows\/notify-clients"/u
+    );
     // The id is a builder's: the row never shows it as text.
     expect(markup.replaceAll('href="/w/cw_1/workflows/notify-clients"', "")).not.toContain(
       "notify-clients"
@@ -529,6 +537,16 @@ describe("the runs of a Workflow", () => {
     expect(markup).toContain(t("workflows.run.failed"));
     expect(markup).toContain(t("workflows.run.done"));
     expect(markup).toContain("Ada Lovelace");
+  });
+
+  it("marks a test run of the draft among the runs", () => {
+    const rows = [
+      toWorkflowRun(runResource({ id: "wr_3", status: "done", mode: "test" })),
+      toWorkflowRun(runResource({ id: "wr_1", status: "done" }))
+    ];
+    const markup = render(page(runList({ rows })));
+    expect(markup.match(/data-test-run=""/gu)).toHaveLength(1);
+    expect(markup).toContain(t("workflows.run.testBadge"));
   });
 
   it("offers more runs where the instance has more", () => {

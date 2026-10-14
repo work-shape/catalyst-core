@@ -49,7 +49,11 @@ const publishedView = workflowAt({ publishedRevision: 4 });
 
 describe("how the draft of a Workflow stands beside what is published", () => {
   it("says that the draft differs where it is another revision than the published one", () => {
-    expect(ahead.draft).toEqual({ revision: 6, publishedRevision: 4 });
+    expect(ahead.draft).toEqual({
+      revision: 6,
+      publishedRevision: 4,
+      testForm: { fields: [], unsupported: [] }
+    });
     expect(draftState(ahead)).toBe("ahead");
   });
 
@@ -58,7 +62,7 @@ describe("how the draft of a Workflow stands beside what is published", () => {
   });
 
   it("says of a draft that was never published that it is not published, not that it differs", () => {
-    expect(unpublished.draft).toEqual({ revision: 1 });
+    expect(unpublished.draft).toEqual({ revision: 1, testForm: { fields: [], unsupported: [] } });
     expect(draftState(unpublished)).toBe("unpublished");
   });
 
@@ -126,7 +130,11 @@ describe("the draft of a Workflow over an instance", () => {
   it("reads the two pointers of the draft from the read of the asset", async () => {
     const { source } = instance();
     const workflow = await source.getWorkflow("cw_1", "month-end", signal);
-    expect(workflow.draft).toEqual({ revision: 6, publishedRevision: 4 });
+    expect(workflow.draft).toEqual({
+      revision: 6,
+      publishedRevision: 4,
+      testForm: { fields: [], unsupported: [] }
+    });
     expect(draftState(workflow)).toBe("ahead");
   });
 

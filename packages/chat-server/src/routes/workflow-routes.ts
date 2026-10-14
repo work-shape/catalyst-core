@@ -3,35 +3,23 @@ import {
   AppError,
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
-  hasAuthScope,
   isAuthenticatedServicePrincipal,
   type AccessResource,
   type ActorAccess,
   type AuthenticatedIdentity,
   type OperationAuthorization,
+  type OperationOrigin,
   type OperationResource,
   type WorkflowRunView,
   type WorkflowStepRunView
 } from "@vivd-catalyst/core";
 import { decide } from "../asset-access";
 import type { ModuleRoutes, RouteRegistration } from "../http/route";
+import { listedWorkflowActions, workflowOf } from "../workflow-listing";
 import type { WorkflowRunsPort } from "../workflow-runs-port";
 
 /** The module these operations belong to. */
 const WORKFLOWS_MODULE = "workflows";
-
-/** The rights an entry of the list names, each with the scope of the calls it opens. */
-const LISTED_ACTIONS = [
-  { action: WORKFLOW_ACTIONS.read, scope: apiOperations["workflows.list_runs"].scope },
-  { action: WORKFLOW_ACTIONS.use, scope: apiOperations["workflows.start"].scope }
-] as const;
-
-/** What a right on one Workflow is decided on: its name and, where it is stored, its asset. */
-const workflowOf = (name: string, assetId?: string): AccessResource => ({
-  kind: WORKFLOW_ASSET_KIND,
-  name,
-  ...(assetId === undefined ? {} : { assetId })
-});
 
 /** What a caller may do with a run, decided on the Workflow of the run or on no Workflow. */
 type RunDecision = (
@@ -40,7 +28,7 @@ type RunDecision = (
 ) => OperationAuthorization;
 
 /**
- * The runs of a Workflow: the start by hand, the reads and the cancel. Each is an operation
+ * The runs of a Workflow: the start by hand, the test run of its draft, the reads and the cancel. Each is an operation
  * of the registry and brings its check, because the right is decided on the Workflow the
  * call or its run names. The right of the caller opens the call and nothing more: a run acts
  * with the grants of the service principal its Workflow names.
@@ -95,6 +83,18 @@ function registerWorkflowRoutes(
     (access: ActorAccess): RunDecision =>
     (_run, resource) =>
       decide(access, WORKFLOW_ACTIONS.read, resource);
+  /**
+   * Whoever may read its Workflow may read a run. An App frame also reads the run its viewer
+   * started through one of its actions: the right to start is not the right to read, and the
+   * App shows the starter what the Workflow answers whoever starts it. The frame admits only
+   * runs of the Workflows its manifest starts.
+   */
+  const mayReadRun =
+    (access: ActorAccess, actor: AuthenticatedIdentity, origin: OperationOrigin): RunDecision =>
+    (run, resource) =>
+      origin.kind === "app" && run && startedBy(run, actor)
+        ? { allowed: true }
+        : decide(access, WORKFLOW_ACTIONS.read, resource);
   /** Whoever started the run may end it, and whoever may write its Workflow. */
   const mayCancel =
     (access: ActorAccess, actor: AuthenticatedIdentity): RunDecision =>
@@ -113,11 +113,7 @@ function registerWorkflowRoutes(
     // through: the right on this Workflow and a credential whose scope reaches the call.
     execute: async (_input, { access, actor }) => ({
       items: (await required().listWorkflows()).flatMap(({ assetId, ...workflow }) => {
-        const resource = workflowOf(workflow.id, assetId);
-        const actions = LISTED_ACTIONS.filter(
-          ({ action, scope }) =>
-            hasAuthScope(actor, scope) && decide(access, action, resource).allowed
-        ).map(({ action }) => action);
+        const actions = listedWorkflowActions(access, actor, workflowOf(workflow.id, assetId));
         return actions.length > 0 ? [{ ...workflow, actions }] : [];
       })
     })
@@ -140,6 +136,39 @@ function registerWorkflowRoutes(
       )
   });
 
+  // A test run of the draft (ADR-0031). It acts as the person who starts it, bounded by the
+  // Workflow's principal, so it needs the right to write the Workflow and nothing that lends
+  // the principal's grants: publishing still asks that. Only a person starts one.
+  route.operation(apiOperations["workflows.test"], {
+    authorize: async (input, { access, actor }) =>
+      isAuthenticatedServicePrincipal(actor)
+        ? {
+            allowed: false,
+            action: WORKFLOW_ACTIONS.write,
+            reason: "no_grant",
+            message: "Only a person starts a test run of a Workflow's draft"
+          }
+        : decide(access, WORKFLOW_ACTIONS.write, await resourceOf(input.workflow)),
+    resource: workflowResource,
+    module: WORKFLOWS_MODULE,
+    execute: async (input, context) => {
+      const { actor } = context;
+      // The check above refused every other caller; the types do not carry it here.
+      if (isAuthenticatedServicePrincipal(actor)) {
+        throw new AppError("FORBIDDEN", "Only a person starts a test run of a Workflow's draft");
+      }
+      return toRunResource(
+        await required().test({
+          workflow: input.workflow,
+          input: input.input,
+          startedBy: actor,
+          operationRunId: context.runId,
+          correlationId: context.correlationId
+        })
+      );
+    }
+  });
+
   route.operation(apiOperations["workflows.list_runs"], {
     authorize: async (input, { access }) =>
       decide(access, WORKFLOW_ACTIONS.read, await resourceOf(input.workflow)),
@@ -155,10 +184,12 @@ function registerWorkflowRoutes(
   });
 
   route.operation(apiOperations["workflows.get_run"], {
-    authorize: (input, { access }) => authorizeOnRun(input.runId, mayRead(access)),
+    authorize: (input, { access, actor, origin }) =>
+      authorizeOnRun(input.runId, mayReadRun(access, actor, origin)),
     resource: runResource,
     module: WORKFLOWS_MODULE,
-    execute: async (input, { access }) => toRunResource(await runOf(input.runId, mayRead(access)))
+    execute: async (input, { access, actor, origin }) =>
+      toRunResource(await runOf(input.runId, mayReadRun(access, actor, origin)))
   });
 
   route.operation(apiOperations["workflows.list_step_runs"], {

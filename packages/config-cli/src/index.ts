@@ -3,6 +3,8 @@ import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import { assetHelpText, runAssetCommand } from "./asset-commands";
 import { runConfigCommand, type ConfigCommandName, type ConfigCommandOptions } from "./commands";
+import type { AssetKindName } from "./command-support";
+import { loginCommand, logoutCommand } from "./login";
 
 export * from "./api";
 export * from "./commands";
@@ -16,11 +18,20 @@ export interface CliRuntimeOptions {
   env?: Readonly<Record<string, string | undefined>>;
   stdout?: (text: string) => void;
   stderr?: (text: string) => void;
+  /** Waits between tries. Tests pass one that does not wait. */
+  sleep?: (milliseconds: number) => Promise<void>;
 }
 
 const helpText = `Usage: catalyst config <command> [options]
+       catalyst login --instance <name-or-url>
+       catalyst logout --instance <name-or-url>
 
 Sync local config assets with a live Catalyst instance.
+
+Login:
+  login      Show a connect code, wait until you confirm it in Settings, API keys, and
+             save the personal API key it issues, readable by you alone
+  logout     Forget the saved key of an instance; revoke it in Settings
 
 Commands:
   pull       Sync remote config assets into the local working copy
@@ -28,20 +39,40 @@ Commands:
   diff       Show local changes, remote newer assets, and conflicts
   validate   Validate local assets and remote references
   list       List local and remote config assets and their sync status
-  show       Print a remote asset: show <agent|skill> <name>
+  show       Print a remote asset: show <agent|skill|guardrail> <name>
 
 Options:
   --instance <name-or-url>  Manifest instance name or direct URL
   --dir <working-copy-dir>  Directory containing catalyst.yaml (default: .)
   --prune                   Mirror on push, deleting the remote-only assets the last pull
                             saw
-  --only <agent:name|skill:name>
+  --only <agent:name|skill:name|guardrail:name>
                             Sync selected assets; repeatable on push/pull
+  --workspace <id>          On pull: bind the working copy to the workspace and hold
+                            what it owns
   --help                    Show this help
 
 Environment:
-  CATALYST_API_KEY  API key exchanged for a short-lived access token. Create one
-                    under Administration, API Access
+  CATALYST_API_KEY      API key exchanged for a short-lived access token. It wins over
+                        a key 'catalyst login' saved
+  CATALYST_CONFIG_HOME  Folder of the saved keys (default: ~/.config/catalyst)
+
+A working copy that belongs to one Namespace names it beside the instance's url in
+catalyst.yaml, as 'namespace: kai-'. Its push names that Namespace, as the instance asks
+of everyone but the holder of the release right; its pull, diff and list read only the
+assets the key may read, never the instance's version or default agent.
+
+A working copy bound to a workspace names it the same way, as 'workspace: <id>', which the
+first 'catalyst config pull --workspace <id>' writes. It holds what that workspace owns, and
+everything its push creates is owned by that workspace, guardrails included. Its push is never
+a release: a new agent starts hidden until an instance admin offers it. A working copy without
+either holds the instance's own assets.
+
+Guardrails join the working copy where catalyst.yaml lists their globs under 'guardrails',
+such as 'guardrails/*/guardrail.yaml'. Each is a folder with its guardrail.yaml and, for a
+model_judge check, its instruction in check.md. Guardrails are no part of a release: a push
+writes each as its draft with assets.put after the batch, which needs the config_assets:write
+scope. Publishing is a step of its own.
 `;
 
 export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): Promise<number> {
@@ -50,6 +81,9 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
   if (argv.length === 0 || argv[0] === "--help" || argv[0] === "-h") {
     stdout(`${assetHelpText}\n${helpText}`);
     return 0;
+  }
+  if (argv[0] === "login" || argv[0] === "logout") {
+    return runLoginCommand(argv[0], argv.slice(1), runtime, stdout, stderr);
   }
   if (argv[0] !== "config") {
     return runAssetCommand(argv, {
@@ -85,6 +119,7 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
         force: { type: "boolean", default: false },
         prune: { type: "boolean", default: false },
         only: { type: "string", multiple: true },
+        workspace: { type: "string" },
         help: { type: "boolean", short: "h", default: false }
       },
       allowPositionals: true,
@@ -106,16 +141,19 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
       stderr("--only is only valid with 'catalyst config push' or 'catalyst config pull'.\n");
       return 2;
     }
+    if (parsed.values.workspace !== undefined && command !== "pull") {
+      stderr(
+        "--workspace is only valid with 'catalyst config pull', which binds the working copy.\n"
+      );
+      return 2;
+    }
     if (parsed.values.prune && parsed.values.only) {
       stderr("--prune cannot be combined with --only.\n");
       return 2;
     }
     if (command === "show") {
-      if (
-        parsed.positionals.length !== 2 ||
-        (parsed.positionals[0] !== "agent" && parsed.positionals[0] !== "skill")
-      ) {
-        stderr("Usage: catalyst config show <agent|skill> <name>\n");
+      if (parsed.positionals.length !== 2 || !isShownKind(parsed.positionals[0])) {
+        stderr("Usage: catalyst config show <agent|skill|guardrail> <name>\n");
         return 2;
       }
     } else if (parsed.positionals.length > 0) {
@@ -129,11 +167,9 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
       ...(parsed.values.force ? { force: true } : {}),
       ...(parsed.values.prune ? { prune: true } : {}),
       ...(parsed.values.only === undefined ? {} : { only: parsed.values.only }),
-      ...(command === "show"
-        ? {
-            assetKind: parsed.positionals[0] as "agent" | "skill",
-            assetName: parsed.positionals[1]!
-          }
+      ...(parsed.values.workspace === undefined ? {} : { workspace: parsed.values.workspace }),
+      ...(command === "show" && isShownKind(parsed.positionals[0])
+        ? { assetKind: parsed.positionals[0], assetName: parsed.positionals[1]! }
         : {}),
       ...(runtime.fetchImpl === undefined ? {} : { fetchImpl: runtime.fetchImpl }),
       ...(runtime.env === undefined ? {} : { env: runtime.env }),
@@ -145,6 +181,49 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
     stderr(`${error instanceof Error ? error.message : String(error)}\n`);
     return 2;
   }
+}
+
+async function runLoginCommand(
+  command: "login" | "logout",
+  args: string[],
+  runtime: CliRuntimeOptions,
+  stdout: (text: string) => void,
+  stderr: (text: string) => void
+): Promise<number> {
+  let parsed;
+  try {
+    parsed = parseArgs({
+      args,
+      options: {
+        instance: { type: "string" },
+        dir: { type: "string" },
+        help: { type: "boolean", short: "h", default: false }
+      },
+      strict: true
+    });
+  } catch (error) {
+    stderr(`${error instanceof Error ? error.message : String(error)}\n`);
+    return 2;
+  }
+  if (parsed.values.help) {
+    stdout(helpText);
+    return 0;
+  }
+  const options: ConfigCommandOptions = {
+    cwd: runtime.cwd ?? process.cwd(),
+    ...(parsed.values.dir === undefined ? {} : { dir: parsed.values.dir }),
+    ...(parsed.values.instance === undefined ? {} : { instance: parsed.values.instance }),
+    ...(runtime.fetchImpl === undefined ? {} : { fetchImpl: runtime.fetchImpl }),
+    ...(runtime.env === undefined ? {} : { env: runtime.env }),
+    ...(runtime.sleep === undefined ? {} : { sleep: runtime.sleep }),
+    stdout,
+    stderr
+  };
+  return command === "login" ? loginCommand(options) : logoutCommand(options);
+}
+
+function isShownKind(value: string | undefined): value is AssetKindName {
+  return value === "agent" || value === "skill" || value === "guardrail";
 }
 
 function isConfigCommand(value: string): value is ConfigCommandName {

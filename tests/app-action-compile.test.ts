@@ -201,6 +201,60 @@ describe("the action files of a Page", () => {
     ]);
   });
 
+  // Fails without the change: a YAML file of `actions/` with another ending was passed over, so
+  // the action was missing at the first call, and a missing key read "expected string, received
+  // undefined".
+  it("tell the author the fix for a misnamed file, a missing key and a line that is no action's", async () => {
+    expect(
+      await errorsOf(
+        page(
+          { connections: ["crm"], entry: "index.html" },
+          { "actions/load.yaml": "connection: crm\noperation: list\neffect: reading\n" }
+        )
+      )
+    ).toEqual([
+      {
+        file: "actions/load.yaml",
+        code: "action_invalid",
+        message: expect.stringContaining("is the file 'actions/load.action.yaml'")
+      }
+    ]);
+    expect(
+      await errorsOf(
+        page(
+          { connections: ["crm"], entry: "index.html" },
+          { "actions/load.action.yaml": "connection: crm\neffect: reading\n" }
+        )
+      )
+    ).toEqual([
+      {
+        file: "actions/load.action.yaml",
+        code: "action_invalid",
+        message: expect.stringMatching(
+          /^'operation' is missing: the name of an operation the Connection offers/u
+        )
+      }
+    ]);
+    expect(
+      await errorsOf(
+        page(
+          {
+            connections: ["crm"],
+            entry: "index.html",
+            actions: [{ name: "load", kind: "connection", effect: "reading" }]
+          },
+          { "actions/load.action.yaml": "connection: crm\noperation: list\neffect: reading\n" }
+        )
+      )
+    ).toEqual([
+      {
+        file: "app.yaml",
+        code: "manifest_invalid",
+        message: expect.stringContaining("needs no line")
+      }
+    ]);
+  });
+
   it("names the limit a Page with too many actions runs into", async () => {
     const files = Object.fromEntries(
       Array.from({ length: APP_MAX_ACTIONS + 1 }, (_, index) => [
@@ -268,6 +322,130 @@ describe("the parameters of a call", () => {
         applyAppActionMapping(JSON.parse('{"__proto__": "{{customer}}"}'), { customer: "x" })
       )
     ).toEqual(["__proto__"]);
+  });
+});
+
+// APP-6a. Fails without it: an action file named a Connection or was refused, so no App
+// could start a Workflow.
+describe("an action file that starts a Workflow", () => {
+  const startVisit = `workflow: visit-log-entries
+description: Records one visit.
+input:
+  schema: { type: object, properties: { page: { type: string } }, required: [page] }
+  mapping: { page: "{{page}}", source: app }
+`;
+  const withKit = (kit: string, files: Record<string, string>, manifest = {}) =>
+    buildPage({
+      files: pageFiles({
+        "app.yaml": JSON.stringify({
+          id: "visits",
+          name: "Visits",
+          kit,
+          entry: "index.html",
+          ...manifest
+        }),
+        "index.html": "<!doctype html><title>Visits</title><p>Visits</p>",
+        ...files
+      })
+    });
+
+  it("is compiled as a changing action of the Workflow it names, with no Connection listed", async () => {
+    const built = await withKit("1.3.0", { "actions/log-visit.action.yaml": startVisit });
+    if (built.status !== "built") throw new Error(JSON.stringify(built.errors));
+
+    expect(compiledActionsOf(built.manifest)).toEqual([
+      {
+        name: "log-visit",
+        kind: "workflow",
+        file: "actions/log-visit.action.yaml",
+        effect: "changing",
+        description: "Records one visit.",
+        workflow: "visit-log-entries",
+        input: {
+          schema: {
+            type: "object",
+            properties: { page: { type: "string" } },
+            required: ["page"]
+          },
+          mapping: { page: "{{page}}", source: "app" }
+        }
+      }
+    ]);
+    expect(applyAppActionMapping({ page: "{{page}}", source: "app" }, { page: "/a" })).toEqual({
+      page: "/a",
+      source: "app"
+    });
+  });
+
+  it("is refused in a Page of a kit that cannot follow the run, and with keys of a Connection action", async () => {
+    expect(
+      await errorsOf(withKit("1.2.0", { "actions/log-visit.action.yaml": startVisit }))
+    ).toEqual([
+      {
+        file: "actions/log-visit.action.yaml",
+        code: "action_invalid",
+        message:
+          "The action starts the Workflow 'visit-log-entries', and the manifest names kit 1.2.0. An App that starts a Workflow names kit 1.3.0 or later in app.yaml."
+      }
+    ]);
+    expect(
+      await errorsOf(
+        withKit("1.3.0", {
+          "actions/log-visit.action.yaml":
+            "workflow: visit-log-entries\neffect: reading\noperation: x\n"
+        })
+      )
+    ).toEqual([
+      {
+        file: "actions/log-visit.action.yaml",
+        code: "action_invalid",
+        message:
+          "Unknown keys 'effect', 'operation'. An action file that starts a Workflow holds workflow, description, policy and input with schema and mapping."
+      }
+    ]);
+    // A mapping that names no parameter is refused as in every action file.
+    expect(
+      await errorsOf(
+        withKit("1.3.0", {
+          "actions/log-visit.action.yaml":
+            'workflow: visit-log-entries\ninput:\n  mapping: { page: "{{path}}" }\n'
+        })
+      )
+    ).toEqual([
+      {
+        file: "actions/log-visit.action.yaml",
+        code: "action_invalid",
+        message: expect.stringContaining("has no parameter 'path'")
+      }
+    ]);
+  });
+
+  it("is refused where the manifest calls it reading or names a Connection for it", async () => {
+    const declared = (line: Record<string, unknown>) =>
+      errorsOf(
+        withKit(
+          "1.3.0",
+          { "actions/log-visit.action.yaml": startVisit },
+          { connections: ["crm"], actions: [{ name: "log-visit", ...line }] }
+        )
+      );
+
+    expect(await declared({ effect: "reading" })).toEqual([
+      {
+        file: "app.yaml",
+        code: "action_invalid",
+        message:
+          "The manifest calls the action 'log-visit' reading. It starts a Workflow, which always changes something: say 'effect: changing' or leave the line out."
+      }
+    ]);
+    expect(await declared({ effect: "changing", connection: "crm" })).toEqual([
+      {
+        file: "app.yaml",
+        code: "action_invalid",
+        message:
+          "The manifest names the Connection 'crm' for the action 'log-visit', which starts the Workflow 'visit-log-entries' and calls no Connection. Remove 'connection'."
+      }
+    ]);
   });
 });
 

@@ -7,6 +7,7 @@ export {
   type CardPadding,
   type CardProps
 } from "./card";
+export { CardReachable, CardTarget, type CardTargetProps } from "./card-target";
 export {
   Disclosure,
   DisclosureContent,
@@ -19,9 +20,16 @@ export { PageLead } from "./page-lead";
 export {
   PageHeader,
   PageHeaderBack,
+  PageHeaderShellAction,
   type PageHeaderBackProps,
   type PageHeaderProps,
   type PageHeaderVariant
 } from "./page-header";
 export { Section, type SectionLayout, type SectionProps } from "./section";
-export { SurfaceFrame, type SurfaceFrameProps } from "./surface-frame";
+export {
+  SurfaceFrame,
+  SurfaceHeader,
+  type SurfaceFrameProps,
+  type SurfaceHeaderProps
+} from "./surface-frame";
+export { SplitHandle, type SplitHandleProps } from "./split-handle";

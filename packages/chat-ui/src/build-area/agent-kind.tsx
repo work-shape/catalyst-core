@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { Bot } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@vivd-catalyst/ui";
 import { useAgentPlacementMutations } from "../api/agent-placement-mutations";
@@ -33,19 +32,20 @@ export const agentKind: BuildAssetKind = {
   emptyText: "build.agentsEmpty",
   emptyReadOnlyText: "build.agentsEmptyReadOnly",
   missingText: "build.agentMissing",
-  icon: Bot,
+  icon: "agent",
   avatar: "agent",
   // A row says what the agent does, as its card on the Agents page does, and never its id.
   row: (asset) => ({ description: asset.description?.trim() || undefined }),
   badges: (asset, t) => (asset.isDefault ? <Badge>{t("configDefaultAgent")}</Badge> : null),
-  Editor: AgentAssetEditor
+  Editor: AgentAssetEditor,
+  startsInWorkspace: true
 };
 
 /** The agent form on the asset page, with what it reads beside the agent and the changes it can make. */
 function AgentAssetEditor(frame: BuildAssetEditorProps) {
   const { apiBaseUrl, authScope, client, user, config } = useSettingsPage();
   const { locale, t } = useTranslation();
-  const { asset, start, instanceWrite } = frame;
+  const { asset, start, instanceWrite, owner } = frame;
   const management = config.features.configAssets;
   const api = { apiBaseUrl, authScope, client };
   const placement = useAgentPlacementMutations({
@@ -62,14 +62,33 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
   const connectionTools = useConnectionToolChoice();
   const appTools = useAppToolsRead();
   const [skillSearch, setSkillSearch] = useState("");
+  // An agent names skills of its own owner and of the instance: a workspace's agent is offered
+  // that workspace's skills first, then the instance's own.
   const skillsQuery = useQuery({
-    queryKey: [...workspaceQueryKeys.assets(apiBaseUrl, authScope), "choice", "skill", skillSearch],
-    queryFn: ({ signal }) =>
-      client.assets.list({
-        params: { kind: "skill" },
-        query: { limit: SKILL_CHOICE_PAGE_SIZE, ...(skillSearch ? { text: skillSearch } : {}) },
-        signal
-      }),
+    queryKey: [
+      ...workspaceQueryKeys.assets(apiBaseUrl, authScope),
+      "choice",
+      "skill",
+      owner ?? "",
+      skillSearch
+    ],
+    queryFn: async ({ signal }) => {
+      const query = {
+        limit: SKILL_CHOICE_PAGE_SIZE,
+        ...(skillSearch ? { text: skillSearch } : {})
+      };
+      const [own, instance] = await Promise.all([
+        owner === undefined
+          ? undefined
+          : client.assets.list({
+              params: { kind: "skill" },
+              query: { ...query, workspaceId: owner },
+              signal
+            }),
+        client.assets.list({ params: { kind: "skill" }, query, signal })
+      ]);
+      return { items: [...(own?.items ?? []), ...instance.items] };
+    },
     placeholderData: (previous) => previous
   });
   const administeredWorkspacesQuery = useAdministeredCollaborationWorkspacesQuery({

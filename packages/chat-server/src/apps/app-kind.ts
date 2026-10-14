@@ -234,6 +234,7 @@ export function createAppAssetKind(): WorkflowAssetKind {
       // holds a file set as before; one that has a commit holds both.
       content: "repository",
       owners: ["workspace"],
+      draftCalls: true,
       validate: () => [],
       // Asked for the Apps a write adds or changes only: a stored App that names a Connection
       // a later release no longer seeds never stands in the way of a write to another asset.

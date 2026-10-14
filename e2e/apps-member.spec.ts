@@ -177,7 +177,8 @@ test("a member who uses an App is shown the App and a builder its revision", asy
   await shoot(memberPage, "apps-list-member", memberListReady);
 
   // The member's head names the App and offers its link as one button, without a menu.
-  await memberList.getByRole("link", { name: "Open", exact: true }).click();
+  // The card's Open is named with the App it opens.
+  await memberList.getByRole("link", { name: `Open ${appName}`, exact: true }).click();
   await expect(memberPage).toHaveURL(new RegExp(`${appPath}$`, "u"));
   const memberView = memberPage.getByTestId("app-view");
   const memberHead = memberView.locator("header").first();
@@ -208,6 +209,20 @@ test("a member who uses an App is shown the App and a builder its revision", asy
     });
   }
   await expect(memberHead.getByRole("button", { name: "Copy link" })).toBeVisible();
+  // DOCK-1: a shared link never carries the conversation of the dock beside the App.
+  const docked = await requestWithOrigin(memberPage, "post", `${apiOrigin}/api/v1/conversations`, {
+    data: { title: "Beside the App" }
+  });
+  expect(docked.ok()).toBe(true);
+  const dockedId = idSchema.parse(await docked.json()).id;
+  await memberPage.goto(`${appPath}?chat=${dockedId}`);
+  await expect(memberPage.locator("[data-dock-chat]")).toHaveAttribute("data-chat-mode", "dock");
+  await memberViewReady();
+  await memberHead.getByRole("button", { name: "Copy link" }).click();
+  await expect(memberHead.getByRole("button", { name: "Link copied" })).toBeVisible();
+  expect(await memberPage.evaluate(() => navigator.clipboard.readText())).toBe(
+    `${uiOrigin}${appPath}`
+  );
   await memberContext.close();
 
   // The builder's head keeps the revision and the menu, and does not name the workspace.

@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -9,7 +10,8 @@ import {
   heldSkillChange,
   people,
   seedDemo,
-  workflowCheckQuestions
+  workflowCheckQuestions,
+  workspaceAssets
 } from "@vivd-catalyst/demo/seed";
 import {
   createdBy,
@@ -44,6 +46,8 @@ const seeded = useSeededInstance({
   instanceAssets: resolve("tests/fixtures/e2e-assets"),
   superadmin: { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" },
   tools: [recordNote],
+  // The fixture config names this key of the Secret Store, as the suite's runner sets it.
+  env: { E2E_SECRET_STORE_KEY: randomBytes(32).toString("base64") },
   // The Apps of the seed are built for real here, so a source that does not build fails.
   appBuild: "sandbox"
 });
@@ -64,6 +68,7 @@ describe("the demo seed on the fixture instance", () => {
       "connection grant rows": 0,
       workspaces: 1,
       "workspace members": 4,
+      "workspace assets": 2,
       apps: 2,
       workflows: 1
     });
@@ -150,10 +155,14 @@ describe("the demo seed on the fixture instance", () => {
     const own = [
       "application_assistant",
       "research_assistant",
-      "platform-guide",
+      "platform-docs",
       "workflow-authoring"
     ];
-    const assets = seeded().before.assets.filter((asset) => !own.includes(asset.name));
+    // The company's workspace owns two of its own, which the test below reads.
+    const workspaceOwn = [workspaceAssets.agent.name, workspaceAssets.skill.name];
+    const assets = seeded().before.assets.filter(
+      (asset) => !own.includes(asset.name) && !workspaceOwn.includes(asset.name)
+    );
     expect(defaultAgentName).toBe("application_assistant");
     // The company's eight and the one Kai Berger made.
     expect(assets.filter((asset) => asset.kind === "agent")).toHaveLength(9);
@@ -176,6 +185,22 @@ describe("the demo seed on the fixture instance", () => {
       [1, "user"]
     ]);
     expect(revisions[1]?.actor?.displayLabel).toBe("Jonas Brandt");
+  });
+
+  it("leaves a skill and an agent the company's workspace owns, the agent offered there alone", async () => {
+    const { client, assets, workspace } = seeded().before;
+    const workspaceId = workspace?.id ?? "";
+    expect(workspaceId).not.toBe("");
+    for (const [kind, name] of [
+      ["skill", workspaceAssets.skill.name],
+      ["agent", workspaceAssets.agent.name]
+    ] satisfies [string, string][]) {
+      const stored = await client.assets.get({ params: { kind, name }, query: { workspaceId } });
+      expect(stored.scope, name).toEqual({ kind: "workspace", workspaceId });
+    }
+    const agent = assets.find((asset) => asset.name === workspaceAssets.agent.name);
+    expect(agent).toMatchObject({ kind: "agent", revision: 1 });
+    expect(agent?.shown).not.toBe("all");
   });
 
   it("writes allow and deny rows in Namespaces and on single assets", () => {

@@ -105,15 +105,15 @@ describe("a grant for a service principal on one Connection", () => {
     expect(byKey.authorize("connection.use")).toEqual({ allowed: false, reason: "no_grant" });
   });
 
-  it("answers beside the principal's two legacy permissions and widens neither", async () => {
+  it("answers beside the rows of the principal's two legacy permissions and widens neither", async () => {
     const s = await setup();
     const crm = await s.t.seed("crm", forWorkflows);
     await s.grantTo(crm);
 
     const access = await createAuthorizer(s.t.stores.access).forActor(runIdentity(s.principal));
 
-    expect(access.authorize("agent.read")).toEqual({ allowed: true, source: "legacy" });
-    expect(access.authorize("config_assets.read")).toEqual({ allowed: true, source: "legacy" });
+    expect(access.authorize("agent.read")).toEqual({ allowed: true, source: "grant" });
+    expect(access.authorize("config_assets.read")).toEqual({ allowed: true, source: "grant" });
     expect(access.authorize("assets.release")).toEqual({ allowed: false, reason: "no_grant" });
     expect(access.authorize("users.manage")).toEqual({ allowed: false, reason: "no_grant" });
     const effective = await s.t.expectOk(s.t.root.id, "permissions.effective", {
@@ -122,8 +122,8 @@ describe("a grant for a service principal on one Connection", () => {
     expect(effective.json()).toEqual({
       holderActive: true,
       items: [
-        { action: "agent.read", effect: "allow", scopeKind: "instance", source: "legacy" },
-        { action: "skill.read", effect: "allow", scopeKind: "instance", source: "legacy" },
+        { action: "agent.read", effect: "allow", scopeKind: "instance", source: "grant" },
+        { action: "skill.read", effect: "allow", scopeKind: "instance", source: "grant" },
         {
           action: "connection.use",
           effect: "allow",
@@ -639,7 +639,9 @@ describe("a disabled or deleted service principal", () => {
 
     expect(deleted?.id).toBe(principal.id);
     const left = await withTestSql(async (sql) => ({
-      grants: await sql<{ id: string }[]>`select id from permission_grants order by id`,
+      // The rows of the administrator who manages API access are hers and stay.
+      grants: await sql<{ id: string }[]>`
+        select id from permission_grants where holder_id <> ${s.ops.id} order by id`,
       keys: await sql<{ count: number }[]>`select count(*)::int as count from api_credentials`,
       principals: await sql<
         { count: number }[]

@@ -5,7 +5,12 @@ import {
   FILE_SET_MAX_FILE_BYTES,
   FILE_SET_MAX_FILES,
   FILE_SET_MAX_TOTAL_BYTES,
+  INSTANCE_ASSET_SCOPE,
+  WORKFLOW_ACTIONS,
+  WORKFLOW_ASSET_KIND,
+  asUserId,
   hasAuthScope,
+  isAuthenticatedServicePrincipal,
   isPrincipalGrantableAction,
   type ActorAccess,
   type AssetKindActions,
@@ -13,6 +18,7 @@ import {
   type OperationScope
 } from "@vivd-catalyst/core";
 import type { ChatServerOptions } from "./types";
+import { listedWorkflowActions, workflowOf } from "./workflow-listing";
 
 // Where a caller is: the instance, its release, the asset kinds and what the caller may do with
 // them. `platform.context.get` answers it, and so does the agent's tool that projects it.
@@ -46,18 +52,51 @@ const VERBS = ["read", "write", "delete", "publish"] as const;
  * Namespace, without a name the instance's own assets as a whole.
  */
 export function usableActions(options: ContextOptions, caller: Caller, name?: string): string[] {
+  return actionsOn(options, caller, name === undefined ? {} : { name });
+}
+
+/** The actions of the kinds the place lets the caller use, where its credential lets it call. */
+function actionsOn(
+  options: ContextOptions,
+  caller: Caller,
+  place: { name?: string; workspaceId?: string }
+): string[] {
   const usable = VERBS.filter((verb) => hasAuthScope(caller.actor, SCOPE_OF_VERB[verb]));
-  return options.configAssets.kinds.kinds.flatMap((kind) =>
-    usable
-      .flatMap((verb) => kind.actions[verb] ?? [])
-      .filter(
-        (action) =>
-          caller.access.authorize(action, {
-            kind: kind.kind,
-            ...(name === undefined ? {} : { name })
-          }).allowed
-      )
-  );
+  return options.configAssets.kinds.kinds
+    .filter((kind) => place.workspaceId === undefined || kind.owners.includes("workspace"))
+    .flatMap((kind) =>
+      usable
+        .flatMap((verb) => kind.actions[verb] ?? [])
+        .filter((action) => caller.access.authorize(action, { kind: kind.kind, ...place }).allowed)
+    );
+}
+
+/**
+ * The workspaces whose own assets the caller can use an action on: every Shared Workspace and
+ * the caller's own workspaces are asked, and the ones with none are left out. A workspace is
+ * named to nobody who holds nothing there.
+ */
+async function usableWorkspaces(
+  options: ContextOptions,
+  caller: Caller
+): Promise<PlatformContext["workspaces"]> {
+  const { clientInstanceId } = options;
+  const [shared, own] = await Promise.all([
+    options.stores.workspaces.listSharedWorkspaces({ clientInstanceId }),
+    isAuthenticatedServicePrincipal(caller.actor)
+      ? []
+      : options.stores.workspaces.listWorkspacesForUser({
+          clientInstanceId,
+          userId: asUserId(caller.actor.id)
+        })
+  ]);
+  const workspaces = new Map([...shared, ...own].map((workspace) => [workspace.id, workspace]));
+  const memberOf = new Set(own.map((workspace) => workspace.id));
+  return [...workspaces.values()].flatMap((workspace) => {
+    const actions = actionsOn(options, caller, { workspaceId: workspace.id });
+    const { id, name, kind } = workspace;
+    return actions.length > 0 ? [{ id, name, kind, member: memberOf.has(id), actions }] : [];
+  });
 }
 
 /**
@@ -93,6 +132,39 @@ function principalActionsOf(
 }
 
 /**
+ * The section rows of the sidebar that belong to no workspace and are there for this caller.
+ * The Workflows row stands for whoever may build a Workflow, so the first one has a place to
+ * go, and otherwise only while `workflows.list` names one to this caller: the list's own
+ * check is asked of each published Workflow until one passes.
+ */
+async function visibleSections(
+  options: ContextOptions,
+  caller: Caller
+): Promise<PlatformContext["visibleSections"]> {
+  if (!options.modules.isEnabled("workflows")) {
+    return [];
+  }
+  const writes =
+    hasAuthScope(caller.actor, SCOPE_OF_VERB.write) &&
+    (caller.access.authorize(WORKFLOW_ACTIONS.write, { kind: WORKFLOW_ASSET_KIND }).allowed ||
+      caller.access.holdsGrantAt(WORKFLOW_ACTIONS.write, ["namespace", "asset"]));
+  if (writes) {
+    return ["workflows"];
+  }
+  const listed = await options.configAssets.store.listConfigAssetPage({
+    clientInstanceId: options.clientInstanceId,
+    kind: WORKFLOW_ASSET_KIND,
+    scope: INSTANCE_ASSET_SCOPE,
+    limit: 1,
+    readable: (asset) =>
+      asset.published === true &&
+      listedWorkflowActions(caller.access, caller.actor, workflowOf(asset.name, asset.id)).length >
+        0
+  });
+  return listed.length > 0 ? ["workflows"] : [];
+}
+
+/**
  * The context of one caller. A Namespace is listed for a caller who holds at least one action
  * of a registered kind in it, through any grant that covers its names, and whose credential
  * carries the scope the action is called with: the answer never names an action this
@@ -104,9 +176,11 @@ export async function readPlatformContext(
 ): Promise<PlatformContext> {
   const { kinds } = options.configAssets.kinds;
   // The Namespaces alone: no count is shown here, so none is computed.
-  const namespaces = await options.stores.access.listNamespaceRecords({
-    clientInstanceId: options.clientInstanceId
-  });
+  const [namespaces, sections, workspaces] = await Promise.all([
+    options.stores.access.listNamespaceRecords({ clientInstanceId: options.clientInstanceId }),
+    visibleSections(options, caller),
+    usableWorkspaces(options, caller)
+  ]);
   return {
     instance: {
       id: options.clientInstanceId,
@@ -118,6 +192,7 @@ export async function readPlatformContext(
       plural: kind.plural,
       lifecycle: kind.lifecycle,
       representation: kind.representation,
+      owners: [...kind.owners],
       actions: { ...kind.actions },
       ...principalActionsOf(options, kind),
       ...(kind.representation === "files"
@@ -140,6 +215,8 @@ export async function readPlatformContext(
       return actions.length > 0
         ? [{ prefix: namespace.prefix, displayName: namespace.displayName, actions }]
         : [];
-    })
+    }),
+    workspaces,
+    visibleSections: sections
   };
 }

@@ -23,6 +23,7 @@ import {
   asToolCallId,
   createAuthorizer,
   createConnectorTypeRegistry,
+  egressOriginOf,
   type AuthenticatedIdentity,
   type Authorizer,
   type CentralPolicySetting,
@@ -108,7 +109,8 @@ export const operationOf = (
 ): JsonValue => ({
   name,
   effect: "reading",
-  exposure: ["agent"],
+  // Open to agents and to outside clients, the default origin of `invoke`.
+  exposure: ["agent", "outside"],
   enabled: true,
   ...overrides
 });
@@ -189,7 +191,7 @@ export interface ConnectionOperationsFixture extends AccessInstance {
   operationCalls: ReturnType<typeof createOperationCalls>;
   /** Stores a Connection of the static type with its secret. Returns the asset id. */
   seed(name: string, overrides?: Record<string, JsonValue | undefined>): Promise<string>;
-  /** Calls an operation through `runOperation`, as the person and from the origin named. */
+  /** Calls an operation through `runOperation`, as the person and from the origin named, the CLI by default. */
   invoke(
     user: UserRecord,
     operation: string,
@@ -291,14 +293,15 @@ export async function fixtureOn<Instance extends AccessInstance>(
     check(target) {
       sequence.push("check egress");
       return (state.hostAllowed ? open : closed).check(target);
-    }
+    },
+    admits: (target) => (state.hostAllowed ? open : closed).admits(target)
   };
 
   let deps: ConnectionOperationSourceDeps | undefined;
   let calls: ReturnType<typeof createOperationCalls> | undefined;
   const t = await setup({
     modules: { connections: { enabled: true } },
-    furtherKinds: [createConnectionAssetKind({ connectorTypes })],
+    furtherKinds: [createConnectionAssetKind({ connectorTypes, egress })],
     server(stores, config) {
       const resolver = createConnectionCredentialResolver({
         clientInstanceId,
@@ -354,7 +357,7 @@ export async function fixtureOn<Instance extends AccessInstance>(
         operations,
         approvalRequests,
         operationCalls: calls,
-        connections: createConnectionManagement(deps)
+        connections: createConnectionManagement({ ...deps, keyring })
       };
     }
   });
@@ -417,7 +420,8 @@ export async function fixtureOn<Instance extends AccessInstance>(
       binding: { connectionAssetId: assetId, subject: SHARED_CREDENTIAL_SUBJECT },
       value: secret,
       source: "runtime",
-      handle
+      handle,
+      origin: egressOriginOf(egressTargetOfUrl(URL_OF_HOST))
     });
     return assetId;
   };
@@ -437,7 +441,8 @@ export async function fixtureOn<Instance extends AccessInstance>(
         effect: further.effect ?? "reading",
         input,
         actor: identityOf(user),
-        origin: further.origin ?? { kind: "user" },
+        // A direct call needs an origin some exposure admits: a person's key over the CLI.
+        origin: further.origin ?? { kind: "cli" },
         correlationId: "corr_test",
         ...(further.idempotencyKey ? { idempotencyKey: further.idempotencyKey } : {})
       },

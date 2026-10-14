@@ -1,0 +1,2 @@
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "api_credentials_client_owner_created_idx" ON "api_credentials" USING btree ("client_instance_id","owner_user_id","created_at","id") WHERE "api_credentials"."owner_user_id" is not null;--> statement-breakpoint
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "api_credentials_client_personal_created_idx" ON "api_credentials" USING btree ("client_instance_id","created_at","id") WHERE "api_credentials"."owner_user_id" is not null;

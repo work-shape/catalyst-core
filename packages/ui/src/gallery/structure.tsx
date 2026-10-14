@@ -8,6 +8,7 @@ import {
   Plus,
   X
 } from "lucide-react";
+import { useId, useState } from "react";
 import { Button } from "../actions/button";
 import { IconButton } from "../actions/icon-button";
 import { EmptyState } from "../feedback/empty-state";
@@ -22,6 +23,7 @@ import {
   CardTitle,
   type CardPadding
 } from "../structure/card";
+import { CardReachable, CardTarget } from "../structure/card-target";
 import {
   Disclosure,
   DisclosureContent,
@@ -29,10 +31,11 @@ import {
   type DisclosureVariant
 } from "../structure/disclosure";
 import { Page, PageFooter, type PageWidth } from "../structure/page";
-import { PageHeader, PageHeaderBack } from "../structure/page-header";
+import { PageHeader, PageHeaderBack, PageHeaderShellAction } from "../structure/page-header";
 import { PageLead } from "../structure/page-lead";
 import { Section, type SectionLayout } from "../structure/section";
-import { SurfaceFrame } from "../structure/surface-frame";
+import { SplitHandle } from "../structure/split-handle";
+import { SurfaceFrame, SurfaceHeader } from "../structure/surface-frame";
 import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
 
@@ -77,6 +80,29 @@ function PageHeaderSamples({ text }: { text: GalleryText }) {
               </Button>
             }
           />
+        </div>
+      </Samples>
+      <Samples label={text.headerShellAction}>
+        <div className="w-full rounded-lg border px-(--layout-gutter) pt-6">
+          <PageHeaderShellAction
+            action={
+              <Button variant="secondary">
+                <MessageSquare aria-hidden="true" />
+                {text.headerShellChat}
+              </Button>
+            }
+          >
+            <PageHeader
+              title={text.headerListTitle}
+              description={text.headerListDescription}
+              primaryAction={
+                <Button>
+                  <Plus aria-hidden="true" />
+                  {text.headerNewAgent}
+                </Button>
+              }
+            />
+          </PageHeaderShellAction>
         </div>
       </Samples>
       <Samples label={text.headerDetail}>
@@ -174,6 +200,51 @@ function SectionSamples({ text }: { text: GalleryText }) {
   );
 }
 
+/**
+ * A card that opens as a whole: a click anywhere on it starts the chat, while Edit keeps its own
+ * action and the time keeps its tooltip. The line under it says what the last click did.
+ */
+function OpeningCardSample({ text }: { text: GalleryText }) {
+  const titleId = useId();
+  const [done, setDone] = useState<string>();
+  return (
+    <div className="grid content-start gap-2" data-gallery-sample="card-target">
+      <Card padding="md" className="flex flex-col">
+        <CardHeader>
+          <CardTitle id={titleId}>{text.cardTitle}</CardTitle>
+          <p className="text-body text-muted-foreground">{text.cardBody}</p>
+          <p className="text-caption text-muted-foreground">
+            <CardReachable>
+              <time dateTime="2026-10-13T09:12" title={text.cardChangedAt}>
+                {text.cardChanged}
+              </time>
+            </CardReachable>
+          </p>
+        </CardHeader>
+        <CardFooter>
+          <CardTarget label={text.cardActionNamed}>
+            <Button size="sm" onClick={() => setDone(text.cardStarted)}>
+              {text.cardAction}
+            </Button>
+          </CardTarget>
+          <Button
+            size="sm"
+            variant="link"
+            className="ml-auto"
+            aria-describedby={titleId}
+            onClick={() => setDone(text.cardEditOpened)}
+          >
+            {text.cardEdit}
+          </Button>
+        </CardFooter>
+      </Card>
+      <p role="status" className="text-caption text-muted-foreground">
+        {done}
+      </p>
+    </div>
+  );
+}
+
 function SurfaceFrameSamples({ text }: { text: GalleryText }) {
   const showChat = (
     <Button variant="ghost" size="sm">
@@ -254,7 +325,33 @@ function SurfaceFrameSamples({ text }: { text: GalleryText }) {
           </SurfaceFrame>
         </div>
       </Samples>
+      <Samples label={text.surfaceHeaderAlone}>
+        <div className="w-full max-w-md overflow-hidden rounded-lg border">
+          <SurfaceHeader title={text.surfaceHeaderTitle} close={close} />
+        </div>
+      </Samples>
     </>
+  );
+}
+
+/** A panel at the left whose width the handle at its right edge sets. */
+function SplitHandleSample({ text }: { text: GalleryText }) {
+  const [width, setWidth] = useState(200);
+  return (
+    <div className="flex h-32 w-full overflow-hidden rounded-lg border" data-gallery-sample="split">
+      <div className="relative shrink-0 border-r bg-muted" style={{ width: `${width}px` }}>
+        <p className="p-3 text-caption text-muted-foreground">{text.splitHandleSample}</p>
+        <SplitHandle
+          label={text.splitHandleLabel}
+          edge="right"
+          width={width}
+          min={120}
+          max={360}
+          onResize={setWidth}
+        />
+      </div>
+      <div className="min-w-0 flex-1" />
+    </div>
   );
 }
 
@@ -291,7 +388,7 @@ export const structureGallery: GalleryGroup = {
     },
     {
       name: "PageHeader",
-      components: ["PageHeader", "PageHeaderBack"],
+      components: ["PageHeader", "PageHeaderBack", "PageHeaderShellAction"],
       render: (text) => <PageHeaderSamples text={text} />
     },
     {
@@ -316,12 +413,25 @@ export const structureGallery: GalleryGroup = {
     },
     {
       name: "SurfaceFrame",
-      components: ["SurfaceFrame"],
+      components: ["SurfaceFrame", "SurfaceHeader"],
       render: (text) => <SurfaceFrameSamples text={text} />
     },
     {
+      name: "SplitHandle",
+      components: ["SplitHandle"],
+      render: (text) => <SplitHandleSample text={text} />
+    },
+    {
       name: "Card",
-      components: ["Card", "CardHeader", "CardTitle", "CardContent", "CardFooter"],
+      components: [
+        "Card",
+        "CardHeader",
+        "CardTitle",
+        "CardContent",
+        "CardFooter",
+        "CardTarget",
+        "CardReachable"
+      ],
       render: (text) => (
         <div className="grid gap-4 sm:grid-cols-2">
           {cardPaddings.map((padding) => (
@@ -348,6 +458,7 @@ export const structureGallery: GalleryGroup = {
               </CardFooter>
             </Card>
           ))}
+          <OpeningCardSample text={text} />
         </div>
       )
     },

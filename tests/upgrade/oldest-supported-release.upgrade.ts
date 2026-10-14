@@ -2,7 +2,14 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll, describe, expect, inject, it } from "vitest";
-import { asAgentRunId, asClientInstanceId, asConversationId, asUserId } from "@vivd-catalyst/core";
+import {
+  asAgentRunId,
+  asApiCredentialId,
+  asClientInstanceId,
+  asConversationId,
+  asUserId
+} from "@vivd-catalyst/core";
+import { runVerifyPermissions } from "../../scripts/verify-permissions";
 import {
   extractRelease,
   migrationsDirectory,
@@ -113,5 +120,38 @@ describe(`upgrade from the oldest supported release (${release})`, () => {
     expect(await stores.users.getUserModelPreference({ clientInstanceId, userId })).toEqual({
       reasoningEfforts: {}
     });
+  });
+
+  it("turns the release's legacy permission lists into grant rows, and no holder's right changes", async () => {
+    const { databaseUrl, stores } = required(upgraded);
+    const lines: string[] = [];
+    expect(await runVerifyPermissions({ databaseUrl, write: (line) => lines.push(line) })).toBe(0);
+    expect(lines.at(-1)).toBe("6 holders, every right unchanged");
+
+    const admin = await stores.users.getUser({
+      clientInstanceId,
+      userId: asUserId("user_upgrade_admin")
+    });
+    expect(admin?.permissions).toEqual([
+      "config_assets.release",
+      "!usage.view",
+      "api_access.manage",
+      "!audit.view"
+    ]);
+    const principals = await stores.apiAccess.listServicePrincipals({ clientInstanceId });
+    expect(principals.map((principal) => principal.permissions)).toEqual([
+      ["config_assets.read", "config_assets.release"]
+    ]);
+    // A key without a list has every scope of its principal, an empty list none.
+    const scopes = async (id: string) =>
+      (
+        await stores.apiAccess.resolveApiCredential({
+          clientInstanceId,
+          credentialId: asApiCredentialId(id)
+        })
+      )?.credential.scopes;
+    expect(await scopes("cred_upgrade_unscoped")).toBeUndefined();
+    expect(await scopes("cred_upgrade_empty")).toEqual([]);
+    expect(await scopes("cred_upgrade_read")).toEqual(["config_assets:read"]);
   });
 });

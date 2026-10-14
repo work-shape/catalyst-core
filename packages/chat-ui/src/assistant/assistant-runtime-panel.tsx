@@ -3,6 +3,7 @@ import { AssistantRuntimeProvider, useComposer, useComposerRuntime } from "@assi
 import { useChatRuntime, type UseChatRuntimeOptions } from "@assistant-ui/react-ai-sdk";
 import type { UIMessage } from "ai";
 import type { SelectedChatModel } from "../workspace/workspace-chat-model";
+import { APP_ASSET_KIND } from "@vivd-catalyst/api-client";
 import type { LocaleCode } from "@vivd-catalyst/core";
 import {
   createMessageSnapshotKey,
@@ -81,6 +82,7 @@ function AssistantRuntimePane({
     selectedConversationId,
     selectedConversationRetainedUntil,
     selectedConversationSubject,
+    docked,
     openRoute,
     messagesLoaded,
     snapshotStatus,
@@ -132,9 +134,18 @@ function AssistantRuntimePane({
         workspaceBlock,
         snapshotStatus,
         noAgentsMessage,
+        queueWhileLoading: !docked,
         t
       }),
-    [conversationRunning, noAgentsMessage, rootSubmitPending, snapshotStatus, t, workspaceBlock]
+    [
+      conversationRunning,
+      docked,
+      noAgentsMessage,
+      rootSubmitPending,
+      snapshotStatus,
+      t,
+      workspaceBlock
+    ]
   );
   const sendDisabledReason = sendBlock?.reason;
   const [queuedSend, setQueuedSend] = useState<QueuedSend | undefined>(undefined);
@@ -149,13 +160,18 @@ function AssistantRuntimePane({
   const settleQueuedSend = useCallback(() => setQueuedSend(undefined), []);
   const visibleNotice = rootSubmitError ?? notice;
   useAutoOpenCompletedRunSurface(activeRun, locale);
-  useAutoOpenPageSurface(activeRun, selectedConversationId);
   const conversationSubject = useSubjectSurface({
     activeRun,
     conversationId: selectedConversationId,
     storedSubject: selectedConversationSubject,
-    workspaceId: collaborationWorkspaceId
+    workspaceId: collaborationWorkspaceId,
+    docked
   });
+  useAutoOpenPageSurface(
+    activeRun,
+    selectedConversationId,
+    conversationSubject?.subject.kind === APP_ASSET_KIND
+  );
 
   useEffect(() => {
     activeRef.current = true;
@@ -399,6 +415,7 @@ function AssistantRuntimePane({
           optimisticPending={optimisticPending}
           messagesEnabled={Boolean(selectedConversationId)}
           messagesLoaded={messagesLoaded}
+          threadLoading={snapshotStatus === "loading"}
           loadedMessageCount={initialMessages.length}
           conversationId={selectedConversationId}
           composerFocusRequestId={composerFocusRequestId}

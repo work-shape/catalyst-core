@@ -73,7 +73,7 @@ export function AccessPage() {
       ];
     })
   );
-  const namesWorkspaces = grantsNameWorkspaces(furtherKinds);
+  const namesWorkspaces = grantsNameWorkspaces(furtherKinds, grantsQuery.data ?? []);
   // The Check tab asks about every kind the instance has. Agents and skills come with the
   // agent configuration; the assets of any other kind are listed once the kind is chosen.
   const checkedOtherKind =
@@ -143,7 +143,6 @@ export function AccessPage() {
             onRetry={retry(grantsQuery)}
             users={usersQuery.data}
             usersFailed={Boolean(usersQuery.error)}
-            namespaces={namespacesQuery.data}
             assets={overview?.assets}
             assetsFailure={overviewFailure}
             kindAssets={kindAssets}

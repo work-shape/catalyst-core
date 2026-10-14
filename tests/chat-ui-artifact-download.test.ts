@@ -26,8 +26,8 @@ import {
   ConversationFileDownloadButton,
   conversationFileFromArtifact
 } from "../packages/chat-ui/src/conversation-file-presentation";
-import { ToolCallPart } from "../packages/chat-ui/src/tool-call";
-import { ToolDisplayPanelProvider } from "../packages/chat-ui/src/tool-display-panel";
+import { ToolCallPart } from "@vivd-catalyst/chat-ui/tool-call";
+import { ToolDisplayPanelProvider } from "@vivd-catalyst/chat-ui/tool-display-panel";
 
 describe("chat UI artifact download cards", () => {
   it("surfaces promoted final artifacts on the final assistant message for common formats", () => {

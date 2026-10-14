@@ -47,16 +47,17 @@ export function resolveWorkflowRights(context: HeldActions | undefined): Workflo
 export type WorkflowsAccess = "open" | "closed" | "unknown";
 
 /**
- * Decides the row in the rail and every address of the area at once: the module is on, the
- * session has a workspace to hold Workflows, and the reader may read one. With the module off
- * or without the right the area is closed, and its addresses answer as unknown ones do.
+ * Decides every address of the area: the module is on, the session has a workspace to hold
+ * Workflows, and the reader may read one or the instance names them the row, which it does
+ * where `workflows.list` names them a Workflow or they may write one. With the module off or
+ * without either the area is closed, and its addresses answer as unknown ones do.
  */
 export function workflowsAccess(input: {
   /** The modules of the instance, once its configuration arrived. */
   modules: Readonly<Record<string, { enabled: boolean }>> | undefined;
   /** The session has workspaces. */
   workspaces: boolean;
-  context: HeldActions | undefined;
+  context: (HeldActions & Partial<Pick<PlatformContext, "visibleSections">>) | undefined;
 }): WorkflowsAccess {
   if (input.modules === undefined) {
     return "unknown";
@@ -67,7 +68,22 @@ export function workflowsAccess(input: {
   if (input.context === undefined) {
     return "unknown";
   }
-  return resolveWorkflowRights(input.context).read ? "open" : "closed";
+  return resolveWorkflowRights(input.context).read ||
+    input.context.visibleSections?.includes("workflows") === true
+    ? "open"
+    : "closed";
+}
+
+/**
+ * Whether the Workflows row of the sidebar shows: the instance names the row for the person,
+ * in a session with workspaces where the module is on. The flag alone decides it; a reader the
+ * instance names no Workflow keeps the area's addresses but sees no row.
+ */
+export function workflowsRowShown(
+  access: WorkflowsAccess,
+  context: Pick<PlatformContext, "visibleSections"> | undefined
+): boolean {
+  return access !== "closed" && context?.visibleSections.includes("workflows") === true;
 }
 
 /**
@@ -197,9 +213,13 @@ export function failureHappened(
   failure: Pick<WorkflowFailure, "reason" | "action">,
   t: (key: TranslationKey, values?: Record<string, string>) => string
 ): string {
-  return failure.reason === "missingRight" && failure.action !== undefined
-    ? t("workflows.reason.missingRightNamed", { right: failure.action })
-    : t(failureSentences(failure.reason).happened);
+  if (failure.action !== undefined && failure.reason === "missingRight") {
+    return t("workflows.reason.missingRightNamed", { right: failure.action });
+  }
+  if (failure.action !== undefined && failure.reason === "testerMissingRight") {
+    return t("workflows.reason.testerMissingRightNamed", { right: failure.action });
+  }
+  return t(failureSentences(failure.reason).happened);
 }
 
 /** What happened, and what the reader can do about it, for why something did not end as done. */

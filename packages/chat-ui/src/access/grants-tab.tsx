@@ -5,7 +5,6 @@ import type {
   ConfigAssetSummary,
   CreatePermissionGrantRequest,
   LocaleCode,
-  NamespaceWithUsage,
   PermissionGrantRow
 } from "@vivd-catalyst/api-client";
 import {
@@ -47,6 +46,7 @@ import {
   grantableUsers,
   GrantWriteError,
   groupGrants,
+  isConfigAssetGrantKind,
   splitGrantableAction,
   withGrantKind,
   type AccessWriteFailure,
@@ -120,6 +120,9 @@ function scopeLabel(
       name: workspaceName(grant.scopeId) ?? grant.scopeId
     });
   }
+  if (grant.scopeKind === "instance") {
+    return t("access.scopeWholeInstance");
+  }
   if (grant.scopeKind !== "asset") {
     return grant.scopeKind;
   }
@@ -139,7 +142,6 @@ export interface GrantsTabProps {
   /** The users the caller is shown. Absent while they load and when they could not be loaded. */
   users: readonly AdministeredUser[] | undefined;
   usersFailed: boolean;
-  namespaces: readonly NamespaceWithUsage[] | undefined;
   /** The active agents and skills. Absent while they load and when they could not be loaded. */
   assets: readonly ConfigAssetSummary[] | undefined;
   /** `forbidden` when the caller may not read the agents and skills of the instance. */
@@ -167,7 +169,6 @@ export function GrantsTab({
   onRetry,
   users,
   usersFailed,
-  namespaces,
   assets,
   assetsFailure,
   kindAssets,
@@ -258,7 +259,6 @@ export function GrantsTab({
         <GrantDialog
           users={users}
           usersFailed={usersFailed}
-          namespaces={namespaces}
           assets={assets}
           assetsFailure={assetsFailure}
           kindAssets={kindAssets}
@@ -448,7 +448,6 @@ function formatDate(value: string, locale: LocaleCode): string {
 const failureKeys: Partial<Record<AccessWriteFailure, TranslationKey>> = {
   userBeingDeleted: "access.grantUserBeingDeleted",
   unknownHolder: "access.grantUnknownHolder",
-  unknownNamespace: "access.grantUnknownNamespace",
   assetGone: "access.grantAssetGone",
   rightNotOffered: "access.grantRightNotOffered",
   moduleOff: "access.grantModuleOff",
@@ -466,15 +465,9 @@ function grantFailureText(error: unknown, t: Translate): string {
     : sentence;
 }
 
-/** Agents and skills: the two kinds every instance has, read with the agent configuration. */
-function isConfigAssetKind(kind: GrantKind): kind is "agent" | "skill" {
-  return kind === "agent" || kind === "skill";
-}
-
 function GrantDialog({
   users,
   usersFailed,
-  namespaces,
   assets,
   assetsFailure,
   kindAssets,
@@ -483,14 +476,7 @@ function GrantDialog({
   onClose
 }: Pick<
   GrantsTabProps,
-  | "users"
-  | "usersFailed"
-  | "namespaces"
-  | "assets"
-  | "assetsFailure"
-  | "kindAssets"
-  | "workspaces"
-  | "onGrant"
+  "users" | "usersFailed" | "assets" | "assetsFailure" | "kindAssets" | "workspaces" | "onGrant"
 > & { onClose(): void }) {
   const { t } = useTranslation();
   const docsLinkShown = useDocsLinkShown();
@@ -504,11 +490,11 @@ function GrantDialog({
   const holders = grantableUsers(users ?? []);
   const holder = holders.find((user) => user.id === form.holderId);
   const kinds = GRANT_KINDS.filter(
-    (kind) => isConfigAssetKind(kind) || kindAssets?.[kind] !== undefined
+    (kind) => isConfigAssetGrantKind(kind) || kindAssets?.[kind] !== undefined
   );
   const words = kindWords[form.kind];
   // What the asset picker chooses from: the agents or skills, or the assets of a further kind.
-  const choices: GrantChoices = isConfigAssetKind(form.kind)
+  const choices: GrantChoices = isConfigAssetGrantKind(form.kind)
     ? {
         items: assets?.flatMap((candidate) =>
           candidate.kind === form.kind && candidate.id !== undefined
@@ -522,7 +508,7 @@ function GrantDialog({
   const assetsError = !choices.failed
     ? undefined
     : t(
-        isConfigAssetKind(form.kind) && assetsFailure === "forbidden"
+        isConfigAssetGrantKind(form.kind) && assetsFailure === "forbidden"
           ? "access.referencesForbidden"
           : words.assetsLoadFailed
       );
@@ -537,6 +523,8 @@ function GrantDialog({
     return parts.length === 0 ? undefined : parts.join(" ");
   };
   const workspace = workspaces?.items?.find((candidate) => candidate.id === form.workspaceId);
+  // With one place to choose there is nothing to ask: the step is left out.
+  const scopeKinds = grantScopeKinds(form.kind);
   const requests = grantRequests(form);
 
   const submit = (event: FormEvent) => {
@@ -628,41 +616,19 @@ function GrantDialog({
             />
           ))}
         </fieldset>
-        <RadioGroup
-          label={t("access.grantScopeKind")}
-          options={grantScopeKinds(form.kind).map((scopeKind) => {
-            const keys = scopeChoice(scopeKind, form.kind);
-            return { value: scopeKind, label: t(keys.label), description: t(keys.description) };
-          })}
-          value={form.scopeKind}
-          onValueChange={(scopeKind) => change({ scopeKind })}
-          hint={docsLinkShown ? <DocsReference to="rightPlace" /> : undefined}
-        />
-        {form.scopeKind === "namespace" ? (
-          <Field
-            label={t("access.grantNamespace")}
-            required
-            hint={namespaces?.length === 0 ? t("access.noNamespaces") : undefined}
-          >
-            <Picker
-              search={(namespaces?.length ?? 0) >= PICKER_SEARCH_FROM_COUNT}
-              options={(namespaces ?? []).map((namespace) => ({
-                value: namespace.prefix,
-                label: namespace.prefix,
-                description: namespace.displayName
-              }))}
-              value={form.namespace}
-              onValueChange={(namespace) => change({ namespace })}
-            >
-              <PickerButton
-                label={t("access.grantNamespace")}
-                placeholder={t("access.chooseNamespace")}
-                value={form.namespace}
-                disabled={namespaces === undefined || namespaces.length === 0}
-              />
-            </Picker>
-          </Field>
-        ) : form.scopeKind === "workspace" ? (
+        {scopeKinds.length > 1 ? (
+          <RadioGroup
+            label={t("access.grantScopeKind")}
+            options={scopeKinds.map((scopeKind) => {
+              const keys = scopeChoice(scopeKind, form.kind);
+              return { value: scopeKind, label: t(keys.label), description: t(keys.description) };
+            })}
+            value={form.scopeKind}
+            onValueChange={(scopeKind) => change({ scopeKind })}
+            hint={docsLinkShown ? <DocsReference to="rightPlace" /> : undefined}
+          />
+        ) : null}
+        {form.scopeKind === "workspace" ? (
           <Field
             label={t("access.grantWorkspace")}
             required
@@ -686,7 +652,7 @@ function GrantDialog({
               />
             </Picker>
           </Field>
-        ) : (
+        ) : form.scopeKind === "asset" ? (
           <Field
             label={t(words.assetField)}
             required
@@ -715,7 +681,7 @@ function GrantDialog({
               />
             </Picker>
           </Field>
-        )}
+        ) : null}
         <RadioGroup
           label={t("access.grantEffect")}
           options={[

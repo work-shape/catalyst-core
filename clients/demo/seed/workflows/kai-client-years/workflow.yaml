@@ -1,0 +1,58 @@
+# Kai Berger's Workflow, which the seed saves in his session and leaves as a draft: it lists the
+# clients of the sample accounting and reads the fiscal years of each in a loop. A definition must
+# name the principal it runs as, and naming one in a draft lends nothing. Publishing it lends
+# `workflow-demo` to whoever starts it, which asks what administering service principals asks,
+# and Kai does not hold that.
+id: kai-client-years
+name: Client years
+description: Lists the first clients of the sample accounting and reads the fiscal years of each.
+runAs: workflow-demo
+inputs:
+  type: object
+  additionalProperties: false
+outputs:
+  type: object
+  properties:
+    read:
+      type: integer
+    failed:
+      type: integer
+  required: [read, failed]
+steps:
+  - id: start
+    name: Start by hand
+    type: trigger
+    triggers:
+      - kind: manual
+  - id: clients
+    name: List the clients
+    type: operation
+    operation: connection.sample-accounting.list_accounting_clients
+    input:
+      page:
+        value: 1
+      page_size:
+        value: 5
+  - id: each_client
+    name: For each client
+    type: loop
+    items: { step: clients, path: rows }
+    itemName: client
+    itemLabel: name
+    onItemFailure: continue
+    steps:
+      - id: years
+        name: Read the fiscal years
+        type: operation
+        operation: connection.sample-accounting.list_fiscal_years
+        input:
+          client_id:
+            ref: { step: each_client, path: client_id }
+  - id: result
+    name: Result
+    type: output
+    input:
+      read:
+        ref: { step: each_client, path: done }
+      failed:
+        ref: { step: each_client, path: failed }

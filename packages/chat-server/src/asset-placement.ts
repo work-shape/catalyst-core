@@ -2,11 +2,14 @@ import {
   AppError,
   INSTANCE_ASSET_SCOPE,
   asCollaborationWorkspaceId,
-  assetScopesEqual,
+  asUserId,
   auditActorFromIdentity,
+  isAuthenticatedServicePrincipal,
   type AccessResource,
   type ActorAccess,
   type AgentAvailability,
+  type CollaborationWorkspace,
+  type InitialAgentAvailability,
   type JsonObject,
   type OperationAuthorization
 } from "@vivd-catalyst/core";
@@ -168,6 +171,105 @@ export async function setAssetAvailability(
   return availability;
 }
 
+/** Where a write asks a new agent to start: everywhere, or in the shared workspace it names. */
+export type AvailableIn = "all" | { workspaceId: string };
+
+/** What a write did that its caller should know and that did not refuse it. */
+export interface AssetWarning {
+  code: string;
+  message: string;
+}
+
+/**
+ * Where an agent that a put or a revert creates starts. It is available in the shared
+ * workspace it is made in and nowhere else: the one the write names, else the workspace that
+ * owns it, else the conversation's. Made in no shared workspace, such as a personal
+ * one or by the CLI, it is hidden, and the caller is warned. Wider is an instance admin's
+ * step: `all` here, a workspace other than the one that owns the agent, or the availability
+ * later. The instance's first agent becomes its default, which every workspace offers; a
+ * workspace's agent never does.
+ */
+export async function initialAgentPlacement(
+  options: AssetWorkflowOptions,
+  call: AssetCall,
+  kind: WorkflowAssetKind,
+  input: {
+    name: string;
+    creates: boolean;
+    setsDefault: boolean;
+    availableIn?: AvailableIn;
+    /** The workspace that owns the agent, which it is made in unless the write names one. */
+    madeIn?: string;
+  }
+): Promise<{ initialAgentAvailability?: InitialAgentAvailability; warnings: AssetWarning[] }> {
+  if (!kind.hasWorkspaceAvailability || !input.creates) {
+    if (input.availableIn !== undefined) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        kind.hasWorkspaceAvailability
+          ? `Config ${kind.kind} '${input.name}' exists: its availability is set on its own`
+          : `Asset kind '${kind.kind}' is not offered per workspace`,
+        { reason: "available_in_not_taken" }
+      );
+    }
+    return { warnings: [] };
+  }
+  if (input.setsDefault) {
+    return { initialAgentAvailability: "all", warnings: [] };
+  }
+  if (input.availableIn === "all") {
+    // Asked without a resource, so only an entry at instance scope answers.
+    call.access.require(kind.actions.write);
+    return { initialAgentAvailability: "all", warnings: [] };
+  }
+  const named = input.availableIn?.workspaceId;
+  if (named !== undefined && input.madeIn !== undefined && named !== input.madeIn) {
+    // A workspace's agent starts in its own workspace. Offering it in another is an instance
+    // admin's step, as widening it later is: asked without a resource, so only an entry at
+    // instance scope answers.
+    call.access.require(kind.actions.write);
+  }
+  const workspace = await memberWorkspace(options, call, named ?? input.madeIn ?? call.workspaceId);
+  if (named !== undefined && !workspace) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `'${named}' is no workspace of this client instance that the caller is a member of`,
+      { reason: "workspace_not_found" }
+    );
+  }
+  if (workspace?.kind === "shared") {
+    return { initialAgentAvailability: { collaborationWorkspaceId: workspace.id }, warnings: [] };
+  }
+  return {
+    initialAgentAvailability: "hidden",
+    warnings: [
+      {
+        code: "agent_hidden",
+        message: `Agent '${input.name}' is hidden until an instance admin makes it available`
+      }
+    ]
+  };
+}
+
+/** The workspace of that id, where the caller is a person who is one of its members. */
+async function memberWorkspace(
+  options: AssetWorkflowOptions,
+  call: AssetCall,
+  workspaceId: string | undefined
+): Promise<CollaborationWorkspace | undefined> {
+  if (workspaceId === undefined || isAuthenticatedServicePrincipal(call.actor)) return undefined;
+  const collaborationWorkspaceId = asCollaborationWorkspaceId(workspaceId);
+  const [workspace, membership] = await Promise.all([
+    options.stores.workspaces.getWorkspace(options.clientInstanceId, collaborationWorkspaceId),
+    options.stores.workspaces.getMembership({
+      clientInstanceId: options.clientInstanceId,
+      collaborationWorkspaceId,
+      userId: asUserId(call.actor.id)
+    })
+  ]);
+  return membership ? workspace : undefined;
+}
+
 /** A kind of a module that is off does not exist here, whatever the store still holds. */
 function kindOf(options: AssetWorkflowOptions, kind: string): WorkflowAssetKind {
   requireAssetKindModuleOn(options.modules, kind);
@@ -213,8 +315,10 @@ async function requirePlacementRight(
 }
 
 /**
- * The asset a call names, as a deny on it is found. Only an asset of the instance has a
- * default or an availability: the id of a row another owner holds is no part of it.
+ * The asset a call names, as a deny on it is found: with its owner and its id, so a deny on
+ * the asset or on the workspace that owns it refuses. The default and the availability are
+ * the instance's whoever owns the asset, so the right is still the kind's write right on the
+ * whole instance.
  */
 async function namedResource(
   options: AssetWorkflowOptions,
@@ -227,8 +331,7 @@ async function namedResource(
     kind: kind.kind,
     name
   });
-  const assetId = row && assetScopesEqual(row.scope, INSTANCE_ASSET_SCOPE) ? row.id : undefined;
-  return accessResource(kind.kind, name, INSTANCE_ASSET_SCOPE, assetId);
+  return accessResource(kind.kind, name, row?.scope ?? INSTANCE_ASSET_SCOPE, row?.id);
 }
 
 async function recordPlacement(call: AssetCall, type: string, metadata: JsonObject): Promise<void> {

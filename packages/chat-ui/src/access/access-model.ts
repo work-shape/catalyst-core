@@ -83,8 +83,21 @@ export const GRANT_KINDS: readonly GrantKind[] = [
   ...new Set(GRANT_RIGHTS.map((right) => right.kind))
 ];
 
-/** Where a grant row applies, in the order the dialog offers the places. */
-const GRANT_SCOPE_KINDS = ["namespace", "asset", "workspace"] as const;
+/** Agents and skills: the two kinds every instance has, read with the agent configuration. */
+const CONFIG_ASSET_GRANT_KINDS = ["agent", "skill"] as const satisfies readonly GrantKind[];
+
+export function isConfigAssetGrantKind(
+  kind: GrantKind
+): kind is (typeof CONFIG_ASSET_GRANT_KINDS)[number] {
+  return CONFIG_ASSET_GRANT_KINDS.some((candidate) => candidate === kind);
+}
+
+/**
+ * Where a new right applies, in the order the dialog offers the places: what a workspace owns
+ * first, then one asset, then the whole instance. A Namespace is not among them: it is
+ * retired, and its rows are only listed and revoked until it goes.
+ */
+const GRANT_SCOPE_KINDS = ["workspace", "asset", "instance"] as const;
 export type GrantScopeKind = (typeof GRANT_SCOPE_KINDS)[number];
 
 /** The rights of one kind, in the order the page lists them. */
@@ -106,7 +119,8 @@ export function grantVerbs(kind: GrantKind): GrantVerb[] {
 
 /**
  * The places a grant of the kind can be written at: those every action of the kind has, so
- * the dialog offers no place one of the ticked actions would be refused at.
+ * the dialog offers no place one of the ticked actions would be refused at. The first is the
+ * one the dialog chooses for the kind.
  */
 export function grantScopeKinds(kind: GrantKind): GrantScopeKind[] {
   const scopes = grantRights(kind).map(
@@ -117,9 +131,22 @@ export function grantScopeKinds(kind: GrantKind): GrantScopeKind[] {
     : GRANT_SCOPE_KINDS.filter((scopeKind) => scopes.every((of) => of.includes(scopeKind)));
 }
 
-/** Whether a grant of any of the kinds can be written on what a Shared Workspace owns. */
-export function grantsNameWorkspaces(kinds: readonly GrantKind[]): boolean {
-  return kinds.some((kind) => grantScopeKinds(kind).includes("workspace"));
+/**
+ * Whether the page needs the names of the Shared Workspaces: a new grant can be written on what
+ * one owns, for agents, skills or any of the further kinds an instance has, or a row already
+ * given is on a workspace. Such a row stays listed and revocable after its kind lost the place,
+ * and it names the workspace by its name.
+ */
+export function grantsNameWorkspaces(
+  furtherKinds: readonly GrantKind[],
+  grants: readonly Pick<PermissionGrantRow, "scopeKind">[]
+): boolean {
+  return (
+    grants.some((grant) => grant.scopeKind === "workspace") ||
+    [...CONFIG_ASSET_GRANT_KINDS, ...furtherKinds].some((kind) =>
+      grantScopeKinds(kind).includes("workspace")
+    )
+  );
 }
 
 /** The kind and verb of an action this page writes; nothing for any other action. */
@@ -145,7 +172,7 @@ function grantRightPosition(action: string): number {
  */
 export function furtherGrantKinds(registered: readonly string[] | undefined): GrantKind[] {
   return GRANT_KINDS.filter(
-    (kind) => kind !== "agent" && kind !== "skill" && (registered?.includes(kind) ?? false)
+    (kind) => !isConfigAssetGrantKind(kind) && (registered?.includes(kind) ?? false)
   );
 }
 
@@ -260,7 +287,7 @@ export function namespaceOfName(
  * The shape the server asks of a skill's name (`skillNameSchema` of the config schema, which
  * does not load in a browser). An agent's name only has to be one word.
  */
-const SKILL_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_.-]*$/u;
+const SKILL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/u;
 const AGENT_NAME_PATTERN = /^\S+$/u;
 
 /**
@@ -276,20 +303,20 @@ export interface GrantForm {
   holderId: string | undefined;
   kind: GrantKind;
   verbs: GrantVerb[];
-  scopeKind: GrantScopeKind;
-  namespace: string | undefined;
+  /** Absent for a kind no right can be written for at any place. */
+  scopeKind: GrantScopeKind | undefined;
   assetId: string | undefined;
   /** The Shared Workspace of a grant on what a workspace owns. */
   workspaceId: string | undefined;
   effect: "allow" | "deny";
 }
 
+/** A new right on agents, at the first place an agent right can be written. */
 export const emptyGrantForm: GrantForm = {
   holderId: undefined,
   kind: "agent",
   verbs: [],
-  scopeKind: "namespace",
-  namespace: undefined,
+  scopeKind: grantScopeKinds("agent")[0],
   assetId: undefined,
   workspaceId: undefined,
   effect: "allow"
@@ -297,40 +324,44 @@ export const emptyGrantForm: GrantForm = {
 
 /**
  * The form after another kind was chosen. An asset belongs to its kind, so none is kept; a
- * verb or a place the new kind has no grant for is dropped, and the first place it has is
- * chosen instead.
+ * verb the new kind has no grant for is dropped, and the place is the kind's first, so a kind
+ * a workspace can own starts in the workspace.
  */
 export function withGrantKind(form: GrantForm, kind: GrantKind): GrantForm {
   const verbs = grantVerbs(kind);
-  const scopeKinds = grantScopeKinds(kind);
   return {
     ...form,
     kind,
     verbs: form.verbs.filter((verb) => verbs.includes(verb)),
-    scopeKind: scopeKinds.includes(form.scopeKind)
-      ? form.scopeKind
-      : (scopeKinds[0] ?? form.scopeKind),
+    scopeKind: grantScopeKinds(kind)[0],
     assetId: undefined
   };
 }
 
+/** The place of the form's rows, once the form names everything the place asks for. */
+function grantScope(
+  form: GrantForm
+): Pick<CreatePermissionGrantRequest, "scopeKind" | "scopeId"> | undefined {
+  switch (form.scopeKind) {
+    case "workspace":
+      return form.workspaceId === undefined
+        ? undefined
+        : { scopeKind: "workspace", scopeId: form.workspaceId };
+    case "asset":
+      return form.assetId === undefined ? undefined : { scopeKind: "asset", scopeId: form.assetId };
+    case "instance":
+      return { scopeKind: "instance" };
+    case undefined:
+      return undefined;
+  }
+}
+
 /** One request per chosen action, in the page's order; nothing while the form is incomplete. */
 export function grantRequests(form: GrantForm): CreatePermissionGrantRequest[] | undefined {
-  if (!grantScopeKinds(form.kind).includes(form.scopeKind)) {
+  if (form.scopeKind === undefined || !grantScopeKinds(form.kind).includes(form.scopeKind)) {
     return undefined;
   }
-  const scope =
-    form.scopeKind === "namespace"
-      ? form.namespace === undefined
-        ? undefined
-        : { scopeKind: "namespace" as const, namespace: form.namespace }
-      : form.scopeKind === "workspace"
-        ? form.workspaceId === undefined
-          ? undefined
-          : { scopeKind: "workspace" as const, scopeId: form.workspaceId }
-        : form.assetId === undefined
-          ? undefined
-          : { scopeKind: "asset" as const, scopeId: form.assetId };
+  const scope = grantScope(form);
   const holderId = form.holderId;
   const actions = grantRights(form.kind)
     .filter((right) => form.verbs.includes(right.verb))
@@ -443,7 +474,6 @@ export type AccessWriteFailure =
   | "duplicateGrant"
   | "userBeingDeleted"
   | "unknownHolder"
-  | "unknownNamespace"
   | "assetGone"
   | "rightNotOffered"
   | "moduleOff"
@@ -462,8 +492,6 @@ export function accessWriteFailure(error: unknown): AccessWriteFailure {
       return "duplicateGrant";
     case "unknown_holder":
       return "unknownHolder";
-    case "unknown_namespace":
-      return "unknownNamespace";
     case "invalid_scope":
       return "assetGone";
     case "unknown_action":
@@ -536,7 +564,7 @@ export interface CheckableAsset {
  * grant it stands in for.
  */
 function checkedReason(
-  source: "role" | "legacy" | "legacy_ref" | "grant" | "membership"
+  source: "role" | "legacy_ref" | "grant" | "membership"
 ): "role" | "legacy" | "grant" {
   if (source === "legacy_ref") return "legacy";
   return source === "membership" ? "grant" : source;

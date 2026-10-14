@@ -25,6 +25,7 @@ import {
   type ClientInstanceId,
   type OperationAuthorization,
   type OperationAuthorizeContext,
+  type OperationBeforeEvent,
   type OperationOrigin,
   type OperationResource,
   type OperationScope,
@@ -163,10 +164,14 @@ type RightsCheck<Op extends Operation> = Op["requires"] extends readonly [unknow
 /** What a registration adds to the descriptor: what the call touches and what it does. */
 type OperationBindingOf<Op extends Operation, Sent> = Omit<
   AssembledOperationBinding,
-  "resource" | "policyTargets" | "execute" | "authorize" | "inputWithoutSecrets"
+  "resource" | "policyTargets" | "beforeEvents" | "execute" | "authorize" | "inputWithoutSecrets"
 > &
   RightsCheck<Op> & {
     resource?(input: OperationInput<Op>): OperationResource | undefined;
+    beforeEvents?(
+      input: OperationInput<Op>,
+      origin: OperationOrigin
+    ): readonly OperationBeforeEvent[] | Promise<readonly OperationBeforeEvent[]>;
     inputWithoutSecrets?(input: OperationInput<Op>): OperationInput<Op> | undefined;
     policyTargets?(
       input: OperationInput<Op>
@@ -418,7 +423,7 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
           operation,
           {
             identity: caller.identity,
-            origin: originOf(caller.identity, request),
+            origin: originOf(caller.identity),
             correlationId,
             input: {
               ...declaredFields(operation.body, request.body),
@@ -488,7 +493,7 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
           operation,
           {
             identity: caller.identity,
-            origin: originOf(caller.identity, request),
+            origin: originOf(caller.identity),
             correlationId,
             input: target.input,
             idempotencyKey: readIdempotencyKey(request),
@@ -560,13 +565,13 @@ async function requireOperationScope(
 
 /**
  * Where a call over HTTP comes from, read from how it was authenticated and from nothing else
- * the caller sends. A browser session is the person. A key or token in the request is
- * automation, which the CLI is, whether it belongs to a service principal or to a person.
+ * the caller sends. Only an API credential is the CLI: a service principal's credential, a
+ * personal API key, or an access token exchanged for either. Everything else is the person,
+ * a browser session as much as a session token an embedding host issued for them.
  */
-function originOf(identity: AuthenticatedIdentity, request: FastifyRequest): OperationOrigin {
+function originOf(identity: AuthenticatedIdentity): OperationOrigin {
   if (isAuthenticatedServicePrincipal(identity)) return { kind: "cli" };
-  if (identity.authenticationMethod === "session-cookie") return { kind: "user" };
-  return hasExplicitCredentials(request.headers) ? { kind: "cli" } : { kind: "user" };
+  return identity.delegatedActor?.kind === "api_key" ? { kind: "cli" } : { kind: "user" };
 }
 
 const inputFieldsSchema = z.record(z.string(), z.unknown()).catch({});

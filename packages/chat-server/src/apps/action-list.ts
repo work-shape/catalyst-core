@@ -18,6 +18,7 @@ import {
   DATA_STORE_ASSET_KIND,
   appActionOperationName,
   connectionOperationName,
+  draftCallTarget,
   liveRevisionId,
   type ActorAccess,
   type AuthenticatedIdentity,
@@ -194,13 +195,14 @@ export class AppActionList {
       const { asset } = revision;
       const resource = appResourceOf(scoped(asset));
       const host = appRevisionHost(asset.name, resource, revision.view, revision.dataStores);
+      const targetOf = await this.draftTargets(caller.actor, revision);
       const can = await appActionPermissions(environment, {
         viewer: caller.actor,
         access: caller.access,
         // The reader has no frame open. Nothing of the decision reads the page session.
         pageSessionId: "",
-        // The policy's word, for a changing action of a draft too: that a draft carries none
-        // out is a fact of the view, which the answer names.
+        // The policy's word, for a changing action of a draft too: where a call of the draft
+        // goes instead is its target, which the answer names beside it.
         mode: "published",
         host,
         revisionId: revision.revisionId,
@@ -221,7 +223,8 @@ export class AppActionList {
               ...(action.description === undefined ? {} : { description: action.description }),
               toolName: appActionOperationName(asset.name, action.name),
               inputSchema: action.input.schema,
-              policy: can[action.name] ?? "deny"
+              policy: can[action.name] ?? "deny",
+              ...(targetOf ? { target: targetOf(action) } : {})
             };
             if (action.kind === "sql") {
               // The rule of a call: the store is listed, published, in the App's scope and
@@ -234,6 +237,19 @@ export class AppActionList {
                 dataStore: { name: action.dataStore, ...(title === undefined ? {} : { title }) },
                 ...(callable ? {} : { unavailable: "data_store_missing" as const }),
                 agentTool: revision.view === "published" && callable
+              };
+            }
+            if (action.kind === "workflow") {
+              // The rule of a call: the module is on. Whether the Workflow is published is asked
+              // by the start; whether the reader may start it, `policy` says.
+              const { callable } = await appActionDefinition(environment, host, action);
+              return {
+                ...listed,
+                kind: action.kind,
+                workflow: { name: action.workflow },
+                ...(callable ? {} : { unavailable: "workflows_off" as const }),
+                // No agent carries the start of a Workflow through an App yet.
+                agentTool: false
               };
             }
             const connection = connections.get(action.connection);
@@ -262,6 +278,30 @@ export class AppActionList {
       });
     }
     return { apps, truncated };
+  }
+
+  /**
+   * Where the reader's next call of each action of a draft goes, by the rule of the call path
+   * (`draftCallTarget`) and the reader's own "Run live once" switches of that revision: a
+   * switch somebody else set covers no call of the reader's. Nothing for a published revision.
+   */
+  private async draftTargets(
+    reader: AuthenticatedIdentity,
+    revision: ListedRevision
+  ): Promise<((action: CompiledAppAction) => AppAction["target"]) | undefined> {
+    if (revision.view !== "draft") return undefined;
+    // The reader's own switches on the current draft: an App's call deletes the one it uses.
+    const switches = await this.options.stores.liveOnceSwitches.list({
+      clientInstanceId: this.options.clientInstanceId,
+      assetId: revision.asset.id,
+      switchedBy: reader.id
+    });
+    const mine = new Set(
+      switches.flatMap((set) =>
+        set.revisionId === revision.revisionId && set.usedByRunId === undefined ? [set.part] : []
+      )
+    );
+    return (action) => draftCallTarget({ effect: action.effect, liveOnce: mine.has(action.name) });
   }
 
   private app(name: string): Promise<ConfigAssetRecord | undefined> {

@@ -1,24 +1,61 @@
 import {
   EVENTS,
+  PLATFORM_EVENT_ALLOW,
   auditActorFromIdentity,
+  getSubjectUserId,
+  isAuthenticatedServicePrincipal,
+  isGuardrailEvent,
+  strictestOutcome,
   type AuditEventStatus,
   type AuditRecorder,
   type JsonObject,
+  type PlatformEventContext,
   type PlatformEventEmitter
 } from "@vivd-catalyst/core";
+import type { GuardrailCallContext, GuardrailRunner } from "../guardrail-runner";
 
 const AUDIT_STATUSES: readonly AuditEventStatus[] = ["success", "failed", "denied"];
 
 /**
- * The events of a call until EW-1 supplies emission and guardrails: no guardrail exists, so a
- * before-event allows, and an audited after-event becomes one audit row. The row holds what
- * the emitter was handed, which is names, ids and codes, never an input or an output.
+ * The events of a call. At a before-event the guardrails bound to it run and the strictest of
+ * their answers is the event's; an `allow` never overrides another's warning or block. An
+ * audited after-event becomes one audit row. The row holds what the emitter was handed, which
+ * is names, ids and codes, never an input or an output: the content a guardrail reads comes
+ * through `checkable` and is never kept.
  */
-export function createAuditingEventEmitter(audit: AuditRecorder): PlatformEventEmitter {
+export function createAuditingEventEmitter(
+  audit: AuditRecorder,
+  guardrails?: Pick<GuardrailRunner, "answer">
+): PlatformEventEmitter {
   return {
     async emit(name, payload, context) {
-      if (context.phase === "before" || !EVENTS[name].audited) {
-        return "allow";
+      if (context.phase === "before") {
+        if (!guardrails || !isGuardrailEvent(name)) {
+          return PLATFORM_EVENT_ALLOW;
+        }
+        const { origin } = context;
+        const answers = await guardrails.answer(
+          {
+            event: name,
+            subject: context.subject,
+            match: {
+              ...context.filterBy,
+              origin: origin.kind,
+              ...(origin.kind === "agent" ? { agent: origin.agentName } : {}),
+              ...(context.workspaceId ? { workspace: context.workspaceId } : {})
+            },
+            fields: async () => (await context.checkable?.()) ?? {},
+            ...(context.aboutGuardrails ? { aboutGuardrails: true } : {})
+          },
+          guardrailCallContext(payload, context)
+        );
+        return {
+          outcome: strictestOutcome(answers.map((answer) => answer.outcome)),
+          guardrails: answers
+        };
+      }
+      if (!EVENTS[name].audited) {
+        return PLATFORM_EVENT_ALLOW;
       }
       const { status, reason, ...metadata } = payload;
       await audit.record({
@@ -35,8 +72,35 @@ export function createAuditingEventEmitter(audit: AuditRecorder): PlatformEventE
           workspaceId: context.workspaceId
         })
       });
-      return "allow";
+      return PLATFORM_EVENT_ALLOW;
     }
+  };
+}
+
+/** Whom a judge's model call is counted for: the person, the workspace, the conversation, the run. */
+function guardrailCallContext(
+  payload: JsonObject,
+  context: PlatformEventContext
+): GuardrailCallContext {
+  const { actor, origin, runtime } = context;
+  const conversationId =
+    origin.kind === "agent"
+      ? origin.conversationId
+      : origin.kind === "app"
+        ? origin.conversationId
+        : undefined;
+  return {
+    correlationId: context.correlationId,
+    ...(isAuthenticatedServicePrincipal(actor) ? {} : { userId: getSubjectUserId(actor) }),
+    ...(context.workspaceId ? { workspaceId: context.workspaceId } : {}),
+    ...(conversationId ? { conversationId } : {}),
+    ...(typeof payload.operationRunId === "string"
+      ? { operationRunId: payload.operationRunId }
+      : {}),
+    ...(runtime?.deadline ? { deadline: runtime.deadline } : {}),
+    ...(runtime?.signal ? { signal: runtime.signal } : {}),
+    ...(context.repeated ? { repeated: true } : {}),
+    ...(context.cannotWait ? { cannotWait: true } : {})
   };
 }
 

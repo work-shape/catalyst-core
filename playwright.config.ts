@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { defineConfig, devices } from "@playwright/test";
 
 const e2eHost = process.env.E2E_HOST ?? "127.0.0.1";
@@ -8,8 +9,14 @@ const e2eComposeProject = process.env.E2E_COMPOSE_PROJECT ?? "agent-chat-e2e";
 const e2eApiUrl = process.env.E2E_API_URL ?? `http://${e2eHost}:${e2eApiPort}`;
 const e2eUiUrl = process.env.E2E_UI_URL ?? `http://${e2eHost}:${e2eUiPort}`;
 const e2eConfigPath = process.env.E2E_CONFIG_PATH ?? "tests/fixtures/e2e-app.yaml";
-const e2eDatabaseUrl = `postgres://agent_chat:agent_chat@${e2eHost}:${e2ePostgresPort}/agent_chat`;
+const e2eDatabaseUrl =
+  process.env.E2E_DATABASE_URL ??
+  `postgres://agent_chat:agent_chat@${e2eHost}:${e2ePostgresPort}/agent_chat`;
 const useExternalServers = process.env.E2E_USE_EXTERNAL_SERVERS === "1";
+// The config names this key of the Secret Store. Without the runner a run makes its own, and a
+// second API a spec starts inherits it from here.
+const e2eSecretStoreKey = process.env.E2E_SECRET_STORE_KEY ?? randomBytes(32).toString("base64");
+process.env.E2E_SECRET_STORE_KEY = e2eSecretStoreKey;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -59,6 +66,7 @@ export default defineConfig({
 
 function createApiServerEnv(): Record<string, string> {
   return {
+    E2E_SECRET_STORE_KEY: e2eSecretStoreKey,
     HOST: e2eHost,
     PORT: e2eApiPort,
     CLIENT_CONFIG_PATH: e2eConfigPath,

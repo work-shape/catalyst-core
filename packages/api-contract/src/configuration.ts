@@ -226,6 +226,15 @@ export const safeConfigSchema = z.object({
 
 export const collaborationWorkspaceAgentsSchema = z.object({
   defaultAgentName: z.string().optional(),
+  /**
+   * The section rows of the interface's sidebar that are there for the caller in this
+   * workspace. `agents`: at least two agents are available here, counted over every page, or
+   * the caller holds `agent.write` on the instance, in a Namespace or on one agent. With one
+   * agent there is nothing to choose: New chat starts a conversation with it. `apps`: the
+   * Apps module is on, and `assets.list` lists the caller an App of this workspace or the
+   * caller holds `app.write` in it or on one of its Apps. A member is never shown an empty row.
+   */
+  visibleSections: z.array(z.enum(["agents", "apps"])),
   items: safeConfigSchema.shape.agents,
   nextCursor: z.string().optional()
 });
@@ -308,7 +317,18 @@ export const configAssetReferencesSchema = z.object({
    * Tools the instance enables whose module is off. No agent can use one. An agent that
    * still names one shows it as unavailable, so it can be removed.
    */
-  moduleOffTools: z.array(z.object({ name: z.string(), module: z.string() })).optional()
+  moduleOffTools: z.array(z.object({ name: z.string(), module: z.string() })).optional(),
+  /**
+   * What the platform tells every agent before its own instructions, read-only: the rules
+   * every agent gets, and the orientation an agent gets whose tools name one of `toolNames`.
+   */
+  platformInstructions: z
+    .object({
+      rules: z.string(),
+      orientation: z.string(),
+      toolNames: z.array(z.string())
+    })
+    .optional()
 });
 
 export const configAssetsOverviewSchema = z.object({

@@ -90,8 +90,24 @@ const ready = (actions: AppAction[]): AppActionsRead => ({
   revision: 4,
   actions
 });
-const actionsView = (read: AppActionsRead, write = true, locale: "en" | "de" = "en") =>
-  render(createElement(AppActionsView, { read, rights: { write }, onTest: noop }), locale);
+const actionsView = (
+  read: AppActionsRead,
+  write = true,
+  locale: "en" | "de" = "en",
+  liveOnce?: Parameters<typeof AppActionsView>[0]["liveOnce"]
+) =>
+  render(
+    createElement(AppActionsView, {
+      read,
+      rights: { write },
+      onTest: noop,
+      ...(liveOnce ? { liveOnce } : {})
+    }),
+    locale
+  );
+const switchOff = { switching: undefined, failed: undefined, switchOn: noop };
+/** `save` as a draft lists it to a writer whose call the policy lets run. */
+const simulated = { ...save, policy: "confirm" as const, target: "dry_run" as const };
 /** The markup of one row. */
 const rowOf = (markup: string, name: string) =>
   markup.split("<tr").find((row) => row.includes(`data-app-action="${name}"`)) ?? "";
@@ -137,6 +153,28 @@ describe("the Actions side of a draft", () => {
     expect(load).not.toContain(">crm<");
   });
 
+  it("says under a Workflow action that it starts the Workflow with the input", () => {
+    const { name, toolName, inputSchema, policy, agentTool } = action();
+    const start: AppAction = {
+      name: `${name}_start`,
+      kind: "workflow",
+      effect: "changing",
+      toolName,
+      inputSchema,
+      policy,
+      agentTool,
+      workflow: { name: "visit-log" }
+    };
+
+    const row = rowOf(actionsView(ready([start])), "load_start");
+    expect(row).toContain("visit-log");
+    expect(row).toContain("The Workflow and the input the action starts it with");
+    expect(row).not.toContain("The connection");
+    expect(rowOf(actionsView(ready([start]), true, "de"), "load_start")).toContain(
+      "Der Workflow und die Eingabe, mit der die Aktion ihn startet"
+    );
+  });
+
   it("gives an sql action the same row, with the Data Store where the Connection would be", () => {
     const { name, effect, toolName, inputSchema, policy, agentTool } = action();
     const list: AppAction = {
@@ -163,6 +201,12 @@ describe("the Actions side of a draft", () => {
     expect(row).toContain("Reading");
     expect(row).toContain('data-policy="allow"');
     expect(row).toContain("Can be tested");
+    // Under the target, what it is: a store and its SQL, never a Connection.
+    expect(row).toContain("The data store and the SQL the action runs on it");
+    expect(row).not.toContain("The connection");
+    expect(rowOf(actionsView(ready([list]), true, "de"), "list_findings")).toContain(
+      "Der Datenspeicher und das SQL, das die Aktion darauf ausführt"
+    );
     // Without a title the store goes by its name, and a store that is not there says so.
     expect(rowOf(markup, "load_gone")).toContain("ledger");
     expect(rowOf(markup, "load_gone")).toContain('data-unavailable="data_store_missing"');
@@ -179,7 +223,7 @@ describe("the Actions side of a draft", () => {
 
   it("says in one line over the list what it is and that a draft changes nothing", () => {
     const intro =
-      "What this app can read or change in other systems. Nothing is changed from a draft";
+      "What this app can read or change in other systems. A draft changes nothing: an action that changes something is simulated";
 
     expect(actionsView(ready([action(), save]))).toContain(intro);
     // The line stands over the room the list loads into, and not over a state with its own.
@@ -197,28 +241,46 @@ describe("the Actions side of a draft", () => {
     expect(markup).toContain("@max-2xl/table:[&amp;_tr]:grid");
     expect(markup).toContain("@max-2xl/table:[&amp;_thead]:hidden");
     const fullCells = (row: string) => row.match(/data-stacked="full"/gu)?.length ?? 0;
-    // What the action calls takes a line. So does the outcome of a row that has no test.
+    // What the action calls takes a line; the test stands beside what a call comes to.
     expect(fullCells(rowOf(markup, "load"))).toBe(1);
-    expect(fullCells(rowOf(markup, "save"))).toBe(2);
-    expect(rowOf(markup, "save")).toContain('colSpan="2"');
+    expect(fullCells(rowOf(markup, "save"))).toBe(1);
+    // Without a test, what a call comes to takes the line.
+    expect(fullCells(rowOf(actionsView(ready([action(), save]), false), "save"))).toBe(2);
   });
 
-  it("offers the test on a reading action alone and says of a changing one that a draft does not carry it out", () => {
-    const markup = actionsView(ready([action(), save]));
+  // ADR-0031: a changing action of a draft is simulated, and "Run live once" carries out the
+  // writer's own next call of it.
+  it("offers the test on every action of a draft, and Run live once on a changing one the policy lets run", () => {
+    const markup = actionsView(
+      ready([action({ target: "live" }), simulated]),
+      true,
+      "en",
+      switchOff
+    );
 
     expect(rowOf(markup, "load")).toContain('aria-label="Test load"');
-    expect(rowOf(markup, "save")).not.toContain("Test");
-    expect(rowOf(markup, "save")).toContain("Not carried out in a draft");
-    expect(appActionOutcome(save, true).labelKey).toBe("apps.actionNotCarriedOutInDraft");
+    expect(rowOf(markup, "load")).toContain('data-target="live"');
+    expect(rowOf(markup, "load")).not.toContain("data-run-live-once");
+    const row = rowOf(markup, "save");
+    expect(row).toContain('aria-label="Test save"');
+    expect(row).toContain('data-target="dry_run"');
+    expect(row).toContain("Simulated");
+    expect(row).toContain('data-run-live-once="off"');
+    expect(row).toContain('aria-label="Run save live once"');
+    // The switch in each of its states: tests/chat-ui-app-live-once.test.ts.
+    // What a call comes to: in the draft an allowed call can be tested, either effect.
+    expect(appActionOutcome({ ...save, policy: "allow" }, true).labelKey).toBe(
+      "apps.actionTestableInDraft"
+    );
     expect(appActionOutcome(action(), true).labelKey).toBe("apps.actionTestableInDraft");
-    // A reading action the policy holds or refuses keeps the policy's word in the draft too.
     expect(appActionOutcome(action({ policy: "approval" }), true).labelKey).toBe(
       "apps.actionPolicyApproval"
     );
     expect(appActionOutcome({ ...save, policy: "confirm" }, false).labelKey).toBe(
       "apps.actionPolicyConfirm"
     );
-    expect(appActionTestable(action(), "published", { write: true })).toBe(false);
+    expect(appActionTestable("published", { write: true })).toBe(false);
+    expect(appActionTestable("draft", { write: false })).toBe(false);
   });
 
   it("renders no test control, and keeps no column for one, for a reader who may not write the App", () => {
@@ -241,7 +303,7 @@ describe("the Actions side of a draft", () => {
   });
 
   it("says all of it in German", () => {
-    const markup = actionsView(ready([action(), save, gone]), true, "de");
+    const markup = actionsView(ready([action(), simulated, gone]), true, "de", switchOff);
 
     for (const text of [
       "Aktion",
@@ -250,7 +312,8 @@ describe("the Actions side of a draft", () => {
       "In diesem Entwurf",
       "Lesend",
       "Kann getestet werden",
-      "Im Entwurf nicht ausgeführt",
+      // The marker and the switch carry the library's own words, which the UI root sets.
+      'aria-label="save einmal live ausführen"',
       "Was diese App in anderen Systemen lesen oder ändern kann.",
       "Die Verbindung und was die Aktion von ihr verlangt",
       "Diese Operation ist für Apps nicht freigegeben.",
@@ -325,6 +388,48 @@ describe("the test dialog", () => {
     expect(markup).toContain("Kundenkartei");
     expect(markup).toContain("&quot;limit&quot;: 0");
     expect(markup).not.toContain("data-app-action-test-status");
+  });
+
+  it("says of a changing action that the draft simulates it, and shows what it would have done, in both languages", () => {
+    const {
+      connection: _connection,
+      operation: _operation,
+      unavailable: _unavailable,
+      ...rest
+    } = action();
+    const start: AppAction = {
+      ...rest,
+      name: "log",
+      kind: "workflow",
+      effect: "changing",
+      workflow: { name: "visit-log" }
+    };
+    // The instance's sentence is English: the dialog says it in its own words.
+    const outcome = {
+      status: "dry_run" as const,
+      message: "Would have started the Workflow 'visit-log' (instance).",
+      input: { page: "/draft" }
+    };
+
+    const en = dialog({ action: start, outcome });
+    expect(en).toContain("It is simulated and changes nothing");
+    expect(en).toContain("It is listed under Operations.");
+    expect(en).toContain('data-app-action-test-status="dry_run"');
+    expect(en).toContain(
+      "Would have started the Workflow &#x27;visit-log&#x27; with the input below."
+    );
+    expect(en).not.toContain("(instance)");
+    expect(en).toContain("What log would have started with");
+    expect(en).toContain("&quot;page&quot;: &quot;/draft&quot;");
+    const de = dialog({ action: start, outcome }, "de");
+    expect(de).toContain("Er wird simuliert und ändert nichts");
+    expect(de).toContain("Er steht unter Operationen.");
+    expect(de).toContain("Hätte den Workflow „visit-log“ mit der Eingabe unten gestartet.");
+    expect(de).not.toContain("Would have");
+    // A call of a Connection or a Data Store says the action it would have called.
+    const called = dialog({ action: action({ name: "save", effect: "changing" }), outcome }, "de");
+    expect(called).toContain("Hätte save mit der Eingabe unten aufgerufen.");
+    expect(called).not.toContain("Would have");
   });
 
   it("links the place the call is listed in, for a reader who may open it", () => {
@@ -522,6 +627,7 @@ describe("a run of an App in Instance > Operations", () => {
       id: "opr_1",
       operation: "app.orders.load",
       effect: "reading",
+      target: "live",
       status: "done",
       actor: { kind: "user", id: "user-anna", label: "Anna Beispiel" },
       origin: {

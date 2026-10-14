@@ -136,7 +136,7 @@ Every model binding with `supportsFastMode: true` needs these rates; startup val
 
 ## Guardrails
 
-`guardrails` defines the checks the instance runs before an action happens. It defaults to none. Each entry is keyed by its name: lowercase words of letters and digits joined by hyphens or underscores, at most 64 characters. The name stays the guardrail's id in Build, in its hits and on an approval request it checked.
+`guardrails` defines the checks the instance runs before an action happens. It defaults to none. Each entry is keyed by its name: lowercase words of letters and digits joined by hyphens or underscores, at most 64 characters. The name stays the guardrail's id in Studio, in its hits and on an approval request it checked.
 
 ```yaml
 guardrails:
@@ -151,23 +151,43 @@ guardrails:
       modelBindingId: guardrailCheck
       instruction: Check whether the proposed content contains personal data.
     outcome: warn
+  no_iban_in_assets:
+    displayName: No IBAN in assets
+    on: asset.before_write
+    check:
+      kind: pattern
+      pattern: '(?i)\bDE\d{2}(?:\s?\d{4}){4}\s?\d{2}\b'
+      reason: Assets hold no bank account numbers. Remove the IBAN and save again.
+    outcome: block
+  no_iban_in_apps:
+    displayName: No IBAN in published Apps
+    on: app.before_publish
+    check:
+      kind: pattern
+      pattern: '(?i)\bDE\d{2}(?:\s?\d{4}){4}\s?\d{2}\b'
+      reason: Apps hold no bank account numbers. Remove the IBAN and publish again.
+    outcome: block
 ```
 
-| Field                        | Meaning                                                                                                                                                |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `displayName`, `description` | What Build shows. Without `displayName` the name is shown.                                                                                             |
-| `on`                         | The event the guardrail answers. `approval_request.before_create` is the only one in this release: it runs before a request for approval is filed.     |
-| `filter.kind`                | The kind of request it applies to, such as `skill_change`. Without it, every kind. The kind needs a registered request handler.                        |
-| `check`                      | `model_judge`: a model of `modelBindingId` reads the content against `instruction` (at most 8,000 characters, any language) and answers with no tools. |
-| `outcome`                    | `warn` or `block`, what a hit does.                                                                                                                    |
+A guardrail answers one event. A rule that should hold wherever content can go live needs one entry per event: the IBAN rule above stops an asset write and, with its second entry, the publish of an App, so an App whose revision was written before the rule existed cannot go live with an IBAN either.
+
+| Field                        | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `displayName`, `description` | What Build shows. Without `displayName` the name is shown.                                                                                                                                                                                                                                                                                                                                                                                    |
+| `on`                         | The event the guardrail answers: `asset.before_write` (a save, a push, a revert, an App written from a Page, an agent's save and the skill change it proposes, again when that change is approved), `operation.before_call` (every call of an operation), `app.before_publish`, `workflow.before_publish`, `data_store.before_publish` (the revision a publish makes live, with its files) or `approval_request.before_create`.                   |
+| `filter`                     | Narrows the event: `kind` (the asset's kind, or the request's kind such as `skill_change`), `operation` (a name or a prefix ending in `.*`), `origin` (`agent`, `user`, `cli`, `mcp`, `app`, `workflow`, `schedule`) and `agent`, as far as the event knows them. Without it, everything at the event.                                                                                                                                          |
+| `check`                      | `pattern`: an RE2 expression (no backreferences, no lookaround), with the `reason` a person is shown. `model_judge`: a model of `modelBindingId` reads the content against `instruction` (at most 8,000 characters, any language) and answers with no tools. Either may name the event's `fields`: `name` and `content` of an asset, `input` of a call, `summary` and `newContent` of a request.                                                 |
+| `outcome`                    | What a hit does: `allow`, `warn`, `require_approval` (a changing call waits for an approval in the Inbox; the App draft an agent's `page.save` writes cannot wait, so there it is a `block`) or `block`. Every guardrail that applies runs, and the strictest answer wins.                                                                                                                                                                                                                                                       |
+
+Content longer than 2 Mi characters is not read in part: a guardrail that blocks or asks for an approval answers it as a match; one that warns warns. A text file in UTF-8, or in UTF-16 with its byte order mark or without one where at least 90% of the bytes at one parity of its first KiB are NUL and at most 10% at the other, is read as text. Any other file is read by a `pattern` as its printable runs (printable ASCII, tab and line ends) of at least 4 characters, as `strings` finds them, so text beside a NUL byte is still found and a photo adds next to nothing. A `model_judge` reads the text files and, of an image or a font (PNG, JPEG, GIF, WebP, ICO, WOFF, WOFF2, TrueType, OpenType), the printable runs of at least 16 characters, which a photo has next to none of and text put into the file has throughout; any other file that is no text leaves it nothing it can judge, which a judge that blocks or asks for an approval answers as a match. Such a refusal does not say to try again, as nothing about it is temporary; a judge that failed or timed out does.
 
 All guardrails bound to an event run concurrently. For skill changes, the summary and proposed new text are sent to the configured model provider; existing skill text and replaced text are excluded. Select a provider and binding approved for that content. Each check is a model call of the instance: it counts toward the usage budgets and safeguards and leaves one usage record with the purpose `guardrail_judge`, also when it fails or times out. The record names the originating conversation when there is one and never an agent run.
 
-`warn` stores a visible warning and leaves the decision with the approver. `block` refuses a violating proposal and returns the reason to the agent without storing a request. If a check cannot be evaluated, including provider failures or the 60-second timeout, `warn` stores a neutral warning and `block` refuses the proposal, so a blocking guardrail never lets unchecked content through. When a usage limit of the instance refuses the check, the reason given to the agent says that the limit is reached. Guardrails are not run again when a request is decided. Request kinds without a proposed-content extractor are not checked.
+`warn` stores a visible warning and leaves the decision with the approver. `block` refuses a violating proposal and returns the reason to the agent without storing a request. If a check cannot be evaluated, including provider failures or the 60-second timeout, `warn` stores a neutral warning and `block` refuses the proposal, so a blocking guardrail never lets unchecked content through. When a usage limit of the instance refuses the check, the reason given to the agent says that the limit is reached. When a skill change is approved, the skill as the approval would write it is checked again at `asset.before_write`: a block then leaves the skill unchanged, and the request ends as not applied with the guardrail's reason. Undoing an approved change writes the earlier revision back, which is checked the same way: a block refuses the undo and the request stays approved. A call that waited for an approval is checked again before it runs. Request kinds without a proposed-content extractor are not checked.
 
-Every warning and block is kept as a hit: the guardrail, the outcome, its one-sentence reason and the kind of request, never the checked content and never the person. The judge is told to word its reason without quoting the content. Build > Guardrails lists the guardrails read-only, and a guardrail's page counts its hits for the last 7 and 30 days and lists the newest 50, for holders of `guardrail.read` (administrators). Hits are counted by rule and period and never listed by person, because a list of who tripped which rule would let the instance monitor employees, which in Germany needs the works council's co-determination (§87(1) no. 6 BetrVG). Who made a request is in the audit log: `approval_request.created` for a request a guardrail warned on, and `operation.failed` of the agent's `propose_skill_change` call for one it blocked. Hits are deleted with the audit events, after `retention.auditDays`. Creation audit metadata contains only guardrail names and statuses, never proposed content or reasons. Stored check messages remain part of the approval request.
+Every warning and block is kept as a hit: the guardrail, the outcome, its one-sentence reason and the kind of request, never the checked content and never the person. A block that answered a `require_approval` where the action could not wait for an approval, such as the App draft an agent's `page.save` writes, says so (`convertedFrom: require_approval` of `guardrails.list_hits`; "Blocked: approval could not wait" on the guardrail's page). The judge is told to word its reason without quoting the content. Studio > Guardrails lists the guardrails read-only, and a guardrail's page counts its hits for the last 7 and 30 days and lists the newest 50, for holders of `guardrail.read` (administrators). Hits are counted by rule and period and never listed by person, because a list of who tripped which rule would let the instance monitor employees, which in Germany needs the works council's co-determination (§87(1) no. 6 BetrVG). Who made a request is in the audit log: `approval_request.created` for a request a guardrail warned on, and `operation.failed` of the agent's `propose_skill_change` call for one it blocked. Hits are deleted with the audit events, after `retention.auditDays`. Creation audit metadata contains only guardrail names and statuses, never proposed content or reasons. Stored check messages remain part of the approval request.
 
-The API seeds the guardrails into the asset store when it starts, so a change of `guardrails` shows in Build after a restart. They cannot be changed or deleted through the asset operations or the CLI.
+The API seeds the guardrails into the asset store when it starts, published, so a change of `guardrails` shows in Studio after a restart. They are the operator's floor: they cannot be changed, unpublished or deleted through the asset operations or the CLI, and they run from release config itself. Further guardrails are written as assets and published by a holder of `guardrail.publish` (see [config assets](/configure/config-assets/#guardrails-as-assets)); they add checks to the floor and never remove one. A name of release config that a guardrail asset holds already is left to the asset in Studio and logged at start; the floor's rule of that name runs all the same.
 
 ### From `approvalChecks`
 
@@ -426,9 +446,9 @@ rejects that unsupported combination.
 
 Agent configuration may override a binding's default with one of Catalyst's product-owned reasoning efforts: `none`, `low`, `medium`, `high`, `xhigh`, or `max`. Only bindings with `agentSelectable: true` are valid agent choices; set it to `false` for internal bindings such as conversation-title generation. The server validates model-binding references and reasoning values; the UI does not accept arbitrary model identifiers.
 
-An agent's `modelBindingId`, `reasoningEffort`, `fastMode`, `userSelectableModelBindingIds`, and `modelReasoningEfforts` are editable in the admin panel exactly when the caller holds the `agent_models.manage` permission, and the server rejects an interactive change to any of them without it. Superadmins hold the permission by default; a superadmin can grant it to individual users. `modelBindingId` and `reasoningEffort` remain valid `editableAgentFields` values for compatibility but no longer have an effect. `catalyst config push` is unchanged and may set all five.
+An agent's `modelBindingId`, `reasoningEffort`, `fastMode`, `userSelectableModelBindingIds`, and `modelReasoningEfforts` are editable in Studio exactly when the caller holds the `agent_models.manage` permission, and the server rejects an interactive change to any of them without it. Superadmins hold the permission by default; a superadmin can grant it to individual users. `modelBindingId` and `reasoningEffort` remain valid `editableAgentFields` values for compatibility but no longer have an effect. `catalyst config push` is unchanged and may set all five.
 
-Set `supportsFastMode: true` on a binding whose provider deployment offers a priority processing tier. It defaults to `false`. An agent may set `fastMode: true` only while its binding supports it; saving it for another binding is a validation error, and switching an agent to a binding without support in the admin panel clears it. For fast-mode runs the OpenAI-compatible adapter sends `service_tier: "priority"` on both API shapes. When a chat user picks another model, fast mode applies only if that binding supports it. Fast runs are billed with the rate card's `fast` rates, see above.
+Set `supportsFastMode: true` on a binding whose provider deployment offers a priority processing tier. It defaults to `false`. An agent may set `fastMode: true` only while its binding supports it; saving it for another binding is a validation error, and switching an agent to a binding without support in Studio clears it. For fast-mode runs the OpenAI-compatible adapter sends `service_tier: "priority"` on both API shapes. When a chat user picks another model, fast mode applies only if that binding supports it. Fast runs are billed with the rate card's `fast` rates, see above.
 
 Which models chat users may pick is decided per agent, not per binding: each
 agent lists them in `userSelectableModelBindingIds`, and any `agentSelectable`
@@ -682,6 +702,64 @@ A model or effort a user picks becomes their own default for new conversations a
 with their account, so it follows them across devices. A conversation that already ran stays on
 what its latest run used. A user who never picked anything follows the agent's configured model
 and effort, so a change to those defaults still reaches them.
+
+### Embedding models
+
+Knowledge Bases with semantic search turn their passages and every search query into vectors.
+The model that does this is a model binding of kind `embedding`:
+
+```yaml
+modelBindings:
+  - id: knowledgeEmbedding
+    providerId: azure-eu
+    kind: embedding
+    model: acme-text-embedding-3-large
+    dimensions: 1536
+knowledge:
+  defaultEmbeddingBinding: knowledgeEmbedding
+usage:
+  costs:
+    customer:
+      models:
+        - providerId: azure-eu
+          model: acme-text-embedding-3-large
+          uncachedInputPricePerMillionTokens: 0.12
+          cachedInputPricePerMillionTokens: 0
+          outputPricePerMillionTokens: 0
+```
+
+- `kind: embedding` marks the binding. A binding without `kind` is a chat binding, as before.
+- `dimensions` is the length of every vector, and is required. The `openai-compatible` adapter
+  sends it to the model, which shortens its vectors to that length. It is at most 16,000; stay
+  at or below 2,000 where a Knowledge Base may later need an approximate index.
+- The binding uses the key of its provider entry and brings none of its own. On Azure OpenAI the
+  entry's v1 endpoint serves both chat and embeddings, and `model` is the name of the embedding
+  deployment.
+- Every binding of kind `embedding` is approved for Knowledge Bases on the instance.
+  `knowledge.defaultEmbeddingBinding` names the one a Knowledge Base uses unless it names
+  another. Without it the instance offers no semantic search; keyword and structured Knowledge
+  Bases work all the same and call no model.
+- An embedding binding is never offered to agents and answers no chat call: an agent cannot
+  pick it, and conversation titles and guardrails cannot name it.
+- An embedding call is admitted and recorded like every other model call, with no output tokens,
+  the purpose `knowledge_embedding` for ingestion and re-index or `knowledge_query` for a search,
+  and the provider entry, its region and the binding. Its cost comes from the rate card's
+  uncached input price; under a spend budget the model needs a row there.
+
+Startup stops, naming the binding, when:
+
+- an embedding binding's provider entry has a region other than `eu`. Embeddings send the text of
+  documents and queries to their provider; only an EU entry, or a provider that keeps data
+  inside the instance such as `deterministic`, is approved for them;
+- an embedding binding has no `dimensions`, or sets `agentSelectable: true`;
+- a chat binding sets `dimensions`;
+- its provider does not embed. `openai-compatible` and `deterministic` embed; `google-vertex` and
+  `aws-bedrock` do not;
+- `knowledge.defaultEmbeddingBinding` names no binding of kind `embedding`;
+- a guardrail or conversation title generation names an embedding binding.
+
+The `deterministic` provider embeds with vectors made from a hash of each text: the same text
+gives the same vector, and nearness of meaning is not modelled. It is for tests and development.
 
 ## Mail
 
@@ -971,7 +1049,7 @@ egress:
       port: 443
 ```
 
-Each key under `connections` is the name of a Connection. A name that starts with the prefix of a [Namespace](/operate/rights-and-namespaces/) belongs to that Namespace: whoever holds `connection.read` or `connection.use` there holds it on this Connection too, so choose the name with that in mind. An entry takes `connectorType`, `displayName`, `description`, `settings`, `authScheme`, `secret` and `operations`, and nothing else. `settings` is checked against the strict schema of the connector type before anything is stored, and a `connectorType` this build does not ship stops startup with the place of the fault. An entry of `operations` takes `name`, `effect` (`reading` or `changing`), `exposure` (any of `agent`, `bridge`, `workflow`) and optionally `policy` and `schemaFingerprint`. What stands in the list is accepted; nothing else of the outside system can be called.
+Each key under `connections` is the name of a Connection. A name that starts with the prefix of a [Namespace](/operate/rights-and-namespaces/) belongs to that Namespace: whoever holds `connection.read` or `connection.use` there holds it on this Connection too, so choose the name with that in mind. An entry takes `connectorType`, `displayName`, `description`, `settings`, `authScheme`, `secret` and `operations`, and nothing else. `settings` is checked against the strict schema of the connector type before anything is stored, and a `connectorType` this build does not ship stops startup with the place of the fault. An entry of `operations` takes `name`, `effect` (`reading` or `changing`), `exposure` (any of `agent`, `bridge`, `workflow`, `outside`) and optionally `policy` and `schemaFingerprint`. What stands in the list is accepted; nothing else of the outside system can be called. Each exposure admits one kind of caller: `agent` an agent, `bridge` an App, `workflow` a Workflow, and `outside` the CLI and the platform MCP server, a caller with an API key or a Service Principal's credential, whose results leave the instance. A person in the browser outside an App and a schedule are admitted by none. `outside` is off unless the list names it.
 
 `secret` is the name of a secret, resolved like every other secret of the instance: from the environment variable of that name or from the file `<NAME>_FILE` points at. It is the only place of a Connection where a secret may stand, and it never holds the value. An `authScheme` other than `none` needs it, and `none` refuses it.
 
@@ -1001,7 +1079,7 @@ Nothing returns a stored secret: no operation, route, CLI command, export, log l
 
 ### Egress
 
-`egress.allow` is the list of outside targets a Connection may reach. It is empty unless set, and an empty list refuses every target.
+`egress.allow` is the list of outside targets a Connection may reach. It is empty unless set, and an empty list refuses every target. `egress.allowPublicHttps` opens every public HTTPS host beside the list; it is off unless set.
 
 | Key        | Meaning                                                                   |
 | ---------- | ------------------------------------------------------------------------- |
@@ -1033,7 +1111,30 @@ egress:
       cidrs: ["172.28.0.0/16"]
 ```
 
-A refusal answers `egress_denied` with the host and the port, and nothing else of the address. A target outside the list is refused before its name is looked up. A host that is on the list and whose name gives no address, as with a stopped service or a resolver that is down, is refused as well and nothing is contacted, but it is not `egress_denied`: a call answers `connection_unavailable` and says that the host did not resolve, and a test of the Connection answers `unavailable`. A checked answer is used for 30 seconds, so a call within that time makes no DNS lookup, and a page load makes none at all. A refusal that came from the resolver (a timeout, a failed lookup, no answer) is held for 5 seconds. The list is read at start: a change needs a restart.
+#### Every public HTTPS host
+
+`egress.allowPublicHttps: true` lets a Connection reach a host that no entry names, over `https` on port 443, for an instance whose administrators connect outside services themselves. The operator accepts that any administrator of the instance may then send a Connection, and its credential, to any public HTTPS service.
+
+```yaml
+egress:
+  allowPublicHttps: true
+  allow:
+    - protocol: http
+      host: mcp-internal
+      port: 8080
+      network: private
+      cidrs: ["172.28.0.0/16"]
+```
+
+- Such a target is judged as a `public` entry: every address the host answers must be public. Loopback, link-local, cloud metadata addresses, private ranges and their IPv4-mapped IPv6 forms are refused as above.
+- The instance's database host is refused on every port, by name and by address.
+- Redirects and returned download addresses are checked as new targets, and the credential still goes only to the origin it was configured for.
+- Another port, plain `http` and `postgres` still need an entry under `egress.allow`. The entries keep working beside the setting, and a private host is reached only through a `private` entry.
+- A start with the setting on logs a warning once.
+
+#### Refusals
+
+A refusal answers `egress_denied` with the host and the port, and nothing else of the address. Its message ends with the setting that would let the target through: an entry under `egress.allow`, `egress.allowPublicHttps` for `https` on port 443, a `private` entry for a host that resolves to a private address, or that no setting does, as for a link-local address or the database host. A target outside the list is refused before its name is looked up. A host that is on the list and whose name gives no address, as with a stopped service or a resolver that is down, is refused as well and nothing is contacted, but it is not `egress_denied`: a call answers `connection_unavailable` and says that the host did not resolve, and a test of the Connection answers `unavailable`. A checked answer is used for 30 seconds, so a call within that time makes no DNS lookup, and a page load makes none at all. A refusal that came from the resolver (a timeout, a failed lookup, no answer) is held for 5 seconds. The list and `allowPublicHttps` are read at start: a change needs a restart.
 
 ## Data Stores
 

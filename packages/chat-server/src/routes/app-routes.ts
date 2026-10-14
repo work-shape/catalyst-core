@@ -1,5 +1,5 @@
 import { APP_ASSET_KIND, apiOperations } from "@vivd-catalyst/api-contract";
-import { AppError, asCollaborationWorkspaceId } from "@vivd-catalyst/core";
+import { AppError, PAGE_FILE_SET_HELD_KEY, asCollaborationWorkspaceId } from "@vivd-catalyst/core";
 import { AppActionCalls } from "../apps/action-call";
 import { AppActionList } from "../apps/action-list";
 import { AppWorkflow } from "../apps/app-workflow";
@@ -20,7 +20,7 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
   const actionList = new AppActionList(options);
 
   route.operation(apiOperations["apps.create_from_page"], {
-    authorize: (input, { access }) => workflow.authorizeCreate(access, input),
+    authorize: (input, { actor, access }) => workflow.authorizeCreate(actor, access, input),
     resource: (input) => ({
       kind: APP_ASSET_KIND,
       id: input.name,
@@ -29,7 +29,9 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
     }),
     changeClass: "reversible",
     module: APPS_MODULE,
-    execute: (input, context) => workflow.createFromPage(context, input)
+    beforeEvents: (input) => [workflow.writeEventFromPage({ ...input, app: input.name })],
+    heldInputKeys: [PAGE_FILE_SET_HELD_KEY],
+    execute: (input, context) => workflow.createFromPage(context, input, context.beforeEvents)
   });
 
   route.operation(apiOperations["apps.actions.list"], {
@@ -43,7 +45,7 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
   });
 
   route.operation(apiOperations["apps.update_from_page"], {
-    authorize: (input, { access }) => workflow.authorizeUpdate(access, input),
+    authorize: (input, { actor, access }) => workflow.authorizeUpdate(actor, access, input),
     resource: (input) => ({
       kind: APP_ASSET_KIND,
       id: input.app,
@@ -52,7 +54,9 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
     }),
     changeClass: "reversible",
     module: APPS_MODULE,
-    execute: (input, context) => workflow.updateFromPage(context, input)
+    beforeEvents: (input) => [workflow.writeEventFromPage(input)],
+    heldInputKeys: [PAGE_FILE_SET_HELD_KEY],
+    execute: (input, context) => workflow.updateFromPage(context, input, context.beforeEvents)
   });
 
   // Asked by the surface of a Page each time it opens. What it tells of an App is decided by
@@ -69,7 +73,7 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
     return workflow.preview({ user, access }, { app: params.app, mode: body.mode });
   });
 
-  // The three calls of a frame. The interface makes them with the viewer's session after the
+  // The calls of a frame. The interface makes them with the viewer's session after the
   // frame asked through the bridge, and names the frame by its page session. The right on the
   // Page or the App is decided here and in the call path, with the caller present.
   route(apiOperations["apps.sessions.context"], async ({ user, access, params, body, reply }) => {
@@ -98,23 +102,14 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
   );
 
   route(
-    apiOperations["apps.sessions.call_connection"],
-    async ({ user, access, context, params, body, request, reply }) => {
+    apiOperations["apps.sessions.get_workflow_run"],
+    async ({ user, access, context, params, body, reply }) => {
       void reply.header("cache-control", "no-store");
       const session = await actions.session(
         { user, access },
         { pageSessionId: params.pageSessionId, fileSetId: body.fileSetId, token: body.token }
       );
-      return actions.callConnection(
-        session,
-        { connection: params.connection, operation: params.operation },
-        body.input,
-        {
-          correlationId: context.correlationId,
-          idempotencyKey: idempotencyKeyOf(request.headers["idempotency-key"]),
-          header: (name, value) => void reply.header(name, value)
-        }
-      );
+      return actions.workflowRun(session, params.runId, context.correlationId);
     }
   );
 }

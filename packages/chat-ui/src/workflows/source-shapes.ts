@@ -1,4 +1,5 @@
 import type {
+  LiveOnceSwitchView,
   WorkflowListItem,
   WorkflowRunView,
   WorkflowStepRunView,
@@ -70,10 +71,19 @@ export interface WorkflowsSource {
   drafts?: WorkflowDraftsSource;
 }
 
-/** What a person does to the draft of a Workflow: `assets.publish`, `assets.discard_draft`. */
+/**
+ * What a person does to the draft of a Workflow: `assets.publish`, `assets.discard_draft`,
+ * `workflows.test` and `assets.run_live_once`.
+ */
 interface WorkflowDraftsSource {
   /** Makes the revision with this number the published one: the one a run starts on. */
   publish(workflow: string, revision: number): Promise<void>;
   /** Puts the draft back on the published revision. `expectedRevision` is the draft read. */
   discard(workflow: string, expectedRevision: number): Promise<void>;
+  /** Starts a test run of the draft as the reader, with the input its form gave. */
+  test(workflow: string, input: Readonly<Record<string, unknown>>): Promise<WorkflowRunView>;
+  /** Lets one step of the draft run live in the next test run. `expectedRevision` is the draft read. */
+  runLiveOnce(workflow: string, step: string, expectedRevision: number): Promise<void>;
+  /** The reader's own switches on the draft, and the test run that used each. */
+  listLiveOnce(workflow: string, signal: AbortSignal): Promise<LiveOnceSwitchView[]>;
 }

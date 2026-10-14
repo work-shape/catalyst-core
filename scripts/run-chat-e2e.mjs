@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
@@ -51,10 +52,16 @@ const e2eHost = process.env.E2E_HOST ?? "127.0.0.1";
 const e2eApiPort = process.env.E2E_API_PORT ?? "4210";
 const e2eUiPort = process.env.E2E_UI_PORT ?? "5273";
 const e2ePostgresPort = process.env.E2E_POSTGRES_PORT ?? "55433";
-const e2eDatabaseUrl = `postgres://agent_chat:agent_chat@${e2eHost}:${e2ePostgresPort}/agent_chat`;
+const e2eDatabaseUrl =
+  process.env.E2E_DATABASE_URL ??
+  `postgres://agent_chat:agent_chat@${e2eHost}:${e2ePostgresPort}/agent_chat`;
 const e2eComposeProject = process.env.E2E_COMPOSE_PROJECT ?? "agent-chat-e2e";
 // The caller already runs an empty Postgres on E2E_HOST:E2E_POSTGRES_PORT with user, password
 // and database `agent_chat`, as the hosted check does; the runner starts and removes no container.
+// E2E_DATABASE_URL replaces that database for the API, the worker, the migration and the specs, so
+// runs on one Postgres cluster can each have a database of their own. The runner creates and drops
+// no database or role; with E2E_EXTERNAL_POSTGRES=1 the caller provides it empty, and without it
+// the container still starts with `agent_chat`, which the URL then bypasses.
 const e2eExternalPostgres = process.env.E2E_EXTERNAL_POSTGRES === "1";
 const e2eApiUrl = process.env.E2E_API_URL ?? `http://${e2eHost}:${e2eApiPort}`;
 const e2eUiUrl = process.env.E2E_UI_URL ?? `http://${e2eHost}:${e2eUiPort}`;
@@ -64,6 +71,11 @@ const e2eConfigPath = resolve(repoRoot, process.env.E2E_CONFIG_PATH ?? generated
 const e2eSessionTokenSecret = "e2e-session-token-secret-with-at-least-24-characters";
 const e2eServerCredential = "e2e-server-to-server-credential";
 const e2eServiceAccessTokenSecret = "e2e-service-access-token-secret-with-32-characters";
+/** The port the sample MCP server of the connection editor spec listens on. */
+const e2eSampleMcpPort = process.env.E2E_SAMPLE_MCP_PORT ?? "4219";
+// The key of the Secret Store of one run. Every API the suite starts inherits it, a second API
+// of a spec too, because the config names it.
+process.env.E2E_SECRET_STORE_KEY ??= randomBytes(32).toString("base64");
 
 const children = new Set();
 let cleanupStarted = false;
@@ -164,8 +176,13 @@ Environment:
   E2E_COMPOSE_PROJECT   Docker Compose project name, default agent-chat-e2e
   E2E_EXTERNAL_POSTGRES=1  Use the empty Postgres already listening on E2E_POSTGRES_PORT
                         (user, password and database agent_chat); start no container
+  E2E_DATABASE_URL      Database URL for the run, default
+                        postgres://agent_chat:agent_chat@E2E_HOST:E2E_POSTGRES_PORT/agent_chat.
+                        Give each parallel run on one Postgres its own empty database; the runner
+                        creates and drops none. Use it with E2E_EXTERNAL_POSTGRES=1
   E2E_SKIP_BUILD=1      Skip package/server builds
   E2E_KEEP_STACK=1      Leave services running for debugging
+  E2E_SAMPLE_MCP_PORT   Port of the sample MCP server a spec starts, default 4219
 
 Examples:
   node scripts/run-chat-e2e.mjs --state
@@ -180,7 +197,11 @@ async function prepareConfig() {
   const fixture = await readFile(fixturePath, "utf8");
   const generated = fixture
     .replaceAll("http://127.0.0.1:4210", e2eApiUrl)
-    .replaceAll("http://127.0.0.1:5273", e2eUiUrl);
+    .replaceAll("http://127.0.0.1:5273", e2eUiUrl)
+    .replace(
+      "protocol: http, host: 127.0.0.1, port: 4219",
+      `protocol: http, host: 127.0.0.1, port: ${e2eSampleMcpPort}`
+    );
   await writeFile(e2eConfigPath, generated);
 }
 
@@ -366,11 +387,13 @@ async function runPlaywright() {
       E2E_API_PORT: e2eApiPort,
       E2E_UI_PORT: e2eUiPort,
       E2E_POSTGRES_PORT: e2ePostgresPort,
+      E2E_DATABASE_URL: e2eDatabaseUrl,
       E2E_COMPOSE_PROJECT: e2eComposeProject,
       E2E_API_URL: e2eApiUrl,
       E2E_UI_URL: e2eUiUrl,
       E2E_CONFIG_PATH: e2eConfigPath,
-      E2E_SERVER_CREDENTIAL: e2eServerCredential
+      E2E_SERVER_CREDENTIAL: e2eServerCredential,
+      E2E_SAMPLE_MCP_PORT: e2eSampleMcpPort
     }
   });
 }

@@ -1,9 +1,13 @@
 import { z } from "zod";
 import { defineProvider } from "@vivd-catalyst/core";
+import { embedDeterministically } from "../deterministic-embedding";
 import { DETERMINISTIC_CAPABILITIES, DeterministicModelProvider } from "../deterministic-provider";
 import type { ModelAdapterFactory, ModelAdapterRequest } from "../types";
 
-/** Answers from fixed rules inside the process. For development, tests and the demo. */
+/**
+ * Answers from fixed rules inside the process, and embeds with vectors from a hash of the text.
+ * For development, tests and the demo.
+ */
 export const deterministicModelProvider = defineProvider({
   port: "models",
   type: "deterministic",
@@ -21,7 +25,8 @@ export const deterministicModelProvider = defineProvider({
       return {
         capabilities: () => DETERMINISTIC_CAPABILITIES,
         complete: (request) => provider.complete(toRequest(request)),
-        stream: (request) => provider.stream(toRequest(request))
+        stream: (request) => provider.stream(toRequest(request)),
+        embed: async (request) => embedDeterministically(request)
       };
     };
   },

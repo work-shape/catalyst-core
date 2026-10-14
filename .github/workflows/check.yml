@@ -7,15 +7,19 @@ permissions:
   contents: read
   # The database of the checks is the instance's Postgres image, a package of this repository.
   packages: read
-# A newer push to the same branch or pull request cancels the run for the older push, on main
-# as well, so only the latest commit of a ref reports a result.
+# A newer push to a pull request cancels the run for the older push, so only its latest commit
+# reports a result. Every run on main finishes: a merge that lands while the previous one is
+# checked must not cancel that check, or a break on main goes unseen. A shared group would still
+# drop a run that waits behind another, so each commit on main is a group of its own.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   check:
-    runs-on: ubuntu-latest
-    # The suite alone takes about 26 minutes; 30 cancelled the last step on every PR.
+    # Vitest runs one test file per core but one, so this job gets 8 cores and 32 GB. On a
+    # hosted runner of 4 cores the suite alone took about 26 minutes; 30 cancelled the last step
+    # on every PR.
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 45
     env:
       POSTGRES_STORE_TEST_DATABASE_URL: postgresql://catalyst:local-check@localhost:5432/catalyst_test
@@ -47,6 +51,10 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Seconds, before the suite's half hour: a pull request whose migration number main gave
+      # out in the meantime fails here with the steps to renumber. `pnpm check` runs it again.
+      - name: Migrations
+        run: pnpm check:migrations
       - run: pnpm check
       # Installs the previous and the oldest supported release from their tags and runs their
       # database tests against the schema of this commit, on the database started above. The
@@ -70,7 +78,7 @@ jobs:
   # is not root runs commands as itself. Under sudo the worker is root, as in a deployment: it
   # gives the workspace to the runner's fixed user and commands run as that user.
   images:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 20
     env:
       POSTGRES_STORE_TEST_DATABASE_URL: postgresql://catalyst:local-check@localhost:5432/catalyst_test
@@ -86,6 +94,12 @@ jobs:
       - name: Database
         timeout-minutes: 5
         run: .github/scripts/start-postgres.sh catalyst local-check catalyst_test 5432
+      # A BuildKit builder whose layer cache stays on Blacksmith between runs. It falls back to
+      # the local builder when Blacksmith cannot set it up.
+      - uses: useblacksmith/setup-docker-builder@19215110ab936351210feebdfa5b440b4493e184 # v2.2.0
+        with:
+          # Every image of the job is a target of this one Dockerfile.
+          cache-key: vivd-client.Dockerfile
       - run: bash scripts/check-image-build.sh
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -112,13 +126,23 @@ jobs:
           pnpm exec vitest run
           tests/docker-workspace-command-runner.test.ts tests/page-build-sandbox.test.ts
           -t "in the runner image|gives the workspace"
-  # The whole browser suite, beside the job above. It is not part of `pnpm check`, because it
-  # needs a browser and ports of its own; locally it is `pnpm test:e2e`.
-  browser:
-    runs-on: ubuntu-latest
-    # The job takes 15 minutes on an ordinary runner (2 to build, 12 for 296 tests) and 22 on a
-    # runner that is 1.6 times slower, which the hosted pool hands out now and then.
-    timeout-minutes: 35
+  # The whole browser suite, beside the job above, in three shards on runners of their own. It is
+  # not part of `pnpm check`, because it needs a browser and ports of its own; locally it is
+  # `pnpm test:e2e`. Each shard builds, starts its own database and servers and runs a third of
+  # the tests, so no shard sees what another one wrote.
+  browser-shard:
+    name: browser ${{ matrix.shard }}/3
+    # Unsharded the suite took 23 to 34 minutes (4 to build and start, the rest for about 370
+    # tests on two workers). A shard builds as long and runs a third of the tests. The longest
+    # shard is set by chat-standalone.spec.ts, whose tests run in order in one worker for about
+    # 15 minutes, so more shards or more cores per shard would not finish sooner. 4 cores give
+    # the two workers Playwright starts on them.
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -154,13 +178,25 @@ jobs:
         shell: bash
         env:
           E2E_EXTERNAL_POSTGRES: "1"
-        run: pnpm test:e2e --retries=1 --reporter=list 2>&1 | tee browser-run.log
+          SHARD: ${{ matrix.shard }}
+        run: pnpm test:e2e --retries=1 --reporter=list --shard="$SHARD/3" 2>&1 | tee browser-run.log
       - name: Keep traces and the server log of a failed run
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: browser-run
+          name: browser-run-${{ matrix.shard }}
           path: |
             test-results/
             browser-run.log
           retention-days: 7
+  # One result under the name the suite always reported: it passes when every shard passed.
+  browser:
+    needs: browser-shard
+    if: ${{ !cancelled() }}
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 2
+    steps:
+      - name: Every shard passed
+        env:
+          SHARDS: ${{ needs.browser-shard.result }}
+        run: test "$SHARDS" = success

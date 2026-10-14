@@ -217,6 +217,18 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     await expect(surface.getByTestId("workflow-canvas")).toBeVisible();
     await expect(surface.locator("[data-workflow-draft]")).toHaveCount(0);
 
+    // "Open page" in the head of the panel opens the Workflow's page in a new tab, with no
+    // conversation in its address; the conversation stays where it is.
+    const conversationUrl = page.url();
+    const [opened] = await Promise.all([
+      page.context().waitForEvent("page"),
+      page.getByRole("button", { name: "Open the workflow's page", exact: true }).click()
+    ]);
+    await opened.waitForURL((url) => url.pathname === workflowPath);
+    expect(new URL(opened.url()).searchParams.has("chat")).toBe(false);
+    await opened.close();
+    expect(page.url()).toBe(conversationUrl);
+
     // The agent saves a draft: the canvas beside the chat is drawn again with the bar of the
     // draft, and the call reads as what it did.
     await sendToolCall(page, "platform.assets.put", {
@@ -277,30 +289,50 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "en"));
 
     // In a plain conversation of the builder's own workspace, a read of an asset moves
-    // nothing. Opening it makes it the subject and shows it beside the chat, with a line that
-    // names it: the Workflow on its canvas, then, as the agent opens it, an agent's form.
-    // A conversation shared with its workspace is refused the open: the asset would reach
-    // every member who reads the conversation.
+    // nothing, and the agent's own open of the Workflow is refused: it belongs to the whole
+    // instance, and only the person's step makes it what a conversation is about.
     const workspaces = workspaceListSchema.parse(
       await (await page.request.get(`${apiBaseUrl}/api/v1/workspaces?limit=100`)).json()
     );
     const personal = workspaces.items.find((workspace) => workspace.kind === "personal");
     expect(personal).toBeDefined();
-    await page.goto(`/w/${personal?.id ?? ""}`);
+    const personalId = personal?.id ?? "";
+    await page.goto(`/w/${personalId}`);
     await sendToolCall(page, "platform.assets.get", { kind: "workflow", name: id });
     const subject = page.getByTestId("conversation-subject");
     await expect(await lastWorkLine(page)).toHaveText("Read the workflow");
     await expect(subject).toHaveCount(0);
-    await expect(page.locator('[data-surface-kind="workflow_canvas"]')).toHaveCount(0);
+    const touched = page.locator('[data-surface-kind="workflow_canvas"]');
+    await expect(touched).toHaveCount(0);
+    await sendToolCall(page, "platform.assets.open", { kind: "workflow", name: id });
+    await expect(await lastWorkLine(page)).toHaveText("The asset could not be opened");
+    await expect(subject).toHaveCount(0);
+    await expect(touched).toHaveCount(0);
+
+    // Started from the Workflow's page, the conversation is about it: the agent's open shows
+    // it beside the chat, with a line that names it.
+    await page.goto(`/w/${personalId}/workflows/${id}`);
+    await workflowPage.getByRole("button", { name: EDIT, exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/w/${personalId}/c/[^/]+$`, "u"));
     await sendToolCall(page, "platform.assets.open", { kind: "workflow", name: id });
     await expect(await lastWorkLine(page)).toHaveText(`Opened ${NAME}`);
     await expect(subject).toHaveAttribute("data-subject-kind", "workflow");
     await expect(subject).toContainText(NAME);
-    const touched = page.locator('[data-surface-kind="workflow_canvas"]');
     await expect(touched.getByTestId("workflow-canvas")).toBeVisible();
     await shootThemes(page, "workflow-from-chat", async () => {
       await expect(touched.getByText("What the run returns.")).toBeVisible();
     });
+
+    // A conversation about an agent, as its page starts one, shows the agent's form when the
+    // agent opens it.
+    const aboutAgent = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/conversations`, {
+      data: {
+        collaborationWorkspaceId: personalId,
+        subject: { kind: "agent", name: "research_assistant" }
+      }
+    });
+    expect(aboutAgent.ok(), await aboutAgent.text()).toBe(true);
+    await page.goto(`/w/${personalId}/c/${idSchema.parse(await aboutAgent.json()).id}`);
     await sendToolCall(page, "platform.assets.open", {
       kind: "agent",
       name: "research_assistant"

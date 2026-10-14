@@ -47,7 +47,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-non-null-assertion",
       "scope": "packages/config-cli",
-      "count": 20,
+      "count": 19,
       "owner": "PA-1b"
     },
     {
@@ -133,13 +133,6 @@
       "scope": "packages/client-assembly",
       "count": 2,
       "owner": "CB-10a"
-    },
-    {
-      "target": "lint",
-      "rule": "@typescript-eslint/no-unsafe-type-assertion",
-      "scope": "packages/config-cli",
-      "count": 2,
-      "owner": "PA-1b"
     },
     {
       "target": "lint",
@@ -250,7 +243,7 @@
       "target": "lint",
       "rule": "import-x/no-relative-packages",
       "scope": "tests",
-      "count": 154,
+      "count": 150,
       "owner": "CB-2"
     },
     {
@@ -579,7 +572,7 @@
       "target": "operations",
       "rule": "plain-changing",
       "scope": "identity",
-      "count": 2,
+      "count": 4,
       "owner": "CONV-1"
     },
     {
@@ -644,6 +637,15 @@
       "scope": "packages/tool-execution",
       "count": 2,
       "owner": "EW-1"
+    }
+  ],
+  "acceptedRaises": [
+    {
+      "key": "operations|plain-changing|identity",
+      "to": 4,
+      "reason": "connect_codes.start and connect_codes.redeem (PK-1) change identity data by design; accepted 2026-10-13",
+      "acceptedBy": "manager",
+      "date": "2026-10-13"
     }
   ]
 }

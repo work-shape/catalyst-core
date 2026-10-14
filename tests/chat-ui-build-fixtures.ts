@@ -30,6 +30,7 @@ export function platformContext(
         plural: "agents",
         lifecycle: "active",
         representation: "config",
+        owners: ["instance", "workspace"],
         actions: { read: "agent.read", write: "agent.write", delete: "agent.delete" }
       },
       {
@@ -37,12 +38,15 @@ export function platformContext(
         plural: "skills",
         lifecycle: "active",
         representation: "config",
+        owners: ["instance", "workspace"],
         actions: { read: "skill.read", write: "skill.write", delete: "skill.delete" }
       }
     ],
     actions,
     assetActions,
-    namespaces
+    namespaces,
+    workspaces: [],
+    visibleSections: []
   };
 }
 

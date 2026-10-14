@@ -192,6 +192,35 @@ export async function discardConfigAssetDraft(
   });
 }
 
+export async function unpublishConfigAsset(
+  db: PostgresConnection,
+  input: Parameters<ConfigAssetStore["unpublishConfigAsset"]>[0]
+): ReturnType<ConfigAssetStore["unpublishConfigAsset"]> {
+  return db.transaction(async (tx) => {
+    await lockConfigAssetWrites(tx, input.clientInstanceId);
+    const asset = await lockAuthorizedAsset(tx, input);
+    const [published] = asset.publishedRevisionId
+      ? await tx
+          .select({ revision: configAssetRevisions.revision })
+          .from(configAssetRevisions)
+          .where(eq(configAssetRevisions.id, asset.publishedRevisionId))
+          .limit(1)
+      : [];
+    if (!published) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `nothing_published: ${input.kind} '${input.name}' is not published`,
+        { reason: "nothing_published" }
+      );
+    }
+    await tx
+      .update(configAssets)
+      .set({ publishedRevisionId: null, updatedAt: new Date() })
+      .where(eq(configAssets.id, asset.id));
+    return { revision: published.revision };
+  });
+}
+
 export async function removeConfigAsset(
   db: PostgresConnection,
   input: Parameters<ConfigAssetStore["removeConfigAsset"]>[0]

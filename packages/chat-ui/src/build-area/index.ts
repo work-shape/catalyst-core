@@ -1,5 +1,6 @@
 export { AgentAvailabilityEditor, AgentEditor } from "./agent-editor";
 export { AssetEditorShell } from "./asset-editor-shell";
+export { PlatformInstructionsBody } from "./platform-instructions";
 export { FieldRefusals } from "./asset-form-fields";
 export * from "./asset-form-model";
 export { isEditableKind } from "./build-asset-kind";
@@ -14,7 +15,8 @@ export type {
 export { buildAssetKinds, BuildAssetKindsProvider } from "./build-asset-kinds";
 export { type BuildAssetRead, type BuildList, type BuildSource } from "./build-data";
 export { BuildFrame } from "./build-frame";
-export { ConnectionPage } from "./connection-page";
+export { ConnectionEditor } from "./connection-editor";
+export * from "./connection-form-model";
 export type {
   ConnectionDetailRead,
   ConnectionHoldersRead,
@@ -23,6 +25,7 @@ export type {
 } from "./connection-source";
 export { dataStoreKindOn } from "./data-store-kind";
 export { GuardrailPage } from "./guardrail-page";
+export { guardrailRunSentence, type GuardrailRunFacts } from "./guardrail-sentence";
 export type { GuardrailSource } from "./guardrail-source";
 export { dataStoreStateView, formatDataStoreSize } from "./data-store-model";
 export { DataStoreValueDialog } from "./data-store-rows";
@@ -51,7 +54,13 @@ export {
   requestBuildStart,
   requestedBuildStart
 } from "./build-create-request";
-export { mayCreateAgents, resolveBuildRights } from "./build-rights";
+export {
+  buildScopes,
+  mayCreateAgents,
+  resolveBuildRights,
+  resolveBuildScope,
+  type BuildScope
+} from "./build-rights";
 export {
   buildLocationOfRoute,
   BuildNavigationProvider,

@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import {
   apiOperations,
   BODY_TOO_LARGE_REASON,
+  INVALID_JSON_BODY_REASON,
   UNKNOWN_OPERATION_REASON
 } from "@vivd-catalyst/api-contract";
 import { AppError, isAppError, toErrorEnvelope } from "@vivd-catalyst/core";
@@ -38,13 +39,43 @@ function isRetiredRoute(method: string, url: string): boolean {
   return RETIRED_ROUTES.has(`${method} ${url.split("?", 1)[0] ?? url}`);
 }
 
-function isBodyTooLarge(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    error.code === "FST_ERR_CTP_BODY_TOO_LARGE"
-  );
+/**
+ * The refusals of a request body that the framework raises before any route reads it, each the
+ * caller's to hear in a sentence. Its JSON reader refuses an empty body, one that does not
+ * parse, and one that names `__proto__` or `constructor.prototype` as a key.
+ */
+const BODY_REFUSALS = new Map([
+  [
+    "FST_ERR_CTP_BODY_TOO_LARGE",
+    {
+      message: "The request body is larger than this instance accepts",
+      reason: BODY_TOO_LARGE_REASON
+    }
+  ],
+  [
+    "FST_ERR_CTP_EMPTY_JSON_BODY",
+    {
+      message: "The request body is empty, and its content type needs JSON",
+      reason: INVALID_JSON_BODY_REASON
+    }
+  ],
+  [
+    "FST_ERR_CTP_INVALID_JSON_BODY",
+    {
+      message:
+        "The request body is no JSON this instance reads: it does not parse, or it names __proto__ or constructor.prototype as a key",
+      reason: INVALID_JSON_BODY_REASON
+    }
+  ]
+]);
+
+function bodyRefusalOf(error: unknown): AppError | undefined {
+  const code =
+    typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+  const refusal = typeof code === "string" ? BODY_REFUSALS.get(code) : undefined;
+  return refusal
+    ? new AppError("BAD_REQUEST", refusal.message, { reason: refusal.reason })
+    : undefined;
 }
 
 export function installErrorHandler(app: FastifyInstance): void {
@@ -65,12 +96,7 @@ export function installErrorHandler(app: FastifyInstance): void {
     );
   });
   app.setErrorHandler((raised, request, reply) => {
-    // A body over the framework's limit is the caller's to hear, in a sentence.
-    const error = isBodyTooLarge(raised)
-      ? new AppError("BAD_REQUEST", "The request body is larger than this instance accepts", {
-          reason: BODY_TOO_LARGE_REASON
-        })
-      : raised;
+    const error = bodyRefusalOf(raised) ?? raised;
     if (!isAppError(error)) {
       app.log.error(error);
     }

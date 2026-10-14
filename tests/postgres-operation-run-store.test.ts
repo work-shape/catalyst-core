@@ -20,6 +20,7 @@ function newRun(overrides: Partial<NewOperationRun> = {}): NewOperationRun {
     clientInstanceId,
     operation: "items.create",
     effect: "changing",
+    target: "live",
     actor: { kind: "user", id: "usr_1", label: "One" },
     origin: { kind: "user" },
     inputHash: "a".repeat(64),

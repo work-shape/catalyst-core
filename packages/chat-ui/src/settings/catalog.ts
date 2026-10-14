@@ -11,6 +11,7 @@ import type {
   SettingsScope,
   SettingsViewer
 } from "./page-definition";
+import { ApiKeysPage } from "./pages/api-keys";
 import { LanguageAppearancePage } from "./pages/language-appearance";
 import { ProfilePage } from "./pages/profile";
 import { SecurityPage } from "./pages/security";
@@ -62,6 +63,13 @@ const settingsPages: readonly SettingsPageDefinition[] = [
     width: "narrow",
     visible: (viewer) => canChangePassword(viewer.user),
     component: SecurityPage
+  },
+  {
+    id: "api-keys",
+    group: "you",
+    labelKey: "settings.apiKeys",
+    visible: (viewer) => viewer.modules?.personalApiKeys?.enabled === true,
+    component: ApiKeysPage
   },
   {
     id: "general",

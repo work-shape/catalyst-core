@@ -1,6 +1,15 @@
 import type { AuthAdapter } from "@vivd-catalyst/auth";
-import { asApiCredentialId, asClientInstanceId, asServicePrincipalId } from "@vivd-catalyst/core";
+import {
+  LEGACY_LIST_GRANTOR,
+  LEGACY_PERMISSION_ACTIONS,
+  PERMISSIONS,
+  asApiCredentialId,
+  asClientInstanceId,
+  asServicePrincipalId,
+  legacyGrantRows
+} from "@vivd-catalyst/core";
 import { z } from "zod";
+import { withTestSql } from "./test-sql";
 
 /**
  * Who a request of a route-helper test claims to be. The header stands in for a credential:
@@ -14,7 +23,12 @@ const callerSchema = z.object({
   scopes: z.array(z.string()).default(["*"]),
   roles: z.array(z.string()).default([]),
   permissions: z.array(z.string()).default([]),
-  cookie: z.boolean().default(false)
+  cookie: z.boolean().default(false),
+  /**
+   * Who acts for the user: `api_key`, the user's own personal API key, or
+   * `service_principal`, an embedding host that named the user in a session token.
+   */
+  delegatedActor: z.enum(["api_key", "service_principal"]).optional()
 });
 export type TestCaller = z.input<typeof callerSchema>;
 
@@ -24,18 +38,77 @@ export function asCaller(caller: TestCaller = {}): { headers: Record<string, str
   return { headers: { [CALLER_HEADER]: JSON.stringify(caller) } };
 }
 
+const LEGACY_ACTIONS: string[] = PERMISSIONS.flatMap((key) => [...LEGACY_PERMISSION_ACTIONS[key]]);
+
+/**
+ * Since AP-4 a caller's legacy list is its instance-wide grant rows, which the evaluator reads
+ * from the store; the identity-resolving adapter writes them for a real sign-in. This writes
+ * them for a test caller as the list it claims, on every request that claims one (a test may
+ * have emptied the database since) and once more when a caller drops its list, so a caller
+ * that never claims a right never touches the database. A service caller is stored too: a row
+ * applies only to a principal the instance has.
+ */
+async function writeCallerRows(input: {
+  clientInstanceId: string;
+  holderKind: "user" | "service_principal";
+  holderId: string;
+  permissions: readonly string[];
+}): Promise<void> {
+  // One transaction under the instance's access lock: a request beside it sees the rows of
+  // before or of after, never none.
+  await withTestSql((connection) =>
+    connection.begin(async (sql) => {
+      await sql`select pg_advisory_xact_lock(hashtextextended(${`access:${input.clientInstanceId}`}, 0))`;
+      if (input.holderKind === "service_principal") {
+        await sql`
+        insert into service_principals
+          (id, client_instance_id, display_label, status, permission_refs, created_at, updated_at)
+        values (${input.holderId}, ${input.clientInstanceId}, 'Test service', 'active', '[]'::jsonb, now(), now())
+        on conflict do nothing`;
+      }
+      await sql`
+      delete from permission_grants
+      where client_instance_id = ${input.clientInstanceId} and holder_kind = ${input.holderKind}
+        and holder_id = ${input.holderId} and scope_kind = 'instance'
+        and action in ${sql(LEGACY_ACTIONS)}`;
+      for (const row of legacyGrantRows(input.permissions)) {
+        await sql`
+        insert into permission_grants
+          (id, client_instance_id, holder_kind, holder_id, action, scope_kind, effect, granted_by, created_at)
+        values
+          (${`grant_${crypto.randomUUID()}`}, ${input.clientInstanceId}, ${input.holderKind},
+           ${input.holderId}, ${row.action}, 'instance', ${row.effect}, ${LEGACY_LIST_GRANTOR}, now())`;
+      }
+    })
+  );
+}
+
 /** An ambient adapter: it must never run when a request carries an explicit credential. */
 export function createCallerAuthAdapter(): AuthAdapter & { calls: number } {
+  const written = new Set<string>();
   const adapter: AuthAdapter & { calls: number } = {
     id: "test-caller",
     credentialMode: "ambient",
     calls: 0,
-    authenticate(request) {
+    async authenticate(request) {
       adapter.calls += 1;
       const header = request.headers[CALLER_HEADER];
       const caller = callerSchema.parse(typeof header === "string" ? JSON.parse(header) : {});
       const { scopes } = caller;
       const clientInstanceId = asClientInstanceId(request.clientInstanceId);
+      const holderKind = caller.kind === "service" ? "service_principal" : "user";
+      const holderId = caller.id ?? (caller.kind === "service" ? "sp_test" : "usr_test");
+      const holder = `${clientInstanceId}|${holderKind}|${holderId}`;
+      if (caller.permissions.length > 0 || written.has(holder)) {
+        await writeCallerRows({
+          clientInstanceId,
+          holderKind,
+          holderId,
+          permissions: caller.permissions
+        });
+        if (caller.permissions.length > 0) written.add(holder);
+        else written.delete(holder);
+      }
       return Promise.resolve(
         caller.kind === "service"
           ? {
@@ -59,7 +132,25 @@ export function createCallerAuthAdapter(): AuthAdapter & { calls: number } {
               clientInstanceId,
               authSource: "test",
               scopes,
-              ...(caller.cookie ? { authenticationMethod: "session-cookie" as const } : {})
+              ...(caller.cookie ? { authenticationMethod: "session-cookie" as const } : {}),
+              ...(caller.delegatedActor === "api_key"
+                ? {
+                    delegatedActor: {
+                      kind: "api_key" as const,
+                      id: asApiCredentialId("key_test"),
+                      displayLabel: "Test key",
+                      authSource: "test"
+                    }
+                  }
+                : caller.delegatedActor === "service_principal"
+                  ? {
+                      delegatedActor: {
+                        kind: "service_principal" as const,
+                        id: "sp_embedding_host",
+                        authSource: "test"
+                      }
+                    }
+                  : {})
             }
       );
     }

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { appActionPermissionSchema } from "./app-bridge";
+import { operationTargetSchema } from "./operation-runs";
 import { pagePreviewSchema } from "./pages";
 
 /** The kind id of an App in the asset registry. */
@@ -35,7 +36,13 @@ export const createAppFromPageRequestSchema = z
     /** What people read as the App's name. */
     title: z.string().min(1).max(120),
     /** The workspace the App belongs to. */
-    workspaceId: z.string().min(1)
+    workspaceId: z.string().min(1),
+    /**
+     * The revision of the Page to copy, by its file set's id. Without it the newest is copied.
+     * A call held for an approval keeps the one its guardrails read, so the approval answers
+     * what is written. A revision that is gone is refused with `CONFLICT`.
+     */
+    fileSetId: z.string().min(1).optional()
   })
   .strict();
 
@@ -54,6 +61,12 @@ export const updateAppFromPageRequestSchema = z
     conversationId: z.string().min(1),
     /** The Page the App is updated from. An App of another Page is written only with `link`. */
     pageId: z.string().min(1),
+    /**
+     * The revision of the Page to copy, by its file set's id. Without it the newest is copied.
+     * A call held for an approval keeps the one its guardrails read, so the approval answers
+     * what is written. A revision that is gone is refused with `CONFLICT`.
+     */
+    fileSetId: z.string().min(1).optional(),
     /** The workspace the App belongs to. */
     workspaceId: z.string().min(1),
     /**
@@ -168,23 +181,26 @@ export const appActionCallRequestSchema = z
   })
   .strict();
 
-export const appConnectionCallRequestSchema = z
-  .object({
-    ...pageSessionProof,
-    /** The input of the Connection's operation, as its accepted schema describes it. */
-    input: z.unknown().optional()
-  })
-  .strict();
-
 /**
  * How a call of a frame went. `done` carries what the operation answered. `pending_approval`
- * carries nothing: the call waits for another person and its run says how it ends.
+ * carries nothing: the call waits for another person and its run says how it ends. `dry_run`
+ * is the answer of a draft, which carries out nothing that changes unless "Run live once"
+ * covers the call: it says in `message` what the call would have done and holds in `result`
+ * the input it would have done it with. A draft of an App leaves a run with the target
+ * `dry_run`, named in the header `operation-run-id`; a Page of a conversation leaves none.
  */
-export const appActionCallResultSchema = z.object({
-  runId: z.string(),
-  status: z.enum(["done", "pending_approval"]),
-  result: z.unknown().optional()
-});
+export const appActionCallResultSchema = z.union([
+  z.object({
+    runId: z.string(),
+    status: z.enum(["done", "pending_approval"]),
+    result: z.unknown().optional()
+  }),
+  z.object({
+    status: z.literal("dry_run"),
+    message: z.string(),
+    result: z.unknown()
+  })
+]);
 
 export type AppSessionContextResponse = z.infer<typeof appSessionContextSchema>;
 export type AppActionCallResult = z.infer<typeof appActionCallResultSchema>;
@@ -223,10 +239,16 @@ const listedAppAction = {
   inputSchema: z.record(z.string(), z.unknown()),
   /**
    * What a call of the action would come to for the caller now, by the caller's rights and
-   * the policy. A draft runs in safe mode: a changing action is refused there whatever this
-   * says, which `view` tells.
+   * the policy, as it would be live. Where a draft's call goes instead, `target` says.
    */
   policy: appActionPermissionSchema,
+  /**
+   * In the draft (ADR-0031): where the caller's next call of the action goes. `live` for a
+   * reading action, and for a changing one the caller switched "Run live once" on for;
+   * `dry_run` for any other changing action, which is simulated. Missing for a published
+   * revision, every call of which is live.
+   */
+  target: operationTargetSchema.optional(),
   /** An agent that lists `toolName` carries the action as a tool now. */
   agentTool: z.boolean()
 };
@@ -237,10 +259,14 @@ const listedAppAction = {
  */
 export const appSqlActionUnavailableSchema = z.enum(["data_store_missing"]);
 
+/** Why a call of a `workflow` action cannot start its Workflow, whoever calls: the module is off. */
+export const appWorkflowActionUnavailableSchema = z.enum(["workflows_off"]);
+
 /**
  * One named action of a revision, with what a call of it would come to for the caller, by its
  * kind. A `connection` action names the Connection and the operation of it that it stands
- * for. An `sql` action names the Data Store its statement reads or adds a row to.
+ * for. An `sql` action names the Data Store its statement reads or adds a row to. A
+ * `workflow` action names the Workflow it starts.
  */
 export const appActionSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -258,6 +284,13 @@ export const appActionSchema = z.discriminatedUnion("kind", [
     /** The Data Store by its name, with its title where the caller may read the store. */
     dataStore: z.object({ name: z.string(), title: z.string().optional() }),
     unavailable: appSqlActionUnavailableSchema.optional()
+  }),
+  z.object({
+    ...listedAppAction,
+    kind: z.literal("workflow"),
+    /** The Workflow by its id. */
+    workflow: z.object({ name: z.string() }),
+    unavailable: appWorkflowActionUnavailableSchema.optional()
   })
 ]);
 

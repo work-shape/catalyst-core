@@ -3,7 +3,8 @@ import {
   type ApiClient,
   type AppActionPermission,
   type AppBridgeHostMessage,
-  type AppBridgePageMessage
+  type AppBridgePageMessage,
+  type AppWorkflowRun
 } from "@vivd-catalyst/api-client";
 
 // The calls a frame asks the interface to make. The frame holds no credential and can reach
@@ -38,17 +39,14 @@ export function frameSessionProof(address: FrameAddress): FrameSessionProof | un
     : { pageSessionId: address.pageSessionId, fileSetId: address.fileSetId, token };
 }
 
-type CallMessage = Extract<AppBridgePageMessage, { type: "action" | "connection_call" }>;
 /**
  * One call as the instance is asked for it: what a frame's message says of it, without what
  * only the bridge reads. The test of an action in the draft view makes the same call.
  */
-type FrameCall =
-  | Pick<Extract<CallMessage, { type: "action" }>, "type" | "name" | "input" | "idempotencyKey">
-  | Pick<
-      Extract<CallMessage, { type: "connection_call" }>,
-      "type" | "connection" | "operation" | "input" | "idempotencyKey"
-    >;
+type FrameCall = Pick<
+  Extract<AppBridgePageMessage, { type: "action" }>,
+  "type" | "name" | "input" | "idempotencyKey"
+>;
 type CallAnswer = Extract<AppBridgeHostMessage, { type: "action_result" }>;
 
 /** How one call of a frame came out, as the frame is told. */
@@ -56,11 +54,17 @@ export type FrameCallAnswer =
   | { ok: true; result: NonNullable<CallAnswer["result"]> }
   | { ok: false; error: NonNullable<CallAnswer["error"]> };
 
+/** How one read of a Workflow Run came out, as the frame is told. */
+export type FrameWorkflowRunAnswer =
+  { ok: true; run: AppWorkflowRun } | { ok: false; error: NonNullable<CallAnswer["error"]> };
+
 /** What the bridge of a frame calls the instance through. */
 export interface FrameCalls {
   /** What each action would come to for the viewer, or nothing where it could not be read. */
   can(): Promise<Record<string, AppActionPermission> | undefined>;
   run(call: FrameCall): Promise<FrameCallAnswer>;
+  /** Reads a Workflow Run that a `workflow` action of the frame started. */
+  workflowRun(runId: string): Promise<FrameWorkflowRunAnswer>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -83,8 +87,9 @@ export interface FrameCallTexts {
 const FINAL_REFUSALS: readonly string[] = [
   "forbidden",
   "action_unknown",
-  "connection_not_declared",
   "draft_safe_mode",
+  // A Page of a conversation reaches no Data Store; only an App does.
+  "data_store_needs_app",
   "input_invalid"
 ];
 
@@ -128,7 +133,7 @@ export function frameCallFailure(
   };
 }
 
-/** What the calls of a frame use of the API client: the three calls of a page session. */
+/** What the calls of a frame use of the API client: the calls of a page session. */
 export interface FrameCallClient {
   apps: Pick<ApiClient["apps"], "sessions">;
 }
@@ -154,30 +159,33 @@ export function createFrameCalls(
       // A frame that names no key gets one per message: one message is one call.
       const key = call.idempotencyKey === undefined ? {} : { idempotencyKey: call.idempotencyKey };
       try {
-        const result =
-          call.type === "action"
-            ? await client.apps.sessions.call_action({
-                params: { pageSessionId, name: call.name },
-                body: { fileSetId, token, input: call.input },
-                ...key
-              })
-            : await client.apps.sessions.call_connection({
-                params: {
-                  pageSessionId,
-                  connection: call.connection,
-                  operation: call.operation
-                },
-                body: { fileSetId, token, input: call.input },
-                ...key
-              });
+        const result = await client.apps.sessions.call_action({
+          params: { pageSessionId, name: call.name },
+          body: { fileSetId, token, input: call.input },
+          ...key
+        });
         return {
           ok: true,
-          result: {
-            runId: result.runId,
-            status: result.status,
-            ...("result" in result ? { result: result.result } : {})
-          }
+          result:
+            result.status === "dry_run"
+              ? { status: result.status, message: result.message, result: result.result }
+              : {
+                  runId: result.runId,
+                  status: result.status,
+                  ...("result" in result ? { result: result.result } : {})
+                }
         };
+      } catch (error) {
+        return { ok: false, error: frameCallFailure(error, texts) };
+      }
+    },
+    async workflowRun(runId) {
+      try {
+        const run = await client.apps.sessions.get_workflow_run({
+          params: { pageSessionId, runId },
+          body: { fileSetId, token }
+        });
+        return { ok: true, run };
       } catch (error) {
         return { ok: false, error: frameCallFailure(error, texts) };
       }

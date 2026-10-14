@@ -5,11 +5,16 @@ import {
   type AdmittedModelCall,
   type ModelAttribution,
   type ModelBindingConfig,
+  type ModelBindingKind,
   type ModelCallAdmission,
   type ModelCallUsage,
+  type ModelEmbeddingPurpose,
   type ModelProviderConfig,
-  type ReasoningEffortConfig
+  type ModelTokenUsage,
+  type ReasoningEffortConfig,
+  type SystemModelAttribution
 } from "@vivd-catalyst/core";
+import { deadlinePassed, limitModelCall, stopOf, type ModelCallLimit } from "./model-call-limit";
 import { ModelProviderError, normalizeModelAdapterError } from "./model-provider-error";
 import { createModelRetryPolicy, modelCallFailureFor, type ModelRetryPolicy } from "./retry";
 import {
@@ -20,6 +25,8 @@ import {
   type ModelAdapterRequest,
   type ModelCapabilities,
   type ModelCompletion,
+  type ModelAdapterEmbedding,
+  type ModelEmbedding,
   type ModelAdapterStreamEvent,
   type ModelCompletionStreamEvent,
   type ModelMessage,
@@ -63,6 +70,25 @@ export interface ModelCall {
 }
 
 /**
+ * The most texts one embedding call carries: the OpenAI embeddings endpoint takes no more in one
+ * request. Ingestion batches below it; a call above it is refused before anything is sent.
+ */
+export const MODEL_EMBEDDING_MAX_TEXTS_PER_CALL = 2_048;
+
+/** One call to an embedding binding: a batch of texts, each turned into one vector. */
+export interface ModelEmbeddingCall {
+  binding: { bindingId: string };
+  texts: readonly string[];
+  attribution: SystemModelAttribution & { purpose: ModelEmbeddingPurpose };
+  clientInstanceId: ClientInstanceId;
+  /** Ties the usage event to the request that caused the call. */
+  correlationId: string;
+  signal?: AbortSignal;
+  /** As for `ModelCall`: no attempt starts and no wait ends after it. */
+  deadline?: Date;
+}
+
+/**
  * What a streamed call yields: the adapter's events, and a notice that a tool call announced by
  * an attempt will not come because that attempt failed and the call is sent again.
  */
@@ -77,6 +103,12 @@ export interface ModelGateway {
    * while the caller has received no text, no reasoning, no native tool event and no completion.
    */
   stream(call: ModelCall): AsyncIterable<ModelCallStreamEvent>;
+  /**
+   * Turns each text into one vector of the binding's dimensions, in the order of the texts. Only
+   * a binding of kind `embedding` takes it, and it takes nothing else. No text, no call: an empty
+   * batch reaches neither admission nor the provider.
+   */
+  embed(call: ModelEmbeddingCall): Promise<ModelEmbedding>;
   /** What the model behind a binding can do. */
   capabilities(binding: ModelBindingRef): ModelCapabilities;
 }
@@ -111,17 +143,30 @@ interface ResolvedModelTarget {
   model: string;
   /** The binding the call named, when it named one. */
   bindingId?: string;
+  /** A call on a provider entry alone is a chat call. */
+  kind: ModelBindingKind;
+  /** The length of the vectors of an embedding binding. */
+  dimensions?: number;
 }
 
 export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
   const { governance, logger } = options;
+  for (const binding of options.bindings) {
+    const adapter = options.adapters.get(binding.providerId);
+    if (binding.kind === "embedding" && adapter && !adapter.embed) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `Embedding binding '${binding.id}' is on model provider '${binding.providerId}', which does not embed`
+      );
+    }
+  }
 
   function resolve(ref: ModelBindingRef): ResolvedModelTarget {
     let providerId: string;
     let model: string | undefined;
-    const bindingId = "bindingId" in ref ? ref.bindingId : undefined;
+    let binding: ModelBindingConfig | undefined;
     if ("bindingId" in ref) {
-      const binding = options.bindings.find((candidate) => candidate.id === ref.bindingId);
+      binding = options.bindings.find((candidate) => candidate.id === ref.bindingId);
       if (!binding) {
         throw new AppError("NOT_FOUND", `Model binding '${ref.bindingId}' is not defined`);
       }
@@ -140,8 +185,21 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
       provider,
       adapter,
       model: model ?? provider.model,
-      ...(bindingId === undefined ? {} : { bindingId })
+      kind: binding?.kind ?? "chat",
+      ...(binding ? { bindingId: binding.id } : {}),
+      ...(binding?.dimensions === undefined ? {} : { dimensions: binding.dimensions })
     };
+  }
+
+  /** A chat call never reaches an embedding binding, nor an embedding call a chat binding. */
+  function assertKind(target: ResolvedModelTarget, kind: ModelBindingKind): void {
+    if (target.kind === kind) return;
+    throw new AppError(
+      "VALIDATION_FAILED",
+      kind === "embedding"
+        ? `${modelLabelOf(target)} is no embedding binding and embeds nothing`
+        : `${modelLabelOf(target)} is an embedding binding and answers no chat call`
+    );
   }
 
   function logProviderError(
@@ -277,6 +335,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
     streaming: boolean
   ): AsyncGenerator<ModelCallStreamEvent, void, void> {
     const target = resolve(call.binding);
+    assertKind(target, "chat");
     assertWithinCapabilities(call, target, streaming);
     const policy = createModelRetryPolicy({ signal: call.signal, deadline: call.deadline });
     policy.assertAttemptMayStart();
@@ -298,34 +357,6 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
       requestCharacters: () => (estimatedRequest ??= requestCharacters(call, estimatedCharacters)),
       received: { inputCharacters: 0, outputCharacters: 0, webSearchCallCount: 0 }
     };
-    const settle = async (answerHandedOn: boolean): Promise<void> => {
-      try {
-        // What the provider reported, with the completion or before the stream was cut.
-        // Without it: an estimate where an answer began, and nothing where none did.
-        await governance.settleModelCall(
-          admitted,
-          seen.completion?.usage ??
-            seen.reportedUsage ??
-            (seen.received.outputCharacters > 0
-              ? estimateInterruptedCallUsage(seen.received)
-              : undefined)
-        );
-      } catch (settleError) {
-        if (answerHandedOn) {
-          // A call whose usage could not be settled fails, so no answer goes unrecorded.
-          throw settleError;
-        }
-        logger.error(
-          {
-            type: "model_usage.record_failed",
-            providerId: target.provider.id,
-            ...modelNameOf(target),
-            error: settleError
-          },
-          "Usage of a model call that did not complete could not be recorded"
-        );
-      }
-    };
     const limit = limitModelCall(call.signal, call.deadline);
     let ended: "completed" | "failed" | "left_unread" = "left_unread";
     try {
@@ -336,7 +367,123 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
       throw error;
     } finally {
       limit.release();
-      await settle(ended === "completed");
+      // What the provider reported, with the completion or before the stream was cut.
+      // Without it: an estimate where an answer began, and nothing where none did.
+      await settle(
+        target,
+        admitted,
+        seen.completion?.usage ??
+          seen.reportedUsage ??
+          (seen.received.outputCharacters > 0
+            ? estimateInterruptedCallUsage(seen.received)
+            : undefined),
+        ended === "completed"
+      );
+    }
+  }
+
+  /**
+   * Ends an admitted call with what it used. A call whose answer is handed on fails when its
+   * usage cannot be settled, so no answer goes unrecorded; any other call keeps its own outcome,
+   * and the failed settlement is logged.
+   */
+  async function settle(
+    target: ResolvedModelTarget,
+    admitted: AdmittedModelCall,
+    usage: ModelCallUsage | undefined,
+    answerHandedOn: boolean
+  ): Promise<void> {
+    try {
+      await governance.settleModelCall(admitted, usage);
+    } catch (settleError) {
+      if (answerHandedOn) throw settleError;
+      logger.error(
+        {
+          type: "model_usage.record_failed",
+          providerId: target.provider.id,
+          ...modelNameOf(target),
+          error: settleError
+        },
+        "Usage of a model call that did not complete could not be recorded"
+      );
+    }
+  }
+
+  /**
+   * The path of an embedding call: resolve, admit, call with the retry policy, check the
+   * vectors, settle. An embedding request is the same request on every attempt and returns
+   * nothing until it is whole, so every attempt is safe to send again.
+   */
+  async function embed(call: ModelEmbeddingCall): Promise<ModelEmbedding> {
+    if (call.texts.length === 0) return { vectors: [], inputTokens: 0 };
+    if (call.texts.length > MODEL_EMBEDDING_MAX_TEXTS_PER_CALL) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `An embedding call carries at most ${MODEL_EMBEDDING_MAX_TEXTS_PER_CALL} texts; this one carries ${call.texts.length}`
+      );
+    }
+    const target = resolve(call.binding);
+    assertKind(target, "embedding");
+    const { dimensions } = target;
+    const embedWith = target.adapter.embed?.bind(target.adapter);
+    if (dimensions === undefined || !embedWith) {
+      throw new AppError("INTERNAL", `${modelLabelOf(target)} cannot embed`);
+    }
+    const policy = createModelRetryPolicy({ signal: call.signal, deadline: call.deadline });
+    policy.assertAttemptMayStart();
+    const admitted = await governance.admitModelCall({
+      clientInstanceId: call.clientInstanceId,
+      attribution: call.attribution,
+      providerId: target.provider.id,
+      model: target.model,
+      ...(target.provider.region ? { region: target.provider.region } : {}),
+      bindingId: call.binding.bindingId,
+      fastMode: false,
+      correlationId: call.correlationId,
+      // An embedding answers with vectors, which the provider bills as no output.
+      request: {
+        inputCharacters: call.texts.reduce((sum, text) => sum + text.length, 0),
+        maxOutputTokens: 0
+      }
+    });
+    const limit = limitModelCall(call.signal, call.deadline);
+    // What the provider counted for its last answer, which it bills whether or not the answer
+    // is whole.
+    let billed: ModelTokenUsage | undefined;
+    let handedOn = false;
+    try {
+      for (;;) {
+        policy.assertAttemptMayStart();
+        try {
+          const answer = await limit.bound(
+            embedWith({
+              model: target.model,
+              texts: call.texts,
+              dimensions,
+              signal: limit.signal,
+              deadline: call.deadline
+            })
+          );
+          billed = answer.usage;
+          assertEmbeddingAnswers(answer, call.texts.length, dimensions);
+          handedOn = true;
+          return { vectors: answer.vectors, inputTokens: answer.usage.inputTokens };
+        } catch (thrown) {
+          if (call.signal?.aborted) throw stopOf(call.signal, thrown);
+          if (limit.expired()) throw deadlinePassed();
+          const error = normalizeModelAdapterError(thrown);
+          if (error instanceof ModelProviderError) {
+            if (error.usage) billed = error.usage;
+            logProviderError(error, target, call.attribution);
+          }
+          const waitMs = policy.waitBeforeRetryMs(error, { retrySafe: true });
+          await policy.wait(waitMs, modelCallFailureFor(error));
+        }
+      }
+    } finally {
+      limit.release();
+      // An embedding reads no cache, so its input is priced whole at the uncached rate.
+      await settle(target, admitted, billed && { ...billed, cachedInputTokens: 0 }, handedOn);
     }
   }
 
@@ -356,6 +503,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
     stream(call) {
       return run(call, true);
     },
+    embed,
     capabilities(binding) {
       const target = resolve(binding);
       return target.adapter.capabilities(target.model);
@@ -515,6 +663,36 @@ function modelNameOf(target: ResolvedModelTarget): { bindingId: string } | { mod
   return target.bindingId === undefined ? { model: target.model } : { bindingId: target.bindingId };
 }
 
+/** How a refusal names the model of a call: by its binding where the call named one. */
+function modelLabelOf(target: ResolvedModelTarget): string {
+  return target.bindingId === undefined
+    ? `Model '${target.model}'`
+    : `Model binding '${target.bindingId}'`;
+}
+
+/**
+ * An embedding answer holds one vector per text, each of the binding's length and of finite
+ * numbers, or the call fails: a vector of another length cannot be stored beside the others.
+ */
+function assertEmbeddingAnswers(
+  embedding: ModelAdapterEmbedding,
+  textCount: number,
+  dimensions: number
+): void {
+  const whole =
+    embedding.vectors.length === textCount &&
+    embedding.vectors.every(
+      (vector) => vector.length === dimensions && vector.every((value) => Number.isFinite(value))
+    );
+  if (!whole) {
+    throw new ModelProviderError({
+      kind: "invalid_response",
+      message: "Embedding answer does not hold one vector of the binding's dimensions per text",
+      details: { textCount, vectorCount: embedding.vectors.length, dimensions }
+    });
+  }
+}
+
 /** Refuses a call that asks the model for something its adapter does not declare. */
 function assertWithinCapabilities(
   call: ModelCall,
@@ -555,11 +733,7 @@ function assertWithinCapabilities(
   if (missing.length > 0) {
     throw new AppError(
       "VALIDATION_FAILED",
-      `${
-        target.bindingId === undefined
-          ? `Model '${target.model}'`
-          : `Model binding '${target.bindingId}'`
-      } of provider '${target.provider.id}' does not support: ${missing.join(", ")}`
+      `${modelLabelOf(target)} of provider '${target.provider.id}' does not support: ${missing.join(", ")}`
     );
   }
 }
@@ -596,76 +770,4 @@ function assertAnswersInFormat(call: ModelCall, completion: ModelCompletion): vo
       message: "Model answer is not valid JSON"
     });
   }
-}
-
-/** What bounds one call in time: the caller's stop and the call's deadline. */
-interface ModelCallLimit {
-  /** Aborts on the caller's stop and at the deadline. An adapter stops with it. */
-  signal: AbortSignal | undefined;
-  /** Whether the deadline has passed. */
-  expired(): boolean;
-  /** Settles as `pending` does, or rejects at the deadline when `pending` is still open then. */
-  bound<T>(pending: Promise<T>): Promise<T>;
-  release(): void;
-}
-
-function deadlinePassed(): AppError {
-  return new AppError("TIMEOUT", "The model call did not finish before its deadline");
-}
-
-// The longest delay a timer takes. A deadline further away is checked again when it fires.
-const TIMER_MAX_DELAY_MS = 2 ** 31 - 1;
-
-/**
- * Stops a call at its deadline. The adapter is told through the signal, and a completion is
- * given up at the deadline even when the adapter does not listen, so a provider that never
- * answers cannot hold its caller. A stream is told through the signal alone.
- */
-function limitModelCall(
-  signal: AbortSignal | undefined,
-  deadline: Date | undefined
-): ModelCallLimit {
-  if (!deadline) {
-    return { signal, expired: () => false, bound: (pending) => pending, release: () => undefined };
-  }
-  const timedOut = new AbortController();
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const arm = (): void => {
-    const leftMs = deadline.getTime() - Date.now();
-    if (leftMs <= 0) {
-      timedOut.abort();
-      return;
-    }
-    timer = setTimeout(arm, Math.min(leftMs, TIMER_MAX_DELAY_MS));
-  };
-  arm();
-  const atDeadline = new Promise<never>((_resolve, reject) => {
-    timedOut.signal.addEventListener("abort", () => reject(deadlinePassed()), { once: true });
-  });
-  // Nothing may be waiting when the deadline passes; the rejection then has no reader.
-  atDeadline.catch(() => undefined);
-  return {
-    signal: signal ? AbortSignal.any([signal, timedOut.signal]) : timedOut.signal,
-    expired: () => timedOut.signal.aborted,
-    bound: (pending) => Promise.race([pending, atDeadline]),
-    release: () => clearTimeout(timer)
-  };
-}
-
-/**
- * What a stopped call throws: the adapter's own abort where it threw one, else the reason the
- * caller stopped with, as an abort.
- */
-function stopOf(signal: AbortSignal, thrown: unknown): unknown {
-  if (!(thrown instanceof ModelProviderError)) {
-    return thrown;
-  }
-  const reason: unknown = signal.reason;
-  if (reason instanceof Error) {
-    return reason;
-  }
-  return new DOMException(
-    typeof reason === "string" ? reason : "The model call was stopped",
-    "AbortError"
-  );
 }

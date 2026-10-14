@@ -1,11 +1,39 @@
 import { Ellipsis, Plus, Settings } from "lucide-react";
+import { useState } from "react";
 import { Button, type ButtonSize, type ButtonVariant } from "../actions/button";
 import { IconButton, type IconButtonSize } from "../actions/icon-button";
+import { RunLiveOnce, type RunLiveOnceState } from "../actions/run-live-once";
 import { TextLink } from "../actions/text-link";
 import { Starter, StarterList } from "../actions/starter";
 import { SkillIcon } from "../status/skill-icon";
+import { TargetBadge } from "../status/target-badge";
 import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
+
+const liveOnceStates: readonly RunLiveOnceState[] = ["off", "busy", "on"];
+
+/** A switch beside the marker it changes: it is set after a moment, as an instance answers. */
+function LiveOnceSample({ text }: { text: GalleryText }) {
+  const [state, setState] = useState<RunLiveOnceState>("off");
+  return (
+    <Samples label="interactive">
+      <TargetBadge target={state === "on" ? "live" : "dry_run"} />
+      <RunLiveOnce
+        state={state}
+        onText={text.liveOnceOn}
+        onSwitchOn={() => {
+          setState("busy");
+          setTimeout(() => setState("on"), 600);
+        }}
+      />
+      {state === "on" ? (
+        <Button variant="ghost" size="sm" onClick={() => setState("off")}>
+          {text.showAgain}
+        </Button>
+      ) : null}
+    </Samples>
+  );
+}
 
 const buttonVariants: readonly ButtonVariant[] = [
   "primary",
@@ -123,6 +151,11 @@ export const actionsGallery: GalleryGroup = {
               title={text.starterLetter}
               hint={text.starterLetterHint}
             />
+            <Starter
+              icon={<SkillIcon icon="guide" size="lg" />}
+              title={text.starterGuide}
+              hint={text.starterGuideHint}
+            />
             <Starter icon={<SkillIcon size="lg" />} title={text.starterPlain} />
             <Starter
               icon={<SkillIcon icon="pdf" size="lg" />}
@@ -132,6 +165,25 @@ export const actionsGallery: GalleryGroup = {
             />
           </StarterList>
         </div>
+      )
+    },
+    {
+      name: "RunLiveOnce",
+      components: ["RunLiveOnce"],
+      render: (text) => (
+        <>
+          <Samples>
+            {liveOnceStates.map((state) => (
+              <RunLiveOnce
+                key={state}
+                state={state}
+                onText={text.liveOnceOn}
+                onSwitchOn={() => undefined}
+              />
+            ))}
+          </Samples>
+          <LiveOnceSample text={text} />
+        </>
       )
     }
   ]

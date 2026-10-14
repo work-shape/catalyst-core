@@ -56,7 +56,9 @@ export const appBridgePageMessageSchema = z.discriminatedUnion("type", [
     input: z.record(z.string(), z.unknown()),
     idempotencyKey
   }),
-  // A call of one operation of a Connection the manifest lists.
+  // Retired: the free call of a Connection operation that kits 1.1.0 to 1.3.0 send for
+  // `connections.call`. It is read only to be answered with `APP_BRIDGE_CONNECTION_CALL_REMOVED`,
+  // so a Page built against those kits is told the fix and does not wait for an answer.
   z.strictObject({
     ...mark,
     type: z.literal("connection_call"),
@@ -66,10 +68,29 @@ export const appBridgePageMessageSchema = z.discriminatedUnion("type", [
     operation: calledName,
     input: z.unknown(),
     idempotencyKey
+  }),
+  // A read of a Workflow Run a `workflow` action of the manifest started.
+  z.strictObject({
+    ...mark,
+    type: z.literal("workflow_run"),
+    session,
+    requestId,
+    runId: calledName
   })
 ]);
 
 export type AppBridgePageMessage = z.infer<typeof appBridgePageMessageSchema>;
+
+/**
+ * The answer to a retired `connection_call`. An App reaches a Connection only through a named
+ * `connection` action in its folder; the free call from the browser was removed.
+ */
+export const APP_BRIDGE_CONNECTION_CALL_REMOVED = {
+  code: "connection_call_removed",
+  message:
+    "connections.call was removed: an App reaches a Connection only through a named action. Add actions/<name>.action.yaml with connection, operation and effect, and call it with actions.call('<name>', input).",
+  retryable: false
+} as const;
 
 /** The seven colours of a theme, as an instance sets them per mode. */
 export const appBridgeThemeSchema = z.strictObject({
@@ -109,6 +130,41 @@ export const appBridgeContextSchema = z.strictObject({
 
 export type AppBridgeContext = z.infer<typeof appBridgeContextSchema>;
 
+/**
+ * A Workflow Run that a `workflow` action of the shown manifest started, as the frame follows
+ * it: its state and, once it is done, its result. The result is the run's own where it is at
+ * most `WORKFLOW_RUN_OUTPUT_PREVIEW_MAX_CHARS` long as JSON; a longer one is not answered and
+ * `outputTruncated` says so.
+ */
+export const appWorkflowRunSchema = z.strictObject({
+  id: z.string(),
+  workflow: z.string(),
+  status: z.enum(["queued", "running", "waiting", "done", "failed", "cancelled", "limit_reached"]),
+  output: z.unknown().optional(),
+  outputTruncated: z.boolean().optional(),
+  /** Why the run did not end `done`: a code and a sentence of the product. */
+  error: z.strictObject({ code: z.string(), message: z.string() }).optional(),
+  startedAt: z.string().optional(),
+  finishedAt: z.string().optional()
+});
+
+export type AppWorkflowRun = z.infer<typeof appWorkflowRunSchema>;
+
+/** Why a call or a read of a frame was refused or failed, as the frame is told. */
+const callFailure = z.strictObject({
+  /** `action_unknown`, `draft_safe_mode`, `forbidden`, `input_invalid` and so on. */
+  code: z.string(),
+  message: z.string(),
+  /** The right a `forbidden` call lacks. */
+  right: z.string().optional(),
+  /**
+   * `false` where making the same call again cannot come out differently, such as a
+   * missing right. A page then offers no button to try again.
+   */
+  retryable: z.boolean().optional(),
+  runId: z.string().optional()
+});
+
 /** What the interface posts into the frame of a Page. */
 export const appBridgeHostMessageSchema = z.discriminatedUnion("type", [
   z.strictObject({ ...mark, type: z.literal("context"), session, context: appBridgeContextSchema }),
@@ -118,7 +174,8 @@ export const appBridgeHostMessageSchema = z.discriminatedUnion("type", [
     theme: appBridgeThemeSchema,
     mode: appBridgeModeSchema
   }),
-  // The answer to one `action` or `connection_call`, named by the id the Page gave it.
+  // The answer to one `action`, named by the id the Page gave it. A retired `connection_call`
+  // is answered the same way, with `APP_BRIDGE_CONNECTION_CALL_REMOVED` as its error.
   z.strictObject({
     ...mark,
     type: z.literal("action_result"),
@@ -126,27 +183,27 @@ export const appBridgeHostMessageSchema = z.discriminatedUnion("type", [
     requestId,
     ok: z.boolean(),
     result: z
-      .strictObject({
-        runId: z.string(),
-        status: z.enum(["done", "pending_approval"]),
-        result: z.unknown().optional()
-      })
+      .union([
+        z.strictObject({
+          runId: z.string(),
+          status: z.enum(["done", "pending_approval"]),
+          result: z.unknown().optional()
+        }),
+        // The answer of a draft: what the call would have done. Nothing was carried out.
+        z.strictObject({ status: z.literal("dry_run"), message: z.string(), result: z.unknown() })
+      ])
       .optional(),
-    error: z
-      .strictObject({
-        /** `action_unknown`, `draft_safe_mode`, `forbidden`, `input_invalid` and so on. */
-        code: z.string(),
-        message: z.string(),
-        /** The right a `forbidden` call lacks. */
-        right: z.string().optional(),
-        /**
-         * `false` where making the same call again cannot come out differently, such as a
-         * missing right. A page then offers no button to try again.
-         */
-        retryable: z.boolean().optional(),
-        runId: z.string().optional()
-      })
-      .optional()
+    error: callFailure.optional()
+  }),
+  // The answer to one `workflow_run`, named by the id the Page gave the read.
+  z.strictObject({
+    ...mark,
+    type: z.literal("workflow_run_result"),
+    session,
+    requestId,
+    ok: z.boolean(),
+    run: appWorkflowRunSchema.optional(),
+    error: callFailure.optional()
   })
 ]);
 
