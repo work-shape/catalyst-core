@@ -63,6 +63,8 @@ skills/support_review/
 
 The CLI recursively includes `.md`, `.txt`, `.json`, `.yaml`, and `.yml` resources below each matched skill directory. It validates them as UTF-8 text, includes them in pull/diff/push, and rejects unsupported files instead of silently dropping them. Resource paths are normalized relative paths; absolute paths, traversal, duplicate paths, and a second `SKILL.md` resource are invalid. Binary assets do not belong in config assets.
 
+A working copy holds the instance's [guardrails](#guardrails-as-assets) where `catalyst.yaml` lists their files under `guardrails`, such as `guardrails/*/guardrail.yaml`; each is a folder with its `guardrail.yaml` and, for a `model_judge` check, its instruction in `check.md`. Without that list, pull, diff and `push --prune` leave the instance's guardrails alone. `pull` brings the draft and `--only guardrail:<name>` selects one. Guardrails are no part of a release: after the `assets.sync` batch of agents and skills, `push` writes each changed guardrail as its next draft with `assets.put` against the revision of its last pull, and `push --prune` deletes one with `assets.delete`, so the key needs `config_assets:write` and the instance the module `assetManagement`. `validate` leaves guardrails to the instance's check at that write. Publishing stays a step of its own, and the guardrails of release config are never part of a working copy.
+
 The front matter of `SKILL.md` holds `title`, `description` and, optionally, `name`, `summary` and `starters`. The two texts have different readers:
 
 - `description` is for the agent. It says when to use the skill.
@@ -352,6 +354,30 @@ The address `apps.preview` answers is the credential of the frame it is loaded i
 | `app.read`, `app.write`, `app.delete` | admin, superadmin | Read, write and delete Apps. A writer is shown the draft. |
 | `app.publish` | admin, superadmin | Move the published revision. A credential needs the scope `config_assets:publish`, which `config_assets:write` does not include. |
 | `app.use` | every member of the App's workspace | Open the published revision, and see it in `assets.list` and `assets.get`. A member is never shown a draft. |
+
+## Guardrails as assets
+
+A guardrail is a check bound to a before-event, with the outcome of a hit, as in [release config](/configure/release-config/#guardrails). Beside the floor of release config, guardrails are written as assets of the kind `guardrail`. A working copy keeps one as `guardrails/<name>/guardrail.yaml`, with the instruction of a `model_judge` check in `check.md` beside it:
+
+```yaml
+# guardrails/no-iban/guardrail.yaml
+name: no-iban
+displayName: No IBAN in skills
+on: asset.before_write
+filter:
+  kind: skill
+check:
+  kind: pattern
+  pattern: "(?i)\\bDE\\d{2}(?:\\s?\\d{4}){4}\\s?\\d{2}\\b"
+  reason: Skills hold no bank account.
+outcome: block
+```
+
+A guardrail belongs to the instance or to one Collaboration Workspace (`--workspace <id>` on `catalyst guardrail put`). A write makes a draft, which checks nothing. `catalyst guardrail test <name> --text <content>` (or `--from <file>`, `--asset skill:<name>`) answers what the draft would say, and `catalyst guardrail dry-run <name>` counts what it would have blocked, asked an approval for or warned on in the last 14 days, by actions and by people, never naming anyone. A dry run checks again the writes and publishes of assets of that period, a `model_judge` at most the newest 200; calls of operations and requests for an approval are counted and not checked, since their content is not kept. Neither keeps a hit. Testing needs `guardrail.write`, and a judge's model usage counts for the guardrail's scope: a workspace guardrail's for its workspace.
+
+`catalyst guardrail publish <name> --revision <n>` shows the dry run first. A first publish that would have blocked anything goes ahead only with `--confirm <n>` naming that number; publish a draft with the outcome `warn` first to watch it. Publishing takes `guardrail.publish` at the guardrail's scope. Administrators hold it at instance scope; an administrator grants it for one Shared Workspace (`permissions.grant`, scope `workspace`) to let someone set that workspace's rules. No workspace right carries it. `catalyst guardrail unpublish <name>` stops a guardrail; its draft stays. Publish and unpublish are audited as `guardrail.published` and `guardrail.unpublished` with the guardrail, the revision, its scope and who.
+
+A workspace guardrail answers the events of its workspace only. Its filter may narrow them, by `kind`, `operation`, `origin`, `agent` and `workspace`, and a filter that names another workspace, an agent the workspace does not offer or an operation of an asset another workspace owns is refused at save. Every guardrail that applies runs, from the floor, the instance and the event's workspace, and the strictest answer wins. Guardrail assets never run on writes, publishes or deletes of guardrails, nor on their tests; only the floor does, so no published guardrail can stop the change of guardrails.
 
 ## Permissions
 
