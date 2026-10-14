@@ -1,4 +1,4 @@
-import { WORKFLOWS_MODULE, WORKFLOW_KIND, type SeedApi } from "./api";
+import { WORKFLOWS_MODULE, WORKFLOW_KIND, offeredNowhere, type SeedApi } from "./api";
 import { builder, type PersonKey } from "./company";
 import type { SeedStep } from "./step";
 import { readWorkflowFile } from "./workflows";
@@ -27,7 +27,11 @@ export async function seedBuilder(
   }
   const { assets } = await root.assetsOverview();
   const stored = assets.find((asset) => asset.kind === "agent" && asset.name === agent.name);
-  if (stored && !stored.availability) await root.showAgentEverywhere(agent.name);
+  // Saved in his session, the agent starts in the workspace he made it in; the seed offers it
+  // everywhere, and one it holds only where nobody is offered it.
+  if (stored && (created > 0 || offeredNowhere(stored.availability))) {
+    await root.showAgentEverywhere(agent.name);
+  }
 
   const module = modules.find((candidate) => candidate.name === WORKFLOWS_MODULE);
   const workflowsOn = module?.enabled === true && module.kinds.includes(WORKFLOW_KIND);

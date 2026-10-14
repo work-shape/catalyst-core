@@ -327,6 +327,34 @@ describe("the test dialog", () => {
     expect(markup).not.toContain("data-app-action-test-status");
   });
 
+  it("says of a Workflow action that the draft starts nothing, in both languages", () => {
+    const {
+      connection: _connection,
+      operation: _operation,
+      unavailable: _unavailable,
+      ...rest
+    } = action();
+    const start: AppAction = {
+      ...rest,
+      name: "log",
+      kind: "workflow",
+      effect: "changing",
+      workflow: { name: "visit-log" }
+    };
+    const outcome = { status: "dry_run" as const, message: "Would have started.", input: {} };
+
+    const en = dialog({ action: start, outcome });
+    expect(en).toContain("It checks your rights and the input and starts no run.");
+    expect(en).not.toContain("It is listed under Operations.");
+    expect(en).toContain(
+      "Would have started the Workflow &#x27;visit-log&#x27; with the input below."
+    );
+    const de = dialog({ action: start, outcome }, "de");
+    expect(de).toContain("Er prüft deine Rechte und die Eingabe und startet keinen Lauf.");
+    expect(de).not.toContain("Er steht unter Operationen.");
+    expect(de).toContain("Hätte den Workflow „visit-log“ mit der Eingabe unten gestartet.");
+  });
+
   it("links the place the call is listed in, for a reader who may open it", () => {
     const link =
       /<a[^>]*href="\/settings\/instance\/operations"[^>]*>It is listed under Operations\.<\/a>/u;

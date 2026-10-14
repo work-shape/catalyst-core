@@ -53,6 +53,8 @@ export interface ControlPlaneModelInput {
   /** The shared workspace the Workspace pages change. */
   settingsCollaborationWorkspace: CollaborationWorkspaceWithRole | undefined;
   selectSettingsCollaborationWorkspace(collaborationWorkspaceId: string): void;
+  /** The workspace the person works in. */
+  activeCollaborationWorkspace: CollaborationWorkspaceWithRole | undefined;
   isAuthenticated: boolean;
   route: WorkspaceRoute;
   view: WorkspaceRouteView;
@@ -133,6 +135,7 @@ export function useControlPlaneModel({
   collaborationWorkspacesReady,
   settingsCollaborationWorkspace,
   selectSettingsCollaborationWorkspace,
+  activeCollaborationWorkspace,
   isAuthenticated,
   route,
   view,
@@ -217,6 +220,7 @@ export function useControlPlaneModel({
           themePreference,
           selectThemePreference,
           workspace: settingsCollaborationWorkspace,
+          activeWorkspace: activeCollaborationWorkspace,
           onAccountDeleted,
           onWorkspaceLeft: () => goToDefaultChat(),
           onWorkspaceDeleted: onCollaborationWorkspaceDeleted
@@ -250,7 +254,8 @@ export function useControlPlaneModel({
       canViewBuild && mayCreateAgents(buildRights, config?.features.configAssets)
         ? {
             namespaces: buildRights.creatableNamespaces(AGENT_ASSET_KIND),
-            mayNameFreely: buildRights.instanceWrite
+            mayNameFreely: buildRights.instanceWrite,
+            mayChooseAll: buildRights.instanceWrite
           }
         : undefined,
     showUiLibrary: view === "ui-library" && canViewUiLibrary,

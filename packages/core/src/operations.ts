@@ -20,8 +20,9 @@ export const POLICY_VALUES = ["allow", "confirm", "approval", "deny"] as const;
 
 export type PolicyValue = (typeof POLICY_VALUES)[number];
 
-/** What a call of a frame reached: an operation of a Connection, or a Data Store. */
-export type AppCallTarget = { connection: string; operation: string } | { dataStore: string };
+/** What a call of a frame reached: an operation of a Connection, a Data Store, or a Workflow it started. */
+export type AppCallTarget =
+  { connection: string; operation: string } | { dataStore: string } | { workflow: string };
 
 export type OperationOrigin =
   | {
@@ -53,8 +54,8 @@ export type OperationOrigin =
       pageSessionId: string;
       conversationId?: ConversationId;
       /**
-       * What the call reached, by name: the Connection and the operation of it, or the Data
-       * Store a statement read. Kept so that a run of a named action says what it touched.
+       * What the call reached, by name: the Connection and the operation of it, the Data
+       * Store a statement read, or the Workflow it started. Kept so that a run of a named action says what it touched.
        * Never an input or a result.
        */
       target?: AppCallTarget;

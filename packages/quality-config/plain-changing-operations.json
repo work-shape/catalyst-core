@@ -127,6 +127,7 @@
     "apps.get_from_page": "conversation_access",
     "apps.preview": "asset_right",
     "apps.sessions.context": "asset_right",
+    "apps.sessions.get_workflow_run": "asset_right",
     "branding.get": "public",
     "captured_mail.list": "public",
     "config.get": "own",

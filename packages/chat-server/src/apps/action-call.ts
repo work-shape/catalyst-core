@@ -3,10 +3,13 @@
 // no registry holds. Once the operation face has that method, this second caller goes.
 import {
   APP_ASSET_KIND,
+  workflowRunSchema,
   type AppActionCallResult,
-  type AppActionPermission
+  type AppActionPermission,
+  type AppWorkflowRun
 } from "@vivd-catalyst/api-contract";
 import {
+  appActionInputAsZod,
   compiledActionsOf,
   declaredConnectionsOf,
   declaredDataStoresOf,
@@ -33,6 +36,7 @@ import {
   type AuthenticatedIdentity,
   type AuthenticatedUser,
   type CollaborationWorkspaceId,
+  type JsonObject,
   type OperationDefinition,
   type OperationOrigin,
   type ServedFileSet
@@ -52,7 +56,7 @@ import {
   type AppActionEnvironment,
   type AppActionHost
 } from "./action-source";
-import { appActionBinding } from "./action-kinds";
+import { appActionBinding, type AppActionBinding } from "./action-kinds";
 
 // A call a frame makes through the bridge. The frame holds no credential: it posts a message
 // to the interface, and the interface makes the call here with the viewer's own session. So
@@ -121,6 +125,9 @@ function refusal(
 
 const sessionInvalid = () =>
   refusal("NOT_FOUND", "session_invalid", "The page session is not valid. Reload the page.");
+
+/** The name a read of a Workflow Run from a frame carries as its action. */
+const WORKFLOW_RUN_READ_NAME = "workflow_runs.get";
 
 const displayNameSchema = z.object({ displayName: z.string() });
 const runReferenceSchema = z.object({ operationRunId: z.string() });
@@ -261,15 +268,110 @@ export class AppActionCalls {
     if (!action) {
       throw refusal("NOT_FOUND", "action_unknown", `The manifest names no action '${name}'.`);
     }
-    this.requireOutsideSafeMode(session, action.effect);
+    const binding = appActionBinding(action);
     const { definition } = await appActionDefinition(this.environment, session.host, action);
-    return this.run(
-      session,
-      definition,
-      input,
-      appOrigin(session, action.name, appActionBinding(action).target),
-      call
+    const origin = appOrigin(session, action.name, binding.target);
+    if (action.effect === "changing" && session.mode !== "published" && binding.dryRun) {
+      return this.dryRun(session, definition, binding.dryRun, input, {
+        origin,
+        correlationId: call.correlationId,
+        parameters: appActionInputAsZod(action.input.schema)
+      });
+    }
+    this.requireOutsideSafeMode(session, action.effect);
+    return this.run(session, definition, input, origin, call);
+  }
+
+  /**
+   * The answer of safe mode to a changing action whose kind can say what it would have done:
+   * the caller's rights and the parameters are asked as a call would ask them, and then
+   * nothing is called and no run is written. A call that would be refused is refused.
+   */
+  private async dryRun(
+    session: FrameSession,
+    definition: OperationDefinition,
+    wouldHave: NonNullable<AppActionBinding["dryRun"]>,
+    input: unknown,
+    call: { origin: OperationOrigin; correlationId: string; parameters: z.ZodType<JsonObject> }
+  ): Promise<AppActionCallResult> {
+    // A named action decides its right itself (`appActionDefinition`).
+    if (definition.action !== null)
+      throw new AppError("INTERNAL", "A named action has no right of its own");
+    const right = await definition.authorize(input, {
+      actor: session.viewer,
+      origin: call.origin,
+      workspaceId: session.workspaceId,
+      correlationId: call.correlationId,
+      access: session.access,
+      resource: session.host.resource
+    });
+    if (!right.allowed) {
+      const { allowed: _allowed, ...denial } = right;
+      throw operationDenialError({ kind: "forbidden", ...denial });
+    }
+    const parameters = call.parameters.safeParse(input);
+    if (!parameters.success) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "Operation input is invalid",
+        { reason: "input_invalid", issues: parameters.error.issues },
+        { exposeMessage: true }
+      );
+    }
+    const dry = wouldHave(parameters.data);
+    return {
+      status: "dry_run",
+      message: `${dry.wouldHave} ${
+        session.mode === "page"
+          ? "A Page of a conversation runs in safe mode and carries out nothing that changes something. Save the Page as an App and publish it."
+          : "The draft of an App runs in safe mode and carries out nothing that changes something. Publish the App to carry it out."
+      }`,
+      result: dry.input
+    };
+  }
+
+  /**
+   * A Workflow Run that a `workflow` action of the shown manifest started, read with the
+   * viewer's rights by `workflows.get_run`: whoever started a run reads it. A run of a
+   * Workflow that no action of the manifest starts, or one another person started, is
+   * answered as one that does not exist, also to a viewer who may read every run: a frame
+   * follows what its viewer started and reads nothing else.
+   */
+  async workflowRun(
+    session: FrameSession,
+    runId: string,
+    correlationId: string
+  ): Promise<AppWorkflowRun> {
+    await this.admit(session, null);
+    const started = new Set(
+      session.actions.flatMap((action) => (action.kind === "workflow" ? [action.workflow] : []))
     );
+    const none = () => new AppError("NOT_FOUND", "There is no such Workflow Run");
+    if (started.size === 0) throw none();
+    const { result } = await runOperation(
+      {
+        operation: "workflows.get_run",
+        effect: "reading",
+        input: { runId },
+        actor: session.viewer,
+        origin: appOrigin(session, WORKFLOW_RUN_READ_NAME),
+        workspaceId: session.workspaceId,
+        correlationId
+      },
+      this.options.operationCalls.deps
+    );
+    if (result.status === "failed" && isAppErrorCode(result.error.code)) {
+      throw new AppError(result.error.code, result.error.message, undefined, {
+        exposeMessage: true
+      });
+    }
+    const run = result.status === "done" ? workflowRunSchema.safeParse(result.output) : undefined;
+    if (!run?.success) throw none();
+    const { workflow, startedBy } = run.data;
+    if (!started.has(workflow) || startedBy.kind !== "user" || startedBy.id !== session.viewer.id) {
+      throw none();
+    }
+    return appWorkflowRunOf(run.data);
   }
 
   /**
@@ -499,7 +601,7 @@ export class AppActionCalls {
 function appOrigin(
   shown: ShownRevision,
   actionName: string,
-  target: AppCallTarget
+  target?: AppCallTarget
 ): Extract<OperationOrigin, { kind: "app" }> {
   return {
     kind: "app",
@@ -508,7 +610,34 @@ function appOrigin(
     actionName,
     pageSessionId: shown.pageSessionId,
     ...(shown.conversationId === undefined ? {} : { conversationId: shown.conversationId }),
-    target
+    ...(target === undefined ? {} : { target })
+  };
+}
+
+/**
+ * A Workflow Run as a frame follows it. A read of a run answers the start of its result as
+ * JSON text; a frame is given the result itself where that text is all of it.
+ */
+function appWorkflowRunOf(run: z.infer<typeof workflowRunSchema>): AppWorkflowRun {
+  const preview = run.outputPreview;
+  let output: { output?: unknown; outputTruncated?: true } = {};
+  if (preview?.truncated) {
+    output = { outputTruncated: true };
+  } else if (preview) {
+    try {
+      output = { output: JSON.parse(preview.text) };
+    } catch {
+      output = { outputTruncated: true };
+    }
+  }
+  return {
+    id: run.id,
+    workflow: run.workflow,
+    status: run.status,
+    ...output,
+    ...(run.error ? { error: { code: run.error.code, message: run.error.message } } : {}),
+    ...(run.startedAt === undefined ? {} : { startedAt: run.startedAt }),
+    ...(run.finishedAt === undefined ? {} : { finishedAt: run.finishedAt })
   };
 }
 
@@ -524,15 +653,17 @@ export async function appActionPermissions(
 ): Promise<Record<string, AppActionPermission>> {
   const can: Record<string, AppActionPermission> = {};
   for (const action of shown.actions) {
+    const binding = appActionBinding(action);
+    // Safe mode refuses a changing action, but for one whose kind answers what it would have done.
     const permission =
-      action.effect === "changing" && shown.mode !== "published"
+      action.effect === "changing" && shown.mode !== "published" && !binding.dryRun
         ? "deny"
         : await appActionPermission(
             environment,
             await appActionDefinition(environment, shown.host, action),
             {
               actor: shown.viewer,
-              origin: appOrigin(shown, action.name, appActionBinding(action).target),
+              origin: appOrigin(shown, action.name, binding.target),
               workspaceId: shown.workspaceId,
               correlationId: "",
               access: shown.access,

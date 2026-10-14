@@ -65,7 +65,13 @@ export function NewAssetPage({
       onUnsavedChange={page.onUnsavedChange}
       save={async (config) => {
         const create = (expectedRevision: number | null) =>
-          source.writes.put({ kind: entry.kind, name: start.name, config, expectedRevision });
+          source.writes.put({
+            kind: entry.kind,
+            name: start.name,
+            config,
+            expectedRevision,
+            ...(start.availableIn ? { availableIn: start.availableIn } : {})
+          });
         try {
           try {
             await create(null);

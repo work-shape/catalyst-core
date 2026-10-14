@@ -12,6 +12,7 @@ import {
   type JsonObject
 } from "@vivd-catalyst/core";
 import type { AssetCall } from "./asset-access";
+import type { AssetWarning } from "./asset-placement";
 import {
   buildAssetFileSet,
   copyFileSetToAsset,
@@ -54,7 +55,7 @@ export interface AssetWorkflowHost {
       origin?: ConfigAssetRevisionOrigin;
       pageLink?: () => Promise<boolean>;
     }
-  ): Promise<{ version: number; revision: number; warnings: never[] }>;
+  ): Promise<{ version: number; revision: number; warnings: AssetWarning[] }>;
   authorizeEditing(call: AssetCall, surface: "put"): Promise<void>;
 }
 
