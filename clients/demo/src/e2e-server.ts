@@ -1,4 +1,8 @@
-import { defineClientInstance, type ConnectorTypeDefinition } from "@vivd-catalyst/client-assembly";
+import {
+  defineClientInstance,
+  type ClientInstanceCapability,
+  type ConnectorTypeDefinition
+} from "@vivd-catalyst/client-assembly";
 import { defineTool, toolSuccess } from "@vivd-catalyst/tool-sdk";
 import { z } from "zod";
 import { demoTools } from "../tools";
@@ -8,7 +12,8 @@ import { demoTools } from "../tools";
 // a skill saved into the Namespace `e2ehold-`, which one test registers and removes; it holds
 // nothing while that Namespace is not registered. No screen sets a central setting before
 // Instance > Policies exists (OP-2), so the suite's server names both.
-// It also names the one Connector type of the suite, which reaches nothing.
+// It also names the one Connector type of the suite, which reaches nothing, and ships the four
+// general skills as a capability of a deployment does, without the commands they name.
 // `pnpm dev:demo` and the demo's own server do not load this file.
 
 const HELD_TOOL = "e2e.record_note";
@@ -74,10 +79,50 @@ const testConnector: ConnectorTypeDefinition = {
   limits: { callTimeoutMs: 5_000, resultMaxBytes: 16 * 1024, maxParallelCalls: 4 }
 };
 
+// The four general skills as a deployment ships them with the artifact helpers of the
+// capabilities repo, which the demo does not hold: the names, titles, summaries and icons, and a
+// line of text each.
+const generalSkills: ClientInstanceCapability = {
+  name: "e2e-general-skills",
+  skills: [
+    {
+      name: "spreadsheets",
+      title: "Spreadsheets",
+      summary:
+        "Knows how to build a spreadsheet that calculates, and to check it before handing it over.",
+      icon: "spreadsheet"
+    },
+    {
+      name: "documents",
+      title: "Documents",
+      summary: "Knows how to lay out a Word document and check it page by page.",
+      icon: "document"
+    },
+    {
+      name: "presentations",
+      title: "Presentations",
+      summary: "Knows how to build a slide deck and check every slide.",
+      icon: "presentation"
+    },
+    {
+      name: "pdf",
+      title: "PDF",
+      summary: "Knows how to read, fill and assemble PDFs, and to verify the result.",
+      icon: "pdf"
+    }
+  ].map((skill) => ({
+    ...skill,
+    description: `Use for ${skill.title}. A fixture of the browser suite.`,
+    content: `# ${skill.title}`
+  })),
+  create: () => ({})
+};
+
 const client = defineClientInstance({
   rootDir: new URL("..", import.meta.url),
   tools: [...demoTools, recordNote],
-  connectorTypes: [testConnector]
+  connectorTypes: [testConnector],
+  capabilities: [generalSkills]
 });
 
 const app = await client.listen({

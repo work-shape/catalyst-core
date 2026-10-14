@@ -63,7 +63,7 @@ import { createClientInstanceAuth } from "./auth";
 import { createInstanceConnections, withConnections } from "./connections";
 import { createInstanceAssetKinds } from "./instance-asset-kinds";
 import { seedInstance } from "./instance-seed";
-import { shippedSkillNames } from "./shipped-skills";
+import { shippedSkillNamesOf, shippedSkillsOf } from "./shipped-skills";
 import { createClientInstanceMail } from "./mail";
 import type {
   ClientInstanceAttachmentHandler,
@@ -371,7 +371,7 @@ export async function createClientInstanceExecutionAssembly(
     source: assetSource,
     kinds: createInstanceAssetKinds({
       agent: { config, validationRefs, validateAgents },
-      skill: { config, shippedSkillNames },
+      skill: { config, shippedSkillNames: shippedSkillNamesOf(capabilities) },
       connections,
       modules,
       moduleKinds: moduleAssembly.assetKinds
@@ -461,6 +461,11 @@ export async function createClientInstanceExecutionAssembly(
   });
   assertClientAssemblyValid({ config, tools, approvalRequestHandlers: handlers, modules });
   const toolRegistry = platformTools.registry(tools, getEnabledToolNames(config));
+  const shippedSkills = shippedSkillsOf({
+    modules,
+    capabilities,
+    hasTool: (toolName) => toolRegistry.has(toolName)
+  });
   const modulesStarted = await moduleAssembly.start({
     operationCalls,
     authorizer,
@@ -538,6 +543,7 @@ export async function createClientInstanceExecutionAssembly(
     modules,
     clientInstanceId,
     store,
+    shippedSkills,
     attachments,
     managedObjects,
     jobRetries: [...jobRetries, ...modulesStarted.jobRetries],
