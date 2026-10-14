@@ -2,17 +2,23 @@ import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createPlatformAssetCalls } from "@vivd-catalyst/chat-server";
+import { createPlatformAssetCalls, type ChatServerOptions } from "@vivd-catalyst/chat-server";
 import {
   PAGE_FILE_SET_HELD_KEY,
   asAgentRunId,
   asConversationId,
   asToolCallId,
   createPlatformId,
+  isPageId,
   type ToolExecutionContext,
   type UserRecord
 } from "@vivd-catalyst/core";
-import { createPageSaveAsAppTool } from "@vivd-catalyst/tool-execution";
+import {
+  ToolRegistry,
+  createPageSaveAsAppTool,
+  createToolOperationRunner,
+  registerToolOperations
+} from "@vivd-catalyst/tool-execution";
 import { clientInstanceId } from "./support/access-instance";
 import { expectStatus, setupAppInstance, type AppInstance } from "./support/app-instance";
 import { IBAN, guardedEvents, ibanPattern, noIban } from "./support/guardrails";
@@ -336,3 +342,91 @@ describe("an App the agent writes from a Page of its conversation", () => {
   });
 });
 
+describe("a page.save_as_app a guardrail holds, through the operation runner", () => {
+  // The agent's call takes the path every tool call takes: the operation of the tool, its
+  // before-events, the request filed for the hold and the job that runs it once approved.
+  it("holds the call, keeps the revision its guardrail read, and writes it once approved", async () => {
+    const t = await setupAppInstance({
+      server: (stores) => ({
+        operations: {
+          events: guardedEvents(stores, {
+            no_iban: { ...noIbanInApps.no_iban, outcome: "require_approval" }
+          }).events
+        },
+        // The agent lists the tool, as a conversation that builds a Page offers it.
+        agentToolNames: (agentName: string) =>
+          agentName === "assistant" ? ["page.save_as_app"] : []
+      })
+    });
+    try {
+      await t.instance.call("health.get");
+      const options: ChatServerOptions | undefined = testServerOptions(t.instance);
+      const operationCalls = options?.operationCalls;
+      if (!options || !operationCalls) throw new Error("The instance has no operation calls");
+      const tool = createPageSaveAsAppTool(createPlatformAssetCalls(options));
+      if (!(await operationCalls.registry.resolve(tool.name))) {
+        registerToolOperations(operationCalls.registry, [tool], { clientInstanceId });
+      }
+      const runTool = createToolOperationRunner(
+        operationCalls.deps,
+        new ToolRegistry({ tools: [tool] })
+      );
+
+      const conversationId = z.object({ id: z.string() }).parse(
+        (
+          await t.expectOk(t.admin.id, "conversations.create", {
+            payload: { title: "Offers" }
+          })
+        ).json()
+      ).id;
+      const { pageId } = await t.storePage(`Konto ${IBAN}`, {}, { conversationId });
+      if (!isPageId(pageId)) throw new Error("No Page");
+      const [looked] = await t.stores.pages.listPageFileSets({ clientInstanceId, pageId });
+      const request = {
+        toolName: tool.name,
+        toolCallId: asToolCallId(`call_${randomUUID()}`),
+        agentRunId: asAgentRunId(`run_${randomUUID()}`),
+        conversationId: asConversationId(conversationId),
+        agentName: "assistant",
+        input: { page: "Offers", name: "offers", title: "Offers" }
+      };
+      const result = await runTool(request, {
+        user: {
+          id: t.admin.id,
+          externalUserId: t.admin.id,
+          displayLabel: t.admin.displayLabel,
+          roles: t.admin.roles,
+          permissions: t.admin.permissions,
+          permissionRefs: t.admin.permissionRefs,
+          clientInstanceId,
+          authSource: "test"
+        },
+        clientInstanceId,
+        correlationId: `corr_${randomUUID()}`
+      });
+      expect(JSON.stringify(result)).toContain("This call has NOT run");
+
+      const [held] = await t.stores.operationRuns.list({ clientInstanceId });
+      expect(held).toMatchObject({ operation: "page.save_as_app", status: "pending_approval" });
+      const approvalRequestId = held?.approvalRequestId ?? "";
+      const filed = await t.stores.approvals.getApprovalRequest({
+        clientInstanceId,
+        requestId: approvalRequestId
+      });
+      // The revision the guardrail read is kept beside the input.
+      expect(filed?.payload).toMatchObject({
+        heldInput: { [PAGE_FILE_SET_HELD_KEY]: looked?.id }
+      });
+      expect(await draftRevisionOf(t, "offers")).toBeUndefined();
+
+      // The Page is saved anew while the call waits; the approval writes the revision it held.
+      await t.storePage("second revision", {}, { conversationId });
+      await approve(t, approvalRequestId);
+      const [done] = await t.stores.operationRuns.list({ clientInstanceId });
+      expect(done).toMatchObject({ id: held?.id, status: "done" });
+      expect(await draftRevisionOf(t, "offers")).toBe(1);
+    } finally {
+      await t.close();
+    }
+  });
+});
