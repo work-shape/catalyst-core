@@ -60,7 +60,7 @@ function accepted(
 
 /** A type that reads its operations from the outside system, as `mcp` does. */
 const discovering: ConnectorTypeDefinition = (() => {
-  const { catalog: _catalog, ...base } = createTestConnector().type;
+  const { catalog: _catalog, declared: _declared, ...base } = createTestConnector().type;
   return { ...base, type: "discovering", discover: () => Promise.resolve([]) };
 })();
 
@@ -304,7 +304,7 @@ describe("the catalog of a Connection", () => {
     expect(statusOf(accepted("deep"), catalog)).toEqual({ status: "unknown" });
 
     // The same for a type that ships its catalog: the operation is unknown, nothing throws.
-    const { discover: _discover, catalog: _catalog, ...base } = discovering;
+    const { discover: _discover, catalog: _catalog, declared: _declared, ...base } = discovering;
     const shipping: ConnectorTypeDefinition = {
       ...base,
       catalog: [tooDeep, descriptor("revenue")]

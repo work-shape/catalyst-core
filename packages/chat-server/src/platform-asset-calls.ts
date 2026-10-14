@@ -22,7 +22,6 @@ import {
 } from "@vivd-catalyst/core";
 import {
   PLATFORM_ASSET_LIST_MAX,
-  PLATFORM_ASSET_OPEN_NEEDS_PERSON,
   PLATFORM_ASSET_TOOLS,
   platformAssetWriteRefusal,
   type PlatformAssetCalls,
@@ -124,6 +123,42 @@ export async function requireReadableSubject(
   if (asset?.status !== "active") throw subjectUnavailable();
 }
 
+/**
+ * Refuses to open or read an asset in a transcript that others read. A member of a Shared
+ * Workspace need not hold the read right on the asset, so a conversation about one is its
+ * creator's alone, as `createConversation` makes it.
+ */
+export async function requireOwnTranscript(
+  options: Pick<AssetWorkflowOptions, "clientInstanceId" | "stores">,
+  conversation: Conversation
+): Promise<void> {
+  if (conversation.visibility === "private") return;
+  const workspace = await options.stores.workspaces.getWorkspace(
+    options.clientInstanceId,
+    conversation.collaborationWorkspaceId
+  );
+  if (workspace?.kind === "personal") return;
+  throw new AppError(
+    "CONFLICT",
+    "This conversation is shared with its workspace, and an asset is opened and read only in a conversation of the person's own. Ask the person to start a new conversation, or to open the asset's page and choose Edit with the agent",
+    { reason: "subject_conversation_shared" },
+    { exposeMessage: true }
+  );
+}
+
+/** Whether an asset belongs to the whole instance, which only a person's step makes a subject. */
+async function ofInstance(
+  options: AssetWorkflowOptions,
+  named: ConversationSubject
+): Promise<boolean> {
+  const row = await options.configAssets.store.getConfigAsset({
+    clientInstanceId: options.clientInstanceId,
+    kind: named.kind,
+    name: named.name
+  });
+  return row?.scope.kind !== "workspace";
+}
+
 const jsonObjectSchema = z.record(z.string(), z.unknown());
 
 /** The input or output of an operation as JSON Schema, where it can be told as one. */
@@ -180,26 +215,6 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
   }
 
   /**
-   * Refuses to open or read an asset in a transcript that others read. A member of a Shared
-   * Workspace need not hold the read right on the asset, so a conversation about one is its
-   * creator's alone, as `createConversation` makes it.
-   */
-  async function requireOwnTranscript(conversation: Conversation): Promise<void> {
-    if (conversation.visibility === "private") return;
-    const workspace = await options.stores.workspaces.getWorkspace(
-      options.clientInstanceId,
-      conversation.collaborationWorkspaceId
-    );
-    if (workspace?.kind === "personal") return;
-    throw new AppError(
-      "CONFLICT",
-      "This conversation is shared with its workspace, and an asset is opened and read only in a conversation of the person's own. Ask the person to start a new conversation, or to open the asset's page and choose Edit with the agent",
-      { reason: "subject_conversation_shared" },
-      { exposeMessage: true }
-    );
-  }
-
-  /**
    * The strictest value an administrator set on any of `operations` for the asset at
    * `address`, read as the value that was set: a tool's own mode stands where no setting names
    * the operation, since the instance default for changes is one an agent's call cannot meet.
@@ -241,29 +256,6 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       page: { limit: APP_REVISIONS_LOOKED_BACK }
     });
     return revisions.some(({ origin }) => origin?.kind === "page" && fromPage(origin));
-  }
-
-  /**
-   * Refuses to move the subject onto an asset of the instance. Such an asset becomes the
-   * subject only by a person's step: the person started the conversation from its page. The
-   * agent's own open is no such step, since a document or a tool's answer the agent read can
-   * ask for it, and the person may change every asset of the instance. Until the host asks the
-   * person to confirm such an open, the agent is refused it. An asset of the conversation's
-   * workspace, such as an App, opens as before.
-   */
-  async function requireWorkspaceAsset(named: ConversationSubject): Promise<void> {
-    const row = await options.configAssets.store.getConfigAsset({
-      clientInstanceId: options.clientInstanceId,
-      kind: named.kind,
-      name: named.name
-    });
-    if (row?.scope.kind === "workspace") return;
-    throw new AppError(
-      "FORBIDDEN",
-      `This ${named.kind} belongs to the whole instance, and only the person makes such an asset what a conversation is about, by starting the conversation from its page. You can read it with ${PLATFORM_ASSET_TOOLS.get.name}. To change it, ask the person to open its page and choose Edit with the agent`,
-      { reason: PLATFORM_ASSET_OPEN_NEEDS_PERSON },
-      { exposeMessage: true }
-    );
   }
 
   /** The call as the asset operations take one. */
@@ -385,22 +377,25 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       const conversation = await conversationOf(context);
       const moves = !sameSubject(named, conversation.subject);
       if (moves) {
-        // Another asset is opened as one the conversation could have been made about, and
-        // only where no person's step is needed for it.
+        // Another asset is opened as one the conversation could have been made about.
         await requireReadableSubject(options, context.user, named);
-        await requireOwnTranscript(conversation);
-        await requireWorkspaceAsset(named);
+        await requireOwnTranscript(options, conversation);
       }
       const read = await readAsset(context, conversation, named);
+      const opened = { ...read, title: titleOf(read.kind, read.name, read.config) };
+      if (!moves) return opened;
+      // An asset of the instance becomes the subject only by a person's step: the agent's own
+      // open is none, since a document or a tool's answer the agent read can ask for it, and
+      // the person may change every asset of the instance. The person is offered to go to it,
+      // and going there makes it the subject (`conversations.subject.open`).
+      if (await ofInstance(options, named)) return { ...opened, awaitsPerson: true };
       // Set once the read stood: a refused open leaves the conversation about what it was.
-      if (moves) {
-        await options.stores.conversations.setConversationSubject({
-          clientInstanceId: options.clientInstanceId,
-          conversationId: conversation.id,
-          subject: named
-        });
-      }
-      return { ...read, title: titleOf(read.kind, read.name, read.config) };
+      await options.stores.conversations.setConversationSubject({
+        clientInstanceId: options.clientInstanceId,
+        conversationId: conversation.id,
+        subject: named
+      });
+      return opened;
     },
 
     async get(context, named) {
@@ -412,7 +407,7 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
         // person may not read alike. Its definition reaches no transcript that members read
         // who may not read it, as the subject's does not.
         await requireReadableSubject(options, context.user, named);
-        await requireOwnTranscript(conversation);
+        await requireOwnTranscript(options, conversation);
       }
       return readAsset(context, conversation, asset);
     },
@@ -503,7 +498,7 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
       // this call creates, in the conversation's own workspace: never an asset of the instance,
       // which only a person's step makes a subject.
       // The Page revision written is the one the guardrails read, or a held call kept.
-      await requireOwnTranscript(conversation);
+      await requireOwnTranscript(options, conversation);
       const page = await pageApps.named(conversation.id, input.page);
       const created = await pageApps.create(
         await callOf(context),

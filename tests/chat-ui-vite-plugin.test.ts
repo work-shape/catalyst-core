@@ -186,11 +186,20 @@ describe("vivdCatalystChatUiPlugin", () => {
 
     for (const copy of [
       "clients/demo/public/favicon.svg",
-      "packages/chat-standalone/public/favicon.svg",
-      "packages/docs/public/favicon.svg"
+      "packages/chat-standalone/public/favicon.svg"
     ]) {
       expect(await readFile(platformFile(copy), "utf8"), copy).toBe(mark);
     }
+  });
+
+  it("gives the docs site its own variant of the mark, in the mark's colours only", async () => {
+    const mark = await readFile(platformFile(defaultFavicon), "utf8");
+    const docsMark = await readFile(platformFile("packages/docs/public/favicon.svg"), "utf8");
+    const colours = (svg: string) => new Set(svg.match(/#[0-9a-f]{6}/giu));
+
+    expect(docsMark).not.toBe(mark);
+    expect(docsMark).toContain("@media (prefers-color-scheme:dark)");
+    expect([...colours(docsMark)].filter((colour) => !colours(mark).has(colour))).toEqual([]);
   });
 });
 

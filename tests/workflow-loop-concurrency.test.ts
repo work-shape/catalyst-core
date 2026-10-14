@@ -45,13 +45,34 @@ async function ready(
   return t;
 }
 
-/** A Connection that counts how many of its changing calls are with it at one moment. */
-function countingCalls(t: WorkflowFixture) {
+/**
+ * How long the first call waits for the others at most. A loop that runs fewer at once then
+ * fails on the count, before the test Connection's call timeout of 2 s ends the held calls.
+ */
+const MEET_MS = 1_500;
+
+/**
+ * A Connection that counts how many of its changing calls are with it at one moment. The first
+ * calls wait until `meet` of them are there, so that the count does not depend on how fast each
+ * item reached its call. After that every call stays 40 ms, in which a call too many is counted.
+ */
+function countingCalls(t: WorkflowFixture, meet: number) {
   const seen = { going: 0, most: 0 };
+  let met = (): void => undefined;
+  const meeting = new Promise<void>((resolve) => {
+    met = () => resolve();
+  });
+  let timer: ReturnType<typeof setTimeout> | undefined;
   t.setBehaviour(async (operation, input): Promise<JsonValue> => {
     if (operation === "echo") return { clients: CLIENTS };
     seen.going += 1;
     seen.most = Math.max(seen.most, seen.going);
+    timer ??= setTimeout(met, MEET_MS);
+    if (seen.going >= meet) {
+      clearTimeout(timer);
+      met();
+    }
+    await meeting;
     await new Promise((resolve) => setTimeout(resolve, 40));
     seen.going -= 1;
     return { received: input };
@@ -72,7 +93,7 @@ describe("a loop with concurrency above 1", () => {
 
   it("runs that many items at once, each item once, and counts them all", async () => {
     const t = await ready({ concurrency: 3 });
-    const seen = countingCalls(t);
+    const seen = countingCalls(t, 3);
     const run = await t.finish((await start(t)).id);
 
     expect(run.status).toBe("done");

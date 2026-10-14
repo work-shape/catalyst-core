@@ -1,13 +1,14 @@
 import { APP_ASSET_KIND } from "@vivd-catalyst/api-client";
 import { SUBJECT_TOOL_PREFIX, WORKFLOW_ASSET_KIND } from "@vivd-catalyst/core";
 import { AGENT_ASSET_KIND } from "../build-area/build-rights";
+import { AGENTS_BUILD_PATH } from "../build-area/build-route";
 import { PAGE_SAVE_TOOL_NAME } from "../pages/page-save";
-import type { Surface } from "../surface/surface";
+import type { WorkspaceRoute } from "../routes";
 
 // What the calls of a run tell of the asset its conversation is about. Opening an asset makes
 // it the subject on the server; the browser reads the same from the answers of the run, so the
-// surface of the asset opens while the run goes and redraws after each saved draft. A read
-// opens nothing.
+// person is taken to the asset's page while the run goes, and its page is read again after each
+// saved draft. A read opens nothing.
 
 export const ASSET_OPEN_TOOL_NAME = `${SUBJECT_TOOL_PREFIX}open`;
 export const ASSET_GET_TOOL_NAME = `${SUBJECT_TOOL_PREFIX}get`;
@@ -53,31 +54,105 @@ function answered(part: SubjectRunPart, toolName: string): Record<string, unknow
     : undefined;
 }
 
-/** The asset an answer of `platform.assets.open` or of `page.save_as_app` opened. */
-function assetOpened(answer: Record<string, unknown> | undefined): SubjectAsset | undefined {
-  return answer !== undefined && typeof answer.kind === "string" && typeof answer.name === "string"
-    ? { kind: answer.kind, name: answer.name }
-    : undefined;
+/** One open of an asset that stood: an answer of `platform.assets.open` or of `page.save_as_app`. */
+export interface AssetOpen {
+  subject: SubjectAsset;
+  /** The name people read for the asset, as the answer says it. */
+  title: string;
+  callId: string | undefined;
+  /**
+   * The asset belongs to the whole instance and the open did not make it the subject: that
+   * waits for the person to go to it (`conversations.subject.open`).
+   */
+  awaitsPerson: boolean;
+}
+
+/** The open an answer of `platform.assets.open` or of `page.save_as_app` says. */
+function assetOpenOfAnswer(
+  answer: Record<string, unknown> | undefined,
+  callId: string | undefined
+): AssetOpen | undefined {
+  if (answer === undefined || typeof answer.kind !== "string" || typeof answer.name !== "string") {
+    return undefined;
+  }
+  return {
+    subject: { kind: answer.kind, name: answer.name },
+    title: typeof answer.title === "string" && answer.title !== "" ? answer.title : answer.name,
+    callId,
+    awaitsPerson: answer.awaitsPerson === true
+  };
 }
 
 /**
- * The asset the last open of the run that stood names, and the call that opened it: what the
- * conversation is about now. Each open is a call of its own, so an asset opened again after
- * its reader closed it shows again. A Page kept as an App opens the App.
+ * The open a call of `platform.assets.open` made, once it stood. The thread shows it as a line
+ * of its own that leads to the asset's page.
+ */
+export function standingAssetOpen(call: {
+  toolName: string;
+  toolCallId?: string;
+  result?: unknown;
+  isError?: boolean;
+}): AssetOpen | undefined {
+  return call.toolName !== ASSET_OPEN_TOOL_NAME || call.isError === true
+    ? undefined
+    : assetOpenOfAnswer(toolAnswer(call.result), call.toolCallId);
+}
+
+/** Every open of the run that stood, in order. A Page kept as an App opens the App. */
+export function opensInRun(parts: readonly SubjectRunPart[]): AssetOpen[] {
+  return parts.flatMap((part) => {
+    const open = assetOpenOfAnswer(
+      answered(part, ASSET_OPEN_TOOL_NAME) ?? answered(part, PAGE_SAVE_AS_APP_TOOL_NAME),
+      part.toolCallId
+    );
+    return open === undefined ? [] : [open];
+  });
+}
+
+/**
+ * The asset the last open of the run that made it the subject names, and the call that opened
+ * it: what the conversation is about now. An open that waits for the person changed nothing.
  */
 export function subjectOpenedInRun(
   parts: readonly SubjectRunPart[]
 ): { subject: SubjectAsset; callId: string | undefined } | undefined {
-  let opened: { subject: SubjectAsset; callId: string | undefined } | undefined;
-  for (const part of parts) {
-    const subject = assetOpened(
-      answered(part, ASSET_OPEN_TOOL_NAME) ?? answered(part, PAGE_SAVE_AS_APP_TOOL_NAME)
-    );
-    if (subject) {
-      opened = { subject, callId: part.toolCallId };
-    }
+  const opened = opensInRun(parts).filter((open) => !open.awaitsPerson);
+  const last = opened.at(-1);
+  return last === undefined ? undefined : { subject: last.subject, callId: last.callId };
+}
+
+/** Whether two names say the same asset. */
+export function sameAsset(a: SubjectAsset | undefined, b: SubjectAsset | undefined): boolean {
+  return a !== undefined && b !== undefined && a.kind === b.kind && a.name === b.name;
+}
+
+/** The path segment of skills in Build. */
+const SKILLS_BUILD_PATH = "skills";
+const SKILL_ASSET_KIND = "skill";
+
+/**
+ * The page of an asset, where its kind has one: an agent or a skill in Build, a Workflow on its
+ * canvas, an App on its draft page. A Workflow and an App have their pages in a workspace.
+ */
+export function assetPageRoute(
+  subject: SubjectAsset,
+  workspaceId: string | undefined
+): WorkspaceRoute | undefined {
+  if (subject.kind === AGENT_ASSET_KIND) {
+    return { kind: "build-asset", assetKind: AGENTS_BUILD_PATH, name: subject.name };
   }
-  return opened;
+  if (subject.kind === SKILL_ASSET_KIND) {
+    return { kind: "build-asset", assetKind: SKILLS_BUILD_PATH, name: subject.name };
+  }
+  if (workspaceId === undefined) {
+    return undefined;
+  }
+  if (subject.kind === WORKFLOW_ASSET_KIND) {
+    return { kind: "workflow", collaborationWorkspaceId: workspaceId, workflow: subject.name };
+  }
+  return subject.kind === APP_ASSET_KIND
+    ? { kind: "app-edit", collaborationWorkspaceId: workspaceId, app: subject.name }
+    : undefined;
 }
 
 /** Whether a save of a Page also wrote the draft of the App the conversation is about. */
@@ -98,33 +173,4 @@ export function savedDraftCalls(parts: readonly SubjectRunPart[]): string[] {
       ? [part.toolCallId]
       : []
   );
-}
-
-/** The key of the surface of a subject: one per asset, so an asset opens once by itself. */
-function subjectSurfaceKey(subject: SubjectAsset): string {
-  return `subject:${subject.kind}:${subject.name}`;
-}
-
-/**
- * The surface of the asset a conversation is about: the canvas of a Workflow, the draft of an
- * App, the saved state of an agent. Nothing for a kind without one: a Page opens through its
- * own card, and the other kinds show nothing beside the chat yet.
- */
-export function subjectSurface(input: {
-  subject: SubjectAsset;
-  workspaceId: string | undefined;
-  title: string;
-}): Surface | undefined {
-  const { subject, workspaceId, title } = input;
-  const key = subjectSurfaceKey(subject);
-  if (subject.kind === WORKFLOW_ASSET_KIND && workspaceId !== undefined) {
-    return { kind: "workflow_canvas", key, title, workspaceId, workflow: subject.name };
-  }
-  if (subject.kind === APP_ASSET_KIND && workspaceId !== undefined) {
-    return { kind: "app_edit", key, title, workspaceId, app: subject.name };
-  }
-  if (subject.kind === AGENT_ASSET_KIND) {
-    return { kind: "agent", key, title, agent: subject.name };
-  }
-  return undefined;
 }

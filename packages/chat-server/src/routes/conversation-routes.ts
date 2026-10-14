@@ -1,5 +1,11 @@
 import { apiOperations } from "@vivd-catalyst/api-contract";
-import { AppError, asCollaborationWorkspaceId } from "@vivd-catalyst/core";
+import {
+  AppError,
+  asCollaborationWorkspaceId,
+  type AuthenticatedIdentity,
+  type AuthenticatedUser,
+  isAuthenticatedServicePrincipal
+} from "@vivd-catalyst/core";
 import { ConversationWorkflow } from "../conversations/conversation-workflow";
 import { RunObservationWorkflow } from "../conversations/run-observation-workflow";
 import type { Route } from "../http/route";
@@ -51,6 +57,25 @@ export function registerConversationRoutes(route: Route, options: ChatServerOpti
     conversations.renameConversation(conversationIdParam(params), body.title, user, context)
   );
 
+  // The person's step that makes an asset what their conversation is about, recorded as an
+  // Operation Run. The conversation's own rule decides who may take it, as for every route of a
+  // conversation: only its creator, on an asset they may read, and anyone else reads "missing".
+  route.operation(apiOperations["conversations.subject.open"], {
+    changeClass: "reversible",
+    authorize: (_input, { actor }) =>
+      isAuthenticatedServicePrincipal(actor)
+        ? { allowed: false, action: "conversations.subject.open", reason: "no_grant" }
+        : { allowed: true },
+    resource: ({ conversationId }) => ({ kind: "conversation", id: conversationId }),
+    execute: ({ conversationId, kind, name, toolCallId }, context) =>
+      conversations.openSubject(
+        conversationIdParam({ conversationId }),
+        personOf(context.actor),
+        context,
+        { kind, name, ...(toolCallId === undefined ? {} : { toolCallId }) }
+      )
+  });
+
   route(apiOperations["conversations.move"], ({ user, context, params, body }) =>
     conversations.moveConversation(conversationIdParam(params), user, context, {
       collaborationWorkspaceId: asCollaborationWorkspaceId(body.collaborationWorkspaceId),
@@ -61,4 +86,11 @@ export function registerConversationRoutes(route: Route, options: ChatServerOpti
   route(apiOperations["conversations.delete"], ({ user, context, params }) =>
     conversations.deleteConversation(conversationIdParam(params), user, context)
   );
+}
+
+function personOf(actor: AuthenticatedIdentity): AuthenticatedUser {
+  if (isAuthenticatedServicePrincipal(actor)) {
+    throw new AppError("FORBIDDEN", "Service principals cannot access user-scoped routes");
+  }
+  return actor;
 }

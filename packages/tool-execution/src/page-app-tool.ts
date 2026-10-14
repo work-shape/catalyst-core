@@ -117,6 +117,13 @@ export function createPageSaveAsAppTool(
 ): AnyToolDefinition {
   return defineTool({
     name: PAGE_SAVE_AS_APP_TOOL_NAME,
+    title: { en: "Save page as app", de: "Page als App speichern" },
+    summary: {
+      en: "Turns a Page into an App draft for the workspace, which a person publishes.",
+      de: "Macht aus einer Page den Entwurf einer App für den Arbeitsbereich, den eine Person veröffentlicht."
+    },
+    group: "results",
+    icon: "app",
     // A new App with a draft. Nothing is published and nothing runs.
     effect: "changing",
     description: [

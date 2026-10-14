@@ -30,3 +30,40 @@ export async function shootThemes(
   }
   await loadIn(page, "light", ready);
 }
+
+/**
+ * Pictures of a screen in English and in German, light, 1280 pixels wide, where
+ * `E2E_SHOTS_DIR` names a folder. Each language loads the address again and waits for `ready`;
+ * the page is left in English at the width it had.
+ */
+export async function shootLocales(
+  page: Page,
+  name: string,
+  ready: () => Promise<void>
+): Promise<void> {
+  if (!shotsDir) {
+    return;
+  }
+  await mkdir(shotsDir, { recursive: true });
+  const size = page.viewportSize();
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:theme", "light"));
+  for (const locale of ["en", "de"]) {
+    await page.evaluate(
+      (value) => window.localStorage.setItem("vivd-catalyst:locale", value),
+      locale
+    );
+    await page.reload();
+    await ready();
+    await page.screenshot({
+      path: join(shotsDir, `${name}-${locale}.png`),
+      animations: "disabled"
+    });
+  }
+  await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "en"));
+  if (size) {
+    await page.setViewportSize(size);
+  }
+  await page.reload();
+  await ready();
+}
