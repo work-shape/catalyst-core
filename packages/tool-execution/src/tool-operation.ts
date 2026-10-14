@@ -340,7 +340,8 @@ const forbiddenDetailsSchema = z.object({
     "denied",
     "unknown_action",
     "holder_inactive",
-    "holder_not_administrable"
+    "holder_not_administrable",
+    "user_only"
   ])
 });
 const issuesSchema = z.object({

@@ -6,6 +6,7 @@ import {
   POLICY_VALUES,
   callerCanConfirm,
   isAppError,
+  isAuthenticatedServicePrincipal,
   isToolOperationAnswer,
   moduleOffError,
   operationDenialError,
@@ -275,14 +276,24 @@ export function requireModuleOn(call: OperationCall, modules: ModuleSnapshot | u
 
 /**
  * What the surface a call came through allows, before the actor's own right is asked. An
- * agent calls the tools its definition lists and nothing else. Every other origin has no rule
- * of its own here.
+ * operation a person calls (`auth: "user"`) is refused to a service principal, as its route
+ * refuses one, also where the call takes no route, such as a step of a Workflow. An agent
+ * calls the tools its definition lists and nothing else. Every other origin has no rule of
+ * its own here.
  */
 export async function authorizeOrigin(
   call: OperationCall,
   definition: OperationDefinition,
   deps: RunOperationDeps
 ): Promise<OperationAuthorization> {
+  if (definition.auth === "user" && isAuthenticatedServicePrincipal(call.actor)) {
+    return {
+      allowed: false,
+      action: definition.action ?? definition.name,
+      reason: "user_only",
+      message: `Only a person may call '${definition.name}', and a service principal is none`
+    };
+  }
   if (call.origin.kind !== "agent") {
     return { allowed: true };
   }
@@ -729,7 +740,8 @@ const forbiddenSchema = z.object({
       "denied",
       "unknown_action",
       "holder_inactive",
-      "holder_not_administrable"
+      "holder_not_administrable",
+      "user_only"
     ])
   })
 });

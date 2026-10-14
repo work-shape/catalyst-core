@@ -7,10 +7,17 @@ export type OperationDenial =
       /**
        * `holder_not_administrable`: the caller may not write a grant row for this holder,
        * whatever right it holds. A service principal writes none, and a service principal's
-       * rows are written by who administers service principals.
+       * rows are written by who administers service principals. `user_only`: the operation is
+       * one a person calls (`auth: "user"`), and the caller is a service principal, whatever
+       * right it holds.
        */
       reason:
-        "no_grant" | "denied" | "unknown_action" | "holder_inactive" | "holder_not_administrable";
+        | "no_grant"
+        | "denied"
+        | "unknown_action"
+        | "holder_inactive"
+        | "holder_not_administrable"
+        | "user_only";
       /**
        * What the refusal says, where a rule refused that no right a caller can be granted
        * opens. Without it the refusal names the missing right.
