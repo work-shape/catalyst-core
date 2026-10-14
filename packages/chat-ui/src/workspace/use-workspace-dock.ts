@@ -163,26 +163,31 @@ export function useWorkspaceDock({
 
 /**
  * A dock whose conversation the person may not read, as from a link someone shared, opens
- * empty instead, without an error: the page shows as it does for anyone.
+ * empty instead, without an error: the page shows as it does for anyone. Text typed while the
+ * thread loaded stays in the composer of the empty dock.
  */
 export function useUnreadableDockConversation({
   dock,
   docked,
-  error
+  error,
+  keepDraft
 }: {
   dock: WorkspaceDock;
   /** The conversation on the screen is the dock's. */
   docked: boolean;
   /** How the thread of that conversation failed to load, if it did. */
   error: unknown;
+  /** Moves the draft of the unreadable conversation to the new conversation. */
+  keepDraft: (conversationId: string) => void;
 }) {
   const status = apiErrorStatus(error);
-  const unreadable =
-    docked && dock.open && dock.conversationId !== undefined && (status === 403 || status === 404);
+  const unreadableId =
+    docked && dock.open && (status === 403 || status === 404) ? dock.conversationId : undefined;
   const { show } = dock;
   useEffect(() => {
-    if (unreadable) {
+    if (unreadableId !== undefined) {
+      keepDraft(unreadableId);
       show(undefined, { replace: true });
     }
-  }, [show, unreadable]);
+  }, [keepDraft, show, unreadableId]);
 }

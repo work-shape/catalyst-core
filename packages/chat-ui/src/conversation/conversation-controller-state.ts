@@ -68,13 +68,19 @@ export function createInitialControllerState(): ConversationControllerState {
 /**
  * The state the controller shows for `conversationId`. State gathered for another conversation
  * never counts: until the thread of the selected conversation arrives, it has no messages and
- * no run.
+ * no run. A conversation whose thread has not answered once is loading while `awaitingThread`.
  */
 export function controllerStateForConversation(
   state: ConversationControllerState,
-  conversationId: string | undefined
+  conversationId: string | undefined,
+  awaitingThread = false
 ): ConversationControllerState {
-  if (!state.conversation || state.conversation.id === conversationId) {
+  if (!state.conversation) {
+    return awaitingThread && conversationId !== undefined && state.snapshotStatus === "ready"
+      ? { ...state, snapshotStatus: "loading" }
+      : state;
+  }
+  if (state.conversation.id === conversationId) {
     return state;
   }
   return {

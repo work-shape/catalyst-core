@@ -470,7 +470,22 @@ export function useWorkspaceChatModel({
     conversationId: selectedConversationId,
     enabled: isAuthenticated && Boolean(selectedConversationId)
   });
-  useUnreadableDockConversation({ dock, docked, error: threadQuery.error });
+  const { moveDraft } = draftController;
+  const keepUnreadableDraft = useCallback(
+    (conversationId: string) =>
+      moveDraft({
+        authScope: WORKSPACE_AUTH_SCOPE,
+        fromConversationId: conversationId,
+        toConversationId: undefined
+      }),
+    [moveDraft]
+  );
+  useUnreadableDockConversation({
+    dock,
+    docked,
+    error: threadQuery.error,
+    keepDraft: keepUnreadableDraft
+  });
   // Only a settled thread for the conversation actually on screen may decide
   // the canonical URL. A snapshot left over from another conversation, or one
   // still being refetched after a move, would redirect back to a workspace the

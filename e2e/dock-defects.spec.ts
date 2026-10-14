@@ -92,6 +92,8 @@ test("on a slow connection, a message typed into the dock of a refused link is n
 
   await expect(page).toHaveURL(new RegExp(`/w/${workspace}/agents$`, "u"), { timeout: 10_000 });
   await expect(dockHead(page)).toContainText("New chat");
+  // What was typed stays in the composer of the empty dock.
+  await expect(composer).toHaveValue("first words to a shared link");
   await page.waitForTimeout(1_000);
   expect(refusedSends).toEqual([]);
   await expect(chatColumn(page).getByRole("alert")).toHaveCount(0);
@@ -122,6 +124,41 @@ test("a thread answered once with 429 is tried again and shows in the dock", asy
   await expect.poll(() => calls, { timeout: 10_000 }).toBeGreaterThan(1);
   await expect(chatColumn(page).getByPlaceholder("Message")).toBeEnabled();
   await expect(chatColumn(page).getByRole("alert")).toHaveCount(0);
+});
+
+// DOCK-1 round 2: a readable thread on a slow connection blocks the send until it is there,
+// keeps what was typed, and lets it go once loaded.
+test("on a slow connection, the dock holds what was typed until its thread is there", async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page, member);
+  const conversation = await createConversation(page, `Slow ${Date.now()}`);
+  const workspace = encodeURIComponent(conversation.collaborationWorkspaceId);
+  let threadAnswered = false;
+  await page.route(`**/api/v1/conversations/${conversation.id}/thread`, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    await route.continue();
+    threadAnswered = true;
+  });
+  const sendsBeforeLoad: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" && !threadAnswered && request.url().includes(conversation.id)) {
+      sendsBeforeLoad.push(new URL(request.url()).pathname);
+    }
+  });
+
+  await page.goto(`/w/${workspace}/agents?chat=${conversation.id}`);
+  const composer = chatColumn(page).getByPlaceholder("Message");
+  await composer.fill("words typed while it loads");
+  await composer.press("Enter");
+  const send = chatColumn(page).getByRole("button", { name: "Send message" });
+  await expect(send).toBeDisabled();
+
+  await expect(send).toBeEnabled({ timeout: 10_000 });
+  await expect(composer).toHaveValue("words typed while it loads");
+  expect(sendsBeforeLoad).toEqual([]);
+  await expect(page).toHaveURL(new RegExp(`chat=${conversation.id}$`, "u"));
 });
 
 async function signIn(page: Page, user: { email: string; password: string }): Promise<void> {
