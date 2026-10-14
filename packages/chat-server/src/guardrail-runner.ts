@@ -293,7 +293,8 @@ export class GuardrailRunner {
           ? GUARDRAIL_CHECK_LIMIT_MESSAGE
           : ranOutOfItsOwnTime
             ? GUARDRAIL_CHECK_TIMEOUT_MESSAGE
-            : "could not be evaluated"
+            : "could not be evaluated",
+        "temporary"
       );
     }
   }
@@ -321,12 +322,21 @@ function checked(fields: GuardrailFields, event: GuardrailEvent, { guardrail }: 
   return names.flatMap((name) => {
     const value = fields[name];
     if (value === undefined) return [];
-    if (value === null) return [[name, null, UNREADABLE_CAUSE] as const];
+    // A pattern reads every file, those that are no text as their bytes; a judge only text.
+    const text =
+      value === null || typeof value === "string"
+        ? value
+        : guardrail.check.kind === "pattern"
+          ? value.pattern
+          : value.judge;
+    if (text === null) {
+      return [[name, null, value === null ? TOO_LARGE_CAUSE : NO_TEXT_CAUSE] as const];
+    }
     // A field longer than a check reads is not read in part.
     return [
-      value.length > GUARDRAIL_CHECKED_FIELD_MAX_CHARS
-        ? ([name, null, tooLargeMessage(GUARDRAIL_CHECKED_FIELD_MAX_CHARS)] as const)
-        : ([name, value] as const)
+      text.length > GUARDRAIL_CHECKED_FIELD_MAX_CHARS
+        ? ([name, null, TOO_LARGE_CAUSE] as const)
+        : ([name, text] as const)
     ];
   });
 }
@@ -334,16 +344,25 @@ function checked(fields: GuardrailFields, event: GuardrailEvent, { guardrail }: 
 /** A field a check reads, `null` with the cause where it cannot be read. */
 type Checked = readonly [string, string] | readonly [string, null, string];
 
-/** Why a field its event could not hand over is not read: too large, or a file that is no text. */
-const UNREADABLE_CAUSE = "could not read content that is too large or is no text";
+const TOO_LARGE_CAUSE = tooLargeMessage(GUARDRAIL_CHECKED_FIELD_MAX_CHARS);
+/** Why a judge reads nothing of files one of which is no text, nor an image or a font. */
+const NO_TEXT_CAUSE = "could not judge a file that is no text";
 
-/** The answer of a guardrail on content it could not read or judge. */
-function unchecked(entry: Bound, cause: string): GuardrailAnswer {
+/**
+ * The answer of a guardrail on content it could not read or judge. Only a check that failed,
+ * such as a judge that timed out, may pass when it is tried again; content too large or no
+ * text stays so.
+ */
+function unchecked(entry: Bound, cause: string, temporary?: "temporary"): GuardrailAnswer {
   const { outcome } = entry.guardrail;
   // Unread content does not pass a guardrail that stops or holds. One that warns says it could
   // not check, without a reason: the card words that in the reader's language.
   return outcome === "block" || outcome === "require_approval"
-    ? answerOf(entry, outcome, `Check '${entry.name}' ${cause}. Try again later.`)
+    ? answerOf(
+        entry,
+        outcome,
+        `Check '${entry.name}' ${cause}.${temporary ? " Try again later." : ""}`
+      )
     : answerOf(entry, outcome, "");
 }
 

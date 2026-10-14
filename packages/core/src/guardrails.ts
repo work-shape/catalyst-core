@@ -163,11 +163,23 @@ export interface OperationBeforeEvent {
 }
 
 /**
- * The fields of a before-event by the names it declares checkable. `null` is a field that
- * cannot be read, as it is too large or holds a file that is no text, such as an image: a
- * guardrail that stops or holds answers on it as on a match, one that warns warns.
+ * The fields of a before-event by the names it declares checkable. `null` is a field too large
+ * to be read: a guardrail that stops or holds answers on it as on a match, one that warns
+ * warns. A field of files that are not all text is read by the kind of check, see
+ * `GuardrailFilesField`.
  */
-export type GuardrailFields = Partial<Record<string, string | null>>;
+export type GuardrailFields = Partial<Record<string, string | null | GuardrailFilesField>>;
+
+/**
+ * A field of files, one of which at least is no text, such as an image. A pattern reads every
+ * file, the bytes of one that is no text as Latin-1, so text beside a NUL byte is still
+ * found. A judge reads the text files and is handed nothing of an image or a font; any other
+ * file that is no text leaves it nothing it can judge (`null`), which it answers as unread.
+ */
+export interface GuardrailFilesField {
+  pattern: string;
+  judge: string | null;
+}
 
 /**
  * What one guardrail answered at a before-event. `allow` where its check found nothing or its
