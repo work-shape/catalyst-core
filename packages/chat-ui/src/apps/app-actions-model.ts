@@ -46,7 +46,8 @@ export function appActionOutcome(
 /** What the target of an action of each kind is, said under it. */
 export const appActionTargetKeys: Record<AppAction["kind"], TranslationKey> = {
   connection: "apps.actionKindConnection",
-  sql: "apps.actionKindSql"
+  sql: "apps.actionKindSql",
+  workflow: "apps.actionKindWorkflow"
 };
 
 export const appActionUnavailableKeys: Record<
