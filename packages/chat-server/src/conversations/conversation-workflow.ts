@@ -1,4 +1,4 @@
-import type { StorePage } from "@vivd-catalyst/core";
+import type { AuditRecorder, StorePage } from "@vivd-catalyst/core";
 import { auditActorFromUser } from "@vivd-catalyst/core";
 import {
   AppError,
@@ -32,7 +32,7 @@ import {
   normalizeGeneratedConversationTitle,
   temporaryAttachmentTitles
 } from "../conversation-title";
-import { requireReadableSubject } from "../platform-asset-calls";
+import { requireOwnTranscript, requireReadableSubject } from "../platform-asset-calls";
 import { modelBindingRefOf, reasoningEffortTheModelTakes } from "../system-model-call";
 import type { ChatServerOptions } from "../types";
 
@@ -158,6 +158,47 @@ export class ConversationWorkflow {
       metadata: {
         previousTitleLength: conversation.title.length,
         titleLength: title.length
+      }
+    });
+    return updated;
+  }
+
+  /**
+   * The person makes an asset what their own conversation is about: the person's step that an
+   * asset of the instance needs, such as going to the page of an asset the agent opened. The
+   * conversation is the person's, in a transcript nobody else reads, and the asset one they may
+   * read; another person's conversation and an asset they may not read are refused as missing.
+   */
+  async openSubject(
+    conversationId: ConversationId,
+    user: AuthenticatedUser,
+    context: { correlationId: string; audit: AuditRecorder },
+    command: ConversationSubject & { toolCallId?: string }
+  ): Promise<Conversation> {
+    const conversation = await this.requireConversationAccess(conversationId, user);
+    if (conversation.createdByUserId !== getSubjectUserId(user)) {
+      throw new AppError("NOT_FOUND", "Conversation is not available");
+    }
+    const subject = { kind: command.kind, name: command.name };
+    await requireReadableSubject(this.options, user, subject);
+    await requireOwnTranscript(this.options, conversation);
+    const updated = await this.options.stores.conversations.setConversationSubject({
+      clientInstanceId: this.options.clientInstanceId,
+      conversationId,
+      subject
+    });
+    // Deleted meanwhile.
+    if (!updated) throw new AppError("NOT_FOUND", "Conversation is not available");
+    await context.audit.record({
+      type: "conversation.subject_opened",
+      status: "success",
+      actor: auditActorFromUser(user),
+      subject: conversationId,
+      correlationId: context.correlationId,
+      metadata: {
+        subjectKind: subject.kind,
+        subjectName: subject.name,
+        ...(command.toolCallId === undefined ? {} : { confirmsToolCallId: command.toolCallId })
       }
     });
     return updated;

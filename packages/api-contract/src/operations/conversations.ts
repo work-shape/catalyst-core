@@ -11,6 +11,7 @@ import {
   createConversationRunRequestSchema,
   messageSchema,
   moveConversationRequestSchema,
+  openConversationSubjectRequestSchema,
   renameConversationRequestSchema,
   runCommandRequestSchema,
   runCommandResponseSchema,
@@ -19,7 +20,7 @@ import {
   startConversationRunResponseSchema,
   structuredDataResourceResponseSchema
 } from "../conversations";
-import { defineOperation, json, page, sse } from "./define-operation";
+import { defineOperation, defineRegisteredOperation, json, page, sse } from "./define-operation";
 
 /**
  * The longest search text the conversation list takes, in characters. A title holds 120, so
@@ -75,6 +76,21 @@ export const conversationOperations = {
     body: renameConversationRequestSchema,
     response: json(conversationSchema),
     errors: ["NOT_FOUND"],
+    rateClass: "write"
+  }),
+  "conversations.subject.open": defineRegisteredOperation({
+    id: "conversations.subject.open",
+    method: "PUT",
+    path: "/api/v1/conversations/:conversationId/subject",
+    summary: "Make an asset what the person's own conversation is about",
+    tag: "Conversations",
+    auth: "user",
+    scope: "conversation:write",
+    requires: [],
+    effect: "changing",
+    body: openConversationSubjectRequestSchema,
+    response: json(conversationSchema),
+    errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
   }),
   "conversations.move": defineOperation({
