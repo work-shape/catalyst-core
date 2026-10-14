@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { type Page } from "@playwright/test";
+import { type Locator, type Page } from "@playwright/test";
 import { expect, test } from "./test";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 
@@ -16,32 +16,37 @@ const NARROW = { width: 390, height: 844 };
 const NOTE = "A skill is instructions the agent follows. It adds no tools.";
 const skillPath = (name: string) => `${apiBaseUrl}/api/v1/assets/skill/${name}`;
 
-/**
- * Skills of this spec's own. Each is a custom skill, also the one named like a skill the
- * platform ships. The last has no summary.
- */
-const skills = [
+/** The four general skills the suite's server ships, each with its icon of the registry. */
+const shipped = [
   {
-    name: "ti2-spreadsheets",
+    name: "spreadsheets",
     title: "Spreadsheets",
+    icon: "spreadsheet",
     summary:
       "Knows how to build a spreadsheet that calculates, and to check it before handing it over."
   },
   {
-    name: "ti2-documents",
+    name: "documents",
     title: "Documents",
+    icon: "document",
     summary: "Knows how to lay out a Word document and check it page by page."
   },
   {
-    name: "ti2-presentations",
+    name: "presentations",
     title: "Presentations",
-    summary: "Knows how to build a deck and check every slide."
+    icon: "presentation",
+    summary: "Knows how to build a slide deck and check every slide."
   },
   {
     name: "pdf",
     title: "PDF",
+    icon: "pdf",
     summary: "Knows how to read, fill and assemble PDFs, and to verify the result."
-  },
+  }
+] as const;
+
+/** Skills of this spec's own, which show the generic icon. The last has no summary. */
+const skills = [
   {
     name: "ti2-plain-language",
     title: "Plain language",
@@ -89,6 +94,13 @@ async function shot(page: Page, name: string): Promise<void> {
   }
 }
 
+/** Chooses the four shipped skills in the open chooser, by their titles. */
+async function chooseShipped(picker: Locator): Promise<void> {
+  for (const skill of shipped) {
+    await picker.getByRole("option", { name: skill.title }).click();
+  }
+}
+
 async function expectNoSidewaysScroll(page: Page): Promise<void> {
   expect(
     await page.evaluate(
@@ -122,19 +134,24 @@ for (const theme of ["dark", "light"] as const) {
       await expect(picker.getByText(NOTE)).toBeVisible();
 
       // Each row says the skill's sentence for people, and neither its id nor the agent's text.
-      for (const skill of skills) {
+      // A shipped skill has its own icon, a skill of the instance's the generic one; both are
+      // hidden beside the title.
+      for (const skill of [...shipped, ...skills]) {
         const option = picker.getByRole("option", { name: skill.title, exact: false }).first();
         await expect(option).toBeVisible();
         if (skill.summary !== undefined) {
           await expect(option).toContainText(skill.summary);
         }
         await expect(option).not.toContainText(skill.name === "pdf" ? "Use for" : skill.name);
+        await expect(option).not.toContainText("fixture of the browser suite");
         await expect(option).not.toContainText("Written for the agent");
-        // Every skill here is a custom one: the generic icon, hidden beside the title.
         const icon = option.locator("[data-skill-icon]");
-        await expect(icon).toHaveAttribute("data-skill-icon", "generic");
+        await expect(icon).toHaveAttribute(
+          "data-skill-icon",
+          "icon" in skill ? skill.icon : "generic"
+        );
         await expect(icon).toHaveAttribute("aria-hidden", "true");
-        await expect(option.locator("[data-file-type]")).toHaveCount(0);
+        if (!("icon" in skill)) await expect(option.locator("[data-file-type]")).toHaveCount(0);
       }
       // A skill without a summary shows its title alone.
       await expect(picker.getByRole("option", { name: "House style" })).toHaveText("House style");
@@ -147,18 +164,23 @@ for (const theme of ["dark", "light"] as const) {
       await search.fill("");
 
       // Choosing adds a chip with the skill's icon; the chooser stays open.
-      for (const title of ["Spreadsheets", "Documents", "Presentations", "PDF"]) {
-        await picker.getByRole("option", { name: title }).first().click();
-      }
       const chips = section.getByRole("list", { name: "Skills" }).getByRole("listitem");
+      await chooseShipped(picker);
       await expect(chips).toHaveCount(4);
-      await expect(chips.locator('[data-skill-icon="generic"]')).toHaveCount(4);
-      await expect(chips.filter({ hasText: "PDF" }).locator("[data-file-type]")).toHaveCount(0);
+      for (const skill of shipped) {
+        await expect(
+          chips.filter({ hasText: skill.title }).locator("[data-skill-icon]")
+        ).toHaveAttribute("data-skill-icon", skill.icon);
+      }
+      await expect(
+        chips.filter({ hasText: "PDF" }).locator('[data-skill-icon="pdf"] [data-file-type="pdf"]')
+      ).toBeVisible();
       await expect(picker).toBeVisible();
 
       // Reopened with the row at the top of the page, the chooser has the room below it.
       await page.keyboard.press("Escape");
       await expect(picker).toBeHidden();
+      await shot(page, `agent-skill-chips-${theme}-1440`);
       await section.evaluate((row) => {
         // Clear of the page's header, which lies over the top of what scrolls.
         row.style.scrollMarginTop = "6rem";
@@ -193,7 +215,13 @@ for (const theme of ["dark", "light"] as const) {
       await expect(row("House style").getByRole("link")).toHaveText(/^House style/u);
       await expect(row("House style")).not.toContainText("ti2-house-style");
       await expect(list.locator("code")).toHaveCount(0);
-      await expect(row("PDF").locator("[data-skill-icon]")).toHaveAttribute(
+      for (const skill of shipped) {
+        await expect(row(skill.title).locator("[data-skill-icon]")).toHaveAttribute(
+          "data-skill-icon",
+          skill.icon
+        );
+      }
+      await expect(row("House style").locator("[data-skill-icon]")).toHaveAttribute(
         "data-skill-icon",
         "generic"
       );
@@ -221,10 +249,44 @@ test("the chooser of skills says in German that a skill adds no tools", async ({
     .locator("section#skills")
     .getByRole("button", { name: /^Skills: / })
     .click();
-  await expect(page.getByRole("dialog")).toHaveAccessibleDescription(
+  const picker = page.getByRole("dialog");
+  await expect(picker).toHaveAccessibleDescription(
     "Ein Skill ist eine Anleitung, der der Agent folgt. Er bringt keine Werkzeuge mit."
   );
+  // The shipped skills carry their icons in German too.
+  await chooseShipped(picker);
+  const chips = page
+    .locator("section#skills")
+    .getByRole("list", { name: "Skills" })
+    .getByRole("listitem");
+  for (const skill of shipped) {
+    await expect(
+      chips.filter({ hasText: skill.title }).locator("[data-skill-icon]")
+    ).toHaveAttribute("data-skill-icon", skill.icon);
+  }
   await shot(page, "agent-skills-de-light-1440");
+  await page.keyboard.press("Escape");
+  await expect(picker).toBeHidden();
+  await page.locator("section#skills").evaluate((row) => {
+    // Clear of the page's header, which lies over the top of what scrolls.
+    row.style.scrollMarginTop = "6rem";
+    row.scrollIntoView({ block: "start" });
+  });
+  await shot(page, "agent-skill-chips-de-light-1440");
+});
+
+test("a skill of the instance cannot take the name of a skill the platform ships", async ({
+  page
+}) => {
+  await signInViaApi(page);
+  const refused = await requestWithOrigin(page, "put", skillPath("pdf"), {
+    data: {
+      expectedRevision: await assetRevision(page, skillPath("pdf")),
+      config: { name: "pdf", title: "Ours", description: "Ours.", content: "# Ours" }
+    }
+  });
+  expect(refused.status()).toBe(403);
+  expect(await refused.text()).toContain("The skill 'pdf' ships with the platform");
 });
 
 test("the gallery's picker of skills shows a shipped skill's page bare and the generic book on its tile", async ({
