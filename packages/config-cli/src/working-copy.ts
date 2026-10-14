@@ -13,6 +13,8 @@ import {
   type SkillConfig,
   type SkillResourceConfig
 } from "@vivd-catalyst/asset-schemas";
+import { savedInstanceOrigins } from "./credentials";
+import { type ConfigCliEnv, readConfigCliEnv } from "./env";
 import { GUARDRAIL_FILE, readGuardrailFolder, type GuardrailDefinition } from "./guardrail-files";
 
 export const MANIFEST_FILENAME = "catalyst.yaml";
@@ -21,7 +23,7 @@ export const STATE_FILENAME = ".catalyst-state.json";
 export interface ManifestInstance {
   url: string;
   /**
-   * The one Namespace this working copy writes in, such as `kai-`. A push names it, and leaves
+   * The one Namespace this working copy writes in, such as `tax-`. A push names it, and leaves
    * the instance's default agent alone, which only a release names.
    */
   namespace?: string;
@@ -119,7 +121,7 @@ export function parseManifest(contents: string, source = MANIFEST_FILENAME): Cat
     const namespace = readOptionalString(value, "namespace", `${source} instance '${name}'`);
     if (namespace !== undefined && !NAMESPACE_PREFIX_PATTERN.test(namespace)) {
       throw new Error(
-        `${source} instance '${name}' names no Namespace prefix: '${namespace}'. A prefix is lowercase words joined by '-' and ends in '-', such as 'kai-'.`
+        `${source} instance '${name}' names no Namespace prefix: '${namespace}'. A prefix is lowercase words joined by '-' and ends in '-', such as 'tax-'.`
       );
     }
     const workspace = readOptionalString(value, "workspace", `${source} instance '${name}'`);
@@ -166,21 +168,43 @@ export async function readManifestIfPresent(
   }
 }
 
-export function resolveInstance(
-  manifest: CatalystManifest,
-  requestedInstance?: string
-): ResolvedInstance {
-  const key = requestedInstance ?? manifest.defaultInstance;
-  if (!key) {
+/**
+ * The instance a command works on: `instance` as an instance of the manifest or as an address,
+ * else the manifest's default instance. A working copy that names neither is refused with the
+ * instances it names: it belongs to one of them, and a saved key never chooses among them.
+ * Outside a working copy (`manifest` undefined), the one instance a key is saved for is taken,
+ * unless `CATALYST_API_KEY` is set, whose instance a saved key does not tell.
+ */
+export async function resolveInstance(
+  manifest: CatalystManifest | undefined,
+  options: { instance?: string | undefined; env?: ConfigCliEnv | undefined } = {}
+): Promise<ResolvedInstance> {
+  const key = options.instance ?? manifest?.defaultInstance;
+  if (key !== undefined && key !== "") {
+    const configured = manifest?.instances[key];
+    if (configured) return { key, ...configured };
+    return { key, url: normalizeUrl(key, `Instance '${key}'`) };
+  }
+  const refusal = `No instance selected; pass --instance or set defaultInstance in ${MANIFEST_FILENAME}.`;
+  if (manifest !== undefined) {
+    const names = Object.keys(manifest.instances);
     throw new Error(
-      `No instance selected; pass --instance or set defaultInstance in ${MANIFEST_FILENAME}`
+      names.length === 0 ? refusal : `${refusal} ${MANIFEST_FILENAME} names ${names.join(", ")}.`
     );
   }
-  const configured = manifest.instances[key];
-  if (configured) {
-    return { key, ...configured };
+  // Read as connectApi reads it: only whether it is set matters here.
+  if (readConfigCliEnv(options.env).CATALYST_API_KEY) {
+    throw new Error(`${refusal} CATALYST_API_KEY is set: name the instance it belongs to.`);
   }
-  return { key, url: normalizeUrl(key, `Instance '${key}'`) };
+  const saved = await savedInstanceOrigins(readConfigCliEnv(options.env));
+  const [origin, ...more] = saved;
+  if (origin === undefined) {
+    throw new Error(
+      `${refusal} No key is saved; 'catalyst login --instance <https-url>' saves one.`
+    );
+  }
+  if (more.length > 0) throw new Error(`${refusal} Keys are saved for ${saved.join(", ")}.`);
+  return { key: origin, url: origin };
 }
 
 /** The key of an asset in the state file: its kind and its name. */

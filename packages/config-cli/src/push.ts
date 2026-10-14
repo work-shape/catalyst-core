@@ -40,7 +40,7 @@ import {
 export async function pushConfig(options: ConfigCommandOptions): Promise<number> {
   const workingDir = resolveWorkingDir(options);
   const manifest = await readManifest(workingDir);
-  const instance = resolveInstance(manifest, options.instance);
+  const instance = await resolveInstance(manifest, options);
   const local = await readWorkingCopy(workingDir, manifest);
   const selectors = parseOnlySelectors(options.only);
   if (options.prune && selectors.length > 0) {

@@ -169,6 +169,26 @@ export function withReviewedOperation(
   };
 }
 
+/**
+ * The definition with one accepted operation exposed to the surface or no longer, and every
+ * other exposure of it as it was.
+ */
+export function withOperationExposure(
+  config: Record<string, unknown>,
+  name: string,
+  exposure: string,
+  exposed: boolean
+): Record<string, unknown> {
+  return {
+    ...config,
+    operations: acceptedOperationsOf(config).map((operation) => {
+      if (operation.name !== name) return operation;
+      const others = operation.exposure.filter((surface) => surface !== exposure);
+      return { ...operation, exposure: exposed ? [...others, exposure] : others };
+    })
+  };
+}
+
 /** The definition without one accepted operation. Nobody can call it afterwards. */
 export function withoutOperation(
   config: Record<string, unknown>,
