@@ -75,6 +75,20 @@ describe("a change through the Postgres executor", () => {
     expect(await visits()).toEqual(before);
   });
 
+  it("tells a statement past a limit of its session as failed, and too many connections as unavailable", async () => {
+    const raising = (sqlState: string) =>
+      calls().change(asWriter(), (change) =>
+        change.script(`do $$ begin raise exception using errcode = '${sqlState}'; end $$`)
+      );
+
+    // Past `temp_file_limit` the statement failed for what it asked: the server is there.
+    expect(await failure(raising("53400"))).toMatchObject({ kind: "failed", sqlState: "53400" });
+    expect(await failure(raising("53300"))).toMatchObject({
+      kind: "unavailable",
+      sqlState: "53300"
+    });
+  });
+
   it("runs outside of a transaction when the change says so", async () => {
     const firstStatement = (further: Partial<PostgresChangeInput> = {}) =>
       calls().change(asWriter(further), (change) =>

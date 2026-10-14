@@ -25,6 +25,7 @@ export const kindLabelKeys = {
   connection: "access.kindConnection",
   app: "access.kindApp",
   workflow: "access.kindWorkflow",
+  knowledge_base: "access.kindKnowledgeBase",
   guardrail: "access.kindGuardrail"
 } as const satisfies Record<GrantKind, TranslationKey> & Record<string, TranslationKey>;
 
@@ -90,6 +91,16 @@ export const kindWords: Record<GrantKind, KindWords> = {
     noAssets: "access.noWorkflows",
     assetsLoadFailed: "access.workflowsLoadFailed"
   },
+  knowledge_base: {
+    actionOnKind: "access.actionOnKnowledgeBase",
+    scopeAsset: "access.scopeKnowledgeBase",
+    onAsset: "access.scopeOnKnowledgeBase",
+    onAssetDescription: "access.scopeOnKnowledgeBaseDescription",
+    assetField: "access.grantKnowledgeBase",
+    chooseAsset: "access.chooseKnowledgeBase",
+    noAssets: "access.noKnowledgeBases",
+    assetsLoadFailed: "access.knowledgeBasesLoadFailed"
+  },
   // `guardrail.publish` is granted for one workspace only: the asset words name no choice
   // the dialog offers.
   guardrail: {
@@ -120,6 +131,10 @@ export const rightSentenceKeys: Partial<Record<GrantableAction, TranslationKey>>
   "workflow.use": "access.actionUseWorkflowDescription",
   "workflow.write": "access.actionWriteWorkflowDescription",
   "workflow.publish": "access.actionPublishWorkflowDescription",
+  "knowledge_base.read": "access.actionReadKnowledgeBaseDescription",
+  "knowledge_base.use": "access.actionUseKnowledgeBaseDescription",
+  "knowledge_base.write": "access.actionWriteKnowledgeBaseDescription",
+  "knowledge_base.publish": "access.actionPublishKnowledgeBaseDescription",
   "guardrail.publish": "access.actionPublishGuardrailDescription"
 };
 
