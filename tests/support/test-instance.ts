@@ -526,6 +526,8 @@ export async function getTestOperations(instance: TestInstance): Promise<Operati
   if (!calls) throw new Error("This fixture has no API process that registers operations");
   return (await calls.registry.list()).operations;
 }
+/** The options the server of an assembled instance was built with, once it answered a request. */
+export const testServerOptions = (instance: TestInstance) => metadata.get(instance)?.serverOptions;
 
 /**
  * Registers fixture operations on an assembled instance through the product's route helper,
