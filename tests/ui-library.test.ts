@@ -406,6 +406,21 @@ describe("Badge", () => {
   });
 });
 
+describe("Badge that truncates", () => {
+  it("narrows to its row and keeps its whole text as its name and title", () => {
+    const text = "Eine veröffentlichte Ausführung fragt hier nach Freigabe";
+    const markup = renderToStaticMarkup(
+      createElement(library.Badge, { tone: "warning", truncate: true }, text)
+    );
+    expect(markup).toContain(`title="${text}"`);
+    expect(markup).toContain(`<span class="truncate">${text}</span>`);
+    expect(markup).toMatch(/class="[^"]*\bmin-w-0\b[^"]*"/u);
+    expect(markup).not.toMatch(/class="[^"]*\bshrink-0\b[^"]*"/u);
+    // A badge that does not ask for it keeps its width.
+    expect(renderToStaticMarkup(createElement(library.Badge, null, "Done"))).toMatch(/shrink-0/u);
+  });
+});
+
 describe("Banner", () => {
   const inRoot = (banner: ReactNode) =>
     renderToStaticMarkup(createElement(UiRoot, { mode: "light", labels: uiLabelsEn }, banner));

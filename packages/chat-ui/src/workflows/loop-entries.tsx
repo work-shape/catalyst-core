@@ -219,7 +219,7 @@ function LoopEntryRow({ entry, loop }: { entry: LoopEntry; loop: WorkflowStepVie
             <StepTargetBadge key={target} target={target} />
           ))}
           {entry.publishedWouldAsk ? (
-            <Badge tone="warning" size="sm" data-published-asks="approval">
+            <Badge tone="warning" size="sm" truncate data-published-asks="approval">
               {t("workflows.run.publishedAsksShort")}
             </Badge>
           ) : null}
