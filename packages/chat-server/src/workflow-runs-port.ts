@@ -75,5 +75,7 @@ export interface WorkflowListEntry {
   reasons: { code: string; message: string; path?: string }[];
   /** The published revision's `inputs`, where its definition could be read. */
   inputs?: JsonObject;
+  /** The display label of the active service principal a run acts as. */
+  runsAs?: string;
   lastRun?: WorkflowLastRun;
 }

@@ -30,6 +30,7 @@ const listSchema = z.object({
       ),
       actions: z.array(z.string()),
       inputs: z.record(z.string(), z.unknown()).optional(),
+      runsAs: z.string().optional(),
       lastRun: z.object({ id: z.string(), status: z.string() }).loose().optional()
     })
   )
@@ -124,6 +125,8 @@ describe("a Workflow stored as an asset", () => {
         reasons: [],
         // The published inputs, from which a page builds its start form.
         inputs: notifyClients().inputs,
+        // Whom every run acts as, by the label people read: the page's "Runs as".
+        runsAs: t.principal.displayLabel,
         actions: ["workflow.read", "workflow.use"]
       }
     ]);
@@ -255,6 +258,8 @@ describe("a Workflow stored as an asset", () => {
     });
     const [disabled] = await listed(t);
     expect(disabled).toMatchObject({ id: WORKFLOW, runnable: false });
+    // A disabled principal acts for no run, so the list names none.
+    expect(disabled?.runsAs).toBeUndefined();
     expect(disabled?.reasons.map((reason) => [reason.code, reason.path])).toEqual([
       ["principal_inactive", "runAs"]
     ]);

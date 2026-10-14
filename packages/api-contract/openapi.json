@@ -15440,6 +15440,9 @@
                             },
                             "additionalProperties": {}
                           },
+                          "runsAs": {
+                            "type": "string"
+                          },
                           "actions": {
                             "type": "array",
                             "items": {

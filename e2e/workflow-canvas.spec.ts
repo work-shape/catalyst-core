@@ -147,6 +147,20 @@ test("folding a loop leaves it where it was, and the entries' filter stays above
   expect(Math.abs(held.top - body.top)).toBeLessThan(2);
 });
 
+test("the head says whom every run of the Workflow acts as, and in German too", async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openSample(page, "monthly-booking-check");
+  await expect(
+    page.getByTestId("workflow-page").getByText("Runs as Workflow runner")
+  ).toBeVisible();
+  await page.goto("/ui-library/workflows?lang=de&at=monthly-booking-check");
+  await expect(
+    page.getByTestId("workflow-page").getByText("Läuft als Workflow runner")
+  ).toBeVisible();
+});
+
 test("the focus walks the steps, Enter opens the step's panel and Escape closes it", async ({
   page
 }) => {

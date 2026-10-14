@@ -336,6 +336,17 @@ describe("the page of a Workflow", () => {
     expect(markup).toContain('data-testid="workflow-canvas"');
   });
 
+  it("says in its head whom every run acts as, by the account's label", () => {
+    const named = toWorkflow(
+      { name: "notify-clients", config: definition, publishedRevision: 3 },
+      { mayStart: true, runsAs: "Monthly close" }
+    );
+    expect(render(page({ workflow: named }))).toContain("Runs as Monthly close");
+    expect(render(page({ workflow: named }), "de")).toContain("Läuft als Monthly close");
+    // Without a label the head names no account: never the definition's own name of it.
+    expect(render(page())).not.toContain("Runs as");
+  });
+
   it("offers neither a start nor the runs where the instance runs no Workflow", () => {
     const markup = render(page({ runsAvailable: false }));
     expect(markup).toContain("Notify clients");
