@@ -26,18 +26,19 @@ import type { BuildAssetViewProps } from "./build-asset-kind";
 import { opensHere } from "../apps/app-header";
 import { opensAssets, type BuildKind } from "./build-asset-kind";
 import { useBuildNavigation } from "./build-route";
-import { GUARDRAIL_HIT_LABELS, GUARDRAIL_OUTCOME_VIEWS, readGuardrail } from "./guardrail-model";
+import {
+  GUARDRAIL_HIT_LABELS,
+  GUARDRAIL_OUTCOME_VIEWS,
+  guardrailFactsOfView,
+  readGuardrail,
+  type GuardrailScope
+} from "./guardrail-model";
+import {
+  WorkspaceNames,
+  useGuardrailRunSentence,
+  type WorkspaceNameOf
+} from "./guardrail-run-line";
 import type { GuardrailHitsRead, GuardrailSource } from "./guardrail-source";
-
-/** The before-events in words. An event this build does not know shows as its name. */
-const EVENT_LABELS: Record<string, TranslationKey> = {
-  "approval_request.before_create": "guardrails.eventApprovalRequest",
-  "asset.before_write": "guardrails.eventAssetWrite",
-  "operation.before_call": "guardrails.eventOperationCall",
-  "app.before_publish": "guardrails.eventAppPublish",
-  "workflow.before_publish": "guardrails.eventWorkflowPublish",
-  "data_store.before_publish": "guardrails.eventDataStorePublish"
-};
 
 /**
  * The kind of what a guardrail checks, in words: the Inbox's name for a kind of request, the
@@ -71,17 +72,24 @@ export function GuardrailPage({
   usePageShown(page, "asset");
   const hits = source.useHits(asset.name);
   const subjectLabel = useSubjectLabel(kinds);
+  const runSentence = useGuardrailRunSentence();
   const guardrail = readGuardrail(asset.config);
   const outcome = GUARDRAIL_OUTCOME_VIEWS[guardrail.outcome];
-  const eventLabel = EVENT_LABELS[guardrail.event];
+  const scope: GuardrailScope =
+    asset.scope.kind === "workspace"
+      ? { kind: "workspace", workspaceId: asset.scope.workspaceId }
+      : { kind: "instance" };
+  const facts = guardrailFactsOfView(guardrail, scope);
   const code = (value: string) => <code className="font-mono text-code">{value}</code>;
-  const sections: {
+  const sections = (
+    nameOf: WorkspaceNameOf
+  ): {
     id: string;
     label: string;
     description: string;
     count?: number;
     body: ReactNode;
-  }[] = [
+  }[] => [
     {
       id: "check",
       label: t("guardrails.checkTitle"),
@@ -90,12 +98,8 @@ export function GuardrailPage({
         <>
           <AssetIdentifier name={asset.name} />
           <KeyValueList>
-            <KeyValue label={t("guardrails.when")}>
-              {eventLabel ? (
-                t(eventLabel)
-              ) : (
-                <code className="font-mono text-code">{guardrail.event}</code>
-              )}
+            <KeyValue label={t("guardrails.whenItRuns")}>
+              <span data-guardrail-runs="">{runSentence(facts, nameOf)}</span>
             </KeyValue>
             <KeyValue label={t("guardrails.appliesTo")}>
               {guardrail.appliesTo === undefined
@@ -161,51 +165,69 @@ export function GuardrailPage({
     }
   ];
 
-  return (
-    <Page
-      width="narrow"
-      ref={page.ref}
-      header={
-        <PageHeader
-          variant="detail"
-          back={back}
-          title={guardrail.title ?? asset.name}
-          scope={<Chip>{t("guardrails.scopeInstance")}</Chip>}
-          state={
-            <Badge tone={outcome.tone} dot>
-              {t(outcome.label)}
-            </Badge>
-          }
-        />
-      }
-      outline={
-        <PageOutline
-          belowHeader
-          items={sections.map(({ id, label, count }) => ({ id, label, count }))}
-        />
-      }
-    >
-      {page.above}
-      {/* The first line of the content starts where the outline does. */}
-      <div className="grid min-w-0 content-start pt-5">
-        <Banner layout="line" className="mb-4" data-build-read-only="">
-          {t("guardrails.description")}
-        </Banner>
-        {sections.map((section) => (
-          <Section
-            key={section.id}
-            id={section.id}
-            layout="stacked"
-            title={section.label}
-            description={section.description}
-            count={section.count}
-          >
-            {section.body}
-          </Section>
-        ))}
-      </div>
-    </Page>
-  );
+  return <WorkspaceNames>{(nameOf) => render(nameOf)}</WorkspaceNames>;
+
+  function render(nameOf: WorkspaceNameOf) {
+    const shown = sections(nameOf);
+    return (
+      <Page
+        width="narrow"
+        ref={page.ref}
+        header={
+          <PageHeader
+            variant="detail"
+            back={back}
+            title={guardrail.title ?? asset.name}
+            scope={<Chip>{scopeLabel(scope, nameOf, t)}</Chip>}
+            state={
+              <Badge tone={outcome.tone} dot>
+                {t(outcome.label)}
+              </Badge>
+            }
+          />
+        }
+        outline={
+          <PageOutline
+            belowHeader
+            items={shown.map(({ id, label, count }) => ({ id, label, count }))}
+          />
+        }
+      >
+        {page.above}
+        {/* The first line of the content starts where the outline does. */}
+        <div className="grid min-w-0 content-start pt-5">
+          <Banner layout="line" className="mb-4" data-build-read-only="">
+            {t("guardrails.description")}
+          </Banner>
+          {shown.map((section) => (
+            <Section
+              key={section.id}
+              id={section.id}
+              layout="stacked"
+              title={section.label}
+              description={section.description}
+              count={section.count}
+            >
+              {section.body}
+            </Section>
+          ))}
+        </div>
+      </Page>
+    );
+  }
+}
+
+/** Who the guardrail belongs to: the instance, or its workspace by name where it is known. */
+function scopeLabel(
+  scope: GuardrailScope,
+  nameOf: WorkspaceNameOf,
+  t: (key: TranslationKey, values?: Record<string, string>) => string
+): string {
+  if (scope.kind === "instance") return t("guardrails.scopeInstance");
+  const name = nameOf(scope.workspaceId);
+  return name === undefined
+    ? t("guardrails.scopeSomeWorkspace")
+    : t("guardrails.scopeWorkspace", { name });
 }
 
 /**

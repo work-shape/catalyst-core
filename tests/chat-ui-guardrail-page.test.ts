@@ -142,7 +142,11 @@ describe("Guardrail page", () => {
     const markup = renderPage();
 
     expect(markup).toContain(">No personal data in skills</h1>");
-    expect(markup).toContain("Before a request for approval is filed");
+    // When it runs, in one line built from its event, filter, check and outcome.
+    expect(markup).toContain(
+      "Runs before anyone asks for an approval of the kind Skill change, instance-wide, set by the operator. Checks the content for breaches of its rule, with a model. Blocks if the check fails."
+    );
+    expect(markup).toContain(">Instance<");
     expect(markup).toContain("Check whether the text names a person.");
     expect(markup).toContain("The action does not happen. Whoever acted is told the reason.");
     expect(markup).toContain("guardrails come from the release config; further ones are written");
@@ -215,7 +219,9 @@ describe("Guardrail page", () => {
         }
       });
     const markup = read(["skill"]);
-    expect(markup).toContain("Before an asset is saved");
+    expect(markup).toContain(
+      "Runs before anyone saves a skill, instance-wide, set by the operator. Checks the content for a text pattern."
+    );
     expect(markup).toContain("Pattern");
     expect(markup).toContain("Skills hold no IBAN.");
     expect(markup).toContain('data-guardrail-hit-subject="kunden-faq"');
@@ -263,7 +269,8 @@ describe("Guardrail page", () => {
 
   it("reads in German", () => {
     const markup = renderPage({ locale: "de" });
-    expect(markup).toContain("Bevor eine Freigabe-Anfrage gestellt wird");
+    expect(markup).toContain("Läuft, bevor jemand eine Freigabe der Art");
+    expect(markup).toContain("instanzweit, vom Betreiber festgelegt.");
     expect(markup).toContain("Noch keine Treffer.");
   });
 });
