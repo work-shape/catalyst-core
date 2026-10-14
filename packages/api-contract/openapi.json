@@ -3548,7 +3548,8 @@
                               "enum": [
                                 "agent",
                                 "bridge",
-                                "workflow"
+                                "workflow",
+                                "outside"
                               ]
                             }
                           },
