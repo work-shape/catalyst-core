@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import {
   Badge,
   Button,
+  Checkbox,
   Chip,
   EmptyState,
   FormNotice,
@@ -12,7 +13,11 @@ import type { ConnectionOperationDetail } from "@vivd-catalyst/api-client";
 import { useTranslation, type TranslationKey } from "../i18n";
 import type { BuildAsset, BuildAssetEditorProps } from "./build-asset-kind";
 import { useConnectionWrite } from "./connection-editing";
-import { withReviewedOperation, withoutOperation } from "./connection-form-model";
+import {
+  withOperationExposure,
+  withReviewedOperation,
+  withoutOperation
+} from "./connection-form-model";
 
 // The accepted operations of a Connection: what each does, who may call it and whether it is
 // callable now. On a Connection made on the instance, a reader who may change it takes an
@@ -48,12 +53,14 @@ const OPERATION_STATUS: Record<
 const EXPOSURE_LABELS: Record<ConnectionOperationDetail["exposure"][number], TranslationKey> = {
   agent: "connections.exposureAgent",
   bridge: "connections.exposureBridge",
-  workflow: "connections.exposureWorkflow"
+  workflow: "connections.exposureWorkflow",
+  outside: "connections.exposureOutside"
 };
 
 /**
  * The accepted operations of a Connection made on the instance, each with the way to take it
- * off and, where the server now describes it differently, to accept the new description.
+ * off, to open it to outside clients or close it again and, where the server now describes it
+ * differently, to accept the new description.
  */
 export function EditableOperations({
   asset,
@@ -74,7 +81,22 @@ export function EditableOperations({
       <ConnectionOperations
         operations={operations}
         actions={(operation) => (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Checkbox
+              label={t("connections.exposeOutside")}
+              description={t("connections.exposeOutsideHint")}
+              checked={operation.exposure.includes("outside")}
+              disabled={blocked}
+              data-connection-outside={operation.name}
+              onCheckedChange={(exposed) => {
+                write
+                  .write(
+                    `outside:${operation.name}`,
+                    withOperationExposure(asset.config, operation.name, "outside", exposed)
+                  )
+                  .catch(() => undefined);
+              }}
+            />
             {operation.status === "needs_review" && operation.discoveredFingerprint ? (
               <Button
                 size="sm"
