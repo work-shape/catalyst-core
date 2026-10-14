@@ -47,6 +47,8 @@ Options:
                             saw
   --only <agent:name|skill:name>
                             Sync selected assets; repeatable on push/pull
+  --workspace <id>          On pull: bind the working copy to the workspace and hold
+                            what it owns
   --help                    Show this help
 
 Environment:
@@ -58,6 +60,12 @@ A working copy that belongs to one Namespace names it beside the instance's url 
 catalyst.yaml, as 'namespace: kai-'. Its push names that Namespace, as the instance asks
 of everyone but the holder of the release right; its pull, diff and list read only the
 assets the key may read, never the instance's version or default agent.
+
+A working copy bound to a workspace names it the same way, as 'workspace: <id>', which the
+first 'catalyst config pull --workspace <id>' writes. It holds what that workspace owns, and
+everything its push creates is owned by that workspace. Its push is never a release: a new
+agent starts hidden until an instance admin offers it. A working copy without either holds
+the instance's own assets.
 `;
 
 export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): Promise<number> {
@@ -104,6 +112,7 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
         force: { type: "boolean", default: false },
         prune: { type: "boolean", default: false },
         only: { type: "string", multiple: true },
+        workspace: { type: "string" },
         help: { type: "boolean", short: "h", default: false }
       },
       allowPositionals: true,
@@ -123,6 +132,12 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
     }
     if (parsed.values.only && command !== "push" && command !== "pull") {
       stderr("--only is only valid with 'catalyst config push' or 'catalyst config pull'.\n");
+      return 2;
+    }
+    if (parsed.values.workspace !== undefined && command !== "pull") {
+      stderr(
+        "--workspace is only valid with 'catalyst config pull', which binds the working copy.\n"
+      );
       return 2;
     }
     if (parsed.values.prune && parsed.values.only) {
@@ -148,6 +163,7 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
       ...(parsed.values.force ? { force: true } : {}),
       ...(parsed.values.prune ? { prune: true } : {}),
       ...(parsed.values.only === undefined ? {} : { only: parsed.values.only }),
+      ...(parsed.values.workspace === undefined ? {} : { workspace: parsed.values.workspace }),
       ...(command === "show"
         ? {
             assetKind: parsed.positionals[0] as "agent" | "skill",

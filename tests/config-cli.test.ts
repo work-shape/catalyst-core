@@ -2802,7 +2802,11 @@ async function createTemporaryDirectory(): Promise<string> {
 }
 
 /** An instance behind the CLI. `guardrails` are its release config's, run at every call. */
-async function createFixture(guardrails: Record<string, unknown> = {}) {
+async function createFixture(
+  guardrails: Record<string, unknown> = {},
+  /** The module a writer who is no release needs, such as a CLI root bound to a workspace. */
+  assetManagement = false
+) {
   const clientInstanceId = asClientInstanceId("config-cli-test");
   const store = (await createTestInstance()).stores;
   const config = parseClientInstanceConfig({
@@ -2815,8 +2819,21 @@ async function createFixture(guardrails: Record<string, unknown> = {}) {
     auth: {},
     infrastructure: { models: { local: { provider: "deterministic", model: "local" } } },
     tools: [{ name: "known.tool", enabled: true }],
-    guardrails
+    guardrails,
+    ...(assetManagement ? { modules: { assetManagement: { enabled: true } } } : {})
   });
+  if (assetManagement) {
+    config.administration.agentConfiguration.allowAgentCreation = true;
+    config.administration.agentConfiguration.allowSkillEditing = true;
+    config.administration.agentConfiguration.editableAgentFields = [
+      "displayName",
+      "description",
+      "instructions",
+      "toolNames",
+      "skillNames",
+      "initialPrompts"
+    ];
+  }
   const authOptions = {
     secret: "a-development-session-token-secret",
     clientInstanceId,
@@ -2977,9 +2994,10 @@ async function instanceHolding(
   syncs: unknown[] = [],
   /** The id each asset gets. Another one makes the instance another database's. */
   idOf: (key: string) => string = heldAssetId,
-  guardrails: Record<string, unknown> = {}
+  guardrails: Record<string, unknown> = {},
+  assetManagement = false
 ) {
-  const fixture = await createFixture(guardrails);
+  const fixture = await createFixture(guardrails, assetManagement);
   const mutations = [
     ...remote.agents.map((config) => ({
       type: "upsert" as const,
@@ -3105,3 +3123,130 @@ function createUnusedModelProvider(): ModelProvider {
     }
   };
 }
+
+describe("a working copy bound to a workspace", () => {
+  it("binds with pull --workspace, pulls and pushes what the workspace owns, and is bound once", async () => {
+    const syncs: unknown[] = [];
+    const { fixture } = await instanceHolding(
+      { defaultAgentName: "assistant", agents: [agentConfig("The instance's own.")], skills: [] },
+      syncs,
+      heldAssetId,
+      {},
+      true
+    );
+    const { clientInstanceId, store } = fixture;
+    const owner = await store.users.createUser({
+      clientInstanceId,
+      displayLabel: "Owner",
+      roles: ["user"],
+      permissions: []
+    });
+    const team = await store.workspaces.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "Team",
+      creatorUserId: owner.id
+    });
+    const scope = { kind: "workspace" as const, workspaceId: team.id };
+    await applyAtCurrentRevisions(store.configAssets, {
+      clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "skill",
+          name: "team-notes",
+          config: skillConfig("team-notes", "Notes."),
+          scope
+        }
+      ]
+    });
+    // A key that writes the instance's assets: the root it is used in names the owner.
+    const principal = await store.apiAccess.createServicePrincipal({
+      clientInstanceId,
+      displayLabel: "Team CLI",
+      permissions: ["config_assets.read", "config_assets.write"]
+    });
+    const credential = await store.apiAccess.createApiCredential({
+      clientInstanceId,
+      servicePrincipalId: principal.id,
+      name: "team CLI",
+      scopes: ["config_assets:read", "config_assets:write"]
+    });
+    const serverFetch = createTestFetch(fixture.server);
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      if (new URL(request.url).pathname === testOperations["access_tokens.exchange"].path) {
+        return serverFetch(request.url, {
+          method: request.method,
+          headers: { authorization: `Bearer ${credential.secret}` }
+        });
+      }
+      if (new URL(request.url).pathname === testOperations["assets.sync"].path) {
+        syncs.push(JSON.parse(await request.clone().text()));
+      }
+      return serverFetch(request);
+    };
+    const directory = await createTemporaryDirectory();
+    await writeMinimalManifest(directory, "https://catalyst.test");
+    const output: string[] = [];
+    const options = {
+      cwd: directory,
+      env: { CATALYST_API_KEY: "cat_team" },
+      fetchImpl,
+      stdout: (text: string) => output.push(text),
+      stderr: (text: string) => output.push(text)
+    };
+
+    expect(
+      await runConfigCommand("pull", { ...options, workspace: team.id }),
+      output.join("")
+    ).toBe(0);
+    expect(output.join("")).toContain(`Bound this working copy to workspace '${team.id}'.`);
+    expect(await readFile(join(directory, "catalyst.yaml"), "utf8")).toContain(
+      `    workspace: ${team.id}\n`
+    );
+    // The workspace's skill, and nothing of the instance's own.
+    const pulled = await readWorkingCopy(directory, await readManifest(directory));
+    expect(pulled.skills.map((skill) => skill.name)).toEqual(["team-notes"]);
+    expect(pulled.agents).toEqual([]);
+
+    // A push of the bound root writes into the workspace.
+    await mkdir(join(directory, "agents"), { recursive: true });
+    await writeFile(
+      join(directory, "agents", "team-helper.agent.yaml"),
+      serializeAgentYaml(
+        canonicalizeAgentConfig({
+          ...agentConfig("Read the notes.", { name: "team-helper" }),
+          toolNames: ["read_skill"],
+          skillNames: ["team-notes"]
+        })
+      )
+    );
+    expect(await runConfigCommand("push", options), output.join("")).toBe(0);
+    expect(syncs.at(-1)).toMatchObject({ workspaceId: team.id });
+    expect(syncs.at(-1)).not.toHaveProperty("defaultAgentName");
+    expect(
+      (
+        await store.configAssets.getConfigAsset({
+          clientInstanceId,
+          kind: "agent",
+          name: "team-helper"
+        })
+      )?.scope
+    ).toEqual(scope);
+
+    // Bound once: another workspace is pulled into a directory of its own.
+    output.length = 0;
+    expect(await runConfigCommand("pull", { ...options, workspace: "cws_other" })).not.toBe(0);
+    expect(output.join("")).toContain(`This working copy is bound to workspace '${team.id}'.`);
+    // A root that pulled the instance's own assets is not bound afterwards.
+    const instanceRoot = await createTemporaryDirectory();
+    await writeMinimalManifest(instanceRoot, "https://catalyst.test");
+    await recordEmptyPull(instanceRoot);
+    output.length = 0;
+    expect(
+      await runConfigCommand("pull", { ...options, cwd: instanceRoot, workspace: team.id })
+    ).not.toBe(0);
+    expect(output.join("")).toContain("This working copy holds the instance's own assets");
+  });
+});

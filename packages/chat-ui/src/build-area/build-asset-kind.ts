@@ -47,6 +47,11 @@ export interface BuildAssetEditorProps {
   saveBlocked?: boolean;
   /** The reader may change what belongs to the instance: its default and where an agent shows. */
   instanceWrite: boolean;
+  /**
+   * The workspace that owns the asset, or that a new one is made for, by its id. Absent for
+   * the instance's own. What the asset may name is read from it and from the instance.
+   */
+  owner?: string;
   /** The way back to the kind's list, for the start of the page head. */
   back: ReactNode;
   /** The page's own actions, for the end of the page head: History and the menu with Delete. */

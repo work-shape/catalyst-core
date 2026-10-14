@@ -190,18 +190,18 @@ export const PERMISSION_REF_ACTION_PREFIX = "ref:";
 export { NAMESPACE_PREFIX_MAX_LENGTH, NAMESPACE_PREFIX_MIN_LENGTH, NAMESPACE_PREFIX_PATTERN };
 
 /**
- * The actions a grant row can be written for, each with the scope kinds it can be written at,
- * until the slice that brings each further check. No grant is written at instance scope: an
+ * The actions a grant row can be written for, each with the scope kinds it can be written at;
+ * a workspace grant covers what it owns (WS-OWN-1a). No grant is written at instance scope: an
  * instance-wide row is a key of a user's or a service principal's legacy list (AP-4), written
  * on the Users and API access screens.
  */
 export const GRANTABLE_ACTION_SCOPES = {
-  "agent.read": ["namespace", "asset"],
-  "agent.write": ["namespace", "asset"],
-  "agent.delete": ["namespace", "asset"],
-  "skill.read": ["namespace", "asset"],
-  "skill.write": ["namespace", "asset"],
-  "skill.delete": ["namespace", "asset"],
+  "agent.read": ["workspace", "namespace", "asset"],
+  "agent.write": ["workspace", "namespace", "asset"],
+  "agent.delete": ["workspace", "namespace", "asset"],
+  "skill.read": ["workspace", "namespace", "asset"],
+  "skill.write": ["workspace", "namespace", "asset"],
+  "skill.delete": ["workspace", "namespace", "asset"],
   // Reading and using a Connection are granted in a Namespace or on one Connection. No
   // workspace owns a Connection, so a right at workspace scope would cover nothing. Writing,
   // deleting and approving stay with the role until a slice opens them.

@@ -64,6 +64,7 @@ import {
   requireMatchingConfigName,
   setsInitialDefault,
   storedWritableIssues,
+  requireOwnerWorkspace,
   toJsonObject,
   withPublishedConfigs
 } from "./asset-write-rules";
@@ -83,6 +84,7 @@ import { initialAgentPlacement, type AvailableIn } from "./asset-placement";
 import { AssetReadWorkflow, scopeOf } from "./asset-read-workflow";
 import { requirePrecondition, revisionConflictOf } from "./asset-revision";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
+import { assertReferencesWithinOwners } from "./asset-owner-references";
 import type { AssetWorkflowOptions } from "./types";
 
 type MutationBatch = Omit<
@@ -506,7 +508,13 @@ export class AssetWorkflow {
     const readOnly = storedWritableIssues(kind, current);
     const issues =
       readOnly ??
-      (ofDefinition.length > 0 ? ofDefinition : await this.writeIssues(call, view.set, found));
+      (ofDefinition.length > 0
+        ? ofDefinition
+        : await this.writeIssues(call, view.set, found, () => {
+            const { scope } = target;
+            const write = { type: "upsert", kind: kind.kind, name: name ?? "", scope } as const;
+            assertReferencesWithinOwners(kinds, [{ ...write, config: prepared }], stored.assets);
+          }));
     return {
       valid: issues.length === 0,
       issues: issues.map(({ message, path, code }) => ({
@@ -530,11 +538,14 @@ export class AssetWorkflow {
   private async writeIssues(
     call: AssetCall,
     stored: AssetSet,
-    found: ReturnType<typeof findAssetSetIssues>
+    found: ReturnType<typeof findAssetSetIssues>,
+    /** The writer's own rule on what the definition names across owners. */
+    withinOwners: () => void
   ): Promise<AssetSetIssue[]> {
     try {
       const issues = found.validateWrite(stored);
       if (issues.length > 0) return issues;
+      withinOwners();
       const { refusals } = await findChangedAgentRefusals(
         this.options,
         call.access,
@@ -578,6 +589,7 @@ export class AssetWorkflow {
     const { kind, name } = target;
     const surface = write.operation === "revert" ? "revert" : "put";
     const kinds = this.options.configAssets.kinds.kinds;
+    await requireOwnerWorkspace(this.options, target.address.workspaceId);
     const stored = await loadStoredAssets(this.options);
     const current = findDefinition(stored.set, kind.kind, name);
     kind.assertStoredWritable?.({ current });
@@ -631,7 +643,8 @@ export class AssetWorkflow {
       name,
       creates: target.asset?.status !== "active",
       setsDefault,
-      ...(write.availableIn === undefined ? {} : { availableIn: write.availableIn })
+      ...(write.availableIn === undefined ? {} : { availableIn: write.availableIn }),
+      ...(target.address.workspaceId === undefined ? {} : { madeIn: target.address.workspaceId })
     });
     let pageLinked = false;
     const { pageLink } = write;

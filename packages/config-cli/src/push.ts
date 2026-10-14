@@ -19,7 +19,9 @@ import {
   assetHash,
   bundleOf,
   byKey,
+  batchScope,
   connectApi,
+  holdsWholeInstance,
   fetchRemoteAsset,
   formatCount,
   isRecord,
@@ -62,7 +64,7 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
     );
   }
   const baselineAssets = baseline.assets;
-  const api = await connectApi(instance.url, options);
+  const api = await connectApi(instance.url, options, instance);
   // Read to its last page or not at all: a listing that fails stops the push, so a prune
   // never takes an asset it could not list for one that is gone.
   const listing = await listRemoteAssets(api);
@@ -74,9 +76,9 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
   const deleteAssets = options.prune
     ? [...listing.values()].filter((asset) => !localKeys.has(asset.key))
     : [];
-  // A working copy of one Namespace never names the instance's default agent.
+  // A working copy of one Namespace or one workspace never names the instance's default agent.
   const changesDefault =
-    instance.namespace === undefined &&
+    holdsWholeInstance(instance) &&
     selectors.length === 0 &&
     (bundle.defaultAgentName ?? null) !== baseline.defaultAgentName;
   if (changesDefault && baseline.defaultAgentName === undefined) {
@@ -170,7 +172,7 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
   }
   // The default agent the push is made against, as the revisions are: the one of the last pull.
   const batch: SyncBatch = {
-    ...(instance.namespace === undefined ? {} : { namespace: instance.namespace }),
+    ...batchScope(instance),
     items,
     ...(changesDefault
       ? {

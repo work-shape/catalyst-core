@@ -1,6 +1,5 @@
 import {
   AppError,
-  INSTANCE_ASSET_SCOPE,
   auditActorFromIdentity,
   findNamespaceOfAssetName,
   isAppError,
@@ -35,6 +34,7 @@ import {
   accessOfSyncCredential,
   syncInitialAvailability,
   requireInteractiveEditingOn,
+  requireOwnerWorkspace,
   toJsonObject
 } from "./asset-write-rules";
 import { currentRevisionOf } from "./asset-revision";
@@ -100,7 +100,7 @@ export async function syncAssets(
   call: AssetCall,
   input: AssetSyncInput
 ) {
-  const bound = withSyncCredential(call);
+  const bound = withSyncCredential(call, input);
   const checked = await checkBatch(options, bound, input, "apply");
   return applyBatch(options, bound, checked);
 }
@@ -115,13 +115,16 @@ export async function checkAssetSync(
   call: AssetCall,
   input: AssetSyncInput
 ): Promise<{ valid: true }> {
-  await checkBatch(options, withSyncCredential(call), input, "check");
+  await checkBatch(options, withSyncCredential(call, input), input, "check");
   return { valid: true };
 }
 
-/** The call as it is decided: whether it is a release depends on the key it came with. */
-function withSyncCredential(call: AssetCall): AssetCall {
-  return { ...call, access: accessOfSyncCredential(call.actor, call.access) };
+/**
+ * The call as it is decided: whether it is a release depends on the key it came with and on
+ * the owner the batch names.
+ */
+function withSyncCredential(call: AssetCall, input: AssetSyncInput): AssetCall {
+  return { ...call, access: accessOfSyncCredential(call.actor, call.access, input) };
 }
 
 /** A batch every check accepted, with what the store is asked to write for it. */
@@ -159,6 +162,7 @@ async function checkBatch(
   ) {
     throw new AppError("VALIDATION_FAILED", `Namespace '${input.namespace}' is not registered`);
   }
+  await requireOwnerWorkspace(options, input.workspaceId);
   const releaseSync = isReleaseSync(call.access, "sync");
   if (purpose === "apply") {
     await authorizeInteractiveWrite(options, call.actor, call, call.audit, releaseSync);
@@ -320,13 +324,13 @@ async function checkBatch(
   // same, which checks under its lock that the asset is still not there.
   const mutations: ConfigAssetMutation[] = ready().map((entry) =>
     entry.item.type === "delete"
-      ? { type: "delete", kind: entry.kind.kind, name: entry.name, scope: INSTANCE_ASSET_SCOPE }
+      ? { type: "delete", kind: entry.kind.kind, name: entry.name, scope: entry.scope }
       : {
           type: "upsert",
           kind: entry.kind.kind,
           name: entry.name,
           config: toJsonObject(acceptedByName(entry.kind.kind).get(entry.name)),
-          scope: INSTANCE_ASSET_SCOPE,
+          scope: entry.scope,
           // A kind with a published revision moves its draft with a write and nothing else.
           ...(entry.kind.lifecycle === "draft_published" ? { draft: true as const } : {})
         }
@@ -493,12 +497,13 @@ export async function authorizeAssetSync(
   access: ActorAccess,
   input: AssetSyncInput
 ): Promise<void> {
-  await authorizeItems(options, accessOfSyncCredential(actor, access), input);
+  await authorizeItems(options, accessOfSyncCredential(actor, access, input), input);
 }
 
 /**
  * What the policy is asked about: each kind the batch names with the Namespace of the names it
- * carries, so a setting narrowed to a kind or to a Namespace applies to the batch.
+ * carries and the workspace the batch names, so a setting narrowed to a kind, a Namespace or
+ * a workspace applies to the batch.
  */
 export async function assetSyncPolicyTargets(
   options: AssetWorkflowOptions,
@@ -510,10 +515,14 @@ export async function assetSyncPolicyTargets(
   const targets = new Map<string, PolicyTarget>();
   for (const item of input.items) {
     const name = item.type === "put" ? readDefinitionName(item.config) : item.name;
+    // A Namespace is a prefix among the instance's own assets only.
     const namespace =
-      name === undefined ? undefined : findNamespaceOfAssetName(namespaces, name)?.prefix;
+      name === undefined || input.workspaceId !== undefined
+        ? undefined
+        : findNamespaceOfAssetName(namespaces, name)?.prefix;
     targets.set(JSON.stringify([item.kind, namespace]), {
       assetKind: item.kind,
+      ...(input.workspaceId === undefined ? {} : { workspaceId: input.workspaceId }),
       ...(namespace === undefined ? {} : { namespace })
     });
   }

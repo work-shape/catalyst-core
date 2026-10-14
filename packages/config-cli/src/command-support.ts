@@ -27,6 +27,7 @@ import {
   writeStateFile,
   type DeletedAssetBaseline,
   type InstanceBaseline,
+  type ManifestInstance,
   type ResolvedInstance,
   type WorkingCopyBundle
 } from "./working-copy";
@@ -38,6 +39,8 @@ export interface ConfigCommandOptions {
   force?: boolean;
   prune?: boolean;
   only?: string[];
+  /** The workspace `pull` binds the working copy to, or finds it bound to. */
+  workspace?: string;
   assetKind?: "agent" | "skill";
   assetName?: string;
   fetchImpl?: typeof fetch;
@@ -103,13 +106,30 @@ type LocalAsset = { key: string; name: string; contents: string } & AssetDefinit
 
 /**
  * The instance's config version and default agent. Only a reader of every agent and skill may
- * read them, so a working copy of one Namespace reads neither and knows only its assets.
+ * read them, so a working copy of one Namespace or of one workspace reads neither and knows
+ * only its assets.
  */
 export async function readInstanceOverview(
   api: ConfigApi,
   instance: ResolvedInstance
 ): Promise<{ version?: number; defaultAgentName?: string }> {
-  return instance.namespace === undefined ? api.getOverview() : {};
+  return holdsWholeInstance(instance) ? api.getOverview() : {};
+}
+
+/** What a batch of the working copy names as its place: its Namespace or its workspace. */
+export function batchScope(instance: ManifestInstance): {
+  namespace?: string;
+  workspaceId?: string;
+} {
+  return {
+    ...(instance.namespace === undefined ? {} : { namespace: instance.namespace }),
+    ...(instance.workspace === undefined ? {} : { workspaceId: instance.workspace })
+  };
+}
+
+/** A working copy of the instance's own assets as a whole: bound to no Namespace or workspace. */
+export function holdsWholeInstance(instance: ManifestInstance): boolean {
+  return instance.namespace === undefined && instance.workspace === undefined;
 }
 
 /**
@@ -380,7 +400,15 @@ function commandEnv(options: ConfigCommandOptions): ConfigCliEnv {
  * A client of the instance, signed in with `CATALYST_API_KEY` where it is set and otherwise
  * with the key `catalyst login` saved for the instance's origin.
  */
-export async function connectApi(url: string, options: ConfigCommandOptions) {
+/**
+ * Signs in to the instance. A working copy's commands pass its instance, so a root bound to a
+ * workspace reads and writes what that workspace owns.
+ */
+export async function connectApi(
+  url: string,
+  options: ConfigCommandOptions,
+  bound: Pick<ResolvedInstance, "workspace"> = {}
+) {
   const apiKey =
     commandEnv(options).CATALYST_API_KEY ||
     (await readStoredCredential(commandEnv(options), url))?.apiKey;
@@ -393,7 +421,8 @@ export async function connectApi(url: string, options: ConfigCommandOptions) {
     baseUrl: url,
     apiKey,
     ...(options.fetchImpl === undefined ? {} : { fetchImpl: options.fetchImpl }),
-    ...(options.sleep === undefined ? {} : { sleep: options.sleep })
+    ...(options.sleep === undefined ? {} : { sleep: options.sleep }),
+    ...(bound.workspace === undefined ? {} : { workspaceId: bound.workspace })
   });
 }
 

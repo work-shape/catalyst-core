@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
-import { AppError, type AssetScope, type ConfigAssetMutation } from "@vivd-catalyst/core";
+import type { AssetScope, ConfigAssetMutation } from "@vivd-catalyst/core";
 import { applyValidatedConfigAssetMutations } from "@vivd-catalyst/chat-server";
 import {
   agent,
@@ -13,8 +13,8 @@ import { createTestAssetKinds } from "./support/test-instance";
 import { withTestSql } from "./support/test-sql";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
-// Who owns an asset. Every asset is owned by the instance until the first kind a workspace can
-// own: the columns and the indexes exist, the write path refuses the scope.
+// Who owns an asset: the instance, or for an agent and a skill the workspace it was made in
+// (WS-OWN-1a). Only an asset of that workspace may name what a workspace owns.
 
 /** A workspace that exists: an asset names its owner through a foreign key. */
 async function createWorkspace(t: Awaited<ReturnType<typeof setup>>, name = "Scope test") {
@@ -50,7 +50,7 @@ describe("scope on a config asset", () => {
     ]);
   });
 
-  it("refuses a workspace scope on the write path with invalid_scope and writes nothing", async () => {
+  it("writes a workspace's agent and skill, and refuses an agent of another owner naming its skill", async () => {
     const t = await setup();
     const validationRefs = {
       modelProviderIds: ["local"],
@@ -58,7 +58,7 @@ describe("scope on a config asset", () => {
       modelBindings: [],
       fastModeModelBindingIds: [],
       reasoningEfforts: [],
-      enabledToolNames: []
+      enabledToolNames: ["read_skill"]
     };
     const config = parseClientInstanceConfig({
       version: 1,
@@ -66,39 +66,82 @@ describe("scope on a config asset", () => {
       auth: {},
       infrastructure: { models: { local: { provider: "deterministic", model: "local" } } }
     });
-    const write = applyValidatedConfigAssetMutations(
-      {
-        config,
-        clientInstanceId,
-        configAssets: {
-          store: t.stores.configAssets,
-          source: createStaticConfigAssetSource({}),
-          kinds: createTestAssetKinds({ config, validationRefs }),
-          validationRefs
+    const workspaceId = await createWorkspace(t);
+    const otherWorkspaceId = await createWorkspace(t, "Another");
+    const owner: AssetScope = { kind: "workspace", workspaceId };
+    const write = (mutations: ConfigAssetMutation[]) =>
+      applyValidatedConfigAssetMutations(
+        {
+          config,
+          clientInstanceId,
+          configAssets: {
+            store: t.stores.configAssets,
+            source: createStaticConfigAssetSource({}),
+            kinds: createTestAssetKinds({ config, validationRefs }),
+            validationRefs
+          }
+        },
+        {
+          clientInstanceId,
+          baseRevisions: Object.fromEntries(
+            mutations.flatMap((mutation) =>
+              mutation.type === "setDefaultAgent"
+                ? []
+                : [[`${mutation.kind}:${mutation.name}`, null]]
+            )
+          ),
+          mutations
         }
+      );
+    const reader = (name: string) =>
+      agent(name, { toolNames: ["read_skill"], skillNames: ["team-notes"] });
+
+    await write([
+      {
+        type: "upsert",
+        kind: "skill",
+        name: "team-notes",
+        config: skill("team-notes"),
+        scope: owner
       },
       {
-        clientInstanceId,
-        baseRevisions: { "agent:team-agent": null },
-        mutations: [
-          {
-            type: "upsert",
-            kind: "agent",
-            name: "team-agent",
-            config: agent("team-agent"),
-            scope: { kind: "workspace", workspaceId: await createWorkspace(t) }
-          }
-        ]
+        type: "upsert",
+        kind: "agent",
+        name: "team-agent",
+        config: reader("team-agent"),
+        scope: owner
       }
-    );
+    ]);
+    for (const name of ["team-notes", "team-agent"]) {
+      const kind = name === "team-notes" ? "skill" : "agent";
+      expect(
+        (await t.stores.configAssets.getConfigAsset({ clientInstanceId, kind, name }))?.scope
+      ).toEqual(owner);
+    }
 
-    await expect(write).rejects.toBeInstanceOf(AppError);
-    await expect(write).rejects.toMatchObject({
+    // The instance's agent and another workspace's agent may not name the workspace's skill.
+    const invalidScope = {
       code: "VALIDATION_FAILED",
+      message:
+        "Config agent 'outside' names the skill 'team-notes', which a workspace owns: only an asset of that workspace may name it",
       details: { reason: "invalid_scope" }
-    });
+    };
     await expect(
-      t.stores.configAssets.getConfigAsset({ clientInstanceId, kind: "agent", name: "team-agent" })
+      write([{ type: "upsert", kind: "agent", name: "outside", config: reader("outside") }])
+    ).rejects.toMatchObject(invalidScope);
+    await expect(
+      write([
+        {
+          type: "upsert",
+          kind: "agent",
+          name: "outside",
+          config: reader("outside"),
+          scope: { kind: "workspace", workspaceId: otherWorkspaceId }
+        }
+      ])
+    ).rejects.toMatchObject(invalidScope);
+    await expect(
+      t.stores.configAssets.getConfigAsset({ clientInstanceId, kind: "agent", name: "outside" })
     ).resolves.toBeUndefined();
   });
 

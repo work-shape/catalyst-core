@@ -53,7 +53,13 @@ export {
   requestBuildStart,
   requestedBuildStart
 } from "./build-create-request";
-export { mayCreateAgents, resolveBuildRights } from "./build-rights";
+export {
+  buildScopes,
+  mayCreateAgents,
+  resolveBuildRights,
+  resolveBuildScope,
+  type BuildScope
+} from "./build-rights";
 export {
   buildLocationOfRoute,
   BuildNavigationProvider,

@@ -68,16 +68,21 @@ export interface SeedApi {
   ): Promise<string>;
   /** The agents and skills of the instance, and what a definition may name on it. */
   assetsOverview(): Promise<ConfigAssetsOverview>;
-  /** Nothing when the caller cannot read the asset or it does not exist. */
-  getAsset(kind: string, name: string): Promise<Asset | undefined>;
+  /**
+   * Nothing when the caller cannot read the asset or it does not exist. With a workspace, the
+   * asset that workspace owns.
+   */
+  getAsset(kind: string, name: string, workspaceId?: string): Promise<Asset | undefined>;
   /**
    * Creates the asset, or replaces it at the revision the caller read where one is given.
-   * `pending_approval`: nothing was written, a holder of `operations.approve` decides.
+   * `pending_approval`: nothing was written, a holder of `operations.approve` decides. With a
+   * workspace, the asset is that workspace's, as a save in its Studio makes it.
    */
   saveAsset(
     kind: string,
     config: Record<string, unknown> & { name: string },
-    expectedRevision?: number
+    expectedRevision?: number,
+    workspaceId?: string
   ): Promise<"done" | "pending_approval">;
   /** Makes one revision of an asset with a draft the one its users are served. */
   publishAsset(kind: string, name: string, revision: number): Promise<void>;
@@ -186,9 +191,12 @@ export function createSeedApi(client: ApiClient): SeedApi {
     createApiKey: async (servicePrincipalId, input) =>
       (await client.api_credentials.create({ params: { servicePrincipalId }, body: input })).secret,
     assetsOverview: () => client.config_assets.get_overview(),
-    async getAsset(kind, name) {
+    async getAsset(kind, name, workspaceId) {
       try {
-        return await client.assets.get({ params: { kind, name } });
+        return await client.assets.get({
+          params: { kind, name },
+          ...(workspaceId === undefined ? {} : { query: { workspaceId } })
+        });
       } catch (error) {
         if (error instanceof ApiError && (error.status === 404 || error.status === 403)) {
           return undefined;
@@ -196,12 +204,16 @@ export function createSeedApi(client: ApiClient): SeedApi {
         throw error;
       }
     },
-    saveAsset: async (kind, config, expectedRevision) =>
+    saveAsset: async (kind, config, expectedRevision, workspaceId) =>
       (
         await client.assets.put({
           params: { kind, name: config.name },
           // A write names the revision it was made against: none for an asset that is new.
-          body: { config, expectedRevision: expectedRevision ?? null }
+          body: {
+            config,
+            expectedRevision: expectedRevision ?? null,
+            ...(workspaceId === undefined ? {} : { workspaceId })
+          }
         })
       ).status,
     async publishAsset(kind, name, revision) {
