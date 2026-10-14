@@ -11,8 +11,10 @@ export {
 } from "./progress";
 export {
   Skeleton,
+  SkeletonChips,
   SkeletonList,
   SkeletonPage,
+  type SkeletonChipsProps,
   type SkeletonListProps,
   type SkeletonPageProps,
   type SkeletonProps,

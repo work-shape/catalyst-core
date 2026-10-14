@@ -96,6 +96,7 @@ export function AgentSurface({ agent }: { agent: string }) {
         initialForm={agentConfigToForm(asset.config)}
         isDefault={asset.isDefault === true}
         references={references.data}
+        referencesLoading={references.isPending}
         editableAgentFields={[]}
         canManageAgentModels={false}
         skillChoice={NO_SKILL_CHOICE}

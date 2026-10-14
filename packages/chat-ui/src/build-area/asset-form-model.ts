@@ -1,3 +1,5 @@
+import { withImpliedTools } from "./instance-tools";
+
 export interface LocalizedPair<Value = string> {
   en: Value;
   de: Value;
@@ -234,7 +236,8 @@ export function agentFormToConfig(form: AgentFormState): Record<string, unknown>
     ...(userSelectableModelBindingIds.length ? { userSelectableModelBindingIds } : {}),
     ...(Object.keys(modelReasoningEfforts).length ? { modelReasoningEfforts } : {}),
     ...(maxSteps === undefined ? {} : { maxSteps }),
-    toolNames: form.toolNames,
+    // The tools the agent holds because of something else are saved with it.
+    toolNames: withImpliedTools(form.toolNames, form.skillNames),
     skillNames: form.skillNames,
     ...(form.knowledgeBases.length ? { knowledgeBases: form.knowledgeBases } : {}),
     initialPrompts: form.initialPrompts
