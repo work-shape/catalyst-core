@@ -19,6 +19,7 @@ import {
   appPreviewProblemText,
   appDraftShown,
   appRefusalText,
+  appsRowShown,
   AppPreviewNotice,
   appPreviewState,
   appRowActions,
@@ -153,6 +154,16 @@ describe("the Apps row of the rail", () => {
     expect(ids({ apps: false })).toEqual([]);
     expect(ids({})).toEqual([]);
     expect(ids({ apps: true, inbox: { toDecide: 0 } })).toEqual(["apps", "inbox"]);
+  });
+
+  // NAV-VIS-1: the instance names the row in the workspace's agent list, where its Apps page
+  // lists the person an App or they may write one there; the browser only reads the flag.
+  it("shows where the instance names it for the open workspace and the module is on", () => {
+    expect(appsRowShown(true, { visibleSections: ["agents", "apps"] })).toBe(true);
+    expect(appsRowShown(true, { visibleSections: ["agents"] })).toBe(false);
+    expect(appsRowShown(false, { visibleSections: ["apps"] })).toBe(false);
+    // Until the list arrived, or where it failed, nothing is known to show.
+    expect(appsRowShown(true, undefined)).toBe(false);
   });
 });
 
