@@ -168,7 +168,17 @@ export function ConnectionOperations({
               </Badge>
             </div>
             {operation.description ? (
-              <p className="line-clamp-3 text-body whitespace-pre-line">{operation.description}</p>
+              // A description to accept again is shown whole: the model of an agent that
+              // carries the tool reads all of it, so whoever accepts it does too.
+              <p
+                className={
+                  operation.status === "needs_review"
+                    ? "max-h-40 overflow-y-auto text-body break-words whitespace-pre-line"
+                    : "line-clamp-3 text-body whitespace-pre-line"
+                }
+              >
+                {operation.description}
+              </p>
             ) : null}
             <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-caption text-muted-foreground">
               {operation.exposure.length === 0 ? (
