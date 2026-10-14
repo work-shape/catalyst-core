@@ -39,7 +39,7 @@ catalyst login --instance https://chat.example.com
 
 The tool prints an address and a code such as `BCDF-GHJK`. Open the address, signed in as yourself; it leads to **Settings > You > API keys** (German: **Einstellungen › Du › API-Schlüssel**). Check that the code is the one your terminal shows, choose what the key may do and until when, and confirm. The tool then collects the key and saves it. Nothing is pasted anywhere: the code you confirm cannot be used to sign in, and the key travels only from the instance to the tool. A code expires after 15 minutes and is collected once.
 
-A key acts as you, narrowed to its scopes. A scope is a right such as `agent.write`, optionally limited to one Namespace: `agent.write:kai-`. A key never does more than you may at the moment of each call: a right an administrator takes from you is gone from the key on its next call. A key lives at most a year. A new key starts with no scope ticked: tick the ones the key needs. **Settings > You > API keys** lists your keys and revokes them; a revoked key is refused on its next call. Whoever administers API access sees and revokes every person's keys. No key issues another key.
+A key acts as you, narrowed to its scopes. A scope is a right such as `agent.write`, optionally limited to one Namespace: `agent.write:tax-`. A key never does more than you may at the moment of each call: a right an administrator takes from you is gone from the key on its next call. A key lives at most a year. A new key starts with no scope ticked: tick the ones the key needs. **Settings > You > API keys** lists your keys and revokes them; a revoked key is refused on its next call. Whoever administers API access sees and revokes every person's keys. No key issues another key.
 
 `catalyst logout --instance <address>` removes the saved key from this machine. It stays valid until you revoke it under **Settings > You > API keys**.
 
@@ -49,7 +49,7 @@ A working copy that belongs to one Namespace names it beside the instance:
 instances:
   production:
     url: https://chat.example.com
-    namespace: kai-
+    namespace: tax-
 defaultInstance: production
 ```
 
@@ -62,16 +62,16 @@ Every operation on assets has a command, for every kind the instance registers: 
 catalyst context                  # the instance, your rights and Namespaces, its kinds
 catalyst kinds                    # each kind: lifecycle, folder or definition, rights
 catalyst references               # models, efforts and tools a definition may name
-catalyst agent list --prefix kai-
-catalyst agent show kai-tax
-catalyst agent history kai-tax
-catalyst skill validate --from skills/kai-guide
-catalyst skill put kai-guide --from skills/kai-guide --if-revision new
-catalyst agent put kai-tax --from agents/kai-tax.agent.yaml --if-revision 3
+catalyst agent list --prefix tax-
+catalyst agent show tax-vat
+catalyst agent history tax-vat
+catalyst skill validate --from skills/tax-guide
+catalyst skill put tax-guide --from skills/tax-guide --if-revision new
+catalyst agent put tax-vat --from agents/tax-vat.agent.yaml --if-revision 3
 catalyst app put offers --from offers --if-revision 4 --workspace <workspace-id>
 catalyst app publish offers --revision 5 --workspace <workspace-id>
-catalyst agent revert kai-tax --to 2 --if-revision 4
-catalyst agent delete kai-tax --if-revision 5
+catalyst agent revert tax-vat --to 2 --if-revision 4
+catalyst agent delete tax-vat --if-revision 5
 ```
 
 `--from` takes the forms of the working copy: an `.agent.yaml` or any YAML or JSON definition, a skill's folder with its `SKILL.md`, or the folder of a kind whose revisions hold files, such as an App. A write names the revision it was made against with `--if-revision`, or `new` to create; read it with `show` or `history`. `discard-draft`, `set-availability` and `set-default` complete the list; `catalyst --help` shows each with its options. `--json` prints the instance's answer as it came.

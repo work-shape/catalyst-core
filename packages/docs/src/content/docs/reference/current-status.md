@@ -24,7 +24,7 @@ The open platform contains:
 - modules, mail for invitations and password reset, and the background jobs page
 - execution workspaces with a sandboxed command runner, off unless an instance enables them
 - approval requests for skill changes that an agent proposes, and for calls the operation policy holds, decided in the Inbox
-- guardrails that check saves, operation calls, publishes and approval requests: the operator's floor in release config, and further guardrails written as assets, tested, dry-run and published with the CLI or an agent; Studio > Guardrails lists them read-only with their hits
+- guardrails that check saves, operation calls, publishes and approval requests: the operator's floor in release config, and further guardrails written as assets, tested, dry-run and published with the CLI; Studio > Guardrails lists them read-only with their hits
 - the chat dock, which keeps a conversation open beside any page
 - Docker images, Compose files, an explicit migration step, and the `/health` and `/ready` probes
 
@@ -33,7 +33,7 @@ Document processing, the artifact helper commands for execution workspaces and t
 ## Not In The Current Release
 
 - A connector for a plain HTTP or OpenAPI system. A Connection reaches a remote MCP server only.
-- Writing, testing or publishing a guardrail in the interface. Studio > Guardrails reads; the CLI and an agent write.
+- Writing, testing or publishing a guardrail in the interface. Studio > Guardrails reads; the CLI writes.
 - A platform MCP server for a local agent such as Claude Code or Codex. A local agent works through `catalyst login` and the CLI.
 - Tools with the permission mode `approval_required`. An agent run cannot pause for a person's decision and continue afterwards, so startup refuses such a tool.
 - An approval for a call an agent makes. The operation policy value `approval` holds a person's call for a decision in the Inbox, see [Operation policy](/configure/release-config/#operation-policy). An agent's run cannot pause for such a decision and continue, so startup refuses a tool of the release whose calls would wait.

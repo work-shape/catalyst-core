@@ -41,11 +41,11 @@ Version-controlled configuration deployed with the client assembly app. It sets 
 
 ## Module
 
-One optional feature of the product with one switch in release config, `modules.<name>.enabled`, such as `apps`, `workflows` or `connections`. The interface lists them under **Settings > Instance > Modules** (German: **Module**). Planning documents call the same thing a Package (German: Paket); that name is not in the interface yet. See [Modules](/configure/modules/).
+One optional feature of the product with one switch in release config, `modules.<name>.enabled`, such as `apps`, `workflows` or `connections`. The interface lists them under **Settings > Instance > Modules** (German: **Module**). See [Modules](/configure/modules/).
 
 ## Workspace
 
-The place conversations, Apps and other work belong to, and whose members may reach them. Every person has a **Personal workspace** (German: **Persönlicher Arbeitsbereich**) that only they see. A **Shared workspace** (listed under **Geteilte Arbeitsbereiche** in German) has members, and its owners manage them under **Settings > Workspace**. Planning documents call it a Collaboration Workspace. It is not an Execution Workspace, which is the sandboxed folder an agent runs commands in.
+Where your conversations and Apps live. Your **Personal workspace** (German: **Persönlicher Arbeitsbereich**) is yours alone. A **Shared workspace** (listed under **Geteilte Arbeitsbereiche** in German) has members; its owners manage them under **Settings > Workspace** (**Einstellungen › Arbeitsbereich**).
 
 ## Studio
 
