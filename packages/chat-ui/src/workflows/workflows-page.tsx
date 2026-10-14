@@ -22,7 +22,7 @@ import { useTranslation } from "../i18n";
 import { RouteLink } from "../route-link";
 import { useStartRun } from "./start-run";
 import { useRunsAvailable, useWorkflowList, type WorkflowList } from "./workflow-data";
-import { startOffered } from "./workflow-model";
+import { listedToReader, startOffered } from "./workflow-model";
 import type { WorkflowListItem } from "./workflow-views";
 import { LoadError, RunStateBadge, WorkflowsFrame, type OpenRoute } from "./workflows-frame";
 import { useWorkflowsHost } from "./workflows-host";
@@ -39,7 +39,11 @@ export function WorkflowsPage() {
     name: starting?.name,
     form: starting?.startForm
   });
-  const rows = list.rows;
+  const write = host?.rights.write === true;
+  const rows = useMemo(
+    () => list.rows?.filter((workflow) => listedToReader(workflow, { write })),
+    [list.rows, write]
+  );
   // The ages are counted from when the list last arrived.
   const now = useMemo(() => new Date(), [rows]);
   if (!host?.workspace) {
@@ -49,7 +53,7 @@ export function WorkflowsPage() {
     <>
       <WorkflowsPageView
         workspaceId={host.workspace.id}
-        list={list}
+        list={{ ...list, rows }}
         now={now}
         runsAvailable={runsAvailable}
         onOpenRoute={host.showRoute}
@@ -195,6 +199,11 @@ function WorkflowCard({
             <CardTitle id={titleId} className="min-w-0 break-words">
               {workflow.name}
             </CardTitle>
+            {workflow.published ? null : (
+              <Badge tone="neutral" size="sm">
+                {t("workflows.draft.unpublished")}
+              </Badge>
+            )}
             {cannotStart(workflow) ? (
               <Badge tone="warning" size="sm">
                 {t("workflows.notRunnable.badge")}
@@ -229,39 +238,37 @@ function WorkflowCard({
           )}
         </p>
       </CardContent>
-      {/* A Workflow without a published revision has nothing a reader could open. */}
-      {workflow.published ? (
-        <CardFooter>
-          <CardTarget label={t("workflows.openNamed", { name: workflow.name })}>
+      {/* A draft opens on its page, where it is published; it has nothing to start yet. */}
+      <CardFooter>
+        <CardTarget label={t("workflows.openNamed", { name: workflow.name })}>
+          <RouteLink
+            route={{ kind: "workflow", ...address }}
+            variant="primary"
+            onOpen={onOpenRoute}
+          >
+            {t("workflows.open")}
+          </RouteLink>
+        </CardTarget>
+        {canStart ? (
+          <Button variant="outline" aria-describedby={titleId} onClick={onStart}>
+            <Play aria-hidden="true" />
+            {t("workflows.startNow")}
+          </Button>
+        ) : null}
+        {/* A Workflow that ran has runs to look through. */}
+        {lastRun === undefined ? null : (
+          <div className="ml-auto flex items-center gap-1">
             <RouteLink
-              route={{ kind: "workflow", ...address }}
-              variant="primary"
+              route={{ kind: "workflow-runs", ...address }}
+              variant="link"
+              describedBy={titleId}
               onOpen={onOpenRoute}
             >
-              {t("workflows.open")}
+              {t("workflows.sectionRuns")}
             </RouteLink>
-          </CardTarget>
-          {canStart ? (
-            <Button variant="outline" aria-describedby={titleId} onClick={onStart}>
-              <Play aria-hidden="true" />
-              {t("workflows.startNow")}
-            </Button>
-          ) : null}
-          {/* A Workflow that ran has runs to look through. */}
-          {lastRun === undefined ? null : (
-            <div className="ml-auto flex items-center gap-1">
-              <RouteLink
-                route={{ kind: "workflow-runs", ...address }}
-                variant="link"
-                describedBy={titleId}
-                onOpen={onOpenRoute}
-              >
-                {t("workflows.sectionRuns")}
-              </RouteLink>
-            </div>
-          )}
-        </CardFooter>
-      ) : null}
+          </div>
+        )}
+      </CardFooter>
     </Card>
   );
 }
