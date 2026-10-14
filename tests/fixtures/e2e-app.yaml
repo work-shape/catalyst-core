@@ -212,6 +212,26 @@ auth:
           - admin
         permissionRefs:
           - demo-tools
+      # The two people of the App Workflow action spec, used by no other spec: the builder
+      # writes the App and is given the use right on its Workflow, and the member holds no
+      # right on the Workflow. Their labels sort after every other for the reason given above.
+      - email: e2e-app-workflow@example.test
+        displayLabel: E2E Zz App Workflow
+        passwordEnvName: E2E_APP_WORKFLOW_PASSWORD
+        developmentPassword: e2e-app-workflow-password
+        roles:
+          - user
+          - admin
+        permissionRefs:
+          - demo-tools
+      - email: e2e-app-workflow-member@example.test
+        displayLabel: E2E Zz App Workflow Member
+        passwordEnvName: E2E_APP_WORKFLOW_MEMBER_PASSWORD
+        developmentPassword: e2e-app-workflow-member-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
   sessionToken:
     issuer: demo-e2e-client-instance
     ttlSeconds: 900

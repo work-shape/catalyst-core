@@ -461,6 +461,140 @@
         "x-catalyst-rate-class": "read"
       }
     },
+    "/api/v1/app-content-sessions/{pageSessionId}/workflow-runs/{runId}": {
+      "post": {
+        "operationId": "apps.sessions.get_workflow_run",
+        "summary": "Read the state and result of a Workflow Run that a workflow action of the Page or App a frame shows started",
+        "tags": [
+          "Apps"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "conversation:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "conversation:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pageSessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppSessionContextRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "workflow": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "queued",
+                        "running",
+                        "waiting",
+                        "done",
+                        "failed",
+                        "cancelled",
+                        "limit_reached"
+                      ]
+                    },
+                    "output": {},
+                    "outputTruncated": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    },
+                    "startedAt": {
+                      "type": "string"
+                    },
+                    "finishedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "workflow",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/approval-requests": {
       "get": {
         "operationId": "approval_requests.list",
@@ -17421,6 +17555,74 @@
               "kind",
               "dataStore"
             ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "effect": {
+                "type": "string",
+                "enum": [
+                  "reading",
+                  "changing"
+                ]
+              },
+              "description": {
+                "type": "string"
+              },
+              "toolName": {
+                "type": "string"
+              },
+              "inputSchema": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              },
+              "policy": {
+                "type": "string",
+                "enum": [
+                  "allow",
+                  "confirm",
+                  "approval",
+                  "deny"
+                ]
+              },
+              "agentTool": {
+                "type": "boolean"
+              },
+              "kind": {
+                "type": "string",
+                "const": "workflow"
+              },
+              "workflow": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              },
+              "unavailable": {
+                "$ref": "#/components/schemas/AppWorkflowActionUnavailable"
+              }
+            },
+            "required": [
+              "name",
+              "effect",
+              "toolName",
+              "inputSchema",
+              "policy",
+              "agentTool",
+              "kind",
+              "workflow"
+            ]
           }
         ]
       },
@@ -17453,23 +17655,45 @@
         "additionalProperties": false
       },
       "AppActionCallResult": {
-        "type": "object",
-        "properties": {
-          "runId": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "done",
-              "pending_approval"
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "runId": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "done",
+                  "pending_approval"
+                ]
+              },
+              "result": {}
+            },
+            "required": [
+              "runId",
+              "status"
             ]
           },
-          "result": {}
-        },
-        "required": [
-          "runId",
-          "status"
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "const": "dry_run"
+              },
+              "message": {
+                "type": "string"
+              },
+              "result": {}
+            },
+            "required": [
+              "status",
+              "message",
+              "result"
+            ]
+          }
         ]
       },
       "AppActionUnavailable": {
@@ -17768,6 +17992,12 @@
         "type": "string",
         "enum": [
           "data_store_missing"
+        ]
+      },
+      "AppWorkflowActionUnavailable": {
+        "type": "string",
+        "enum": [
+          "workflows_off"
         ]
       },
       "ApprovalCheckResult": {
@@ -23388,6 +23618,17 @@
                     "required": [
                       "dataStore"
                     ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "workflow": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "workflow"
+                    ]
                   }
                 ]
               }
@@ -24001,6 +24242,26 @@
           "workspaceId": {
             "type": "string",
             "minLength": 1
+          },
+          "availableIn": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "all"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "workspaceId": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "workspaceId"
+                ]
+              }
+            ]
           }
         }
       },

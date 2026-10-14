@@ -200,7 +200,9 @@ export function operationRunApp(
           target:
             "dataStore" in origin.target
               ? { name: origin.target.dataStore, operation: "sql" }
-              : { name: origin.target.connection, operation: origin.target.operation }
+              : "workflow" in origin.target
+                ? { name: origin.target.workflow, operation: "start" }
+                : { name: origin.target.connection, operation: origin.target.operation }
         }
       : {})
   };

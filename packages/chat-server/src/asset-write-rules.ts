@@ -226,7 +226,8 @@ const RELEASE_ACTION = "assets.release";
  *    instance cannot run is refused and never dropped. (`preparedUpsert`)
  * 7. An agent it creates is available everywhere, and hidden only where the batch also
  *    deletes an agent that was available in chosen workspaces: that is a rename, and the new
- *    name must not reach more people than the old one did. (`releaseInitialAvailability`)
+ *    name must not reach more people than the old one did. Every other batch is made in no
+ *    workspace, so its new agents start hidden. (`syncInitialAvailability`)
  * 8. A delete of an asset that is not there is no refusal. (`asset-sync.ts`)
  * 9. It may hold `ASSET_RELEASE_SYNC_MAX_ITEMS` items. (`maxSyncItems`)
  * 10. It reaches only the kinds a release carries. (`isReleasedKind`)
@@ -308,14 +309,19 @@ export function preparedUpsert(
   return isReleaseSync(access, surface) ? input.next : kind.prepareInteractiveUpsert(input);
 }
 
-/** Where the agents a batch creates start. Nothing leaves it to the store's default. */
-export function releaseInitialAvailability(
+/**
+ * Where the agents a batch creates start. Nothing leaves it to the store's default. A batch
+ * that gives the instance its first default agent makes its agents available everywhere,
+ * because the default must be.
+ */
+export function syncInitialAvailability(
   access: ActorAccess,
-  surface: AssetWriteSurface
-): { initialAgentAvailability?: InitialAgentAvailability } {
-  return isReleaseSync(access, surface)
-    ? { initialAgentAvailability: "selected_when_replacing_selected" }
-    : {};
+  setsFirstDefault: boolean
+): { initialAgentAvailability: InitialAgentAvailability } {
+  if (isReleaseSync(access, "sync")) {
+    return { initialAgentAvailability: "selected_when_replacing_selected" };
+  }
+  return { initialAgentAvailability: setsFirstDefault ? "all" : "hidden" };
 }
 
 /** How many items one batch of this caller may hold. */

@@ -78,6 +78,7 @@ import {
   type AssetAddress,
   type AssetTarget
 } from "./asset-target";
+import { initialAgentPlacement, type AvailableIn } from "./asset-placement";
 import { AssetReadWorkflow, scopeOf } from "./asset-read-workflow";
 import { requirePrecondition, revisionConflictOf } from "./asset-revision";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
@@ -314,6 +315,7 @@ export class AssetWorkflow {
       config?: Record<string, unknown>;
       files?: readonly AssetFileInput[];
       expectedRevision?: number | null;
+      availableIn?: AvailableIn;
     }
   ) {
     const target = await this.target(input);
@@ -339,7 +341,8 @@ export class AssetWorkflow {
     assertStoredWritable(target, "always");
     return this.upsert(call, target, input.config, {
       expectedRevision,
-      audit: "config_asset.updated"
+      audit: "config_asset.updated",
+      ...(input.availableIn === undefined ? {} : { availableIn: input.availableIn })
     });
   }
 
@@ -534,6 +537,8 @@ export class AssetWorkflow {
       fileSet?: { assetId: string; fileSetId: FileSet["id"] };
       /** The commit the revision names, for an asset whose files are a repository. */
       repository?: AssetRepoWrite;
+      /** Where a new agent starts, as its caller asked. */
+      availableIn?: AvailableIn;
       /** Where the revision came from, where it is not written as it stands. */
       origin?: ConfigAssetRevisionOrigin;
       /**
@@ -595,6 +600,12 @@ export class AssetWorkflow {
     if (setsDefault) {
       mutations.push({ type: "setDefaultAgent", agentName: name });
     }
+    const { warnings, ...placement } = await initialAgentPlacement(this.options, call, kind, {
+      name,
+      creates: target.asset?.status !== "active",
+      setsDefault,
+      ...(write.availableIn === undefined ? {} : { availableIn: write.availableIn })
+    });
     let pageLinked = false;
     const { pageLink } = write;
     const result = await this.apply(call, target, {
@@ -608,6 +619,7 @@ export class AssetWorkflow {
       baseRevisions: { [assetKey(kind.kind, name)]: write.expectedRevision },
       // The default is set for the first asset only, so the instance has none before.
       ...(setsDefault ? { baseDefaultAgentName: null } : {}),
+      ...placement,
       ...(write.origin ? { origin: write.origin } : {}),
       mutations
     });
@@ -628,7 +640,7 @@ export class AssetWorkflow {
         })
     ]);
     await afterWrite(this.options, call, target, { previous: current, config: toJsonObject(next) });
-    return { version: result.version, revision, warnings: [] };
+    return { version: result.version, revision, warnings };
   }
 
   /**
