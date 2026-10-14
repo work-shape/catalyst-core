@@ -45,12 +45,17 @@ export interface OperationRunActor {
  * Why a decision was taken the way it was, where the mode alone does not say it.
  * `inherited_approval_not_applied`: the instance default asked for another person's approval
  * and the call ran on its caller's word instead, because the operation answers a secret that
- * is shown once and so cannot wait.
+ * is shown once and so cannot wait. `workflow_publish`: a step of a run of a published Workflow
+ * revision made a call whose policy asks its caller to confirm, and publishing the Workflow
+ * was that confirmation: the publish review lists its changing operations.
  */
-export type OperationRunDecisionReason = "inherited_approval_not_applied";
+export type OperationRunDecisionReason = "inherited_approval_not_applied" | "workflow_publish";
 
 export interface OperationRunDecision {
-  /** `direct`: the caller's own call was the confirmation. */
+  /**
+   * `direct`: nobody was asked when the call was made. The caller's own call was the
+   * confirmation, or what `reason` names.
+   */
   mode: "direct" | "confirmed" | "approved" | "declined";
   reason?: OperationRunDecisionReason;
   by: string;

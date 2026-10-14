@@ -4,6 +4,7 @@ import {
   createConnectionOperationSource,
   createConnectionToolSource,
   createEgressChecker,
+  createHttpApiConnectorType,
   createMcpConnectorType,
   discoverConnection,
   loadSecretKeyring,
@@ -155,6 +156,7 @@ async function buildInstanceConnections(
   }
   const connectorTypes = createConnectorTypeRegistry([
     createMcpConnectorType({ logger }),
+    createHttpApiConnectorType(),
     ...types
   ]);
   // Named keys are needed: a release Connection's secret or one entered on the instance is

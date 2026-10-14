@@ -104,13 +104,12 @@ export const workflows = defineTranslations({
       "Revision {number} becomes the version that runs, by hand and on its schedule.",
     "workflows.draft.publishFailed": "The draft could not be published.",
     "workflows.draft.publishTitle": "Publish “{name}”?",
-    "workflows.draft.unpublished": "Draft, not published yet",
+    "workflows.draft.unpublished": "Draft · not published",
     "workflows.draft.unpublishedBody":
       "This workflow has no published version. It can be started once the draft is published.",
     "workflows.edit.failed": "The conversation could not be started.",
     "workflows.edit.refused": "This workflow is not available to you for editing with the agent.",
     "workflows.edit.withAgent": "Edit with the agent",
-    "workflows.surface.openPage": "Open the workflow's page",
     "workflows.emptyReadOnly": "No workflows yet. A builder of this workspace can add one.",
     "workflows.failed": "The workflow could not be loaded.",
     "workflows.lastRun": "Last run",
@@ -397,14 +396,13 @@ export const workflows = defineTranslations({
       "Revision {number} wird die Version, die läuft, von Hand und nach ihrem Zeitplan.",
     "workflows.draft.publishFailed": "Der Entwurf konnte nicht veröffentlicht werden.",
     "workflows.draft.publishTitle": "„{name}“ veröffentlichen?",
-    "workflows.draft.unpublished": "Entwurf, noch nicht veröffentlicht",
+    "workflows.draft.unpublished": "Entwurf · nicht veröffentlicht",
     "workflows.draft.unpublishedBody":
       "Dieser Workflow hat keine veröffentlichte Version. Er kann gestartet werden, sobald der Entwurf veröffentlicht ist.",
     "workflows.edit.failed": "Die Unterhaltung konnte nicht gestartet werden.",
     "workflows.edit.refused":
       "Dieser Workflow steht dir für die Bearbeitung mit dem Agenten nicht zur Verfügung.",
     "workflows.edit.withAgent": "Mit dem Agenten bearbeiten",
-    "workflows.surface.openPage": "Seite des Workflows öffnen",
     "workflows.emptyReadOnly":
       "Noch keine Workflows. Wer in diesem Arbeitsbereich bauen darf, kann einen hinzufügen.",
     "workflows.failed": "Der Workflow konnte nicht geladen werden.",

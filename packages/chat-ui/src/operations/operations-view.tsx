@@ -24,7 +24,7 @@ import {
   defaultOperationRunFilter,
   formatOperationRunDuration,
   isOperationRunFilterDefault,
-  operationDecisionLabelKeys,
+  operationDecisionLabelKey,
   operationEffectFilterLabelKeys,
   operationOriginLabelKeys,
   operationRunAgentName,
@@ -307,7 +307,7 @@ export function OperationRunDetail({
       </Fact>
       {decision ? (
         <Fact name="decision" label={t("operations.decision")}>
-          {t(operationDecisionLabelKeys[decision.mode])}
+          {t(operationDecisionLabelKey(decision))}
           <Detail>
             {decision.byLabel ?? decision.by}, {formatDateTime(decision.at, locale)}
           </Detail>
