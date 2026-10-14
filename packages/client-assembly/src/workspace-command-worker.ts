@@ -100,7 +100,8 @@ export async function createClientInstanceWorkspaceCommandWorker(
   // Before anything is opened: a host that cannot hold its sandboxes is a config to correct.
   // A resolve-only run is the release gate on a build machine, whose memory says nothing about
   // the host's, so it leaves this check to the start on the host and says so on stderr, which
-  // the gate shows.
+  // the gate shows. The skip is safe only because `endResolveOnlyRun()` below ends that run at
+  // once: nothing may come between the two, or a resolve-only run would go on unchecked.
   if (!isResolveOnlyRun()) {
     assertSandboxMemoryFitsHost({ config, modules, env, logger });
   } else if (sandboxMemoryTerms({ config, modules, env }).length > 0) {
