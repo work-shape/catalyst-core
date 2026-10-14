@@ -21,13 +21,13 @@ import {
   deniedEnd,
   executeAdmitted,
   failRun,
-  hashInput,
   OperationNotBegunError,
   requireModuleOn,
   resolveGuardedPolicy,
   type RunContext,
   type RunOperationDeps
 } from "./operation-execution";
+import { hashInput } from "./input-hash";
 
 /** The frozen call of a run that waits for an approval, as its approval request keeps it. */
 export interface WaitingOperationCall {

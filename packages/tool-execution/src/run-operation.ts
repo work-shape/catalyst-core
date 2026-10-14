@@ -34,7 +34,6 @@ import {
   endRun,
   executeAdmitted,
   failRun,
-  hashInput,
   requireModuleOn,
   resolveGuardedPolicy,
   type DirectDecision,
@@ -44,6 +43,7 @@ import {
   type RunContext,
   type RunOperationDeps
 } from "./operation-execution";
+import { hashInput } from "./input-hash";
 
 /**
  * How long a call waits for another person's approval before it expires unexecuted. The
