@@ -336,6 +336,7 @@ describe("the Connector types of a build", () => {
         connectorType: "fixture",
         settings: { url: "https://outside.example.test/mcp" },
         authScheme: "bearer",
+        operations: [],
         ...overrides
       });
     expect(check({})).toEqual([]);
