@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { clearLiveOnceSwitches } from "./asset-after-write";
 import {
   AppError,
   asUserId,
@@ -529,20 +530,7 @@ export class AssetDraftWorkflow {
       // The discard makes the published revision the draft again. A "Run live once" switch
       // set for it before the draft changed would apply once more, so the switches the draft
       // left behind are cleared first (ADR-0031).
-      const cleared = await this.options.stores.liveOnceSwitches.clearStale({
-        clientInstanceId: this.options.clientInstanceId,
-        assetId: asset.id
-      });
-      for (const stale of cleared) {
-        await recordAssetEvent(call, "live_once.cleared", {
-          kind: kind.kind,
-          name,
-          revisionId: stale.revisionId,
-          part: stale.part,
-          switchedBy: stale.switchedBy.id,
-          reason: "draft_changed"
-        });
-      }
+      await clearLiveOnceSwitches(this.options, call, kind, name, asset.id);
     }
     let discarded: { revision: number };
     try {

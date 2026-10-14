@@ -242,7 +242,8 @@ describe("a call made by a draft", () => {
     expect(t.executed).toEqual([]);
     expect(await switchRows(t)).toEqual([
       { type: "live_once.switched_on", part: "send", revisionId: switched, actor: t.kai.id },
-      { type: "live_once.cleared", part: "send", revisionId: switched, actor: t.kai.id }
+      // Cleared at the save, by the person who saved the draft.
+      { type: "live_once.cleared", part: "send", revisionId: switched, actor: t.admin.id }
     ]);
 
     // A switch for a revision the caller has not seen is refused, and nobody without the
