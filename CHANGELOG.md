@@ -28,6 +28,17 @@ contain breaking changes; a patch version does not.
   ignores the table `guardrail_hits` and the stored guardrails, and it does not read
   `guardrails`: roll back with the config that still has `approvalChecks`, or the instance runs
   no checks.
+- **Embedding models:** a model binding of `kind: embedding` with `dimensions` turns text into
+  vectors for Knowledge Bases, and `knowledge.defaultEmbeddingBinding` names the default. The
+  gateway's `embed` is the one path for an embedding call, admitted, retried and settled like a
+  chat call, with the usage purpose `knowledge_embedding` or `knowledge_query` and no output
+  tokens. `openai-compatible` posts to `<baseUrl>/embeddings` (Azure OpenAI's v1 endpoint
+  included) and `deterministic` returns vectors from a hash of the text. Startup stops on an
+  embedding binding whose entry has a region other than `eu`, one without `dimensions` or with
+  `agentSelectable: true`, one on a provider that does not embed, a default that names no
+  embedding binding, and a guardrail or conversation title generation that names one.
+  Nothing calls `embed` yet; Knowledge Base ingestion and search follow. Existing config is
+  unchanged: a binding without `kind` is a chat binding.
 - **Skills that ship with the platform:** the guide to the platform (`platform-guide`) and, with
   Workflows on, `workflow-authoring` are stored skills of origin `release`. The API process
   writes them at start: a changed one gets a revision in History, one a release no longer ships
@@ -951,6 +962,10 @@ id from config_assets where status = 'deleted')`.
 
 ### Changed
 
+- **Agents page:** a card shows the agent mark in place of the initials, the name, the default
+  badge, what the agent does in two lines at most, and Start chat. Its starter prompts are no
+  longer on the card; they wait in the empty chat with that agent. New agent opens its dialog
+  on the page: Cancel stays there, and Continue leads to the new agent's page in Studio.
 - **Studio:** the list of agents names each agent in the reader's language and shows what it
   does under its name, in place of its id. `assets.list` takes an optional `locale`; an agent's
   title and description answer in it where the agent holds that language, and in the
@@ -2074,6 +2089,21 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
 
 ### Fixed
 
+- **The agent opens no asset of the instance on its own:** `platform.assets.open` moves the
+  conversation's subject onto an asset of the conversation's workspace, such as an App, as
+  before, but no longer onto an asset of the whole instance, such as a Workflow or an agent. A
+  prompt injection the agent read could have opened a shared Workflow for an administrator and
+  saved a poisoned draft on it. Such an asset becomes the subject only when the person starts
+  the conversation from its page ("Edit with the agent"). The refused open tells the agent to
+  read the asset with `platform.assets.get` or to ask the person to open its page; its call
+  ends `failed` with `not_allowed`, and the audit row names the kind and the asset, never the
+  definition. A confirmation of the agent's open in the host's prompt comes with NAV-2.
+- **Dialogs:** a dialog closed by its Cancel or close button gives the focus back to what
+  opened it, such as New agent on the Agents page. Only Escape did; the buttons left the focus
+  on the page body.
+- **Agents page:** an agent renamed or changed in Studio shows its new name and description on
+  its card and in the agent picker without a reload. A save of an agent, and a change of the
+  default agent, now also ask again for the workspaces' lists of agents.
 - **Hostile YAML and tool-call text:** every YAML file an author or an agent writes
   (`workflow.yaml`, `app.yaml`, App action files, `store.yaml`, `SKILL.md` frontmatter), the
   release config and the CLI working copy are read by one reader. It knows JSON types only:
