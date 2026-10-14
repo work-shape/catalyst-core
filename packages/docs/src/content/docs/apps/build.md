@@ -53,7 +53,7 @@ An action's name is the name of its file without the ending: `actions/load-booki
 | `sql` | `actions/<name>.sql` plus a line under `actions` in `app.yaml` | The Data Store the manifest lists | Written in the manifest line |
 | `workflow` | `actions/<name>.action.yaml` with `workflow` | A run of the published Workflow | Always `changing` |
 
-Every call runs as the person who looks at the App, through the platform's policy and audit. The viewer needs the right to use the App, and for a `connection` action the right to use the Connection, for a `workflow` action the right to use the Workflow. An `sql` action of a published App needs no right on the Data Store: the person who published the App answered for it.
+Every call runs as the person who looks at the App, through the platform's policy and audit. In the published App the viewer needs the right to use the App; in its draft, the right to write it. Beside that, for a `connection` action the viewer needs the right to use the Connection, for a `workflow` action the right to use the Workflow. An `sql` action of a published App needs no right on the Data Store: the person who published the App answered for it.
 
 Server code of an App's own, beyond these three kinds, is planned and not available.
 
@@ -80,7 +80,7 @@ input:
 - `operation` is the name of one operation of that Connection, exactly as the Connection lists it. For an MCP Connection that is the name of the server's tool. Only an operation an editor accepted on the Connection's page, enabled and offered to Apps (exposure `bridge`), can be called. `platform.assets.get` on the Connection shows its accepted operations with name, effect and exposure, where the agent has that tool and the person may read the Connection; otherwise ask the person for the operation's name.
 - `effect` is `reading` or `changing`, as the operation was accepted. A `reading` action that stands for a changing operation is refused.
 - `input.schema` declares the parameters the browser passes: JSON Schema with `type: object` and `properties` of type `string`, `integer`, `number`, `boolean` or `array` of one of them. A parameter not declared is refused at the call.
-- `input.mapping` is the operation's input. A value `"{{name}}"` stands for the parameter `name`; every other value is passed as written. A mapping computes nothing. A parameter the caller leaves out leaves out its key.
+- `input.mapping` is the operation's input. A value `"{{name}}"` stands for the parameter `name`; every other value is passed as written. A mapping computes nothing: a text that holds `{{` other than as the whole value is refused by the build. A parameter the caller leaves out leaves out its key.
 
 The answer's `result` is the MCP tool's result: `{ content, structuredContent }`, where `content` is a list of blocks such as `{ type: "text", text }` and `structuredContent` is there when the tool gives one. A tool that answers an error rejects the call.
 
@@ -115,7 +115,7 @@ A reading statement answers `{ columns, rows, truncated }`: `rows` is a list of 
 
 The App lists its Data Store under `dataStores` in `app.yaml`, by name, with `minSchema` where it needs at least that migration of the store. The `dataStores` module has to be on. The agent cannot create a Data Store or its tables: a person creates it with its migrations (`store.yaml` and `migrations/0001_<name>.sql`, written with `catalyst data-store put` and published), and the statements read and write the tables those migrations made. Ask the person which Data Store to use, or to create one.
 
-An `sql` action runs only in an App: in a Page of a conversation it is refused with `data_store_needs_app`. In the App's draft it runs with the viewer's own right to read the store.
+An `sql` action runs only in an App: a reading `sql` action in a Page is refused with `data_store_needs_app` (a changing one gets `draft_safe_mode` first). In the App's draft it runs with the viewer's own right to read the store.
 
 ### A `workflow` action
 
@@ -144,9 +144,9 @@ A Page and the draft of an App run in safe mode:
 
 The published App carries out every action. An action may ask for a stricter `policy` than the instance sets (`confirm`, `approval` or `deny`), written in the action file or, for an `sql` action, in its manifest line. A call that waits for another person's approval answers `status: "pending_approval"` without a result.
 
-An agent never publishes. Tell the person to publish the draft: with the Publish button on the App's page, or with `catalyst app publish <name> --revision <n> --workspace <id>`. Publishing needs the right `app.publish`, which administrators hold. It checks again what a save checked, and that each Data Store is published, at `minSchema` or later, and readable (or, for an insert, writable) by the person who publishes; guardrails may answer it.
+An agent never publishes. Tell the person to publish the draft: with the Publish button on the App's page, or with `catalyst app publish <name> --revision <n> --workspace <id>`. Publishing needs the right `app.publish`, which administrators hold. It checks again what a save checked, and that each Data Store is published, at `minSchema` or later, readable (for an insert, `data_store.insert`) by the person who publishes, and of the App's workspace; a retired store, or one of another workspace, is refused. Guardrails may answer the publish too.
 
-Saving checks what it can: when a save writes the App's draft, it refuses a Connection that does not exist, an operation the Connection does not accept and a `reading` action on a changing operation. `page.save` then answers the Page as saved and, under `app`, `saved: false` with what was found: fix it and save again.
+Saving checks what it can: when a save writes the App's draft, it refuses a Connection that does not exist, a Data Store that does not exist, an operation the Connection does not accept and a `reading` action on a changing operation. `page.save` then answers the Page as saved and, under `app`, `saved: false` with what was found: fix it and save again. Whether the operation is enabled and offered to Apps (exposure `bridge`) is checked only at the call, which is refused as forbidden: check the operation's exposure on the Connection's page first.
 
 ## Calling an action from the App
 
