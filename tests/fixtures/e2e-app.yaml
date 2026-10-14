@@ -200,6 +200,38 @@ auth:
           - user
         permissionRefs:
           - demo-tools
+      # The person of the App in chat spec, used by no other spec: an App's id is taken once
+      # for the whole instance. No grant gives a right on Apps yet, so they are an admin. The
+      # label sorts after every other for the reason given above.
+      - email: e2e-app-in-chat@example.test
+        displayLabel: E2E Zz App In Chat
+        passwordEnvName: E2E_APP_IN_CHAT_PASSWORD
+        developmentPassword: e2e-app-in-chat-password
+        roles:
+          - user
+          - admin
+        permissionRefs:
+          - demo-tools
+      # The two people of the App Workflow action spec, used by no other spec: the builder
+      # writes the App and is given the use right on its Workflow, and the member holds no
+      # right on the Workflow. Their labels sort after every other for the reason given above.
+      - email: e2e-app-workflow@example.test
+        displayLabel: E2E Zz App Workflow
+        passwordEnvName: E2E_APP_WORKFLOW_PASSWORD
+        developmentPassword: e2e-app-workflow-password
+        roles:
+          - user
+          - admin
+        permissionRefs:
+          - demo-tools
+      - email: e2e-app-workflow-member@example.test
+        displayLabel: E2E Zz App Workflow Member
+        passwordEnvName: E2E_APP_WORKFLOW_MEMBER_PASSWORD
+        developmentPassword: e2e-app-workflow-member-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
   sessionToken:
     issuer: demo-e2e-client-instance
     ttlSeconds: 900
@@ -243,11 +275,18 @@ modules:
   # needs a Workflow stores and publishes its own.
   workflows:
     enabled: true
-# The one address a Connection of the suite may reach. Nothing listens there and the `test`
+# The addresses a Connection of the suite may reach. Nothing listens on the first and the `test`
 # connector type contacts nothing: the entry is what lets a test of a Connection answer ready.
+# The second is the sample MCP server `e2e/connection-editor.spec.ts` starts; the runner moves
+# its port with E2E_SAMPLE_MCP_PORT.
 egress:
   allow:
     - { protocol: https, host: 127.0.0.1, port: 8443, network: private, cidrs: [127.0.0.0/8] }
+    - { protocol: http, host: 127.0.0.1, port: 4219, network: private, cidrs: [127.0.0.0/8] }
+# The key of the secrets of Connections made in the suite. The runner makes a new one per run.
+secretStore:
+  keys:
+    - { id: e2e, ref: E2E_SECRET_STORE_KEY }
 executionWorkspaces:
   enabled: true
 infrastructure:

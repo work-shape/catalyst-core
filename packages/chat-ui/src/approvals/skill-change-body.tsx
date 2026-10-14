@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { cn } from "@vivd-catalyst/ui";
+import { Banner, cn } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
 import {
   SKILL_ROOT_TARGET,
@@ -24,9 +24,12 @@ const WHOLE_CONTENT_CLASS = "rounded-md border border-border bg-card px-3 py-2 t
 export function SkillChangeBody({
   preview,
   heading = true,
-  expanded = false
+  expanded = false,
+  refusal
 }: {
   preview: unknown;
+  /** Set where the approved change was not applied, with the reason; empty where none came. */
+  refusal?: string;
   /** The line that names the skill. Left out where the surroundings already name it. */
   heading?: boolean;
   /** Shows a whole new text at once. In a thread it stays one click away. */
@@ -40,6 +43,16 @@ export function SkillChangeBody({
 
   return (
     <div className="grid min-w-0 gap-3">
+      {refusal === undefined ? null : (
+        <Banner tone="warning" data-testid="skill-change-refused">
+          {t("skillChangeRefused")}
+          {refusal ? (
+            <span className="block text-caption">
+              {t("skillChangeRefusedReason", { reason: refusal })}
+            </span>
+          ) : null}
+        </Banner>
+      )}
       {heading ? (
         <p className="text-xs text-muted-foreground">
           {change.isNewSkill

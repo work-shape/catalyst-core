@@ -64,7 +64,10 @@ export interface CreateUserInput {
   email?: string;
   roles?: UserRole[];
   permissionRefs?: string[];
+  /** Written as the user's instance-wide grant rows. */
   permissions?: string[];
+  /** Who the rows of `permissions` name as their grantor; a seed or sign-in names nobody. */
+  grantedBy?: UserId;
   status?: UserStatus;
 }
 
@@ -75,7 +78,10 @@ export interface UpdateUserInput {
   email?: string | null;
   roles?: UserRole[];
   permissionRefs?: string[];
+  /** Rewrites the instance-wide grant rows of the keys whose state the list changes. */
   permissions?: string[];
+  /** Who the rows `permissions` writes name as their grantor. */
+  grantedBy?: UserId;
   status?: UserStatus;
 }
 

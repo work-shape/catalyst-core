@@ -56,6 +56,11 @@ export interface ApiCredentialRecord {
 export interface ResolvedApiCredential {
   credential: ApiCredentialRecord;
   servicePrincipal: ServicePrincipalRecord;
+  /**
+   * The legacy keys the principal's rows hold (`legacyKeysHeld`), which the credential's token
+   * carries as far as its scopes reach.
+   */
+  heldKeys: string[];
   /** Auth-only verification material. Never expose this through management APIs. */
   secretHash: string;
 }
@@ -71,6 +76,7 @@ export interface CreateServicePrincipalInput {
   description?: string;
   status?: ServicePrincipalStatus;
   permissionRefs?: string[];
+  /** Written as the principal's instance-wide grant rows, granted by `createdByUserId`. */
   permissions?: string[];
   createdByUserId?: UserId;
 }
@@ -82,13 +88,17 @@ export interface UpdateServicePrincipalInput {
   description?: string | null;
   status?: ServicePrincipalStatus;
   permissionRefs?: string[];
+  /** Rewrites the instance-wide grant rows of the keys whose state the list changes. */
   permissions?: string[];
+  /** Who the rows `permissions` writes name as their grantor. */
+  grantedBy?: UserId;
 }
 
 export interface CreateApiCredentialInput {
   clientInstanceId: ClientInstanceId;
   servicePrincipalId: ServicePrincipalId;
   name: string;
+  /** Left out, the credential has every scope its principal has, stored as `["*"]`. */
   scopes?: string[];
   expiresAt?: ISODateString;
 }

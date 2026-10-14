@@ -46,6 +46,9 @@ if (
 ) {
   throw new Error("The platform registry has no agent, skill and connection entry.");
 }
+/** A kind that only lists, as a module's kind without a page is: Connections without their page. */
+const { kind, path, label, searchLabel, emptyText, icon } = connectionKind;
+const listedConnections: BuildKind = { kind, path, label, searchLabel, emptyText, icon };
 
 function row(kind: string, name: string, overrides: Partial<BuildAssetRow> = {}): BuildAssetRow {
   return {
@@ -373,13 +376,13 @@ describe("Studio frame", () => {
     expect(render({ kindPath: "agents" }, { kinds })).not.toContain("API access");
   });
 
-  it("lists Connections without a New button or the CLI entry, each row with its chips and a link to its page", () => {
+  it("lists Connections with New connection for who may create one, each row with its chips and a link to its page", () => {
     const base = source();
     const withConnections = (rows: BuildAssetRow[]) =>
       source({
         lists: { connection: { rows } },
         overrides: {
-          // The reader may write every asset of the instance: a Connection is still only listed.
+          // The reader may write every asset of the instance, and so create a Connection.
           kinds: [...base.kinds, { kind: "connection", canCreate: true, canDelete: true }]
         }
       });
@@ -411,13 +414,13 @@ describe("Studio frame", () => {
     // Where a Connection comes from is no chip of the row.
     expect(list).not.toContain("Release config");
     expect(list).not.toContain(">Runtime<");
-    // A row opens the Connection's page. Nothing is started or mirrored: no New button, no menu.
+    // A row opens the Connection's page, and a new one is started from the list.
     expect(list).toContain('href="/build/connections/crm"');
-    expect(list).not.toContain(">New ");
+    expect(list).toContain(">New connection<");
     expect(list).not.toContain("More actions");
-    // The list says where Connections come from, with rows and without.
+    // The list says what Connections are and which of them are read-only, with rows and without.
     expect(list).toContain(
-      "The operator of this instance sets up its connections. They cannot be changed here."
+      "Connections give agents, apps and workflows access to outside systems. Those from the release config are read-only here."
     );
     // The address of a Connection the instance does not hold says so, and names the way back.
     const missing = render(
@@ -427,7 +430,7 @@ describe("Studio frame", () => {
     expect(missing).toContain("There is no connection with the id crm.");
     expect(missing).toContain('aria-label="Back to Connections"');
     // A kind that only lists has no page: its rows are no links and an asset's address shows the list.
-    const listedOnly = [agentKind, skillKind, { ...connectionKind, view: undefined }];
+    const listedOnly = [agentKind, skillKind, listedConnections];
     expect(
       render({ kindPath: "connections" }, { kinds: listedOnly, source: withConnections(rows) })
     ).not.toContain("<a ");
@@ -443,14 +446,10 @@ describe("Studio frame", () => {
     expect(empty("en")).toContain(
       "No connections yet. A connection holds the access to an outside system."
     );
-    expect(empty("en")).toContain(
-      "The operator of this instance sets up its connections. They cannot be changed here."
-    );
-    expect(empty("en")).not.toContain("cannot be created here");
     expect(empty("de")).toContain(
-      "Der Betreiber dieser Instanz richtet ihre Verbindungen ein. Hier lassen sie sich nicht ändern."
+      "Verbindungen geben Agenten, Apps und Workflows Zugang zu externen Systemen. Die aus der Release-Konfiguration sind hier schreibgeschützt."
     );
-    expect(empty("en")).not.toContain(">New ");
+    expect(empty("en")).toContain(">New connection<");
     expect(empty("de")).toContain(
       "Noch keine Verbindungen. Eine Verbindung hält den Zugang zu einem externen System."
     );
@@ -770,7 +769,7 @@ describe("Studio addresses", () => {
     expect(resolveBuildPlace([], {}, undefined)).toBeUndefined();
     // A kind that only lists has no asset page: the address of an asset is corrected to its list.
     const listed = {
-      entry: { ...connectionKind, view: undefined },
+      entry: listedConnections,
       state: { kind: "connection", canCreate: false, canDelete: false }
     };
     expect(

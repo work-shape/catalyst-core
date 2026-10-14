@@ -80,6 +80,7 @@ export function createInstanceOperationCalls(
     modules: input.modules,
     configAssets: input.configAssets,
     operations: input.operations,
+    guardrails,
     approvalRequests: {
       store: store.approvals,
       handlers: input.approvalRequestHandlers,
@@ -92,7 +93,11 @@ export function createInstanceOperationCalls(
       // The tools the server binds to the subject of a conversation are no part of an agent's
       // definition: the conversation of the call decides whether the agent has them.
       const offer = conversationId
-        ? await input.conversationOffer?.offerOf({ clientInstanceId, conversationId })
+        ? await input.conversationOffer?.offerOf({
+            clientInstanceId,
+            conversationId,
+            agentToolNames: listed
+          })
         : undefined;
       return conversationToolNames(listed, offer);
     }

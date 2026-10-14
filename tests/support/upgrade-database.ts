@@ -16,7 +16,12 @@ export async function upgradeFixtureDatabase(input: {
   fixtures: PostgresFixtures;
   releaseMigrationsDirectory: string;
   fixtureFile: string;
-}): Promise<{ applied: string[]; stores: PostgresStores; close(): Promise<void> }> {
+}): Promise<{
+  applied: string[];
+  databaseUrl: string;
+  stores: PostgresStores;
+  close(): Promise<void>;
+}> {
   const databaseUrl = await input.fixtures.database(`upgrade:${input.fixtureFile}`, false);
   try {
     await migrateDatabase({ databaseUrl, migrationsDirectory: input.releaseMigrationsDirectory });
@@ -30,6 +35,7 @@ export async function upgradeFixtureDatabase(input: {
     const stores = await createPostgresStores({ databaseUrl });
     return {
       applied,
+      databaseUrl,
       stores,
       async close() {
         await stores.close();
@@ -40,4 +46,12 @@ export async function upgradeFixtureDatabase(input: {
     await input.fixtures.drop(databaseUrl);
     throw error;
   }
+}
+
+/**
+ * The stores over a database a migration test built by hand, once it is migrated to this
+ * commit. The caller closes them.
+ */
+export function storesOn(databaseUrl: string): Promise<PostgresStores> {
+  return createPostgresStores({ databaseUrl, poolSize: 1 });
 }

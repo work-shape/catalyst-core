@@ -9,7 +9,9 @@ import { expect } from "./test";
 
 export const apiOrigin = new URL(process.env.E2E_API_URL ?? "http://127.0.0.1:4210").origin;
 export const uiOrigin = new URL(process.env.E2E_UI_URL ?? "http://127.0.0.1:5273").origin;
-const databaseUrl = `postgres://agent_chat:agent_chat@${process.env.E2E_HOST ?? "127.0.0.1"}:${process.env.E2E_POSTGRES_PORT ?? "55433"}/agent_chat`;
+const databaseUrl =
+  process.env.E2E_DATABASE_URL ??
+  `postgres://agent_chat:agent_chat@${process.env.E2E_HOST ?? "127.0.0.1"}:${process.env.E2E_POSTGRES_PORT ?? "55433"}/agent_chat`;
 /**
  * The member of the view specs alone. Every view is a conversation of its own, and a member
  * shared with another spec file would fill that file's rail with them.

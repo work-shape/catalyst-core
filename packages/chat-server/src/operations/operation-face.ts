@@ -73,6 +73,10 @@ export interface AssembledOperationBinding {
   inputWithoutSecrets?(input: unknown): unknown;
   /** What the policy is asked about, where the resource does not say it all. */
   policyTargets?(input: unknown): readonly PolicyTarget[] | Promise<readonly PolicyTarget[]>;
+  /** See `beforeEvents` of the definition: the before-event of each asset a call writes. */
+  beforeEvents?: OperationDefinition["beforeEvents"];
+  /** See `heldInputKeys` of the definition. */
+  heldInputKeys?: readonly string[];
   execute(input: unknown, context: OperationBindingContext): unknown;
 }
 
@@ -174,6 +178,8 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
         outputSchema: response.schema,
         resource: (input) => binding.resource?.(input),
         ...(binding.policyTargets ? { policyTargets: binding.policyTargets } : {}),
+        ...(binding.beforeEvents ? { beforeEvents: binding.beforeEvents } : {}),
+        ...(binding.heldInputKeys ? { heldInputKeys: binding.heldInputKeys } : {}),
         ...(binding.inputWithoutSecrets
           ? { inputWithoutSecrets: binding.inputWithoutSecrets }
           : {}),
@@ -254,6 +260,8 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
           );
         case "pending_confirmation":
           throw new AppError("INTERNAL", "A direct call cannot wait for a confirmation");
+        case "dry_run":
+          throw new AppError("INTERNAL", "A direct call is no call of a draft");
       }
     }
   };

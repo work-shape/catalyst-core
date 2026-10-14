@@ -26,7 +26,8 @@ export class IdentityResolvingAuthAdapter implements AuthAdapter {
 
   async authenticate(request: AuthRequest): Promise<AuthenticatedIdentity> {
     const claims = await this.adapter.authenticate(request);
-    if (isAuthenticatedServicePrincipal(claims)) {
+    // A personal API key's owner was read from the store by the key: no sign-in names them.
+    if (isAuthenticatedServicePrincipal(claims) || claims.delegatedActor?.kind === "api_key") {
       return claims;
     }
     const resolved = await this.userStore.resolveUserIdentity({

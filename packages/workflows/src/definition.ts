@@ -54,7 +54,7 @@ export const WORKFLOW_EXECUTED_STEP_TYPES = [
 export interface WorkflowDefinitionIssue {
   path: string;
   message: string;
-  code?: WorkflowBlockIssue["code"];
+  code?: WorkflowBlockIssue["code"] | typeof WORKFLOW_OPERATION_NOT_CALLABLE;
 }
 
 export type WorkflowDefinitionResult =
@@ -179,6 +179,31 @@ const notSupported = (path: string, what: string): WorkflowDefinitionIssue => ({
   code: WORKFLOW_ERROR_CODES.notSupported,
   message: `This engine does not run ${what} yet (${WORKFLOW_ERROR_CODES.notSupported})`
 });
+
+/** The code of a step that names an operation no step of a Workflow may call. */
+export const WORKFLOW_OPERATION_NOT_CALLABLE = "operation_not_callable";
+
+/** The operations that read and change the platform's own assets: `assets.put` and its kin. */
+const PLATFORM_ASSET_OPERATION_PREFIX = "assets.";
+
+/**
+ * Why a step of a Workflow may not call this operation, or nothing where it may. A step calls
+ * what the Workflow does with data: a Connection, a Data Store, a Knowledge Base, an App's
+ * action, another Workflow. The operations of the platform's own assets are none of that. A
+ * run acts as a service principal, and a change to an agent, a skill, an App or a Workflow is
+ * made by a person or by an agent for one, under the rights, drafts and confirmations of that
+ * path. So no step names one, whatever its principal holds, and a save refuses it by name.
+ */
+export function stepOperationRefusal(
+  operation: string
+): { code: typeof WORKFLOW_OPERATION_NOT_CALLABLE; message: string } | undefined {
+  return operation.startsWith(PLATFORM_ASSET_OPERATION_PREFIX)
+    ? {
+        code: WORKFLOW_OPERATION_NOT_CALLABLE,
+        message: `The operation '${operation}' works on the platform's own assets, which a step of a Workflow may not call`
+      }
+    : undefined;
+}
 
 /**
  * What the file form holds and this engine does not run, each by the name of its field. The
@@ -315,6 +340,8 @@ function structuralIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[]
     }
   });
   for (const [id, { step, sequence }] of index) {
+    const refused = step.type === "operation" ? stepOperationRefusal(step.operation) : undefined;
+    if (refused) issues.push({ path: `steps.${id}.operation`, ...refused });
     if (step.type === "code") {
       const file = codeFileIssue(step.file);
       if (file) issues.push({ path: `steps.${id}.file`, message: file });
@@ -379,7 +406,8 @@ function withinNesting(value: unknown): boolean {
  * Checks a value read from `workflow.yaml`. Answers the definition, or every issue found: of
  * its shape first, then what the contract's block check refuses (`block_depth`,
  * `reference_out_of_scope`, `duplicate_step_id`, `not_supported_yet`), then what this engine
- * does not run and what else must hold between the steps.
+ * does not run and what else must hold between the steps, among it a step that names an
+ * operation no step may call (`operation_not_callable`).
  */
 export function parseWorkflowManifest(value: unknown): WorkflowDefinitionResult {
   // Before anything reads the value by recursion: the schema and the checks below follow a
@@ -429,7 +457,7 @@ export function readWorkflowManifest(text: string): WorkflowDefinitionResult {
       ]
     };
   }
-  const read = readYamlData(text, "workflow.yaml");
+  const read = readYamlData(text, "workflow.yaml", { refuseAliases: true });
   return read.ok
     ? parseWorkflowManifest(read.value)
     : { ok: false, issues: [{ path: "", message: read.issue.message }] };

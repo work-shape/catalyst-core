@@ -2,7 +2,7 @@ import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-quer
 import { useMemo } from "react";
 import type { ConfigAssetRevision, OperationOutcome } from "@vivd-catalyst/api-client";
 import { invalidateOfferedAgents } from "../api/agent-placement-mutations";
-import { createAssetWrites } from "../api/asset-writes";
+import { createAssetWrites, type AvailableIn } from "../api/asset-writes";
 import { usePlatformContextQuery } from "../api/workspace-queries";
 import { workspaceQueryKeys } from "../api/workspace-query-keys";
 import { useTranslation } from "../i18n";
@@ -93,6 +93,7 @@ interface BuildWrites {
     config: Record<string, unknown>;
     /** The revision the page loaded, or `null` for an asset the call creates. */
     expectedRevision: number | null;
+    availableIn?: AvailableIn;
   }): Promise<{ revision: number }>;
   delete(input: { kind: string; name: string; expectedRevision: number }): Promise<unknown>;
   revert(input: {

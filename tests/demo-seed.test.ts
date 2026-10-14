@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -44,6 +45,8 @@ const seeded = useSeededInstance({
   instanceAssets: resolve("tests/fixtures/e2e-assets"),
   superadmin: { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" },
   tools: [recordNote],
+  // The fixture config names this key of the Secret Store, as the suite's runner sets it.
+  env: { E2E_SECRET_STORE_KEY: randomBytes(32).toString("base64") },
   // The Apps of the seed are built for real here, so a source that does not build fails.
   appBuild: "sandbox"
 });
@@ -150,7 +153,7 @@ describe("the demo seed on the fixture instance", () => {
     const own = [
       "application_assistant",
       "research_assistant",
-      "platform-guide",
+      "platform-docs",
       "workflow-authoring"
     ];
     const assets = seeded().before.assets.filter((asset) => !own.includes(asset.name));

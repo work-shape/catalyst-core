@@ -74,8 +74,11 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
   const deleteAssets = options.prune
     ? [...listing.values()].filter((asset) => !localKeys.has(asset.key))
     : [];
+  // A working copy of one Namespace never names the instance's default agent.
   const changesDefault =
-    selectors.length === 0 && (bundle.defaultAgentName ?? null) !== baseline.defaultAgentName;
+    instance.namespace === undefined &&
+    selectors.length === 0 &&
+    (bundle.defaultAgentName ?? null) !== baseline.defaultAgentName;
   if (changesDefault && baseline.defaultAgentName === undefined) {
     throw new Error(
       "No default-agent baseline is recorded. Run 'catalyst config pull' before changing the default agent."
@@ -167,6 +170,7 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
   }
   // The default agent the push is made against, as the revisions are: the one of the last pull.
   const batch: SyncBatch = {
+    ...(instance.namespace === undefined ? {} : { namespace: instance.namespace }),
     items,
     ...(changesDefault
       ? {

@@ -4,12 +4,16 @@ import type { AuthAdapter } from "@vivd-catalyst/auth";
 import type { WorkflowAssetKind } from "@vivd-catalyst/chat-server";
 import { parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import {
+  LEGACY_LIST_GRANTOR,
   StoreBackedAuditRecorder,
   asApiCredentialId,
   asClientInstanceId,
   type CollaborationWorkspaceId,
   asServicePrincipalId,
+  authScopeForPermission,
   createAssetKindRegistry,
+  isPermission,
+  legacyGrantRows,
   type UserRecord,
   type UserRole
 } from "@vivd-catalyst/core";
@@ -82,13 +86,21 @@ const USER_HEADER = "x-test-user";
 export const SERVICE_HEADER = "x-test-service";
 /** The scopes of the credential, separated by spaces. Left out, the credential carries all. */
 export const SCOPES_HEADER = "x-test-scopes";
+/** The keys of the service the header names; `storeTestServicePrincipal` writes their rows. */
+const TEST_SERVICE_KEYS = ["config_assets.read", "config_assets.release"];
+const signedInUserSchema = z.object({
+  id: z.string(),
+  display_label: z.string(),
+  roles: z.array(z.string()),
+  permission_refs: z.array(z.string())
+});
 
 /**
  * Signs in whoever the header names with what their stored record holds, a disabled user
  * included: the real sign-in turns a disabled user away, and these tests prove the evaluator
  * does so too.
  */
-export function recordAuthAdapter(stores: TestStore): AuthAdapter {
+export function recordAuthAdapter(): AuthAdapter {
   return {
     id: "test-record",
     credentialMode: "ambient",
@@ -97,29 +109,41 @@ export function recordAuthAdapter(stores: TestStore): AuthAdapter {
       const scopes = typeof named === "string" ? named.split(" ").filter(Boolean) : ["*"];
       const service = request.headers[SERVICE_HEADER];
       if (typeof service === "string") {
+        // A service key belongs to a stored principal, whose keys are its rows (AP-4).
+        await storeTestServicePrincipal(service);
         return {
           kind: "service",
           id: asServicePrincipalId(service),
           credentialId: asApiCredentialId("cred_test"),
           displayLabel: "Service",
           permissionRefs: [],
-          permissions: ["config_assets.read", "config_assets.release"],
+          // The keys the scopes reach, as `deriveEffectiveServiceGrants` gives a real token.
+          permissions: TEST_SERVICE_KEYS.filter((key) => {
+            const scope = isPermission(key) ? authScopeForPermission(key) : undefined;
+            return scopes.includes("*") || (scope !== undefined && scopes.includes(scope));
+          }),
           clientInstanceId,
           authSource: "test",
           scopes
         };
       }
       const userId = request.headers[USER_HEADER];
-      const users = await stores.users.listUsers({ clientInstanceId });
-      const user = users.find((candidate) => candidate.id === userId);
+      // The record without its rights: the evaluator reads the person's rows itself (AP-4), so
+      // signing in sends one statement, as production's sign-in of a known person does.
+      const rows = await withTestSql(
+        (sql) => sql`
+          select id, display_label, roles, permission_refs from product_users
+          where client_instance_id = ${clientInstanceId} and id = ${String(userId)}`
+      );
+      const user = rows.length === 1 ? signedInUserSchema.parse(rows[0]) : undefined;
       if (!user) throw new Error(`No test user '${String(userId)}'`);
       return {
         id: user.id,
         externalUserId: user.id,
-        displayLabel: user.displayLabel,
+        displayLabel: user.display_label,
         roles: user.roles,
-        permissions: user.permissions,
-        permissionRefs: user.permissionRefs,
+        permissions: [],
+        permissionRefs: user.permission_refs,
         clientInstanceId,
         authSource: "test",
         scopes
@@ -129,19 +153,27 @@ export function recordAuthAdapter(stores: TestStore): AuthAdapter {
 }
 
 /**
- * Stores the service principal the header names, with the id the tests sign it in under. A
- * grant row is written only for a principal the instance has.
+ * Stores the service principal the header names, with the id the tests sign it in under, and
+ * the instance-wide rows its keys are (AP-4). A grant row is written only for a principal the
+ * instance has, and only a stored principal holds anything.
  */
 export async function storeTestServicePrincipal(id: string): Promise<void> {
-  await withTestSql(
-    (sql) => sql`
+  await withTestSql(async (sql) => {
+    await sql`
       insert into service_principals
-        (id, client_instance_id, display_label, status, permission_refs, permissions, created_at, updated_at)
-      values
-        (${id}, ${clientInstanceId}, 'Service', 'active', '[]'::jsonb,
-         '["config_assets.read","config_assets.release"]'::jsonb, now(), now())
-      on conflict do nothing`
-  );
+        (id, client_instance_id, display_label, status, permission_refs, created_at, updated_at)
+      values (${id}, ${clientInstanceId}, 'Service', 'active', '[]'::jsonb, now(), now())
+      on conflict do nothing`;
+    for (const row of legacyGrantRows(TEST_SERVICE_KEYS)) {
+      await sql`
+        insert into permission_grants
+          (id, client_instance_id, holder_kind, holder_id, action, scope_kind, effect, granted_by, created_at)
+        values
+          (${`grant_${crypto.randomUUID()}`}, ${clientInstanceId}, 'service_principal', ${id},
+           ${row.action}, 'instance', ${row.effect}, ${LEGACY_LIST_GRANTOR}, now())
+        on conflict do nothing`;
+    }
+  });
 }
 
 export const errorSchema = z.object({
@@ -212,10 +244,12 @@ export interface AccessInstance {
     scope: { namespace: string } | { assetId: string } | { workspaceId: string },
     effect?: "allow" | "deny"
   ): Promise<string>;
+  /** A new agent starts hidden unless `availableIn` says where. */
   putAgent(
     userId: string,
     name: string,
-    overrides?: Record<string, unknown>
+    overrides?: Record<string, unknown>,
+    availableIn?: "all" | { workspaceId: string }
   ): Promise<AccessResponse>;
   assetId(kind: string, name: string): Promise<string>;
   /** A Shared Workspace the administrator created. Returns its id. */
@@ -271,7 +305,7 @@ export async function setupAccessInstance(
       ...(operations ? { operations } : {}),
       // A call the policy holds is filed and decided as on an assembled instance.
       approvalRequests: { store: stores.approvals, handlers: new Map() },
-      authAdapter: recordAuthAdapter(stores),
+      authAdapter: recordAuthAdapter(),
       auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: stores.audit }),
       configAssets: {
         store: stores.configAssets,
@@ -373,10 +407,15 @@ export async function setupAccessInstance(
     });
     return grantSchema.parse(response.json()).id;
   };
-  const putAgent = (userId: string, name: string, overrides: Record<string, unknown> = {}) =>
+  const putAgent = (
+    userId: string,
+    name: string,
+    overrides: Record<string, unknown> = {},
+    availableIn?: "all" | { workspaceId: string }
+  ) =>
     call(userId, "assets.put", {
       params: { kind: "agent", name },
-      payload: { config: agent(name, overrides) }
+      payload: { config: agent(name, overrides), ...(availableIn ? { availableIn } : {}) }
     });
   const assetId = async (kind: string, name: string) => {
     const asset = await stores.configAssets.getConfigAsset({ clientInstanceId, kind, name });

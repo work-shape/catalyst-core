@@ -164,6 +164,44 @@ describe("skill changes", () => {
         .content
     ).toContain("x".repeat(4000));
   });
+  it("stays with instruction text: nothing below scripts/ is created or changed, and no file that is not text", () => {
+    const withScript = {
+      ...skill,
+      resources: [
+        ...(skill.resources ?? []),
+        { path: "scripts/notes.md", mediaType: "text/markdown" as const, content: "Old notes." }
+      ]
+    };
+    expect(() =>
+      applySkillChange(skill, [
+        { type: "create_resource", resourcePath: "scripts/run.md", content: "text" }
+      ])
+    ).toThrow("below 'scripts/'");
+    expect(() =>
+      applySkillChange(skill, [
+        { type: "create_resource", resourcePath: "Scripts/run.txt", content: "text" }
+      ])
+    ).toThrow("below 'scripts/'");
+    expect(() => applySkillChange(withScript, [replace("Old", "New", "scripts/notes.md")])).toThrow(
+      "below 'scripts/'"
+    );
+    // A script and a binary file have no resource type, so a proposal cannot name one.
+    for (const resourcePath of ["scripts/run.py", "assets/form.pdf", "assets/logo.png"]) {
+      expect(() =>
+        applySkillChange(skill, [{ type: "create_resource", resourcePath, content: "x" }])
+      ).toThrow();
+    }
+    // The index of a skill's other files is left as it is by a change of its text.
+    const files = [
+      { path: "assets/form.pdf", sha256: "a".repeat(64), bytes: 9, mediaType: "application/pdf" }
+    ];
+    expect(
+      applySkillChange({ ...skill, files }, [replace("guidance", "details", "notes.md")])
+    ).toMatchObject({
+      files
+    });
+  });
+
   it("creates a skill only as an exclusive operation", () => {
     const create = {
       type: "create_skill" as const,

@@ -14,7 +14,7 @@ async function setup(settings: CentralPolicySetting[]) {
   const events: PlatformEventEmitter = {
     emit: (name) => {
       emitted.push(name);
-      return Promise.resolve("allow");
+      return Promise.resolve({ outcome: "allow", guardrails: [] });
     }
   };
   const approvalRequests: string[] = [];

@@ -478,7 +478,7 @@ function runConfigAssetStoreSuite(
       });
       await applyAtCurrentRevisions(store.configAssets, {
         clientInstanceId,
-        initialAgentAvailability: "selected",
+        initialAgentAvailability: "hidden",
         mutations: [
           { type: "upsert", kind: "agent", name: "assistant", config: agentConfig("v5") },
           { type: "upsert", kind: "agent", name: "second", config: agentConfig("v1") }

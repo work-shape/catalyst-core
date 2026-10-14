@@ -5,11 +5,15 @@ import {
   unknownToJsonValue,
   type AgentSkillChangesPolicy,
   type ApprovalRequestCreator,
-  type ConfigAssetSource
+  type ConfigAssetSource,
+  type SkillConfig
 } from "@vivd-catalyst/core";
 import {
+  applySkillChange,
   assertSkillChangeScope,
   createSkillChangePreview,
+  guardrailFieldOf,
+  guardrailStringsOf,
   skillChangeOperationsSchema,
   skillNameSchema
 } from "@vivd-catalyst/config-schema";
@@ -45,6 +49,26 @@ export function createProposeSkillChangeTool(options: {
       "Propose one small, exact skill change per call. Read the skill with read_skill first. A new skill is one create_skill operation, optionally followed by create_resource operations for its supporting files, for example references/checklist.md. Never include personal or customer-specific data: skills are shared by all users. Tell the user in your reply what would change and that it needs a person's approval; it is not active until approved.",
     permission: { mode: "allow" },
     inputSchema: proposeSkillChangeInputSchema,
+    // The guardrails on asset writes answer the skill as the change would write it, as they
+    // answer a person's push: an approval later applies what they read here.
+    beforeEvents: (input) => [
+      {
+        name: "asset.before_write",
+        subject: { kind: "skill", name: input.skillName },
+        checkable: async () => {
+          // The skill whole: the snapshot leaves its resources out, and the guardrails read them.
+          const current = await options.assetSource.getSkill(input.skillName);
+          let skill: SkillConfig;
+          try {
+            skill = applySkillChange(current, input.operations);
+          } catch {
+            // The call refuses a change that does not apply; there is nothing to check.
+            return { name: input.skillName };
+          }
+          return { name: skill.name, content: guardrailFieldOf(guardrailStringsOf(skill)) };
+        }
+      }
+    ],
     async execute(input, context) {
       const run = context.toolRequest;
       if (!run) {
@@ -60,7 +84,8 @@ export function createProposeSkillChangeTool(options: {
           skillName: parsed.skillName,
           operations: parsed.operations
         });
-        const skill = snapshot.skills.find((candidate) => candidate.name === parsed.skillName);
+        // Whole, with its resources: the change and its base version are made from them.
+        const skill = await options.assetSource.getSkill(parsed.skillName);
         const preview = createSkillChangePreview(skill, parsed.operations);
         const payload = unknownToJsonValue({
           agentName: run.agentName,

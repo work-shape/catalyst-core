@@ -16,6 +16,7 @@ import {
   type OperationAuthorization,
   type PolicyTarget
 } from "@vivd-catalyst/core";
+import { afterRemove, afterWrite } from "./asset-after-write";
 import { AssetDraftWorkflow } from "./asset-draft-workflow";
 import type { AssetFileInput } from "./asset-files";
 import { readDefinitionName, type WorkflowAssetKind } from "./asset-kinds/shared";
@@ -62,7 +63,9 @@ import {
   requireAssetKindModuleOn,
   requireMatchingConfigName,
   setsInitialDefault,
-  toJsonObject
+  storedWritableIssues,
+  toJsonObject,
+  withPublishedConfigs
 } from "./asset-write-rules";
 import {
   assertStoredWritable,
@@ -76,6 +79,7 @@ import {
   type AssetAddress,
   type AssetTarget
 } from "./asset-target";
+import { initialAgentPlacement, type AvailableIn } from "./asset-placement";
 import { AssetReadWorkflow, scopeOf } from "./asset-read-workflow";
 import { requirePrecondition, revisionConflictOf } from "./asset-revision";
 import { applyValidatedConfigAssetMutations } from "./config-asset-writer";
@@ -166,6 +170,12 @@ export class AssetWorkflow {
         : decide(access, target.kind.actions.write, target.resource);
     if (!decision.allowed) {
       return decision;
+    }
+    // A revert restores content: who does not read the asset is refused before the guardrails
+    // read the revision, so no answer of theirs tells what it holds. A name of no asset of
+    // this scope has nothing to restore and is refused by the revert as a free name is.
+    if (input.revision !== undefined && target.asset && !readsTarget(access, target)) {
+      return decide(access, target.kind.actions.read, target.resource);
     }
     const config =
       input.config ??
@@ -312,6 +322,7 @@ export class AssetWorkflow {
       config?: Record<string, unknown>;
       files?: readonly AssetFileInput[];
       expectedRevision?: number | null;
+      availableIn?: AvailableIn;
     }
   ) {
     const target = await this.target(input);
@@ -323,6 +334,19 @@ export class AssetWorkflow {
     assertStoredWritable(target, call.access);
     if (kind.representation === "files") {
       return this.drafts.putFiles(call, target, { ...input, expectedRevision });
+    }
+    if (kind.revisionFiles && input.files !== undefined) {
+      if (input.config !== undefined) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          `A ${kind.kind} is written as its config or as its files, with '${kind.revisionFiles.manifestFile}' among them, and not as both at once`,
+          { reason: "config_and_files" }
+        );
+      }
+      requireOwnScope(target, call.access);
+      await requireExpectedRevision(this.options, call, target, expectedRevision);
+      assertStoredWritable(target, "always");
+      return this.drafts.putFolder(call, target, input.files, expectedRevision);
     }
     if (input.config === undefined || input.files !== undefined) {
       throw new AppError(
@@ -337,7 +361,8 @@ export class AssetWorkflow {
     assertStoredWritable(target, "always");
     return this.upsert(call, target, input.config, {
       expectedRevision,
-      audit: "config_asset.updated"
+      audit: "config_asset.updated",
+      ...(input.availableIn === undefined ? {} : { availableIn: input.availableIn })
     });
   }
 
@@ -381,7 +406,11 @@ export class AssetWorkflow {
     return this.upsert(call, target, restored.config, {
       expectedRevision,
       operation: "revert",
-      audit: "config_asset.reverted"
+      audit: "config_asset.reverted",
+      // The files of the restored revision come back with it. They were never removed.
+      ...(target.kind.revisionFiles && restored.fileSetId && target.asset
+        ? { fileSet: { assetId: target.asset.id, fileSetId: restored.fileSetId } }
+        : {})
     });
   }
 
@@ -390,6 +419,7 @@ export class AssetWorkflow {
     const { kind, name } = target;
     const right = deleteDecision(call.access, target);
     if (!right.allowed) {
+      if (right.action === undefined) throw operationDenialError({ kind: "forbidden", ...right });
       call.access.require(right.action, target.resource);
     }
     await this.requireFurtherRight(call.access, target, "delete");
@@ -403,6 +433,10 @@ export class AssetWorkflow {
       return this.drafts.remove(call, target, expectedRevision);
     }
     const stored = await loadStoredAssets(this.options);
+    await kind.assertRemovable?.({
+      name,
+      assets: (other) => withPublishedConfigs(this.options, stored.assets, other)
+    });
     const clearsDefault = clearsLastDefault(stored.set, kind, name);
     requireInstanceDefaultChange(call.access, kind, clearsDefault);
     /** The set as the delete would leave it. */
@@ -430,7 +464,7 @@ export class AssetWorkflow {
           version: result.version
         })
     ]);
-    await this.afterRemove(call, target);
+    await afterRemove(this.options, call, target);
     return { version: result.version, revision, warnings: [] };
   }
 
@@ -452,7 +486,11 @@ export class AssetWorkflow {
     const stored = await loadStoredAssets(this.options);
     const view = loadReferableAssets(this.options, call.access, stored);
     const current = name === undefined ? undefined : findDefinition(view.set, kind.kind, name);
-    const prepared = kind.prepareInteractiveUpsert({ current, next: input.config });
+    const prepared = kind.prepareInteractiveUpsert({
+      current,
+      next: input.config,
+      principalId: call.actor.id
+    });
     const drafted = (set: AssetSet) => withDefinition(set, kind.kind, name ?? "", prepared);
     const found = findAssetSetIssues(kinds, drafted(view.set));
     const ofDefinition = view.complete
@@ -524,6 +562,8 @@ export class AssetWorkflow {
       fileSet?: { assetId: string; fileSetId: FileSet["id"] };
       /** The commit the revision names, for an asset whose files are a repository. */
       repository?: AssetRepoWrite;
+      /** Where a new agent starts, as its caller asked. */
+      availableIn?: AvailableIn;
       /** Where the revision came from, where it is not written as it stands. */
       origin?: ConfigAssetRevisionOrigin;
       /**
@@ -531,6 +571,8 @@ export class AssetWorkflow {
        * Page its origin names. It refuses the write by throwing.
        */
       pageLink?: () => Promise<boolean>;
+      /** The files of the write as its event names them: path, hash and size, no content. */
+      auditFiles?: readonly { path: string; sha256: string; bytes: number }[];
     }
   ) {
     const { kind, name } = target;
@@ -541,11 +583,12 @@ export class AssetWorkflow {
     kind.assertStoredWritable?.({ current });
     const setsDefault = setsInitialDefault(stored.set, kind);
     requireInstanceDefaultChange(call.access, kind, setsDefault);
-    // A revert restores what was stored: nothing is adjusted on the way.
+    // A revert restores what was stored: only what the kind's server decides is kept as it is.
+    const principalId = call.actor.id;
     const definition =
       write.operation === "revert"
-        ? config
-        : kind.prepareInteractiveUpsert({ current, next: config });
+        ? (kind.prepareRevert?.({ current, restored: config, principalId }) ?? config)
+        : kind.prepareInteractiveUpsert({ current, next: config, principalId });
     /** The set as the write would leave it. */
     const written = (set: AssetSet) => {
       const replaced = withDefinition(set, kind.kind, name, definition);
@@ -584,6 +627,12 @@ export class AssetWorkflow {
     if (setsDefault) {
       mutations.push({ type: "setDefaultAgent", agentName: name });
     }
+    const { warnings, ...placement } = await initialAgentPlacement(this.options, call, kind, {
+      name,
+      creates: target.asset?.status !== "active",
+      setsDefault,
+      ...(write.availableIn === undefined ? {} : { availableIn: write.availableIn })
+    });
     let pageLinked = false;
     const { pageLink } = write;
     const result = await this.apply(call, target, {
@@ -597,6 +646,7 @@ export class AssetWorkflow {
       baseRevisions: { [assetKey(kind.kind, name)]: write.expectedRevision },
       // The default is set for the first asset only, so the instance has none before.
       ...(setsDefault ? { baseDefaultAgentName: null } : {}),
+      ...placement,
       ...(write.origin ? { origin: write.origin } : {}),
       mutations
     });
@@ -613,10 +663,16 @@ export class AssetWorkflow {
           version: result.version,
           // A revision that copies a Page names it: the trail says where the content came from.
           ...(write.origin?.kind === "page" ? { pageId: write.origin.pageId } : {}),
-          ...(pageLinked ? { pageLinked: true } : {})
+          ...(pageLinked ? { pageLinked: true } : {}),
+          ...(write.auditFiles ? { files: write.auditFiles.map((file) => ({ ...file })) } : {})
         })
     ]);
-    return { version: result.version, revision, warnings: [] };
+    await afterWrite(this.options, call, target, { previous: current, config: toJsonObject(next) });
+    return {
+      version: result.version,
+      revision,
+      warnings: [...warnings, ...(kind.writeWarnings?.(next) ?? [])]
+    };
   }
 
   /**
@@ -673,27 +729,6 @@ export class AssetWorkflow {
     }
   }
 
-  /**
-   * What the kind of a deleted asset does beside the delete, for a kind whose revisions are a
-   * config. The delete is committed: a failure is logged and the call is answered as done.
-   */
-  private async afterRemove(call: AssetCall, target: AssetTarget): Promise<void> {
-    const { kind, asset } = target;
-    if (!kind.onRemove || !asset) return;
-    try {
-      await kind.onRemove({
-        assetId: asset.id,
-        ...(asset.publishedConfig === undefined ? {} : { published: asset.publishedConfig }),
-        stores: this.options.stores
-      });
-    } catch (error) {
-      this.options.logger.error(
-        { correlationId: call.correlationId, error: error instanceof Error ? error.message : "" },
-        `A ${kind.kind} was deleted but what its kind does beside the delete failed`
-      );
-    }
-  }
-
   private record(call: AssetCall, type: string, metadata: JsonObject): Promise<void> {
     return recordAssetEvent(call, type, metadata);
   }
@@ -745,19 +780,4 @@ function allocatedRevision(
     throw new AppError("INTERNAL", `The write of config ${kind} '${name}' has no revision`);
   }
   return revision;
-}
-
-/** What the kind refuses a write of the stored asset for, whatever the write says. */
-function storedWritableIssues(
-  kind: WorkflowAssetKind,
-  current: unknown
-): AssetSetIssue[] | undefined {
-  if (current === undefined) return undefined;
-  try {
-    kind.assertStoredWritable?.({ current });
-    return undefined;
-  } catch (error) {
-    if (isAppError(error)) return errorIssues(error);
-    throw error;
-  }
 }

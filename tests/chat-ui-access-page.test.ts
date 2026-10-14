@@ -311,7 +311,9 @@ describe("when a check gives a result", () => {
 
   it("gives none for a name no asset can have", () => {
     expect(checkState({ ...ready, name: "kai helper" })).toBe("incomplete");
-    expect(checkState({ ...ready, kind: "skill", name: "9lives" })).toBe("incomplete");
+    expect(checkState({ ...ready, kind: "skill", name: "_lives" })).toBe("incomplete");
+    // A skill name of the public convention may start with a digit.
+    expect(checkState({ ...ready, kind: "skill", name: "9lives" })).toBe("ready");
     expect(checkState({ ...ready, kind: "skill", name: "kai-notes" })).toBe("ready");
     expect(checkState({ ...ready, holderId: undefined })).toBe("incomplete");
   });

@@ -386,6 +386,40 @@ export function findMigrationHistoryChanges({
 }
 
 /**
+ * @typedef {{ migration: string, mainHead: string }} NumberCollision
+ */
+
+/**
+ * New migrations whose number a ref already gives to another migration. Branches built side by
+ * side generate the same next number, and the one that lands second renumbers onto main's head.
+ * Compared with the tip of the ref, not the merge base, so the check sees what main holds now.
+ * A ref that does not resolve finds nothing.
+ * @param {{ repoRoot?: string, ref: string, path?: string }} input
+ * @returns {NumberCollision[]}
+ */
+export function findMigrationNumberCollisions({
+  repoRoot = platformRoot,
+  ref,
+  path = migrationsPath
+}) {
+  const journalPath = `${path}/meta/_journal.json`;
+  const main = journalEntries(gitOptional(repoRoot, ["show", `${ref}:${journalPath}`]));
+  const mainHead = main[main.length - 1];
+  if (!mainHead) return [];
+  const taken = migrationNumber(mainHead.tag);
+  const known = new Set(main.map((entry) => entry.tag));
+  return journalEntries(readFileSync(join(repoRoot, journalPath), "utf8"))
+    .filter((entry) => !known.has(entry.tag) && migrationNumber(entry.tag) <= taken)
+    .map((entry) => ({ migration: entry.tag, mainHead: mainHead.tag }));
+}
+
+/** @param {string} tag The leading number of a migration tag such as 0071_guardrail_hits. */
+function migrationNumber(tag) {
+  const match = /^(\d+)_/u.exec(tag);
+  return match ? Number(match[1]) : Number.NaN;
+}
+
+/**
  * The branch migrations are compared against: an explicit ref, else local main, else origin/main.
  * @param {string} [repoRoot]
  */

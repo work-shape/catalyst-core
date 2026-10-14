@@ -77,6 +77,15 @@ development servers are already using them:
 E2E_API_PORT=4211 E2E_UI_PORT=5274 E2E_POSTGRES_PORT=55434 pnpm test:e2e:chat-state
 ```
 
+Runs on one machine that share a Postgres server must not share its `agent_chat` database: one
+run's migration, fixtures and cleanup would erase the other's data. Give each run an empty
+database of its own and name it with `E2E_DATABASE_URL`, together with `E2E_EXTERNAL_POSTGRES=1`.
+The runner creates and drops no database or role; the specs read the same variable.
+
+```bash
+E2E_EXTERNAL_POSTGRES=1 E2E_DATABASE_URL=postgres://me:secret@127.0.0.1:5432/e2e_run1 pnpm test:e2e:chat-state
+```
+
 The hosted check runs the same `pnpm test:e2e` as its own job. It provides the database itself
 and sets `E2E_EXTERNAL_POSTGRES=1`, so the runner starts no container there.
 
@@ -115,3 +124,33 @@ The deterministic model provider is kept for local tests and repeatable debuggin
 Storage code uses product-owned store interfaces at package boundaries. The Postgres-backed adapters use Drizzle internally for typed database interactions; Drizzle table/query types should not leak into public platform APIs.
 
 Database schema changes must go through committed migrations. Use `pnpm db:generate` after changing Drizzle schema files, review the generated SQL, and commit the schema and migration together. Do not use `drizzle-kit push` or any `db push` workflow. Committed migrations never change, and a new migration expands before a later one contracts: `pnpm check:migrations` checks both against `packages/postgres-store/migration-policy.json`.
+
+Branches built side by side generate the same next migration number. `pnpm check:migrations` also
+stops a migration whose number `main` (and `origin/main`) already gives to another one, with the
+steps to renumber it onto `main`'s head; the hosted check runs it before the long suite.
+
+## Changelog
+
+A change that users or operators of the packages notice gets an entry, and the entry is a file of
+its own, so two pull requests never edit the same lines of `CHANGELOG.md`. Add
+`changes/unreleased/<branch>.md`, named after the branch with `/` as `-` (more than one file per
+branch is fine), and do not edit `CHANGELOG.md`:
+
+```md
+---
+section: Fixed
+---
+
+- **Chat:** what changed, in the words of the person who notices it. A change that breaks config,
+  adds a migration or needs a deploy order names the exact refusal text and the rollback caveat.
+```
+
+`section` is one of `Added`, `Changed`, `Fixed` and `Database`; the entry is one or more Markdown
+list items without headings. `pnpm check:changes` (part of `pnpm check`) refuses a file the release
+could not place, and `pnpm changelog` prints the next release's section as it will read.
+
+The release runs `pnpm changelog --release <version>` (`--date YYYY-MM-DD`, default today) and
+commits the result with the version bump. It turns the Unreleased section of `CHANGELOG.md` into
+`## <version> — <date>`, puts each file's entry after the entries already in its section, files in
+name order, and deletes the files. Entries in the Unreleased section of `CHANGELOG.md` are the ones
+written before change files existed.

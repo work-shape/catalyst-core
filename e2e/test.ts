@@ -348,6 +348,17 @@ const allowedPageErrors: readonly AllowedPageError[] = [
     tests: ["a tile of a published App reads rows through a named action with the viewer's rights"]
   },
   {
+    name: "app-workflow-action-refused-for-a-missing-right",
+    reason:
+      "Chromium's own log line: a member without the use right on the Workflow presses the " +
+      "App's button, the call is answered with 403, and the test asserts that the App names the right.",
+    matches: requestAnswered(403),
+    path: /^\/api\/v1\/app-content-sessions\/[^/]+\/actions\/log-visit$/u,
+    tests: [
+      "an App button starts a published Workflow and shows its output; the draft and a member without the right start nothing"
+    ]
+  },
+  {
     name: "app-actions-list-that-fails",
     reason:
       "Chromium's own log line: the test answers one read of an App's actions with 500 and " +

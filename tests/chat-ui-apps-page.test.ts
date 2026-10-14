@@ -111,9 +111,13 @@ describe("the Apps page", () => {
       /<a[^>]*href="\/w\/cw_1\/app-drafts\/angebotsrechner"[^>]*>Edit<\/a>/u
     );
     expect(cards[0]).toContain("Changed yesterday");
-    // An App with a draft alone has the draft as its one action.
+    // The whole card opens the App: Open is its one target, and Edit keeps its own way.
+    expect(cards[0]?.match(/data-card-target=""/gu)).toHaveLength(1);
+    expect(cards[0]).toMatch(/<a[^>]*data-card-target=""[^>]*href="[^"]*\/apps\/angebotsrechner"/u);
+    // An App with a draft alone has the draft as its one action, and the card opens it.
     expect(cards[1]?.match(/<a /gu)).toHaveLength(1);
     expect(cards[1]).toMatch(/<a[^>]*href="\/w\/cw_1\/app-drafts\/urlaubsplaner"[^>]*>Edit<\/a>/u);
+    expect(cards[1]).toMatch(/<a[^>]*data-card-target=""[^>]*href="[^"]*\/app-drafts\//u);
 
     // Whoever uses Apps gets Open and nothing a builder works with.
     const member = render(appsPage([summary(), draftOnly], NO_APP_RIGHTS));
@@ -128,8 +132,15 @@ describe("the Apps page", () => {
     expect(memberCards[1]).toContain("Draft only");
     expect(memberCards[1]).not.toContain("<a ");
     expect(memberCards[1]).not.toContain("<button");
+    expect(memberCards[1]).not.toContain('data-card-target=""');
 
     expect(render(appsPage([summary()], NO_APP_RIGHTS), "de")).toContain("Geändert gestern");
+    // The card's target is named as one sentence with the App's name, in either language.
+    expect(cards[0]).toContain('aria-label="Open Angebotsrechner"');
+    expect(cards[1]).toContain('aria-label="Edit Urlaubsplaner"');
+    expect(render(appsPage([summary()], NO_APP_RIGHTS), "de")).toContain(
+      'aria-label="Angebotsrechner öffnen"'
+    );
   });
 
   it("keeps the draft's news from a reader who does not write", () => {

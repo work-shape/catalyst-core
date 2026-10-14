@@ -1,7 +1,9 @@
 import { randomBytes } from "node:crypto";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
 import {
   AppError,
+  LEGACY_LIST_GRANTOR,
+  asClientInstanceId,
   createApiCredentialId,
   createApiCredentialSecretMaterial,
   createServicePrincipalId,
@@ -18,6 +20,12 @@ import {
 } from "@vivd-catalyst/core";
 import type { PostgresConnection } from "./postgres-database";
 import { mapApiCredential, mapServicePrincipal } from "./rows";
+import {
+  legacyPermissionListOf,
+  legacyPermissionLists,
+  principalLegacyKeys,
+  writeLegacyPermissionList
+} from "./legacy-permission-lists";
 import { apiCredentials, permissionGrants, productUsers, servicePrincipals } from "./schema";
 
 export async function listServicePrincipals(
@@ -29,7 +37,12 @@ export async function listServicePrincipals(
     .from(servicePrincipals)
     .where(eq(servicePrincipals.clientInstanceId, input.clientInstanceId))
     .orderBy(asc(servicePrincipals.displayLabel));
-  return rows.map(mapServicePrincipal);
+  const lists = await legacyPermissionLists(db, {
+    clientInstanceId: input.clientInstanceId,
+    holderKind: "service_principal",
+    holderIds: rows.map((row) => row.id)
+  });
+  return rows.map((row) => mapServicePrincipal(row, lists.get(row.id) ?? []));
 }
 
 export async function createServicePrincipal(
@@ -64,7 +77,7 @@ export async function createServicePrincipal(
     const name = input.name ?? (await freeNameFor(db, input, attempt > 0));
     const row = await insertServicePrincipal(db, input, name, now);
     if (row) {
-      return mapServicePrincipal(row);
+      return mapServicePrincipal(row, await principalList(db, row));
     }
     if (input.name !== undefined || attempt >= DERIVED_NAME_ATTEMPTS) {
       throw new AppError(
@@ -84,25 +97,46 @@ async function insertServicePrincipal(
   name: string,
   now: Date
 ) {
-  const [row] = await db
-    .insert(servicePrincipals)
-    .values({
-      id: createServicePrincipalId(),
-      clientInstanceId: input.clientInstanceId,
-      name,
-      displayLabel: input.displayLabel,
-      description: input.description ?? null,
-      status: input.status ?? "active",
-      permissionRefs: input.permissionRefs ?? [],
-      permissions: input.permissions ?? [],
-      createdByClientInstanceId: input.createdByUserId ? input.clientInstanceId : null,
-      createdByUserId: input.createdByUserId ?? null,
-      createdAt: now,
-      updatedAt: now
-    })
-    .onConflictDoNothing({ target: [servicePrincipals.clientInstanceId, servicePrincipals.name] })
-    .returning();
-  return row;
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(servicePrincipals)
+      .values({
+        id: createServicePrincipalId(),
+        clientInstanceId: input.clientInstanceId,
+        name,
+        displayLabel: input.displayLabel,
+        description: input.description ?? null,
+        status: input.status ?? "active",
+        permissionRefs: input.permissionRefs ?? [],
+        createdByClientInstanceId: input.createdByUserId ? input.clientInstanceId : null,
+        createdByUserId: input.createdByUserId ?? null,
+        createdAt: now,
+        updatedAt: now
+      })
+      .onConflictDoNothing({ target: [servicePrincipals.clientInstanceId, servicePrincipals.name] })
+      .returning();
+    if (row) {
+      await writeLegacyPermissionList(tx, {
+        clientInstanceId: input.clientInstanceId,
+        holderKind: "service_principal",
+        holderId: row.id,
+        entries: input.permissions ?? [],
+        grantedBy: input.createdByUserId ?? LEGACY_LIST_GRANTOR
+      });
+    }
+    return row;
+  });
+}
+
+function principalList(
+  db: PostgresConnection,
+  row: { clientInstanceId: string; id: string }
+): Promise<string[]> {
+  return legacyPermissionListOf(db, {
+    clientInstanceId: asClientInstanceId(row.clientInstanceId),
+    holderKind: "service_principal",
+    holderId: row.id
+  });
 }
 
 /** The label as a slug, or that slug with a short random suffix where a principal has it. */
@@ -135,7 +169,7 @@ export async function findServicePrincipalByName(
       )
     )
     .limit(1);
-  return row ? mapServicePrincipal(row) : undefined;
+  return row ? mapServicePrincipal(row, await principalList(db, row)) : undefined;
 }
 
 export async function updateServicePrincipal(
@@ -155,24 +189,33 @@ export async function updateServicePrincipal(
   if (input.permissionRefs !== undefined) {
     set.permissionRefs = input.permissionRefs;
   }
-  if (input.permissions !== undefined) {
-    set.permissions = input.permissions;
-  }
 
-  const [row] = await db
-    .update(servicePrincipals)
-    .set(set)
-    .where(
-      and(
-        eq(servicePrincipals.clientInstanceId, input.clientInstanceId),
-        eq(servicePrincipals.id, input.servicePrincipalId)
+  const row = await db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(servicePrincipals)
+      .set(set)
+      .where(
+        and(
+          eq(servicePrincipals.clientInstanceId, input.clientInstanceId),
+          eq(servicePrincipals.id, input.servicePrincipalId)
+        )
       )
-    )
-    .returning();
+      .returning();
+    if (updated && input.permissions !== undefined) {
+      await writeLegacyPermissionList(tx, {
+        clientInstanceId: input.clientInstanceId,
+        holderKind: "service_principal",
+        holderId: updated.id,
+        entries: input.permissions,
+        grantedBy: input.grantedBy ?? LEGACY_LIST_GRANTOR
+      });
+    }
+    return updated;
+  });
   if (!row) {
     throw new AppError("NOT_FOUND", "Service principal is not available");
   }
-  return mapServicePrincipal(row);
+  return mapServicePrincipal(row, await principalList(db, row));
 }
 
 /**
@@ -185,6 +228,12 @@ export async function deleteServicePrincipal(
   input: Parameters<ApiAccessStore["deleteServicePrincipal"]>[0]
 ): Promise<ServicePrincipalRecord | undefined> {
   return db.transaction(async (tx) => {
+    // What the principal held, for whoever records its deletion.
+    const permissions = await legacyPermissionListOf(tx, {
+      clientInstanceId: input.clientInstanceId,
+      holderKind: "service_principal",
+      holderId: input.servicePrincipalId
+    });
     const [row] = await tx
       .delete(servicePrincipals)
       .where(
@@ -206,7 +255,7 @@ export async function deleteServicePrincipal(
           eq(permissionGrants.holderId, input.servicePrincipalId)
         )
       );
-    return mapServicePrincipal(row);
+    return mapServicePrincipal(row, permissions);
   });
 }
 
@@ -244,7 +293,9 @@ export async function createApiCredential(
       name: input.name,
       keyPrefix: material.keyPrefix,
       secretHash: material.secretHash,
-      scopes: input.scopes ?? null,
+      // A credential named no scope has every scope its principal has. That is `*`; a list
+      // is never null from this release on.
+      scopes: input.scopes ?? ["*"],
       createdAt: new Date(),
       expiresAt: input.expiresAt ? new Date(input.expiresAt) : null
     })
@@ -262,7 +313,9 @@ export async function revokeApiCredential(
     .where(
       and(
         eq(apiCredentials.clientInstanceId, input.clientInstanceId),
-        eq(apiCredentials.id, input.credentialId)
+        eq(apiCredentials.id, input.credentialId),
+        // A personal key is revoked through its own operation.
+        isNotNull(apiCredentials.servicePrincipalId)
       )
     )
     .returning();
@@ -296,9 +349,14 @@ export async function resolveApiCredential(
   if (!row) {
     return undefined;
   }
+  const keys = await principalLegacyKeys(db, {
+    clientInstanceId: asClientInstanceId(row.servicePrincipal.clientInstanceId),
+    principalId: row.servicePrincipal.id
+  });
   return {
     credential: mapApiCredential(row.credential),
-    servicePrincipal: mapServicePrincipal(row.servicePrincipal),
+    servicePrincipal: mapServicePrincipal(row.servicePrincipal, keys.list),
+    heldKeys: keys.held,
     secretHash: row.credential.secretHash
   };
 }
@@ -317,11 +375,12 @@ export async function updateApiCredentialLastUsed(
       .where(
         and(
           eq(apiCredentials.clientInstanceId, input.clientInstanceId),
-          eq(apiCredentials.id, input.credentialId)
+          eq(apiCredentials.id, input.credentialId),
+          isNotNull(apiCredentials.servicePrincipalId)
         )
       )
       .returning();
-    if (!credential) {
+    if (!credential?.servicePrincipalId) {
       throw new AppError("NOT_FOUND", "API credential is not available");
     }
     const [principal] = await tx

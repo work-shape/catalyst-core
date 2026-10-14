@@ -116,6 +116,14 @@ describe("Namespace grants on agents and skills", () => {
       (await t.putAgent(t.admin.id, "assistant", { instructions: "Changed." })).statusCode
     ).toBe(200);
 
+    // A revert restores content its guardrails answer about: it needs the read right too.
+    await t.expectRefused(
+      t.kai.id,
+      "assets.revert",
+      { params: { kind: "agent", name: "kai-helper" }, payload: { revision: 1 } },
+      t.forbidden("agent.read", "no_grant")
+    );
+    await t.grant(t.kai.id, "agent.read", { namespace: "kai-" });
     await t.expectOk(t.kai.id, "assets.revert", {
       params: { kind: "agent", name: "kai-helper" },
       payload: { revision: 1 }
@@ -231,7 +239,7 @@ describe("Namespace grants on agents and skills", () => {
       { params: { kind: "agent", name: "kai-helper" }, payload: {} },
       t.forbidden("agent.write", "no_grant")
     );
-    expect((await t.putAgent(t.admin.id, "assistant")).statusCode).toBe(200);
+    expect((await t.putAgent(t.admin.id, "assistant", {}, "all")).statusCode).toBe(200);
     await t.expectOk(t.admin.id, "assets.set_default", {
       params: { kind: "agent" },
       payload: { name: "assistant" }

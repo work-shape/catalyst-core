@@ -279,7 +279,7 @@ export function namespaceOfName(
  * The shape the server asks of a skill's name (`skillNameSchema` of the config schema, which
  * does not load in a browser). An agent's name only has to be one word.
  */
-const SKILL_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_.-]*$/u;
+const SKILL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/u;
 const AGENT_NAME_PATTERN = /^\S+$/u;
 
 /**
@@ -556,7 +556,7 @@ export interface CheckableAsset {
  * grant it stands in for.
  */
 function checkedReason(
-  source: "role" | "legacy" | "legacy_ref" | "grant" | "membership"
+  source: "role" | "legacy_ref" | "grant" | "membership"
 ): "role" | "legacy" | "grant" {
   if (source === "legacy_ref") return "legacy";
   return source === "membership" ? "grant" : source;

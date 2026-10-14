@@ -8,6 +8,8 @@ import {
   CardContent,
   CardFooter,
   CardHeader,
+  CardReachable,
+  CardTarget,
   CardTitle,
   EmptyState,
   Page,
@@ -145,7 +147,8 @@ function cannotStart(workflow: WorkflowListItem): boolean {
 /**
  * One Workflow, as the Agents and Apps pages show theirs: what it is called and what it does,
  * how its latest run ended and when, and the ways into it. The state of the run stands beside
- * the words "Last run", so it is not read as the state of the Workflow.
+ * the words "Last run", so it is not read as the state of the Workflow. The whole card of a
+ * published Workflow opens it.
  */
 function WorkflowCard({
   workflow,
@@ -194,13 +197,16 @@ function WorkflowCard({
             <>
               <span>{t("workflows.lastRun")}</span>
               <RunStateBadge status={lastRun.status} />
+              {/* The full date stays reachable as a tooltip above the card's target. */}
               {lastRun.startedAt === undefined ? null : (
-                <time
-                  dateTime={lastRun.startedAt}
-                  title={formatDateTime(lastRun.startedAt, locale)}
-                >
-                  {formatUpdated(lastRun.startedAt, now, locale)}
-                </time>
+                <CardReachable>
+                  <time
+                    dateTime={lastRun.startedAt}
+                    title={formatDateTime(lastRun.startedAt, locale)}
+                  >
+                    {formatUpdated(lastRun.startedAt, now, locale)}
+                  </time>
+                </CardReachable>
               )}
             </>
           )}
@@ -209,14 +215,15 @@ function WorkflowCard({
       {/* A Workflow without a published revision has nothing a reader could open. */}
       {workflow.published ? (
         <CardFooter>
-          <RouteLink
-            route={{ kind: "workflow", ...address }}
-            variant="primary"
-            describedBy={titleId}
-            onOpen={onOpenRoute}
-          >
-            {t("workflows.open")}
-          </RouteLink>
+          <CardTarget label={t("workflows.openNamed", { name: workflow.name })}>
+            <RouteLink
+              route={{ kind: "workflow", ...address }}
+              variant="primary"
+              onOpen={onOpenRoute}
+            >
+              {t("workflows.open")}
+            </RouteLink>
+          </CardTarget>
           {canStart ? (
             <Button variant="outline" aria-describedby={titleId} onClick={onStart}>
               <Play aria-hidden="true" />

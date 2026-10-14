@@ -143,12 +143,14 @@ So ten people of the team use the agents and two build them. Membership in the w
 
 Each agent has a setting named **Available in**. It lists the workspaces whose members can choose the agent in the chat.
 
-- **All workspaces** is where every new agent starts, also one created in a Namespace. Mara's new `tax-travel-costs` can be chosen in every workspace of the instance at once, personal ones and future ones included.
-- **Selected workspaces** narrows that to the Personal Workspaces, to chosen Shared Workspaces, or to both. With nothing ticked the agent is hidden everywhere.
+- **All workspaces**: every workspace of the instance, personal ones and future ones included.
+- **Selected workspaces**: the Personal Workspaces, chosen Shared Workspaces, or both. With nothing ticked the agent is hidden everywhere.
 
-To keep the tax agents to the tax team, somebody opens each agent in Studio, goes to **Available in**, chooses **Selected workspaces** and ticks **Tax team**. That somebody needs "Edit agent configuration" for the whole instance. Mara's grant in `tax-` does not show her this section, so she cannot do it herself.
+A new agent starts in the workspace it was made in. Mara opens Studio while she works in Tax team, or asks the Build Agent in a conversation there, and her new `tax-travel-costs` can be chosen in Tax team and nowhere else. An agent made in a personal workspace, pushed with the CLI, or written through the API without a workspace starts hidden everywhere, and the answer says so. A person with the instance-wide right may choose **All workspaces** in the dialog that starts the agent.
 
-Two exceptions. The default agent of the instance is always available everywhere. And an agent that arrives through a release push starts hidden when the same push deletes an agent that was limited to selected workspaces, because that is a rename and the new name must not reach more people than the old one did.
+To offer an agent in more workspaces, or to show a hidden one, somebody opens it in Studio, goes to **Available in** and chooses **All workspaces**, or **Selected workspaces** with the workspaces ticked. That somebody needs "Edit agent configuration" for the whole instance. Mara's grant in `tax-` does not show her this section, so she cannot do it herself.
+
+Two exceptions. The default agent of the instance is always available everywhere, so the first agent of an instance starts there. And an agent that arrives through a release push starts in all workspaces, and hidden when the same push deletes an agent that was limited to selected workspaces, because that is a rename and the new name must not reach more people than the old one did.
 
 Nothing links a Namespace to a workspace today. You cannot say "the agents of `tax-` belong to the workspace Tax team". The only bridge is the **Available in** setting, agent by agent, and only a person with the instance-wide right sets it.
 
@@ -229,6 +231,8 @@ Catalyst has three roles. The interface calls the role of a person their **Acces
 The three roles are fixed. You cannot change what a role carries, and you cannot create a role of your own.
 
 Below the Access level, the same page has a card named **Rights** with one switch per right. A switch adds a right the role does not carry, or takes away one it does. The card shows where each right comes from: "by role", "granted individually" or "revoked individually". A revoked right stays revoked even though the role carries it.
+
+A switch is stored as grants for the whole instance, one per action the right stands for, and each records who set it and when. These grants are changed on the Users page and on the API access page for a Service Principal, not in the Grants list of the Access page, which leaves them out.
 
 | Switch on the Users page | Name in the API | Carried by |
 | --- | --- | --- |
