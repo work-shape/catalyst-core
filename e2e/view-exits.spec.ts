@@ -44,6 +44,11 @@ import {
 // must count nothing. That the browser refused the move is read from its own log line, so a
 // test cannot pass because the view never tried.
 
+// Every test stores its own view and counts on its own other host, so none needs another before
+// it. The file holds a third of the browser suite's time, and in parallel mode the shards of
+// the hosted check split it test by test instead of keeping it in one worker.
+exitTest.describe.configure({ mode: "parallel" });
+
 type ViewKind = "html.rendered" | "private_hydrated_view";
 
 /** Stores a view of the kind and opens the conversation that shows it. */

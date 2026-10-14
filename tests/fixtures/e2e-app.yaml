@@ -275,6 +275,9 @@ modules:
   # needs a Workflow stores and publishes its own.
   workflows:
     enabled: true
+  # Personal API keys are on: You > API keys issues one with the scopes a person ticks.
+  personalApiKeys:
+    enabled: true
 # The addresses a Connection of the suite may reach. Nothing listens on the first and the `test`
 # connector type contacts nothing: the entry is what lets a test of a Connection answer ready.
 # The second is the sample MCP server `e2e/connection-editor.spec.ts` starts; the runner moves

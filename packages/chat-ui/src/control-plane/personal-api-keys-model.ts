@@ -50,18 +50,6 @@ export function personalKeyActionOffer(context: PlatformContext | undefined): st
   );
 }
 
-/** The actions of the offer the person holds somewhere: on the instance or in a Namespace. */
-export function heldKeyActions(
-  offer: readonly string[],
-  context: PlatformContext | undefined
-): string[] {
-  const held = new Set([
-    ...(context?.actions ?? []),
-    ...(context?.namespaces ?? []).flatMap((namespace) => namespace.actions)
-  ]);
-  return offer.filter((action) => held.has(action));
-}
-
 /** A Namespace prefix as the instance writes one: lowercase words joined by hyphens, `kai-`. */
 const NAMESPACE_PREFIX = /^[a-z][a-z0-9]*(-[a-z0-9]+)*-$/u;
 
@@ -124,10 +112,15 @@ export interface PersonalKeyDraft {
   expiryDays: PersonalKeyExpiryDays;
 }
 
-export function initialPersonalKeyDraft(actions: readonly string[], name = ""): PersonalKeyDraft {
+/**
+ * A new key starts with no scope ticked: it gets only what the person ticks. Ticked in advance,
+ * every right the person holds went into the key unless they found and unticked each one, and
+ * a click on the scope they wanted took it away.
+ */
+export function initialPersonalKeyDraft(name = ""): PersonalKeyDraft {
   return {
     name,
-    actions: [...actions],
+    actions: [],
     namespace: "",
     expiryDays: DEFAULT_PERSONAL_KEY_EXPIRY_DAYS
   };
