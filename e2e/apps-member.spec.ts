@@ -11,7 +11,7 @@ import {
   writePageFiles
 } from "./page-surface-fixtures";
 import { requestWithOrigin } from "./request-with-origin";
-import { shootThemes } from "./surface-shots";
+import { shootLocales, shootThemes } from "./surface-shots";
 import { expect, test } from "./test";
 import { apiOrigin, uiOrigin } from "./view-fixtures";
 
@@ -249,13 +249,17 @@ test("a member who uses an App is shown the App and a builder its revision", asy
   await page.keyboard.press("Escape");
   await expect(page.getByRole("menu")).toBeHidden();
 
-  // "Edit with the agent" opens a conversation about the App with its draft beside it.
+  // "Edit with the agent" opens the App's draft page with a conversation about it in the dock.
+  const draftPath = `/w/${workspaceId}/app-drafts/${appId}`;
   await head.getByRole("button", { name: "Edit with the agent", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/c/[^/]+$`, "u"));
+  await expect(page).toHaveURL((url) => url.pathname === draftPath && url.searchParams.has("chat"));
   const subject = page.getByTestId("conversation-subject");
   await expect(subject).toHaveAttribute("data-subject-kind", "app");
+  await expect(subject).toContainText("Working on:");
   await expect(subject.getByRole("link", { name: appName, exact: true })).toBeVisible();
-  const draft = page.locator('[data-surface-kind="app_edit"]');
+  // Nothing opens beside the dock: the App's page is the draft.
+  await expect(page.locator("aside[data-surface-kind]")).toHaveCount(0);
+  const draft = page.getByTestId("app-edit");
   const draftReady = async () => {
     await expect(
       draft
@@ -269,8 +273,9 @@ test("a member who uses an App is shown the App and a builder its revision", asy
   await shootThemes(page, "app-from-page", draftReady);
 
   // In a plain conversation of the App's workspace that is the builder's own, the agent
-  // opens the App and its draft shows beside the chat. An App is opened in the workspace it
-  // belongs to, and a conversation shared with the workspace is refused the open.
+  // opens the App: an App belongs to the workspace, so the open moves this tab, which sent the
+  // message, from the chat route to the App's draft page with the conversation in the dock
+  // (navigation check 27, Platform Access check 46's workspace-scoped open).
   const madePrivate = await requestWithOrigin(
     page,
     "patch",
@@ -280,7 +285,57 @@ test("a member who uses an App is shown the App and a builder its revision", asy
   expect(madePrivate.ok(), await madePrivate.text()).toBe(true);
   await page.goto(`/w/${workspaceId}`);
   await sendToolCall(page, "platform.assets.open", { kind: "app", name: appId });
+  await expect(page).toHaveURL((url) => url.pathname === draftPath && url.searchParams.has("chat"));
+  const conversationId = new URL(page.url()).searchParams.get("chat") ?? "";
+  const chatPath = `/w/${workspaceId}/c/${conversationId}`;
   await expect(subject).toHaveAttribute("data-subject-kind", "app");
+  // The conversation keeps the line of the open, which leads to the App's page.
+  const openedLine = page.getByTestId("asset-opened-line").last();
+  await expect(openedLine).toHaveText(`Opened ${appName}`);
+  await expect(openedLine.getByRole("link", { name: appName, exact: true })).toHaveAttribute(
+    "href",
+    draftPath
+  );
+  await expect(page.getByTestId("asset-opened-chip")).toHaveCount(0);
   await draftReady();
   await shootThemes(page, "app-from-chat", draftReady);
+  await shootLocales(page, "nav-2-opened-line", async () => {
+    await expect(page.getByTestId("asset-opened-line").last()).toBeVisible();
+    await draftReady();
+  });
+  // The open added one step to the history: Back returns to the conversation.
+  await page.goBack();
+  await expect(page).toHaveURL((url) => url.pathname === chatPath);
+  await page.goForward();
+  await expect(page).toHaveURL((url) => url.pathname === draftPath);
+
+  // A second tab of the same person that shows this conversation never moves: it offers to
+  // go to the asset instead. So does this tab on a page the person went to on their own.
+  const second = await page.context().newPage();
+  await second.setViewportSize({ width: 1280, height: 800 });
+  await second.goto(chatPath);
+  const appsList = `/w/${workspaceId}/apps`;
+  await page.goto(`${appsList}?chat=${conversationId}`);
+  await sendToolCall(page, "platform.assets.open", { kind: "app", name: appId });
+  const chip = page.getByTestId("asset-opened-chip");
+  await expect(chip).toContainText(`Opened ${appName}`);
+  expect(new URL(page.url()).pathname).toBe(appsList);
+  // The person turns to the second tab, which reads the conversation again as a shown tab does.
+  await second.bringToFront();
+  await second.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  const secondChip = second.getByTestId("asset-opened-chip");
+  const secondReady = async () => {
+    await expect(secondChip).toBeVisible();
+  };
+  await secondReady();
+  expect(new URL(second.url()).pathname).toBe(chatPath);
+  await shootLocales(second, "nav-2-chip-second-tab", secondReady);
+  await second.close();
+  await page.bringToFront();
+  // The press of "Go to it" is the person's own step: the page opens with the dock.
+  await chip.getByRole("button", { name: "Go to it", exact: true }).click();
+  await expect(page).toHaveURL(
+    (url) => url.pathname === draftPath && url.searchParams.get("chat") === conversationId
+  );
+  await expect(chip).toHaveCount(0);
 });

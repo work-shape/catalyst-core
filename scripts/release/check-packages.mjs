@@ -30,11 +30,11 @@ const MAX_TARBALL_BYTES = 300_000;
 // React byte for byte, about 258 kB packed, so sharing those between versions is the way to
 // stop the growth before the limit moves again. postgres-store ships its migrations with one
 // schema snapshot each, about 9 kB packed per migration; 69 migrations are 620 kB, 82 are 814 kB
-// (2026-10-14, the Knowledge Base migration). chat-ui grew
-// past 1 MB with the Workflow, Data Store, Agents and rights pages, and past 1.2 MB with the
-// Studio scope filter and workspace owners of WS-OWN-1a and Connect a local agent of CONNECT-1a
-// (2026-10-14), and past 1.25 MB with Knowledge Bases of KB-1 and the New connection dialog of
-// CS-5a (1.26 MB, 2026-10-14); src/ and dist/ both count each line.
+// (2026-10-14, the Knowledge Base migration).
+// Raised chat-ui to 1.3 MB on 2026-10-14 for the guardrail pages of EW-6a, the Studio scope
+// filter and workspace owners of WS-OWN-1a, Connect a local agent of CONNECT-1a, the tool chips
+// of TOOLS-1, Knowledge Bases of KB-1 and the New connection dialog of CS-5a; src/ and dist/
+// both count each line.
 const MAX_TARBALL_BYTES_BY_DIR = {
   "chat-ui": 1_300_000,
   ui: 500_000,

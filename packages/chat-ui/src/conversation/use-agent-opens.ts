@@ -1,0 +1,182 @@
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import type { ApiClient, Message } from "@vivd-catalyst/api-client";
+import { workspaceRoutePath, type WorkspaceRoute } from "../routes";
+import type { WorkspaceDock } from "../workspace/use-workspace-dock";
+import { lastRunParts, pendingOpen, planOpenMoves, type WatchedRun } from "./open-move";
+import {
+  assetPageRoute,
+  opensInRun,
+  sameAsset,
+  type AssetOpen,
+  type SubjectAsset,
+  type SubjectRunPart
+} from "./subject-run";
+
+const FINISHED_RUN_STATES = new Set(["completed", "failed", "cancelled"]);
+
+/** What the opens of the agent offer the conversation. */
+export interface AgentOpens {
+  /**
+   * The last open of the run that did not take the person to the asset: the dock says
+   * "Opened <name> · Go to it". Absent once the person is on its page and it is the subject.
+   */
+  pending: AssetOpen | undefined;
+  /**
+   * Takes the person to the page of an asset the agent opened. An open that waits for the
+   * person makes it the subject first: the person's step is the confirmation.
+   */
+  goTo(open: AssetOpen): Promise<void>;
+  /** The page of an asset the agent opened, for the link of its line. */
+  pageOf(open: AssetOpen): WorkspaceRoute | undefined;
+  /** Notes a run this tab started: only such a run takes the person anywhere. */
+  sent(runId: string): void;
+}
+
+/**
+ * The navigation rule of the agent's opens (navigation-and-layout.md, 4.7b). It lives with the
+ * workspace, not with the thread: the thread's pane is drawn anew for each conversation, and the
+ * runs this tab sent and the pages it was taken to outlast that.
+ *
+ * An open moves this tab only where `openMoves` says so. The first move of a run adds a step to
+ * the history and later ones take its place, so Back returns to where the person was. Every
+ * other open leaves the offer to go to it.
+ */
+export function useAgentOpens(input: {
+  activeRun: WatchedRun | undefined;
+  /** The messages of the thread and the projections of its ended runs, for the last run. */
+  messages: readonly Message[];
+  completedRunProjections: Readonly<Record<string, { parts: readonly SubjectRunPart[] }>>;
+  conversationId: string | undefined;
+  storedSubject: SubjectAsset | undefined;
+  workspaceId: string | undefined;
+  route: WorkspaceRoute;
+  dock: WorkspaceDock;
+  client: ApiClient;
+  /** The conversation is about another asset now: its thread is read again. */
+  onSubjectChanged(conversationId: string): void;
+  onError(message: string): void;
+}): AgentOpens {
+  const {
+    activeRun,
+    messages,
+    completedRunProjections,
+    conversationId,
+    storedSubject,
+    workspaceId,
+    route,
+    dock,
+    client,
+    onSubjectChanged,
+    onError
+  } = input;
+  const sentRuns = useRef(new Set<string>());
+  // The runs seen going while their conversation was on the screen. A run seen only after it
+  // ended is replayed: it moves nothing.
+  const liveRuns = useRef(new Set<string>());
+  const handledOpens = useRef(new Set<string>());
+  const movedRuns = useRef(new Set<string>());
+  const movedTo = useRef(new Map<string, Set<string>>());
+  const routeRef = useRef(route);
+  useLayoutEffect(() => {
+    routeRef.current = route;
+  }, [route]);
+
+  // A conversation left behind is no longer watched: its run is read later when it comes back.
+  const shownConversation = useRef(conversationId);
+  useEffect(() => {
+    if (shownConversation.current !== undefined && shownConversation.current !== conversationId) {
+      liveRuns.current.clear();
+    }
+    shownConversation.current = conversationId;
+  }, [conversationId]);
+
+  const sent = useCallback((runId: string) => {
+    sentRuns.current.add(runId);
+    liveRuns.current.add(runId);
+  }, []);
+
+  const pageOf = useCallback(
+    (open: AssetOpen) => assetPageRoute(open.subject, workspaceId),
+    [workspaceId]
+  );
+
+  const runId = activeRun?.run.id;
+  const status = activeRun?.projection.status;
+  const parts = activeRun?.projection.parts;
+  const { openPage } = dock;
+  useEffect(() => {
+    if (runId === undefined || status === undefined || parts === undefined) {
+      return;
+    }
+    if (conversationId === undefined) {
+      return;
+    }
+    if (!FINISHED_RUN_STATES.has(status)) {
+      liveRuns.current.add(runId);
+    }
+    const conversationMoves = movedTo.current.get(conversationId) ?? new Set<string>();
+    const plan = planOpenMoves({
+      runId,
+      opens: opensInRun(parts),
+      storedSubject,
+      workspaceId,
+      handled: handledOpens.current,
+      sentHere: sentRuns.current.has(runId),
+      live: liveRuns.current.has(runId),
+      here: routeRef.current,
+      conversationId,
+      movedTo: conversationMoves,
+      movedInRun: movedRuns.current.has(runId)
+    });
+    for (const key of plan.handled) {
+      handledOpens.current.add(key);
+    }
+    for (const move of plan.moves) {
+      openPage(move.page, conversationId, { replace: move.replace });
+      movedRuns.current.add(runId);
+      conversationMoves.add(workspaceRoutePath(move.page));
+      movedTo.current.set(conversationId, conversationMoves);
+      routeRef.current = move.page;
+    }
+  }, [conversationId, openPage, parts, runId, status, storedSubject, workspaceId]);
+
+  const goTo = useCallback(
+    async (open: AssetOpen) => {
+      const target = assetPageRoute(open.subject, workspaceId);
+      if (target === undefined || conversationId === undefined) {
+        return;
+      }
+      if (open.awaitsPerson && !sameAsset(storedSubject, open.subject)) {
+        try {
+          const outcome = await client.conversations.subject.open({
+            params: { conversationId },
+            body: {
+              kind: open.subject.kind,
+              name: open.subject.name,
+              ...(open.callId === undefined ? {} : { toolCallId: open.callId })
+            }
+          });
+          if (outcome.status !== "done") {
+            return;
+          }
+        } catch (error) {
+          onError(error instanceof Error ? error.message : String(error));
+          return;
+        }
+        onSubjectChanged(conversationId);
+      }
+      openPage(target, conversationId);
+    },
+    [client, conversationId, onError, onSubjectChanged, openPage, storedSubject, workspaceId]
+  );
+
+  // The offer stands for the last run, also one this tab only reads: in a second tab, after a
+  // reload, or once the thread was read again after the run.
+  const lastParts = lastRunParts({ activeRun, messages, completedRunProjections });
+  const pending =
+    lastParts === undefined
+      ? undefined
+      : pendingOpen({ opens: opensInRun(lastParts), storedSubject, workspaceId, here: route });
+
+  return { pending, goTo, pageOf, sent };
+}

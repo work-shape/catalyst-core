@@ -211,6 +211,13 @@ export function createDataSourceTools(input: CreateDataSourceToolsInput): AnyToo
     return [
       defineTool<QueryToolInput, QueryToolOutput>({
         name: toolName,
+        title: { en: "Query database", de: "Datenbank abfragen" },
+        summary: {
+          en: "Reads records from a configured database with a read-only query.",
+          de: "Liest Datensätze aus einer eingerichteten Datenbank mit einer reinen Leseabfrage."
+        },
+        group: "instance",
+        icon: "database",
         effect: "reading",
         description: [
           `Run a read-only query against ${config.description}.`,
@@ -245,6 +252,13 @@ export function createDataSourceTools(input: CreateDataSourceToolsInput): AnyToo
       }),
       defineTool<DescribeToolInput, DescribeToolOutput>({
         name: describeToolName,
+        title: { en: "Describe database", de: "Datenbank beschreiben" },
+        summary: {
+          en: "Reads which tables and columns a configured database has.",
+          de: "Liest, welche Tabellen und Spalten eine eingerichtete Datenbank hat."
+        },
+        group: "instance",
+        icon: "database",
         effect: "reading",
         description: `Discover the readable schema of ${config.description}. Omit relation to list tables and views, or provide one relation to inspect its columns, primary key, and foreign keys.`,
         inputSchema: describeToolInputSchema,

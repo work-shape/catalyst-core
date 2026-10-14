@@ -376,6 +376,15 @@ export const createConversationRequestSchema = z.object({
   subject: conversationSubjectSchema.optional()
 });
 
+/**
+ * The person makes an asset what their conversation is about, as going to the asset's page
+ * after its agent opened it does. `toolCallId` names the agent's open the step answers, for
+ * the audit; it is missing where the person took the step of their own accord.
+ */
+export const openConversationSubjectRequestSchema = conversationSubjectSchema.extend({
+  toolCallId: z.string().min(1).max(200).optional()
+});
+
 export const renameConversationRequestSchema = z.object({
   title: z.string().trim().min(1).max(120)
 });
@@ -715,6 +724,7 @@ export type Conversation = z.infer<typeof conversationSchema>;
 export type ConversationVisibility = z.infer<typeof conversationVisibilitySchema>;
 export type ConversationListItem = z.infer<typeof conversationListItemSchema>;
 export type RenameConversationRequest = z.infer<typeof renameConversationRequestSchema>;
+export type OpenConversationSubjectRequest = z.infer<typeof openConversationSubjectRequestSchema>;
 export type Message = z.infer<typeof messageSchema>;
 export type MessageMetadata = z.infer<typeof messageMetadataSchema>;
 export type ConversationResourceBase = z.infer<typeof conversationResourceBaseSchema>;

@@ -54,6 +54,13 @@ export function createWebFetchTool(input: CreateWebFetchToolInput): AnyToolDefin
 
   return defineTool<WebFetchInput, WebFetchOutput>({
     name: WEB_FETCH_TOOL_NAME,
+    title: { en: "Fetch web page", de: "Webseite abrufen" },
+    summary: {
+      en: "Reads a public web page from its address.",
+      de: "Liest eine öffentliche Webseite unter ihrer Adresse."
+    },
+    group: "web",
+    icon: "web",
     effect: "reading",
     description:
       "Fetch a public http or https HTML/text page by URL, extract conservative readable text, and return bounded source metadata. This tool cannot access localhost, private networks, cloud metadata hosts, authenticated browser sessions, files, or JavaScript-only pages.",
