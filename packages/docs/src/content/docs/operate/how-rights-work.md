@@ -450,7 +450,7 @@ Here is the whole way, in order. The table below the chart says who sets each st
 | 6 Input | Nobody. The action defines its input. | |
 | 7 Right | Administrator | Users for role and single rights, Access for grants |
 | 8 and 10 Policy | Operator, and the author of a tool | `policy.defaults` in release config, `permission.mode` on a tool |
-| 9 Guardrails | Nobody yet | See [Guardrails](#guardrails) |
+| 9 Guardrails | Operator (the floor), and whoever may publish a guardrail | `guardrails` in release config; Studio > Guardrails. See [Guardrails](#guardrails) |
 | 11 and 12 Run and record | Nobody. It is part of every action on the full path. | Read it on Operations and Audit |
 
 The chart shows the common exits. A few rarer ones exist.
@@ -488,24 +488,40 @@ Only a person's call can wait. A call made with an API key is refused with `POLI
 
 A call that carries a secret never waits. These are creating an API key, resetting a user's password, and creating a user with a first password. A held call would keep the secret and show it to whoever decides, and a key shown later reaches nobody. Under an instance default of `approval` such a call runs on the caller's own word. See [operation policy](/configure/release-config/#operation-policy).
 
-There is an older, separate approval that works without the policy. An agent can propose a change to one of its skills. That proposal is an Approval Request of the kind "Skill change", and the same people decide it. The operator can bind **Guardrails** to it, which are rules a model evaluates and which warn the approver or block the proposal. Administrators see them and their hits in Studio > Guardrails. See [config assets](/configure/config-assets/#agent-skill-changes).
+There is an older, separate approval that works without the policy. An agent can propose a change to one of its skills. That proposal is an Approval Request of the kind "Skill change", and the same people decide it. [Guardrails](#guardrails) can check it before it is filed and warn the approver or block the proposal. See [config assets](/configure/config-assets/#agent-skill-changes).
+
+A [guardrail](#guardrails) can also send a call to the Inbox: a call it answers with "needs approval" waits there like a call the policy holds.
 
 Agents and approvals do not go together yet. A run cannot pause for a person and continue later. So the instance refuses to start with a tool of the release whose calls would need an approval or a confirmation. Such a tool states `allow` or `deny`, unless the instance default for its kind of action already is one of the two.
 
 ### Guardrails
 
-A guardrail is meant to be a rule that looks at an action just before it runs and can block it or send it to an approval. It sits at step 9, after the right and the first look at the policy, and it can only make the answer stricter.
+A guardrail is a rule that looks at an action just before it happens and answers: let it through, warn, ask for an approval, or block. It sits at step 9, after the right and the first look at the policy, and it can only make the answer stricter.
 
-**No guardrail runs at this step yet.** The step is built and every action on the full path passes it, but nothing is plugged in, so it always answers "no objection". The error `GUARDRAIL_BLOCKED` is in the API reference and does not occur today. The guardrails an operator sets in [release config](/configure/release-config/#guardrails) run at one other point so far: before a request for approval is filed. Administrators see them and their hits in Studio > Guardrails.
+Guardrails run at six points:
 
-What protects an instance today are fixed limits that are not called guardrails:
+- before an asset is saved: a save in Studio, a push, a revert, an App written from a Page, an agent's save and the skill change it proposes;
+- before any operation is called, at step 9 of every action on the full path;
+- before an App, a Workflow or a Data Store is published;
+- before a request for approval is filed.
+
+Every guardrail that applies runs, and the strictest answer wins.
+
+- **Block**: the action does not happen. The caller gets `403 GUARDRAIL_BLOCKED` with the guardrail's reason.
+- **Ask for an approval** (`require_approval`): a changing call waits in the Inbox, as when the policy holds it. A reading call cannot wait and is refused. Where a changing action cannot wait either, such as the App draft an agent's save writes, it is blocked, and the hit says so.
+- **Warn**: the action goes on, and the reason is kept beside it.
+
+There are two sources of guardrails. The operator's floor is set in [release config](/configure/release-config/#guardrails), always runs and cannot be changed in the product. Further guardrails are written as assets, for the whole instance or for one Shared Workspace, tried on sample content and in a dry run, and made live by a person who may publish guardrails (`guardrail.publish`). Administrators hold that right for the instance, and an administrator can grant it for one Shared Workspace. A workspace's guardrail checks only what happens in that workspace. No published guardrail runs when guardrails themselves are changed; only the floor does. See [Guardrails as assets](/configure/config-assets/#guardrails-as-assets).
+
+**Studio > Guardrails** (German: **Studio › Leitplanken**) lists every guardrail with one sentence saying when it runs, such as "Runs before an agent saves a skill, in workspace Kai Spezis. Checks the content for a text pattern. Blocks if the check fails." A guardrail's page counts its hits for the last 7 and 30 days. Hits are counted by rule and never listed by person.
+
+Beside guardrails, fixed limits protect an instance:
 
 | Limit | What it stops | Set in |
 | --- | --- | --- |
 | Module switches | A whole feature, for everybody | [release config](/configure/modules/) |
 | Tool and model lists of a Namespace | An agent with a tool or model off the list | Access, tab Namespaces |
 | Editable fields of an agent | A change in the interface to a field the release owns | [release config](/configure/config-assets/#interactive-editing-and-field-ownership) |
-| Guardrails | A proposed skill change that breaks a rule | [release config](/configure/release-config/#guardrails) |
 | Usage limits and budgets | Model calls beyond a daily or monthly amount | [Capacity and limits](/operate/capacity-and-limits/) |
 | Rate limits | Too many requests in a short time | release config |
 
@@ -609,7 +625,8 @@ A release push reaches every agent and skill of the instance and is not held bac
 | Let somebody edit an agent | Settings > Instance > Access, Rights | Manage users |
 | Change the lists of a Namespace registered before | Settings > Instance > Access, Namespaces | Manage users |
 | Find out why somebody can or cannot do something | Settings > Instance > Access, Check | Manage users and View agent configuration |
-| Create a key for the CLI or a script | Settings > Instance > API access | Superadmin |
+| Create a key of your own for the CLI | Settings > You > API keys, or `catalyst login` | The module `personalApiKeys` on |
+| Create a key for a script or CI | Settings > Instance > API access | Superadmin |
 | Decide a call or a skill change that waits | Inbox | Approve skill changes |
 | See what was called, by whom, and what was refused | Settings > Instance > Operations | View audit log |
 | See who changed which right | Settings > Instance > Audit | View audit log |
@@ -620,8 +637,7 @@ A release push reaches every agent and skill of the instance and is not held bac
 - **Groups and teams.** A grant names one person. Nothing gives a right to a group.
 - **Custom roles.** The three roles are fixed. The Rights card on the Users page shows which rights a person has by role, and nothing edits what a role carries.
 - **Company sign-in with group mapping.** People are not signed in through a company identity provider with its groups.
-- **Grants on a workspace or on the whole instance, and grants for other kinds.** A new grant covers one agent, skill, Connection or Workflow. Grants written before in a Namespace, or on a Shared Workspace for Connections, keep applying until they are revoked. Writing, deleting and approving a Connection stay with the Admin role. Data Stores and Apps have no grant for a person.
+- **Grants on a workspace or on the whole instance, and grants for other kinds.** A new grant covers one agent, skill, Connection or Workflow. The one grant on a Shared Workspace is the right to publish that workspace's guardrails. Grants written before in a Namespace, or on a Shared Workspace for Connections, keep applying until they are revoked. Writing, deleting and approving a Connection stay with the Admin role. Data Stores and Apps have no grant for a person.
 - **Policy settings for administrators.** The instance can already resolve a policy value per action, per Namespace, per workspace and per kind of asset. Nothing stores such settings and no screen edits them. Today the policy is two instance-wide defaults and the mode a tool states. An administrator cannot set "saving in `tax-` needs an approval" in the interface.
-- **Guardrails.** The step exists and nothing is plugged in.
 - **An agent that waits for a person.** A run cannot pause for a confirmation or an approval and continue.
 - **One path for everything.** Conversations, workspaces and the other areas named [above](#which-actions-take-the-whole-path) are checked for sign-in, module, scope and right, without policy and without an Operation Run.

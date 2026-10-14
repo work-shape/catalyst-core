@@ -37,11 +37,11 @@ On an instance with the module `personalApiKeys` on, a person logs the tool in w
 catalyst login --instance https://chat.example.com
 ```
 
-The tool prints an address and a code such as `BCDF-GHJK`. Open the address, signed in as yourself, check that the code is the one your terminal shows, choose what the key may do and until when, and confirm. The tool then collects the key and saves it. Nothing is pasted anywhere: the code you confirm cannot be used to sign in, and the key travels only from the instance to the tool. A code expires after 15 minutes and is collected once.
+The tool prints an address and a code such as `BCDF-GHJK`. Open the address, signed in as yourself; it leads to **Settings > You > API keys** (German: **Einstellungen › Du › API-Schlüssel**). Check that the code is the one your terminal shows, choose what the key may do and until when, and confirm. The tool then collects the key and saves it. Nothing is pasted anywhere: the code you confirm cannot be used to sign in, and the key travels only from the instance to the tool. A code expires after 15 minutes and is collected once.
 
-A key acts as you, narrowed to its scopes. A scope is a right such as `agent.write`, optionally limited to one Namespace: `agent.write:kai-`. A key never does more than you may at the moment of each call: a right an administrator takes from you is gone from the key on its next call. A key lives at most a year. A new key starts with no scope ticked: tick the ones the key needs. Settings, API keys lists your keys and revokes them; a revoked key is refused on its next call. Whoever administers API access sees and revokes every person's keys. No key issues another key.
+A key acts as you, narrowed to its scopes. A scope is a right such as `agent.write`, optionally limited to one Namespace: `agent.write:kai-`. A key never does more than you may at the moment of each call: a right an administrator takes from you is gone from the key on its next call. A key lives at most a year. A new key starts with no scope ticked: tick the ones the key needs. **Settings > You > API keys** lists your keys and revokes them; a revoked key is refused on its next call. Whoever administers API access sees and revokes every person's keys. No key issues another key.
 
-`catalyst logout --instance <address>` removes the saved key from this machine. It stays valid until you revoke it in Settings.
+`catalyst logout --instance <address>` removes the saved key from this machine. It stays valid until you revoke it under **Settings > You > API keys**.
 
 A working copy that belongs to one Namespace names it beside the instance:
 
@@ -56,7 +56,7 @@ defaultInstance: production
 Its `push` names the Namespace, as the instance asks of everyone but the holder of the release right, and never changes the instance's default agent. Its `pull`, `diff` and `list` read only the agents and skills the key may read, and neither the instance's version nor its default agent, which only a reader of every agent and skill may read; a key of one Namespace pulls, diffs and lists its Namespace.
 ## One command per asset operation
 
-Every operation on assets has a command, for every kind the instance registers: agents, skills, Apps, Workflows, Connections, Data Stores. The kind is the first word, by its id, its plural or with dashes (`data-store`). The instance names its kinds; a kind a later release adds works without a new CLI.
+Every operation on assets has a command, for every kind the instance registers: agents, skills, Apps, Workflows, Connections, Data Stores, guardrails. The kind is the first word, by its id, its plural or with dashes (`data-store`). The instance names its kinds; a kind a later release adds works without a new CLI.
 
 ```sh
 catalyst context                  # the instance, your rights and Namespaces, its kinds
@@ -75,6 +75,17 @@ catalyst agent delete kai-tax --if-revision 5
 ```
 
 `--from` takes the forms of the working copy: an `.agent.yaml` or any YAML or JSON definition, a skill's folder with its `SKILL.md`, or the folder of a kind whose revisions hold files, such as an App. A write names the revision it was made against with `--if-revision`, or `new` to create; read it with `show` or `history`. `discard-draft`, `set-availability` and `set-default` complete the list; `catalyst --help` shows each with its options. `--json` prints the instance's answer as it came.
+
+Guardrails have four commands of their own beside `put`:
+
+```sh
+catalyst guardrail test no-iban --text "DE89 3704 0044 0532 0130 00"   # or --from <file>, --asset skill:<name>
+catalyst guardrail dry-run no-iban                 # what the draft would have done in the last 14 days
+catalyst guardrail publish no-iban --revision 2    # shows the dry run first
+catalyst guardrail unpublish no-iban               # stops it; the draft stays
+```
+
+`test` checks the draft, or `--revision <n>`, and keeps no hit. A first `publish` of a guardrail that would have blocked or held actions asks for `--confirm <n>` with the number the dry run counted. [Guardrails as assets](/configure/config-assets/#guardrails-as-assets) says who may do what.
 
 The instance decides every right, revision and check. A `revert` needs the read right on the asset beside the write right, as it restores content. A refusal is printed as the instance gave it, with each asset, issue or item it names:
 
