@@ -12,7 +12,7 @@ import {
   useServicePrincipalsQuery,
   useWorkspaceUsersQuery
 } from "../api/workspace-queries";
-import { canManageApiAccess, canManageUsers } from "../control-plane/governance";
+import { canManageServicePrincipals, canManageUsers } from "../control-plane/governance";
 import { workspaceRoutePath } from "../routes";
 import { useSettingsPage } from "../settings/settings-page-context";
 import { apiErrorCode } from "../workspace-utils";
@@ -102,11 +102,11 @@ export function useConnectionSource(): ConnectionSource {
   const { apiBaseUrl, authScope, client, user, startDockedChat } = useSettingsPage();
   const api = { apiBaseUrl, authScope, client };
   const calls = client.connections;
-  // The rows are read by who manages users; the names of principals by who manages API access.
+  // The rows are read by who manages users; the names of principals by who manages them.
   const seesHolders = canManageUsers(user);
-  const seesPrincipals = seesHolders && canManageApiAccess(user);
   const queryClient = useQueryClient();
   const context = usePlatformContextQuery({ apiBaseUrl, authScope, client, enabled: true });
+  const seesPrincipals = seesHolders && canManageServicePrincipals(context.data);
   const detailKey = (name: string) => ["connection-detail", apiBaseUrl, authScope, name];
   return {
     // The right is held on every Connection of the instance or in the Connection's Namespace.

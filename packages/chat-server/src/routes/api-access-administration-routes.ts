@@ -1,14 +1,13 @@
 import { apiOperations } from "@vivd-catalyst/api-contract";
-import {
-  ApiAccessAdministrationWorkflow,
-  authorizeApiAccessChange
-} from "../api-access-administration-workflow";
+import { ApiAccessAdministrationWorkflow } from "../api-access-administration-workflow";
 import type { Route } from "../http/route";
 import type { ChatServerOptions } from "../types";
 
 /**
  * Instance > API Access. The list is a plain read. The four changes are registered operations:
- * each call is an Operation Run, and only a superadmin who holds `api_access.manage` makes one.
+ * each call is an Operation Run. Principals are administered under `service_principals.manage`,
+ * their keys under `api_access.manage`, and what either gives a principal asks the rule of no
+ * escalation.
  */
 export function registerApiAccessAdministrationRoutes(
   route: Route,
@@ -26,13 +25,15 @@ export function registerApiAccessAdministrationRoutes(
 
   route.operation(createPrincipal, {
     changeClass: "reversible",
-    authorize: authorizeApiAccessChange(createPrincipal.id),
+    authorize: (input, caller) =>
+      workflow.authorizeCreatePrincipal(createPrincipal.id, caller, input),
     execute: (input, context) => workflow.createServicePrincipal(context, input)
   });
 
   route.operation(updatePrincipal, {
     changeClass: "reversible",
-    authorize: authorizeApiAccessChange(updatePrincipal.id),
+    authorize: (input, caller) =>
+      workflow.authorizeUpdatePrincipal(updatePrincipal.id, caller, input),
     resource: ({ servicePrincipalId }) => ({ kind: "service_principal", id: servicePrincipalId }),
     execute: (input, context) => workflow.updateServicePrincipal(context, input)
   });
@@ -40,14 +41,15 @@ export function registerApiAccessAdministrationRoutes(
   route.operation(createCredential, {
     // A key can be revoked. Its descriptor declares the answer `secret`: the run keeps none.
     changeClass: "reversible",
-    authorize: authorizeApiAccessChange(createCredential.id),
+    authorize: (input, caller) =>
+      workflow.authorizeCreateCredential(createCredential.id, caller, input),
     resource: ({ servicePrincipalId }) => ({ kind: "service_principal", id: servicePrincipalId }),
     execute: (input, context) => workflow.createApiCredential(context, input)
   });
 
   route.operation(revokeCredential, {
     // A revoked key stays revoked, so the change counts as irreversible.
-    authorize: authorizeApiAccessChange(revokeCredential.id),
+    authorize: (_input, caller) => workflow.authorizeRevokeCredential(revokeCredential.id, caller),
     resource: ({ credentialId }) => ({ kind: "api_credential", id: credentialId }),
     execute: ({ credentialId }, context) => workflow.revokeApiCredential(context, credentialId)
   });

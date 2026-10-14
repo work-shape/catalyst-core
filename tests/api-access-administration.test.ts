@@ -141,14 +141,16 @@ describe("API Access administration", () => {
     expect(auditJson).not.toContain("secretHash");
   });
 
-  it("denies default admin and user access and still requires superadmin for key lifecycle", async () => {
+  // Check 38 and paths 2 to 4 of the RIGHTS-1 plan review: an administrator, no superadmin and
+  // without `api_access.manage`, runs service principals on what the administrator holds.
+  it("lets an administrator run principals on what they hold, keys under api_access.manage", async () => {
     const fixture = await createFixture();
-    for (const token of ["admin", "user"]) {
-      const response = await fixture.server.call("service_principals.list", {
+    const listAs = (token: string) =>
+      fixture.server.call("service_principals.list", {
         headers: { authorization: `Bearer ${token}` }
       });
-      expect(response.statusCode).toBe(403);
-    }
+    expect((await listAs("user")).statusCode).toBe(403);
+    expect((await listAs("admin")).statusCode).toBe(200);
     const selfGrant = await fixture.server.call("users.update", {
       params: { userId: fixture.users.admin.id },
       headers: { authorization: "Bearer admin" },
@@ -156,72 +158,97 @@ describe("API Access administration", () => {
     });
     expect(selfGrant.statusCode).toBe(403);
 
+    const adminClient = await createClient(fixture.server, "admin");
     const managerClient = await createClient(fixture.server, "admin-manager");
-    await expect(
-      managerClient.service_principals.create({
-        body: {
-          displayLabel: "Forbidden managed principal",
-          permissions: ["config_assets.read"]
-        }
-      })
-    ).rejects.toMatchObject({ status: 403 });
-
     const superadminClient = await createClient(fixture.server, "superadmin");
-    const principal = completedOutput(
-      await superadminClient.service_principals.create({
-        body: {
-          displayLabel: "Managed principal",
-          permissions: ["config_assets.read"]
-        }
+    const refusedFor = (action: string) => ({
+      status: 403,
+      payload: { error: { details: { action } } }
+    });
+
+    // The administrator holds `config_assets.read`, and nobody but a superadmin gives release.
+    const reader = completedOutput(
+      await adminClient.service_principals.create({
+        body: { displayLabel: "Reader", permissions: ["config_assets.read"] }
       })
     );
     await expect(
-      managerClient.service_principals.update({
-        params: { servicePrincipalId: principal.principal.id },
-        body: {
-          displayLabel: "Forbidden update"
-        }
+      adminClient.service_principals.create({
+        body: { displayLabel: "Releaser", permissions: ["config_assets.release"] }
       })
-    ).rejects.toMatchObject({ status: 403 });
-    await superadminClient.service_principals.update({
-      params: { servicePrincipalId: principal.principal.id },
-      body: {
-        status: "disabled"
-      }
-    });
+    ).rejects.toMatchObject(refusedFor("config_assets.release"));
     await expect(
-      managerClient.service_principals.update({
-        params: { servicePrincipalId: principal.principal.id },
-        body: {
-          status: "active"
-        }
+      adminClient.service_principals.update({
+        params: { servicePrincipalId: reader.principal.id },
+        body: { permissions: ["config_assets.read", "config_assets.release"] }
       })
-    ).rejects.toMatchObject({ status: 403 });
+    ).rejects.toMatchObject(refusedFor("config_assets.release"));
+    // Who manages principals and does not hold the right gives it to none, also not later.
+    const deniedClient = await createClient(fixture.server, "admin-without-read");
     await expect(
-      managerClient.service_principals.update({
-        params: { servicePrincipalId: principal.principal.id },
-        body: {
-          permissions: ["config_assets.read", "config_assets.release"]
-        }
+      deniedClient.service_principals.create({
+        body: { displayLabel: "Second reader", permissions: ["config_assets.read"] }
       })
-    ).rejects.toMatchObject({ status: 403 });
+    ).rejects.toMatchObject(refusedFor("config_assets.read"));
+    const empty = completedOutput(
+      await deniedClient.service_principals.create({
+        body: { displayLabel: "Empty", permissions: [] }
+      })
+    );
+    await expect(
+      deniedClient.service_principals.update({
+        params: { servicePrincipalId: empty.principal.id },
+        body: { permissions: ["config_assets.read"] }
+      })
+    ).rejects.toMatchObject(refusedFor("config_assets.read"));
+    const releaser = completedOutput(
+      await superadminClient.service_principals.create({
+        body: { displayLabel: "Releaser", permissions: ["config_assets.release"] }
+      })
+    );
+
+    // Disabling takes away and asks nothing more. Enabling lends what the principal holds.
+    const setStatus = (
+      client: Awaited<ReturnType<typeof createClient>>,
+      detail: { principal: { id: string } },
+      status: "active" | "disabled"
+    ) =>
+      client.service_principals.update({
+        params: { servicePrincipalId: detail.principal.id },
+        body: { status }
+      });
+    for (const detail of [reader, releaser]) await setStatus(adminClient, detail, "disabled");
+    await expect(setStatus(deniedClient, reader, "active")).rejects.toMatchObject(
+      refusedFor("config_assets.read")
+    );
+    await expect(setStatus(adminClient, releaser, "active")).rejects.toMatchObject(
+      refusedFor("config_assets.release")
+    );
+    await setStatus(adminClient, reader, "active");
+    await setStatus(superadminClient, releaser, "active");
+
+    // A key is a bearer copy of the principal's rights: `api_access.manage` and the rule.
+    await expect(
+      adminClient.api_credentials.create({
+        params: { servicePrincipalId: reader.principal.id },
+        body: { name: "Without the right" }
+      })
+    ).rejects.toMatchObject(refusedFor("api_access.manage"));
     await expect(
       managerClient.api_credentials.create({
-        params: { servicePrincipalId: principal.principal.id },
-        body: { name: "Forbidden key" }
+        params: { servicePrincipalId: releaser.principal.id },
+        body: { name: "Release key" }
       })
-    ).rejects.toMatchObject({ status: 403 });
-
-    const credential = await superadminClient.api_credentials.create({
-      params: { servicePrincipalId: principal.principal.id },
-      body: {
-        name: "Superadmin key"
-      }
+    ).rejects.toMatchObject(refusedFor("config_assets.release"));
+    const credential = await managerClient.api_credentials.create({
+      params: { servicePrincipalId: reader.principal.id },
+      body: { name: "Reader key" }
     });
     await expect(
-      managerClient.api_credentials.revoke({ params: { credentialId: credential.credential.id } })
-    ).rejects.toMatchObject({
-      status: 403
+      adminClient.api_credentials.revoke({ params: { credentialId: credential.credential.id } })
+    ).rejects.toMatchObject(refusedFor("api_access.manage"));
+    await managerClient.api_credentials.revoke({
+      params: { credentialId: credential.credential.id }
     });
   });
 
@@ -479,7 +506,7 @@ describe("API Access changes as Operation Runs", () => {
     ).toHaveLength(1);
   });
 
-  it("refuses an admin who is not a superadmin before anything runs, and records the refusal", async () => {
+  it("refuses a caller without the right before anything runs, and records the refusal", async () => {
     const fixture = await createFixture();
     const principal = await createPrincipal(fixture, "Guarded");
     const credential = createdCredentialSchema.parse(
@@ -498,61 +525,61 @@ describe("API Access changes as Operation Runs", () => {
         .map((row) => row.text)
         .sort();
 
+    // Principals are administered under `service_principals.manage`, which a user lacks; keys
+    // under `api_access.manage`, which an administrator lacks.
     const calls = [
-      ["service_principals.create", { payload: { displayLabel: "Refused" } }],
+      [
+        "service_principals.create",
+        "user",
+        "service_principals.manage",
+        { payload: { displayLabel: "Refused" } }
+      ],
       [
         "service_principals.update",
+        "user",
+        "service_principals.manage",
         { params: { servicePrincipalId: principal.id }, payload: { status: "disabled" } }
       ],
       [
         "api_credentials.create",
+        "admin",
+        "api_access.manage",
         { params: { servicePrincipalId: principal.id }, payload: { name: "Refused key" } }
       ],
-      ["api_credentials.revoke", { params: { credentialId: credential.id } }]
+      [
+        "api_credentials.revoke",
+        "admin",
+        "api_access.manage",
+        { params: { credentialId: credential.id } }
+      ]
     ] as const;
-    for (const [operation, request] of calls) {
-      // Holds `api_access.manage` and the admin role, and is no superadmin.
-      const manager = await fixture.server.call(operation, {
+    for (const [operation, token, right, request] of calls) {
+      const response = await fixture.server.call(operation, {
         ...request,
-        headers: { authorization: "Bearer admin-manager" }
+        headers: { authorization: `Bearer ${token}` }
       });
-      expect(manager.statusCode).toBe(403);
-      expect(apiErrorResponseSchema.parse(manager.json()).error).toMatchObject({
+      expect(response.statusCode).toBe(403);
+      expect(apiErrorResponseSchema.parse(response.json()).error).toMatchObject({
         code: "FORBIDDEN",
-        details: { action: operation, reason: "no_grant" }
-      });
-      // An admin without the right is told the right, as before.
-      const admin = await fixture.server.call(operation, {
-        ...request,
-        headers: { authorization: "Bearer admin" }
-      });
-      expect(admin.statusCode).toBe(403);
-      expect(apiErrorResponseSchema.parse(admin.json()).error).toMatchObject({
-        code: "FORBIDDEN",
-        message: "Missing the right 'api_access.manage'",
-        details: { action: "api_access.manage", reason: "no_grant" }
+        message: `Missing the right '${right}'`,
+        details: { action: right, reason: "no_grant" }
       });
 
       const refused = (await fixture.runs(operation)).filter((run) => run.status === "denied");
-      expect(refused.map((run) => run.actor.id).sort()).toEqual(
-        [fixture.users.admin.id, fixture.users["admin-manager"].id].sort()
-      );
+      expect(refused.map((run) => run.actor.id)).toEqual([fixture.users[token].id]);
+      const [run] = refused;
+      expect(run?.id).toBe(response.headers["operation-run-id"]);
       const events = await fixture.store.audit.listAuditEvents({
         clientInstanceId: fixture.clientInstanceId,
         limit: 200
       });
-      for (const run of refused) {
-        expect(run.id).toBe(
-          (run.actor.id === fixture.users.admin.id ? admin : manager).headers["operation-run-id"]
-        );
-        // One row for the check of the right, and the row every refused run ends with.
-        expect(
-          events
-            .filter((event) => event.metadata?.operationRunId === run.id)
-            .map((event) => `${event.type}:${event.status}`)
-            .sort()
-        ).toEqual(["operation.authorization_checked:denied", "operation.denied:denied"]);
-      }
+      // One row for the check of the right, and the row every refused run ends with.
+      expect(
+        events
+          .filter((event) => event.metadata?.operationRunId === run?.id)
+          .map((event) => `${event.type}:${event.status}`)
+          .sort()
+      ).toEqual(["operation.authorization_checked:denied", "operation.denied:denied"]);
     }
     expect(untouched(await storedRows())).toEqual(untouched(before));
   });
@@ -625,6 +652,13 @@ async function createFixture() {
       displayLabel: "API access manager",
       roles: ["admin"],
       permissions: ["api_access.manage"]
+    }),
+    /** An administrator from whom a deny takes `config_assets.read`. */
+    "admin-without-read": await store.users.createUser({
+      clientInstanceId,
+      displayLabel: "Admin without reading",
+      roles: ["admin"],
+      permissions: ["!config_assets.read"]
     }),
     user: await store.users.createUser({
       clientInstanceId,

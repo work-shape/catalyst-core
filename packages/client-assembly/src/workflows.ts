@@ -216,7 +216,12 @@ export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceI
     ...(modules.isEnabled(workflowsModule.name)
       ? {
           assetKinds: [
-            createWorkflowAssetKind({ clientInstanceId, apiAccess: stores.apiAccess, ...zone })
+            createWorkflowAssetKind({
+              clientInstanceId,
+              apiAccess: stores.apiAccess,
+              access: stores.access,
+              ...zone
+            })
           ]
         }
       : {}),
