@@ -43,6 +43,13 @@ export function appActionOutcome(
     : policyOutcomes[action.policy];
 }
 
+/** What the target of an action of each kind is, said under it. */
+export const appActionTargetKeys: Record<AppAction["kind"], TranslationKey> = {
+  connection: "apps.actionKindConnection",
+  sql: "apps.actionKindSql",
+  workflow: "apps.actionKindWorkflow"
+};
+
 export const appActionUnavailableKeys: Record<
   NonNullable<AppAction["unavailable"]>,
   TranslationKey
