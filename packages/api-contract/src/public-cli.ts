@@ -5,4 +5,4 @@
  * (`packages/docs/src/content/docs/configure/cli.md`, For maintainers). Undefined while no
  * published CLI has `catalyst setup`: the page then offers no command.
  */
-export const PUBLISHED_CLI_VERSION: string | undefined = undefined;
+export const PUBLISHED_CLI_VERSION: string | undefined = "0.7.0";

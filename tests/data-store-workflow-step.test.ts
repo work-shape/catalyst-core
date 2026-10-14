@@ -142,25 +142,38 @@ describe("a step of a Workflow Run on a Data Store", () => {
     });
   });
 
-  // `confirm` is the default of an instance. A run has nobody to ask, so its confirmation is
-  // an approval, and a call of a service principal cannot be held for one.
-  it.each([["confirm"], ["approval"]] as const)(
-    "needs an approval under the instance's policy '%s', which nobody can give its call yet: it is refused and says so",
-    async (changing) => {
-      const { grant, step } = await monthlyCheck(changing === "confirm" ? undefined : changing);
-      await grant(DATA_STORE_ACTIONS.insert);
-      await grant(DATA_STORE_ACTIONS.read);
+  // `confirm` is the default of an instance. A step of a published Workflow's run makes the
+  // call: publishing the Workflow was the confirmation, and the run says so.
+  it("adds the rows under the instance's default 'confirm', as publishing the Workflow confirmed it", async () => {
+    const { grant, step } = await monthlyCheck();
+    await grant(DATA_STORE_ACTIONS.insert);
+    await grant(DATA_STORE_ACTIONS.read);
 
-      expect((await step("insert", insert, "step_1")).answer).toEqual({
-        kind: "policy",
-        operation: INSERT,
-        reason: "approval_unavailable"
-      });
-      expect(await step("query", count, "step_2")).toMatchObject({
-        result: { output: { rows: [{ count: 0 }] } }
-      });
-    }
-  );
+    expect(await step("insert", insert, "step_1")).toMatchObject({
+      answer: "done",
+      run: { decision: { mode: "direct", reason: "workflow_publish" } }
+    });
+    expect(await step("query", count, "step_2")).toMatchObject({
+      result: { output: { rows: [{ count: 1 }] } }
+    });
+  });
+
+  // An approval the instance asks for is another person's, and a call of a service principal
+  // cannot be held for one.
+  it("needs an approval under the instance's policy 'approval', which nobody can give its call yet: it is refused and says so", async () => {
+    const { grant, step } = await monthlyCheck("approval");
+    await grant(DATA_STORE_ACTIONS.insert);
+    await grant(DATA_STORE_ACTIONS.read);
+
+    expect((await step("insert", insert, "step_1")).answer).toEqual({
+      kind: "policy",
+      operation: INSERT,
+      reason: "approval_unavailable"
+    });
+    expect(await step("query", count, "step_2")).toMatchObject({
+      result: { output: { rows: [{ count: 0 }] } }
+    });
+  });
 
   it("is refused under the instance's policy 'deny'", async () => {
     const { grant, step } = await monthlyCheck("deny");
