@@ -40,6 +40,8 @@ describe("what a personal key reaches", () => {
       // A server credential is the instance's own secret, never a key.
       if (operation.auth === "public" || operation.auth === "serverCredential") continue;
       if (operation.scope === null || KEY_OPERATION_SCOPES.has(operation.scope)) continue;
+      if ("personalKeyScope" in operation && KEY_OPERATION_SCOPES.has(operation.personalKeyScope))
+        continue;
       if (!isTestOperation(name)) continue;
       const params = Object.fromEntries(
         operationPathParamNames(operation.path).map((param) => [param, "x"])
@@ -57,7 +59,7 @@ describe("what a personal key reaches", () => {
       else if (!absent) reached.push(`${name} ${response.statusCode}`);
     }
     expect(reached).toEqual([]);
-    // Users, grants, service principals, conversations, runs, approvals, audit and more.
+    // Users, grants, service principals, conversations, review queues, audit and more.
     expect(refused).toBeGreaterThan(80);
   });
 

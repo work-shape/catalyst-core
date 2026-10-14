@@ -384,7 +384,7 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
       await requireWithinLimit(options, operation, { identity: caller.identity }, reply);
     }
     if (caller.identity && operation.scope) {
-      await requireOperationScope(options, caller.identity, operation.id, operation.scope);
+      await requireOperationScope(options, caller.identity, operation);
     }
     const query = parseInput(operation.query, request.query, "Request query is invalid");
     const body = parseInput(operation.body, request.body ?? {}, "Request body is invalid");
@@ -548,10 +548,19 @@ const FURTHER_SCOPE_OF_OPERATION: Partial<
 async function requireOperationScope(
   options: Pick<ResolvedChatServerOptions, "authorizer">,
   identity: AuthenticatedIdentity,
-  operationId: string,
-  scope: OperationScope
+  operation: Operation
 ): Promise<void> {
-  const further = FURTHER_SCOPE_OF_OPERATION[operationId];
+  const scope = operation.scope;
+  if (!scope) return;
+  if (
+    !isAuthenticatedServicePrincipal(identity) &&
+    identity.keyScopes !== undefined &&
+    operation.personalKeyScope &&
+    hasAuthScope(identity, operation.personalKeyScope)
+  ) {
+    return;
+  }
+  const further = FURTHER_SCOPE_OF_OPERATION[operation.id];
   if (hasAuthScope(identity, scope) || !further || !hasAuthScope(identity, further.scope)) {
     requireAuthScope(identity, scope);
     return;

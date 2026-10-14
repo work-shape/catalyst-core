@@ -12,6 +12,7 @@ export const operationRunOperations = {
     tag: "Operations",
     auth: "principal",
     scope: "governance:read",
+    personalKeyScope: "me:read",
     // A caller reads its own run without a right. Another caller's run takes the right
     // `audit.view`, which the operation checks itself.
     requires: [],
