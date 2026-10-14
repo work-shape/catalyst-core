@@ -457,7 +457,8 @@ for (const locale of LOCALES) {
         "POST /api/v1/connections/:name/test"
       ]);
       await create.locator("[data-connection-approve]").click();
-      await expect(page).toHaveURL(new RegExp(`/build/connections/${fresh}$`, "u"));
+      // The chat beside the page stays open: its conversation is in the address.
+      await expect(page).toHaveURL(new RegExp(`/build/connections/${fresh}(?:\\?|$)`, "u"));
       await expect(main.locator('[data-connection-operation="health"]')).toBeVisible();
       expect(freshWrites).toEqual([
         "PUT /api/v1/assets/connection/:name",

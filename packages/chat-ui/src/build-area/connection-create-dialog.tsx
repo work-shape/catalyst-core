@@ -467,9 +467,12 @@ export function ConnectionCreateFlow({
         return (
           <div className="grid min-w-0 gap-4">
             {stage.drafted ? (
-              <p className="text-body text-muted-foreground" data-connection-drafted="">
-                {t("connectionCreate.draftedIntro", { title })}
-              </p>
+              <>
+                <ConnectedLine text={connectedLine} />
+                <p className="text-body text-muted-foreground" data-connection-drafted="">
+                  {t("connectionCreate.draftedIntro", { title })}
+                </p>
+              </>
             ) : null}
             <ConnectionApprovalList
               candidates={stage.candidates}
