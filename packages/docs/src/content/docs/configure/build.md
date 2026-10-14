@@ -1,9 +1,9 @@
 ---
 title: Agents and skills in Studio
-description: Create, edit, restore and delete agents and skills in the Studio area, on the whole instance or in the Namespaces you hold rights in.
+description: Create, edit, restore and delete agents and skills in Studio, connect outside systems, and read the other lists Studio holds.
 ---
 
-**Studio** is the area of the interface where agents and skills are made. It stands in the main rail as a row of its own and opens at `/build`. The old address `/admin/config` leads there.
+**Studio** is the area of the interface where agents and skills are made. It stands in the main rail as a row of its own and opens at `/build`. The old address `/admin/config` leads there. Beside **Agents** (German: **Agenten**) and **Skills**, Studio lists **Connections** (**Verbindungen**), **Data stores** (**Datenspeicher**) and **Guardrails** (**Leitplanken**), each for a person who may read one. Apps and Workflows are not in Studio: each has a row of its own in the main rail.
 
 Studio works on the [asset API](/reference/api/assets/): it reads a list page by page, reads one asset when its page opens and writes one asset at a time. It never loads the whole set of agents and skills.
 
@@ -43,7 +43,7 @@ The administrator role holds every right on Connections. Beside the rights, the 
 
 ## Giving an agent the tools of a Connection
 
-The **Tools** section of an agent's page lists the instance's own tools under **Instance tools** and then, under **Connections**, one group for each Connection you may read (`connection.read`). A group holds a check box for each operation that agents may call and that is enabled and ready, with its description and whether it reads or changes. Ticking a box gives the agent the tool `connection.<name>.<operation>`. A group with more than 12 operations starts folded and shows how many of its operations the agent holds.
+The **Tools** section of an agent's page lists the instance's own tools under **Instance tools** and then, under **Connections**, one group for each Connection you may read (`connection.read`). A group holds a check box for each operation that agents may call and that is enabled and ready, with its description and whether it reads or changes. Ticking a box gives the agent the tool `connection.<name>.<operation>`. A group with more than 12 operations starts folded and shows how many of its operations the agent holds, and so does every group the agent holds nothing of when there are more than 6 groups.
 
 A tool the agent already holds whose Connection or operation is gone, switched off, not offered to agents or not visible to you stays on the page in a group **No longer available** at the end of the section. Saving keeps it until you remove it. At run time the agent goes on without such a tool.
 
@@ -53,29 +53,34 @@ The list is read once when the page opens, in one answer without pages. A Connec
 
 ## The page of a Connection
 
-The page of a Connection shows it and changes nothing. It never shows a credential or a reference to one.
+A Connection made in Studio is changed on its page by a person who may change Connections (`connection.write`): its address and authentication under **Settings**, its key under **Credential**, and the operations agents may call. A Connection that comes from the release config opens read-only and says so; it is changed in the release config. The page never shows a credential or a reference to one.
 
-- **Settings**: the connector type, the authentication scheme and the settings of the connector type, as the release config names them.
+- **Settings**: the connector type, the authentication scheme and the settings of the connector type.
 - **Status**: whether the instance reaches the outside system, when it was last tested, and whether the credential is set, not set or unreadable. A Connection has one credential for everyone who may use it, and the page says so. A Connection with the authentication scheme `none` needs no credential, and the page says that instead.
-- **Operations**: each accepted operation with its tool name `connection.<name>.<operation>`, whether it reads or changes, who may call it (agents, Apps, Workflows, outside clients or nobody) and its status. On a Connection made on the instance, a person with `connection.write` opens an operation to outside clients with the check box **Outside clients (CLI, MCP)** (German: **Externe Clients (CLI, MCP)**), and closes it again by clearing it. It is off on every operation until somebody ticks it, because what such a call returns is copied to the computer that holds the key. Only an operation with the status **Ready** can be called. **Awaiting discovery** means the instance has not read it from the outside system yet, **Needs review** that the outside system describes it differently than was accepted, **Unknown** that the outside system does not offer it, and **Disabled** that the release config switches it off.
+- **Operations**: each accepted operation with its tool name `connection.<name>.<operation>`, whether it reads or changes, who may call it (agents, Apps, Workflows, outside clients or nobody) and its status. On a Connection made on the instance, a person with `connection.write` opens an operation to outside clients with the check box **Outside clients (CLI, MCP)** (German: **Externe Clients (CLI, MCP)**), and closes it again by clearing it. It is off on every operation until somebody ticks it, because what such a call returns is copied to the computer that holds the key. Only an operation with the status **Ready** can be called. **Awaiting discovery** means the instance has not read it from the outside system yet, **Needs review** that the outside system describes it differently than was accepted, **Unknown** that the outside system does not offer it, and **Disabled** that the operator switched it off. On a Connection made in Studio, **Accept new description** clears **Needs review**, and **Remove** takes an operation away.
+- **Discovered tools** (German: **Gefundene Tools**), for a person who may change the Connection: the tools the server offers. For each, check **What it does** (**Was es tut**: Reading or Changing), untick **Agents can use it** (**Agenten dürfen es nutzen**) if agents should not call it, then **Accept** (**Akzeptieren**) to add it as an operation. **Read tools again** asks the server once more.
 - **Used by**: the agents that carry a tool of the Connection, of those the reader may read.
+- **Who may use it**: the people and service principals given this Connection by itself. Rights on a whole Namespace are on the Access page.
 
 **Test connection** asks the connector type to check the Connection and records the answer. It is offered to a person who may change Connections (`connection.write`); a person who may only read sees the recorded state. A test that a policy holds for an approval has not run: it waits in the Inbox.
 
-| Status | What it means | What to do |
-| --- | --- | --- |
-| Ready | The outside system answered the test. | Nothing. |
-| Not tested | Nobody has tested the Connection yet. | Test it. |
-| Unauthorized | The outside system refused the credential. | The operator sets a new credential in the instance's environment and restarts the instance. |
-| Network denied | The host is not in [`egress.allow`](/configure/release-config/#egress), or it resolves to an address the instance may not reach. | The operator adds the host to `egress.allow`, or for a public HTTPS host on port 443 sets `egress.allowPublicHttps`, and restarts the instance. |
-| Unavailable | The outside system did not answer. | Check the address under Settings. It is changed in the release config. |
-| Not configured | The credential is missing. | The operator supplies it in the instance's environment and restarts the instance. |
-| Credential unreadable | A credential is stored and the instance cannot read it. | The operator restores the Secret Store key it was stored with, or supplies the credential again, and restarts the instance. |
-| Failed | The test failed for a reason the instance does not name. | Test again, then ask the operator. |
+What to do depends on where the Connection comes from. A Connection made in Studio is repaired on its page; one from the release config needs the operator.
+
+| Status | What it means | Made in Studio | From the release config |
+| --- | --- | --- | --- |
+| Ready | The outside system answered the test. | Nothing. | Nothing. |
+| Not tested | Nobody has tested the Connection yet. | Test it. | Test it. |
+| Testing | A test runs. | Wait for it. | Wait for it. |
+| Unauthorized | The outside system refused the credential. | Enter a new key under **Credential**, then test again. | The operator sets a new credential in the instance's environment and restarts the instance. |
+| Network denied | The host is not in [`egress.allow`](/configure/release-config/#egress), or it resolves to an address the instance may not reach. | The operator adds the host to `egress.allow`, or for a public HTTPS host on port 443 sets `egress.allowPublicHttps`, and restarts the instance. | The same. |
+| Unavailable | The outside system did not answer. | Check the address under **Settings** and change it if it is wrong. | Check the address under **Settings**. The operator changes it in the release config. |
+| Not configured | The credential is missing. | Enter the key under **Credential**, then test again. | The operator supplies it in the instance's environment and restarts the instance. |
+| Credential unreadable | A credential is stored and the instance cannot read it. | Enter the key again under **Credential**, then test again. | The operator restores the Secret Store key it was stored with, or supplies the credential again, and restarts the instance. |
+| Failed | The test failed for a reason the instance does not name. | Test again, then ask the operator. | Test again, then ask the operator. |
 
 ## The list
 
-Each kind has a list: **Agents** and **Skills**. A row shows the name, the Namespace if the asset is in one, the id and when it was last changed. A row is a link, so it opens in a new tab like any other link.
+Each kind has a list. For **Agents** and **Skills** a row shows the name, the Namespace if the asset is in one, the id and when it was last changed. A row is a link, so it opens in a new tab like any other link.
 
 - **Search** asks the instance for names and ids that contain the text.
 - **Namespace** narrows the list to one Namespace. It shows when you hold rights in more than one.
