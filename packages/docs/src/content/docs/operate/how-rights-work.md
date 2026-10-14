@@ -513,7 +513,7 @@ Every guardrail that applies runs, and the strictest answer wins.
 
 There are two sources of guardrails. The operator's floor is set in [release config](/configure/release-config/#guardrails), always runs and cannot be changed in the product. Further guardrails are written as assets, for the whole instance or for one Shared Workspace, tried on sample content and in a dry run, and made live by a person who may publish guardrails (`guardrail.publish`). Administrators hold that right for the instance, and an administrator can grant it for one Shared Workspace. A workspace's guardrail checks only what happens in that workspace. No published guardrail runs when guardrails themselves are changed; only the floor does. See [Guardrails as assets](/configure/config-assets/#guardrails-as-assets).
 
-**Studio > Guardrails** (German: **Studio › Leitplanken**) lists every guardrail with one sentence saying when it runs, such as "Runs before an agent saves a skill, in workspace Kai Spezis. Checks the content for a text pattern. Blocks if the check fails." A guardrail's page counts its hits for the last 7 and 30 days. Hits are counted by rule and never listed by person.
+**Studio > Guardrails** (German: **Studio › Leitplanken**) lists every guardrail with one sentence saying when it runs, such as "Runs before an agent saves a skill, in workspace Finance. Checks the content for a text pattern. Blocks if the check fails." A guardrail's page counts its hits for the last 7 and 30 days. Hits are counted by rule and never listed by person.
 
 Beside guardrails, fixed limits protect an instance:
 
