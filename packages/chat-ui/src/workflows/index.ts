@@ -27,7 +27,8 @@ export {
   failureHappened,
   resolveWorkflowRights,
   startOffered,
-  workflowsAccess
+  workflowsAccess,
+  workflowsRowShown
 } from "./workflow-model";
 export { StartDialog } from "./start-run";
 export { checkStartForm, startFormOf, startRefusalByField } from "./start-form";

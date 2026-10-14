@@ -1,6 +1,7 @@
 import {
   Bell,
   BookOpen,
+  Bot,
   Box,
   Clock,
   Code,
@@ -10,11 +11,13 @@ import {
   Flag,
   GitBranch,
   Globe,
+  Inbox,
+  LayoutGrid,
   Mail,
   Play,
   Plug,
   Repeat,
-  Sparkles,
+  ShieldCheck,
   UserCheck,
   Workflow,
   Wrench
@@ -32,22 +35,28 @@ export type IconRegistry = Readonly<Record<string, IconComponent>>;
 export type IconFamily = "file" | "service" | "skill" | "tool";
 
 /**
- * The icons the library ships: one per family, one per asset kind (`agent`, `skill`,
- * `connection`, `workflow`), `guide` for the platform's guide to itself, one per kind of part
- * of a graph, one per category of what a part touches and one per file type (`spreadsheet`,
- * `document`, `presentation`, `pdf`, `image`, `archive`, `text`, and `file` for every other
- * type, which is also the generic icon of the family). None of them is a mark of a vendor.
+ * The icons the library ships: one per family, one per kind of asset (`agent`, `skill`,
+ * `connection`, `workflow`, `app`, `datastore`, `guardrail`), the same everywhere a kind is
+ * shown, `inbox` for the Inbox, `guide` for the platform's guide to itself, one per kind of
+ * part of a graph, one per category of what a part touches and one per file type
+ * (`spreadsheet`, `document`, `presentation`, `pdf`, `image`, `archive`, `text`, and `file` for
+ * every other type, which is also the generic icon of the family). None of them is a mark of a
+ * vendor.
  */
 export const genericIcons = {
   ...fileTypeIcons,
-  agent: Sparkles,
+  agent: Bot,
+  app: LayoutGrid,
   approval: UserCheck,
   branch: GitBranch,
   code: Code,
   connection: Plug,
   database: Database,
+  datastore: Database,
   files: FileText,
+  guardrail: ShieldCheck,
   guide: Compass,
+  inbox: Inbox,
   mail: Mail,
   manual: Play,
   notify: Bell,
@@ -81,8 +90,20 @@ export function IconRegistryProvider({
 
 /**
  * The icon registered under `name`, else the one under `fallback`, else the generic icon of
- * the family, else the generic step.
+ * the family, else the generic step. `registered` says whether `name` itself is registered.
  */
+export function useRegistryIcon(
+  name: string | undefined,
+  fallback?: string,
+  family?: IconFamily
+): { Icon: IconComponent; registered: boolean } {
+  const registry = useContext(IconRegistryContext);
+  return {
+    Icon: resolveIcon(registry, name, fallback, family),
+    registered: name !== undefined && registry[name] !== undefined
+  };
+}
+
 function resolveIcon(
   registry: IconRegistry,
   name: string | undefined,
@@ -108,6 +129,6 @@ export interface RegistryIconProps {
 
 /** An icon by its key in the registry, with a generic one for a key nobody registered. */
 export function RegistryIcon({ name, fallback, family, className }: RegistryIconProps) {
-  const Icon = resolveIcon(useContext(IconRegistryContext), name, fallback, family);
+  const { Icon } = useRegistryIcon(name, fallback, family);
   return <Icon aria-hidden className={className} />;
 }

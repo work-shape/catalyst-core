@@ -65,7 +65,14 @@ export const platformContextSchema = z.object({
    * leave it empty.
    */
   assetActions: z.array(z.string()),
-  namespaces: z.array(platformContextNamespaceSchema)
+  namespaces: z.array(platformContextNamespaceSchema),
+  /**
+   * The section rows of the interface's sidebar that are there for the caller, of those that
+   * belong to no workspace. `workflows`: the module is on, and the caller is listed at least
+   * one Workflow by `workflows.list` or holds `workflow.write` on the instance, in a Namespace
+   * or on one Workflow. A member is never shown an empty row; whoever may build one is.
+   */
+  visibleSections: z.array(z.enum(["workflows"]))
 });
 
 export type PlatformContext = z.infer<typeof platformContextSchema>;

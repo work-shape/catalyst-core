@@ -16,7 +16,7 @@ import { storesOn } from "./support/upgrade-database";
 
 // AP-4 verifier: the way back. `--restore-legacy-columns` writes the rows into the columns and
 // the release before AP-4 starts. That release reads the column AND every grant row, so the rows
-// migration 0072 wrote keep answering under it.
+// migration 0073 wrote keep answering under it.
 
 const fixtures = new PostgresFixtures(inject("postgresFixturePrefix"));
 const cleanups: (() => Promise<void> | void)[] = [];
@@ -102,7 +102,7 @@ describe("AP-4 verifier: rollback", () => {
     // On the old release an admin unticks users.manage: the old store writes the column only.
     await sql`update product_users set permissions = '[]'::jsonb where id = 'usr_manager'`;
 
-    // The old release still allows it: migration 0072's instance-wide rows are still there.
+    // The old release still allows it: migration 0073's instance-wide rows are still there.
     expect(await preAp4Decision(sql, "usr_manager", "users.manage")).toBe(false);
   });
 
@@ -134,7 +134,7 @@ describe("AP-4 verifier: rollback", () => {
     await restoreLegacyColumns({ sql, write: () => undefined });
     // On the old release: users.manage is taken away, audit.view is given.
     await sql`update product_users set permissions = '["audit.view"]'::jsonb where id = 'usr_manager'`;
-    // Upgrade again: the restore removed the record of 0072, so it moves the lists again.
+    // Upgrade again: the restore left a marker, so the migrate step moves the lists again.
     expect(await migrateDatabase({ databaseUrl })).toEqual([
       expect.stringMatching(/_legacy_permission_grants$/u)
     ]);

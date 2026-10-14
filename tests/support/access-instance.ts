@@ -18,6 +18,7 @@ import {
   type UserRole
 } from "@vivd-catalyst/core";
 import { atCurrentRevision } from "./asset-revisions";
+import { createStoredConfigAssetSource } from "./static-config-asset-source";
 import type { TestCallInput, TestOperationName } from "./operations";
 import {
   createTestAssetKinds,
@@ -243,10 +244,12 @@ export interface AccessInstance {
     scope: { namespace: string } | { assetId: string } | { workspaceId: string },
     effect?: "allow" | "deny"
   ): Promise<string>;
+  /** A new agent starts hidden unless `availableIn` says where. */
   putAgent(
     userId: string,
     name: string,
-    overrides?: Record<string, unknown>
+    overrides?: Record<string, unknown>,
+    availableIn?: "all" | { workspaceId: string }
   ): Promise<AccessResponse>;
   assetId(kind: string, name: string): Promise<string>;
   /** A Shared Workspace the administrator created. Returns its id. */
@@ -266,6 +269,11 @@ export interface AccessInstanceOptions {
   fastModeModelBindingIds?: string[];
   /** Switches of `modules`, such as `{ connections: { enabled: true } }`. */
   modules?: ModuleSwitches;
+  /**
+   * The runtime reads the stored agents and skills, as an assembled instance does, so what a
+   * workspace offers follows the writes. Left out, the runtime sees none.
+   */
+  storedAssetSource?: true;
   /**
    * Further server options, built from the stores and the config of the instance. They
    * replace the ones this file sets, such as the call path with a further operation source.
@@ -302,6 +310,14 @@ export async function setupAccessInstance(
       configAssets: {
         store: stores.configAssets,
         validationRefs,
+        ...(options.storedAssetSource
+          ? {
+              source: createStoredConfigAssetSource({
+                store: stores.configAssets,
+                clientInstanceId
+              })
+            }
+          : {}),
         ...(furtherKinds.length === 0
           ? {}
           : {
@@ -391,10 +407,15 @@ export async function setupAccessInstance(
     });
     return grantSchema.parse(response.json()).id;
   };
-  const putAgent = (userId: string, name: string, overrides: Record<string, unknown> = {}) =>
+  const putAgent = (
+    userId: string,
+    name: string,
+    overrides: Record<string, unknown> = {},
+    availableIn?: "all" | { workspaceId: string }
+  ) =>
     call(userId, "assets.put", {
       params: { kind: "agent", name },
-      payload: { config: agent(name, overrides) }
+      payload: { config: agent(name, overrides), ...(availableIn ? { availableIn } : {}) }
     });
   const assetId = async (kind: string, name: string) => {
     const asset = await stores.configAssets.getConfigAsset({ clientInstanceId, kind, name });

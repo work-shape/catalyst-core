@@ -133,6 +133,8 @@ export interface AppInstanceOptions {
   server?: (
     ...input: Parameters<NonNullable<AccessInstanceOptions["server"]>>
   ) => Partial<TestServerOptions>;
+  /** Registers the operations of a further module, such as the routes of `workflows`. */
+  register?: AccessInstanceOptions["register"];
 }
 
 export interface AppInstance extends AccessInstance {
@@ -207,7 +209,8 @@ export async function setupAppInstance(options: AppInstanceOptions = {}): Promis
         ? { authAdapter: { ...recordAuthAdapter(), credentialMode: "explicit" as const } }
         : {}),
       ...options.server?.(stores, config)
-    })
+    }),
+    ...(options.register ? { register: options.register } : {})
   });
   const { stores, instance, admin, kai } = access;
   let scratch: string | undefined;

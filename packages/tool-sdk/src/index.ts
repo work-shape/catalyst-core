@@ -3,6 +3,7 @@ import type {
   ConversationId,
   JsonObject,
   JsonValue,
+  OperationBeforeEvent,
   OperationEffect,
   PolicyValue,
   ToolExecutionErrorCode,
@@ -32,6 +33,15 @@ export interface ToolDefinition<TInput = unknown, TOutput = unknown> {
   policyFloor?(call: {
     conversationId: ConversationId;
   }): PolicyValue | undefined | Promise<PolicyValue | undefined>;
+  /**
+   * The before-events of a call beside `operation.before_call`: a tool that saves an asset
+   * names `asset.before_write` for it, so the guardrails on asset writes answer an agent's save
+   * as they answer a person's.
+   */
+  beforeEvents?(
+    input: TInput,
+    call: { conversationId: ConversationId }
+  ): readonly OperationBeforeEvent[] | Promise<readonly OperationBeforeEvent[]>;
   execute(
     input: TInput,
     context: ToolRuntimeContext

@@ -6,10 +6,12 @@ import {
   type ConversationId,
   type ConversationSubject,
   type JsonObject,
+  type OperationBeforeEvent,
   type PolicyValue,
   type ToolExecutionContext
 } from "@vivd-catalyst/core";
 import { defineTool, toolSuccess, type AnyToolDefinition } from "@vivd-catalyst/tool-sdk";
+import type { PageAppCalls } from "./page-app-tool";
 import type { PlatformDiscoveryCalls } from "./platform-discovery-tools";
 
 // The tools an agent opens, reads and saves the draft of an asset with. Each is a projection of
@@ -93,7 +95,7 @@ export interface PlatformCallableOperation {
  * refusal. A conversation without a subject is refused by each method on the subject, except
  * by a read that names an asset and by the call that opens one.
  */
-export interface PlatformAssetCalls extends PlatformDiscoveryCalls {
+export interface PlatformAssetCalls extends PlatformDiscoveryCalls, PageAppCalls {
   /**
    * Makes `named` the asset the conversation is about, and reads it. One the person may not
    * read, or one that does not exist, is refused alike and leaves the subject as it was; so is
@@ -118,6 +120,11 @@ export interface PlatformAssetCalls extends PlatformDiscoveryCalls {
    * conversation, or nothing where no setting matches it. A save is never looser than it.
    */
   putPolicyFloor(conversationId: ConversationId): Promise<PolicyValue | undefined>;
+  /** The before-event of a save of a conversation's subject: `asset.before_write` of it. */
+  putBeforeEvents(
+    conversationId: ConversationId,
+    config: Record<string, unknown>
+  ): Promise<readonly OperationBeforeEvent[]>;
   listOperations(
     context: ToolExecutionContext
   ): Promise<{ operations: PlatformCallableOperation[]; truncated: boolean }>;
@@ -156,10 +163,16 @@ export function createPlatformAssetBinding(): PlatformAssetBinding {
       validate: (context, config) => required().validate(context, config),
       put: (context, input) => required().put(context, input),
       putPolicyFloor: (conversationId) => required().putPolicyFloor(conversationId),
+      putBeforeEvents: (conversationId, config) =>
+        required().putBeforeEvents(conversationId, config),
       listOperations: (context) => required().listOperations(context),
       readContext: (context) => required().readContext(context),
       listAssets: (context, input) => required().listAssets(context, input),
-      listFiles: (context, input) => required().listFiles(context, input)
+      listFiles: (context, input) => required().listFiles(context, input),
+      saveAsApp: (context, input) => required().saveAsApp(context, input),
+      saveIntoSubjectApp: (context, input) => required().saveIntoSubjectApp(context, input),
+      pageAppPolicyFloor: (conversationId, write) =>
+        required().pageAppPolicyFloor(conversationId, write)
     }
   };
 }
@@ -377,6 +390,9 @@ export function createPlatformAssetTools(calls: PlatformAssetCalls): AnyToolDefi
       permission: { mode: "allow" },
       // A setting on the operation this projects holds for the save of the agent too.
       policyFloor: ({ conversationId }) => calls.putPolicyFloor(conversationId),
+      // The guardrails on asset writes answer the agent's save as they answer a person's.
+      beforeEvents: (input, { conversationId }) =>
+        calls.putBeforeEvents(conversationId, input.config),
       async execute(input, context) {
         const written = await calls.put(context, input);
         return toolSuccess(written, {

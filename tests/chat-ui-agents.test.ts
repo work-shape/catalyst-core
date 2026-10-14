@@ -5,6 +5,7 @@ import {
   agentListStatus,
   AgentsPage,
   agentStudioRoute,
+  agentsRowShown,
   areaOfRoute,
   railSections,
   shownRailSections,
@@ -106,6 +107,20 @@ describe("the Agents row of the rail", () => {
     // An embedded session has no workspace whose agents the page could show.
     expect(ids({ apps: true })).toEqual(["apps"]);
   });
+
+  // NAV-VIS-1: the workspace's list names the row with two agents or more, or for whoever may
+  // write one. With one agent New chat starts it, and the row is gone.
+  it("shows where the open workspace's list names it, in a session with workspaces", () => {
+    const named = { visibleSections: ["agents" as const] };
+    const unnamed = { visibleSections: [] };
+
+    expect(agentsRowShown(true, named)).toBe(true);
+    expect(agentsRowShown(true, unnamed)).toBe(false);
+    // Until the list arrived, or where it failed, nothing is known to show.
+    expect(agentsRowShown(true, undefined)).toBe(false);
+    // An embedded session has no workspace whose agents the page could show.
+    expect(agentsRowShown(false, named)).toBe(false);
+  });
 });
 
 describe("the state of the workspace's list of agents", () => {
@@ -173,7 +188,13 @@ describe("the Agents page", () => {
 
   it("offers New agent in the page head to a person who may create one, and to nobody else", () => {
     const button = /<button[^>]*>(?:<svg.*?<\/svg>)?New agent<\/button>/u;
-    const newAgent = { namespaces: [], mayNameFreely: true, onStart: noop };
+    const newAgent = {
+      namespaces: [],
+      mayNameFreely: true,
+      mayChooseAll: true,
+      startsIn: { workspace: { id: "cws_1", name: "Steuer" }, mayChooseAll: true },
+      onStart: noop
+    };
 
     expect(page({ onOpenStudio: noop, newAgent })).toMatch(button);
     expect(page({ agents: [], onOpenStudio: noop, newAgent })).toMatch(button);

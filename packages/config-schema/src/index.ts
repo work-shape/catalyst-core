@@ -1,6 +1,7 @@
 export * from "./schemas";
 export * from "./connection-schema";
 export * from "./guardrail-schema";
+export * from "./guardrail-pattern";
 export { APPROVAL_CHECKS_WITH_GUARDRAILS_REFUSAL } from "./approval-checks-transition";
 export * from "./infrastructure";
 export * from "./validation";

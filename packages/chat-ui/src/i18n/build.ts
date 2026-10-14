@@ -15,6 +15,9 @@ export const build = defineTranslations({
     "build.assetRefused": "You may not read this asset.",
     "build.conflictDeleted":
       "Somebody deleted this while you were editing. Your text is still here, but it can no longer be saved.",
+    "build.createAvailableHidden": "Hidden until an instance admin makes it available",
+    "build.createAvailableWorkspaceHint":
+      "Only members of this workspace can choose it. An instance admin can make it available in more.",
     "build.copyTitle": "{title} (copy)",
     "build.copyToEdit": "Copy to edit",
     "build.createContinue": "Continue",
@@ -125,6 +128,9 @@ export const build = defineTranslations({
     "build.assetRefused": "Du darfst dieses Asset nicht lesen.",
     "build.conflictDeleted":
       "Jemand hat dies gelöscht, während du es bearbeitet hast. Dein Text steht noch hier, lässt sich aber nicht mehr speichern.",
+    "build.createAvailableHidden": "Ausgeblendet, bis ein Instanz-Admin ihn verfügbar macht",
+    "build.createAvailableWorkspaceHint":
+      "Nur Mitglieder dieses Arbeitsbereichs können ihn auswählen. Ein Instanz-Admin kann ihn in weiteren verfügbar machen.",
     "build.copyTitle": "{title} (Kopie)",
     "build.copyToEdit": "Zum Bearbeiten kopieren",
     "build.createContinue": "Weiter",

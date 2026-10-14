@@ -9,7 +9,7 @@ export const APP_KIT_PACKAGE = "@work-shape/catalyst-app-kit";
  * Every kit version this release can build against. A release that ships a kit version adds it
  * here; none is ever removed, because a stored Page names the version it was built with.
  */
-export const RELEASED_KIT_VERSIONS: readonly string[] = ["1.0.0", "1.1.0", "1.2.0"];
+export const RELEASED_KIT_VERSIONS: readonly string[] = ["1.0.0", "1.1.0", "1.2.0", "1.3.0"];
 
 /** The stylesheet of the shared UI library, with the utility classes its components use. */
 export const KIT_STYLESHEET_FILE = "ui.css";
@@ -29,6 +29,11 @@ export const KIT_PLAIN_PAGE_FILES: readonly string[] = [KIT_PAGE_STYLESHEET_FILE
 const KIT_CLIENT_FILE = "kit.js";
 /** The first version with a stylesheet for a plain Page and with a theme script. */
 const PLAIN_PAGE_STYLES_SINCE = "1.2.0";
+/**
+ * The first version that reads the answer a draft gives a `workflow` action and follows the
+ * Workflow Run a call started.
+ */
+export const KIT_WORKFLOW_ACTIONS_SINCE = "1.3.0";
 
 /** Where the instance serves the files of a kit version. A path, never a host. */
 export const KIT_RUNTIME_PATH = "/app-runtime/kit";
@@ -59,8 +64,17 @@ export function kitFilePath(kitVersion: string, file: string): string {
  * as that version built it: a stored Page keeps loading the files of the version it names.
  */
 export function kitStylesPlainPages(kitVersion: string): boolean {
+  return releasedSince(kitVersion, PLAIN_PAGE_STYLES_SINCE);
+}
+
+/** Whether a Page of a kit version may have `workflow` actions. */
+export function kitStartsWorkflows(kitVersion: string): boolean {
+  return releasedSince(kitVersion, KIT_WORKFLOW_ACTIONS_SINCE);
+}
+
+function releasedSince(kitVersion: string, since: string): boolean {
   const index = RELEASED_KIT_VERSIONS.indexOf(kitVersion);
-  return index !== -1 && index >= RELEASED_KIT_VERSIONS.indexOf(PLAIN_PAGE_STYLES_SINCE);
+  return index !== -1 && index >= RELEASED_KIT_VERSIONS.indexOf(since);
 }
 
 /**

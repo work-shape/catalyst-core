@@ -21,7 +21,7 @@ import { migrationsUntil } from "./support/migrations-until";
 import { PostgresFixtures } from "./support/postgres-fixtures";
 import { storesOn } from "./support/upgrade-database";
 
-// AP-4 verifier: an independent check that migration 0072 plus the row-only evaluator answers
+// AP-4 verifier: an independent check that migration 0073 plus the row-only evaluator answers
 // what the evaluator of the commit before AP-4 (a frozen copy in support/ap4-verify) answered
 // over the legacy columns, for every registered action, every key and three resources, over a
 // random seed written at the migration before AP-4.
@@ -197,7 +197,7 @@ async function seed(sql: Sql, seedNumber: number): Promise<Seeded> {
           : pick(ACTIONS);
       // No release before AP-4 wrote a row at instance scope: the Access page refused it
       // (`invalid_scope`). A user's row there is still compared; a service principal's is not,
-      // because once migration 0072 merged it with a key of the list nothing tells the two
+      // because once migration 0073 merged it with a key of the list nothing tells the two
       // apart, and a credential's scopes cap the list's keys but did not cap such a row.
       const scopeKind = pick(
         holder.kind === "user"
@@ -285,7 +285,7 @@ function asList(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String) : [];
 }
 
-describe("AP-4 verifier: rights before and after migration 0072", () => {
+describe("AP-4 verifier: rights before and after migration 0073", () => {
   for (const seedNumber of [1, 2, 3]) {
     it(`users answer the same for every action, key and resource (seed ${seedNumber})`, async () => {
       const { databaseUrl, sql } = await databaseBeforeAp4();

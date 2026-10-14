@@ -1,4 +1,3 @@
-import { Cable } from "lucide-react";
 import { Badge, Chip, ConnectionIcon } from "@vivd-catalyst/ui";
 import { connectionCategory } from "../connection-facts";
 import type { BuildAssetViewProps, BuildListedKind } from "./build-asset-kind";
@@ -25,7 +24,7 @@ export const connectionKind: BuildListedKind = {
   description: "connections.description",
   searchLabel: "connections.search",
   emptyText: "connections.empty",
-  icon: Cable,
+  icon: "connection",
   view: { Page: ConnectionAssetPage, missingText: "connections.missing" },
   // A row shows the icon of the system behind the Connection, on its tile, and what the
   // Connection is for in words. Its id stands on its page.

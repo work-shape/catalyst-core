@@ -276,3 +276,15 @@ export async function hasConnection(
   }
   return (await api.getAsset(CONNECTION_KIND, connection)) !== undefined;
 }
+
+/** Whether an agent's availability offers it in no workspace, or it has none. */
+export function offeredNowhere(
+  availability: ConfigAssetsOverview["assets"][number]["availability"]
+): boolean {
+  return (
+    !availability ||
+    (availability.mode === "selected" &&
+      !availability.personalWorkspaces &&
+      availability.collaborationWorkspaceIds.length === 0)
+  );
+}

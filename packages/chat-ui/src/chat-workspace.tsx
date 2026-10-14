@@ -538,6 +538,13 @@ function ChatWorkspaceContent({
                             model.controlPlane.agentCreation
                               ? {
                                   ...model.controlPlane.agentCreation,
+                                  startsIn: {
+                                    workspace:
+                                      activeWorkspace?.kind === "shared"
+                                        ? { id: activeWorkspace.id, name: activeWorkspace.name }
+                                        : undefined,
+                                    mayChooseAll: model.controlPlane.agentCreation.mayChooseAll
+                                  },
                                   onStart: (start) => startNewAgent(model.route.showRoute, start)
                                 }
                               : undefined

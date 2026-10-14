@@ -5,7 +5,7 @@ import { migrateDatabase } from "@vivd-catalyst/postgres-store";
 import { migrationsUntil } from "./support/migrations-until";
 import { PostgresFixtures } from "./support/postgres-fixtures";
 
-// AP-4 verifier: migration 0072 on its own, on odd inputs and run a second time by hand.
+// AP-4 verifier: migration 0073 on its own, on odd inputs and run a second time by hand.
 
 const fixtures = new PostgresFixtures(inject("postgresFixturePrefix"));
 const cleanups: (() => Promise<void> | void)[] = [];
@@ -14,7 +14,7 @@ afterEach(async () => {
 });
 const instance = "ap4-sql";
 const migrationSql = readFileSync(
-  "packages/postgres-store/migrations/0072_legacy_permission_grants.sql",
+  "packages/postgres-store/migrations/0073_legacy_permission_grants.sql",
   "utf8"
 );
 
@@ -29,7 +29,7 @@ async function databaseBeforeAp4() {
   return { databaseUrl, sql };
 }
 
-describe("AP-4 verifier: migration 0072 SQL", () => {
+describe("AP-4 verifier: migration 0073 SQL", () => {
   it("runs on an empty instance and writes nothing", async () => {
     const { databaseUrl, sql } = await databaseBeforeAp4();
     await migrateDatabase({ databaseUrl });

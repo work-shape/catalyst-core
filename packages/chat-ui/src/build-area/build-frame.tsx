@@ -22,6 +22,7 @@ import {
   PageHeaderBack,
   Picker,
   PickerButton,
+  RegistryIcon,
   SkeletonList,
   SkeletonPage,
   SubRail
@@ -74,7 +75,14 @@ const ALL_NAMESPACES = "";
  * back, History, the delete, the answer to a conflict and every state; what a kind is comes
  * from its registry entry, and what the instance holds from `source`.
  */
-export function BuildFrame({ source }: { source: BuildSource }) {
+export function BuildFrame({
+  source,
+  workspace
+}: {
+  source: BuildSource;
+  /** The shared workspace the reader works in: a new agent starts available there. */
+  workspace?: { id: string; name: string };
+}) {
   const { t } = useTranslation();
   const { location, open, href } = useBuildNavigation();
   const kinds = visibleBuildKinds(useBuildAssetKinds(), source.kinds);
@@ -235,6 +243,12 @@ export function BuildFrame({ source }: { source: BuildSource }) {
   };
 
   const assetName = creating ? undefined : place.name;
+  // A new asset and a copy start where the dialog says: of a kind that starts in the workspace,
+  // in the one the reader works in.
+  const startsIn =
+    isEditableKind(entry) && entry.startsInWorkspace
+      ? { workspace, mayChooseAll: source.rights.instanceWrite }
+      : undefined;
   const back = (
     <PageHeaderBack label={t("build.backToList", { kind: t(entry.label) })} onClick={openList}>
       {t(entry.label)}
@@ -248,6 +262,7 @@ export function BuildFrame({ source }: { source: BuildSource }) {
         kind={entry.kind}
         view={entry.view}
         name={assetName}
+        kinds={kinds.map((kind) => kind.entry)}
         page={{ ref: pageRef, above: loadError, shown: pageShown }}
         back={back}
       />
@@ -291,6 +306,7 @@ export function BuildFrame({ source }: { source: BuildSource }) {
             initialTitle={t("build.copyTitle", { title: copying.title })}
             namespaces={source.rights.creatableNamespaces(entry.kind)}
             mayNameFreely={source.rights.instanceWrite}
+            startsIn={startsIn}
             onClose={() => setCopying(undefined)}
             onStart={(chosen) => {
               setCopying(undefined);
@@ -323,14 +339,11 @@ export function BuildFrame({ source }: { source: BuildSource }) {
             groups={[
               {
                 id: "kinds",
-                items: kinds.map((kind) => {
-                  const Icon = kind.entry.icon;
-                  return {
-                    id: kind.entry.path,
-                    label: t(kind.entry.label),
-                    icon: <Icon aria-hidden="true" />
-                  };
-                })
+                items: kinds.map((kind) => ({
+                  id: kind.entry.path,
+                  label: t(kind.entry.label),
+                  icon: <RegistryIcon name={kind.entry.icon} />
+                }))
               }
             ]}
             value={entry.path}
@@ -355,6 +368,7 @@ export function BuildFrame({ source }: { source: BuildSource }) {
           entry={entry}
           namespaces={source.rights.creatableNamespaces(entry.kind)}
           mayNameFreely={source.rights.instanceWrite}
+          startsIn={startsIn}
           onClose={() => setAsking(false)}
           onStart={(chosen) => {
             setAsking(false);
@@ -466,7 +480,7 @@ function BuildList({
           <SkeletonList rows={6} />
         )
       ) : list.rows.length === 0 && !filtered ? (
-        <EmptyState icon={<entry.icon aria-hidden="true" />} action={newButton}>
+        <EmptyState icon={<RegistryIcon name={entry.icon} />} action={newButton}>
           {t(editable && !state.canCreate ? editable.emptyReadOnlyText : entry.emptyText)}
         </EmptyState>
       ) : (
@@ -614,13 +628,12 @@ function RowMark({ entry, title }: { entry: BuildKind; title: string }) {
   if (entry.avatar) {
     return <Avatar kind={entry.avatar} name={title} />;
   }
-  const Icon = entry.icon;
   return (
     <span
       aria-hidden="true"
       className="grid size-8 place-items-center rounded-md bg-muted text-muted-foreground"
     >
-      <Icon className="size-4" />
+      <RegistryIcon name={entry.icon} className="size-4" />
     </span>
   );
 }

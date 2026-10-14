@@ -77,10 +77,11 @@ const appsModule = defineModule({
     "apps.preview",
     "apps.sessions.context",
     "apps.sessions.call_action",
-    "apps.sessions.call_connection"
+    "apps.sessions.call_connection",
+    "apps.sessions.get_workflow_run"
   ],
   kinds: ["app"],
-  tools: ["page.save"],
+  tools: ["page.save", "page.save_as_app"],
   jobKinds: ["page.bundle", "asset_repo.commit", "asset_repo.sweep"],
   commandWorkerJobKinds: ["page.bundle", "asset_repo.commit", "asset_repo.sweep"]
 });

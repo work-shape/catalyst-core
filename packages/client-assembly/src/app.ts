@@ -63,6 +63,7 @@ import { createClientInstanceAuth } from "./auth";
 import { createInstanceConnections, withConnections } from "./connections";
 import { createInstanceAssetKinds } from "./instance-asset-kinds";
 import { seedInstance } from "./instance-seed";
+import { shippedSkillNames } from "./shipped-skills";
 import { createClientInstanceMail } from "./mail";
 import type {
   ClientInstanceAttachmentHandler,
@@ -368,7 +369,7 @@ export async function createClientInstanceExecutionAssembly(
     source: assetSource,
     kinds: createInstanceAssetKinds({
       agent: { config, validationRefs, validateAgents },
-      skill: { config },
+      skill: { config, shippedSkillNames },
       connections,
       modules,
       moduleKinds: moduleAssembly.assetKinds
@@ -424,7 +425,8 @@ export async function createClientInstanceExecutionAssembly(
           : undefined
       })
     : undefined;
-  const pageSave = createInstancePageSave({ modules, stores: store, workspaceService });
+  const apps = platformTools.pageApps;
+  const pageSave = createInstancePageSave({ modules, stores: store, workspaceService, apps });
   const tools = createToolDefinitions({
     config,
     tools: [
