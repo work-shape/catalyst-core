@@ -3,10 +3,11 @@ import { defineTranslations } from "./translation-area";
 export const guardrails = defineTranslations({
   en: {
     "guardrails.kind": "Guardrails",
-    "guardrails.description": "Guardrails come from the release config and cannot be changed here.",
+    "guardrails.description":
+      "This page changes nothing yet. The operator's guardrails come from the release config; further ones are written with the CLI or the Build Agent and enforce once published.",
     "guardrails.search": "Search guardrails",
     "guardrails.empty":
-      "No guardrails yet. A guardrail checks an action before it happens and warns, holds it for approval or blocks it. The operator sets them in the release config.",
+      "No guardrails yet. A guardrail checks an action before it happens and warns, holds it for approval or blocks it. The operator sets them in the release config, and further ones are written with the CLI.",
     "guardrails.missing": "There is no guardrail with the id {name}.",
     "guardrails.scopeInstance": "Instance",
     "guardrails.checkTitle": "Check",
@@ -61,10 +62,10 @@ export const guardrails = defineTranslations({
   de: {
     "guardrails.kind": "Leitplanken",
     "guardrails.description":
-      "Leitplanken kommen aus der Release-Konfiguration und lassen sich hier nicht ändern.",
+      "Diese Seite ändert noch nichts. Die Leitplanken des Betreibers kommen aus der Release-Konfiguration; weitere werden mit der CLI oder dem Build-Agenten geschrieben und gelten, sobald sie veröffentlicht sind.",
     "guardrails.search": "Leitplanken durchsuchen",
     "guardrails.empty":
-      "Noch keine Leitplanken. Eine Leitplanke prüft eine Aktion, bevor sie geschieht, und warnt, hält sie zur Freigabe an oder blockiert sie. Der Betreiber legt sie in der Release-Konfiguration fest.",
+      "Noch keine Leitplanken. Eine Leitplanke prüft eine Aktion, bevor sie geschieht, und warnt, hält sie zur Freigabe an oder blockiert sie. Der Betreiber legt sie in der Release-Konfiguration fest, weitere werden mit der CLI geschrieben.",
     "guardrails.missing": "Es gibt keine Leitplanke mit der Kennung {name}.",
     "guardrails.scopeInstance": "Instanz",
     "guardrails.checkTitle": "Prüfung",

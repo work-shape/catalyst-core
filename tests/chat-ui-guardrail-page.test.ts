@@ -145,7 +145,7 @@ describe("Guardrail page", () => {
     expect(markup).toContain("Before a request for approval is filed");
     expect(markup).toContain("Check whether the text names a person.");
     expect(markup).toContain("The action does not happen. Whoever acted is told the reason.");
-    expect(markup).toContain("Guardrails come from the release config and cannot be changed here.");
+    expect(markup).toContain("guardrails come from the release config; further ones are written");
     expect(markup).not.toContain("Save");
     // The judge's model binding is configuration, not something a reader acts on.
     expect(markup).not.toContain("judge");

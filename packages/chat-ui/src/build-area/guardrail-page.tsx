@@ -57,7 +57,8 @@ function useSubjectLabel(kinds: readonly BuildKind[]): (event: string, kind: str
 
 /**
  * The page of one Guardrail: what it checks and when, what a hit does, and the newest hits.
- * Release config defines every Guardrail so far, so the page changes nothing.
+ * The page changes nothing: release config defines the floor, and further Guardrails are
+ * written with the CLI or the Build Agent until Build authors them (EW-6b).
  */
 export function GuardrailPage({
   page,
