@@ -33,3 +33,16 @@ section: Added
   existing instance assets; a draft this conversation just created runs nothing and widens
   nothing, so the move to its page follows normally and publishing stays the person's click.
   An existing instance asset still waits for the person's "Go to it" (interim, until OP-3).
+- **A Data Store never published shows its draft:** its page in Studio says "Draft · not
+  published", lists the migrations a publish applies and offers Publish to whoever may publish
+  it; it reads nothing of a database that does not exist yet. Before, it said twice that the
+  store was not available.
+- **Studio follows the asset the agent opens:** the answers of `platform.assets.open`, `.get`
+  and of a first save name the owning workspace as `workspaceId`, and going to the asset's page
+  in Studio sets Studio's scope to that owner, so the page reads it where it is. Studio offers
+  the reader's Personal Workspace as the scope "Personal" to whoever Studio is open to, where
+  what the agent made in a personal conversation is listed and changed.
+- **An administrator's setting holds the first save as it holds the API's put:** the floor of
+  a first save is asked of the kind and the name it creates, so a setting on a Namespace
+  applies, and a setting on another kind does not. Tools' `policyFloor` is told the call's
+  input. A confirmation of an open sent again changes nothing and writes no second audit row.
