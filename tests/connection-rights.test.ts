@@ -113,7 +113,9 @@ describe("the vocabulary of Connection rights", () => {
       "operations.approve",
       "users.manage",
       "usage.view",
-      "audit.view"
+      "audit.view",
+      // RIGHTS-1a: no legacy key names it; the role holds it as an action.
+      "service_principals.manage"
     ]);
   });
 
