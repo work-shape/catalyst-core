@@ -22,6 +22,8 @@ On an instance with the module [`connections`](/configure/modules/#connections) 
 
 ## Connecting an outside system
 
+[Connect a system](/connect/connect-a-system/) walks through these steps for the person who sets it up.
+
 A Connection reaches a remote MCP server. That is the one connector type a Connection made on the instance has: there is no connector for a plain HTTP or REST API. To reach such an API, put an MCP server in front of it, or have the operator add a [custom tool](/extend/custom-tools/) in the client assembly.
 
 1. **New connection** in Studio > Connections takes a name, the server's https address with the path of its MCP endpoint, and the authentication: none, a bearer token, or a key in a header the server names.
