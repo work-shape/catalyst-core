@@ -11,6 +11,7 @@ import {
   ApiResponseShapeError,
   listAll,
   type ApiClient,
+  type CollaborationWorkspaceAgents,
   type Conversation,
   type ConversationThreadSnapshot,
   type DraftAttachment,
@@ -169,15 +170,17 @@ export function useCollaborationWorkspaceAgentsQuery(
     ),
     queryFn: async () => {
       let defaultAgentName: string | undefined;
+      let visibleSections: CollaborationWorkspaceAgents["visibleSections"] = [];
       const items = await listAll(async (paging) => {
         const page = await input.client.workspaces.agents.list({
           params: { collaborationWorkspaceId: input.collaborationWorkspaceId ?? "" },
           query: { locale: input.localePreference, ...paging }
         });
         defaultAgentName = page.defaultAgentName;
+        visibleSections = page.visibleSections;
         return page;
       });
-      return { defaultAgentName, items };
+      return { defaultAgentName, visibleSections, items };
     },
     placeholderData: (previousData) => previousData,
     enabled: input.enabled && Boolean(input.collaborationWorkspaceId)

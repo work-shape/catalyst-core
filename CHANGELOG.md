@@ -431,6 +431,12 @@ contain breaking changes; a patch version does not.
   first one. The pages and their addresses are unchanged. `platform.context.get` answers
   `visibleSections`, which names `workflows` where that row is there for the caller, decided by
   the check of `workflows.list`.
+- **No Agents row for one agent:** the row "Agents" of the main rail, open and collapsed, shows
+  only while the open workspace offers the person two agents or more, or the person may write
+  one (`agent.write` on the instance, in a Namespace or on one agent). With one agent New chat
+  starts it, and the composer's agent picker stays as it is. The page and its address are
+  unchanged. `workspaces.agents.list` answers `visibleSections`, which names `agents` where the
+  row is there for the caller in that workspace, counted over every page of the list.
 - **New chat from the Recent heading:** the "Recent" heading of the main rail has a small plus
   at its right end that starts a new chat as the "New chat" row does. It shows while the pointer
   is over the Recent section or the keyboard is on it, and always on a screen without hover.

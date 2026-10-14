@@ -19115,6 +19115,15 @@
           "defaultAgentName": {
             "type": "string"
           },
+          "visibleSections": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "agents"
+              ]
+            }
+          },
           "items": {
             "type": "array",
             "items": {
@@ -19293,6 +19302,7 @@
           }
         },
         "required": [
+          "visibleSections",
           "items"
         ]
       },

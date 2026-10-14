@@ -8,6 +8,10 @@ import { expect, test, type PageErrorWatch } from "./test";
 // has neither row, open or collapsed; a builder has both while there is nothing in them, so the
 // first one has a place to go; and the member's Workflows row comes once a Workflow is theirs
 // to read. Fails without the rule: the rail showed both rows to everyone with the module on.
+//
+// The Agents row follows the list of the workspace's agents: the instance names it where two
+// agents or more are offered or the person may write one. With one agent the row is gone and
+// New chat starts that agent. Fails without the rule: the row stood in every workspace.
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
@@ -160,6 +164,84 @@ test("a member is shown no empty Apps or Workflows row, a builder is, and a Work
   await rail(memberPage).getByRole("button", { name: "Workflows", exact: true }).click();
   await expect(memberPage).toHaveURL(/\/workflows$/u);
   await expect(memberPage.getByText("Sidebar sections", { exact: true })).toBeVisible();
+});
+
+test("a member with one agent has no Agents row, and New chat starts that agent", async ({
+  browser,
+  pageErrors
+}) => {
+  const page = await sessionOf(browser, pageErrors.watch, member);
+  const workspaceId = await workspaceOf(page);
+  const agentsUrl = `${apiBaseUrl}/api/v1/workspaces/${workspaceId}/agents`;
+  const listSchema = z.object({
+    defaultAgentName: z.string(),
+    visibleSections: z.array(z.string()),
+    items: z.array(z.object({ name: z.string(), displayName: z.string() }).loose())
+  });
+
+  // The instance offers this member the two agents of the run, so it names the row.
+  const offered = listSchema.parse(await (await page.request.get(agentsUrl)).json());
+  expect(offered.items.length).toBeGreaterThanOrEqual(2);
+  expect(offered.visibleSections).toEqual(["agents"]);
+  await openRail(page);
+
+  // The workspace offers its default agent alone, and the instance then names no row, as the
+  // server tests prove: the answer is narrowed to that here, the instance's agents are shared.
+  const only = offered.items.find((agent) => agent.name === offered.defaultAgentName);
+  if (!only) {
+    throw new Error("The workspace's default agent is not among its agents");
+  }
+  const agentsPath = new URL(agentsUrl).pathname;
+  await page.route(
+    (url) => url.pathname === agentsPath,
+    async (route) => {
+      const response = await route.fetch();
+      const answer = listSchema.parse(await response.json());
+      await route.fulfill({
+        response,
+        json: {
+          ...answer,
+          items: answer.items.filter(({ name }) => name === only.name),
+          visibleSections: []
+        }
+      });
+    }
+  );
+  const narrowed = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === agentsPath
+  );
+  await page.reload();
+  await narrowed;
+  // The composer names the one agent and offers no other, as it does for one agent.
+  const chat = page.getByRole("region", { name: "Chat" });
+  await expect(chat.getByRole("button", { name: /^Select agent/u })).toHaveCount(0);
+  await expect(chat).toContainText(only.displayName);
+  const navigation = rail(page);
+  // The row New chat stands first; the Recent heading carries a second New chat.
+  const newChat = navigation.getByRole("button", { name: "New chat", exact: true }).first();
+  await expect(newChat).toBeVisible();
+  await expect(navigation.getByRole("button", { name: "Agents", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
+  await expect(navigation.getByRole("button", { name: "Agents", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Expand sidebar" }).click();
+
+  // New chat starts a conversation with that agent: the first message makes it and its run.
+  await newChat.click();
+  const composer = page.getByRole("textbox", { name: "Message" });
+  await composer.fill("Which agent answers here?");
+  const started = page.waitForRequest(
+    (request) =>
+      request.method() === "POST" &&
+      /^\/api\/v1\/conversations(?:\/[^/]+)?\/runs$/u.test(new URL(request.url()).pathname)
+  );
+  await composer.press("Enter");
+  expect(
+    z
+      .object({ agentName: z.string() })
+      .loose()
+      .parse((await started).postDataJSON())
+  ).toMatchObject({ agentName: only.name });
 });
 
 /** The id of the workspace the start page opened. */

@@ -7,7 +7,9 @@ import {
   asCollaborationWorkspaceId,
   asUserId,
   getSubjectUserId,
+  hasAuthScope,
   isAuthenticatedServicePrincipal,
+  type ActorAccess,
   type AuthenticatedIdentity,
   type AuthenticatedUser,
   type OperationExecutionContext,
@@ -23,6 +25,28 @@ import { requirePathParam, resolveRequestLocale } from "../request-context";
 import type { ChatServerOptions } from "../types";
 import { requireWorkspaceAccess } from "../workspace-access";
 import { findWorkspaceFiles } from "../workspace-files";
+
+/** The agent kind and the right that writes one, as the kind registers them. */
+const AGENT_KIND = "agent";
+const AGENT_WRITE = "agent.write";
+
+/**
+ * Whether the Agents row of the sidebar is there for the caller in one workspace: it offers a
+ * choice, two agents or more, or the caller may write an agent and so make the next one. With
+ * one agent New chat starts it, and a page of one card adds nothing. The right is the one the
+ * agent kind registers, held on the instance, in a Namespace or on one agent, with a credential
+ * whose scope reaches the write.
+ */
+function agentsRowShown(available: number, user: AuthenticatedUser, access: ActorAccess): boolean {
+  if (available >= 2) {
+    return true;
+  }
+  return (
+    hasAuthScope(user, "config_assets:write") &&
+    (access.authorize(AGENT_WRITE, { kind: AGENT_KIND }).allowed ||
+      access.holdsGrantAt(AGENT_WRITE, ["namespace", "asset"]))
+  );
+}
 
 /**
  * Collaboration Workspaces. The reads are plain routes but `workspaces.files.list`, which an
@@ -81,30 +105,34 @@ export function registerCollaborationWorkspaceRoutes(
     return workspaces.getWorkspace(user, collaborationWorkspaceId(params));
   });
 
-  route(apiOperations["workspaces.agents.list"], async ({ user, params, request, query }) => {
-    const assets = await workspaces.getAssetSnapshot(user, collaborationWorkspaceId(params));
-    const { defaultAgentName, agents } = createSafeConfigView(
-      options.config,
-      assets,
-      options.modules,
-      {
-        requestedLocale: resolveRequestLocale(options, request),
-        reasoningEffortsOfBinding: (bindingId) =>
-          options.modelGateway.capabilities({ bindingId }).reasoningEfforts,
-        connections: await agentConnections(options)
-      }
-    );
-    return {
-      defaultAgentName,
-      ...paginate(
-        agents,
-        query,
-        ["name"],
-        false,
-        pageScope(apiOperations["workspaces.agents.list"].id, params, query)
-      )
-    };
-  });
+  route(
+    apiOperations["workspaces.agents.list"],
+    async ({ user, access, params, request, query }) => {
+      const assets = await workspaces.getAssetSnapshot(user, collaborationWorkspaceId(params));
+      const { defaultAgentName, agents } = createSafeConfigView(
+        options.config,
+        assets,
+        options.modules,
+        {
+          requestedLocale: resolveRequestLocale(options, request),
+          reasoningEffortsOfBinding: (bindingId) =>
+            options.modelGateway.capabilities({ bindingId }).reasoningEfforts,
+          connections: await agentConnections(options)
+        }
+      );
+      return {
+        defaultAgentName,
+        visibleSections: agentsRowShown(agents.length, user, access) ? ["agents" as const] : [],
+        ...paginate(
+          agents,
+          query,
+          ["name"],
+          false,
+          pageScope(apiOperations["workspaces.agents.list"].id, params, query)
+        )
+      };
+    }
+  );
 
   route.operation(apiOperations["workspaces.files.list"], {
     // Any member may search; which conversations they may read the search itself decides.

@@ -63,7 +63,7 @@ import { useChatFileDropzone } from "../chat-file-dropzone";
 import { useToolDisplayPanel } from "../tool-display-panel";
 import type { ResolvedThemeMode } from "../theme";
 import type { WorkspaceView } from "./workspace-rail";
-import { agentListStatus, type AgentListStatus } from "../agents/agents-model";
+import { agentListStatus, agentsRowShown, type AgentListStatus } from "../agents/agents-model";
 import { NO_APP_RIGHTS, resolveAppRights, type AppRights } from "../apps/app-model";
 import {
   resolveWorkflowRights,
@@ -308,7 +308,10 @@ export interface ConversationRailModel {
   canViewAdministration: boolean;
   /** Present for a person who may decide requests or has made one: the Inbox row shows. */
   inbox: { toDecide: number } | undefined;
-  /** The session has workspaces: the Agents row shows. */
+  /**
+   * The session has workspaces and the instance names the Agents row for the open one: two
+   * agents or more are available there, or the person may write one.
+   */
   agents: boolean;
   /**
    * The Apps module is on. The row shows where the person is also shown an App of the open
@@ -1122,7 +1125,7 @@ export function useWorkspaceChatModel({
       selectedConversationId,
       canViewAdministration,
       inbox,
-      agents: collaborationWorkspacesAvailable,
+      agents: agentsRowShown(collaborationWorkspacesAvailable, workspaceAgentsQuery.data),
       apps: appsEnabled,
       workflows: workflowsRowShown(workflowsOpen, platformContextQuery.data),
       view,
