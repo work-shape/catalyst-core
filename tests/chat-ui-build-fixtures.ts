@@ -42,7 +42,8 @@ export function platformContext(
     ],
     actions,
     assetActions,
-    namespaces
+    namespaces,
+    visibleSections: []
   };
 }
 

@@ -8,6 +8,7 @@ import {
   asClientInstanceId,
   asCollaborationWorkspaceId,
   asConversationId,
+  asManagedArtifactId,
   asMessageId,
   asUserId,
   createFileSetId
@@ -317,6 +318,71 @@ describe("the tools that find what is on the platform", () => {
     const files = tools.find((tool) => tool.name === "platform.files.list");
     expect(files?.inputSchema.safeParse({ text: "tax\u0000" }).success).toBe(false);
     expect(files?.inputSchema.safeParse({ kind: "page", text: "tax" }).success).toBe(true);
+  });
+
+  it("finds files the agent made for the person and none it only rendered to check its work", async () => {
+    const t = await fixture(false, true);
+    const { clientInstanceId } = t;
+    const stores = t.app.stores;
+    const chat = await t.conversationOf(OWNER);
+    const conversationId = asConversationId(chat.id);
+    const workspaceFile = (path: string) => ({
+      clientInstanceId,
+      conversationId,
+      kind: "image.png",
+      objectKey: `execution-workspaces/private/${path}`,
+      filename: path.replace(/^.*\//, ""),
+      mimeType: "image/png",
+      byteSize: 3,
+      checksum: `sha256:${path}`
+    });
+    // A render the agent looked at, as workspace.preview_images stores it.
+    await stores.files.createManagedArtifact({
+      ...workspaceFile("previews/contoso_daten.png"),
+      metadata: {
+        source: "execution_workspace",
+        purpose: "inspection",
+        workspaceId: "ws-1",
+        workspacePath: "previews/contoso_daten.png"
+      }
+    });
+    // One stored before the purpose was recorded, known by its id.
+    await stores.files.ensureManagedArtifact({
+      ...workspaceFile("previews/contoso_start.png"),
+      id: asManagedArtifactId("art_workspace_preview_stored_before_the_purpose"),
+      metadata: {
+        source: "execution_workspace",
+        workspaceId: "ws-1",
+        workspacePath: "previews/contoso_start.png"
+      }
+    });
+    // A chart promoted for the person, then looked at again: the look is the newer row.
+    const promoted = await stores.files.createManagedArtifact({
+      ...workspaceFile("artifacts/umsatz_chart.png"),
+      metadata: {
+        source: "execution_workspace",
+        workspaceId: "ws-1",
+        workspacePath: "artifacts/umsatz_chart.png"
+      }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await stores.files.ensureManagedArtifact({
+      ...workspaceFile("artifacts/umsatz_chart.png"),
+      id: asManagedArtifactId("art_workspace_preview_looked_at_the_chart"),
+      metadata: {
+        source: "execution_workspace",
+        purpose: "inspection",
+        workspaceId: "ws-1",
+        workspacePath: "artifacts/umsatz_chart.png"
+      }
+    });
+
+    const found = filesSchema.parse(
+      (await chat("platform.files.list", { kind: "generated_file" })).answer
+    );
+    expect(found.files.map(({ id, name }) => ({ id, name }))).toEqual([
+      { id: promoted.id, name: "umsatz_chart.png" }
+    ]);
   });
 
   it("finds the Pages and files of every conversation of the workspace the user may read, from any chat, and nothing else", async () => {

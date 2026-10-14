@@ -1,4 +1,3 @@
-import { Database } from "lucide-react";
 import { Badge, Chip } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
 import type { BuildAssetViewProps, BuildListedKind } from "./build-asset-kind";
@@ -103,7 +102,7 @@ export function dataStoreKindOn(useSource: () => DataStoreSource): BuildListedKi
     description: "dataStores.description",
     searchLabel: "dataStores.search",
     emptyText: "dataStores.empty",
-    icon: Database,
+    icon: "datastore",
     view: { Page: DataStoreAssetPage, missingText: "dataStores.missing" },
     rowText: (asset) => asset.description,
     badges: (asset, t) => (

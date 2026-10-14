@@ -105,6 +105,16 @@ auth:
           - user
         permissionRefs:
           - demo-tools
+      # The member of the sidebar sections spec, who holds nothing on Apps or Workflows until
+      # the spec gives them a Workflow to read. No other spec uses this member.
+      - email: e2e-sidebar-sections@example.test
+        displayLabel: E2E Zz Sidebar Sections
+        passwordEnvName: E2E_SIDEBAR_SECTIONS_PASSWORD
+        developmentPassword: e2e-sidebar-sections-password
+        roles:
+          - user
+        permissionRefs:
+          - demo-tools
       # The three people of the Apps spec. No other spec uses them: the admin builds and
       # publishes, the member uses what is published, and the builder is the one the spec shows
       # the draft without the publish right. No grant gives a right on Apps yet, so the builder
