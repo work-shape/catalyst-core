@@ -45,7 +45,7 @@ describe("API access panel", () => {
         TranslationProvider,
         { children: null, locale: "en" },
         createElement(ApiAccessPanel, {
-          canMutate: true,
+          may: { principals: true, keys: true },
           principals: [detail],
           loading: false,
           mutating: false,
@@ -79,7 +79,7 @@ describe("API access panel", () => {
         TranslationProvider,
         { children: null, locale: "de" },
         createElement(ApiAccessPanel, {
-          canMutate: true,
+          may: { principals: true, keys: true },
           principals: [],
           loading: false,
           mutating: false,
@@ -106,7 +106,7 @@ describe("API access panel", () => {
         TranslationProvider,
         { children: null, locale: "en" },
         createElement(ApiAccessPanel, {
-          canMutate: false,
+          may: { principals: false, keys: false },
           principals: [detail],
           loading: false,
           mutating: false,
@@ -130,13 +130,44 @@ describe("API access panel", () => {
     expect(markup).not.toContain(">Revoke<");
   });
 
+  it("offers principals to who administers them and keys only to who issues keys", () => {
+    const [credential] = detail.credentials;
+    if (!credential) throw new Error("The fixture principal has a key");
+    const markup = renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { children: null, locale: "en" },
+        createElement(ApiAccessPanel, {
+          // An administrator: `service_principals.manage` by default, not `api_access.manage`.
+          may: { principals: true, keys: false },
+          principals: [detail],
+          loading: false,
+          mutating: false,
+          onCreatePrincipal: noopResult,
+          onUpdatePrincipal: noopResult,
+          onCreateCredential: async () => ({
+            credential,
+            secret: "never-rendered"
+          }),
+          onRevokeCredential: async () => credential,
+          onClearRevealedCredential: () => undefined
+        })
+      )
+    );
+
+    expect(markup).toContain("Create service principal");
+    expect(markup).toContain(">Edit<");
+    expect(markup).not.toContain("Create API key");
+    expect(markup).not.toContain(">Revoke<");
+  });
+
   it("renders a hook-owned revealed key only while supplied", () => {
     const markup = renderToStaticMarkup(
       createElement(
         TranslationProvider,
         { children: null, locale: "en" },
         createElement(ApiAccessPanel, {
-          canMutate: true,
+          may: { principals: true, keys: true },
           principals: [detail],
           revealedCredential: {
             secret: "cat_live_once",
