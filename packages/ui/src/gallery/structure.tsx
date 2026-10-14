@@ -82,6 +82,29 @@ function PageHeaderSamples({ text }: { text: GalleryText }) {
           />
         </div>
       </Samples>
+      <Samples label={text.headerShellAction}>
+        <div className="w-full rounded-lg border px-(--layout-gutter) pt-6">
+          <PageHeaderShellAction
+            action={
+              <Button variant="secondary">
+                <MessageSquare aria-hidden="true" />
+                {text.headerShellChat}
+              </Button>
+            }
+          >
+            <PageHeader
+              title={text.headerListTitle}
+              description={text.headerListDescription}
+              primaryAction={
+                <Button>
+                  <Plus aria-hidden="true" />
+                  {text.headerNewAgent}
+                </Button>
+              }
+            />
+          </PageHeaderShellAction>
+        </div>
+      </Samples>
       <Samples label={text.headerDetail}>
         <div
           className="h-48 w-full overflow-y-auto rounded-lg border"
@@ -135,29 +158,6 @@ function PageHeaderSamples({ text }: { text: GalleryText }) {
             description={<code className="font-mono">{text.headerIdentifier}</code>}
             {...actions}
           />
-        </div>
-      </Samples>
-      <Samples label={text.headerShellAction}>
-        <div className="w-full rounded-lg border px-(--layout-gutter) pt-6">
-          <PageHeaderShellAction
-            action={
-              <Button variant="secondary">
-                <MessageSquare aria-hidden="true" />
-                {text.headerShellChat}
-              </Button>
-            }
-          >
-            <PageHeader
-              title={text.headerListTitle}
-              description={text.headerListDescription}
-              primaryAction={
-                <Button>
-                  <Plus aria-hidden="true" />
-                  {text.headerNewAgent}
-                </Button>
-              }
-            />
-          </PageHeaderShellAction>
         </div>
       </Samples>
     </>
