@@ -49,10 +49,11 @@ export function createApiAccessRevealController(
 export function createApiAccessAuthorityKey(input: {
   apiBaseUrl: string;
   principalId: string | undefined;
-  canManageSuperadminAccess: boolean;
+  /** The reader issues keys: `api_access.manage`. */
+  canIssueKeys: boolean;
 }): string | undefined {
-  if (!input.canManageSuperadminAccess || !input.principalId) {
+  if (!input.canIssueKeys || !input.principalId) {
     return undefined;
   }
-  return JSON.stringify([input.apiBaseUrl, input.principalId, "superadmin"]);
+  return JSON.stringify([input.apiBaseUrl, input.principalId, "api_access"]);
 }

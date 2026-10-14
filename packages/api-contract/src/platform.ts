@@ -87,6 +87,11 @@ export const platformContextSchema = z.object({
    * leave it empty.
    */
   assetActions: z.array(z.string()),
+  /**
+   * The rights over the instance itself the caller holds that no asset kind carries and no
+   * legacy key names, such as `service_principals.manage`.
+   */
+  instanceActions: z.array(z.string()),
   namespaces: z.array(platformContextNamespaceSchema),
   /**
    * The workspaces whose own assets the caller can use an action of a listed kind on, each
