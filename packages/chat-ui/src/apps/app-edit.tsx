@@ -367,7 +367,9 @@ export function AppEditFrame({
             state={
               known ? (
                 <Badge tone={ahead ? "warning" : "neutral"} size="sm" dot>
-                  {t("apps.draftRevision", { number: draftRevision })}
+                  {publishedRevision === undefined
+                    ? t("apps.draftNotPublished")
+                    : t("apps.draftRevision", { number: draftRevision })}
                 </Badge>
               ) : (
                 <Badge size="sm">{t("apps.draft")}</Badge>

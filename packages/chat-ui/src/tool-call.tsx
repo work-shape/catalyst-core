@@ -37,6 +37,8 @@ import {
   type ToolDetailSection
 } from "./workspace-tool-display";
 import { assetToolSentence, type AssetToolCall } from "./conversation/asset-tool-lines";
+import { AssetOpenedLine } from "./conversation/conversation-subject";
+import { standingAssetOpen } from "./conversation/subject-run";
 
 // Whoever renders tool calls outside the thread gives them their subjects with this.
 export { ToolSubjectsProvider } from "./assistant/tool-subjects";
@@ -120,6 +122,11 @@ export function ToolCallPart({
 
   if (toolName === PAGE_SAVE_TOOL_NAME) {
     return <PageSaveCard args={args} result={result} failed={state === "failed"} />;
+  }
+
+  const opened = standingAssetOpen({ toolName, toolCallId, result, isError });
+  if (opened) {
+    return <AssetOpenedLine open={opened} />;
   }
 
   if (approvalRequest) {

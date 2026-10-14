@@ -7,10 +7,10 @@ import { apiOrigin, uiOrigin } from "./view-fixtures";
 // An App made in a plain chat. The person talks to an agent whose definition lists no tool of
 // a Page; the conversation offers them anyway. The Page shows beside the chat from the start
 // of its first save, building, and then as the Page. The agent keeps it as an App on the
-// person's word: the App's draft opens beside the chat from the same files, and the
-// conversation is about the App. Each later save of the Page writes the App's draft, which
-// reloads in place, and opens no Page. After a reload the conversation opens the App and its
-// saves still write it. Fails without A3: the agent of this conversation has no page.save,
+// person's word: the person moves to the App's draft page with the conversation in the dock,
+// and the conversation is about the App. Each later save of the Page writes the App's draft,
+// which reloads in place, and opens no Page. After a reload the dock keeps the conversation and
+// its saves still write the App. Fails without A3: the agent of this conversation has no page.save,
 // and page.save_as_app does not exist.
 
 /** The person of this spec, from `tests/fixtures/e2e-app.yaml`. */
@@ -23,9 +23,18 @@ const THIRD_HEADING = "Margin calculator with tax and discounts";
 const assetSchema = z.looseObject({ draftRevision: z.number() });
 
 /** The document inside the frame of the surface of `kind` beside the conversation. */
-function documentIn(page: Page, kind: "page" | "app_edit"): FrameLocator {
+function documentIn(page: Page, kind: "page"): FrameLocator {
   return page
     .locator(`aside[data-surface-kind="${kind}"]`)
+    .getByTestId("page-preview-frame")
+    .contentFrame()
+    .frameLocator("iframe");
+}
+
+/** The document inside the preview of the App's draft page. */
+function draftDocument(page: Page): FrameLocator {
+  return page
+    .getByTestId("app-edit")
     .getByTestId("page-preview-frame")
     .contentFrame()
     .frameLocator("iframe");
@@ -95,13 +104,13 @@ test("a Page built in a plain chat becomes an App, which the next saves of the P
   ).toBeVisible();
 
   // The person asks to keep it as an App: the agent saves the same Page as one, without a
-  // second build. The App's draft opens beside the chat, and the chat is about the App.
+  // second build. The conversation is about the App from then on, and this tab, which sent the
+  // message, moves to the App's draft page with the conversation in the dock.
   await sendToolCall(page, "page.save_as_app", { page: pageName, name: appId, title: appTitle });
-  const app = page.locator('aside[data-surface-kind="app_edit"]');
-  await expect(app).toBeVisible();
-  await expect(app).toHaveAccessibleName(appTitle);
+  const draftPath = `/w/${encodeURIComponent(workspaceId)}/app-drafts/${appId}`;
+  await expect(page).toHaveURL((url) => url.pathname === draftPath && url.searchParams.has("chat"));
   await expect(
-    documentIn(page, "app_edit").getByRole("heading", { name: "Margin calculator" })
+    draftDocument(page).getByRole("heading", { name: "Margin calculator" })
   ).toBeVisible();
   const subject = page.getByTestId("conversation-subject");
   await expect(subject).toHaveAttribute("data-subject-kind", "app");
@@ -116,49 +125,31 @@ test("a Page built in a plain chat becomes an App, which the next saves of the P
   );
   expect(await draftRevision()).toBe(1);
 
-  // "Open page" in the head of the App's panel opens the page of its draft in a new tab, with
-  // no conversation in its address; this tab stays on the conversation.
-  const conversationUrl = page.url();
-  const [opened] = await Promise.all([
-    page.context().waitForEvent("page"),
-    page.getByRole("button", { name: "Open the app's draft page", exact: true }).click()
-  ]);
-  const draftPath = `/w/${encodeURIComponent(workspaceId)}/app-drafts/${appId}`;
-  await opened.waitForURL((url) => url.pathname === draftPath);
-  expect(new URL(opened.url()).searchParams.has("chat")).toBe(false);
-  await opened.close();
-  expect(page.url()).toBe(conversationUrl);
-
-  // The next save of the Page writes the App's draft: the draft reloads in place and no Page
-  // opens beside the chat.
+  // The next save of the Page writes the App's draft: the draft page reloads in place and no
+  // Page opens over it.
   await writeFile(page, "index.html", indexWith(SECOND_HEADING));
   await sendToolCall(page, "page.save", { name: pageName, directory: pageFolder });
-  await expect(
-    documentIn(page, "app_edit").getByRole("heading", { name: SECOND_HEADING })
-  ).toBeVisible();
+  await expect(draftDocument(page).getByRole("heading", { name: SECOND_HEADING })).toBeVisible();
   await expect(page.locator('aside[data-surface-kind="page"]')).toHaveCount(0);
   await expect(page.getByTestId("page-card").last()).toContainText(
     `Revision 2, saved to the draft of ${appTitle}`
   );
   expect(await draftRevision()).toBe(2);
 
-  // Coming back to the conversation opens the App, and its saves still write the App.
+  // Coming back to the page keeps the conversation in the dock, and its saves still write
+  // the App.
   await page.reload();
-  await expect(app).toBeVisible();
+  await expect(draftDocument(page).getByRole("heading", { name: SECOND_HEADING })).toBeVisible();
   await writeFile(page, "index.html", indexWith(THIRD_HEADING));
   await sendToolCall(page, "page.save", { name: pageName, directory: pageFolder });
-  await expect(
-    documentIn(page, "app_edit").getByRole("heading", { name: THIRD_HEADING })
-  ).toBeVisible();
+  await expect(draftDocument(page).getByRole("heading", { name: THIRD_HEADING })).toBeVisible();
   await expect(page.locator('aside[data-surface-kind="page"]')).toHaveCount(0);
   expect(await draftRevision()).toBe(3);
 
-  // On a phone the App lies over the chat, and nothing reaches past the screen.
+  // On a phone the dock lies over the page; "Show page" brings the draft in front, and
+  // nothing reaches past the screen.
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(app).toBeVisible();
-  await expect(app).toHaveAttribute("data-surface-mode", "covering");
-  await expect(
-    documentIn(page, "app_edit").getByRole("heading", { name: THIRD_HEADING })
-  ).toBeVisible();
+  await page.getByRole("button", { name: "Show page", exact: true }).click();
+  await expect(draftDocument(page).getByRole("heading", { name: THIRD_HEADING })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
