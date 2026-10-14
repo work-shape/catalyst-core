@@ -311,8 +311,46 @@ export function useWorkspaceThreadQuery(
       input.client.conversations.thread.get({
         params: { conversationId: input.conversationId ?? "" }
       }),
+    // A thread the instance refuses, as one the person may not read, is not asked for again:
+    // the dock that names it opens empty at once. A timeout or a rate limit passes, so it is.
+    retry: threadQueryRetry,
+    retryDelay: threadRetryDelay,
     enabled: input.enabled
   });
+}
+
+/** As often as a query is tried again by default. */
+const THREAD_LOAD_RETRIES = 3;
+
+/** Statuses below 500 that pass by themselves: a request timeout and a rate limit. */
+const PASSING_CLIENT_STATUSES = new Set([408, 429]);
+
+function isRefusal(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.status >= 400 &&
+    error.status < 500 &&
+    !PASSING_CLIENT_STATUSES.has(error.status)
+  );
+}
+
+export function threadQueryRetry(failureCount: number, error: unknown): boolean {
+  return failureCount < THREAD_LOAD_RETRIES && !isRefusal(error);
+}
+
+/** The longest single wait before a thread is asked for again. */
+const THREAD_RETRY_MAX_WAIT_MS = 30_000;
+
+/**
+ * The default backoff, or longer when a rate limit says how long to wait, never past
+ * `THREAD_RETRY_MAX_WAIT_MS`.
+ */
+export function threadRetryDelay(failureCount: number, error: unknown): number {
+  const backoffMs = 1_000 * 2 ** failureCount;
+  const retryAfterSeconds = error instanceof ApiError ? error.retryAfterSeconds : undefined;
+  const waitMs =
+    retryAfterSeconds === undefined ? backoffMs : Math.max(backoffMs, retryAfterSeconds * 1_000);
+  return Math.min(waitMs, THREAD_RETRY_MAX_WAIT_MS);
 }
 
 export function useConversationResourcesQuery(

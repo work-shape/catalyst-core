@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { ThemeMode } from "@vivd-catalyst/ui/theme";
 import type { ClientLabelOverrides } from "./i18n";
@@ -35,19 +35,41 @@ export interface ChatShellProps {
   onThemeModeChange?: (mode: ThemeMode) => void;
   className?: string;
   route?: WorkspaceRoute;
+  /**
+   * The conversation of the chat dock beside every page but the chat route, as the address
+   * carries it in `?chat=`. A host with a router reads it there and writes the one each change
+   * of route names.
+   */
+  chat?: string;
+  /**
+   * The host plays the dock's movement as a view transition, which each change of route names
+   * in its `motion`. Without it the shell plays the movement itself.
+   */
+  viewTransitions?: boolean;
   onRouteChange?: (route: WorkspaceRoute, options?: WorkspaceRouteChangeOptions) => void;
 }
 
 export function ChatShell({
   displayWidgets,
   route,
+  chat,
   onRouteChange,
   ...workspaceProps
 }: ChatShellProps) {
   const [queryClient] = useState(createWorkspaceQueryClient);
-  const [localRoute, setLocalRoute] = useState<WorkspaceRoute>(() => defaultWorkspaceRoute());
-  const resolvedRoute = route ?? localRoute;
-  const resolvedRouteChange = onRouteChange ?? setLocalRoute;
+  // A shell without a host's router keeps its address itself.
+  const [localAddress, setLocalAddress] = useState<{ route: WorkspaceRoute; chat?: string }>(
+    () => ({ route: defaultWorkspaceRoute() })
+  );
+  const hosted = route !== undefined;
+  const resolvedRoute = route ?? localAddress.route;
+  const resolvedChat = hosted ? chat : localAddress.chat;
+  const changeLocalAddress = useCallback(
+    (nextRoute: WorkspaceRoute, options?: WorkspaceRouteChangeOptions) =>
+      setLocalAddress({ route: nextRoute, chat: options?.chat }),
+    []
+  );
+  const resolvedRouteChange = onRouteChange ?? changeLocalAddress;
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -56,6 +78,7 @@ export function ChatShell({
           <ChatWorkspace
             {...workspaceProps}
             route={resolvedRoute}
+            chat={resolvedChat}
             onRouteChange={resolvedRouteChange}
           />
         </ToolDisplayWidgetProvider>
