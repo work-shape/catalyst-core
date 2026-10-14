@@ -51,10 +51,26 @@ export async function readDefinition(path: string): Promise<Record<string, unkno
       `'${file}' cannot be read: ${error instanceof Error ? error.message : String(error)}`
     );
   });
-  if (typeof definition !== "object" || definition === null || Array.isArray(definition)) {
+  if (!isMapping(definition)) {
     throw new Error(`'${file}' holds no definition: its top level is not a mapping.`);
   }
-  return { ...definition };
+  return { ...definitionOfShown(definition) };
+}
+
+function isMapping(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * The definition in what `show --json` printed: the answer of `assets.get` carries it under
+ * `config`, beside the asset's kind and revision. Sent as it stands, the whole answer would be
+ * the definition, with no field of the agent at the top, so a write would change every field.
+ */
+function definitionOfShown(value: Record<string, unknown>): Record<string, unknown> {
+  const { config, kind, revision } = value;
+  return isMapping(config) && typeof kind === "string" && typeof revision === "number"
+    ? config
+    : value;
 }
 
 async function parseDefinition(file: string, contents: string): Promise<unknown> {
