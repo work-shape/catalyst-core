@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { createConnectionAssetKind } from "@vivd-catalyst/chat-server";
+import { createEgressChecker } from "@vivd-catalyst/connections";
 import {
   createConnectorTypeRegistry,
   type ConnectorTypeDefinition,
@@ -39,6 +40,14 @@ export const fixtureConnectorType: ConnectorTypeDefinition = {
 };
 
 export const fixtureConnectorTypes = createConnectorTypeRegistry([fixtureConnectorType]);
+
+/** The egress list of the tests: the one host the fixture type reaches. */
+const fixtureEgress = createEgressChecker({
+  allow: [
+    { protocol: "https", host: "outside.example.test", port: 443, network: "public", cidrs: [] }
+  ],
+  resolve: () => Promise.resolve([{ address: "93.184.216.34", family: 4 }])
+});
 
 /** A handle as the Secret Store hands one out. It is a reference and holds no secret. */
 export const FIXTURE_SECRET_HANDLE = "secret_3f0c6a52-9d1b-4c7e-8a21-5b9e0d4c7f10";
@@ -85,7 +94,7 @@ export async function setupConnectionInstance(
     ...options,
     modules: { connections: { enabled: true }, ...options.modules },
     furtherKinds: [
-      createConnectionAssetKind({ connectorTypes: fixtureConnectorTypes }),
+      createConnectionAssetKind({ connectorTypes: fixtureConnectorTypes, egress: fixtureEgress }),
       ...(options.furtherKinds ?? [])
     ]
   });

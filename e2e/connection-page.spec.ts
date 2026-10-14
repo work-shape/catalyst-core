@@ -259,7 +259,7 @@ test("a Connection's page shows its definition, its state in every case and the 
       await expect(page.getByRole("heading", { name: "Sample business", level: 1 })).toBeVisible();
       await expect(
         main.getByText(
-          "The operator of this instance sets up its connections. They cannot be changed here.",
+          "This connection is defined in the release config. The operator changes it there; it cannot be changed here.",
           {
             exact: true
           }
@@ -278,11 +278,11 @@ test("a Connection's page shows its definition, its state in every case and the 
         main.getByText("The outside system asks for no credential.", { exact: true })
       ).toBeVisible();
       await expect(main.locator("[data-connection-shared]")).toHaveCount(0);
-      // The page writes nothing.
+      // The page writes nothing. Its history is read, and a copy is where an edit starts.
       await expect(main.getByRole("textbox")).toHaveCount(0);
-      await expect(main.getByRole("button", { name: /^(History|Save|More actions)/u })).toHaveCount(
-        0
-      );
+      await expect(main.getByRole("button", { name: /^(Save|More actions|Edit)/u })).toHaveCount(0);
+      await expect(main.getByRole("button", { name: "History" })).toBeVisible();
+      await expect(main.getByRole("button", { name: "Copy to edit" })).toBeVisible();
       // The operations as the instance judges them against the Connector type.
       const operation = (name: string) => main.locator(`[data-connection-operation="${name}"]`);
       await expect(operation("echo")).toContainText("Reading");
@@ -360,7 +360,7 @@ test("a Connection's page shows its definition, its state in every case and the 
       await open(walled, { locale: "de" });
       await expect(
         main.getByText(
-          "Der Betreiber dieser Instanz richtet ihre Verbindungen ein. Hier lassen sie sich nicht ändern.",
+          "Diese Verbindung ist in der Release-Konfiguration festgelegt. Der Betreiber ändert sie dort; hier lässt sie sich nicht ändern.",
           { exact: true }
         )
       ).toBeVisible();

@@ -8,6 +8,7 @@ import {
   type OperationResource
 } from "@vivd-catalyst/core";
 import { accessResource, decide } from "../asset-access";
+import { requestConnectionDiscovery } from "../connection-jobs";
 import type { ConnectionManagementPort } from "../connection-management-port";
 import type { Route } from "../http/route";
 import type { ChatServerOptions } from "../types";
@@ -16,6 +17,8 @@ import type { ChatServerOptions } from "../types";
 const AGENT_ASSET_KIND = "agent";
 /** The module these operations belong to. */
 const CONNECTIONS_MODULE = "connections";
+/** What the run of a secret write keeps in the value's place. */
+const SECRET_MARK = "[secret]";
 
 /**
  * What a Connection's page and the agent editor read beyond the asset, and the test. Each is
@@ -37,6 +40,13 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
       name
     };
     return decide(access, action, resource);
+  }
+
+  function requestDiscovery(connectionName: string): Promise<void> {
+    return requestConnectionDiscovery(options.stores.jobs, {
+      clientInstanceId: options.clientInstanceId,
+      connectionName
+    });
   }
 
   function required(): ConnectionManagementPort {
@@ -86,6 +96,39 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
     changeClass: "reversible",
     module: CONNECTIONS_MODULE,
     execute: (input, context) => required().test(input.name, context.runtime.signal)
+  });
+
+  route.operation(apiOperations["connections.set_secret"], {
+    authorize: (input, { access }) => authorizeOn(access, CONNECTION_ACTIONS.write, input.name),
+    resource: connectionResource,
+    // A secret that was replaced cannot be brought back.
+    inputWithoutSecrets: (input) => ({ ...input, value: SECRET_MARK }),
+    module: CONNECTIONS_MODULE,
+    execute: async (input) => {
+      const secret = await required().setSecret(input.name, {
+        value: input.value,
+        expectedVersion: input.expectedVersion
+      });
+      // What the system offers may depend on whose key asks. A Connection with nothing to
+      // discover ends that discovery at once.
+      await requestDiscovery(input.name);
+      return secret;
+    }
+  });
+
+  route.operation(apiOperations["connections.discover"], {
+    authorize: (input, { access }) => authorizeOn(access, CONNECTION_ACTIONS.write, input.name),
+    resource: connectionResource,
+    // A discovery stores what the system offers now and accepts nothing.
+    changeClass: "reversible",
+    module: CONNECTIONS_MODULE,
+    execute: async (input) => {
+      if (!(await required().resource(input.name))) {
+        throw new AppError("NOT_FOUND", `Connection '${input.name}' does not exist`);
+      }
+      await requestDiscovery(input.name);
+      return { status: "queued" as const };
+    }
   });
 
   route.operation(apiOperations["connections.list_tools"], {

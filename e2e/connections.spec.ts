@@ -8,8 +8,8 @@ import { expect, test } from "./test";
 
 // Studio > Connections on an instance with the module on: the rail entry, the empty list in
 // both languages, a row with its chips, and the grant of a Connection right on the Access page.
-// No operation writes a Connection yet, so the row is planted in the store, as the release
-// seed will write it.
+// The row is planted in the store as the release seed writes it; making one in Build is
+// `connection-editor.spec.ts`.
 
 const host = process.env.E2E_HOST ?? "127.0.0.1";
 const apiBaseUrl = process.env.E2E_API_URL ?? `http://${host}:4210`;
@@ -25,9 +25,9 @@ const shotsDir = process.env.E2E_SHOTS_DIR;
 
 const EMPTY_EN = "No connections yet. A connection holds the access to an outside system.";
 const DESCRIPTION_EN =
-  "The operator of this instance sets up its connections. They cannot be changed here.";
+  "Connections give agents, apps and workflows access to outside systems. Those from the release config are read-only here.";
 const DESCRIPTION_DE =
-  "Der Betreiber dieser Instanz richtet ihre Verbindungen ein. Hier lassen sie sich nicht ändern.";
+  "Verbindungen geben Agenten, Apps und Workflows Zugang zu externen Systemen. Die aus der Release-Konfiguration sind hier schreibgeschützt.";
 const EMPTY_DE =
   "Noch keine Verbindungen. Eine Verbindung hält den Zugang zu einem externen System.";
 
@@ -175,8 +175,8 @@ test("an administrator sees Connections in Studio and grants its rights; a read 
       ).toHaveAttribute("aria-current", "true");
       await expect(main.getByText(EMPTY_EN, { exact: true })).toBeVisible();
       await expect(main.getByText(DESCRIPTION_EN, { exact: true })).toBeVisible();
-      // Nothing starts a Connection here yet, and it has no CLI entry.
-      await expect(main.getByRole("button", { name: /^New /u })).toHaveCount(0);
+      // The administrator starts a Connection here. The CLI writes none yet: no CLI entry.
+      await expect(main.getByRole("button", { name: "New connection" }).first()).toBeVisible();
       await expect(main.getByRole("button", { name: "More actions", exact: true })).toHaveCount(0);
       await shoot(page, "connections-empty", async () => {
         await expect(page.getByRole("heading", { level: 1 })).toHaveText(

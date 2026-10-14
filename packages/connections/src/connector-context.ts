@@ -5,6 +5,7 @@ import {
   LOG_REDACTION,
   SHARED_CREDENTIAL_SUBJECT,
   connectionCallError,
+  egressOriginOf,
   type ConnectionConfig,
   type ConnectionCredential,
   type ConnectionCredentialResolver,
@@ -118,6 +119,23 @@ function credentialOf(
   return sealCredential(scheme, secret, {});
 }
 
+/**
+ * The origin a Connection's secret is set for and sent to: that of its target, read from the
+ * settings as a call reads them. Nothing where the settings do not fit the type.
+ */
+export function connectionOriginOf(
+  type: ConnectorTypeDefinition,
+  config: Pick<ConnectionConfig, "settings">
+): string | undefined {
+  const settings = type.settingsSchema.safeParse(config.settings);
+  if (!settings.success) return undefined;
+  try {
+    return egressOriginOf(type.target(settings.data));
+  } catch {
+    return undefined;
+  }
+}
+
 export interface OpenConnectorContextInput {
   type: ConnectorTypeDefinition;
   /** The Connection of the call: its asset id, its revision and the config of that revision. */
@@ -161,9 +179,11 @@ export async function openConnectorContext(
         { reason: CREDENTIAL_REFUSALS.notConfigured }
       );
     }
+    // Only a secret set for the origin the call goes to is handed out.
     const secret = await credentials.resolve({
       handle: config.secretHandle,
-      binding: { connectionAssetId: connection.id, subject: SHARED_CREDENTIAL_SUBJECT }
+      binding: { connectionAssetId: connection.id, subject: SHARED_CREDENTIAL_SUBJECT },
+      origin: egressOriginOf(target)
     });
     // A call that ended while its credential was read is handed none: the secret stays where
     // it was resolved and no type sees it.

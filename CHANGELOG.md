@@ -11,6 +11,33 @@ in, and `pnpm changelog` prints the next release's section as it will read.
 
 ### Added
 
+- **Connections made on the instance (CS-4, first slice):** Build > Connections has "New
+  connection" for a remote MCP server: name, address and authentication (`none`, `bearer`, or a
+  key in a named header). The asset operations now create, change, revert and delete a
+  Connection of origin `runtime`; the server writes its origin, its owner (the writer) and its
+  secret handle, whatever the caller sent. A Connection of release config stays read-only
+  (`read_only_origin`), and a batch of `assets.sync` holding a Connection is refused with
+  `connection_batch_unavailable`. A save whose address the operator's `egress.allow` does not
+  name is refused with `egress_denied` before anything is stored; the list is asked without a
+  DNS lookup. `connections.set_secret` (`PUT /api/v1/connections/:name/secret`) takes the key
+  once, as the next version after the `expectedVersion` the writer read (`secret_write_conflict`
+  otherwise), answers only the state and the version, and keeps a mark instead of the value in
+  its Operation Run. `connections.discover` (`POST /api/v1/connections/:name/discover`) queues a
+  discovery; every save and every new key queue one too. `connections.get` answers the tools
+  the last discovery read that the Connection does not accept (`discovered`), and the page
+  accepts one with its effect, for agents or not, pinned to the fingerprint it showed. A delete
+  is refused with `409 connection_in_use` while an agent carries a tool of the Connection or an
+  App names it, in its draft or in its published revision, and removes its key and its runtime
+  state. Both operations need `connection.write`. A key is bound to the origin of the
+  Connection's target (protocol, host and port) it was entered for: a save that moves the
+  target to another origin removes it, a new path on the same origin or another Connector type
+  with the same target keeps it, and a key is never handed to a test, discovery or call of
+  another origin (`connection_not_configured`), also where its removal failed. Migration
+  `0078_secret_origin` adds `secrets.origin`. **Upgrade:** an instance whose release config
+  names `secretStore.keys` now needs the first key at start even where release config defines
+  no Connection, and stops naming its variable without it. A secret of release config is bound
+  to its origin by the seed at the next start. Shared OAuth, the CLI and the platform MCP tools for Connections are not
+  part of this slice.
 - **Personal API keys and `catalyst login`:** the module `personalApiKeys` (off by default)
   lets a person issue keys that act as themself, in Settings, API keys, or by confirming the
   code `catalyst login` prints; the CLI collects the key itself and saves it in
@@ -453,7 +480,7 @@ in, and `pnpm changelog` prints the next release's section as it will read.
   1,000 rows and 1 MiB per call, `onConflict: fail | skip`, answers `inserted` and `skipped`)
   needs `data_store.insert`. `load` takes a dataset of a Workflow Run into one table in one
   transaction (at most 100,000 rows and 64 MiB per call; `key` with `onConflict: fail | skip |
-  update`; `replace.by` deletes the rows of the dataset's values and adds the dataset, so a
+update`; `replace.by` deletes the rows of the dataset's values and adds the dataset, so a
   reader never sees the table half replaced); it needs `data_store.insert`, and
   `data_store.execute` as well for `update` and `replace`. Until the datasets of Workflow Runs
   exist it answers `not_supported_yet`. `data_stores.get` (`GET /api/v1/data-stores/:store`,
@@ -2335,9 +2362,9 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   release config or an agent file now reads as plain text or is refused, as `workflow.yaml` and
   `app.yaml` already were. A file whose aliases expand past 100,000 values is refused
   (`'<file>' holds more than 100000 values once its aliases are followed
-  (YAML_DATA_MAX_VALUES).`); before, such a `workflow.yaml` hung its reader. A file with a NUL
+(YAML_DATA_MAX_VALUES).`); before, such a `workflow.yaml` hung its reader. A file with a NUL
   character or half of a surrogate pair is refused (`'<file>' holds a NUL character or half of a
-  surrogate pair, which cannot be stored.`). A tool call whose arguments hold either is answered
+surrogate pair, which cannot be stored.`). A tool call whose arguments hold either is answered
   to the model as the tool error `invalid_text` and stored with an empty input; before, it ended
   the whole run with `INTERNAL`. Rollback: none needed, nothing is stored differently.
 
@@ -2399,7 +2426,7 @@ Request(url))` where code called `app.server.inject(...)`. `listen` resolves wit
   `docker/vivd-client.Dockerfile`, the one `pnpm dev` starts) builds the packages that `core`,
   `config-schema` and `ui` depend on. Before, it built `core` without `asset-schemas`, the
   image built, and the UI container stopped at start with `Cannot find module
-  .../asset-schemas/dist/index.js`. The image build now loads the Vite plugin and fails when
+.../asset-schemas/dist/index.js`. The image build now loads the Vite plugin and fails when
   a package is missing, and `pnpm check:images` builds this image too.
 
 - **Model providers and redirects:** no model adapter follows a redirect any more. A provider

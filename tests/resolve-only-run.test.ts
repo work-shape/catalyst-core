@@ -1,7 +1,7 @@
 import type { ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { tmpdir, totalmem } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createTestConfig } from "./support/fixtures";
@@ -55,8 +55,13 @@ describe("a resolve-only run, as the release gate starts every built entry point
 
   /** The environment names no database and no secret: the run ends before one is asked for. */
   async function resolveOnly(name: string, build: Build, configPath: string) {
+    return run(name, build, configPath, ["--resolve-only"]);
+  }
+
+  /** A run of the process, a start on the host where `--resolve-only` is not given. */
+  async function run(name: string, build: Build, configPath: string, flags: string[] = []) {
     const child = startTestProcess(new URL("./support/instance-process.ts", import.meta.url), {
-      args: [name, build, "--resolve-only"],
+      args: [name, build, ...flags],
       env: { PATH: process.env.PATH, CLIENT_CONFIG_PATH: configPath },
       stdio: ["ignore", "pipe", "pipe"]
     });
@@ -69,6 +74,21 @@ describe("a resolve-only run, as the release gate starts every built entry point
     }
     const [code] = await once(child, "exit");
     return { code, ...output };
+  }
+
+  /** A release config whose Docker sandboxes need, all at once, twice the memory of this machine. */
+  async function configExceedingThisMachine(): Promise<string> {
+    const path = join(directory, "sandboxes-exceed-this-machine.yaml");
+    const config = createTestConfig({
+      executionWorkspaces: { enabled: true, worker: { concurrency: 2 } },
+      workspaceObjectRoot: join(directory, "workspace-objects")
+    });
+    const infrastructure = {
+      ...config.infrastructure,
+      sandbox: { provider: "docker", image: "runner:test", memoryBytes: totalmem() }
+    };
+    await writeFile(path, JSON.stringify({ ...config, infrastructure, modules: {} }));
+    return path;
   }
 
   // Fails without the change: the two workers were assembled without the capabilities of the
@@ -166,6 +186,28 @@ describe("a resolve-only run, as the release gate starts every built entry point
         "the workspace command worker of this assembly does not serve the job kind 'documents.render'"
       );
       expect(server).toMatchObject({ code: 0, stdout: `${MARKER}\n` });
+    },
+    ENDED_WITHIN_MS
+  );
+
+  // Fails without the change: the release gate measured the machine it ran on, not the host,
+  // and stopped every deploy whose host has more memory than that machine.
+  it(
+    "leaves the host's memory to the start on the host: the workspace command worker resolves a config its sandboxes exceed this machine with, and refuses to start with it",
+    async () => {
+      const config = await configExceedingThisMachine();
+      const [resolved, started] = await Promise.all([
+        resolveOnly("workspace-command-worker", "without-capability", config),
+        run("workspace-command-worker", "without-capability", config)
+      ]);
+
+      expect(resolved).toMatchObject({ code: 0, stdout: `${MARKER}\n` });
+      expect(resolved.stderr).toContain("host memory not checked: checked at startup on the host");
+      expect(started.code).toBe(1);
+      expect(started.stdout).not.toContain(MARKER);
+      expect(`${started.stdout}${started.stderr}`).toContain(
+        "The sandboxes that can run at once need"
+      );
     },
     ENDED_WITHIN_MS
   );
