@@ -25,7 +25,6 @@ export async function readSecret(
   if (setRawMode === undefined)
     throw new Error("This terminal cannot hide secret input. Use stdin.");
   const wasRaw = input.isRaw ?? false;
-  const wasPaused = input.isPaused();
   emitKeypressEvents(input);
   setRawMode(true);
   try {
@@ -63,7 +62,7 @@ export async function readSecret(
     });
   } finally {
     setRawMode(wasRaw);
-    if (wasPaused) input.pause();
+    input.pause();
     prompt("\n");
   }
 }

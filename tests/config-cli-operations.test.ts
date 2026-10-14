@@ -237,6 +237,27 @@ describe("write-only CLI secret input", () => {
     expect(JSON.stringify(result)).not.toContain(secret);
   });
 
+  it("reuses the secret write idempotency key after a dropped connection", async () => {
+    const secret = generateTestSecret();
+    const keys: (string | null)[] = [];
+    const fetchImpl = apiFetch((request) => {
+      if (request.method === "GET") return Response.json(connectionDetail());
+      keys.push(request.headers.get("idempotency-key"));
+      if (keys.length === 1) throw new TypeError("The test connection dropped");
+      return Response.json({ state: "set", version: 1 });
+    });
+    const result = await run(["connection", "secret", "set", "outside"], {
+      fetchImpl,
+      sleep: async () => {},
+      stdin: Readable.from([secret])
+    });
+    expect(result.code, result.err).toBe(0);
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).toBeTruthy();
+    expect(keys[1]).toBe(keys[0]);
+    expect(result.out + result.err).not.toContain(secret);
+  });
+
   it("refuses secret arguments and flags without echoing them or contacting the server", async () => {
     const secret = generateTestSecret();
     const fetchImpl = vi.fn<typeof fetch>();
@@ -292,7 +313,8 @@ describe("write-only CLI secret input", () => {
         isRaw: false,
         setRawMode: vi.fn()
       });
-      input.pause();
+      expect(input.isPaused()).toBe(false);
+      const pause = vi.spyOn(input, "pause");
       const secret = generateTestSecret();
       let body: unknown;
       const result = await run(["connection", "secret", "set", "outside"], {
@@ -321,6 +343,7 @@ describe("write-only CLI secret input", () => {
       expect(input.setRawMode.mock.calls).toEqual([[true], [false]]);
       expect(input.listenerCount("keypress")).toBe(0);
       expect(input.isPaused()).toBe(true);
+      expect(pause).toHaveBeenCalled();
     }
   );
 });

@@ -119,10 +119,11 @@ export async function runOperationCommand(argv: readonly string[], base: Options
       secret = value;
       if (value.length === 0) throw new UsageError("The secret must not be empty.");
       const state = await api.change(
-        (client) =>
+        (client, idempotencyKey) =>
           client.connections.set_secret({
             params: { name: connectionName },
-            body: { value, expectedVersion: detail.secret.version ?? null }
+            body: { value, expectedVersion: detail.secret.version ?? null },
+            idempotencyKey
           }),
         "Read the connection's secret state before trying again."
       );
@@ -225,6 +226,9 @@ export const operationHelpText = `Operations (JSON output; the instance decides 
   connection test <name>            Check the Connection (connections.test)
   connection discover <name>        Queue discovery (connections.discover)
   connection tools                 List available tools (connections.list_tools)
+
+Multi-line secrets (such as PEM keys) must use stdin, e.g. connection secret set <name> < key.pem.
+The hidden prompt accepts one line; Enter submits it.
 
 Options: --instance <name-or-url>, --dir <working-copy-dir>, --json, --help
 Exit codes: 0 done, 1 refused or failed, 2 usage, 3 waits for approval.
