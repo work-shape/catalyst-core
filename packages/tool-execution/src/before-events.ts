@@ -1,6 +1,7 @@
 import type {
   GuardrailAnswer,
   GuardrailSubject,
+  OperationBeforeEvent,
   OperationCall,
   OperationDefinition,
   OperationDenial,
@@ -25,6 +26,8 @@ export interface BeforeEventsOf {
       subject?: PlatformEventContext["subject"];
     }
   ): Promise<PlatformEventAnswer>;
+  /** Told the events of the operation's own `beforeEvents` before they are asked. */
+  asked?(events: readonly OperationBeforeEvent[]): void;
 }
 
 /** What one before-event answered, with the subject it asked about where it was not the call. */
@@ -53,7 +56,9 @@ export async function askBeforeEvents(context: BeforeEventsOf): Promise<SubjectA
   if (definition.events?.before) {
     answers.push(await context.emit(definition.events.before, "before"));
   }
-  for (const event of (await definition.beforeEvents?.(call.input, call.origin)) ?? []) {
+  const own = (await definition.beforeEvents?.(call.input, call.origin)) ?? [];
+  context.asked?.(own);
+  for (const event of own) {
     const answer = await context.emit(
       event.name,
       "before",

@@ -389,6 +389,7 @@ describe("event registry", () => {
       ["app.before_publish", false, "before"],
       ["approval_request.before_create", false, "before"],
       ["asset.before_write", false, "before"],
+      ["data_store.before_publish", false, "before"],
       ["live_once.cleared", true, "after"],
       ["live_once.switched_on", true, "after"],
       ["live_once.used", true, "after"],

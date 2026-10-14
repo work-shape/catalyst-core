@@ -35,7 +35,8 @@ const EVENT_LABELS: Record<string, TranslationKey> = {
   "asset.before_write": "guardrails.eventAssetWrite",
   "operation.before_call": "guardrails.eventOperationCall",
   "app.before_publish": "guardrails.eventAppPublish",
-  "workflow.before_publish": "guardrails.eventWorkflowPublish"
+  "workflow.before_publish": "guardrails.eventWorkflowPublish",
+  "data_store.before_publish": "guardrails.eventDataStorePublish"
 };
 
 /**
