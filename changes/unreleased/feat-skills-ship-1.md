@@ -11,3 +11,7 @@ section: Added
   stops with the skill's name and the steps to remove the copy with `catalyst config push`. The
   start deletes nothing. The docs page Config assets says the same under "Skills that ship with
   the release".
+- **A proposal to a shipped skill is refused when the agent makes it:** `propose_skill_change`
+  on a skill that ships with the release answers `not_allowed` with a sentence the agent can pass
+  on (it ships with the release and cannot be changed on this instance; a person can copy it).
+  Before, the request was filed and its approval always failed.
