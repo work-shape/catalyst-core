@@ -6,6 +6,7 @@ import {
   waitsForDiscovery,
   withAcceptedOperation,
   withConnectionForm,
+  withOperationExposure,
   withReviewedOperation,
   withoutOperation,
   type ConnectionFormState
@@ -85,6 +86,41 @@ describe("the form of a Connection", () => {
       { name: "lookup" }
     ]);
     expect(withoutOperation(accepted, "lookup").operations).toEqual(base.operations);
+  });
+
+  it("opens one operation to outside clients and closes it again, and leaves its other exposures", () => {
+    const base = {
+      name: "crm",
+      operations: [
+        { name: "list", effect: "reading", exposure: ["agent", "workflow"], enabled: true },
+        { name: "lookup", effect: "reading", exposure: ["agent"], enabled: true }
+      ]
+    };
+    const opened = withOperationExposure(base, "list", "outside", true);
+    expect(opened.operations).toEqual([
+      {
+        name: "list",
+        effect: "reading",
+        exposure: ["agent", "workflow", "outside"],
+        enabled: true
+      },
+      base.operations[1]
+    ]);
+    // Ticked twice it is listed once.
+    expect(withOperationExposure(opened, "list", "outside", true)).toEqual(opened);
+    expect(withOperationExposure(opened, "list", "outside", false).operations).toEqual(
+      base.operations
+    );
+    // An accepted tool is never open to outside clients by itself.
+    const accepted = withAcceptedOperation(base, {
+      name: "fresh",
+      effect: "reading",
+      fingerprint: FINGERPRINT,
+      forAgents: true
+    });
+    expect(accepted.operations).toContainEqual(
+      expect.objectContaining({ name: "fresh", exposure: ["agent"] })
+    );
   });
 
   it("waits for a discovery until a new catalog is in, and not longer than its bound", () => {

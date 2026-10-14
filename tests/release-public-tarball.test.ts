@@ -137,7 +137,7 @@ describe("the public tarball check", () => {
     const result = check(unpacked({ "src/index.ts": "export {};\n" }));
     expect(result.status).toBe(1);
     expect(result.output).toContain(
-      "src/index.ts: only dist/, LICENSE and README.md are published"
+      "src/index.ts: only dist/, skills/, LICENSE and README.md are published"
     );
   });
 });

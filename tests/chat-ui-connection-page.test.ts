@@ -456,7 +456,7 @@ describe("Connection page", () => {
     expect(row("revenue_by_month")).toContain(">Agents<");
     expect(row("revenue_by_month")).toContain("Ready");
 
-    for (const caller of [">Agents<", ">Apps<", ">Workflows<"]) {
+    for (const caller of [">Agents<", ">Apps<", ">Workflows<", ">Outside clients<"]) {
       expect(row("list_customers"), caller).toContain(caller);
     }
     expect(row("list_customers")).toContain("Awaiting discovery");
@@ -665,5 +665,30 @@ describe("Connection page", () => {
     expect(renderPage({ asset: runtime, detail, locale: "de" })).toContain(
       "Gib den Schlüssel unter Zugangsdaten ein. Teste danach erneut."
     );
+  });
+
+  it("offers a writer one check box per operation that opens it to outside clients, ticked where it is", () => {
+    const runtime = connectionAsset("ledger", { origin: "runtime" });
+    const markup = renderPage({ asset: runtime });
+    const box = (name: string) => {
+      const match = new RegExp(`<button[^>]*data-connection-outside="${name}"[^>]*>`, "u").exec(
+        markup
+      );
+      expect(match, name).not.toBeNull();
+      return match?.[0] ?? "";
+    };
+    expect(markup).toContain("Outside clients (CLI, MCP)");
+    expect(markup).toContain("What a call returns is copied to the computer that holds the key.");
+    // Ticked only where the operation names `outside`, which no operation does by itself.
+    expect(box("list_customers")).toContain('aria-checked="true"');
+    for (const name of ["revenue_by_month", "update_customer", "top_products", "delete_order"]) {
+      expect(box(name), name).toContain('aria-checked="false"');
+    }
+    expect(renderPage({ asset: runtime, locale: "de" })).toContain("Externe Clients (CLI, MCP)");
+    // A reader who may not write, and a Connection of the release config, get no box.
+    expect(renderPage({ asset: runtime, canWrite: false })).not.toContain(
+      "data-connection-outside"
+    );
+    expect(renderPage()).not.toContain("data-connection-outside");
   });
 });
