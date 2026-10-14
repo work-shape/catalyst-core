@@ -54,7 +54,7 @@ test("an operator reads the modules of the instance, in English and in German", 
       .getByRole("button", { name: "Modules" })
   ).toBeVisible();
   // Every module the product knows has a row, in the order of the registry.
-  await expect(page.locator("[data-module]")).toHaveCount(9);
+  await expect(page.locator("[data-module]")).toHaveCount(10);
   expect(
     await page
       .locator("[data-module]")
@@ -68,7 +68,8 @@ test("an operator reads the modules of the instance, in English and in German", 
     "connections",
     "workflows",
     "dataStores",
-    "knowledge"
+    "knowledge",
+    "personalApiKeys"
   ]);
 
   const resources = moduleRow(page, "resources");

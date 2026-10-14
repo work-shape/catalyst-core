@@ -3,6 +3,7 @@ import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import { assetHelpText, runAssetCommand } from "./asset-commands";
 import { runConfigCommand, type ConfigCommandName, type ConfigCommandOptions } from "./commands";
+import { loginCommand, logoutCommand } from "./login";
 
 export * from "./api";
 export * from "./commands";
@@ -16,11 +17,20 @@ export interface CliRuntimeOptions {
   env?: Readonly<Record<string, string | undefined>>;
   stdout?: (text: string) => void;
   stderr?: (text: string) => void;
+  /** Waits between tries. Tests pass one that does not wait. */
+  sleep?: (milliseconds: number) => Promise<void>;
 }
 
 const helpText = `Usage: catalyst config <command> [options]
+       catalyst login --instance <name-or-url>
+       catalyst logout --instance <name-or-url>
 
 Sync local config assets with a live Catalyst instance.
+
+Login:
+  login      Show a connect code, wait until you confirm it in Settings, API keys, and
+             save the personal API key it issues, readable by you alone
+  logout     Forget the saved key of an instance; revoke it in Settings
 
 Commands:
   pull       Sync remote config assets into the local working copy
@@ -40,8 +50,14 @@ Options:
   --help                    Show this help
 
 Environment:
-  CATALYST_API_KEY  API key exchanged for a short-lived access token. Create one
-                    under Administration, API Access
+  CATALYST_API_KEY      API key exchanged for a short-lived access token. It wins over
+                        a key 'catalyst login' saved
+  CATALYST_CONFIG_HOME  Folder of the saved keys (default: ~/.config/catalyst)
+
+A working copy that belongs to one Namespace names it beside the instance's url in
+catalyst.yaml, as 'namespace: kai-'. Its push names that Namespace, as the instance asks
+of everyone but the holder of the release right; its pull, diff and list read only the
+assets the key may read, never the instance's version or default agent.
 `;
 
 export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): Promise<number> {
@@ -50,6 +66,9 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
   if (argv.length === 0 || argv[0] === "--help" || argv[0] === "-h") {
     stdout(`${assetHelpText}\n${helpText}`);
     return 0;
+  }
+  if (argv[0] === "login" || argv[0] === "logout") {
+    return runLoginCommand(argv[0], argv.slice(1), runtime, stdout, stderr);
   }
   if (argv[0] !== "config") {
     return runAssetCommand(argv, {
@@ -145,6 +164,45 @@ export async function runCli(argv: string[], runtime: CliRuntimeOptions = {}): P
     stderr(`${error instanceof Error ? error.message : String(error)}\n`);
     return 2;
   }
+}
+
+async function runLoginCommand(
+  command: "login" | "logout",
+  args: string[],
+  runtime: CliRuntimeOptions,
+  stdout: (text: string) => void,
+  stderr: (text: string) => void
+): Promise<number> {
+  let parsed;
+  try {
+    parsed = parseArgs({
+      args,
+      options: {
+        instance: { type: "string" },
+        dir: { type: "string" },
+        help: { type: "boolean", short: "h", default: false }
+      },
+      strict: true
+    });
+  } catch (error) {
+    stderr(`${error instanceof Error ? error.message : String(error)}\n`);
+    return 2;
+  }
+  if (parsed.values.help) {
+    stdout(helpText);
+    return 0;
+  }
+  const options: ConfigCommandOptions = {
+    cwd: runtime.cwd ?? process.cwd(),
+    ...(parsed.values.dir === undefined ? {} : { dir: parsed.values.dir }),
+    ...(parsed.values.instance === undefined ? {} : { instance: parsed.values.instance }),
+    ...(runtime.fetchImpl === undefined ? {} : { fetchImpl: runtime.fetchImpl }),
+    ...(runtime.env === undefined ? {} : { env: runtime.env }),
+    ...(runtime.sleep === undefined ? {} : { sleep: runtime.sleep }),
+    stdout,
+    stderr
+  };
+  return command === "login" ? loginCommand(options) : logoutCommand(options);
 }
 
 function isConfigCommand(value: string): value is ConfigCommandName {
