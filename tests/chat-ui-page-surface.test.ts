@@ -16,6 +16,7 @@ import {
   PageFilesView,
   pageFrameAddress,
   PageSaveCardView,
+  pageBuildingSurface,
   pageSurface,
   pageSurfaceAfterRunCalls,
   PageSurfaceView,
@@ -139,10 +140,16 @@ describe("the calls of a run and the surface slot", () => {
     expect(ask(parts, handled)).toBeUndefined();
   });
 
-  it("waits for a call that is still running and opens the newest of several", () => {
+  it("opens the building Page once when a call starts, and the newest of several revisions", () => {
     const handled = new Set<string>();
     const third = { output: { pageId: "page-1", number: 3, fileSetId: "set-3" } };
 
+    expect(ask([call("call-1", "input_available")], handled)).toEqual({
+      kind: "page_building",
+      key: "page-building:call-1",
+      title: "Offers",
+      callId: "call-1"
+    });
     expect(ask([call("call-1", "input_available")], handled)).toBeUndefined();
     expect(
       ask(
@@ -179,6 +186,80 @@ describe("the calls of a run and the surface slot", () => {
     expect(
       ask([{ ...call("call-4", "output_available", built), toolName: "workspace.exec" }])
     ).toBeUndefined();
+  });
+
+  it("leaves the shown revision of the same Page in place while its next save builds", () => {
+    const save = readPageSave({ args: { name: "Offers" }, result: built });
+    if (save.state !== "built") {
+      throw new Error("expected a revision");
+    }
+
+    expect(
+      ask([call("call-2", "input_available")], new Set(), pageSurface("conv-1", save, t))
+    ).toBeUndefined();
+    // Another Page takes the slot as soon as it starts building.
+    expect(
+      ask(
+        [call("call-3", "input_available", undefined, "Prices")],
+        new Set(),
+        pageSurface("conv-1", save, t)
+      )
+    ).toMatchObject({ kind: "page_building", title: "Prices" });
+  });
+
+  it("puts what refused the first save onto its building Page", () => {
+    const building = pageBuildingSurface("call-1", { name: "Offers" }, t);
+
+    const errors = pageSurfaceAfterRunCalls({
+      conversationId: "conv-1",
+      parts: [call("call-1", "output_available", refused)],
+      handled: new Set(["call-1:start"]),
+      current: building,
+      t
+    });
+    expect(errors).toMatchObject({ key: building.key, kind: "page_building" });
+    expect(errors?.kind === "page_building" ? errors.buildErrors : undefined).toHaveLength(2);
+
+    const failed = pageSurfaceAfterRunCalls({
+      conversationId: "conv-1",
+      parts: [call("call-1", "output_error")],
+      handled: new Set(["call-1:start"]),
+      current: building,
+      t
+    });
+    expect(failed).toMatchObject({ key: building.key, failed: true });
+  });
+
+  it("opens no Page for the saves of a conversation about an App: they write the App's draft", () => {
+    const intoApp = {
+      output: {
+        ...built.output,
+        app: { name: "offers", title: "Offers", saved: true, revision: 2 }
+      }
+    };
+    const handled = new Set<string>();
+    const about = (parts: Parameters<typeof ask>[0]) =>
+      pageSurfaceAfterRunCalls({
+        conversationId: "conv-1",
+        parts,
+        handled,
+        current: undefined,
+        aboutApp: true,
+        t
+      });
+
+    expect(about([call("call-1", "input_available")])).toBeUndefined();
+    expect(about([call("call-1", "output_available", intoApp)])).toBeUndefined();
+    // Where the save's building Page was shown, its revision replaces it.
+    expect(
+      pageSurfaceAfterRunCalls({
+        conversationId: "conv-1",
+        parts: [call("call-2", "output_available", intoApp)],
+        handled: new Set(["call-2:start"]),
+        current: pageBuildingSurface("call-2", { name: "Offers" }, t),
+        t
+      })
+    ).toMatchObject({ kind: "page", key: "page:page-1:set-2" });
   });
 
   it("drops the findings when the next save of the Page succeeds", () => {

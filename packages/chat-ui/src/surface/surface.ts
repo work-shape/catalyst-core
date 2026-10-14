@@ -34,6 +34,12 @@ interface SurfaceSources {
     buildErrors?: readonly PageBuildError[];
   };
   /**
+   * A Page while its first save is building, from the start of the agent's call: the place its
+   * preview will take. `buildErrors` are what the build refused the save for, `failed` a save
+   * that did not run. Nothing was stored in either case.
+   */
+  page_building: { callId: string; buildErrors?: readonly PageBuildError[]; failed?: boolean };
+  /**
    * The published revision of an App. `title` is the name people read. `appPath` is the App's
    * own route to open on; without it the App opens where it starts.
    */

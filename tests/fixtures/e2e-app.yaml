@@ -200,6 +200,18 @@ auth:
           - user
         permissionRefs:
           - demo-tools
+      # The person of the App in chat spec, used by no other spec: an App's id is taken once
+      # for the whole instance. No grant gives a right on Apps yet, so they are an admin. The
+      # label sorts after every other for the reason given above.
+      - email: e2e-app-in-chat@example.test
+        displayLabel: E2E Zz App In Chat
+        passwordEnvName: E2E_APP_IN_CHAT_PASSWORD
+        developmentPassword: e2e-app-in-chat-password
+        roles:
+          - user
+          - admin
+        permissionRefs:
+          - demo-tools
   sessionToken:
     issuer: demo-e2e-client-instance
     ttlSeconds: 900
