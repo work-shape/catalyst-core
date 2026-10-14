@@ -6,6 +6,7 @@ export {
   createPageBridge,
   readPageMessage,
   themeMessage,
+  workflowRunResultMessage,
   type ArrivedMessage
 } from "./bridge-host";
 export {

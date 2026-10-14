@@ -11,6 +11,7 @@ import {
   createFrameCalls,
   createPageBridge,
   frameCallFailure,
+  workflowRunResultMessage,
   frameSessionProof,
   type ArrivedMessage,
   type FrameCalls
@@ -88,7 +89,8 @@ describe("a call a Page asks the interface to make", () => {
       run: (call) => {
         ran.push(call);
         return Promise.resolve({ ok: true, result: { runId: "run-1", status: "done", result: 7 } });
-      }
+      },
+      workflowRun: () => Promise.reject(new Error("not asked"))
     });
 
     made.receive(from(page, message({ type: "ready" })));
@@ -122,7 +124,8 @@ describe("a call a Page asks the interface to make", () => {
   it("is answered to nobody when the frame shows another document by then", async () => {
     const { made, posted, page, from, message, setFrame } = bridge({
       can: () => Promise.resolve(undefined),
-      run: () => Promise.resolve({ ok: false, error: { code: "failed", message: "No" } })
+      run: () => Promise.resolve({ ok: false, error: { code: "failed", message: "No" } }),
+      workflowRun: () => Promise.reject(new Error("not asked"))
     });
 
     made.receive(
@@ -142,6 +145,41 @@ describe("a call a Page asks the interface to make", () => {
     await settled();
 
     expect(posted).toEqual([]);
+  });
+
+  // Fails without APP-6a: the bridge took no read of a Workflow Run, so a Page that started one
+  // could not follow it.
+  it("reads a Workflow Run for the Page and answers it under the id the Page gave the read", async () => {
+    const read: string[] = [];
+    const run = { id: "wfr-1", workflow: "visit-log-entries", status: "done" as const, output: 1 };
+    const { made, posted, page, from, message } = bridge({
+      can: () => Promise.resolve(undefined),
+      run: () => Promise.reject(new Error("not asked")),
+      workflowRun: (runId) => {
+        read.push(runId);
+        return Promise.resolve({ ok: true, run });
+      }
+    });
+
+    made.receive(
+      from(
+        page,
+        message({ type: "workflow_run", session: "s-1", requestId: "r-2", runId: "wfr-1" })
+      )
+    );
+    // A read that carries more than the run's id is no message of the bridge.
+    made.receive(
+      from(
+        page,
+        message({ type: "workflow_run", session: "s-1", requestId: "r-3", runId: "wfr-1", x: 1 })
+      )
+    );
+    await settled();
+
+    expect(read).toEqual(["wfr-1"]);
+    expect(posted).toEqual([
+      { message: workflowRunResultMessage("s-1", "r-2", { ok: true, run }), targetOrigin: "*" }
+    ]);
   });
 
   it("is refused where the frame has no way to the instance, and the context names no action", async () => {
@@ -202,13 +240,18 @@ describe("the calls of a frame", () => {
       sent.push({ operation, request });
       return Promise.resolve(answer);
     };
+    const run = { id: "wfr-1", workflow: "visit-log-entries", status: "running" as const };
     const calls = createFrameCalls(
       {
         apps: {
           sessions: {
             context: () => Promise.resolve({ can: { load: "allow" as const } }),
             call_action: record("call_action"),
-            call_connection: record("call_connection")
+            call_connection: record("call_connection"),
+            get_workflow_run: (request: unknown) => {
+              sent.push({ operation: "get_workflow_run", request });
+              return Promise.resolve(run);
+            }
           }
         }
       },
@@ -231,6 +274,7 @@ describe("the calls of a frame", () => {
       operation: "list",
       input: { limit: 5 }
     });
+    expect(await calls.workflowRun("wfr-1")).toEqual({ ok: true, run });
 
     const proof = { fileSetId: "set-2", token: "token-3" };
     expect(sent).toEqual([
@@ -248,6 +292,10 @@ describe("the calls of a frame", () => {
           params: { pageSessionId: "session-1", connection: "crm", operation: "list" },
           body: { ...proof, input: { limit: 5 } }
         }
+      },
+      {
+        operation: "get_workflow_run",
+        request: { params: { pageSessionId: "session-1", runId: "wfr-1" }, body: proof }
       }
     ]);
   });

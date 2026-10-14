@@ -163,6 +163,12 @@ describe("the Actions side of a draft", () => {
     expect(row).toContain("Reading");
     expect(row).toContain('data-policy="allow"');
     expect(row).toContain("Can be tested");
+    // Under the target, what it is: a store and its SQL, never a Connection.
+    expect(row).toContain("The data store and the SQL the action runs on it");
+    expect(row).not.toContain("The connection");
+    expect(rowOf(actionsView(ready([list]), true, "de"), "list_findings")).toContain(
+      "Der Datenspeicher und das SQL, das die Aktion darauf ausführt"
+    );
     // Without a title the store goes by its name, and a store that is not there says so.
     expect(rowOf(markup, "load_gone")).toContain("ledger");
     expect(rowOf(markup, "load_gone")).toContain('data-unavailable="data_store_missing"');
@@ -325,6 +331,34 @@ describe("the test dialog", () => {
     expect(markup).toContain("Kundenkartei");
     expect(markup).toContain("&quot;limit&quot;: 0");
     expect(markup).not.toContain("data-app-action-test-status");
+  });
+
+  it("says of a Workflow action that the draft starts nothing, in both languages", () => {
+    const {
+      connection: _connection,
+      operation: _operation,
+      unavailable: _unavailable,
+      ...rest
+    } = action();
+    const start: AppAction = {
+      ...rest,
+      name: "log",
+      kind: "workflow",
+      effect: "changing",
+      workflow: { name: "visit-log" }
+    };
+    const outcome = { status: "dry_run" as const, message: "Would have started.", input: {} };
+
+    const en = dialog({ action: start, outcome });
+    expect(en).toContain("It checks your rights and the input and starts no run.");
+    expect(en).not.toContain("It is listed under Operations.");
+    expect(en).toContain(
+      "Would have started the Workflow &#x27;visit-log&#x27; with the input below."
+    );
+    const de = dialog({ action: start, outcome }, "de");
+    expect(de).toContain("Er prüft deine Rechte und die Eingabe und startet keinen Lauf.");
+    expect(de).not.toContain("Er steht unter Operationen.");
+    expect(de).toContain("Hätte den Workflow „visit-log“ mit der Eingabe unten gestartet.");
   });
 
   it("links the place the call is listed in, for a reader who may open it", () => {
