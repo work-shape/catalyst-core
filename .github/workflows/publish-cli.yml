@@ -10,7 +10,7 @@ on:
 jobs:
   publish:
     if: ${{ vars.PUBLISH_PUBLIC_CLI == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 15
     permissions:
       contents: read

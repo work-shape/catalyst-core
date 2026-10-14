@@ -43,11 +43,13 @@ done
 [[ -n $image ]] \
   || fail "no registry served postgres 17.6 in three rounds: ${registries[*]}; the reason each gave is above"
 
-# Room for three test files side by side: a hosted runner has four cores, Vitest leaves one
-# free, and vitest.config.ts runs no more files than the server has connections for. Postgres's
-# default of 100 has room for two. The number is connectionsForWorkers(3) of
-# scripts/test-postgres-capacity.mjs: 3 * (40 + 1) + 3.
-max_connections=126
+# Room for as many test files side by side as Vitest runs on this machine: one per core but
+# one, and vitest.config.ts runs no more files than the server has connections for. Postgres's
+# default of 100 has room for two. The number is connectionsForWorkers(defaultTestWorkers()) of
+# scripts/test-postgres-capacity.mjs: workers * (40 + 1) + 3, 126 on 4 cores, 290 on 8.
+cores=$(nproc)
+workers=$(( cores > 1 ? cores - 1 : 1 ))
+max_connections=$(( workers * (40 + 1) + 3 ))
 
 docker run --detach --name "$name" \
   --env "POSTGRES_USER=$user" --env "POSTGRES_PASSWORD=$password" --env "POSTGRES_DB=$database" \

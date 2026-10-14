@@ -575,7 +575,7 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
         page
       });
       if ("refusal" in asked) return draftNotWritten(app, asked.refusal);
-      const { event } = asked;
+      const { event, warnings } = asked;
       try {
         const updated = await pageApps.update(
           await callOf(context),
@@ -589,7 +589,12 @@ export function createPlatformAssetCalls(options: AssetWorkflowOptions): Platfor
           },
           [event]
         );
-        return { ...app, saved: true, revision: updated.revision };
+        return {
+          ...app,
+          saved: true,
+          revision: updated.revision,
+          ...(warnings.length > 0 ? { warnings } : {})
+        };
       } catch (error) {
         // The Page is saved either way: a write of the App that did not happen is the answer's,
         // not a failed save.
