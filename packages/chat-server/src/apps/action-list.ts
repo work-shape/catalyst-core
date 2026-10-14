@@ -290,13 +290,16 @@ export class AppActionList {
     revision: ListedRevision
   ): Promise<((action: CompiledAppAction) => AppAction["target"]) | undefined> {
     if (revision.view !== "draft") return undefined;
+    // The reader's own switches on the current draft: an App's call deletes the one it uses.
     const switches = await this.options.stores.liveOnceSwitches.list({
       clientInstanceId: this.options.clientInstanceId,
       assetId: revision.asset.id,
-      revisionId: revision.revisionId
+      switchedBy: reader.id
     });
     const mine = new Set(
-      switches.flatMap((set) => (set.switchedBy.id === reader.id ? [set.part] : []))
+      switches.flatMap((set) =>
+        set.revisionId === revision.revisionId && set.usedByRunId === undefined ? [set.part] : []
+      )
     );
     return (action) => draftCallTarget({ effect: action.effect, liveOnce: mine.has(action.name) });
   }

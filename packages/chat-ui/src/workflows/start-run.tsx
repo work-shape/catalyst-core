@@ -108,6 +108,7 @@ export function StartDialog({
   name,
   form: given = NO_START_FORM,
   again = false,
+  test = false,
   loading,
   error,
   refusedValues,
@@ -118,6 +119,8 @@ export function StartDialog({
   form?: StartForm;
   /** The start is asked for on the page of an earlier run, which stays as it is. */
   again?: boolean;
+  /** The start is a test run of the draft, which acts as the reader and simulates changes. */
+  test?: boolean;
   loading: boolean;
   error: string | undefined;
   /**
@@ -158,17 +161,26 @@ export function StartDialog({
     setChanged((current) => new Set(current).add(field));
   };
   const body = t(
-    again
-      ? "workflows.run.againBody"
-      : asks
-        ? "workflows.startForm.body"
-        : "workflows.start.bodyManual"
+    test
+      ? "workflows.test.body"
+      : again
+        ? "workflows.run.againBody"
+        : asks
+          ? "workflows.startForm.body"
+          : "workflows.start.bodyManual"
   );
   return (
     <Dialog
       open
       size={asks ? "md" : "sm"}
-      title={t(again ? "workflows.run.againTitle" : "workflows.start.title", { name })}
+      title={t(
+        test
+          ? "workflows.test.title"
+          : again
+            ? "workflows.run.againTitle"
+            : "workflows.start.title",
+        { name }
+      )}
       onClose={onClose}
       footer={
         <>
@@ -176,7 +188,7 @@ export function StartDialog({
             {t("cancel")}
           </Button>
           <Button type="submit" form={formId} loading={loading}>
-            {t("workflows.start.confirm")}
+            {t(test ? "workflows.test.confirm" : "workflows.start.confirm")}
           </Button>
         </>
       }

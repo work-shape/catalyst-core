@@ -1,7 +1,6 @@
 import {
   AppError,
   boundedActorAccess,
-  draftCallTarget,
   isAuthenticatedServicePrincipal,
   type ActingServicePrincipal,
   type ActorAccess,
@@ -42,11 +41,13 @@ export function draftCallOf(call: OperationCall): OperationCall {
 /**
  * Where the call goes. A call of what is live goes live, and so does every reading call of a
  * draft, with the rights of the person testing. A changing call of a draft is simulated,
- * unless its caller switched "Run live once" on for its action or step of its revision, which
- * it then uses up; a switch somebody else set leaves this call simulated. Only a call that may
- * be made takes the switch: a call the surface or the right refuses leaves it for the next.
- * The rule itself is `draftCallTarget`, where DT-2 and DT-3 add the test target of the called
- * asset (a Data Store's test copy, a Connection's test credential).
+ * unless its caller switched "Run live once" on for its action or step of its revision. An App
+ * call uses the switch up. A call of a Workflow test run binds the switch to its run, and every
+ * call of that step in that run goes live, each item of a loop and each retry. Only a call that
+ * may be made takes the switch: a caller the surface or the right refuses leaves it, so nobody
+ * without the right uses up a builder's switch. A test target of the called asset (a Data
+ * Store's test copy, a Connection's test credential) will send every call of a draft there;
+ * DT-2 and DT-3 add it here.
  */
 export async function decideTarget(input: {
   call: OperationCall;
@@ -59,20 +60,29 @@ export async function decideTarget(input: {
   const { draft } = call;
   if (!draft || definition.effect === "reading") return "live";
   if (!deps.liveOnce || !(await admitted())) return "dry_run";
-  const { taken, cleared } = await deps.liveOnce.take({
+  const forRun = call.origin.kind === "workflow" ? call.origin.workflowRunId : undefined;
+  const now = deps.now ?? (() => new Date());
+  const { taken, firstUse, cleared } = await deps.liveOnce.take({
     clientInstanceId: deps.clientInstanceId,
     assetId: draft.asset.id,
     revisionId: draft.revisionId,
     part: draft.part,
-    takenBy: call.actor.id
+    switchedBy: call.actor.id,
+    ...(forRun === undefined ? {} : { forRun }),
+    at: now().toISOString()
   });
   for (const stale of cleared) {
     await emitSwitchEvent("live_once.cleared", stale, call, deps, { reason: "draft_changed" });
   }
-  if (taken) {
-    await emitSwitchEvent("live_once.used", taken, call, deps, { operation: definition.name });
+  if (!taken) return "dry_run";
+  // A switch is used once: by the call that took it, or by the test run it was bound to.
+  if (firstUse) {
+    await emitSwitchEvent("live_once.used", taken, call, deps, {
+      operation: definition.name,
+      ...(forRun === undefined ? {} : { workflowRunId: forRun })
+    });
   }
-  return draftCallTarget({ effect: definition.effect, liveOnce: taken !== undefined });
+  return "live";
 }
 
 /** One audit row of a switch, with the asset as its subject. */

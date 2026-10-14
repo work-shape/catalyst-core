@@ -260,6 +260,7 @@ function GuardrailHitList({
             <ListRow
               key={hit.id}
               data-guardrail-hit={hit.outcome}
+              data-guardrail-hit-converted-from={hit.convertedFrom}
               data-guardrail-hit-subject={hit.subjectName}
               leading={<Icon aria-hidden="true" className="size-4 text-muted-foreground" />}
               title={
@@ -277,7 +278,11 @@ function GuardrailHitList({
                     <Chip>{subjectLabel(hit.event, hit.subjectKind)}</Chip>
                   ) : null}
                   <Badge tone={view.tone} size="sm">
-                    {t(GUARDRAIL_HIT_LABELS[hit.outcome])}
+                    {t(
+                      hit.convertedFrom === "require_approval"
+                        ? "guardrails.hitBlockedApprovalCouldNotWait"
+                        : GUARDRAIL_HIT_LABELS[hit.outcome]
+                    )}
                   </Badge>
                 </>
               }

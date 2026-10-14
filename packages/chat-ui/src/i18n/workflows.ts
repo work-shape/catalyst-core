@@ -3,6 +3,44 @@ import { defineTranslations } from "./translation-area";
 /** Workflows: their list, what one does, its runs, and one run with its steps. */
 export const workflows = defineTranslations({
   en: {
+    "workflows.liveOnce.again": "Run live once again",
+    "workflows.liveOnce.used": "Ran live in your test run of {time}.",
+    "workflows.simulated.wouldAskConfirmation":
+      "Live, the call would have asked for a confirmation.",
+    "workflows.simulated.wouldAskApproval":
+      "Live, the call would have waited for another person's approval.",
+    "workflows.simulated.would":
+      "Simulated: nothing was changed. Live, this step would have called “{operation}” with these values.",
+    "workflows.simulated.nothing": "Simulated: nothing was changed.",
+    "workflows.run.publishedAsksShort": "Asks for approval when published",
+    "workflows.run.publishedAsksApproval": "A published run asks for approval here",
+    "workflows.advice.testerMissingRight":
+      "Ask an administrator for the right, or ask someone who holds it to test the workflow.",
+    "workflows.reason.testerMissingRight":
+      "You may not do this: a test run acts as you, and you lack a right.",
+    "workflows.reason.testerMissingRightNamed":
+      "You may not do this: a test run acts as you, and you lack the right “{right}”.",
+    "workflows.test.button": "Test run",
+    "workflows.test.title": "Test “{name}”?",
+    "workflows.test.body":
+      "The test run reads live data as you, within what the workflow's account may do. Steps that change something are only simulated, unless one is set to run live once.",
+    "workflows.test.confirm": "Start test run",
+    "workflows.test.failed": "The test run could not be started.",
+    "workflows.test.pending": "The test run waits for an approval.",
+    "workflows.test.refused": "You may not test this workflow.",
+    "workflows.run.testAgain": "Test again",
+    "workflows.run.testBadge": "Test run",
+    "workflows.run.testLine":
+      "Test run of the draft. It reads live data as {person}; steps that change something are simulated unless they run live once.",
+    "workflows.run.testTitle": "Test run of {date}",
+    "workflows.target.label": "Target",
+    "workflows.liveOnce.button": "Run live once",
+    "workflows.liveOnce.hint":
+      "In your next test run this step runs for real, under the instance's rules.",
+    "workflows.liveOnce.done": "Runs live in your next test run.",
+    "workflows.liveOnce.failed": "The step could not be set to run live.",
+    "workflows.liveOnce.stale":
+      "The draft has changed since. Open the workflow again to set the step live.",
     "workflows.advice.accountInactive":
       "An administrator has to restore the account or name another one in the workflow.",
     "workflows.advice.crashed":
@@ -256,6 +294,45 @@ export const workflows = defineTranslations({
     "workflows.unavailable": "This workflow is not available to you."
   },
   de: {
+    "workflows.liveOnce.again": "Noch einmal live ausführen",
+    "workflows.liveOnce.used": "Lief live in deinem Testlauf vom {time}.",
+    "workflows.simulated.wouldAskConfirmation":
+      "Live hätte der Aufruf nach einer Bestätigung gefragt.",
+    "workflows.simulated.wouldAskApproval":
+      "Live hätte der Aufruf auf die Freigabe einer anderen Person gewartet.",
+    "workflows.simulated.would":
+      "Simuliert: Es wurde nichts geändert. Live hätte dieser Schritt „{operation}“ mit diesen Werten aufgerufen.",
+    "workflows.simulated.nothing": "Simuliert: Es wurde nichts geändert.",
+    "workflows.run.publishedAsksShort": "Eine veröffentlichte Ausführung fragt hier nach Freigabe",
+    "workflows.run.publishedAsksApproval":
+      "Eine veröffentlichte Ausführung fragt hier nach Freigabe",
+    "workflows.advice.testerMissingRight":
+      "Bitte einen Administrator um das Recht, oder bitte jemanden, der es hat, den Workflow zu testen.",
+    "workflows.reason.testerMissingRight":
+      "Du darfst das nicht: Ein Testlauf handelt als du, und dir fehlt ein Recht.",
+    "workflows.reason.testerMissingRightNamed":
+      "Du darfst das nicht: Ein Testlauf handelt als du, und dir fehlt das Recht „{right}“.",
+    "workflows.test.button": "Testlauf",
+    "workflows.test.title": "„{name}“ testen?",
+    "workflows.test.body":
+      "Der Testlauf liest echte Daten mit deinen Rechten, im Rahmen dessen, was das Konto des Workflows darf. Schritte, die etwas ändern, werden nur simuliert, außer du lässt einen davon einmal live ausführen.",
+    "workflows.test.confirm": "Testlauf starten",
+    "workflows.test.failed": "Der Testlauf konnte nicht gestartet werden.",
+    "workflows.test.pending": "Der Testlauf wartet auf eine Freigabe.",
+    "workflows.test.refused": "Du darfst diesen Workflow nicht testen.",
+    "workflows.run.testAgain": "Erneut testen",
+    "workflows.run.testBadge": "Testlauf",
+    "workflows.run.testLine":
+      "Testlauf des Entwurfs. Er liest echte Daten als {person}; Schritte, die etwas ändern, werden simuliert, außer sie sollen einmal live laufen.",
+    "workflows.run.testTitle": "Testlauf vom {date}",
+    "workflows.target.label": "Ziel",
+    "workflows.liveOnce.button": "Einmal live ausführen",
+    "workflows.liveOnce.hint":
+      "In deinem nächsten Testlauf läuft dieser Schritt live, nach den Regeln der Instanz.",
+    "workflows.liveOnce.done": "Läuft in deinem nächsten Testlauf live.",
+    "workflows.liveOnce.failed": "Der Schritt konnte nicht für einen Live-Lauf vorgemerkt werden.",
+    "workflows.liveOnce.stale":
+      "Der Entwurf hat sich inzwischen geändert. Öffne den Workflow neu, um den Schritt live auszuführen.",
     "workflows.advice.accountInactive":
       "Ein Administrator muss das Konto wiederherstellen oder im Workflow ein anderes nennen.",
     "workflows.advice.crashed":

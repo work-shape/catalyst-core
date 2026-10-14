@@ -18,6 +18,7 @@ import {
   UNKNOWN_OPERATION_REASON
 } from "@vivd-catalyst/api-contract";
 import { afterEach, describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import {
   ApiKeyAccessTokenExchange,
@@ -2488,6 +2489,11 @@ describe("catalyst login", () => {
   });
 });
 
+/** What `show --json` prints of an asset: the definition under `config`, beside its facts. */
+const shownAnswerSchema = z
+  .object({ kind: z.string(), revision: z.number(), config: z.record(z.string(), z.unknown()) })
+  .loose();
+
 describe("catalyst asset commands against an instance", () => {
   /**
    * The CLI as one user of the instance: the key exchange is answered here, and every other
@@ -2656,6 +2662,62 @@ describe("catalyst asset commands against an instance", () => {
     const reverted = await run("agent", "revert", "kai-tax", "--to", "1", "--if-revision", "2");
     expect(reverted.code, reverted.err).toBe(0);
     expect((await t.stored("agent", "kai-tax"))?.revision).toBe(3);
+  });
+
+  it("puts back what show --json printed, and asks for the model right only where the model changes", async () => {
+    const t = await setupNamespaceHolder({
+      server: () => ({
+        authAdapter: { ...recordAuthAdapter(), credentialMode: "explicit" }
+      })
+    });
+    // An agent on a model binding, written by the superadmin, who manages models. An admin
+    // writes agents and does not hold `agent_models.manage`.
+    const created = await t.putAgent(
+      t.root.id,
+      "bound",
+      { modelProviderId: undefined, modelBindingId: "plain" },
+      "all"
+    );
+    expect(created.statusCode, created.body).toBe(200);
+    const cwd = await createTemporaryDirectory();
+    const { run } = cliAs(t.instance, t.admin.id, cwd);
+
+    const shown = await run("agent", "show", "bound", "--json");
+    expect(shown.code, shown.err).toBe(0);
+    const answer = shownAnswerSchema.parse(JSON.parse(shown.out));
+    const { config } = answer;
+    await writeFile(
+      join(cwd, "bound.json"),
+      JSON.stringify({ ...answer, config: { ...config, displayName: "Renamed" } })
+    );
+    const renamed = await run(
+      "agent",
+      "put",
+      "bound",
+      "--from",
+      "bound.json",
+      "--if-revision",
+      "1"
+    );
+    expect(renamed.code, renamed.err).toBe(0);
+    const stored = (await t.stored("agent", "bound"))?.config;
+    expect(stored).toMatchObject({ displayName: "Renamed", modelBindingId: "plain" });
+    expect(stored).not.toHaveProperty("revision");
+
+    // Leaving the binding out changes the model the agent runs on: that needs the right.
+    const { modelBindingId: _binding, ...unbound } = config;
+    await writeFile(join(cwd, "unbound.json"), JSON.stringify(unbound));
+    const refused = await run(
+      "agent",
+      "put",
+      "bound",
+      "--from",
+      "unbound.json",
+      "--if-revision",
+      "2"
+    );
+    expect(refused.code).toBe(1);
+    expect(refused.err).toContain("Missing the right 'agent_models.manage'");
   });
 
   it("writes an App from its folder as a draft and publishes the revision it names", async () => {

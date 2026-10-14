@@ -137,7 +137,10 @@ describe("AP-4 r2: rollback round trip with edits on both releases", () => {
     await seedUser(sql, "usr_b", ["!audit.view", "usage.view"]);
     await seedPrincipal(sql, "sp_a", ["config_assets.read", "config_assets.release"]);
 
-    expect(await migrateDatabase({ databaseUrl })).toHaveLength(1);
+    // AP-4's migration among them: a later migration of main is applied with it.
+    expect(await migrateDatabase({ databaseUrl })).toContainEqual(
+      expect.stringMatching(/_legacy_permission_grants$/u)
+    );
     let stores = await storesOn(databaseUrl);
     // Edits on the new release, through the product's stores.
     await stores.users.updateUser({

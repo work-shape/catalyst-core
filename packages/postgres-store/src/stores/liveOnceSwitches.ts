@@ -6,7 +6,7 @@ export function createPostgresLiveOnceSwitchesStore(db: PostgresConnection): Liv
   return {
     switchOn: (input) => operations.switchLiveOnceOn(db, input),
     take: (input) => operations.takeLiveOnceSwitch(db, input),
-    list: (input) => operations.listLiveOnceSwitches(db, input),
-    clearStale: (input) => operations.clearStaleLiveOnceSwitches(db, input)
+    clearStale: (input) => operations.clearStaleLiveOnceSwitches(db, input),
+    list: (input) => operations.listLiveOnceSwitches(db, input)
   };
 }

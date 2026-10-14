@@ -134,6 +134,11 @@ export interface GuardrailAnswer {
   reason: string;
   /** `release`: the operator's floor, set in release config. */
   origin: "release";
+  /**
+   * Set on a `block` that answers a `require_approval` where the action cannot wait for an
+   * approval (`PlatformEventContext.cannotWait`).
+   */
+  approvalCannotWait?: true;
 }
 
 /** One Guardrail as the asset store keeps it. */
@@ -168,6 +173,11 @@ export interface GuardrailHit {
   subjectId?: string;
   /** The asset's or the operation's name, where the subject has one. */
   subjectName?: string;
+  /**
+   * The outcome the guardrail answered, where the action could not wait for an approval and
+   * the hit is the `block` it was answered as (`GuardrailAnswer.approvalCannotWait`).
+   */
+  convertedFrom?: "require_approval";
   createdAt: ISODateString;
 }
 

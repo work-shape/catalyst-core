@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { clearLiveOnceSwitches } from "./asset-after-write";
 import {
   AppError,
   asUserId,
@@ -61,37 +62,6 @@ export interface AssetWorkflowHost {
     }
   ): Promise<{ version: number; revision: number; warnings: AssetWarning[] }>;
   authorizeEditing(call: AssetCall, surface: "put"): Promise<void>;
-}
-
-/**
- * Clears the "Run live once" switches of an asset that were set for a revision that is not its
- * draft any more (ADR-0031). A write or a discard that changes the draft calls it at once, so
- * the audit row names the person who changed the draft; a call that finds a stale switch later
- * clears it too.
- */
-export async function clearStaleLiveOnceSwitches(
-  options: AssetWorkflowOptions,
-  call: AssetCall,
-  target: Pick<AssetTarget, "kind" | "name">,
-  assetId: string | undefined
-): Promise<void> {
-  if (!target.kind.draftCalls || assetId === undefined) {
-    return;
-  }
-  const cleared = await options.stores.liveOnceSwitches.clearStale({
-    clientInstanceId: options.clientInstanceId,
-    assetId
-  });
-  for (const stale of cleared) {
-    await recordAssetEvent(call, "live_once.cleared", {
-      kind: target.kind.kind,
-      name: target.name,
-      revisionId: stale.revisionId,
-      part: stale.part,
-      switchedBy: stale.switchedBy.id,
-      reason: "draft_changed"
-    });
-  }
 }
 
 /** The Page revision a file set was read from, as the revision that copies it records it. */
@@ -556,10 +526,12 @@ export class AssetDraftWorkflow {
     if (asset.revision !== expectedRevision) {
       throw await revisionConflictOf(this.options, call.access, target);
     }
-    // The discard makes the published revision the draft again. A "Run live once" switch set
-    // for it before the draft changed would apply once more, so the switches the draft left
-    // behind are cleared first (ADR-0031).
-    await clearStaleLiveOnceSwitches(this.options, call, target, asset.id);
+    if (kind.draftCalls) {
+      // The discard makes the published revision the draft again. A "Run live once" switch
+      // set for it before the draft changed would apply once more, so the switches the draft
+      // left behind are cleared first (ADR-0031).
+      await clearLiveOnceSwitches(this.options, call, kind, name, asset.id);
+    }
     let discarded: { revision: number };
     try {
       discarded = await this.options.configAssets.store.discardConfigAssetDraft({
@@ -580,8 +552,8 @@ export class AssetDraftWorkflow {
       revision: discarded.revision,
       discardedRevision: expectedRevision
     });
-    // The switches of the discarded draft are cleared now, in the name of who discarded it.
-    await clearStaleLiveOnceSwitches(this.options, call, target, asset.id);
+    // The switches set for the discarded draft are cleared now, in the name of who discarded it.
+    await clearLiveOnceSwitches(this.options, call, kind, name, asset.id);
     return { draftRevision: discarded.revision, publishedRevision: discarded.revision };
   }
 
@@ -630,14 +602,46 @@ export class AssetDraftWorkflow {
         reason: "draft_changed"
       });
     }
+    // The switch is its owner's: only a call or a test run of theirs uses it.
     await recordAssetEvent(call, "live_once.switched_on", {
       kind: kind.kind,
       name,
       revision: asset.revision,
       revisionId: asset.activeRevisionId,
-      part: input.part
+      part: input.part,
+      switchedBy: call.actor.id
     });
     return { draftRevision: asset.revision, part: input.part };
+  }
+
+  /**
+   * The caller's own "Run live once" switches on the current draft, with the test run that
+   * used each, so a page shows them as they stand after a reload.
+   */
+  async listLiveOnce(call: AssetCall, input: AssetAddress) {
+    const target = await this.host.target(input);
+    const { kind } = target;
+    call.access.require(kind.actions.write, target.resource);
+    if (!kind.draftCalls) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `A draft of the kind '${kind.kind}' makes no calls that could run live`
+      );
+    }
+    const asset = requireActive(target);
+    const switches = await this.options.stores.liveOnceSwitches.list({
+      clientInstanceId: this.options.clientInstanceId,
+      assetId: asset.id,
+      switchedBy: call.actor.id
+    });
+    return {
+      items: switches.map((set) => ({
+        part: set.part,
+        switchedAt: set.switchedAt,
+        ...(set.usedByRunId === undefined ? {} : { usedByRunId: set.usedByRunId }),
+        ...(set.usedAt === undefined ? {} : { usedAt: set.usedAt })
+      }))
+    };
   }
 
   /**

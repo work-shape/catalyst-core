@@ -185,6 +185,31 @@ describe("the draft of an App in safe mode", () => {
     expect(t.handed.length - before).toBe(1);
   });
 
+  it("keeps each member's switch on the same action: another's switch replaces none and uses none", async () => {
+    const kaiFrame = await t.openApp(t.kai.id, "draft");
+    const adminFrame = await t.openApp(t.admin.id, "draft");
+    const rows = await switchRowCount();
+    expectStatus(await switchOn(t.kai.id), 200);
+    expectStatus(await switchOn(t.admin.id), 200);
+    expect((await listedTarget(t.kai.id)).save).toBe("live");
+    expect((await listedTarget(t.admin.id)).save).toBe("live");
+    const before = t.handed.length;
+
+    const own = await save(t.kai.id, kaiFrame, "mine");
+    expect(resultSchema.parse(own.json()).status).toBe("done");
+    // Kai's call used Kai's switch; the admin's waits for the admin.
+    expect((await listedTarget(t.admin.id)).save).toBe("live");
+    const theirs = await save(t.admin.id, adminFrame, "theirs");
+    expect(resultSchema.parse(theirs.json()).status).toBe("done");
+    expect(t.handed.length - before).toBe(2);
+    expect(await switchRows(rows)).toEqual([
+      { type: "live_once.switched_on", part: "save" },
+      { type: "live_once.switched_on", part: "save" },
+      { type: "live_once.used", part: "save" },
+      { type: "live_once.used", part: "save" }
+    ]);
+  });
+
   it("clears an unused switch with the next save of the draft, and audits the clearing then, in the saver's name", async () => {
     expectStatus(await switchOn(t.kai.id), 200);
     const rows = await switchRowCount();

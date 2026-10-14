@@ -1,4 +1,4 @@
-import { Button, List, ListRow, SkeletonList } from "@vivd-catalyst/ui";
+import { Badge, Button, List, ListRow, SkeletonList } from "@vivd-catalyst/ui";
 import { formatMomentShort } from "../control-plane/locale-format";
 import { useTranslation } from "../i18n";
 import type { WorkflowRunList } from "./workflow-data";
@@ -69,7 +69,16 @@ export function RunsList({
                   .filter((part) => part !== undefined)
                   .join(" · ")}
                 descriptionWraps
-                chips={<RunStateBadge status={run.status} />}
+                chips={
+                  <>
+                    {run.test ? (
+                      <Badge tone="info" size="sm" data-test-run="">
+                        {t("workflows.run.testBadge")}
+                      </Badge>
+                    ) : null}
+                    <RunStateBadge status={run.status} />
+                  </>
+                }
                 link={
                   <a
                     {...routeLink(
