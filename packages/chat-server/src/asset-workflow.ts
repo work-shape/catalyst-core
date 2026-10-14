@@ -167,6 +167,12 @@ export class AssetWorkflow {
     if (!decision.allowed) {
       return decision;
     }
+    // A revert restores content: who does not read the asset is refused before the guardrails
+    // read the revision, so no answer of theirs tells what it holds. A name of no asset of
+    // this scope has nothing to restore and is refused by the revert as a free name is.
+    if (input.revision !== undefined && target.asset && !readsTarget(access, target)) {
+      return decide(access, target.kind.actions.read, target.resource);
+    }
     const config =
       input.config ??
       (input.revision === undefined
