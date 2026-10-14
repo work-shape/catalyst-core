@@ -74,7 +74,7 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
     return workflow.preview({ user, access }, { app: params.app, mode: body.mode });
   });
 
-  // The three calls of a frame. The interface makes them with the viewer's session after the
+  // The calls of a frame. The interface makes them with the viewer's session after the
   // frame asked through the bridge, and names the frame by its page session. The right on the
   // Page or the App is decided here and in the call path, with the caller present.
   route(apiOperations["apps.sessions.context"], async ({ user, access, params, body, reply }) => {
@@ -120,6 +120,18 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
           header: (name, value) => void reply.header(name, value)
         }
       );
+    }
+  );
+
+  route(
+    apiOperations["apps.sessions.get_workflow_run"],
+    async ({ user, access, context, params, body, reply }) => {
+      void reply.header("cache-control", "no-store");
+      const session = await actions.session(
+        { user, access },
+        { pageSessionId: params.pageSessionId, fileSetId: body.fileSetId, token: body.token }
+      );
+      return actions.workflowRun(session, params.runId, context.correlationId);
     }
   );
 }

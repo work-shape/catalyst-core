@@ -178,6 +178,7 @@ test("a builder who renames an agent in Studio finds the new name on its card", 
   const created = await requestWithOrigin(page, "put", agentPath(name), {
     data: {
       expectedRevision: await assetBaseRevision(page, agentPath(name)),
+      availableIn: "all",
       config: {
         name,
         displayName: "Rename Probe",

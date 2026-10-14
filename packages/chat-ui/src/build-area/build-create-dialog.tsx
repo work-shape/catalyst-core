@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Button, Dialog, Field, Input, Select } from "@vivd-catalyst/ui";
+import { Button, Dialog, Field, Input, KeyValue, KeyValueList, Select } from "@vivd-catalyst/ui";
 import { useTranslation } from "../i18n";
 import type { BuildAssetKind, BuildAssetStart } from "./build-asset-kind";
 import { assetIdFromTitle } from "./build-model";
@@ -8,10 +8,20 @@ import type { BuildNamespace } from "./build-rights";
 /** The choice of no Namespace: the id is taken as typed. */
 const NO_NAMESPACE = "";
 
+/** Where a new asset of a kind that starts in its workspace is made, and who may widen that. */
+export interface BuildCreateStart {
+  /** The shared workspace the reader works in. Absent in a personal one. */
+  workspace: { id: string; name: string } | undefined;
+  /** The reader may make the asset available in every workspace. */
+  mayChooseAll: boolean;
+}
+
 /**
  * Starts a new asset: its name, and its id with the Namespace it is named in. The id follows
  * the name until the reader changes it. Only the Namespaces the reader may write in are
- * offered, and the choice of none only to somebody who may write anywhere.
+ * offered, and the choice of none only to somebody who may write anywhere. A kind that starts
+ * in its workspace says where the asset will be available, and lets whoever may change that
+ * choose every workspace instead.
  */
 export function BuildCreateDialog({
   entry,
@@ -19,6 +29,7 @@ export function BuildCreateDialog({
   initialTitle = "",
   namespaces,
   mayNameFreely,
+  startsIn,
   onClose,
   onStart
 }: {
@@ -29,6 +40,8 @@ export function BuildCreateDialog({
   initialTitle?: string;
   namespaces: readonly BuildNamespace[];
   mayNameFreely: boolean;
+  /** Present for a kind that starts in its workspace. */
+  startsIn: BuildCreateStart | undefined;
   onClose(): void;
   /** Hears the name and the id chosen. A copy adds the definition it starts from itself. */
   onStart(start: Omit<BuildAssetStart, "copyOf">): void;
@@ -39,6 +52,7 @@ export function BuildCreateDialog({
   const [prefix, setPrefix] = useState(
     mayNameFreely ? NO_NAMESPACE : (namespaces[0]?.prefix ?? NO_NAMESPACE)
   );
+  const [everywhere, setEverywhere] = useState(false);
   const id = typedId ?? assetIdFromTitle(title);
   const choices = [
     ...(mayNameFreely ? [{ prefix: NO_NAMESPACE, displayName: t("build.createNoNamespace") }] : []),
@@ -48,7 +62,14 @@ export function BuildCreateDialog({
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (title.trim() && id.trim()) {
-      onStart({ name: `${prefix}${id.trim()}`, title: title.trim() });
+      const availableIn = everywhere
+        ? ("all" as const)
+        : startsIn?.workspace && { workspaceId: startsIn.workspace.id };
+      onStart({
+        name: `${prefix}${id.trim()}`,
+        title: title.trim(),
+        ...(availableIn ? { availableIn } : {})
+      });
     }
   };
 
@@ -107,7 +128,44 @@ export function BuildCreateDialog({
             onChange={(event) => setTypedId(event.target.value)}
           />
         </Field>
+        {startsIn ? (
+          <AvailableIn startsIn={startsIn} everywhere={everywhere} onChange={setEverywhere} />
+        ) : null}
       </form>
     </Dialog>
+  );
+}
+
+/** Where the new asset will be available: a choice for whoever may widen it, a line otherwise. */
+function AvailableIn({
+  startsIn,
+  everywhere,
+  onChange
+}: {
+  startsIn: BuildCreateStart;
+  everywhere: boolean;
+  onChange(everywhere: boolean): void;
+}) {
+  const { t } = useTranslation();
+  const where = startsIn.workspace?.name ?? t("build.createAvailableHidden");
+  const hint =
+    startsIn.workspace && !everywhere ? t("build.createAvailableWorkspaceHint") : undefined;
+  if (!startsIn.mayChooseAll) {
+    return (
+      <KeyValueList layout="stacked">
+        <KeyValue label={t("configAvailability")}>{where}</KeyValue>
+      </KeyValueList>
+    );
+  }
+  return (
+    <Field label={t("configAvailability")} hint={hint}>
+      <Select
+        value={everywhere ? "all" : "start"}
+        onChange={(event) => onChange(event.target.value === "all")}
+      >
+        <option value="start">{where}</option>
+        <option value="all">{t("configAvailabilityAll")}</option>
+      </Select>
+    </Field>
   );
 }

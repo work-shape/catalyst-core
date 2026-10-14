@@ -239,7 +239,7 @@ describe("Namespace grants on agents and skills", () => {
       { params: { kind: "agent", name: "kai-helper" }, payload: {} },
       t.forbidden("agent.write", "no_grant")
     );
-    expect((await t.putAgent(t.admin.id, "assistant")).statusCode).toBe(200);
+    expect((await t.putAgent(t.admin.id, "assistant", {}, "all")).statusCode).toBe(200);
     await t.expectOk(t.admin.id, "assets.set_default", {
       params: { kind: "agent" },
       payload: { name: "assistant" }

@@ -280,7 +280,17 @@ describe("assets.put, assets.delete and assets.revert", () => {
 
     const created = await put(t.kai.id, "First.", null);
     expect(created.statusCode).toBe(200);
-    expect(writeSchema.parse(created.json())).toEqual({ version: 2, revision: 1, warnings: [] });
+    // A new agent made in no workspace starts hidden, and the answer says so.
+    expect(writeSchema.parse(created.json())).toEqual({
+      version: 2,
+      revision: 1,
+      warnings: [
+        {
+          code: "agent_hidden",
+          message: "Agent 'kai-intake' is hidden until an instance admin makes it available"
+        }
+      ]
+    });
     const replaced = await put(t.kai.id, "Second.", 1);
     expect(writeSchema.parse(replaced.json())).toEqual({ version: 3, revision: 2, warnings: [] });
 
@@ -462,6 +472,8 @@ describe("assets.sync", () => {
         { ...item("put", "agent", "kai-intake"), revision: 1 },
         { ...item("delete", "agent", "kai-old"), revision: 2 }
       ],
+      // A push is made in no workspace: its new agent starts hidden.
+      hiddenAgentNames: ["kai-intake"],
       warnings: []
     });
     expect(await t.stored("skill", "kai-guide")).toMatchObject({ status: "active", revision: 1 });
