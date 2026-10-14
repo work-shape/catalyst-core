@@ -115,7 +115,7 @@ const operationSchema = z.object({
   title: z
     .string()
     .optional()
-    .describe("The name in words a person reads in the list, such as 'Mandanten auflisten'."),
+    .describe("The name in words a person reads in the list, such as 'List customers'."),
   description: z
     .string()
     .describe(
@@ -146,25 +146,25 @@ const inputSchema = z.object({
     .min(1)
     .max(CONNECTION_NAME_MAX_LENGTH)
     .describe(
-      "The id of the Connection the tools are for, such as 'exampledata': the one the request names, or a new one in lowercase letters, digits and hyphens."
+      "The id of the Connection the tools are for, such as 'crm': the one the request names, or a new one in lowercase letters, digits and hyphens."
     ),
   title: z
     .string()
     .min(1)
     .max(120)
-    .describe("The Connection's name in words, such as 'Exampledata'."),
+    .describe("The Connection's name in words, such as 'CRM'."),
   baseUrl: z
     .string()
     .min(1)
     .describe(
-      "The address every request starts with, such as 'https://api.exampledata.com'. No user name, password, query or fragment."
+      "The address every request starts with, such as 'https://crm.example/api/v1'. No user name, password, query or fragment."
     ),
   headerNames: z
     .array(z.string())
     .max(DRAFT_HEADERS_MAX)
     .optional()
     .describe(
-      "The names of fixed headers the API needs on every request that carry no credential, such as 'x-client-instance-id'. Names only: a person types their values. A header that carries a key is never one of them: the person enters the key on the Connection's page."
+      "The names of fixed headers the API needs on every request that carry no credential, such as 'x-tenant-id'. Names only: a person types their values. A header that carries a key is never one of them: the person enters the key on the Connection's page."
     ),
   operations: z
     .array(operationSchema)
