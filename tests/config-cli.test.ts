@@ -10,7 +10,17 @@ import { retiredReleasePaths } from "./support/retired-api-paths";
 
 import { createHash } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  stat,
+  symlink,
+  writeFile
+} from "node:fs/promises";
 import { hostname, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
@@ -267,7 +277,22 @@ skills:
     );
   });
 
-  it("takes the one instance a key is saved for where neither --instance nor a default names one, as the manifest names it", async () => {
+  it("takes the one instance a key is saved for outside a working copy only, and never with CATALYST_API_KEY set", async () => {
+    const configHome = await createTemporaryDirectory();
+    const env = { CATALYST_CONFIG_HOME: configHome };
+    await expect(resolveInstance(undefined, { env })).rejects.toThrow(
+      "No instance selected; pass --instance or set defaultInstance in catalyst.yaml. No key is saved; 'catalyst login --instance <https-url>' saves one."
+    );
+    await saveCredentialsFor(configHome, ["https://catalyst.test"]);
+    expect(await resolveInstance(undefined, { env })).toEqual({
+      key: "https://catalyst.test",
+      url: "https://catalyst.test"
+    });
+    // An automation key's instance is not the saved one's.
+    await expect(
+      resolveInstance(undefined, { env: { ...env, CATALYST_API_KEY: "cat_automation" } })
+    ).rejects.toThrow("CATALYST_API_KEY is set: name the instance it belongs to.");
+    // A working copy names its instances itself, even the saved one, and a key never chooses.
     const manifest = parseManifest(`instances:
   production:
     url: https://catalyst.test
@@ -275,25 +300,44 @@ skills:
 agents: []
 skills: []
 `);
-    const configHome = await createTemporaryDirectory();
-    const env = { CATALYST_CONFIG_HOME: configHome };
     await expect(resolveInstance(manifest, { env })).rejects.toThrow(
-      "No instance selected; pass --instance or set defaultInstance in catalyst.yaml. No key is saved; 'catalyst login --instance <https-url>' saves one."
+      "No instance selected; pass --instance or set defaultInstance in catalyst.yaml. catalyst.yaml names production."
     );
-    await saveCredentialsFor(configHome, ["https://catalyst.test"]);
-    expect(await resolveInstance(manifest, { env })).toEqual({
-      key: "production",
-      url: "https://catalyst.test",
-      namespace: "tax-"
-    });
-    expect(await resolveInstance({ ...manifest, instances: {} }, { env })).toEqual({
-      key: "https://catalyst.test",
-      url: "https://catalyst.test"
-    });
     await saveCredentialsFor(configHome, ["https://catalyst.test", "https://other.test"]);
-    await expect(resolveInstance(manifest, { env })).rejects.toThrow(
+    await expect(resolveInstance(undefined, { env })).rejects.toThrow(
       "Keys are saved for https://catalyst.test, https://other.test."
     );
+  });
+
+  // Verifier repros (CONNECT-1a, second verification, verify/connect-1a-2 5317122c): the fallback
+  // that fixed `catalyst context` outside a working copy also picked an instance inside a working
+  // copy whose catalyst.yaml names its instances without a default.
+  it("does not switch a root that names another instance to the one a key is saved for", async () => {
+    const manifest = parseManifest(`instances:
+  production:
+    url: https://chat.customer.test
+agents: []
+skills: []
+`);
+    const configHome = await createTemporaryDirectory();
+    await saveCredentialsFor(configHome, ["https://chat.other.test"]);
+    const env = { CATALYST_CONFIG_HOME: configHome };
+    await expect(resolveInstance(manifest, { env })).rejects.toThrow("No instance selected");
+  });
+
+  it("does not pick production in a root of staging and production without a default", async () => {
+    const manifest = parseManifest(`instances:
+  staging:
+    url: https://staging.chat.customer.test
+  production:
+    url: https://chat.customer.test
+agents: []
+skills: []
+`);
+    const configHome = await createTemporaryDirectory();
+    await saveCredentialsFor(configHome, ["https://chat.customer.test"]);
+    const env = { CATALYST_CONFIG_HOME: configHome };
+    await expect(resolveInstance(manifest, { env })).rejects.toThrow("No instance selected");
   });
 
   it("keeps resolved skill resources inside their package", () => {
@@ -3907,6 +3951,32 @@ describe("catalyst setup, verifier repros", () => {
     await symlink(outside, skillPath);
     await computer.setup(["claude-code", "--instance", SETUP_INSTANCE]);
     await expect(stat(outside)).rejects.toThrow(/ENOENT/u);
+  });
+
+  it("writes nothing through a link at SKILL.md to an existing file that holds a skill setup wrote", async () => {
+    const t = await setupPersonalKeyInstance();
+    await grantKaiNamespace(t);
+    const computer = await computerOf(t);
+    const skillPath = join(computer.home, ".claude", "skills", "catalyst", "SKILL.md");
+    await mkdir(join(skillPath, ".."), { recursive: true });
+    // Followed, the link would read as an older skill of this CLI, which setup replaces.
+    const older = (await renderCatalystSkill()).replace("# Catalyst", "# Catalyst, older");
+    const outsideText = older.replace(/sha256 [0-9a-f]{64}/u, sha256Mark(older));
+    const outside = join(computer.home, "shared-skill.md");
+    await writeFile(outside, outsideText);
+    await symlink(outside, skillPath);
+
+    const kept = await computer.setup(["claude-code", "--instance", SETUP_INSTANCE]);
+    expect(kept.code).toBe(1);
+    expect(kept.err).toContain(`Kept ${skillPath}`);
+    expect(await readFile(outside, "utf8")).toBe(outsideText);
+
+    const forced = await computer.setup(["claude-code", "--instance", SETUP_INSTANCE, "--force"]);
+    expect(forced.code, forced.err).toBe(0);
+    expect(await readFile(outside, "utf8")).toBe(outsideText);
+    expect((await lstat(`${skillPath}.bak`)).isSymbolicLink()).toBe(true);
+    expect((await lstat(skillPath)).isFile()).toBe(true);
+    expect(await readFile(skillPath, "utf8")).toBe(await renderCatalystSkill());
   });
 });
 

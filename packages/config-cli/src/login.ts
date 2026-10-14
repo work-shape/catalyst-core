@@ -10,7 +10,7 @@ import {
 } from "./command-support";
 import { credentialOrigin, removeCredential, saveCredential } from "./credentials";
 import { readConfigCliEnv } from "./env";
-import { EMPTY_MANIFEST, readManifestIfPresent, resolveInstance } from "./working-copy";
+import { readManifestIfPresent, resolveInstance } from "./working-copy";
 
 /**
  * Logs in by a connect code: the instance gives a short code, the person confirms it in
@@ -124,7 +124,7 @@ export async function logoutCommand(options: ConfigCommandOptions): Promise<numb
 
 /**
  * An address given as it is, or the instance `resolveInstance` selects: one named in the working
- * copy's manifest, its default, or the one a key is saved for.
+ * copy's manifest, its default, or outside a working copy the one a key is saved for.
  */
 export async function resolveInstanceUrl(options: ConfigCommandOptions): Promise<string> {
   const requested = options.instance;
@@ -132,7 +132,7 @@ export async function resolveInstanceUrl(options: ConfigCommandOptions): Promise
     return requested.replace(/\/+$/u, "");
   }
   const manifest = await readManifestIfPresent(resolveWorkingDir(options));
-  return (await resolveInstance(manifest ?? EMPTY_MANIFEST, options)).url;
+  return (await resolveInstance(manifest, options)).url;
 }
 
 /** Where the person sees and revokes their keys: Settings, You, API keys of the instance. */

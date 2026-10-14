@@ -13,7 +13,7 @@ description: Work with a Workshape Catalyst instance through the catalyst comman
 2. `catalyst kinds --json`: each kind with its command word, lifecycle and rights.
 3. `catalyst --help`: the commands and options of the CLI that is installed.
 
-Trust these answers over this skill. A command without `--instance` works on the instance a working copy names as its default, else on the one instance saved. When more than one is saved, pass `--instance <name-or-url>` on every command.
+Trust these answers over this skill. In a working copy, a command without `--instance` works on the instance its `catalyst.yaml` names as default, and is refused where it names none. Outside a working copy, it works on the one instance saved. When more than one is saved, or the working copy names no default, pass `--instance <name-or-url>` on every command.
 
 ## When the CLI is not logged in
 

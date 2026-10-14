@@ -13,7 +13,7 @@ import {
   type SkillConfig,
   type SkillResourceConfig
 } from "@vivd-catalyst/asset-schemas";
-import { credentialOrigin, savedInstanceOrigins } from "./credentials";
+import { savedInstanceOrigins } from "./credentials";
 import { type ConfigCliEnv, readConfigCliEnv } from "./env";
 import { GUARDRAIL_FILE, readGuardrailFolder, type GuardrailDefinition } from "./guardrail-files";
 
@@ -156,9 +156,6 @@ export async function readManifest(workingDir: string): Promise<CatalystManifest
   return parseManifest(await readFile(path, "utf8"), path);
 }
 
-/** What a folder that is no working copy names: no instance and no asset. */
-export const EMPTY_MANIFEST: CatalystManifest = { instances: {}, agents: [], skills: [] };
-
 /** The manifest of the folder, or none where the folder is no working copy. */
 export async function readManifestIfPresent(
   workingDir: string
@@ -173,40 +170,41 @@ export async function readManifestIfPresent(
 
 /**
  * The instance a command works on: `instance` as an instance of the manifest or as an address,
- * else the manifest's default instance, else the one instance a key is saved for. With none or
- * several saved, the caller has to name one.
+ * else the manifest's default instance. A working copy that names neither is refused with the
+ * instances it names: it belongs to one of them, and a saved key never chooses among them.
+ * Outside a working copy (`manifest` undefined), the one instance a key is saved for is taken,
+ * unless `CATALYST_API_KEY` is set, whose instance a saved key does not tell.
  */
 export async function resolveInstance(
-  manifest: CatalystManifest,
+  manifest: CatalystManifest | undefined,
   options: { instance?: string | undefined; env?: ConfigCliEnv | undefined } = {}
 ): Promise<ResolvedInstance> {
-  const key = options.instance ?? manifest.defaultInstance;
-  if (key === undefined || key === "") {
-    return savedInstance(manifest, await savedInstanceOrigins(readConfigCliEnv(options.env)));
+  const key = options.instance ?? manifest?.defaultInstance;
+  if (key !== undefined && key !== "") {
+    const configured = manifest?.instances[key];
+    if (configured) return { key, ...configured };
+    return { key, url: normalizeUrl(key, `Instance '${key}'`) };
   }
-  const configured = manifest.instances[key];
-  if (configured) {
-    return { key, ...configured };
-  }
-  return { key, url: normalizeUrl(key, `Instance '${key}'`) };
-}
-
-/** The one saved instance, as the manifest names it where it does. */
-function savedInstance(manifest: CatalystManifest, saved: readonly string[]): ResolvedInstance {
-  const [origin, ...more] = saved;
-  if (origin === undefined || more.length > 0) {
+  const refusal = `No instance selected; pass --instance or set defaultInstance in ${MANIFEST_FILENAME}.`;
+  if (manifest !== undefined) {
+    const names = Object.keys(manifest.instances);
     throw new Error(
-      `No instance selected; pass --instance or set defaultInstance in ${MANIFEST_FILENAME}. ${
-        origin === undefined
-          ? "No key is saved; 'catalyst login --instance <https-url>' saves one."
-          : `Keys are saved for ${saved.join(", ")}.`
-      }`
+      names.length === 0 ? refusal : `${refusal} ${MANIFEST_FILENAME} names ${names.join(", ")}.`
     );
   }
-  const named = Object.entries(manifest.instances).find(
-    ([, instance]) => credentialOrigin(instance.url) === origin
-  );
-  return named ? { key: named[0], ...named[1] } : { key: origin, url: origin };
+  const env = readConfigCliEnv(options.env);
+  if (env.CATALYST_API_KEY) {
+    throw new Error(`${refusal} CATALYST_API_KEY is set: name the instance it belongs to.`);
+  }
+  const saved = await savedInstanceOrigins(env);
+  const [origin, ...more] = saved;
+  if (origin === undefined) {
+    throw new Error(
+      `${refusal} No key is saved; 'catalyst login --instance <https-url>' saves one.`
+    );
+  }
+  if (more.length > 0) throw new Error(`${refusal} Keys are saved for ${saved.join(", ")}.`);
+  return { key: origin, url: origin };
 }
 
 /** The key of an asset in the state file: its kind and its name. */

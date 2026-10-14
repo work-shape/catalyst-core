@@ -24,9 +24,10 @@ setup <tool> --instance <url>`, with the instance's address and the CLI version
   link at that path is never written through. A run again keeps a working key and updates the
   skill; only a key the instance refuses (401 or 403) is replaced by a new login. It never prints
   the key. A test fails when the skill names a command or option `catalyst --help` does not list.
-- **CLI:** a command without `--instance` and without a `defaultInstance` in `catalyst.yaml`
-  works on the one instance a key is saved for. With none or several saved it is refused as
-  before, and the message names the saved ones. `catalyst --version` prints the version.
+- **CLI:** outside a working copy, a command without `--instance` works on the one instance a
+  key is saved for, unless `CATALYST_API_KEY` is set. With none or several saved it is refused,
+  and the message names the saved ones. In a working copy nothing changes: one whose
+  `catalyst.yaml` names no `defaultInstance` is refused, and the message names its instances. `catalyst --version` prints the version.
   `login`, `logout` and `setup` name the address of API keys, `<url>/settings/you/api-keys`.
 - **`CommandLine`** in the UI library: one command with a copy button.
 - **The docs page "Connect a local agent"**, carried into `platform-docs`.

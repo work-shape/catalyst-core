@@ -27,7 +27,7 @@ import {
   resolveWorkingDir,
   type ConfigCommandOptions
 } from "./command-support";
-import { EMPTY_MANIFEST, readManifestIfPresent, resolveInstance } from "./working-copy";
+import { readManifestIfPresent, resolveInstance } from "./working-copy";
 
 // `catalyst context`, `kinds`, `references` and `catalyst <kind> <verb>`: one command per
 // operation of the instance, for every kind it registers. A command reads its arguments, sends
@@ -655,7 +655,7 @@ async function openInstance(
   options: ConfigCommandOptions
 ): Promise<{ api: ConfigApi; workspace: string | undefined }> {
   const manifest = await readManifestIfPresent(resolveWorkingDir(options));
-  const instance = await resolveInstance(manifest ?? EMPTY_MANIFEST, options);
+  const instance = await resolveInstance(manifest, options);
   return { api: await connectApi(instance.url, options), workspace: instance.workspace };
 }
 
@@ -767,8 +767,8 @@ ${Object.values(VERBS)
 
 Options:
   --instance <name-or-url>  An instance of catalyst.yaml, or its URL. Left out: the
-                            defaultInstance of catalyst.yaml, or the one instance a key
-                            is saved for
+                            defaultInstance of catalyst.yaml; outside a working copy,
+                            the one instance a key is saved for
   --dir <working-copy-dir>  Directory containing catalyst.yaml (default: .)
   --workspace <id>          Address the assets one workspace owns. Left out in a working
                             copy bound to a workspace: that workspace

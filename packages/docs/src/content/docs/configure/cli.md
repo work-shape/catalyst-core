@@ -45,7 +45,7 @@ A key acts as you, narrowed to its scopes. A scope is a right such as `agent.wri
 
 `catalyst setup <claude-code|codex|other> --instance <address>` logs in the same way where no working key is saved, then writes the Catalyst skill for an AI tool on your computer. [Connect a local agent](/getting-started/local-agent/) describes it.
 
-A command without `--instance` works on the `defaultInstance` of the working copy's `catalyst.yaml`, and outside a working copy, or in one without a default, on the one instance a key is saved for. With none or several saved it names the saved ones and asks for `--instance`. `catalyst --version` prints the version of the tool.
+A command without `--instance` works on the `defaultInstance` of the working copy's `catalyst.yaml`; one without a default is refused with the instances it names, and a saved key never chooses among them. Outside a working copy it works on the one instance a key is saved for, unless `CATALYST_API_KEY` is set. With none or several saved it names the saved ones and asks for `--instance`. `catalyst --version` prints the version of the tool.
 
 A working copy that belongs to one Namespace names it beside the instance:
 

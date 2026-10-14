@@ -53,8 +53,8 @@ Commands:
 
 Options:
   --instance <name-or-url>  Manifest instance name or direct URL. Left out: the
-                            manifest's defaultInstance, or the one instance a key is
-                            saved for
+                            manifest's defaultInstance; outside a working copy, the
+                            one instance a key is saved for
   --dir <working-copy-dir>  Directory containing catalyst.yaml (default: .)
   --prune                   Mirror on push, deleting the remote-only assets the last pull
                             saw
