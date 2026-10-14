@@ -7,6 +7,7 @@ import {
   createOpenApiDocument,
   createOpenApiDocumentFromOperations,
   findBreakingChanges,
+  describeApiReference,
   isRegisteredOperation,
   openApiDocumentSchema,
   renderApiReferencePage,
@@ -275,6 +276,18 @@ describe("the released OpenAPI document", () => {
     expect(page.html).toContain("Operation-Run-Id");
   });
 
+  it("lists each credential once with its alternative scopes in the reference", () => {
+    const operation = required(
+      describeApiReference(released)
+        .groups.flatMap((group) => group.operations)
+        .find((operation) => operation.id === "operations.get_run")
+    );
+    expect(operation.html.match(/<code>accessToken<\/code>/gu)).toHaveLength(1);
+    expect(operation.html).toContain(
+      "<code>accessToken</code> (<code>governance:read</code> or <code>me:read</code>)"
+    );
+  });
+
   it("names every schema it refers to and holds no schema nothing refers to", () => {
     const text = JSON.stringify(released);
     const referenced = new Set(
@@ -363,6 +376,37 @@ describe("the breaking-change comparison", () => {
       "GET /api/v1/conversations: query parameter limit: maximum accepts less than before",
       "GET /api/v1/instance/branding: the operation now asks for a credential"
     ]);
+  });
+
+  it("compares every scope alternative of a scheme without depending on their order", () => {
+    const one = structuredClone(released);
+    documentedOperationOf(one, "operations.get_run").security = [
+      { accessToken: ["governance:read", "config_assets:read"] }
+    ];
+    const two = structuredClone(one);
+    documentedOperationOf(two, "operations.get_run").security.push({ accessToken: ["me:read"] });
+    expect(findBreakingChanges(one, two)).toEqual([]);
+    expect(findBreakingChanges(two, one)).toEqual([
+      "GET /api/v1/operations/runs/{runId}: the credential accessToken no longer accepts the scope alternative me:read"
+    ]);
+    const reordered = structuredClone(two);
+    documentedOperationOf(reordered, "operations.get_run").security = [
+      { accessToken: ["me:read"] },
+      { accessToken: ["config_assets:read", "governance:read"] },
+      { accessToken: ["me:read"] }
+    ];
+    expect(findBreakingChanges(two, reordered)).toEqual([]);
+    expect(findBreakingChanges(reordered, two)).toEqual([]);
+    expect(findBreakingChanges(reordered, one)).toEqual(findBreakingChanges(two, one));
+    const narrower = structuredClone(two);
+    documentedOperationOf(narrower, "operations.get_run").security = [
+      { accessToken: ["governance:read", "config_assets:read"] },
+      { accessToken: ["me:read", "config_assets:write"] }
+    ];
+    expect(findBreakingChanges(two, narrower)).toEqual([
+      "GET /api/v1/operations/runs/{runId}: the credential accessToken no longer accepts the scope alternative me:read"
+    ]);
+    expect(findBreakingChanges(narrower, two)).toEqual([]);
   });
 
   it("takes the newest release whose document has versioned paths as the baseline", () => {

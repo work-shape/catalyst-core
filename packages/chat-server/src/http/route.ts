@@ -555,9 +555,9 @@ async function requireOperationScope(
   if (
     !isAuthenticatedServicePrincipal(identity) &&
     identity.keyScopes !== undefined &&
-    operation.personalKeyScope &&
-    hasAuthScope(identity, operation.personalKeyScope)
+    operation.personalKeyScope
   ) {
+    requireAuthScope(identity, operation.personalKeyScope);
     return;
   }
   const further = FURTHER_SCOPE_OF_OPERATION[operation.id];

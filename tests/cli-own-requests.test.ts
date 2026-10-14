@@ -252,7 +252,18 @@ describe("personal keys following their calls and requests", () => {
     const own = requests.find((request) => request.requestedBy.id === t.admin.id);
     const other = requests.find((request) => request.requestedBy.id === t.root.id);
     if (!own || !other) throw new Error("Both owners must have a held call");
-    expect((await reader.cli("requests", "--withdraw", own.id)).code).toBe(1);
+    const readOnly = await reader.cli("requests", "--withdraw", own.id);
+    expect(readOnly.code).toBe(1);
+    expect(readOnly.err).toContain("Missing auth scope 'config_assets:write'");
+    expect(readOnly.err).not.toContain("conversation:write");
+    const browser = await t.instance.call("approval_requests.withdraw", {
+      params: { requestId: own.id },
+      headers: { "x-test-user": t.admin.id, "x-test-scopes": "config_assets:write" }
+    });
+    expect(browser.statusCode).toBe(403);
+    expect(browser.json()).toMatchObject({
+      error: { message: "Missing auth scope 'conversation:write'" }
+    });
     const refused = await t.instance.call("approval_requests.withdraw", {
       params: { requestId: other.id },
       headers: writer.headers
