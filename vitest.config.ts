@@ -66,6 +66,7 @@ const sourceAlias = {
   "@vivd-catalyst/ui/theme": "packages/ui/src/theme/index.ts",
   "@vivd-catalyst/ui": "packages/ui/src/index.ts",
   "@vivd-catalyst/usage-governance": "packages/usage-governance/src/index.ts",
+  "@vivd-catalyst/web-access": "packages/web-access/src/index.ts",
   "@vivd-catalyst/workflows": "packages/workflows/src/index.ts"
 };
 

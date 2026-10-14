@@ -126,7 +126,7 @@ const personalApiKeysModule = defineModule({
     "personal_api_keys.list",
     "personal_api_keys.revoke"
   ],
-  ui: ["settings.you.api-keys", "settings.api-access.personal-keys"]
+  ui: ["settings.you.api-keys", "settings.you.connect", "settings.api-access.personal-keys"]
 });
 
 /** The modules whose code ships with the platform. A capability declares its own. */

@@ -68,6 +68,7 @@ export default defineConfig({
           items: [
             "getting-started/overview",
             "getting-started/operating-models",
+            "getting-started/local-agent",
             "getting-started/local-demo",
             "getting-started/execution-workspaces-local"
           ]

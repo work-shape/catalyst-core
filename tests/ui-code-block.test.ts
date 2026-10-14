@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   CodeBlock,
   CodeFile,
+  CommandLine,
   UiRoot,
   uiLabelsDe,
   type CodeBlockProps,
@@ -218,5 +219,33 @@ describe("CodeFile", () => {
   it("shows a note beside the name only when there is one", () => {
     expect(renderFile()).not.toContain("code-file-note");
     expect(renderFile({ note: "Zu groß" })).toMatch(/data-slot="code-file-note"[^>]*>Zu groß</u);
+  });
+});
+
+describe("CommandLine", () => {
+  const command =
+    "npm install --global @work-shape/catalyst-cli@0.6.3 && catalyst setup codex --instance https://chat.example.com";
+  const renderCommand = () =>
+    renderToStaticMarkup(
+      createElement(
+        UiRoot,
+        { mode: "light", labels: uiLabelsDe },
+        createElement(CommandLine, { command, label: "Befehl für Codex" })
+      )
+    );
+
+  it("shows the whole command, broken where it is long, beside a button that copies it", () => {
+    const markup = renderCommand();
+    expect(markup).toMatch(/role="region" aria-label="Befehl für Codex" tabindex="0"/u);
+    expect(markup).toContain("whitespace-pre-wrap");
+    expect(markup).toContain("catalyst setup codex --instance https://chat.example.com");
+    expect(markup).not.toContain('data-line="1" class="block pr-4');
+    expect(markup).toContain(`aria-label="${uiLabelsDe.copy}"`);
+  });
+
+  it("needs a UiRoot for its button's label", () => {
+    expect(() =>
+      renderToStaticMarkup(createElement(CommandLine, { command, label: "Command" }))
+    ).toThrow(/CommandLine/u);
   });
 });
