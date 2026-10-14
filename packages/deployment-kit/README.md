@@ -106,7 +106,10 @@ it was assembled from, makes the checks that need only the two, prints
 `resolve-only: this process starts with this config` and ends with code 0 before it opens a
 store. A config the schema refuses fails there, and so does a process that would stop on the
 host: a module is on that its build ships no code for, or the workspace command worker is built
-for a config that turns Execution Workspaces off. An entry point must start its process through
+for a config that turns Execution Workspaces off. Whether the host has the memory for the
+sandboxes of a config depends on the host, not on the machine the gate runs on: the gate does
+not check it and the workspace command worker logs
+`host memory not checked: checked at startup on the host`. An entry point must start its process through
 `defineClientInstance` for this. One that ends without the line fails, and one that is still
 running after two minutes is killed and fails.
 

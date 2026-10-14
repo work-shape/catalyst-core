@@ -32,6 +32,7 @@ import type { ClientInstanceCapability } from "./capabilities";
 import {
   assertCommandWorkerServesModuleJobKinds,
   endResolveOnlyRun,
+  isResolveOnlyRun,
   resolveInstanceModules
 } from "./modules";
 import {
@@ -39,7 +40,7 @@ import {
   createInstancePageBuildJobs,
   requireFilesStore
 } from "./pages";
-import { assertSandboxMemoryFitsHost } from "./sandbox-memory";
+import { assertSandboxMemoryFitsHost, sandboxMemoryTerms } from "./sandbox-memory";
 import {
   WORKFLOW_CODE_JOB_KIND,
   WORKFLOW_CODE_SWEEP_JOB_KIND,
@@ -97,7 +98,14 @@ export async function createClientInstanceWorkspaceCommandWorker(
     requireFilesStore(config);
   }
   // Before anything is opened: a host that cannot hold its sandboxes is a config to correct.
-  assertSandboxMemoryFitsHost({ config, modules, env, logger });
+  // A resolve-only run is the release gate on a build machine, whose memory says nothing about
+  // the host's, so it leaves this check to the start on the host and says so on stderr, which
+  // the gate shows.
+  if (!isResolveOnlyRun()) {
+    assertSandboxMemoryFitsHost({ config, modules, env, logger });
+  } else if (sandboxMemoryTerms({ config, modules, env }).length > 0) {
+    process.stderr.write("host memory not checked: checked at startup on the host\n");
+  }
   endResolveOnlyRun();
   const infrastructure = await createInstanceInfrastructure({
     config,
