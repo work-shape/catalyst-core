@@ -112,12 +112,12 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
   /**
    * Throws where another asset still needs this one and nothing checks that reference when
    * the other is written: asked of a delete with the assets as they are stored, each with its
-   * draft and its published config.
+   * draft and, where it has one, its published config.
    */
   assertRemovable?(input: {
     name: string;
-    assets(kind: string): readonly ConfigAssetRecord[];
-  }): void;
+    assets(kind: string): Promise<readonly ConfigAssetRecord[]>;
+  }): Promise<void>;
   /**
    * What a write of a config revision does beside storing it, called once the write is
    * committed, with the stores of the instance. A failure is logged and the write stands, so

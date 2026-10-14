@@ -262,15 +262,17 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
     assertInteractiveUpsertAllowed: ({ surface }) => refuseBatch(surface),
     assertInteractiveDeleteAllowed: ({ surface }) => refuseBatch(surface),
     // An agent names tools and an App names Connections in its manifest. Neither is checked
-    // again when the Connection goes, so a delete asks here: of an App, its draft and what it
+    // again when the Connection goes, so a delete asks here: of each, its draft and what it
     // serves now.
-    assertRemovable({ name, assets }) {
-      const carrying = assets(AGENT_ASSET_KIND).filter((agent) =>
-        toolNamesOf(agent.config).some(
-          (toolName) => parseConnectionOperationName(toolName)?.connection === name
+    async assertRemovable({ name, assets }) {
+      const carrying = (await assets(AGENT_ASSET_KIND)).filter((agent) =>
+        [agent.config, agent.publishedConfig].some((config) =>
+          toolNamesOf(config).some(
+            (toolName) => parseConnectionOperationName(toolName)?.connection === name
+          )
         )
       ).length;
-      const naming = assets(APP_ASSET_KIND).filter((app) =>
+      const naming = (await assets(APP_ASSET_KIND)).filter((app) =>
         [app.config, app.publishedConfig].some((config) =>
           manifestConnectionsOf(config).includes(name)
         )

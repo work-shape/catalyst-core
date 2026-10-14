@@ -63,7 +63,8 @@ import {
   requireAssetKindModuleOn,
   requireMatchingConfigName,
   setsInitialDefault,
-  toJsonObject
+  toJsonObject,
+  withPublishedConfigs
 } from "./asset-write-rules";
 import {
   assertStoredWritable,
@@ -404,9 +405,9 @@ export class AssetWorkflow {
       return this.drafts.remove(call, target, expectedRevision);
     }
     const stored = await loadStoredAssets(this.options);
-    kind.assertRemovable?.({
+    await kind.assertRemovable?.({
       name,
-      assets: (other) => stored.assets.filter((asset) => asset.kind === other)
+      assets: (other) => withPublishedConfigs(this.options, stored.assets, other)
     });
     const clearsDefault = clearsLastDefault(stored.set, kind, name);
     requireInstanceDefaultChange(call.access, kind, clearsDefault);

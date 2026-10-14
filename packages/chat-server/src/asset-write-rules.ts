@@ -63,6 +63,33 @@ export async function loadStoredAssets(options: AssetWorkflowOptions): Promise<S
   return { state, assets, set: assetSetOf(assets, state.defaultAgentName) };
 }
 
+/**
+ * The stored assets of one kind, each with its published config where it has one. The list of
+ * the stored assets carries only the drafts; the published configs are one more read.
+ */
+export async function withPublishedConfigs(
+  options: AssetWorkflowOptions,
+  assets: readonly ConfigAssetRecord[],
+  kind: ConfigAssetKind
+): Promise<ConfigAssetRecord[]> {
+  const ofKind = assets.filter((asset) => asset.kind === kind);
+  if (ofKind.length === 0) return ofKind;
+  const published = new Map(
+    (
+      await options.configAssets.store.listPublishedConfigAssets({
+        clientInstanceId: options.clientInstanceId,
+        kind,
+        names: ofKind.map((asset) => asset.name),
+        limit: ofKind.length
+      })
+    ).map((asset) => [asset.name, asset.publishedConfig])
+  );
+  return ofKind.map((asset) => {
+    const publishedConfig = published.get(asset.name);
+    return publishedConfig === undefined ? asset : { ...asset, publishedConfig };
+  });
+}
+
 /** What a refused change is told of an asset its caller may not read: that there is one. */
 const UNREAD_ASSET_ISSUE = "The change would break an asset the caller may not read";
 
