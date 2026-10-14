@@ -164,7 +164,10 @@ export const auditEvents = async (instance: TestInstance) =>
 export async function discoverDirectly(
   w: ReturnType<typeof world>,
   signal = new AbortController().signal,
-  further: Pick<Parameters<typeof discoverConnection>[0], "timeoutMs" | "transaction"> = {}
+  further: Pick<
+    Parameters<typeof discoverConnection>[0],
+    "timeoutMs" | "transaction" | "schemaChecker"
+  > = {}
 ) {
   const execution = await createTestInstance({ execution: w.input() });
   try {

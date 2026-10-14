@@ -9,8 +9,10 @@ import {
 } from "../identity";
 import { defineOperation, defineRegisteredOperation, json, page } from "./define-operation";
 
-// The four changing operations ask for the right `api_access.manage` and for the superadmin
-// role. The rule is more than one right, so each operation checks it itself and requires none.
+// A service principal is administered under `service_principals.manage`, its keys under
+// `api_access.manage`. Whatever a change gives a principal, or lends it by enabling it or
+// issuing it a key, the caller must hold too. The rule is more than one right, so each
+// changing operation checks it itself and requires none.
 export const apiAccessOperations = {
   "service_principals.list": defineOperation({
     id: "service_principals.list",
@@ -20,7 +22,7 @@ export const apiAccessOperations = {
     tag: "API Access",
     auth: "user",
     scope: "api_access:read",
-    requires: ["api_access.manage"],
+    requires: ["service_principals.manage"],
     effect: "reading",
     query: listQuerySchema,
     response: page(servicePrincipalDetailSchema, ["principal.displayLabel", "principal.id"], false),
@@ -31,7 +33,7 @@ export const apiAccessOperations = {
     id: "service_principals.create",
     method: "POST",
     path: "/api/v1/instance/service-principals",
-    summary: "Create a service principal; superadmins only",
+    summary: "Create a service principal",
     tag: "API Access",
     auth: "user",
     scope: "api_access:write",
@@ -46,7 +48,7 @@ export const apiAccessOperations = {
     id: "service_principals.update",
     method: "PATCH",
     path: "/api/v1/instance/service-principals/:servicePrincipalId",
-    summary: "Change a service principal; superadmins only",
+    summary: "Change a service principal",
     tag: "API Access",
     auth: "user",
     scope: "api_access:write",
@@ -61,7 +63,7 @@ export const apiAccessOperations = {
     id: "api_credentials.create",
     method: "POST",
     path: "/api/v1/instance/service-principals/:servicePrincipalId/credentials",
-    summary: "Issue an API key for a service principal; superadmins only",
+    summary: "Issue an API key for a service principal",
     tag: "API Access",
     auth: "user",
     scope: "api_access:write",
@@ -78,7 +80,7 @@ export const apiAccessOperations = {
     id: "api_credentials.revoke",
     method: "POST",
     path: "/api/v1/instance/api-credentials/:credentialId/revoke",
-    summary: "Revoke an API key; superadmins only",
+    summary: "Revoke an API key",
     tag: "API Access",
     auth: "user",
     scope: "api_access:write",

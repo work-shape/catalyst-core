@@ -13,6 +13,7 @@ import { platformModules } from "@vivd-catalyst/client-assembly";
 import { createModuleRegistry, type PlatformAction } from "@vivd-catalyst/core";
 import {
   FIRST_PARTY_AUTH_SCOPES,
+  INSTANCE_ACTIONS,
   PERMISSIONS,
   legacyPermissionFor,
   operationPathParamNames
@@ -172,6 +173,12 @@ describe("every operation of the catalog", () => {
     }
   );
 
+  // What a caller of the role `user` holds an action through: its legacy key, or for a right of
+  // the instance itself no key at all, so the caller lacks it whatever keys it holds.
+  const heldBy = (action: PlatformAction): string =>
+    INSTANCE_ACTIONS.some((candidate) => candidate === action)
+      ? action
+      : legacyPermissionFor(action);
   const requiring = authenticated.flatMap(({ name, operation }) => {
     // User administration checks its right in authorize, so these descriptors require none.
     const actions: readonly PlatformAction[] =
@@ -179,9 +186,9 @@ describe("every operation of the catalog", () => {
         ? ["users.manage"]
         : operation.requires;
     return actions.map((action) => {
-      const missing = legacyPermissionFor(action);
+      const missing = heldBy(action);
       // Two actions can stand behind one legacy permission; the first of them refuses.
-      const refused = operation.requires.find((other) => legacyPermissionFor(other) === missing);
+      const refused = operation.requires.find((other) => heldBy(other) === missing);
       return [name, action, missing, refused ?? action] as const;
     });
   });

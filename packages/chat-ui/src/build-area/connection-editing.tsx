@@ -1,16 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import {
-  Badge,
-  Button,
-  Checkbox,
-  EmptyState,
-  Field,
-  FormNotice,
-  List,
-  Select,
-  SkeletonList
-} from "@vivd-catalyst/ui";
-import type { ConnectionDetail, ConnectionDiscoveredTool } from "@vivd-catalyst/api-client";
+import { Button, EmptyState, FormNotice, SkeletonList } from "@vivd-catalyst/ui";
+import type { ConnectionDetail } from "@vivd-catalyst/api-client";
 import { useTranslation } from "../i18n";
 import type { BuildAsset, BuildAssetEditorProps } from "./build-asset-kind";
 import { instanceSentence, PendingApprovalError, type BuildWriteOutcome } from "./build-refusals";
@@ -19,10 +9,16 @@ import {
   ConnectionSecretField,
   ConnectionServerFields
 } from "./connection-form";
+import { ConnectionApprovalList, approveLabel, useApprovalChoice } from "./connection-approval";
+import {
+  discoveredCandidates,
+  selectedCandidates,
+  type ApprovalCandidate
+} from "./connection-approval-model";
 import {
   connectionConfigToForm,
   countConnectionFormChanges,
-  withAcceptedOperation,
+  withApprovedOperations,
   withConnectionForm
 } from "./connection-form-model";
 import type { ConnectionSource } from "./connection-source";
@@ -214,8 +210,9 @@ export function ConnectionSecretEditor({
 }
 
 /**
- * What the server offers that the Connection does not accept, each with what it does and
- * whether agents may use it, to accept. "Read tools again" asks for a new discovery.
+ * What the server offers that the Connection does not accept, as one list to approve at once:
+ * the tools that only read are ticked, and one row says who may use what is approved. "Read
+ * tools again" asks for a new discovery.
  */
 export function DiscoveredTools({
   name,
@@ -253,23 +250,23 @@ export function DiscoveredTools({
       )
       .finally(() => setAsking(false));
   };
-  const tools = detail?.discovered ?? [];
+  const candidates = discoveredCandidates(detail?.discovered ?? []);
+  // A new discovery starts the list again: what is ticked follows what the server now offers.
+  const listKey = candidates
+    .map((candidate) => `${candidate.name}:${candidate.schemaFingerprint ?? ""}`)
+    .join("|");
   const body = !detail ? (
     <SkeletonList rows={2} />
-  ) : tools.length > 0 ? (
-    <List aria-label={t("connections.discoveredTitle")}>
-      {tools.map((tool) => (
-        <DiscoveredTool
-          key={tool.name}
-          tool={tool}
-          saving={write.saving === tool.name}
-          blocked={frame.saveBlocked === true || write.saving !== undefined}
-          accept={(choice) =>
-            write.write(tool.name, withAcceptedOperation(asset.config, { ...tool, ...choice }))
-          }
-        />
-      ))}
-    </List>
+  ) : candidates.length > 0 ? (
+    <DiscoveredApproval
+      key={listKey}
+      candidates={candidates}
+      saving={write.saving === "approve"}
+      blocked={frame.saveBlocked === true || write.saving !== undefined}
+      approve={(chosen, surfaces) =>
+        write.write("approve", withApprovedOperations(asset.config, chosen, surfaces))
+      }
+    />
   ) : (
     <EmptyState layout="inline" data-connection-discovered-empty="">
       {t(
@@ -297,79 +294,40 @@ export function DiscoveredTools({
   );
 }
 
-function DiscoveredTool({
-  tool,
+function DiscoveredApproval({
+  candidates,
   saving,
   blocked,
-  accept
+  approve
 }: {
-  tool: ConnectionDiscoveredTool;
+  candidates: ApprovalCandidate[];
   saving: boolean;
   blocked: boolean;
-  accept(choice: { effect: "reading" | "changing"; forAgents: boolean }): Promise<boolean>;
+  approve(chosen: ApprovalCandidate[], surfaces: string[]): Promise<boolean>;
 }) {
   const { t } = useTranslation();
-  const [effect, setEffect] = useState(tool.proposedEffect);
-  const [forAgents, setForAgents] = useState(true);
+  const approval = useApprovalChoice(candidates);
+  const chosen = selectedCandidates(candidates, approval.choice.selected);
   return (
-    <li
-      data-connection-discovered={tool.name}
-      className="grid min-w-0 gap-2 border-b py-3 first:pt-0 last:border-b-0 last:pb-0"
-    >
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <code className="min-w-0 font-mono text-label break-all">{tool.name}</code>
-        <Badge tone={tool.proposedEffect === "changing" ? "warning" : "neutral"}>
-          {t(
-            tool.proposedEffect === "changing"
-              ? "connections.effectChanging"
-              : "connections.effectReading"
-          )}
-        </Badge>
-      </div>
-      {tool.description ? (
-        // Whole: the model of an agent that carries the tool reads all of it, so whoever
-        // accepts it does too.
-        <p className="max-h-40 overflow-y-auto text-body break-words whitespace-pre-line">
-          {tool.description}
-        </p>
-      ) : null}
-      <p className="text-caption text-muted-foreground">
-        {t(
-          tool.proposedEffect === "reading"
-            ? "connections.proposedReading"
-            : "connections.proposedChanging"
-        )}
-      </p>
-      <div className="flex min-w-0 flex-wrap items-end gap-3">
-        <Field label={t("connections.acceptEffect")} className="w-44">
-          <Select
-            size="sm"
-            value={effect}
-            onChange={(event) =>
-              setEffect(event.target.value === "changing" ? "changing" : "reading")
-            }
-          >
-            <option value="reading">{t("connections.effectReading")}</option>
-            <option value="changing">{t("connections.effectChanging")}</option>
-          </Select>
-        </Field>
-        <Checkbox
-          label={t("connections.acceptForAgents")}
-          checked={forAgents}
-          onCheckedChange={setForAgents}
-        />
-        <Button
-          size="sm"
-          loading={saving}
-          disabled={blocked}
-          data-connection-accept={tool.name}
-          onClick={() => {
-            accept({ effect, forAgents }).catch(() => undefined);
-          }}
-        >
-          {t("connections.accept")}
-        </Button>
-      </div>
-    </li>
+    <div className="grid gap-3" data-connection-discovered="">
+      <ConnectionApprovalList
+        candidates={candidates}
+        choice={approval.choice}
+        onSelectedChange={approval.setSelected}
+        onSurfacesChange={approval.setSurfaces}
+        disabled={blocked}
+      />
+      <Button
+        className="justify-self-start"
+        loading={saving}
+        disabled={blocked || chosen.length === 0}
+        data-connection-approve=""
+        onClick={() => {
+          approve(chosen, [...approval.choice.surfaces]).catch(() => undefined);
+        }}
+      >
+        {approveLabel(chosen.length, t)}
+      </Button>
+    </div>
   );
 }

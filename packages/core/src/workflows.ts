@@ -4,7 +4,6 @@ import type { UserId, WorkflowRunId, WorkflowStepRunId } from "./ids";
 import type { JsonObject, JsonValue } from "./json";
 import type { OperationTarget } from "./operation-runs";
 import type { OperationEffect } from "./operations";
-import type { PlatformAction } from "./permissions";
 
 // The names and shapes of a Workflow that more than one package reads: the asset kind, the
 // parsed `workflow.yaml`, a run and its step runs, who a run acts as, and what its jobs and
@@ -482,10 +481,10 @@ export interface WorkflowManifest {
    * The `name` of the service principal a run of this Workflow acts as (`WorkflowRunPrincipal`,
    * `ServicePrincipalRecord.name`): a slug, unique on the instance and never changed, so the
    * definition moves between instances unchanged. Making a revision live that names a
-   * principal needs what administering service principals needs (`WORKFLOW_RUN_AS_ACTION` and
-   * the rule beside it in the server). A test run of a draft does not: it acts as the person
-   * testing, bounded by the principal (ADR-0031). A definition without it is refused on save.
-   * Spec: Who a run acts as.
+   * principal lends its rights to everyone who starts the Workflow, so whoever publishes must
+   * hold every one of them (`requireHeldRights`, asked by `requireWorkflowRunAs` of the server).
+   * A test run of a draft does not: it acts as the person testing, bounded by the principal
+   * (ADR-0031). A definition without it is refused on save. Spec: Who a run acts as.
    */
   runAs: string;
   /** The schema of the run's input, as JSON Schema: the output schema of the trigger step. */
@@ -785,11 +784,3 @@ export const WORKFLOW_ACTIONS = {
   use: "workflow.use",
   readRunData: "workflow.read_run_data"
 } as const satisfies AssetKindActions & { readRunData: string };
-
-/**
- * The right that letting a Workflow act as a service principal asks for: the one that
- * administering service principals asks for. The whole rule is that of administering them and
- * is asked in one place, `requireWorkflowRunAs` of the server: this right, held by a person
- * who is a superadmin. It is the strict default. Spec: Who a run acts as.
- */
-export const WORKFLOW_RUN_AS_ACTION = "api_access.manage" satisfies PlatformAction;

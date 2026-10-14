@@ -1,6 +1,5 @@
-import { Agent as HttpAgent, request as httpRequest, type IncomingMessage } from "node:http";
-import { Agent as HttpsAgent, request as httpsRequest } from "node:https";
-import { isIP } from "node:net";
+import { Agent as HttpAgent, type IncomingMessage } from "node:http";
+import { Agent as HttpsAgent } from "node:https";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
@@ -16,11 +15,17 @@ import {
   type JsonObject
 } from "@vivd-catalyst/core";
 import { z } from "zod";
-import { egressTargetOfUrl, isSameEgressOrigin, pinnedLookup } from "../egress";
+import { egressTargetOfUrl, isSameEgressOrigin } from "../egress";
+import {
+  hostHeaderOf,
+  oneRequestAgent,
+  sendPinnedRequest,
+  type ConnectorAgent
+} from "../pinned-request";
 
 // The one file that speaks to a remote MCP server, and the one file that knows the MCP SDK.
-// Everything the SDK sends leaves through `pinnedFetch` below, and nothing else in this
-// package opens a connection for an MCP Connection.
+// Everything the SDK sends leaves through `pinnedFetch` below, which sends each request with
+// `sendPinnedRequest`, and nothing else opens a connection for an MCP Connection.
 //
 // What is decided here:
 // - Transport is Streamable HTTP. A session is opened for one test, discovery or call and
@@ -85,8 +90,6 @@ export const MCP_CLEANUP_TIMEOUT_MS = 3_000;
 const CLIENT_INFO = { name: "workshape-catalyst", version: "1" } as const;
 const SESSION_ID_PATTERN = /^[\x21-\x7e]+$/u;
 
-type PooledAgent = HttpAgent | HttpsAgent;
-
 /** The sockets one process keeps to MCP servers, by Connection. It holds no credential. */
 interface McpSocketPool {
   /**
@@ -94,16 +97,16 @@ interface McpSocketPool {
    * full and every agent in it serves a request. The caller then sends on a socket of that
    * one request.
    */
-  agentFor(connectionId: string, grant: EgressGrant): PooledAgent | undefined;
+  agentFor(connectionId: string, grant: EgressGrant): ConnectorAgent | undefined;
 }
 
-function isIdle(agent: PooledAgent): boolean {
+function isIdle(agent: ConnectorAgent): boolean {
   return Object.keys(agent.sockets).length === 0 && Object.keys(agent.requests).length === 0;
 }
 
 export function createMcpSocketPool(): McpSocketPool {
   // Insertion order is use order: an entry that is used moves to the end.
-  const agents = new Map<string, PooledAgent>();
+  const agents = new Map<string, ConnectorAgent>();
   return {
     agentFor(connectionId, grant) {
       // A socket is reused only by its Connection, and only towards the address that was
@@ -227,84 +230,6 @@ function credentialOrNone(
     if (connectionCallReasonOf(error) === EGRESS_DENIED) return undefined;
     throw error;
   }
-}
-
-interface Hop {
-  url: URL;
-  grant: EgressGrant;
-  method: "POST" | "DELETE";
-  headers: Record<string, string>;
-  body: string | undefined;
-  agent: PooledAgent;
-  signal: AbortSignal;
-}
-
-const DEFAULT_PORTS = { https: 443, http: 80 } as const;
-
-/** The `Host` of a request, written from the checked target and from nothing else. */
-function hostHeaderOf(grant: EgressGrant): string {
-  const host = isIP(grant.host) === 6 ? `[${grant.host}]` : grant.host;
-  const usual = grant.protocol === "https" ? DEFAULT_PORTS.https : DEFAULT_PORTS.http;
-  return grant.port === usual ? host : `${host}:${grant.port}`;
-}
-
-/** An agent for one request. Whoever makes it destroys it when the request is over. */
-function oneRequestAgent(grant: EgressGrant): PooledAgent {
-  return grant.protocol === "https" ? new HttpsAgent() : new HttpAgent();
-}
-
-/**
- * Sends one request to the pinned address and answers once the status line arrived. Where
- * it goes is read from the checked target alone: protocol, host, port and address. Of the
- * address the server was configured or redirected with, only path and query are used.
- */
-function sendHop(hop: Hop): Promise<IncomingMessage> {
-  return new Promise((resolve, reject) => {
-    if (hop.signal.aborted) {
-      reject(new Error("The session ended"));
-      return;
-    }
-    const literal = isIP(hop.grant.host) !== 0;
-    const options = {
-      protocol: `${hop.grant.protocol}:`,
-      // A name is resolved by the pinned lookup only. A literal address is the pinned one.
-      host: literal ? hop.grant.address : hop.grant.host,
-      port: hop.grant.port,
-      path: `${hop.url.pathname}${hop.url.search}`,
-      method: hop.method,
-      headers: hop.headers,
-      lookup: pinnedLookup(hop.grant),
-      agent: hop.agent
-    };
-    // The name the server's certificate is verified against is the checked host, said here
-    // and derived from no header. A literal address names itself: no name is sent, and the
-    // certificate is verified against the address.
-    const request =
-      hop.grant.protocol === "https"
-        ? httpsRequest({ ...options, servername: literal ? "" : hop.grant.host })
-        : httpRequest(options);
-    // The signal is watched here and not handed to the request: a request that is ended
-    // through its own signal reports that on streams nobody listens to any more, and an
-    // error without a listener ends the process.
-    let response: IncomingMessage | undefined;
-    const onAbort = () => {
-      response?.destroy();
-      request.destroy(new Error("The session ended"));
-    };
-    const settle = () => hop.signal.removeEventListener("abort", onAbort);
-    hop.signal.addEventListener("abort", onAbort, { once: true });
-    request.on("error", (error) => {
-      if (response === undefined) settle();
-      reject(error);
-    });
-    request.once("response", (arrived) => {
-      response = arrived;
-      arrived.on("error", () => undefined);
-      arrived.once("close", settle);
-      resolve(arrived);
-    });
-    request.end(hop.body);
-  });
 }
 
 /**
@@ -491,7 +416,7 @@ function pinnedFetch(
       const agent = kept ?? oneRequestAgent(grant);
       let response: IncomingMessage;
       try {
-        response = await sendHop({
+        response = await sendPinnedRequest({
           url,
           grant,
           method,

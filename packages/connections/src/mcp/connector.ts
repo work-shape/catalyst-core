@@ -20,7 +20,8 @@ import {
   withMcpSession
 } from "./client";
 import { MCP_DISCOVERY_MAX_BYTES, MCP_DISCOVERY_TIMEOUT_MS, discoverMcpTools } from "./discovery";
-import { holdsCredential, mcpToolResult } from "./result";
+import { holdsCredential } from "../connector-context";
+import { mcpToolResult } from "./result";
 
 export { MCP_CLEANUP_TIMEOUT_MS, MCP_POOLED_CONNECTIONS_MAX } from "./client";
 

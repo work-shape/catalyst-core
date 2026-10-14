@@ -74,6 +74,13 @@ export async function setup() {
     roles: ["user", "admin"],
     permissions: ["api_access.manage"]
   });
+  /** Manages users and is no administrator: holds no `service_principals.manage`. */
+  const manager = await t.stores.users.createUser({
+    clientInstanceId,
+    displayLabel: "Manager",
+    roles: ["user"],
+    permissions: ["users.manage"]
+  });
   const payload = (assetId: string, overrides: Record<string, unknown> = {}) => ({
     holderKind: "service_principal",
     holderId: principal.id,
@@ -109,7 +116,7 @@ export async function setup() {
       holderKind: "service_principal",
       excludeInstanceScope: true
     });
-  return { t, principal, ops, payload, grantTo, step, principalRows };
+  return { t, principal, ops, manager, payload, grantTo, step, principalRows };
 }
 
 export type Setup = Awaited<ReturnType<typeof setup>>;
