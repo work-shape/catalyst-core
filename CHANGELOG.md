@@ -60,21 +60,27 @@ contain breaking changes; a patch version does not.
   the new outcomes before rolling back.
 - **Guardrails read every way content reaches an asset or goes live:** `asset.before_write` now
   also answers `apps.create_from_page` and `apps.update_from_page` (the App's definition and
-  the Page's newest files, as the write copies them), `assets.revert` (the earlier revision it
-  writes again, also one written before the guardrail existed), and an approved skill change
-  before it is applied (the skill as the approval writes it). A block at the approval leaves the
-  skill unchanged and ends the request as not applied (`superseded`, `applyResult.execution`
-  `refused`, `GUARDRAIL_BLOCKED` with the reason), which the Inbox item shows. A new
-  before-event `data_store.before_publish` answers the publish of a Data Store, with the
-  revision's definition and migration files. A file that is no UTF-8 text or holds a NUL byte,
-  such as an image, is no longer skipped: the content is unread, so a guardrail that blocks or
-  holds answers it as a match and one that warns warns. A block found when a held call or an
-  approved change is asked again is kept as a hit. Apps and Pages: `apps.create_from_page` and
-  `apps.update_from_page` now ask whether the caller reads the Page before the guardrails read
-  it, so a Page the caller cannot read answers 404 before any check. **Operators:** a `block`
-  or `require_approval` guardrail on `asset.before_write` without `filter.kind` now also stops
-  saving an App or a Data Store that holds an image; narrow it by `kind` where that is not
-  wanted. A rule that should keep content out of live Apps needs an entry on
+  the Page revision the write copies: the write copies the revision the guardrails read, also
+  when the call waited for an approval, and refuses with `CONFLICT` where that revision is
+  gone), `assets.revert` (the earlier revision it writes again, also one written before the
+  guardrail existed), an approved skill change before it is applied (the skill as the approval
+  writes it) and the undo of an approved skill change (`approval_requests.revert`, the revision
+  it writes back). A block at the approval leaves the skill unchanged and ends the request as
+  not applied (`superseded`, `applyResult.execution` `refused`, `GUARDRAIL_BLOCKED` with the
+  reason), which the Inbox item shows; a block at the undo refuses it and the request stays
+  approved. A new before-event `data_store.before_publish` answers the publish of a Data
+  Store, with the revision's definition and migration files. A file that is no UTF-8 text or
+  holds a NUL byte is no longer skipped: a `pattern` reads its bytes as Latin-1, so an image
+  passes and text hidden beside a NUL byte is found; a `model_judge` is handed nothing of an
+  image or a font and answers any other such file as unread. A refusal for content that is
+  too large or cannot be judged no longer says to try again. A block found when a held call
+  or an approved change is asked again is kept as a hit. A revert and a publish read no
+  revision of an asset of another scope than the call's: the call is refused as before, with
+  no guardrail asked. **Access:** `apps.create_from_page` and `apps.update_from_page` ask
+  whether the caller reads the Page before the guardrails read it, so a Page the caller
+  cannot read answers 404 before any check; `assets.revert` now needs the read right on the
+  asset beside the write right, as a revert restores content its guardrails would answer
+  about. **Operators:** a rule that should keep content out of live Apps needs an entry on
   `app.before_publish` beside the one on `asset.before_write`; the demo's IBAN rule has both.
   **Rollback:** an earlier release refuses a guardrail on `data_store.before_publish`: remove
   it before rolling back.
