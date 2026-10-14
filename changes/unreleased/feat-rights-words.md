@@ -18,3 +18,7 @@ section: Changed
   may read them (`users.manage`); without that the instance still refuses and names the right.
   A holder of `api_access.manage` alone is told that the service principals need the right to
   manage them, instead of "No service principals yet".
+- **An agent's page (AGENT-AVAIL-1)** names "Available in" ("Verfügbar in") once, as its
+  section's heading, and saves where the agent can be chosen through the page's one save bar
+  with the agent's other changes. The section's own "Save availability" button is gone. The
+  library's `RadioGroup` takes `labelHidden` for a group whose heading names it already.

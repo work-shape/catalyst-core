@@ -1,4 +1,4 @@
-export { AgentAvailabilityEditor, AgentEditor } from "./agent-editor";
+export { AgentEditor, type AgentAvailabilityChoice } from "./agent-editor";
 export { AssetEditorShell } from "./asset-editor-shell";
 export { PlatformInstructionsBody } from "./platform-instructions";
 export { FieldRefusals } from "./asset-form-fields";
