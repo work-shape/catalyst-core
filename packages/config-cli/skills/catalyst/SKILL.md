@@ -23,10 +23,10 @@ A command that answers "Not logged in" or refuses the key needs the person. Stop
 
 ```sh
 catalyst agent list --prefix tax-
-catalyst agent show tax-advisor
+catalyst agent show tax-vat
 catalyst skill show tax-guide --files
-catalyst agent show tax-advisor --revision published
-catalyst agent history tax-advisor
+catalyst agent show tax-vat --revision published
+catalyst agent history tax-vat
 catalyst references --json
 ```
 
@@ -48,9 +48,9 @@ A folder with a `catalyst.yaml` is a working copy. Work in this order:
 1. `catalyst config pull` before you edit, and again before every push.
 2. Edit the files.
 3. `catalyst config validate`, then `catalyst config diff`. Show the person the diff.
-4. `catalyst config push`, or `catalyst config push --only agent:tax-advisor` for one asset.
+4. `catalyst config push`, or `catalyst config push --only agent:tax-vat` for one asset.
 
-`catalyst config list` shows each asset's sync status, and `catalyst config show agent tax-advisor` prints the instance's version of one.
+`catalyst config list` shows each asset's sync status, and `catalyst config show agent tax-vat` prints the instance's version of one.
 
 ## Guardrails
 
