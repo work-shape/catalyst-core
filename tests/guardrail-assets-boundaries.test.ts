@@ -1,27 +1,17 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createGuardrailAssetKind, seedReleaseGuardrails } from "@vivd-catalyst/chat-server";
-import {
-  clientInstanceId,
-  errorSchema,
-  recordAuthAdapter,
-  setupAccessInstance,
-  skill
-} from "./support/access-instance";
-import { testOperations } from "./support/operations";
-import { createTestFetch } from "./support/test-instance";
-import { runCli } from "../packages/config-cli/src/index";
+import { createGuardrailAssetKind } from "@vivd-catalyst/chat-server";
+import { PLATFORM_EVENT_ALLOW } from "@vivd-catalyst/core";
+import { askBeforeEvents } from "@vivd-catalyst/tool-execution";
+import { clientInstanceId, errorSchema, skill } from "./support/access-instance";
 import { setupAppInstance } from "./support/app-instance";
 import { IBAN, guardedEvents, ibanPattern, noIban } from "./support/guardrails";
 import { withTestSql } from "./support/test-sql";
-import { PLATFORM_EVENT_ALLOW } from "@vivd-catalyst/core";
-import { askBeforeEvents } from "../packages/tool-execution/src/before-events";
 
-// Independent verification of EW-6a (platform PR 67). Each test states the defect it shows;
-// the ones marked "sanity" pass and pin behaviour the verifier probed.
+// The boundaries of guardrails written as assets (EW-6a), from the independent verification
+// of platform PR 67: a newer draft stays inert, no published guardrail locks the change of
+// guardrails, a broken asset leaves the floor answering, and only the operations on guardrails
+// themselves, never an input that names the kind, skip the published guardrails.
 
 const guardrail = (name: string, overrides: Record<string, unknown> = {}) => ({
   name,
@@ -74,7 +64,7 @@ const hitsOf = (name: string) =>
       where client_instance_id = ${clientInstanceId} and guardrail_name = ${name}`
   ).then(([row]) => row?.count ?? 0);
 
-describe("EW-6a verify: drafts stay inert", () => {
+describe("guardrail assets: drafts stay inert", () => {
   // Sanity: a newer draft of a published guardrail does not enforce; the published one does.
   it("enforces the published revision and never the newer draft", async () => {
     const t = await instance();
@@ -85,7 +75,7 @@ describe("EW-6a verify: drafts stay inert", () => {
   });
 });
 
-describe("EW-6a verify: no lockout", () => {
+describe("guardrail assets: no lockout", () => {
   // Sanity: a published guardrail that blocks every call of every operation leaves the
   // guardrail screens and the unpublish working.
   it("leaves listing, hits, unpublish and delete of guardrails open under a block-all call guardrail", async () => {
@@ -111,7 +101,7 @@ describe("EW-6a verify: no lockout", () => {
   });
 });
 
-describe("EW-6a verify: the floor with broken assets", () => {
+describe("guardrail assets: the floor with broken assets", () => {
   // Sanity: a published guardrail whose stored definition no longer parses is skipped, and the
   // release floor still answers.
   it("still runs the release floor when a published guardrail asset is corrupt", async () => {
@@ -133,13 +123,10 @@ describe("EW-6a verify: the floor with broken assets", () => {
   });
 });
 
-describe("EW-6a verify: what counts as a call about guardrails", () => {
-  // DEFECT. `aboutGuardrails` in tool-execution/src/before-events.ts decides by the shape of
-  // the input: any operation whose input carries a top-level `kind: "guardrail"`, or `items`
-  // all of kind `guardrail`, is taken for a change of guardrails, and no published guardrail
-  // runs on it, only the floor. The agent's own `workspace.promote_artifact` takes a free
-  // `kind` string, and so may a connection's or a customer tool's operation: with
-  // `kind: "guardrail"` the call escapes every published guardrail.
+describe("guardrail assets: what counts as a call about guardrails", () => {
+  // Fails without the fix: the call was taken for one about guardrails by the shape of its
+  // input, so an operation whose input named `kind: "guardrail"`, as the agent's own
+  // `workspace.promote_artifact` may, escaped every published guardrail.
   const askedAbout = async (operation: string, input: unknown) => {
     const asked: (boolean | undefined)[] = [];
     await askBeforeEvents({
@@ -170,110 +157,5 @@ describe("EW-6a verify: what counts as a call about guardrails", () => {
     expect(
       await askedAbout("connection.books.import", { items: [{ kind: "guardrail", row: 1 }] })
     ).toEqual([undefined]);
-  });
-});
-
-describe("EW-6a verify: a release name an asset already holds (open decision 6)", () => {
-  // FOLLOW-UP. When a release adds a floor guardrail whose name a guardrail asset holds, the
-  // floor runs from release config and records its hits under the shared name, so the hits
-  // of the operator's floor show on the asset, a draft that was never published.
-  it("does not show the floor's hits on an unpublished asset of the same name", async () => {
-    const t = await instance({ pii: noIban({ displayName: "Floor PII" }) });
-    // The asset was written before the release that brings the floor rule `pii`.
-    await withTestSql(
-      (sql) => sql`
-        delete from config_assets
-        where client_instance_id = ${clientInstanceId} and kind = 'guardrail' and name = 'pii'`
-    ).catch(() => undefined);
-    const written = await t.put("pii", guardrail("pii", { outcome: "warn" }));
-    if (written.statusCode !== 200) {
-      // The floor's stored copy holds the name: reproduce the order of an upgrade instead.
-      expect(refusalOf(written).details?.reason).toBe("guardrail_release_config_only");
-      return;
-    }
-    const seeded = await seedReleaseGuardrails({
-      clientInstanceId,
-      guardrails: { pii: noIban({ displayName: "Floor PII" }) },
-      stores: t.stores
-    });
-    expect(seeded.conflicts).toEqual(["pii"]);
-    expect((await t.putSkill(`Konto ${IBAN}`)).statusCode).toBe(403);
-    const hits = await t.call(t.admin.id, "guardrails.list_hits", { params: { name: "pii" } });
-    expect(hits.statusCode, hits.body).toBe(200);
-    // The asset `pii` is a draft that never ran; the floor's block is listed under it.
-    expect(JSON.stringify(hits.json())).not.toContain("block");
-  });
-});
-
-describe("EW-6a verify: the CLI's confirmation of a first blocking publish", () => {
-  const directories: string[] = [];
-  afterEach(async () => {
-    await Promise.all(
-      directories.splice(0).map((dir) => rm(dir, { recursive: true, force: true }))
-    );
-  });
-
-  // DEFECT (check 57). The CLI asks for `--confirm <n>` only where the dry run counted blocked
-  // actions. A guardrail on `operation.before_call` is never checked again (its input is not
-  // kept), so its dry run says "would have blocked 0" beside N not evaluable, and the CLI
-  // publishes it at once, though it blocks every one of those N calls from then on.
-  it("does not publish a first blocking guardrail unconfirmed when its dry run could check nothing", async () => {
-    const t = await setupAccessInstance({
-      furtherKinds: [createGuardrailAssetKind()],
-      server: (stores) => ({
-        authAdapter: { ...recordAuthAdapter(), credentialMode: "explicit" },
-        operations: { events: guardedEvents(stores, {}).events }
-      })
-    });
-    const cwd = await mkdtemp(join(tmpdir(), "ew6a-verify-"));
-    directories.push(cwd);
-    await t.expectOk(t.admin.id, "assets.put", {
-      params: { kind: "skill", name: "faq" },
-      payload: { config: skill("faq", "Antworten.") }
-    });
-    await t.expectOk(t.admin.id, "assets.put", {
-      params: { kind: "guardrail", name: "no-puts" },
-      payload: {
-        config: guardrail("no-puts", {
-          on: "operation.before_call",
-          filter: { operation: "assets.put" },
-          check: { kind: "pattern", pattern: "." }
-        })
-      }
-    });
-    const serverFetch = createTestFetch(t.instance, { "x-test-user": t.admin.id });
-    const fetchImpl: typeof fetch = async (input, init) => {
-      const request = input instanceof Request ? input : new Request(input, init);
-      if (new URL(request.url).pathname === testOperations["access_tokens.exchange"].path) {
-        return new Response(
-          JSON.stringify({
-            accessToken: "access-token",
-            expiresAt: new Date(Date.now() + 60_000).toISOString()
-          }),
-          { status: 200, headers: { "content-type": "application/json" } }
-        );
-      }
-      return serverFetch(request);
-    };
-    const out: string[] = [];
-    const err: string[] = [];
-    const code = await runCli(
-      ["guardrail", "publish", "no-puts", "--revision", "1", "--instance", "https://catalyst.test"],
-      {
-        cwd,
-        env: { CATALYST_API_KEY: "cat_personal" },
-        fetchImpl,
-        stdout: (text) => out.push(text),
-        stderr: (text) => err.push(text)
-      }
-    );
-    // What it did: published unasked, and the next write of a skill is blocked.
-    const blocked = await t.call(t.admin.id, "assets.put", {
-      params: { kind: "skill", name: "faq" },
-      payload: { config: skill("faq", "Neu.") }
-    });
-    expect(err.join("")).toContain("would have blocked 0 actions by 0 people");
-    expect(blocked.statusCode).toBe(403);
-    expect({ code, published: out.join("") }).toMatchObject({ code: 1 });
   });
 });

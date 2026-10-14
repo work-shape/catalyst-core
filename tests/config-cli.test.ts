@@ -88,7 +88,7 @@ import {
   setupAccessInstance,
   skill as accessSkill
 } from "./support/access-instance";
-import { IBAN as GUARDRAIL_IBAN, ibanPattern } from "./support/guardrails";
+import { IBAN as GUARDRAIL_IBAN, guardedEvents, ibanPattern } from "./support/guardrails";
 import { setupNamespaceHolder } from "./support/asset-operations";
 import { appFiles, setupAppInstance } from "./support/app-instance";
 
@@ -2759,6 +2759,65 @@ describe("catalyst asset commands against an instance", () => {
     };
     return { run, requests };
   }
+
+  // Check 57, from the verification of PR 67. Fails without the fix: a guardrail on
+  // `operation.before_call`, whose past calls cannot be checked again, reported "would have
+  // blocked 0" and was published at once, though it blocked every one of those calls after.
+  it("does not publish a first blocking guardrail unconfirmed when its dry run could check nothing", async () => {
+    const t = await setupAccessInstance({
+      furtherKinds: [createGuardrailAssetKind()],
+      server: (stores) => ({
+        authAdapter: { ...recordAuthAdapter(), credentialMode: "explicit" },
+        operations: { events: guardedEvents(stores, {}).events }
+      })
+    });
+    const cwd = await createTemporaryDirectory();
+    await t.expectOk(t.admin.id, "assets.put", {
+      params: { kind: "skill", name: "faq" },
+      payload: { config: accessSkill("faq", "Antworten.") }
+    });
+    await t.expectOk(t.admin.id, "assets.put", {
+      params: { kind: "guardrail", name: "no-puts" },
+      payload: {
+        config: {
+          name: "no-puts",
+          displayName: "No puts",
+          on: "operation.before_call",
+          filter: { operation: "assets.put" },
+          check: { kind: "pattern", pattern: "." },
+          outcome: "block"
+        }
+      }
+    });
+    const { run } = cliAs(t.instance, t.admin.id, cwd);
+    const unconfirmed = await run("guardrail", "publish", "no-puts", "--revision", "1");
+    expect(unconfirmed.err).toContain("would have blocked 0 actions by 0 people");
+    expect(unconfirmed.code).toBe(1);
+    const unchecked = /and (\d+) actions? it could not check/u.exec(unconfirmed.err)?.[1];
+    expect(Number(unchecked)).toBeGreaterThan(0);
+    // Nothing was published.
+    const stored = await t.stores.configAssets.getConfigAsset({
+      clientInstanceId: accessInstanceId,
+      kind: "guardrail",
+      name: "no-puts"
+    });
+    expect(stored?.publishedRevision).toBeUndefined();
+    const confirmed = await run(
+      "guardrail",
+      "publish",
+      "no-puts",
+      "--revision",
+      "1",
+      "--confirm",
+      /--confirm (\d+)/u.exec(unconfirmed.err)?.[1] ?? ""
+    );
+    expect(confirmed.code, confirmed.err).toBe(0);
+    const blocked = await t.call(t.admin.id, "assets.put", {
+      params: { kind: "skill", name: "faq" },
+      payload: { config: accessSkill("faq", "Wieder neu.") }
+    });
+    expect(blocked.statusCode).toBe(403);
+  });
 
   // `catalyst guardrail test`, `dry-run`, `publish` and `unpublish` (EW-6a). Fails without the
   // change: the CLI had none of these, and a guardrail could not be published.
