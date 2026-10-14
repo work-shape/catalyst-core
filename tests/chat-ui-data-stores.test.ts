@@ -355,14 +355,16 @@ describe("Data Stores in Build", () => {
     expect(list).not.toContain(">New ");
     expect(list).not.toContain("More actions");
     expect(list).toContain(
-      "Data stores are created by an agent or through the API and cannot be changed here."
+      "Data stores are created with their migrations through the CLI or the API and cannot be changed here."
     );
   });
 
   it("says in the empty list what a store is and how one comes to exist, and has no item where the instance lists none", () => {
     const empty = render({ kindPath: "data-stores" });
     expect(empty).toContain("A data store is a database the platform hosts");
-    expect(empty).toContain("An agent or the API creates one.");
+    expect(empty).toContain(
+      "A person with the right to create data stores adds one through the CLI or the API."
+    );
     expect(empty).not.toContain(">New ");
 
     const off = render({ kindPath: "data-stores" }, { on: false });

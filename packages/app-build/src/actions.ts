@@ -112,6 +112,29 @@ function actionFileOf(file: PageFile): ActionFile | undefined {
 }
 
 /**
+ * A YAML file of `actions/` whose name has not the ending of an action file. The build would
+ * pass it over and the action would be missing at the first call, so it is refused with the
+ * name it needs.
+ */
+function misnamedActionFiles(files: readonly PageFile[]): PageBuildError[] {
+  return files.flatMap(({ path }) => {
+    if (!path.startsWith(APP_ACTIONS_DIRECTORY) || !/\.ya?ml$/u.test(path)) return [];
+    if (path.endsWith(APP_ACTION_FILE_SUFFIX)) return [];
+    const name = path
+      .slice(APP_ACTIONS_DIRECTORY.length)
+      .replace(/(\.action)?\.ya?ml$/u, "")
+      .replaceAll("/", "-");
+    return [
+      {
+        file: path,
+        code: "action_invalid" as const,
+        message: `'${path}' is no action file: an action that calls a Connection or starts a Workflow is the file '${APP_ACTIONS_DIRECTORY}${name}${APP_ACTION_FILE_SUFFIX}', and a statement on the Data Store is '${APP_ACTIONS_DIRECTORY}${name}${APP_SQL_ACTION_FILE_SUFFIX}'. Rename the file.`
+      }
+    ];
+  });
+}
+
+/**
  * Compiles the action files of a Page against its manifest. It answers every action, or every
  * fault an author has to fix, each with its file.
  */
@@ -142,6 +165,7 @@ export function compileActions(
     };
   }
 
+  errors.push(...misnamedActionFiles(files));
   const defined = new Set<string>();
   for (const { file, name, kind } of actionFiles) {
     if (defined.has(name)) {
@@ -289,7 +313,7 @@ function compileSqlActionFile(
     return {
       errors: [
         inFile(
-          `The statement has no line under 'actions' in ${PAGE_MANIFEST_FILE}. Add '{ name: ${name}, file: ${file.path}, effect: reading }': the manifest says what a statement does.`
+          `The statement has no line under 'actions' in ${PAGE_MANIFEST_FILE}. Add '{ name: ${name}, file: ${file.path}, effect: reading }', or 'effect: changing' for an INSERT: the manifest says what a statement does.`
         )
       ]
     };
@@ -420,7 +444,7 @@ function compileActionFile(
     errors: error.issues.map((issue) => ({
       file: file.path,
       code: "action_invalid" as const,
-      message: describeIssue(issue, keys)
+      message: describeIssue(issue, keys, value)
     }))
   });
   // The key `workflow` makes the file one that starts a Workflow.
@@ -565,10 +589,28 @@ function readMapping(
   return fault === undefined ? { value } : { message: fault };
 }
 
-function describeIssue(issue: z.core.$ZodIssue, keys: string): string {
+/** What each key of an action file holds, for a file that leaves one out. */
+const ACTION_FILE_KEY_HINTS: Readonly<Record<string, string>> = {
+  connection: "the name of a Connection the manifest lists under 'connections'",
+  operation:
+    "the name of an operation the Connection offers, exactly as the Connection lists it; only an accepted operation can be called",
+  effect:
+    "'reading' or 'changing', as the operation was accepted on the Connection; an action file that starts a Workflow has 'workflow: <Workflow id>' in place of connection, operation and effect"
+};
+
+function describeIssue(issue: z.core.$ZodIssue, keys: string, value: unknown): string {
   if (issue.code === "unrecognized_keys") {
     const where = issue.path.length > 0 ? ` under '${issue.path.join(".")}'` : "";
     return `Unknown key${issue.keys.length > 1 ? "s" : ""} ${issue.keys.map((key) => `'${key}'`).join(", ")}${where}. ${keys}`;
+  }
+  const [top] = issue.path;
+  if (
+    issue.path.length === 1 &&
+    typeof top === "string" &&
+    (typeof value !== "object" || value === null || !Object.hasOwn(value, top))
+  ) {
+    const hint = ACTION_FILE_KEY_HINTS[top];
+    return `'${top}' is missing${hint ? `: ${hint}` : ""}. ${keys}`;
   }
   const key = issue.path.length > 0 ? `'${issue.path.join(".")}'` : "The action file";
   return `${key}: ${issue.message}`;

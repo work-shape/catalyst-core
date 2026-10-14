@@ -85,6 +85,10 @@ export default defineConfig({
           ]
         },
         {
+          label: "Apps",
+          items: ["apps/build"]
+        },
+        {
           label: "Extend",
           items: ["extend/custom-tools", "extend/openapi-tools"]
         },

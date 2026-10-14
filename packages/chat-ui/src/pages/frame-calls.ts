@@ -88,6 +88,8 @@ const FINAL_REFUSALS: readonly string[] = [
   "forbidden",
   "action_unknown",
   "draft_safe_mode",
+  // A Page of a conversation reaches no Data Store; only an App does.
+  "data_store_needs_app",
   "input_invalid"
 ];
 

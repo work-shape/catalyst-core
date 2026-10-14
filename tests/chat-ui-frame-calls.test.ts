@@ -349,6 +349,12 @@ describe("the calls of a frame", () => {
     expect(
       frameCallFailure(refusal(404, "NOT_FOUND", "No such action", { reason: "action_unknown" }))
     ).toEqual({ code: "action_unknown", message: "No such action", retryable: false });
+    // Fails without the change: a Page that reads a Data Store was offered to try again.
+    expect(
+      frameCallFailure(
+        refusal(409, "CONFLICT", "Save it as an App", { reason: "data_store_needs_app" })
+      )
+    ).toEqual({ code: "data_store_needs_app", message: "Save it as an App", retryable: false });
     // A limit passes, so the Page may offer to try again.
     expect(frameCallFailure(refusal(429, "RATE_LIMITED", "Too many calls"))).toEqual({
       code: "rate_limited",
