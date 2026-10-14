@@ -52,7 +52,7 @@ export const assetOperations = {
     id: "assets.sync",
     method: "POST",
     path: "/api/v1/assets/sync",
-    summary: "Apply puts and deletes in one Namespace, all of them or none",
+    summary: "Apply puts and deletes in one Namespace or workspace, all of them or none",
     tag: "Assets",
     auth: "principal",
     scope: "config_assets:write",

@@ -195,12 +195,12 @@ export { NAMESPACE_PREFIX_MAX_LENGTH, NAMESPACE_PREFIX_MIN_LENGTH, NAMESPACE_PRE
  * principal's legacy list (AP-4). `guardrail.publish` is one workspace's; no bundle carries it.
  */
 export const GRANTABLE_ACTION_SCOPES = {
-  "agent.read": ["namespace", "asset"],
-  "agent.write": ["namespace", "asset"],
-  "agent.delete": ["namespace", "asset"],
-  "skill.read": ["namespace", "asset"],
-  "skill.write": ["namespace", "asset"],
-  "skill.delete": ["namespace", "asset"],
+  "agent.read": ["workspace", "namespace", "asset"],
+  "agent.write": ["workspace", "namespace", "asset"],
+  "agent.delete": ["workspace", "namespace", "asset"],
+  "skill.read": ["workspace", "namespace", "asset"],
+  "skill.write": ["workspace", "namespace", "asset"],
+  "skill.delete": ["workspace", "namespace", "asset"],
   // Reading and using a Connection are granted in a Namespace or on one Connection. No
   // workspace owns a Connection, so a right at workspace scope would cover nothing. Writing,
   // deleting and approving stay with the role until a slice opens them.

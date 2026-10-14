@@ -60,6 +60,11 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
   readonly holdsInstanceDefault: boolean;
   /** An asset of this kind is usable only in the workspaces its availability names. */
   readonly hasWorkspaceAvailability: boolean;
+  /**
+   * The assets a definition of the kind names by name, for the rule that an asset names what
+   * a workspace owns only when its own owner is that workspace. Left out: it names none.
+   */
+  references?(definition: unknown): readonly { kind: string; name: string }[];
   /** Adjusts what an interactive save sends before it is validated. */
   prepareInteractiveUpsert(input: {
     current: unknown;

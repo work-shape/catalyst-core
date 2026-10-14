@@ -48,6 +48,7 @@ function withPublishingKind(context: PlatformContext): PlatformContext {
         plural: "apps",
         lifecycle: "draft_published",
         representation: "files",
+        owners: ["workspace"],
         actions: {
           read: "app.read",
           write: "app.write",
