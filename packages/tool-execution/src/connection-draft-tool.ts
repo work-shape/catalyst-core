@@ -148,11 +148,7 @@ const inputSchema = z.object({
     .describe(
       "The id of the Connection the tools are for, such as 'crm': the one the request names, or a new one in lowercase letters, digits and hyphens."
     ),
-  title: z
-    .string()
-    .min(1)
-    .max(120)
-    .describe("The Connection's name in words, such as 'CRM'."),
+  title: z.string().min(1).max(120).describe("The Connection's name in words, such as 'CRM'."),
   baseUrl: z
     .string()
     .min(1)
