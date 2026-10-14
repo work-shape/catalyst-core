@@ -1,6 +1,6 @@
 {
-  "id": "c8890039-4abd-4f42-b70f-6482a3d15dbb",
-  "prevId": "6ff7d744-1c78-4d8d-b8dd-81cce6aabf19",
+  "id": "b6496d6f-14cd-4161-970b-838ad5a13b12",
+  "prevId": "b3ccd651-fe50-48ae-b8d9-9639eda49572",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -8131,6 +8131,18 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "subject_id": {
+          "name": "subject_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "subject_name": {
+          "name": "subject_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",

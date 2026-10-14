@@ -5,7 +5,9 @@ import ts from "typescript";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   EVENTS,
+  GUARDRAIL_EVENTS,
   type AuditEventName,
+  type GuardrailEvent,
   type PlatformEventDefinition,
   type PlatformEventEmitter,
   type PlatformEventName
@@ -204,12 +206,23 @@ function emittedNames(sources: readonly string[]): Set<string> {
   return names;
 }
 
-/** The names handed to a `PlatformEventEmitter` where the call is written: `emit("name", …)`. */
+/**
+ * The names handed to a `PlatformEventEmitter` where the call is written, `emit("name", …)`,
+ * and the before-events an operation's `beforeEvents` names for the call path to emit, written
+ * as the name of an `OperationBeforeEvent` or as the choice between such names.
+ */
 function emitterNames(sources: readonly string[]): Set<string> {
   return new Set(
-    sources.flatMap((source) =>
-      Array.from(source.matchAll(/\bemit\(\s*"([a-z_]+\.[a-z_.]+)"/gu), (match) => match[1] ?? "")
-    )
+    sources.flatMap((source) => [
+      ...Array.from(
+        source.matchAll(/\bemit\(\s*"([a-z_]+\.[a-z_.]+)"/gu),
+        (match) => match[1] ?? ""
+      ),
+      ...Array.from(
+        source.matchAll(/(?:\bname: |[?:] )"([a-z_]+\.before_[a-z_]+)"/gu),
+        (match) => match[1] ?? ""
+      )
+    ])
   );
 }
 
@@ -364,23 +377,31 @@ describe("event registry", () => {
       expect(definition.audited).toBe(true);
       expect(definition.phases).toEqual(["after"]);
     }
-    // The events added since: those of an operation's call and the question the guardrails
-    // answer before an approval request is filed. The before-events are no audit row.
+    // The events added since: those of an operation's call and the questions the guardrails
+    // answer before something happens. The before-events are no audit row.
     expect(
       definitions
         .filter(([, definition]) => !definition.legacy)
         .map(([name, { audited, phases }]) => [name, audited, phases.join()])
     ).toEqual([
+      ["app.before_publish", false, "before"],
       ["approval_request.before_create", false, "before"],
+      ["asset.before_write", false, "before"],
       ["operation.authorization_checked", true, "after"],
       ["operation.before_call", false, "before"],
       ["operation.completed", true, "after"],
       ["operation.denied", true, "after"],
       ["operation.failed", true, "after"],
-      ["operation.started", true, "after"]
+      ["operation.started", true, "after"],
+      ["workflow.before_publish", false, "before"]
     ]);
     expectTypeOf<(typeof EVENTS)[PlatformEventName]>().toExtend<PlatformEventDefinition>();
     expectTypeOf<AuditEventName>().toEqualTypeOf<PlatformEventName>();
+    // A guardrail binds only to a registered before-event.
+    expectTypeOf<GuardrailEvent>().toExtend<PlatformEventName>();
+    for (const event of GUARDRAIL_EVENTS) {
+      expect(EVENTS[event].phases).toEqual(["before"]);
+    }
     expectTypeOf<PlatformEventEmitter["emit"]>().parameter(0).toEqualTypeOf<PlatformEventName>();
   });
 });

@@ -1,3 +1,4 @@
+import type { GuardrailAnswer, GuardrailFields } from "./guardrails";
 import type { JsonObject } from "./json";
 import type { OperationCall } from "./operations";
 
@@ -70,6 +71,14 @@ export const EVENTS = {
     name: "api_access.service_principals_viewed",
     subject: "api_access"
   },
+  // Guardrails answer here before an App's revision goes live. The subject is the App.
+  "app.before_publish": {
+    name: "app.before_publish",
+    subject: "config_asset",
+    legacy: false,
+    audited: false,
+    phases: ["before"]
+  },
   "app.created": { ...LEGACY_AUDIT, name: "app.created", subject: "config_asset" },
   "app.published": { ...LEGACY_AUDIT, name: "app.published", subject: "config_asset" },
   // Guardrails bound to it answer before a request is filed. The subject is the request's kind.
@@ -99,6 +108,15 @@ export const EVENTS = {
     ...LEGACY_AUDIT,
     name: "approval_request.withdrawn",
     subject: "approval_request"
+  },
+  // Guardrails answer here before a revision of any asset kind is written. The subject is the
+  // asset; its kind narrows the guardrails that apply.
+  "asset.before_write": {
+    name: "asset.before_write",
+    subject: "config_asset",
+    legacy: false,
+    audited: false,
+    phases: ["before"]
   },
   "audit.pruned": { ...LEGACY_AUDIT, name: "audit.pruned", subject: "audit" },
   "auth.personal_access_token_issued": {
@@ -334,7 +352,7 @@ export const EVENTS = {
     ...OPERATION_AUDIT,
     name: "operation.authorization_checked"
   },
-  // Guardrails answer here before anything runs. EW-1 supplies them.
+  // Guardrails answer here before anything runs.
   "operation.before_call": {
     name: "operation.before_call",
     subject: "operation",
@@ -392,6 +410,14 @@ export const EVENTS = {
   },
   "user.profile_updated": { ...LEGACY_AUDIT, name: "user.profile_updated", subject: "user" },
   "user.updated": { ...LEGACY_AUDIT, name: "user.updated", subject: "user" },
+  // Guardrails answer here before a Workflow's revision goes live. The subject is the Workflow.
+  "workflow.before_publish": {
+    name: "workflow.before_publish",
+    subject: "config_asset",
+    legacy: false,
+    audited: false,
+    phases: ["before"]
+  },
   "workflow_run.cancelled": {
     ...LEGACY_AUDIT,
     name: "workflow_run.cancelled",
@@ -453,17 +479,62 @@ export interface PlatformEventContext extends Pick<
   OperationCall,
   "actor" | "origin" | "workspaceId" | "correlationId"
 > {
-  subject: { kind: string; id: string };
+  /** What the event is about. A before-event of an asset not written yet has its name only. */
+  subject: { kind: string; id?: string; name?: string };
   phase: PlatformEventPhase;
+  /**
+   * The fields a guardrail at a before-event reads, by the names the event declares checkable:
+   * an asset's text, a call's input. Asked only where a guardrail applies, and never stored:
+   * the payload holds references only.
+   */
+  checkable?(): GuardrailFields | Promise<GuardrailFields>;
+  /** What a filter narrows by beside the origin: the asset kind or the operation's name. */
+  filterBy?: { kind?: string; operation?: string };
+  /** For the deadline and the stop of a guardrail's model call, where the caller has them. */
+  runtime?: { deadline?: Date; signal?: AbortSignal };
+  /**
+   * Set where the event is asked again for the same action, as before a call that waited for
+   * an approval is executed. The guardrails answer again; their hits were kept the first time.
+   */
+  repeated?: true;
 }
 
 export type PlatformEventOutcome = "allow" | "warn" | "block" | "require_approval";
 
-// EW-1 implements emission, guardrails and persistence.
+/**
+ * What a before-event answered: the strictest outcome of every guardrail that applies, and
+ * those that warned, held or blocked, with their reasons. An after-event answers `allow`.
+ */
+export interface PlatformEventAnswer {
+  outcome: PlatformEventOutcome;
+  guardrails: readonly GuardrailAnswer[];
+}
+
+export const PLATFORM_EVENT_ALLOW: PlatformEventAnswer = { outcome: "allow", guardrails: [] };
+
+const OUTCOME_ORDER: readonly PlatformEventOutcome[] = [
+  "allow",
+  "warn",
+  "require_approval",
+  "block"
+];
+
+/** The strictest of several outcomes: an `allow` never overrides a `warn` or a `block`. */
+export function strictestOutcome(outcomes: readonly PlatformEventOutcome[]): PlatformEventOutcome {
+  return outcomes.reduce(
+    (left, right) => (OUTCOME_ORDER.indexOf(left) >= OUTCOME_ORDER.indexOf(right) ? left : right),
+    "allow"
+  );
+}
+
+/**
+ * The one way an event is raised. At `before` the guardrails bound to the name run, and the
+ * caller acts on the answer; at `after` an audited event becomes an audit row.
+ */
 export interface PlatformEventEmitter {
   emit(
     name: PlatformEventName,
     payload: JsonObject,
     context: PlatformEventContext
-  ): Promise<PlatformEventOutcome>;
+  ): Promise<PlatformEventAnswer>;
 }

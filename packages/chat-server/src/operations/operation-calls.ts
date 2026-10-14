@@ -17,6 +17,7 @@ import {
 } from "../operation-call-approval-handler";
 import type { ChatServerOptions, OperationCalls, ResolvedChatServerOptions } from "../types";
 import { createAuditingEventEmitter } from "./event-emitter";
+import type { GuardrailRunner } from "../guardrail-runner";
 
 export type OperationCallsOptions = Pick<
   Omit<ResolvedChatServerOptions, "operationCalls">,
@@ -32,6 +33,8 @@ export type OperationCallsOptions = Pick<
   /** Without it this process holds no call for an approval and refuses one that needs it. */
   approvalRequests?: ChatServerOptions["approvalRequests"] &
     Pick<ApprovalRequestWorkflowOptions, "guardrails">;
+  /** Runs the guardrails at every before-event of a call. Without it nothing is checked. */
+  guardrails?: GuardrailRunner;
   /**
    * The asset kinds of the instance. With them a held `assets.put` is shown as the asset it
    * saves; without them it is shown as any other call.
@@ -88,7 +91,9 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
     }),
     runs: options.stores.operationRuns,
     authorizer: options.authorizer,
-    events: options.operations?.events ?? createAuditingEventEmitter(options.auditRecorder),
+    events:
+      options.operations?.events ??
+      createAuditingEventEmitter(options.auditRecorder, options.guardrails),
     audit: options.auditRecorder,
     policy: {
       instanceDefaults: options.config.policy.defaults,
