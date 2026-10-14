@@ -534,6 +534,60 @@ test("no section of the gallery scrolls sideways at 390 px, and a wide table say
   await expect(page.getByRole("tooltip", { name: whole })).toBeVisible();
 });
 
+// A card that opens as a whole. Fails without `CardTarget`: a click on a card's name or its
+// text did nothing, and only the button in its footer opened what the card stands for.
+test("a card opens from anywhere on it, its other control keeps its action, and the keyboard meets it once", async ({
+  page
+}) => {
+  const root = await openGallery(page, "Page structure");
+  const sample = root.locator('[data-gallery-sample="card-target"]');
+  const card = sample.locator("[data-card]");
+  const done = sample.getByRole("status");
+  const start = card.getByRole("button", { name: "Start chat" });
+  const edit = card.getByRole("button", { name: "Edit" });
+  await card.scrollIntoViewIfNeeded();
+
+  // A click on the name, on the text and on the empty room beside Edit opens the card. The
+  // target's area lies over the name and the text, so the pointer is sent there by force.
+  const box = await card.boundingBox();
+  const spots = [
+    () => card.getByRole("heading", { name: "Support assistant" }).click({ force: true }),
+    () => card.getByText("Answers questions from the product handbook.").click({ force: true }),
+    () => card.click({ position: { x: (box?.width ?? 0) / 2, y: (box?.height ?? 0) - 8 } })
+  ];
+  for (const click of spots) {
+    await edit.click();
+    await expect(done).toHaveText("The editor opened.");
+    await click();
+    await expect(done).toHaveText("The chat started.");
+  }
+
+  // The hover state is the card's: its edge darkens under the pointer.
+  await page.mouse.move(0, 0);
+  const atRest = await style(card, "border-top-color");
+  await card.getByText("Answers questions from the product handbook.").hover({ force: true });
+  await expect.poll(() => style(card, "border-top-color")).not.toBe(atRest);
+
+  // One tab stop leads into the card, the next to Edit and the one after out of it; the name
+  // and the card are no stops of their own. Enter on the target opens the card.
+  await edit.click();
+  await edit.focus();
+  await page.keyboard.press("Shift+Tab");
+  await expect(start).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(card.locator(":focus")).toHaveCount(0);
+  await page.keyboard.press("Tab");
+  await expect(start).toBeFocused();
+  await expect(start).toHaveAccessibleDescription("Support assistant");
+  expect(await style(start, "outline-style")).toBe("solid");
+  await page.keyboard.press("Enter");
+  await expect(done).toHaveText("The chat started.");
+  await page.keyboard.press("Tab");
+  await expect(edit).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(card.locator(":focus")).toHaveCount(0);
+});
+
 /** The section and every box around it that is wider inside than it shows, by tag and class. */
 function widerThanItsBox(page: Page): Promise<string[]> {
   return page.locator("[data-gallery-section]").evaluate((section) => {

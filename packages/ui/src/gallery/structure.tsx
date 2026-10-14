@@ -8,6 +8,7 @@ import {
   Plus,
   X
 } from "lucide-react";
+import { useId, useState } from "react";
 import { Button } from "../actions/button";
 import { IconButton } from "../actions/icon-button";
 import { EmptyState } from "../feedback/empty-state";
@@ -19,6 +20,7 @@ import {
   CardContent,
   CardFooter,
   CardHeader,
+  CardTarget,
   CardTitle,
   type CardPadding
 } from "../structure/card";
@@ -174,6 +176,44 @@ function SectionSamples({ text }: { text: GalleryText }) {
   );
 }
 
+/**
+ * A card that opens as a whole: a click anywhere on it starts the chat, while Edit keeps its own
+ * action. The line under it says what the last click did.
+ */
+function OpeningCardSample({ text }: { text: GalleryText }) {
+  const titleId = useId();
+  const [done, setDone] = useState<string>();
+  return (
+    <div className="grid content-start gap-2" data-gallery-sample="card-target">
+      <Card padding="md" className="flex flex-col">
+        <CardHeader>
+          <CardTitle id={titleId}>{text.cardTitle}</CardTitle>
+          <p className="text-body text-muted-foreground">{text.cardBody}</p>
+        </CardHeader>
+        <CardFooter>
+          <CardTarget>
+            <Button size="sm" aria-describedby={titleId} onClick={() => setDone(text.cardStarted)}>
+              {text.cardAction}
+            </Button>
+          </CardTarget>
+          <Button
+            size="sm"
+            variant="link"
+            className="ml-auto"
+            aria-describedby={titleId}
+            onClick={() => setDone(text.cardEditOpened)}
+          >
+            {text.cardEdit}
+          </Button>
+        </CardFooter>
+      </Card>
+      <p role="status" className="text-caption text-muted-foreground">
+        {done}
+      </p>
+    </div>
+  );
+}
+
 function SurfaceFrameSamples({ text }: { text: GalleryText }) {
   const showChat = (
     <Button variant="ghost" size="sm">
@@ -321,7 +361,7 @@ export const structureGallery: GalleryGroup = {
     },
     {
       name: "Card",
-      components: ["Card", "CardHeader", "CardTitle", "CardContent", "CardFooter"],
+      components: ["Card", "CardHeader", "CardTitle", "CardContent", "CardFooter", "CardTarget"],
       render: (text) => (
         <div className="grid gap-4 sm:grid-cols-2">
           {cardPaddings.map((padding) => (
@@ -348,6 +388,7 @@ export const structureGallery: GalleryGroup = {
               </CardFooter>
             </Card>
           ))}
+          <OpeningCardSample text={text} />
         </div>
       )
     },

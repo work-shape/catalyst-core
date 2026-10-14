@@ -86,9 +86,11 @@ test("a member finds the agents of the workspace under New chat and starts a cha
   await expect(composer).toBeFocused();
   await expect(composer).toHaveValue("");
 
+  // The whole card starts the chat: a click on what the agent does lands on Start chat, whose
+  // area lies over the text, so the pointer is sent there by force.
   // The starter prompts of the default agent stand in the empty chat with it.
   await openAgents(page);
-  await defaultCard.getByRole("button", { name: "Start chat" }).click();
+  await defaultCard.getByText("Help with application and document review.").click({ force: true });
   await expect(page).toHaveURL(/\/w\/[^/]+$/u);
   await expect(startPageAgent(page)).toHaveAccessibleName(`Select agent: ${DEFAULT_AGENT}`);
   await expect(page.getByRole("button", { name: PROMPT_TITLE })).toBeVisible();
@@ -148,6 +150,7 @@ test("a builder is led from a card to the agent's page in Studio", async ({
     [1440, 390]
   );
 
+  // The link stands above the card that starts a chat, and keeps its own way.
   await edit.click();
   await expect(page).toHaveURL(/\/build\/agents\/research_assistant$/u);
   await expect(page.getByRole("region", { name: "Studio" })).toBeVisible();

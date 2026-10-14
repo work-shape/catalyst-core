@@ -232,6 +232,7 @@ test("a member starts a Workflow with inputs from its form and sees the run end;
     await page.goto(`/w/${workspaceId}/workflows`);
     const card = page.getByRole("listitem").filter({ hasText: name });
     const dialog = page.getByRole("dialog", { name: `Start “${name}” now?` });
+    // Start now stands above the card that opens the Workflow, and keeps its own action.
     const openForm = async () => {
       await card.getByRole("button", { name: "Start now", exact: true }).click();
       await expect(dialog).toBeVisible();
@@ -313,7 +314,10 @@ test("a member starts a Workflow with inputs from its form and sees the run end;
     await page.goto(`/w/${workspaceId}/workflows`);
     await expect(card).toBeVisible();
     await expect(card.getByRole("button", { name: "Start now", exact: true })).toHaveCount(0);
-    await card.getByRole("link", { name: "Open", exact: true }).click();
+    // The whole card opens the Workflow: a click on its name lands on Open, whose area lies
+    // over it.
+    await expect(card.getByRole("link", { name: "Open", exact: true })).toHaveCount(1);
+    await card.getByRole("heading", { name, exact: true }).click({ force: true });
     const workflowPage = page.getByTestId("workflow-page");
     await expect(workflowPage.getByRole("heading", { level: 1 })).toHaveText(name);
     await expect(workflowPage.getByRole("button", { name: "Start now", exact: true })).toHaveCount(

@@ -3,6 +3,7 @@ export {
   CardContent,
   CardFooter,
   CardHeader,
+  CardTarget,
   CardTitle,
   type CardPadding,
   type CardProps

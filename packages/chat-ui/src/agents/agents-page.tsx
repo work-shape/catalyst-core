@@ -7,6 +7,7 @@ import {
   Card,
   CardFooter,
   CardHeader,
+  CardTarget,
   CardTitle,
   EmptyState,
   InlineError,
@@ -144,7 +145,8 @@ export function AgentsPage({
 
 /**
  * One agent: its mark, its name, what it does in two lines at most, and the ways into a chat
- * with it. Its starter prompts wait in the empty chat with it, not on the card.
+ * with it. Its starter prompts wait in the empty chat with it, not on the card. The whole card
+ * starts the chat.
  */
 function AgentCard({
   agent,
@@ -178,9 +180,11 @@ function AgentCard({
         ) : null}
       </CardHeader>
       <CardFooter className="justify-between">
-        <Button size="sm" aria-describedby={titleId} onClick={() => onStartChat(agent.name)}>
-          {t("agents.startChat")}
-        </Button>
+        <CardTarget>
+          <Button size="sm" aria-describedby={titleId} onClick={() => onStartChat(agent.name)}>
+            {t("agents.startChat")}
+          </Button>
+        </CardTarget>
         {onOpenStudio ? (
           <RouteLink
             route={agentStudioRoute(agent.name)}

@@ -292,12 +292,14 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await expect(memberOpen).toHaveAttribute("href", appPath);
   await expect(memberCard.getByRole("link", { name: "Edit", exact: true })).toHaveCount(0);
   await expect(memberCard).not.toContainText(appId);
+  // The menu stands above the card that opens the App, and opens itself.
   await memberCard.getByRole("button", { name: `Actions for ${appName}` }).click();
   await expect(memberPage.getByRole("menuitem", { name: "Copy link" })).toBeVisible();
   await expect(memberPage.getByRole("menuitem", { name: "Edit" })).toHaveCount(0);
   await memberPage.keyboard.press("Escape");
   await shoot(memberPage, "apps-list-member", [["light", "en", 1440]], memberListReady);
-  await memberArea.getByRole("link", { name: "Open", exact: true }).click();
+  // The whole card opens the App: a click on its name lands on Open, whose area lies over it.
+  await memberCard.getByRole("heading", { name: appName, exact: true }).click({ force: true });
   await expect(
     appIn(memberPage, "app-view").getByRole("heading", { name: PUBLISHED_HEADING })
   ).toBeVisible();

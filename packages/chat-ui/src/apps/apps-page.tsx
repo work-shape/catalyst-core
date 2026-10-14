@@ -9,6 +9,7 @@ import {
   CardContent,
   CardFooter,
   CardHeader,
+  CardTarget,
   CardTitle,
   DropdownMenu,
   DropdownMenuContent,
@@ -301,8 +302,8 @@ function menuAction(action: AppRowAction): action is AppMenuAction {
 
 /**
  * One App: what it is called and what it is for, where it stands, when it last changed, and
- * the way into it. The main action is the first of the footer; what a builder does beside it
- * stands at the other end.
+ * the way into it. The main action is the first of the footer, and the whole card opens it;
+ * what a builder does beside it stands at the other end.
  */
 function AppCard({
   app,
@@ -374,9 +375,11 @@ function AppCard({
       {route || editRoute || menu.length > 0 ? (
         <CardFooter>
           {route ? (
-            <RouteLink route={route} variant="primary" describedBy={titleId} onOpen={onOpenRoute}>
-              {t(route.kind === "app" ? "apps.open" : "apps.edit")}
-            </RouteLink>
+            <CardTarget>
+              <RouteLink route={route} variant="primary" describedBy={titleId} onOpen={onOpenRoute}>
+                {t(route.kind === "app" ? "apps.open" : "apps.edit")}
+              </RouteLink>
+            </CardTarget>
           ) : null}
           <div className="ml-auto flex items-center gap-1">
             {editRoute ? (
