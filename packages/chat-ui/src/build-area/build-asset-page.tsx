@@ -31,6 +31,7 @@ import { BuildHistory } from "./build-history";
 import type { VisibleBuildKind } from "./build-model";
 import { formatDateTime } from "../control-plane/locale-format";
 import { readBuildRefusal, type BuildWriteOutcome } from "./build-refusals";
+import { buildWorkspaceName } from "./build-rights";
 
 interface AssetPageProps {
   source: BuildSource;
@@ -297,7 +298,9 @@ function LoadedAssetPage({
     (candidate) => candidate.prefix === stored.namespace
   );
   const workspaceName =
-    source.rights.workspaces.find((candidate) => candidate.id === owner)?.name ?? owner;
+    owner === undefined
+      ? undefined
+      : buildWorkspaceName(source.rights, owner, t("build.scopePersonal"));
   const readOnlyReason = shipped
     ? t("build.readOnlyPlatform")
     : workspaceName !== undefined

@@ -48,6 +48,7 @@ export const build = defineTranslations({
     "build.namespaceAll": "All Namespaces",
     "build.scopeFilter": "Scope",
     "build.scopeInstance": "Instance",
+    "build.scopePersonal": "Personal",
     "build.namespaceFilter": "Namespace",
     "build.noAccess":
       "Studio is not available to you. It opens for people who hold a right on an agent or a skill.",
@@ -167,6 +168,7 @@ export const build = defineTranslations({
     "build.namespaceAll": "Alle Namespaces",
     "build.scopeFilter": "Geltungsbereich",
     "build.scopeInstance": "Instanz",
+    "build.scopePersonal": "Persönlich",
     "build.namespaceFilter": "Namespace",
     "build.noAccess":
       "Studio steht dir nicht zur Verfügung. Es öffnet sich für Personen mit einem Recht an einem Agenten oder einem Skill.",

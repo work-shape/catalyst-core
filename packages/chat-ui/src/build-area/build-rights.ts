@@ -16,12 +16,17 @@ export interface BuildNamespace {
   displayName: string;
 }
 
-/** A Shared Workspace whose own assets the reader holds a right on, as the scope names it. */
+/**
+ * A workspace whose own assets the reader holds a right on, as the scope names it: a Shared
+ * Workspace, or the reader's own Personal Workspace.
+ */
 interface BuildWorkspace {
   id: string;
   name: string;
   /** The reader is a member: a new agent made there starts offered there. */
   member: boolean;
+  /** The reader's Personal Workspace, which Studio names "Personal". */
+  personal?: true;
 }
 
 /**
@@ -84,15 +89,20 @@ export function resolveBuildRights(
   };
   const creatableNamespaces = (kind: string) =>
     held.filter((namespace) => holds(kind, "write", namespace.prefix)).map(toBuildNamespace);
-  // Studio offers the Shared Workspaces: what is made in a personal one starts hidden.
+  // Studio is open to a reader with a right on the instance's or a Shared Workspace's assets.
+  // To that reader it also offers the Personal Workspace, where what the reader's agent made in
+  // a personal conversation stands (manager, 2026-10-14); it opens Studio to nobody alone.
   const inWorkspaces = (context?.workspaces ?? []).filter(
     (workspace) => workspace.kind === "shared"
+  );
+  const ownWorkspaces = (context?.workspaces ?? []).filter(
+    (workspace) => workspace.kind === "personal"
   );
   const holdsIn = (kind: string, verb: AssetVerb, workspaceId: string | undefined): boolean => {
     const name = action(kind, verb);
     return (
       name !== undefined &&
-      inWorkspaces.some(
+      [...inWorkspaces, ...ownWorkspaces].some(
         (workspace) => workspace.id === workspaceId && workspace.actions.includes(name)
       )
     );
@@ -104,8 +114,9 @@ export function resolveBuildRights(
     onSingleAssets.length > 0 ||
     held.length > 0;
 
+  const readsAny = readsInstance || inWorkspaces.length > 0;
   return {
-    readsAny: readsInstance || inWorkspaces.length > 0,
+    readsAny,
     reads: (kind) =>
       verbs.some((verb) => {
         const name = action(kind, verb);
@@ -117,7 +128,12 @@ export function resolveBuildRights(
     instanceWrite,
     namespaces: held.map(toBuildNamespace),
     readsInstance,
-    workspaces: inWorkspaces.map(({ id, name, member }) => ({ id, name, member })),
+    workspaces: [
+      ...inWorkspaces.map(({ id, name, member }) => ({ id, name, member })),
+      ...(readsAny
+        ? ownWorkspaces.map(({ id, name }) => ({ id, name, member: true, personal: true as const }))
+        : [])
+    ],
     may: (verb, asset) =>
       instanceWrite ||
       (asset.workspaceId === undefined
@@ -150,6 +166,19 @@ export function mayCreateAgents(
 
 /** The owner Studio works in: the instance's own assets, or what one workspace owns. */
 export type BuildScope = { kind: "instance" } | { kind: "workspace"; workspaceId: string };
+
+/**
+ * The name a workspace of Studio is shown with: its own, "Personal" for the reader's Personal
+ * Workspace, or its id where the reader is shown none.
+ */
+export function buildWorkspaceName(
+  rights: Pick<BuildRights, "workspaces">,
+  id: string,
+  personal: string
+): string {
+  const workspace = rights.workspaces.find((candidate) => candidate.id === id);
+  return workspace?.personal ? personal : (workspace?.name ?? id);
+}
 
 /** The value a scope is kept and chosen as: `instance`, or the workspace's id. */
 const INSTANCE_SCOPE_VALUE = "instance";

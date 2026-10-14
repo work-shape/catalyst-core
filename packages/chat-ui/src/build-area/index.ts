@@ -56,6 +56,7 @@ export {
 } from "./build-create-request";
 export {
   buildScopes,
+  buildWorkspaceName,
   mayCreateAgents,
   resolveBuildRights,
   resolveBuildScope,

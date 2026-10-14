@@ -56,7 +56,7 @@ import {
   type VisibleBuildKind
 } from "./build-model";
 import { useBuildNavigation } from "./build-route";
-import { buildScopeValue, buildScopes, type BuildScope } from "./build-rights";
+import { buildScopeValue, buildScopes, buildWorkspaceName, type BuildScope } from "./build-rights";
 import { scrollPageToTop } from "./build-scroll";
 
 /** The commands the CLI entry names, in the order a person runs them. */
@@ -458,7 +458,7 @@ function BuildList({
   const scope = source.scoped?.(entry.kind) ? source.scope : undefined;
   const scopes = scope && source.chooseScope ? buildScopes(source.rights) : [];
   const workspaceName = (id: string) =>
-    source.rights.workspaces.find((candidate) => candidate.id === id)?.name ?? id;
+    buildWorkspaceName(source.rights, id, t("build.scopePersonal"));
   const scopeName = (of: BuildScope) =>
     of.kind === "instance" ? t("build.scopeInstance") : workspaceName(of.workspaceId);
   // A Namespace is a prefix among the instance's own assets alone.
