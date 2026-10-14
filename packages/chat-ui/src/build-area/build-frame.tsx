@@ -22,6 +22,7 @@ import {
   PageHeaderBack,
   Picker,
   PickerButton,
+  RegistryIcon,
   SkeletonList,
   SkeletonPage,
   SubRail
@@ -44,7 +45,7 @@ import {
   type BuildAssetCopy
 } from "./build-asset-page";
 import { BuildCreateDialog } from "./build-create-dialog";
-import { buildCreateRequested, clearBuildCreateRequest } from "./build-create-request";
+import { clearBuildStartRequest, requestedBuildStart } from "./build-create-request";
 import { BUILD_SEARCH_DELAY_MS, type BuildListFilter, type BuildSource } from "./build-data";
 import {
   formatUpdated,
@@ -86,12 +87,13 @@ export function BuildFrame({ source }: { source: BuildSource }) {
   const [listViews, setListViews] = useState<Record<string, ListView>>({});
   // A new asset has no address yet: it is written on the list's address and ends with it.
   const locationKey = `${location.kindPath ?? ""}/${location.name ?? ""}`;
-  // A page outside Build may have asked for the dialog: the list it leads to opens with it.
-  const [asking, setAsking] = useState(
-    () => location.name === undefined && buildCreateRequested(location.kindPath)
+  const [asking, setAsking] = useState(false);
+  // A page outside Studio may have started an asset in its own dialog: the list it leads to
+  // opens the new asset's page.
+  const [start, setStart] = useState<BuildAssetStart | undefined>(() =>
+    location.name === undefined ? requestedBuildStart(location.kindPath) : undefined
   );
-  useEffect(clearBuildCreateRequest, []);
-  const [start, setStart] = useState<BuildAssetStart>();
+  useEffect(clearBuildStartRequest, []);
   /** A shipped asset the reader asked to copy: the dialog that names the copy is open. */
   const [copying, setCopying] = useState<BuildAssetCopy>();
   const [seenLocationKey, setSeenLocationKey] = useState(locationKey);
@@ -323,14 +325,11 @@ export function BuildFrame({ source }: { source: BuildSource }) {
             groups={[
               {
                 id: "kinds",
-                items: kinds.map((kind) => {
-                  const Icon = kind.entry.icon;
-                  return {
-                    id: kind.entry.path,
-                    label: t(kind.entry.label),
-                    icon: <Icon aria-hidden="true" />
-                  };
-                })
+                items: kinds.map((kind) => ({
+                  id: kind.entry.path,
+                  label: t(kind.entry.label),
+                  icon: <RegistryIcon name={kind.entry.icon} />
+                }))
               }
             ]}
             value={entry.path}
@@ -466,7 +465,7 @@ function BuildList({
           <SkeletonList rows={6} />
         )
       ) : list.rows.length === 0 && !filtered ? (
-        <EmptyState icon={<entry.icon aria-hidden="true" />} action={newButton}>
+        <EmptyState icon={<RegistryIcon name={entry.icon} />} action={newButton}>
           {t(editable && !state.canCreate ? editable.emptyReadOnlyText : entry.emptyText)}
         </EmptyState>
       ) : (
@@ -614,13 +613,12 @@ function RowMark({ entry, title }: { entry: BuildKind; title: string }) {
   if (entry.avatar) {
     return <Avatar kind={entry.avatar} name={title} />;
   }
-  const Icon = entry.icon;
   return (
     <span
       aria-hidden="true"
       className="grid size-8 place-items-center rounded-md bg-muted text-muted-foreground"
     >
-      <Icon className="size-4" />
+      <RegistryIcon name={entry.icon} className="size-4" />
     </span>
   );
 }

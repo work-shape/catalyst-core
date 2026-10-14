@@ -249,6 +249,12 @@ interface OperationDefinitionBase<Input, Output> {
     input: Input,
     origin: OperationOrigin
   ): readonly OperationBeforeEvent[] | Promise<readonly OperationBeforeEvent[]>;
+  /**
+   * The input fields the `heldInput` of its before-events may set for a call held for an
+   * approval, such as the revision of a Page it copies. They are merged into the input when the
+   * call is executed; no other field of the input can be changed that way.
+   */
+  heldInputKeys?: readonly string[];
   /** Where the operation is reached over HTTP. An agent tool has no such face. */
   http?: { method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"; path: string };
   /** A run still `running` after this long counts as interrupted. */

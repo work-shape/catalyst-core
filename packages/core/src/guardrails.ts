@@ -163,10 +163,11 @@ export interface OperationBeforeEvent {
   checkable(): GuardrailFields | Promise<GuardrailFields>;
   /**
    * What the call's input gains where it is held for an approval, so the call the approval
-   * answers reads what this event read, such as the revision of a Page it copies. Asked after
-   * the fields were read; nothing where they were not.
+   * answers reads what the approval was asked about, such as the revision of a Page it copies:
+   * the one this event's guardrails read, or, where none applied, the one there is when the
+   * call is held. Only the keys the operation declares in `heldInputKeys` are kept.
    */
-  heldInput?(): JsonObject | undefined;
+  heldInput?(): JsonObject | undefined | Promise<JsonObject | undefined>;
 }
 
 /**

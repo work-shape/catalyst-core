@@ -166,7 +166,7 @@ describe("the lifecycle and the representation of an asset kind", () => {
       "/w/ws_1/apps/offers"
     );
     expect(appInterfacePath({ workspaceId: "ws_1", app: "offers", mode: "draft" })).toBe(
-      "/w/ws_1/apps/offers/edit"
+      "/w/ws_1/app-drafts/offers"
     );
   });
 });

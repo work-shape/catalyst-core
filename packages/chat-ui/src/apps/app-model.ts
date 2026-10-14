@@ -1,4 +1,9 @@
-import { ApiError, type AssetSummary, type PlatformContext } from "@vivd-catalyst/api-client";
+import {
+  ApiError,
+  type AssetSummary,
+  type CollaborationWorkspaceAgents,
+  type PlatformContext
+} from "@vivd-catalyst/api-client";
 import type { TranslationKey } from "../i18n";
 
 /** The four rights of an App, by the names the instance decides them under. */
@@ -42,6 +47,19 @@ export function resolveAppRights(context: Pick<PlatformContext, "actions"> | und
     publish: held.includes(APP_RIGHT_NAMES.publish),
     delete: held.includes(APP_RIGHT_NAMES.delete)
   };
+}
+
+/**
+ * Whether the Apps row of the sidebar shows: the module is on and the instance says the row is
+ * there for the person in the open workspace, which it does where the Apps page lists them an
+ * App or they may write one there. A member is never shown an empty row; a builder is, so the
+ * first App has a place to go. Unknown counts as none until the workspace's list arrived.
+ */
+export function appsRowShown(
+  enabled: boolean,
+  list: Pick<CollaborationWorkspaceAgents, "visibleSections"> | undefined
+): boolean {
+  return enabled && list?.visibleSections.includes("apps") === true;
 }
 
 /**

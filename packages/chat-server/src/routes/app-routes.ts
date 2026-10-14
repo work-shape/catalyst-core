@@ -3,6 +3,7 @@ import { AppError, asCollaborationWorkspaceId } from "@vivd-catalyst/core";
 import { AppActionCalls } from "../apps/action-call";
 import { AppActionList } from "../apps/action-list";
 import { AppWorkflow } from "../apps/app-workflow";
+import { PAGE_FILE_SET_HELD_KEY } from "../apps/page-apps";
 import type { Route } from "../http/route";
 import type { ResolvedChatServerOptions } from "../types";
 
@@ -30,6 +31,7 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
     changeClass: "reversible",
     module: APPS_MODULE,
     beforeEvents: (input) => [workflow.writeEventFromPage({ ...input, app: input.name })],
+    heldInputKeys: [PAGE_FILE_SET_HELD_KEY],
     execute: (input, context) => workflow.createFromPage(context, input, context.beforeEvents)
   });
 
@@ -54,6 +56,7 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
     changeClass: "reversible",
     module: APPS_MODULE,
     beforeEvents: (input) => [workflow.writeEventFromPage(input)],
+    heldInputKeys: [PAGE_FILE_SET_HELD_KEY],
     execute: (input, context) => workflow.updateFromPage(context, input, context.beforeEvents)
   });
 

@@ -3,6 +3,7 @@ import { AssistantRuntimeProvider, useComposer, useComposerRuntime } from "@assi
 import { useChatRuntime, type UseChatRuntimeOptions } from "@assistant-ui/react-ai-sdk";
 import type { UIMessage } from "ai";
 import type { SelectedChatModel } from "../workspace/workspace-chat-model";
+import { APP_ASSET_KIND } from "@vivd-catalyst/api-client";
 import type { LocaleCode } from "@vivd-catalyst/core";
 import {
   createMessageSnapshotKey,
@@ -17,6 +18,7 @@ import { dedupeToolSurfaceRefs, readToolSurfaceRefs } from "../tool-surfaces";
 import { AssistantThread, type StartComposerPosition } from "./assistant-thread";
 import { AssistantToolRegistry } from "./assistant-tool-registry";
 import { useRegisterToolDisplayActions } from "../domain-ui-widgets";
+import { useSubjectSurface } from "../conversation/use-subject-surface";
 import { ConversationSubjectLine } from "../conversation/conversation-subject";
 import { useTranslation } from "../i18n";
 import { useAutoOpenPageSurface } from "../pages/page-card";
@@ -148,7 +150,17 @@ function AssistantRuntimePane({
   const settleQueuedSend = useCallback(() => setQueuedSend(undefined), []);
   const visibleNotice = rootSubmitError ?? notice;
   useAutoOpenCompletedRunSurface(activeRun, locale);
-  useAutoOpenPageSurface(activeRun, selectedConversationId);
+  const conversationSubject = useSubjectSurface({
+    activeRun,
+    conversationId: selectedConversationId,
+    storedSubject: selectedConversationSubject,
+    workspaceId: collaborationWorkspaceId
+  });
+  useAutoOpenPageSurface(
+    activeRun,
+    selectedConversationId,
+    conversationSubject?.subject.kind === APP_ASSET_KIND
+  );
 
   useEffect(() => {
     activeRef.current = true;
@@ -369,9 +381,11 @@ function AssistantRuntimePane({
           notice={visibleNotice}
           newConversationPrivate={newConversationPrivate}
           subjectLine={
-            selectedConversationSubject === undefined ? undefined : (
+            conversationSubject === undefined ? undefined : (
               <ConversationSubjectLine
-                subject={selectedConversationSubject}
+                subject={conversationSubject.subject}
+                title={conversationSubject.title}
+                onShow={conversationSubject.show}
                 workspaceId={collaborationWorkspaceId}
                 onOpenRoute={openRoute}
               />

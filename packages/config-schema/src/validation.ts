@@ -30,6 +30,7 @@ export function parseClientInstanceConfig(input: unknown): ClientInstanceConfig 
   assertExecutionWorkspaceInfrastructure(parsed.data);
   assertModuleSwitches(parsed.data);
   assertConfigReferences(parsed.data);
+  assertEmbeddingBindings(parsed.data);
   assertTokenSafeguardsAdmitACall(parsed.data);
   assertFastModePricingCoverage(parsed.data);
   assertSpendBudgetPricingCoverage(parsed.data, []);
@@ -191,6 +192,57 @@ function assertConfigReferences(config: ClientInstanceConfig): void {
 }
 
 /**
+ * Embeddings send the text of documents and queries to their provider, so the approved route is
+ * part of the config: an embedding binding sits on an entry with region `eu` or on one that keeps
+ * data inside the instance. A chat use of the product never names an embedding binding, and the
+ * default of `knowledge` names nothing else.
+ */
+function assertEmbeddingBindings(config: ClientInstanceConfig): void {
+  const providers = getModelProviderConfigs(config);
+  for (const binding of config.modelBindings) {
+    if (binding.kind !== "embedding") continue;
+    const region = providers.find((provider) => provider.id === binding.providerId)?.region;
+    if (region !== undefined && region !== "eu") {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `Embedding binding '${binding.id}' is on model provider '${binding.providerId}', whose region is '${region}': embeddings send document text to their provider and need an entry with region 'eu'`
+      );
+    }
+  }
+  const embeddingBindingIds = new Set(
+    config.modelBindings
+      .filter((binding) => binding.kind === "embedding")
+      .map((binding) => binding.id)
+  );
+  const { conversationTitles } = config;
+  const chatUses = [
+    ...Object.entries(config.guardrails).flatMap(([name, { check }]) =>
+      check.kind === "model_judge"
+        ? [{ user: `Guardrail '${name}'`, bindingId: check.modelBindingId }]
+        : []
+    ),
+    ...(conversationTitles.enabled && conversationTitles.modelBindingId
+      ? [{ user: "Conversation title generation", bindingId: conversationTitles.modelBindingId }]
+      : [])
+  ];
+  for (const { user, bindingId } of chatUses) {
+    if (embeddingBindingIds.has(bindingId)) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `${user} names the embedding binding '${bindingId}', which answers no chat call`
+      );
+    }
+  }
+  const defaultBinding = config.knowledge.defaultEmbeddingBinding;
+  if (defaultBinding !== undefined && !embeddingBindingIds.has(defaultBinding)) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `'knowledge.defaultEmbeddingBinding' names '${defaultBinding}', which is no model binding of kind 'embedding'`
+    );
+  }
+}
+
+/**
  * A call reserves `MODEL_CALL_RESERVED_OUTPUT_TOKENS` for its answer and the size of its
  * request on top, and is admitted only while that fits under the token limits. A limit at or
  * below the reservation would start an instance that refuses every call.
@@ -266,9 +318,18 @@ export function assertSpendBudgetPricingCoverage(
     }
   }
 
-  for (const { check } of Object.values(config.guardrails)) {
-    if (check.kind !== "model_judge") continue;
-    const selection = resolveModelBinding(config, check.modelBindingId);
+  const pricedBindingIds = [
+    // A guardrail that asks a model; the other checks call none.
+    ...Object.values(config.guardrails).flatMap(({ check }) =>
+      check.kind === "model_judge" ? [check.modelBindingId] : []
+    ),
+    // Ingestion and search call them without an agent; the budget bounds them all the same.
+    ...config.modelBindings
+      .filter((binding) => binding.kind === "embedding")
+      .map((binding) => binding.id)
+  ];
+  for (const bindingId of pricedBindingIds) {
+    const selection = resolveModelBinding(config, bindingId);
     if (selection.provider.type !== "deterministic") {
       requiredPrices.add(createPricingKey(selection.provider.id, selection.model));
     }

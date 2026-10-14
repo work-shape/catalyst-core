@@ -136,15 +136,16 @@ default and lists each description in the selector; with `false`, or for an
 agent without a description, the selector shows only the display name.
 
 The **Agents** page, the row under New chat in the main rail, shows every agent
-a person may use in the open workspace as a card: the display name, the
-description, the first three starter prompts and **Start chat**. Start chat
-opens a new conversation with that agent selected, and a starter prompt opens
-one with its text in the composer. The card always shows the description,
-whatever `ui.showAgentDescriptions` says, and it marks the workspace's default
-agent. A person who may read agents in Studio also finds **Edit in Studio** on
-each card. A person who may create one finds **New agent** in the page head: it
-opens the list of agents in Studio with the dialog that starts an agent, when
-`allowAgentCreation` is on and the person holds the right to write one.
+a person may use in the open workspace as a card: the agent mark, the display
+name, the description in two lines at most, and **Start chat**. Start chat
+opens a new conversation with that agent selected, where its starter prompts
+wait. The card always shows the description, whatever
+`ui.showAgentDescriptions` says, and it marks the workspace's default agent. A
+person who may read agents in Studio also finds **Edit in Studio** on each card.
+A person who may create one finds **New agent** in the page head, when
+`allowAgentCreation` is on and the person holds the right to write one: it opens
+the dialog that names the agent on the page itself, and **Continue** leads to the
+new agent's page in Studio, where it is written. Cancel stays on the page.
 
 People with the `config_assets.write` permission, or with a grant in a Namespace, edit assets in [Studio](/configure/build/). The module `assetManagement` turns that on, and release config decides how much of an agent is interactively editable:
 
@@ -307,6 +308,8 @@ A write moves the draft and nothing else. The revision the members of the App's 
 `apps.update_from_page` (`POST /api/v1/apps/{app}/update-from-page`) writes the newest revision of that Page as the next draft revision of the App. It needs `app.write` on the App and read access to the Page, and it names `expectedRevision`, the draft revision the caller last read. Nothing is published, and the App keeps its title. The update is the next commit of the App's repository, made as the commit of a save is and refused as one is. An App that is updated from another Page or from none answers `409` with `details.reason: "app_not_from_page"`; that includes every App saved before a release with this operation. With `"link": true` such an App is written too and is this Page's from then on; the audit event `config_asset.updated` of that write carries `pageLinked: true`. A draft that moved since answers `412 REVISION_CONFLICT`, and a call with the new number replaces it.
 
 `apps.get_from_page` (`GET /api/v1/conversations/{conversationId}/pages/{pageId}/app`) answers the App of a Page, or `null`: among the Apps updated from the Page that the caller may write, the one the caller wrote from it last, and otherwise the one created first. `draftFromPage` is `false` where the draft was last written another way than from this Page. With `?app=<id>` the answer also carries `candidate`: that App where the caller may write it, with `page` saying whether it is updated from `none`, `this` Page, an `other_page` of the conversation or one of an `other_conversation`; `null` otherwise. In the interface the header of a Page with an App offers Update app in place of Save as app, and Save as app under the id of an App the reader may write offers to update that App from the Page.
+
+With the module `apps` on, every conversation offers its agent `page.save`, `page.save_as_app` and the file tools a Page's folder is written with (`workspace.write_file`, and `workspace.edit_file` and `workspace.read_file` where the release enables them), whatever the agent's `toolNames` list; without `workspace.write_file` in the release none of them is offered. The surface beside the chat opens when the first save starts, as the Page building. `page.save_as_app` is the agent's Save as app: it saves the newest revision of a Page of the conversation as an App of the conversation's workspace, with `app.created` as above, and makes the App what the conversation is about. It is refused in a conversation shared with its workspace, as an open is. From then on each built `page.save` of that Page in the conversation also writes the next draft revision of the App, as `apps.update_from_page` does; its answer carries `app` with `saved: true` and the revision, or `saved: false` with the reason where the draft was written another way since, another Page was put into the App, the person may not write it or the write failed. The Page is saved either way. What an administrator sets on `assets.put` for an App holds for both tools, as it does for `platform.assets.put`; a setting on `apps.create_from_page` holds for `page.save_as_app`, and one on `apps.update_from_page` for `page.save` in a conversation about an App.
 
 `apps.preview` (`POST /api/v1/apps/{app}/preview`) answers the address a frame loads, for the mode `published` or `draft`, and `interfacePath`, the path of the App in the interface. `assets.delete` removes an App with its revisions and its files; its Operation Runs and audit events stay.
 

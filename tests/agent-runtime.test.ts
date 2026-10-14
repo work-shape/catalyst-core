@@ -1496,7 +1496,7 @@ describe("local agent runtime", () => {
               displayName: "Subject Agent",
               instructions: "Help the user.",
               modelProviderId: "test-provider",
-              // A definition that lists a tool of a subject is offered it in no other conversation.
+              // A definition that lists an asset tool is offered it only where the server offers it.
               toolNames: ["platform.assets.get"],
               initialPrompts: []
             }
@@ -1548,7 +1548,9 @@ describe("local agent runtime", () => {
     expect(first.system).toContain("Subject of this conversation:");
     expect(first.system).toContain("This conversation is about one workflow, named 'month-end'.");
     expect(first.system).toContain("Never ask which workflow they mean.");
-    expect(first.system).toContain("Read it with platform.assets.get before you answer");
+    expect(first.system).toContain(
+      "Read it with platform.assets.get, naming no asset, before you answer"
+    );
     expect(first.system.indexOf("Subject of this conversation:")).toBeLessThan(
       first.system.indexOf("Client agent instructions:")
     );

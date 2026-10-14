@@ -200,7 +200,7 @@ test("a builder reads the actions of a draft, tests a reading one and finds its 
       });
       expect(written.ok(), await written.text()).toBe(true);
     }
-    const draftPath = (id: string) => `/w/${workspaceId}/apps/${id}/edit`;
+    const draftPath = (id: string) => `/w/${workspaceId}/app-drafts/${id}`;
     const draft = page.getByTestId("app-edit");
     const actions = draft.locator("[data-app-actions]");
     const row = (name: string) => draft.locator(`[data-app-action="${name}"]`);

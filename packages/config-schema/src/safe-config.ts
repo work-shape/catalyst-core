@@ -82,6 +82,9 @@ export function createSafeConfigView(
     views: {
       allowedScriptSrc: config.views.allowedScriptSrc
     },
+    replies: {
+      allowedLinkHosts: config.replies.allowedLinkHosts
+    },
     modules: Object.fromEntries(
       modules.modules.map((module) => [module.name, { enabled: module.enabled }])
     ),
@@ -170,7 +173,9 @@ function agentConnections(agent: AgentConfig, connections: readonly SafeConfigCo
 /**
  * The starters the empty chat offers for an agent: those of its skills, the skills in the
  * order the agent names them, at most `AGENT_STARTERS_MAX`. A starter that names a tool the
- * agent does not hold is left out, so none offers what the agent cannot do.
+ * agent does not hold is left out, so none offers what the agent cannot do. A starter carries
+ * its skill's icon only where the skill ships with the platform; every other skill's starter
+ * shows the generic skill icon.
  */
 function agentStarters(
   agent: AgentConfig,
@@ -183,13 +188,15 @@ function agentStarters(
   return agent.skillNames
     .flatMap((skillName) => {
       const skill = skills.find((candidate) => candidate.name === skillName);
+      const icon = skill?.origin === "release" ? skill.icon : undefined;
       return (skill?.starters ?? [])
         .filter((starter) => (starter.tools ?? []).every((tool) => agent.toolNames.includes(tool)))
         .map((starter) => ({
           skillName,
           title: text(starter.title),
           ...(starter.hint === undefined ? {} : { hint: text(starter.hint) }),
-          prompt: text(starter.prompt)
+          prompt: text(starter.prompt),
+          ...(icon === undefined ? {} : { icon })
         }));
     })
     .slice(0, AGENT_STARTERS_MAX);

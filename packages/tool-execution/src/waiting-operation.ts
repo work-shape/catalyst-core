@@ -38,9 +38,10 @@ export interface WaitingOperationCall {
    */
   call: Omit<OperationCall, "actor"> & { actor: AuthenticatedIdentity | undefined };
   /**
-   * What the call's before-events read when it was held, such as the revision of a Page it
-   * copies. Merged into the input once the input's hash is checked, so the call the approval
-   * answers is asked about and executes what the approval was asked about.
+   * What the call's before-events held beside its input, such as the revision of a Page it
+   * copies. Merged into the input once the input's hash is checked, in the keys the operation
+   * declares (`heldInputKeys`), so the call the approval answers is asked about and executes
+   * what the approval was asked about.
    */
   heldInput?: JsonObject;
 }
@@ -367,13 +368,19 @@ async function waitingContext(
   if (!actor) {
     return { actorGone: true, definition };
   }
-  const { heldInput } = waiting;
+  // What the approval was asked about is read and executed again: only in the keys the
+  // operation declares, so nothing held can change another field of the input.
+  const held = Object.fromEntries(
+    (definition.heldInputKeys ?? []).flatMap((key) => {
+      const value = waiting.heldInput?.[key];
+      return value === undefined ? [] : [[key, value] as const];
+    })
+  );
   const call: OperationCall = {
     ...waiting.call,
     actor,
-    // What the guardrails read when the call was held is read and executed again.
-    ...(heldInput && isRecord(waiting.call.input)
-      ? { input: { ...waiting.call.input, ...heldInput } }
+    ...(Object.keys(held).length > 0 && isRecord(waiting.call.input)
+      ? { input: { ...waiting.call.input, ...held } }
       : {})
   };
   requireModuleOn(call, deps.modules);

@@ -4,8 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { WORKFLOW_ASSET_KIND, asClientInstanceId, asUserId } from "@vivd-catalyst/core";
-import { PLATFORM_ASSET_TOOL_NAMES } from "@vivd-catalyst/tool-execution";
+import {
+  WORKFLOW_ASSET_KIND,
+  asClientInstanceId,
+  asCollaborationWorkspaceId,
+  asUserId
+} from "@vivd-catalyst/core";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
 import { waitUntil } from "./support/assertions";
 import { createTestConfig } from "./support/fixtures";
@@ -83,6 +87,7 @@ const runSchema = z.object({
   status: z.string(),
   definitionRevisionId: z.string()
 });
+const subjectSchema = z.object({ kind: z.string(), name: z.string() });
 const messagesSchema = z.object({
   items: z.array(z.object({ role: z.string(), text: z.string() }))
 });
@@ -197,11 +202,12 @@ describe("a conversation about a Workflow", () => {
         as
       );
     /** One message to the agent, and what the tool it named answered. */
-    const say = async (conversationId: string, text: string) => {
-      const started = await injectStartConversationRun(app, conversationId, text);
-      const events = await drainRunEvents(app, conversationId, started.run.id);
+    const say = async (conversationId: string, text: string, as?: string) => {
+      const headers = as === undefined ? undefined : { "x-dev-user-id": as };
+      const started = await injectStartConversationRun(app, conversationId, text, { headers });
+      const events = await drainRunEvents(app, conversationId, started.run.id, { headers });
       const messages = messagesSchema.parse(
-        (await app.call("conversations.messages.list", { params: { conversationId } })).json()
+        (await app.call("conversations.messages.list", { params: { conversationId } }, as)).json()
       );
       const answers = messages.items.filter((message) => message.role === "tool");
       return { events, answer: answers.at(-1)?.text };
@@ -349,13 +355,10 @@ describe("a conversation about a Workflow", () => {
     120_000
   );
 
-  it("reaches the Workflow of its conversation whatever the model names", async () => {
+  it("checks and saves only the asset of its conversation, whatever the model names", async () => {
     const t = await fixture();
     const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse(subject))).json());
-    // A name in the input of the read is not part of the tool: the answer is the subject.
-    const read = readSchema.parse(
-      await t.call(id, "platform.assets.get", { kind: "agent", name: "test_agent" })
-    );
+    const read = readSchema.parse(await t.call(id, "platform.assets.get"));
     expect(read.config.name).toBe(WORKFLOW);
     // The operations a step may call, as far as the owner sees them: this instance has none.
     expect(await t.call(id, "platform.assets.operations")).toEqual({
@@ -377,15 +380,259 @@ describe("a conversation about a Workflow", () => {
     ).toBeUndefined();
   }, 120_000);
 
-  it("offers the tools in no conversation without a subject", async () => {
+  it("opens no asset of the instance in a conversation about nothing, and a read moves nothing", async () => {
     const t = await fixture();
     const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse(undefined))).json());
-    for (const tool of PLATFORM_ASSET_TOOL_NAMES) {
-      const { events, answer } = await t.say(id, `/tool ${tool} {}`);
-      // The scripted model refuses a tool it was not offered, and the run fails on that.
-      expect(events).toContain(`Tool '${tool}' is not available to this agent`);
-      expect(answer).toBeUndefined();
+    const subjectOf = async (as?: string) =>
+      z
+        .object({ conversation: z.object({ subject: subjectSchema.optional() }) })
+        .parse(
+          (
+            await t.ok(
+              t.app.call("conversations.thread.get", { params: { conversationId: id } }, as)
+            )
+          ).json()
+        ).conversation.subject;
+
+    // Nothing is checked or saved before an asset is opened: there is none yet.
+    for (const [tool, input] of [
+      ["platform.assets.get", {}],
+      ["platform.assets.validate", { config: configOf() }],
+      ["platform.assets.put", { config: configOf(), expectedRevision: t.published }]
+    ] as const) {
+      const { answer } = await t.say(id, `/tool ${tool} ${JSON.stringify(input)}`);
+      expect(answer).toContain(
+        "This conversation is about no asset yet. Open the one to work on with platform.assets.open"
+      );
     }
+    const halfNamed = await t.say(id, `/tool platform.assets.get {"kind":"workflow"}`);
+    expect(halfNamed.answer).toContain("Name the asset with both 'kind' and 'name'");
+    expect(await subjectOf()).toBeUndefined();
+
+    // An asset that does not exist is refused, and the conversation stays about nothing.
+    const missing = await t.say(
+      id,
+      `/tool platform.assets.open ${JSON.stringify({ kind: WORKFLOW_ASSET_KIND, name: "no-such-workflow" })}`
+    );
+    expect(missing.answer).toContain("The subject of the conversation is not available");
+    expect(await subjectOf()).toBeUndefined();
+
+    // A read of the Workflow reads it and moves nothing: the save still has no asset.
+    const looked = readSchema.parse(await t.call(id, "platform.assets.get", subject));
+    expect(looked.config.name).toBe(WORKFLOW);
+    expect(await subjectOf()).toBeUndefined();
+    const unopened = await t.say(
+      id,
+      `/tool platform.assets.put ${JSON.stringify({ config: configOf([added]), expectedRevision: looked.revision })}`
+    );
+    expect(unopened.answer).toContain("This conversation is about no asset yet");
+
+    // The Workflow and the agent belong to the whole instance: the agent's own open of either
+    // is refused, as a document it read could have asked for it. Only the person's step makes
+    // one the subject, so the conversation stays about nothing and a save reaches neither.
+    for (const asset of [subject, { kind: "agent", name: "test_agent" }]) {
+      const refused = await t.say(id, `/tool platform.assets.open ${JSON.stringify(asset)}`);
+      expect(refused.answer).toContain(
+        `This ${asset.kind} belongs to the whole instance, and only the person makes such an asset what a conversation is about`
+      );
+      expect(refused.answer).not.toContain("manifest");
+      expect(await subjectOf()).toBeUndefined();
+    }
+    const unsaved = await t.say(
+      id,
+      `/tool platform.assets.put ${JSON.stringify({ config: configOf([added]), expectedRevision: looked.revision })}`
+    );
+    expect(unsaved.answer).toContain("This conversation is about no asset yet");
+    expect((await t.asset()).revision).toBe(t.published);
+
+    // Each refusal is a refused call of the tool with its reason and the asset, and no content.
+    const runs = await t.app.stores.operationRuns.list({ clientInstanceId: t.clientInstanceId });
+    const opens = runs.filter((run) => run.operation === "platform.assets.open");
+    expect(opens.map((run) => `${run.status}:${run.error?.code}`).sort()).toEqual([
+      "failed:handler_failed",
+      "failed:not_allowed",
+      "failed:not_allowed"
+    ]);
+    const audited = await t.app.stores.audit.listAuditEvents({
+      clientInstanceId: t.clientInstanceId
+    });
+    const refusals = audited.filter(
+      (event) =>
+        event.type === "operation.failed" &&
+        opens.some((run) => run.id === event.metadata?.operationRunId) &&
+        event.reason === "not_allowed"
+    );
+    expect(refusals.map((event) => event.metadata?.auditMetadata)).toEqual(
+      expect.arrayContaining([
+        { kind: WORKFLOW_ASSET_KIND, refused: "subject_needs_person_step" },
+        { kind: "agent", refused: "subject_needs_person_step" }
+      ])
+    );
+    expect(refusals).toHaveLength(2);
+    expect(JSON.stringify(refusals)).not.toContain("manifest");
+  }, 120_000);
+
+  it("opens and saves the asset of the instance a conversation started from its page is about, and moves to no other one", async () => {
+    const t = await fixture();
+    const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse(subject))).json());
+    const subjectOf = async () =>
+      z
+        .object({ conversation: z.object({ subject: subjectSchema.optional() }) })
+        .parse(
+          (
+            await t.ok(t.app.call("conversations.thread.get", { params: { conversationId: id } }))
+          ).json()
+        ).conversation.subject;
+
+    // The person started the conversation from the Workflow's page: the agent opens it, and
+    // answers its read and its title, and a save reaches it.
+    const read = readSchema
+      .extend({ title: z.string() })
+      .parse(await t.call(id, "platform.assets.open", subject));
+    expect(read.config.name).toBe(WORKFLOW);
+    expect(read.title).toBe("Month end");
+    expect(await subjectOf()).toEqual(subject);
+    const saved = writeSchema.parse(
+      await t.call(id, "platform.assets.put", {
+        config: configOf([added]),
+        expectedRevision: read.revision
+      })
+    );
+    expect(saved).toEqual({ saved: true, revision: t.published + 1 });
+
+    // Another asset of the instance is not opened from here: the conversation stays about the
+    // Workflow, and a save still reaches the Workflow and nothing else.
+    const agent = { kind: "agent", name: "test_agent" };
+    const refused = await t.say(id, `/tool platform.assets.open ${JSON.stringify(agent)}`);
+    expect(refused.answer).toContain("This agent belongs to the whole instance");
+    expect(await subjectOf()).toEqual(subject);
+
+    // A conversation started from the agent's page is about the agent. It has no draft, so
+    // its agent opens it, reads it and saves nothing.
+    const { id: aboutAgent } = z
+      .object({ id: z.string() })
+      .parse((await t.ok(t.converse(agent))).json());
+    expect(
+      z
+        .object({ kind: z.string(), name: z.string() })
+        .parse(await t.call(aboutAgent, "platform.assets.open", agent))
+    ).toEqual(agent);
+    const live = await t.say(
+      aboutAgent,
+      `/tool platform.assets.put ${JSON.stringify({ config: configOf(), expectedRevision: 1 })}`
+    );
+    expect(live.answer).toContain("An asset of the kind 'agent' has no draft");
+    expect((await t.asset()).revision).toBe(t.published + 1);
+  }, 120_000);
+
+  it("opens an asset of the conversation's workspace in a conversation about nothing, the last one opened winning", async () => {
+    const t = await fixture();
+    const created = z
+      .object({ id: z.string(), collaborationWorkspaceId: z.string() })
+      .parse((await t.ok(t.converse(undefined))).json());
+    const { id } = created;
+    const subjectOf = async () =>
+      z
+        .object({ conversation: z.object({ subject: subjectSchema.optional() }) })
+        .parse(
+          (
+            await t.ok(t.app.call("conversations.thread.get", { params: { conversationId: id } }))
+          ).json()
+        ).conversation.subject;
+    // Two assets the conversation's workspace owns, as an App is owned. What the open asks is
+    // the owner of the asset, not its kind, so a Workflow stored for the workspace stands in.
+    const owned = (name: string) => ({ kind: WORKFLOW_ASSET_KIND, name });
+    for (const name of ["team-close", "team-open"]) {
+      await t.app.stores.configAssets.applyConfigAssetMutations({
+        clientInstanceId: t.clientInstanceId,
+        baseRevisions: { [`${WORKFLOW_ASSET_KIND}:${name}`]: null },
+        mutations: [
+          {
+            type: "upsert",
+            kind: WORKFLOW_ASSET_KIND,
+            name,
+            draft: true,
+            scope: {
+              kind: "workspace",
+              workspaceId: asCollaborationWorkspaceId(created.collaborationWorkspaceId)
+            },
+            config: {
+              name,
+              manifest: {
+                id: name,
+                name,
+                runAs: "workflow-runner",
+                inputs: { type: "object" },
+                outputs: { type: "object" },
+                steps: [trigger, result]
+              }
+            }
+          }
+        ]
+      });
+    }
+
+    const first = readSchema.parse(await t.call(id, "platform.assets.open", owned("team-close")));
+    expect(first.config.name).toBe("team-close");
+    expect(await subjectOf()).toEqual(owned("team-close"));
+    const second = readSchema.parse(await t.call(id, "platform.assets.open", owned("team-open")));
+    expect(second.config.name).toBe("team-open");
+    expect(await subjectOf()).toEqual(owned("team-open"));
+  }, 120_000);
+
+  it("opens a hidden asset as a missing one, and none into a conversation its workspace shares", async () => {
+    const t = await fixture();
+    // The member may not read the Workflow: the open is refused as for one that does not
+    // exist, and the conversation stays about nothing.
+    const { id: own } = z
+      .object({ id: z.string() })
+      .parse((await t.ok(t.converse(undefined, OTHER))).json());
+    const hidden = await t.say(own, `/tool platform.assets.open ${JSON.stringify(subject)}`, OTHER);
+    const missing = await t.say(
+      own,
+      `/tool platform.assets.open ${JSON.stringify({ kind: WORKFLOW_ASSET_KIND, name: "no-such-workflow" })}`,
+      OTHER
+    );
+    expect(hidden.answer).toContain("The subject of the conversation is not available");
+    expect(hidden.answer).toBe(missing.answer);
+    const conversation = z
+      .object({ conversation: z.object({ subject: subjectSchema.optional() }) })
+      .parse(
+        (
+          await t.ok(
+            t.app.call("conversations.thread.get", { params: { conversationId: own } }, OTHER)
+          )
+        ).json()
+      );
+    expect(conversation.conversation.subject).toBeUndefined();
+
+    // A conversation of a Shared Workspace that its members read opens no asset and gets no
+    // definition into it, also not by a read.
+    const { id: workspaceId } = z
+      .object({ id: z.string() })
+      .parse((await t.ok(t.app.call("workspaces.create", { payload: { name: "Shared" } }))).json());
+    const { id: shared } = z.object({ id: z.string(), visibility: z.literal("workspace") }).parse(
+      (
+        await t.ok(
+          t.app.call("conversations.create", {
+            payload: { title: "Team", collaborationWorkspaceId: workspaceId }
+          })
+        )
+      ).json()
+    );
+    for (const tool of ["platform.assets.open", "platform.assets.get"]) {
+      const refused = await t.say(shared, `/tool ${tool} ${JSON.stringify(subject)}`);
+      expect(refused.answer).toContain("This conversation is shared with its workspace");
+      expect(refused.answer).not.toContain("manifest");
+    }
+    const sharedThread = z
+      .object({ conversation: z.object({ subject: subjectSchema.optional() }) })
+      .parse(
+        (
+          await t.ok(t.app.call("conversations.thread.get", { params: { conversationId: shared } }))
+        ).json()
+      );
+    expect(sharedThread.conversation.subject).toBeUndefined();
   }, 120_000);
 
   it("refuses a conversation about a Workflow its creator may not read as it refuses one about nothing", async () => {
@@ -393,19 +640,8 @@ describe("a conversation about a Workflow", () => {
     const unreadable = await t.converse(subject, OTHER);
     const missing = await t.converse({ kind: WORKFLOW_ASSET_KIND, name: "no-such-workflow" });
     const unknownKind = await t.converse({ kind: "no-such-kind", name: WORKFLOW });
-    // A kind without a draft is refused by its kind, for an asset that exists and one that
-    // does not alike, and for whoever asks: the agent's tools save drafts and nothing else.
-    for (const [name, as] of [
-      ["test_agent", undefined],
-      ["no-such-agent", undefined],
-      ["test_agent", OTHER]
-    ] as const) {
-      const withoutDraft = await t.converse({ kind: "agent", name }, as);
-      expect(withoutDraft.statusCode, withoutDraft.body).toBe(422);
-      expect(withoutDraft.json()).toMatchObject({
-        error: { code: "VALIDATION_FAILED", details: { reason: "subject_without_draft" } }
-      });
-    }
+    // An agent has no draft and may be a subject all the same: its agent reads it.
+    expect((await t.converse({ kind: "agent", name: "test_agent" })).statusCode).toBe(200);
     const refusal = z.object({ error: z.object({ code: z.string(), message: z.string() }) });
     const told = [unreadable, missing, unknownKind].map((response) => ({
       status: response.statusCode,

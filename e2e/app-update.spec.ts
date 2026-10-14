@@ -16,6 +16,9 @@ import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 import { apiOrigin, uiOrigin } from "./view-fixtures";
 
+/** The address of the draft of the App at `appPath`, outside the App's own addresses. */
+const draftPathOf = (appPath: string) => appPath.replace("/apps/", "/app-drafts/");
+
 // A Page that was saved as an App takes its later revisions into that App: the header of the
 // Page offers Update app in place of Save as app, the update becomes the next draft revision
 // and publishes nothing, a draft that was written somewhere else is replaced only by a button
@@ -157,7 +160,7 @@ test("a Page saved as an App updates the draft of that App, and nothing that is 
   await dialog.getByRole("textbox", { name: /^Name/u }).fill(appName);
   await expect(dialog.getByRole("textbox", { name: /^ID/u })).toHaveValue(appId);
   await dialog.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`${appPath}/edit$`, "u"));
+  await expect(page).toHaveURL(new RegExp(`${draftPathOf(appPath)}$`, "u"));
   const edit = page.getByTestId("app-edit");
   await expect(edit).toContainText("Draft · revision 1");
   await edit.getByRole("button", { name: "Publish", exact: true }).click();
@@ -207,7 +210,7 @@ test("a Page saved as an App updates the draft of that App, and nothing that is 
 
   // The confirmation leads to the App: its draft is revision 2 with the Page as it is now.
   await done.getByRole("button", { name: "Open the draft", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`${appPath}/edit$`, "u"));
+  await expect(page).toHaveURL(new RegExp(`${draftPathOf(appPath)}$`, "u"));
   const draftReady = async () => {
     await expect(edit).toContainText(/(?:Draft · revision|Entwurf · Revision) 2/u);
     await expect(
@@ -221,7 +224,7 @@ test("a Page saved as an App updates the draft of that App, and nothing that is 
   await expect(appIn(page, "app-view").getByRole("heading", { name: FIRST_HEADING })).toBeVisible();
 
   // The revisions of the App publish the new one, as they did.
-  await page.goto(`${appPath}/edit`);
+  await page.goto(draftPathOf(appPath));
   await draftReady();
   await edit.getByRole("button", { name: "More actions" }).click();
   await page.getByRole("menuitem", { name: "Revisions" }).click();
@@ -447,13 +450,13 @@ test("a Page is put into an App that was saved before Apps remembered their Page
 
   // The new draft is the Page as it is; what is published is what it was, until it is published.
   await done.getByRole("button", { name: "Open the draft", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`${appPath}/edit$`, "u"));
+  await expect(page).toHaveURL(new RegExp(`${draftPathOf(appPath)}$`, "u"));
   const edit = page.getByTestId("app-edit");
   await expect(edit).toContainText("Draft · revision 2");
   await expect(appIn(page, "app-edit").getByRole("heading", { name: THIRD_HEADING })).toBeVisible();
   await page.goto(appPath);
   await expect(appIn(page, "app-view").getByRole("heading", { name: FIRST_HEADING })).toBeVisible();
-  await page.goto(`${appPath}/edit`);
+  await page.goto(draftPathOf(appPath));
   await edit.getByRole("button", { name: "Publish", exact: true }).click();
   const publishDialog = page.getByRole("dialog", { name: `Publish “${appName}”?` });
   await publishDialog.getByRole("button", { name: "Publish", exact: true }).click();

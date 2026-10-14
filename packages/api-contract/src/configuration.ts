@@ -120,6 +120,8 @@ export const safeConfigSchema = z.object({
   }),
   /** What a generated view may load besides the instance's own view runtime. */
   views: z.object({ allowedScriptSrc: z.array(z.string()) }).default({ allowedScriptSrc: [] }),
+  /** Hosts a link in a reply or a Markdown file preview may point to besides the instance. */
+  replies: z.object({ allowedLinkHosts: z.array(z.string()) }).default({ allowedLinkHosts: [] }),
   /** Every module of the product with its state on this instance. */
   modules: z.record(z.string(), z.object({ enabled: z.boolean() })).default({}),
   /** Derived from `modules` for one transition release. */
@@ -224,6 +226,15 @@ export const safeConfigSchema = z.object({
 
 export const collaborationWorkspaceAgentsSchema = z.object({
   defaultAgentName: z.string().optional(),
+  /**
+   * The section rows of the interface's sidebar that are there for the caller in this
+   * workspace. `agents`: at least two agents are available here, counted over every page, or
+   * the caller holds `agent.write` on the instance, in a Namespace or on one agent. With one
+   * agent there is nothing to choose: New chat starts a conversation with it. `apps`: the
+   * Apps module is on, and `assets.list` lists the caller an App of this workspace or the
+   * caller holds `app.write` in it or on one of its Apps. A member is never shown an empty row.
+   */
+  visibleSections: z.array(z.enum(["agents", "apps"])),
   items: safeConfigSchema.shape.agents,
   nextCursor: z.string().optional()
 });

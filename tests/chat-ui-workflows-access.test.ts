@@ -5,6 +5,7 @@ import {
   resolveWorkflowRights,
   shownRailSections,
   workflowsAccess,
+  workflowsRowShown,
   workspaceRouteFromPath,
   workspaceRoutePath
 } from "@vivd-catalyst/chat-ui/workflows";
@@ -41,6 +42,21 @@ describe("who is shown the Workflows area", () => {
     ).toBe("closed");
   });
 
+  // NAV-VIS-1 review: the row follows the server's flag alone, so a member the flag names
+  // through `workflow.use` or a narrower `workflow.write` reaches the area it leads to.
+  it("opens it for a person the instance names the row, without the right to read", () => {
+    const member = {
+      actions: ["workflow.use"],
+      assetActions: [],
+      visibleSections: ["workflows" as const]
+    };
+    expect(workflowsAccess({ modules: modulesOn, workspaces: true, context: member })).toBe("open");
+    expect(workflowsRowShown("open", member)).toBe(true);
+    expect(workflowsAccess({ modules: modulesOn, workspaces: false, context: member })).toBe(
+      "closed"
+    );
+  });
+
   it("closes it while the module is off, whatever the person holds", () => {
     expect(workflowsAccess({ modules: {}, workspaces: true, context: reader })).toBe("closed");
     expect(
@@ -73,6 +89,19 @@ describe("who is shown the Workflows area", () => {
     expect(ids(true)).toEqual(["apps", "workflows"]);
     expect(ids(false)).toEqual(["apps"]);
     expect(shownRailSections(railSections).map((section) => section.id)).toEqual([]);
+  });
+
+  // NAV-VIS-1: the instance names the row where its list shows the person a Workflow or they
+  // may write one, so a member is never shown an empty row. A reader it names none keeps the
+  // area's addresses without the row.
+  it("shows the row where the instance names it, in a session that can hold the area", () => {
+    const named = { visibleSections: ["workflows" as const] };
+    const unnamed = { visibleSections: [] };
+    expect(workflowsRowShown("open", named)).toBe(true);
+    expect(workflowsRowShown("unknown", named)).toBe(true);
+    expect(workflowsRowShown("open", unnamed)).toBe(false);
+    expect(workflowsRowShown("closed", named)).toBe(false);
+    expect(workflowsRowShown("unknown", undefined)).toBe(false);
   });
 });
 

@@ -19,6 +19,7 @@ import {
   appPreviewProblemText,
   appDraftShown,
   appRefusalText,
+  appsRowShown,
   AppPreviewNotice,
   appPreviewState,
   appRowActions,
@@ -110,12 +111,14 @@ describe("addresses of the Apps area", () => {
     });
   });
 
-  it("opens an App on its start without a route, and never takes the draft's address for one", () => {
+  it("opens an App on its start without a route, and keeps every route below it the App's own", () => {
     const app = { kind: "app", collaborationWorkspaceId: "cw_1", app: "a" } as const;
 
     expect(workspaceRoutePath({ ...app, appPath: "/" })).toBe("/w/cw_1/apps/a");
-    expect(workspaceRoutePath({ ...app, appPath: "/edit" })).toBe("/w/cw_1/apps/a");
-    expect(workspaceRouteFromPath("/w/cw_1/apps/a/edit").kind).toBe("app-edit");
+    // The draft stands outside the App's addresses, so an App's own `/edit` is its.
+    expect(workspaceRoutePath({ ...app, appPath: "/edit" })).toBe("/w/cw_1/apps/a/edit");
+    expect(workspaceRouteFromPath("/w/cw_1/apps/a/edit")).toEqual({ ...app, appPath: "/edit" });
+    expect(workspaceRouteFromPath("/w/cw_1/app-drafts/a").kind).toBe("app-edit");
     expect(workspaceRouteFromPath("/w/cw_1/apps/a/edit/more")).toEqual({
       ...app,
       appPath: "/edit/more"
@@ -151,6 +154,16 @@ describe("the Apps row of the rail", () => {
     expect(ids({ apps: false })).toEqual([]);
     expect(ids({})).toEqual([]);
     expect(ids({ apps: true, inbox: { toDecide: 0 } })).toEqual(["apps", "inbox"]);
+  });
+
+  // NAV-VIS-1: the instance names the row in the workspace's agent list, where its Apps page
+  // lists the person an App or they may write one there; the browser only reads the flag.
+  it("shows where the instance names it for the open workspace and the module is on", () => {
+    expect(appsRowShown(true, { visibleSections: ["agents", "apps"] })).toBe(true);
+    expect(appsRowShown(true, { visibleSections: ["agents"] })).toBe(false);
+    expect(appsRowShown(false, { visibleSections: ["apps"] })).toBe(false);
+    // Until the list arrived, or where it failed, nothing is known to show.
+    expect(appsRowShown(true, undefined)).toBe(false);
   });
 });
 
