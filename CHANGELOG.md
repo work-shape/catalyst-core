@@ -24,6 +24,20 @@ contain breaking changes; a patch version does not.
   `target`) are expand-only. **Rollback:** the previous release ignores the column and the
   table; runs it writes during a rollback get `live`, and switches set before it stay unused
   until a release that reads them, where a changed draft clears them.
+- **Apps, an action that starts a Workflow (App Kit 1.3.0):** an action file
+  `actions/<name>.action.yaml` with `workflow: <id>` and `input.schema`/`input.mapping` starts
+  the published Workflow as the viewer, who needs `workflow.use` on it; without it the call is
+  refused with the right named. Its effect is always `changing`. The call answers
+  `{ runId, status, result }` with the Workflow Run in `result`; the Page follows it with the
+  kit's `useWorkflowRun(result.id)` or `workflowRuns.get(result.id)`, through the new operation
+  `apps.sessions.get_workflow_run`
+  (`POST /api/v1/app-content-sessions/:pageSessionId/workflow-runs/:runId`), which reads only
+  runs of the Workflows the App's actions start and only for the viewer who started them. In a
+  draft the call starts nothing and answers `status: "dry_run"` with "Would have started the
+  Workflow '<id>' with <input>". The build refuses a Workflow action in an App on a kit before
+  1.3.0. `page.save` documents the kind. The kit's `page.css` for a plain Page leaves out the
+  flow canvas rules the library's stylesheet brings. **Operators:** the chat-server tarball
+  limit rises to 2.1 MB for the fourth kit version.
 - **Guardrails replace approval checks, and Build lists them:** release config takes
   `guardrails`, keyed by name, each with `on: approval_request.before_create`, an optional
   `filter.kind`, a `check` of kind `model_judge` (`modelBindingId`, `instruction`) and
@@ -994,6 +1008,18 @@ id from config_assets where status = 'deleted')`.
   conversation and fails the check, naming the conversation.
 
 ### Changed
+
+- **New agents start in the workspace they were made in:** an agent created in a Shared
+  Workspace, in Studio or by the Build Agent in a conversation there, is available in that
+  workspace only. One created in a Personal Workspace, by `catalyst config push` without the
+  release right, or by `assets.put` without a workspace starts hidden; `assets.put` answers the
+  warning `agent_hidden` and `assets.sync` names the agents in `hiddenAgentNames`. Before, every
+  new agent was available in all workspaces. `assets.put` takes `availableIn` (`"all"` with the
+  right to write agents on the whole instance, or `{ "workspaceId" }`), and the create dialog in
+  Studio offers "All workspaces" to that holder. A release push and the first agent of an
+  instance start in all workspaces as before. **Operators:** a script that creates agents
+  through the API and expects them in every workspace passes `availableIn: "all"` or sets the
+  availability after the write.
 
 - **Skill icons:** a skill's line icon sits on one neutral tile in lists and on starters (32 px
   tile, 18 px icon; 24 px in the picker rows), in ink for a skill that ships with the platform

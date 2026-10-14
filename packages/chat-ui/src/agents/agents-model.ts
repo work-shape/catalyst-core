@@ -14,6 +14,8 @@ export interface AgentCreation {
   namespaces: readonly BuildNamespace[];
   /** The viewer may name an agent outside every Namespace. */
   mayNameFreely: boolean;
+  /** The viewer may make a new agent available in every workspace. */
+  mayChooseAll: boolean;
 }
 
 /** How the list of the open workspace's agents stands. */
