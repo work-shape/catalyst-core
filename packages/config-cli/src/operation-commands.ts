@@ -118,15 +118,27 @@ export async function runOperationCommand(argv: readonly string[], base: Options
       );
       secret = value;
       if (value.length === 0) throw new UsageError("The secret must not be empty.");
-      const state = await api.change(
-        (client, idempotencyKey) =>
-          client.connections.set_secret({
-            params: { name: connectionName },
-            body: { value, expectedVersion: detail.secret.version ?? null },
-            idempotencyKey
-          }),
-        "Read the connection's secret state before trying again."
-      );
+      const state = await api
+        .change(
+          (client, idempotencyKey) =>
+            client.connections.set_secret({
+              params: { name: connectionName },
+              body: { value, expectedVersion: detail.secret.version ?? null },
+              idempotencyKey
+            }),
+          "Read the connection's secret state before trying again."
+        )
+        .catch(async (error: unknown) => {
+          if (
+            !(error instanceof ConfigApiError) ||
+            error.status !== 409 ||
+            error.code !== "OUTPUT_NOT_RETAINED"
+          )
+            throw error;
+          return (
+            await api.read((client) => client.connections.get({ params: { name: connectionName } }))
+          ).secret;
+        });
       writeOutput(options, JSON.stringify(state, null, 2));
       return 0;
     }

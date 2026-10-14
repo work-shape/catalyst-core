@@ -258,6 +258,44 @@ describe("write-only CLI secret input", () => {
     expect(result.out + result.err).not.toContain(secret);
   });
 
+  it.each(["CONFLICT", "REVISION_CONFLICT"])("keeps other 409s as refusals (%s)", async (code) => {
+    let reads = 0;
+    const result = await run(["connection", "secret", "set", "outside"], {
+      stdin: Readable.from([generateTestSecret()]),
+      fetchImpl: apiFetch((request) => {
+        if (request.method === "GET") {
+          reads += 1;
+          return Response.json(connectionDetail());
+        }
+        return Response.json({ error: { code, message: "Write refused" } }, { status: 409 });
+      })
+    });
+    expect(result.code).toBe(1);
+    expect(result.out).toBe("");
+    expect(result.err).toContain(`HTTP 409 ${code}`);
+    expect(reads).toBe(1);
+  });
+
+  it("keeps OUTPUT_NOT_RETAINED as a refusal for generic calls", async () => {
+    const result = await run(["call", "connections.set_secret"], {
+      stdin: Readable.from([
+        JSON.stringify({
+          params: { name: "outside" },
+          body: { value: generateTestSecret(), expectedVersion: null }
+        })
+      ]),
+      fetchImpl: apiFetch(() =>
+        Response.json(
+          { error: { code: "OUTPUT_NOT_RETAINED", message: "Already carried out" } },
+          { status: 409 }
+        )
+      )
+    });
+    expect(result.code).toBe(1);
+    expect(result.out).toBe("");
+    expect(result.err).toContain("HTTP 409 OUTPUT_NOT_RETAINED");
+  });
+
   it("refuses secret arguments and flags without echoing them or contacting the server", async () => {
     const secret = generateTestSecret();
     const fetchImpl = vi.fn<typeof fetch>();
@@ -384,6 +422,69 @@ describe("CLI parity against persisted operations", () => {
     expect(JSON.parse(result.out)).toEqual({ state: "set", version: 1 });
     expect(result.out + result.err).not.toContain(secret);
     // Discovery resolves the encrypted value from the real store, not from the CLI response.
+    await runJobs(instance);
+    expect(w.connector.handed).toContain(secret);
+  });
+
+  it("reads secret state after the server commits and its answer is lost", async () => {
+    const w = world();
+    const instance = await w.start();
+    instances.push(instance);
+    const name = "retry-secret";
+    const made = await instance.call("assets.put", {
+      params: { kind: "connection", name },
+      payload: {
+        config: {
+          name,
+          displayName: "Retry secret",
+          connectorType: "discovering",
+          settings: { url: "https://93.184.216.34/mcp" },
+          authScheme: "bearer",
+          enabled: true,
+          operations: []
+        },
+        expectedRevision: null
+      }
+    });
+    expect(made.statusCode, made.body).toBe(200);
+    const secret = generateTestSecret();
+    const forward = createTestFetch(instance);
+    const statuses: number[] = [];
+    const keys: (string | null)[] = [];
+    let reads = 0;
+    const result = await run(["connection", "secret", "set", name], {
+      stdin: Readable.from([secret]),
+      sleep: async () => {},
+      fetchImpl: apiFetch(async (request) => {
+        request.headers.delete("authorization");
+        const response = await forward(request);
+        if (request.method === "GET") reads += 1;
+        if (request.method === "PUT") {
+          statuses.push(response.status);
+          keys.push(request.headers.get("idempotency-key"));
+          if (statuses.length === 1) {
+            // The real server has completed the transaction and produced its successful reply.
+            expect(response.status).toBe(200);
+            expect(await response.json()).toEqual({ state: "set", version: 1 });
+            throw new TypeError("The reply was lost after the server committed");
+          }
+          expect(response.status).toBe(409);
+          expect(errorSchema.parse(await response.clone().json()).error.code).toBe(
+            "OUTPUT_NOT_RETAINED"
+          );
+        }
+        return response;
+      })
+    });
+    expect(result.code, result.err).toBe(0);
+    expect(JSON.parse(result.out)).toEqual({ state: "set", version: 1 });
+    expect(result.err).toBe("");
+    expect(result.out).not.toContain(secret);
+    expect(statuses).toEqual([200, 409]);
+    expect(keys[0]).toBeTruthy();
+    expect(keys[1]).toBe(keys[0]);
+    expect(reads).toBe(2);
+    // Discovery reads the actual encrypted value; version 1 also proves no second write ran.
     await runJobs(instance);
     expect(w.connector.handed).toContain(secret);
   });
