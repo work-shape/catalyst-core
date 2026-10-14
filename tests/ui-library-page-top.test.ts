@@ -102,22 +102,3 @@ describe("the lead paragraph of a page", () => {
     expect(markup).not.toContain("<button");
   });
 });
-
-describe("the state in a detail head", () => {
-  const head = (keepState: boolean) =>
-    renderToStaticMarkup(
-      createElement(PageHeader, {
-        variant: "detail",
-        title: "HEAD",
-        state: createElement("span", { "data-testid": "state" }, "Draft · not published"),
-        keepState
-      })
-    );
-
-  it("gives way before the name, unless the page keeps it whole and cuts the name first", () => {
-    const chips = /data-slot="page-header-chips"[^>]*>(.*?)<\/div>/u;
-    expect(head(false).match(chips)?.[1]).toContain("Draft · not published");
-    expect(head(true)).not.toContain('data-slot="page-header-chips"');
-    expect(head(true)).toMatch(/class="[^"]*shrink-0[^"]*"><span data-testid="state">/u);
-  });
-});

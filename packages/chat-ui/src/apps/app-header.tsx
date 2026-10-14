@@ -130,7 +130,10 @@ export function AppHeader({
   name: string;
   /** The badge after the name: the published or the draft revision. */
   state?: ReactNode;
-  /** The state stays whole and the name is cut first, as for a draft never published. */
+  /**
+   * The state is always in view, as for a draft never published: where the head has tabs it
+   * stands at the end of their row, which has room whatever the actions take.
+   */
   keepState?: boolean;
   secondaryActions?: ReactNode;
   primaryAction?: ReactNode;
@@ -141,6 +144,7 @@ export function AppHeader({
   onBack(): void;
 }) {
   const { t } = useTranslation();
+  const stateUnderHead = keepState && tabs !== undefined;
   const head = (
     <PageHeader
       variant="detail"
@@ -160,8 +164,7 @@ export function AppHeader({
         </PageHeaderBack>
       }
       title={name}
-      state={state}
-      keepState={keepState}
+      state={stateUnderHead ? undefined : state}
       secondaryActions={secondaryActions}
       primaryAction={primaryAction}
       overflow={overflow}
@@ -172,7 +175,14 @@ export function AppHeader({
   ) : (
     <>
       {head}
-      <div className="shrink-0 px-(--layout-gutter)">{tabs}</div>
+      <div className="flex shrink-0 items-stretch px-(--layout-gutter)">
+        <div className="min-w-0 flex-1">{tabs}</div>
+        {stateUnderHead ? (
+          <div data-slot="app-head-state" className="flex shrink-0 items-center border-b ps-3">
+            {state}
+          </div>
+        ) : null}
+      </div>
     </>
   );
 }

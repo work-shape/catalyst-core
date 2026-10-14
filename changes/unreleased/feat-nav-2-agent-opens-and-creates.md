@@ -26,5 +26,5 @@ section: Changed
   conversation in the dock. A preview the dock's conversation opens on a page, such as a file or
   a view, covers the page and leaves the dock in view.
 - **"Draft · not published":** the page of a Workflow or an App that was never published says
-  so. On the App's page the badge stays beside the name with the dock open, the name cut first:
-  `PageHeader` of the UI library gains `keepState` for a state a page must always say.
+  so. On the App's page that badge stands at the end of the tab row, so it stays whole with the
+  dock open, whatever room the actions take.

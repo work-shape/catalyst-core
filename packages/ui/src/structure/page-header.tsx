@@ -60,12 +60,6 @@ export interface PageHeaderProps extends Omit<HTMLAttributes<HTMLElement>, "titl
   /** The state, such as a draft badge. */
   state?: ReactNode;
   /**
-   * In a `detail` head: the state stays whole beside the name and the name is cut first, for a
-   * state the page must always say, such as a draft that was never published. Without it the
-   * state gives way before the name.
-   */
-  keepState?: boolean;
-  /**
    * One line about the page. A `list` head shows it under the name. A `detail` head shows it
    * after the name and the state on their row, in the muted style: it is cut with an ellipsis
    * where it does not fit, reads in full in a tooltip, and is not shown where a few words have
@@ -144,7 +138,6 @@ export function PageHeader({
   headingLevel = 1,
   scope,
   state,
-  keepState = false,
   description,
   descriptionTooltip,
   secondaryActions,
@@ -210,7 +203,7 @@ export function PageHeader({
           >
             {title}
           </Heading>
-          {scope === undefined && (state === undefined || keepState) ? null : (
+          {scope === undefined && state === undefined ? null : (
             // A chip is shown whole or not at all: one that does not fit goes to a second line,
             // and only the first line shows. The pseudo-element that opens the first line takes
             // one gap, so the box starts a gap early. The chips go before the way back's text
@@ -227,13 +220,10 @@ export function PageHeader({
                 className="flex h-control-sm min-w-0 flex-wrap items-center gap-x-2 overflow-hidden before:h-full before:w-0 before:content-['']"
               >
                 {scope}
-                {keepState ? null : state}
+                {state}
               </div>
             </div>
           )}
-          {keepState && state !== undefined ? (
-            <div className="flex h-control-sm shrink-0 items-center">{state}</div>
-          ) : null}
           {description === undefined ? null : (
             <InlineDescription tooltip={descriptionTooltip ?? description}>
               {description}

@@ -1,6 +1,7 @@
 import type { FrameLocator, Page } from "@playwright/test";
 import { z } from "zod";
 import { pageName, pageSurface, plainPageSource, sendToolCall } from "./page-surface-fixtures";
+import { shootLocales } from "./surface-shots";
 import { expect, test } from "./test";
 import { apiOrigin, uiOrigin } from "./view-fixtures";
 
@@ -145,6 +146,20 @@ test("a Page built in a plain chat becomes an App, which the next saves of the P
   await expect(draftDocument(page).getByRole("heading", { name: THIRD_HEADING })).toBeVisible();
   await expect(page.locator('aside[data-surface-kind="page"]')).toHaveCount(0);
   expect(await draftRevision()).toBe(3);
+
+  // At 1280 with the dock open the page still says the App runs nowhere yet, whole: the state
+  // stands at the end of the tab row, which has room whatever the actions take.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const draftState = () =>
+    page
+      .getByTestId("app-edit")
+      .getByText(/^(?:Draft · not published|Entwurf · nicht veröffentlicht)$/u);
+  const wholeState = async () => {
+    await expect(draftState()).toBeVisible();
+    expect(await draftState().evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+  };
+  await wholeState();
+  await shootLocales(page, "nav-2-app-draft-dock", wholeState);
 
   // On a phone the dock lies over the page; "Show page" brings the draft in front, and
   // nothing reaches past the screen.
