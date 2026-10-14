@@ -404,3 +404,8 @@ const PERMISSION_AUTH_SCOPES: Partial<Record<Permission, string>> = {
 export function authScopeForPermission(permission: Permission): string | undefined {
   return PERMISSION_AUTH_SCOPES[permission];
 }
+
+/** The key a request's token read a scope as. */
+export function permissionForAuthScope(scope: string): Permission | undefined {
+  return PERMISSIONS.find((permission) => PERMISSION_AUTH_SCOPES[permission] === scope);
+}

@@ -10,7 +10,6 @@ import {
   asClientInstanceId,
   asServicePrincipalId,
   asUserId,
-  authScopeForPermission,
   createAuthorizer,
   evaluateAccess,
   hasPermission,

@@ -274,9 +274,9 @@ export interface AccessHolder {
   roles: readonly string[];
   permissionRefs: readonly string[];
   /**
-   * The legacy keys the token of a service principal's credential carries, which its scopes
-   * left of the principal's keys. A key the principal holds and the token does not carry
-   * allows nothing on this request, as before AP-4. Absent for every other holder.
+   * The legacy keys the token of a service principal's credential carries. On its request they
+   * are the principal's legacy rights in place of the rows its list became, as before AP-4
+   * (`tokenRights`). Absent for every other holder.
    */
   tokenKeys?: readonly string[];
 }
@@ -355,7 +355,10 @@ export function listAccessEntries(holder: AccessHolder, persisted: PersistedAcce
       grant.holderKind === holder.kind &&
       grant.holderId === holder.id
   );
-  const uncarried = actionsTheTokenDoesNotCarry(holder, ownRows);
+  const token = holder.tokenKeys === undefined ? undefined : tokenRights(holder.tokenKeys, ownRows);
+  for (const action of token?.allowed ?? []) {
+    entries.push({ action, effect: "allow", scopeKind: "instance", source: "grant" });
+  }
   for (const grant of persisted.grants) {
     // A row of another client instance or of another holder never applies. Rows held through a
     // role or a group are the store's answer for this holder.
@@ -373,9 +376,8 @@ export function listAccessEntries(holder: AccessHolder, persisted: PersistedAcce
     }
     if (
       grant.scopeKind === "instance" &&
-      grant.effect === "allow" &&
       grant.holderKind === holder.kind &&
-      uncarried.has(grant.action)
+      token?.replaces(grant)
     ) {
       continue;
     }
@@ -392,20 +394,40 @@ export function listAccessEntries(holder: AccessHolder, persisted: PersistedAcce
 }
 
 /**
- * The actions of the keys a service principal holds whose scope its credential's token lacks.
- * Their instance-wide allows give nothing on the token's request: the scopes cap the keys.
+ * What a credential's token stands for, as it did before AP-4: on the token's request the keys
+ * it carries are the principal's legacy rights, in place of the rows the principal's list
+ * became. A scope carries its first key (`governance:read` carries `usage.view`) whichever key
+ * of the scope the principal holds. A key the principal's rows give in full, allowed or
+ * denied, is the list's; of a key whose actions differ, the allows are the list's and a deny is
+ * a row of its own; a key whose actions are not all in rows is no key of the list.
  */
-function actionsTheTokenDoesNotCarry(
-  holder: AccessHolder,
+function tokenRights(
+  carried: readonly string[],
   ownRows: readonly LegacyRowView[]
-): ReadonlySet<string> {
-  const carried = holder.tokenKeys;
-  if (carried === undefined) return new Set();
-  return new Set(
-    legacyKeysHeld(ownRows)
-      .filter((key) => !carried.includes(key))
-      .flatMap((key) => LEGACY_PERMISSION_ACTIONS[key])
-  );
+): { allowed: PlatformAction[]; replaces(row: LegacyRowView): boolean } {
+  const held = legacyKeysHeld(ownRows);
+  const heldScopes = new Set(held.map((key) => authScopeForPermission(key)));
+  const allowed = PERMISSIONS.filter(
+    (key) =>
+      carried.includes(key) &&
+      (held.includes(key) ||
+        (authScopeForPermission(key) !== undefined && heldScopes.has(authScopeForPermission(key))))
+  ).flatMap((key) => LEGACY_PERMISSION_ACTIONS[key]);
+  return {
+    allowed,
+    replaces(row) {
+      const key = PERMISSIONS.find((candidate) =>
+        LEGACY_PERMISSION_ACTIONS[candidate].some((action) => action === row.action)
+      );
+      if (key === undefined) return false;
+      const effects = LEGACY_PERMISSION_ACTIONS[key].map(
+        (action) =>
+          ownRows.find((own) => own.scopeKind === "instance" && own.action === action)?.effect
+      );
+      if (effects.some((effect) => effect === undefined)) return false;
+      return effects.every((effect) => effect === effects[0]) || row.effect === "allow";
+    }
+  };
 }
 
 function entryCovers(entry: AccessEntry, resource: AccessResource | undefined): boolean {

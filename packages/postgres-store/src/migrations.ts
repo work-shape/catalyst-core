@@ -95,7 +95,8 @@ export async function migrateDatabase(input: MigrateDatabaseInput): Promise<stri
           }
           applied.push(migration.name);
         }
-        return applied;
+        const moved = await moveRestoredLegacyLists(session, migrations);
+        return moved === undefined ? applied : [...applied, moved];
       } finally {
         if (!sessionEnded)
           await session.unsafe("select pg_advisory_unlock(hashtextextended($1, 0))", [
@@ -184,6 +185,52 @@ async function takeMigrationLock(
 export async function assertDatabaseMigrated(sql: Queries): Promise<void> {
   const { missing } = await readMigrationState(sql);
   if (missing.length > 0) throw new DatabaseBehindError(missing);
+  // Lists written back for a release before AP-4 wait for the migration step to move them.
+  const legacy = releaseMigrations().find(isLegacyListMigration);
+  if (legacy !== undefined && (await legacyListsRestored(sql)))
+    throw new DatabaseBehindError([legacy.name]);
+}
+
+/** The migration that moves the legacy permission lists into grant rows (AP-4). */
+function isLegacyListMigration(migration: CommittedMigration): boolean {
+  return migration.name.endsWith("_legacy_permission_grants");
+}
+
+/** Whether `--restore-legacy-columns` wrote the lists back and no migration step ran since. */
+async function legacyListsRestored(sql: Queries): Promise<boolean> {
+  const [table] = await sql.unsafe<{ name: string | null }[]>(
+    "select to_regclass('legacy_permission_restores')::text as name"
+  );
+  if (!table?.name) return false;
+  const [row] = await sql.unsafe<{ restored: boolean }[]>(
+    "select exists (select 1 from legacy_permission_restores) as restored"
+  );
+  return row?.restored === true;
+}
+
+/**
+ * The data step of the migration step, after the migrations: when the legacy lists were
+ * written back into their columns for a release before AP-4, the statements of the migration
+ * that moves them into rows run again over the lists that release kept, and the mark of the
+ * restore is removed, in one transaction. Every statement of that migration can run again.
+ * Returns the migration's name when it ran.
+ */
+async function moveRestoredLegacyLists(
+  session: Queries,
+  migrations: readonly CommittedMigration[]
+): Promise<string | undefined> {
+  const legacy = migrations.find(isLegacyListMigration);
+  if (legacy === undefined || !(await legacyListsRestored(session))) return undefined;
+  await session.unsafe("begin");
+  try {
+    for (const chunk of legacy.chunks) await session.unsafe(chunk.text);
+    await session.unsafe("delete from legacy_permission_restores");
+    await session.unsafe("commit");
+  } catch (error) {
+    if (!endsSession(error)) await session.unsafe("rollback");
+    throw error;
+  }
+  return legacy.name;
 }
 
 export interface MigrationState {

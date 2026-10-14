@@ -16,10 +16,10 @@
 //
 // `--restore-legacy-columns` is the way back to a release before AP-4, which reads the columns
 // and every grant row: it writes each holder's instance-wide rows back into its column as the
-// legacy list and removes those rows, turns every `["*"]` back to null and removes the record of
-// the migration, so the next upgrade moves the lists into rows again. It prints what it changed
-// and checks nothing. Run it with the new release stopped and start the old release after it.
-import { readFileSync } from "node:fs";
+// legacy list and removes those rows, turns every `["*"]` back to null and marks the restore in
+// `legacy_permission_restores`, so the next migration step moves the lists into rows again. It
+// prints what it changed and checks nothing. Run it with the new release stopped and start the
+// old release after it.
 import { pathToFileURL } from "node:url";
 import postgres, { type Sql } from "postgres";
 import { deriveEffectiveServiceGrants } from "@vivd-catalyst/auth";
@@ -29,6 +29,7 @@ import {
   asClientInstanceId,
   asServicePrincipalId,
   createAuthorizer,
+  createPlatformId,
   isPermission,
   legacyPermissionList,
   type AccessStore,
@@ -126,7 +127,11 @@ export function frozenHasPermission(subject: LegacySubject, key: LegacyKey): boo
   return effective.has(key);
 }
 
-/** `deriveEffectiveServiceGrants`, frozen: the keys a credential's token carries. */
+/**
+ * The keys a request's token carried: the scopes `deriveEffectiveServiceGrants` left of the
+ * credential's list, each read as its first key, as `HmacServiceAccessTokenAuthAdapter` read
+ * them (`permissionForAuthScope`), frozen. `governance:read` was `usage.view`.
+ */
 export function frozenCredentialPermissions(input: {
   principalPermissions: readonly string[];
   credentialScopes: readonly string[] | undefined;
@@ -146,7 +151,10 @@ export function frozenCredentialPermissions(input: {
   );
   const selected = restrictions ?? [...principalScopes.keys()];
   return [...new Set(selected)].flatMap((scope) => {
-    const key = scope === "*" ? undefined : principalScopes.get(scope);
+    const key =
+      scope === "*" || !principalScopes.has(scope)
+        ? undefined
+        : LEGACY_KEYS.find((candidate) => LEGACY_KEY_SCOPES[candidate] === scope);
     return key === undefined ? [] : [key];
   });
 }
@@ -328,8 +336,8 @@ export async function verifyPermissions(input: {
       authSource: "verify-permissions",
       scopes: []
     };
-    // What the principal itself holds, before any credential narrows it: a token that carries
-    // every key.
+    // What the principal itself holds, before any credential narrows it: an actor no token
+    // stands behind (a Workflow run's), so only its rows decide.
     comparisons.push(
       await compareHolder({
         holder: `service_principal ${principal.id}`,
@@ -339,8 +347,7 @@ export async function verifyPermissions(input: {
         legacySubject: { permissions: principal.permissions },
         actor: {
           ...actor,
-          permissions: [...LEGACY_KEYS],
-          credentialId: asApiCredentialId("verify-permissions")
+          workflowRunId: createPlatformId<"WorkflowRunId">("wfr")
         }
       })
     );
@@ -432,60 +439,28 @@ function sameEntries(left: readonly string[], right: readonly string[]): boolean
   return left.length === right.length && left.every((entry) => right.includes(entry));
 }
 
-/** The journal time of the migration that moved the lists into rows, which the database records. */
-function legacyMigrationTime(): number {
-  const journal: unknown = JSON.parse(
-    readFileSync(
-      new URL("../packages/postgres-store/migrations/meta/_journal.json", import.meta.url),
-      "utf8"
-    )
-  );
-  const entries =
-    typeof journal === "object" && journal !== null && "entries" in journal
-      ? journal.entries
-      : undefined;
-  if (Array.isArray(entries)) {
-    for (const candidate of entries) {
-      if (
-        typeof candidate === "object" &&
-        candidate !== null &&
-        "tag" in candidate &&
-        "when" in candidate &&
-        typeof candidate.tag === "string" &&
-        candidate.tag.endsWith("_legacy_permission_grants") &&
-        typeof candidate.when === "number"
-      )
-        return candidate.when;
-    }
-  }
-  throw new Error("The migration journal names no legacy_permission_grants migration");
-}
-
 /**
  * The way back to a release before AP-4, in one transaction. That release reads each holder's
  * column and every grant row, so the column takes the legacy list the holder's instance-wide
  * rows say, and the rows the list now stands for are removed. Every `["*"]` turns back to null,
- * and the record of the migration is removed, so the next upgrade moves the lists the old
- * release kept into rows again. Run a second time, it finds no record and changes nothing.
- * Returns the number of rows it changed.
+ * and a row of `legacy_permission_restores` marks the restore: the next migration step moves
+ * the lists the old release kept into rows again, whatever migrations are recorded. Run a
+ * second time before that step, it finds the mark and changes nothing. Returns the number of
+ * rows it changed.
  */
 export async function restoreLegacyColumns(input: {
   sql: Sql;
   write: (line: string) => void;
 }): Promise<number> {
-  const when = legacyMigrationTime();
   return input.sql.begin(async (tx) => {
-    const recorded = await tx<{ created_at: string }[]>`
-      select created_at from drizzle.__drizzle_migrations where created_at >= ${when}
+    const [restored] = await tx<{ restored_at: Date }[]>`
+      select restored_at from legacy_permission_restores order by restored_at limit 1
     `;
-    if (!recorded.some((record) => Number(record.created_at) === when)) {
-      input.write("The lists are in the columns already: the migration is not recorded");
-      return 0;
-    }
-    if (recorded.some((record) => Number(record.created_at) > when)) {
-      throw new Error(
-        "Migrations after legacy_permission_grants are recorded: the upgrade would not move the lists again. Roll back from the release that brought AP-4."
+    if (restored !== undefined) {
+      input.write(
+        `The lists were written back into the columns at ${restored.restored_at.toISOString()}; the next migration step moves them into rows again`
       );
+      return 0;
     }
     const rows = await tx<InstanceRow[]>`
       select holder_kind, holder_id, client_instance_id, action, effect,
@@ -542,8 +517,10 @@ export async function restoreLegacyColumns(input: {
       input.write(`restored   credential ${credential.id} ["*"] -> null`);
     }
     changed += credentials.length;
-    await tx`delete from drizzle.__drizzle_migrations where created_at = ${when}`;
-    input.write(`${changed} rows restored for a release that reads the legacy columns`);
+    await tx`insert into legacy_permission_restores (restored_at) values (now())`;
+    input.write(
+      `${changed} rows restored for a release that reads the legacy columns; the next migration step moves the lists into rows again`
+    );
     return changed;
   });
 }

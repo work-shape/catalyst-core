@@ -4,6 +4,25 @@
   "version": "7",
   "dialect": "postgresql",
   "tables": {
+    "public.legacy_permission_restores": {
+      "name": "legacy_permission_restores",
+      "schema": "",
+      "columns": {
+        "restored_at": {
+          "name": "restored_at",
+          "type": "timestamp with time zone",
+          "primaryKey": true,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.product_users": {
       "name": "product_users",
       "schema": "",

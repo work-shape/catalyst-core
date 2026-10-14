@@ -164,17 +164,18 @@ export function extractApiKey(headers: AuthRequestHeaders): string | undefined {
  * The scopes a credential's token carries, those of its list that its principal's keys name,
  * and the keys behind them. The evaluator allows the principal's instance-wide rights of a key
  * only when the token carries that key, so the scopes cap the principal's rights as they did
- * before AP-4. A scope carries one key, as before AP-4: of `usage.view` and `audit.view`,
- * which share `governance:read`, the later in key order.
+ * before AP-4. A scope carries its first key (`permissionForAuthScope`), as a request's
+ * token did before AP-4: `governance:read` carries `usage.view` whichever of `usage.view` and
+ * `audit.view` the principal holds.
  */
 export function deriveEffectiveServiceGrants(
   resolved: ResolvedApiCredential
 ): EffectiveServiceGrants {
-  const principalScopes = new Map<string, string>();
+  const principalScopes = new Set<string>();
   for (const permission of resolved.heldKeys.filter(isPermission)) {
     const scope = authScopeForPermission(permission);
     if (scope) {
-      principalScopes.set(scope, permission);
+      principalScopes.add(scope);
     }
   }
   const restrictions = resolved.credential.scopes?.map((entry) => {
@@ -183,14 +184,14 @@ export function deriveEffectiveServiceGrants(
     }
     return entry;
   });
-  const selectedScopes = restrictions ?? [...principalScopes.keys()];
+  const selectedScopes = restrictions ?? [...principalScopes];
   const scopes = [...new Set(selectedScopes)].filter(
     (scope) => scope !== "*" && principalScopes.has(scope)
   ) as AuthScope[];
   return {
     scopes,
     permissions: scopes.flatMap((scope) => {
-      const permission = principalScopes.get(scope);
+      const permission = permissionForAuthScope(scope);
       return permission === undefined ? [] : [permission];
     })
   };

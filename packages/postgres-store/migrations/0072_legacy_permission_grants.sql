@@ -3,9 +3,9 @@
 -- `service_principals` keep what they hold, are read and written by no code of this release,
 -- and are dropped by a later migration once this release is the oldest supported one. Rolling
 -- back to a release before this one: `scripts/verify-permissions.ts --restore-legacy-columns`
--- writes the rows back into the columns, removes them, turns `["*"]` back to null and removes
--- the record of this migration, then the old release starts. The next upgrade runs this
--- migration again, over the lists the old release kept.
+-- writes the rows back into the columns, removes them, turns `["*"]` back to null and writes a
+-- row into "legacy_permission_restores", then the old release starts. The next migration step
+-- runs this migration's statements again, over the lists the old release kept.
 --
 -- Each key of a list becomes one instance-wide row per action it stands for
 -- (`LEGACY_PERMISSION_ACTIONS` in `core/src/permissions.ts`): an allow for `key`, a deny for
@@ -13,6 +13,13 @@
 -- keys gave no right and gives no row. A user whose deletion was requested holds nothing and
 -- gets no row. A row the holder already has for that action keeps who wrote it; a legacy
 -- revocation still makes it a deny, because the revocation refused the action before.
+-- A row of "legacy_permission_restores" says the lists were written back into their columns
+-- for a release before this one. The migration step then runs the statements below again over
+-- the lists that release kept, and empties the table (`postgres-store/src/legacy-list-restore.ts`).
+-- Every statement of this migration can run again.
+CREATE TABLE IF NOT EXISTS "legacy_permission_restores" (
+	"restored_at" timestamp with time zone PRIMARY KEY NOT NULL
+);--> statement-breakpoint
 INSERT INTO "permission_grants" (
   "id", "client_instance_id", "holder_kind", "holder_id", "action", "scope_kind", "scope_id",
   "namespace", "effect", "granted_by", "created_at"

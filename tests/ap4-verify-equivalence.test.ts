@@ -262,8 +262,9 @@ function preDerive(principalPermissions: string[], credentialScopes: string[] | 
   const scopes = [...new Set(selected)].filter((s) => s !== "*" && principalScopes.has(s));
   return {
     scopes,
+    // A request's token read each scope as its first key (`HmacServiceAccessTokenAuthAdapter`).
     permissions: scopes.flatMap((scope) => {
-      const permission = principalScopes.get(scope);
+      const permission = pre.permissionForAuthScope(scope);
       return permission === undefined ? [] : [permission];
     })
   };

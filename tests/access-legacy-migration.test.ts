@@ -567,7 +567,7 @@ describe("AP-4 rollback: the columns back for a release that reads them", () => 
     expect(lines).toEqual([
       "restored   user usr_admin [!usage.view,config_assets.release] -> [config_assets.release,!users.manage,audit.view]",
       'restored   credential cred_unscoped ["*"] -> null',
-      "8 rows restored for a release that reads the legacy columns"
+      "8 rows restored for a release that reads the legacy columns; the next migration step moves the lists into rows again"
     ]);
     expect(await sql`select id, permissions from product_users order by id`).toEqual([
       { id: "usr_admin", permissions: ["config_assets.release", "!users.manage", "audit.view"] },
@@ -584,26 +584,50 @@ describe("AP-4 rollback: the columns back for a release that reads them", () => 
 
     const again: string[] = [];
     expect(await restoreLegacyColumns({ sql, write: (line) => again.push(line) })).toBe(0);
-    expect(again).toEqual(["The lists are in the columns already: the migration is not recorded"]);
+    expect(again).toEqual([
+      expect.stringMatching(
+        /^The lists were written back into the columns at .*; the next migration step moves them into rows again$/u
+      )
+    ]);
 
-    // The next upgrade moves the lists into rows again, and every right is what it was.
+    // The next migration step moves the lists into rows again, and every right is what it was.
     await database.migrate();
+    expect(await sql`select * from legacy_permission_restores`).toEqual([]);
     const after = await verify(databaseUrl);
     expect(after.different).toEqual([]);
     expect(after.exitCode).toBe(0);
   });
 
-  it("refuses when a migration after AP-4's is recorded, and changes nothing", async () => {
+  it("moves the lists the old release changed into rows again, also after later migrations", async () => {
     const database = await databaseBeforeMigration();
-    await seedSmall(database.sql);
+    const { sql, databaseUrl } = database;
+    await seedSmall(sql);
     await database.migrate();
-    await database.sql`
+    // A later release's migration is recorded before the rollback.
+    await sql`
       insert into drizzle.__drizzle_migrations (hash, created_at)
       select 'later', max(created_at) + 1 from drizzle.__drizzle_migrations`;
-    await expect(
-      restoreLegacyColumns({ sql: database.sql, write: () => undefined })
-    ).rejects.toThrow(/Migrations after legacy_permission_grants are recorded/u);
-    expect(await grantRows(database.sql, "usr_admin")).toHaveLength(2);
+    expect(await restoreLegacyColumns({ sql, write: () => undefined })).toBeGreaterThan(0);
+
+    // On the old release: usr_admin loses a key and a revocation and gains one; the principal
+    // loses read.
+    await sql`update product_users set permissions = '["users.manage"]'::jsonb where id = 'usr_admin'`;
+    await sql`update service_principals set permissions = '["config_assets.release"]'::jsonb where id = 'sp_cli'`;
+
+    // The process of this release refuses to start until the migration step ran.
+    await expect(storesOn(databaseUrl)).rejects.toThrow(/legacy_permission_grants/u);
+    expect(await migrateDatabase({ databaseUrl })).toEqual([
+      expect.stringMatching(/_legacy_permission_grants$/u)
+    ]);
+    expect(await migrateDatabase({ databaseUrl })).toEqual([]);
+    expect(sortedRows(await grantRows(sql, "usr_admin"))).toEqual([
+      { action: "users.manage", effect: "allow" }
+    ]);
+    expect(sortedRows(await grantRows(sql, "sp_cli"))).toEqual([
+      { action: "assets.release", effect: "allow" }
+    ]);
+    const after = await verify(databaseUrl);
+    expect(after.different).toEqual([]);
   });
 });
 
@@ -656,13 +680,13 @@ describe("AP-4: a credential's scopes cap its principal's keys", () => {
     };
 
     // The list showed config_assets.read although a row denied agent.read; `governance:read`
-    // carried one of usage.view and audit.view, the later key.
+    // carries its first key, usage.view, as a request's token did.
     expect(await rights("cred_all")).toEqual({
       "agent.read": false,
       "skill.read": true,
       "assets.release": true,
-      "usage.view": false,
-      "audit.view": true
+      "usage.view": true,
+      "audit.view": false
     });
     expect(await rights("cred_release")).toEqual({
       "agent.read": false,
