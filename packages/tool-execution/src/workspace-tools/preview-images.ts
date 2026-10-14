@@ -49,6 +49,13 @@ export function isWorkspaceInspectionArtifact(
 export function workspacePreviewImagesTool(deps: WorkspaceToolDependencies) {
   return defineTool({
     name: "workspace.preview_images",
+    title: { en: "Inspect artifact images", de: "Bilder von Dateien ansehen" },
+    summary: {
+      en: "Looks at pages and images of files it made, to check them.",
+      de: "Sieht sich Seiten und Bilder selbst erstellter Dateien an, um sie zu prüfen."
+    },
+    group: "files",
+    icon: "image",
     effect: "reading",
     description:
       "Load bounded rendered preview images into model-visible visual context. This is how to check rendered output: images loaded here are never listed among the person's files, so render checks under /workspace/previews and promote with workspace.promote_artifact only the files the person should get. Give exactly one source: artifactId, path, or paths. Use path/paths for rendered image files under /workspace/previews, or artifactId with page/slide/sheet/range selectors for managed DOCX/XLSX/PPTX/PDF artifacts. The result reports pending, failed, or unsupported when pixels are not actually attached. Loaded images stay in visual context for the current turn only; call the tool again in a later turn to see them again.",

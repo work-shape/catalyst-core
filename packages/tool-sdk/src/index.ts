@@ -9,11 +9,17 @@ import type {
   ToolExecutionErrorCode,
   ToolHandlerResult,
   ToolPermissionPolicy,
+  ToolPresentation,
   ToolRuntimeContext
 } from "@vivd-catalyst/core";
 
-export interface ToolDefinition<TInput = unknown, TOutput = unknown> {
+/**
+ * A tool an agent can call. `title`, `summary`, `group` and `icon` are for people: the agent page
+ * shows them, and the model never reads them.
+ */
+export interface ToolDefinition<TInput = unknown, TOutput = unknown> extends ToolPresentation {
   name: string;
+  /** What the model reads: when to use the tool, what it takes and returns, and its limits. */
   description: string;
   /**
    * `changing` when the tool writes state that outlives the call and is visible outside the

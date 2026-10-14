@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Workshape Catalyst API",
-    "version": "0.6.3",
-    "description": "Every operation under `/api/v1` of release 0.6.3, and the unversioned readiness probe `/ready`. Every error answers with the envelope `ApiErrorResponse`; its `code` is the stable part, its `correlationId` names the request in the instance's log."
+    "version": "0.7.0",
+    "description": "Every operation under `/api/v1` of release 0.7.0, and the unversioned readiness probe `/ready`. Every error answers with the envelope `ApiErrorResponse`; its `code` is the stable part, its `correlationId` names the request in the instance's log."
   },
   "servers": [
     {
@@ -19567,6 +19567,63 @@
           }
         ]
       },
+      "AgentToolReference": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "title": {
+            "type": "object",
+            "properties": {
+              "en": {
+                "type": "string"
+              },
+              "de": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "en",
+              "de"
+            ]
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "en": {
+                "type": "string"
+              },
+              "de": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "en",
+              "de"
+            ]
+          },
+          "group": {
+            "$ref": "#/components/schemas/ToolGroup"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "effect": {
+            "type": "string",
+            "enum": [
+              "reading",
+              "changing"
+            ]
+          },
+          "module": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
       "ApiCredential": {
         "type": "object",
         "properties": {
@@ -22448,6 +22505,12 @@
             "type": "array",
             "items": {
               "type": "string"
+            }
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentToolReference"
             }
           },
           "moduleOffTools": {
@@ -28238,6 +28301,18 @@
         "type": "string",
         "format": "date-time",
         "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+      },
+      "ToolGroup": {
+        "type": "string",
+        "enum": [
+          "documents",
+          "web",
+          "files",
+          "results",
+          "skills",
+          "platform",
+          "instance"
+        ]
       },
       "ToolResultMessageMetadata": {
         "type": "object",
