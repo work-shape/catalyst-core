@@ -195,7 +195,9 @@ describe("agent page", () => {
       "tools"
     );
 
-    expect(tools).toContain("crm.lookup");
+    // It is a chip of its own among the instance's tools, named by its id.
+    expect(tools).toContain('data-tool-package="own:crm.lookup"');
+    expect(tools).toContain(">crm.lookup<");
     expect(tools).not.toContain("data-unavailable-option");
   });
 
@@ -411,7 +413,8 @@ describe("agent page", () => {
     expect(skillsOf(["skillNames"])).toContain(">gone_skill<");
     expect(skillsOf(["skillNames"])).toContain("Choose skills");
     expect(skillsOf(["skillNames"])).toContain('aria-label="Remove"');
-    expect(skillsOf(["skillNames"])).toContain("read_skill");
+    // read_skill comes with the skills, so nothing asks the reader to tick it.
+    expect(skillsOf(["skillNames"])).not.toContain("read_skill");
     // Read-only, the skills are named and can be neither removed nor added.
     expect(skillsOf([])).toContain(">Tax review<");
     expect(skillsOf([])).not.toContain("Choose skills");

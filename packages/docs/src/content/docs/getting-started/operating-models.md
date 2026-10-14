@@ -1,5 +1,5 @@
 ---
-title: Operating Models
+title: Ways to run an instance
 description: Choose whether the dedicated instance is operated for you or by you.
 ---
 
@@ -63,4 +63,4 @@ Choose operated dedicated instance when speed and low operational burden matter 
 
 Choose self-operated instance when infrastructure location, network boundaries, internal policy, or direct operational ownership matter most.
 
-In both cases, write the [Instance Brief](/operate/instance-brief/) before implementation.
+In both cases, write the [instance brief](/operate/instance-brief/) before implementation.

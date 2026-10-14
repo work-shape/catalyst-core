@@ -1,11 +1,11 @@
 ---
-title: Local Execution Workspaces
+title: Run code execution locally
 description: Test execution workspaces from the repository and see what an instance needs to run them.
 ---
 
 Execution workspaces give an agent a file area per conversation and a bounded command tool. The code is in the open repository: the tools `workspace.exec`, `workspace.write_file`, `workspace.edit_file`, `workspace.apply_patch`, `workspace.import_files`, `workspace.list_files`, `workspace.read_file`, `workspace.preview_images` and `workspace.promote_artifact`, the command queue, the worker and the runner image.
 
-The demo client enables execution workspaces with the Docker sandbox: its Compose files build the runner image and start a workspace command worker, and its agent names the workspace tools. Another client assembly has to do the same, as described under [What An Instance Needs](#what-an-instance-needs).
+The reference client enables execution workspaces with the Docker sandbox: its Compose files build the runner image and start a workspace command worker, and its agent names the workspace tools. Another client assembly has to do the same, as described under [What An Instance Needs](#what-an-instance-needs).
 
 ## Requirements
 
@@ -41,7 +41,7 @@ A client assembly runs execution workspaces when all of these are in place:
 - a worker process beside the API, started with `runWorkspaceCommandWorker()` of the instance's `defineClientInstance` object
 - the workspace tools enabled under `tools` and named in the `toolNames` of the agents that use them
 
-Startup stops when execution workspaces are enabled without the object storage or the sandbox. [Release Config](/configure/release-config/#infrastructure) describes both settings, and [Execution Workspace Operations](/operate/execution-workspaces/) the roles in a deployment.
+Startup stops when execution workspaces are enabled without the object storage or the sandbox. [Release configuration](/configure/release-config/#infrastructure) describes both settings, and [Operate code execution](/operate/execution-workspaces/) the roles in a deployment.
 
 ## Sandbox Providers
 

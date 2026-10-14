@@ -153,6 +153,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     clientInstanceId,
     stores,
     operationCalls,
+    definitions,
     limits,
     now,
     stepFiles,

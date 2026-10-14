@@ -1,5 +1,5 @@
 ---
-title: Auth And Embedding
+title: Sign-in and embedding
 description: Connect Workshape Catalyst to users in an existing customer application.
 ---
 

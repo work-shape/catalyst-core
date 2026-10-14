@@ -20,6 +20,13 @@ import { resolveWorkspaceHandle } from "./workspace";
 export function workspaceWriteFileTool(deps: WorkspaceToolDependencies) {
   return defineTool({
     name: "workspace.write_file",
+    title: { en: "Write workspace file", de: "Datei schreiben" },
+    summary: {
+      en: "Creates or replaces a text file in the conversation.",
+      de: "Legt eine Textdatei in der Unterhaltung an oder ersetzt sie."
+    },
+    group: "files",
+    icon: "text",
     effect: "changing",
     // Runs on the agent's own call. Without a mode the instance default for changes would apply.
     permission: { mode: "allow" },

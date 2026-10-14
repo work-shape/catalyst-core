@@ -1,5 +1,5 @@
 ---
-title: Instance Brief
+title: Instance brief
 description: The thin documentation every client instance should have before implementation.
 ---
 

@@ -162,7 +162,7 @@ test("a Page saved as an App updates the draft of that App, and nothing that is 
   await dialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${draftPathOf(appPath)}$`, "u"));
   const edit = page.getByTestId("app-edit");
-  await expect(edit).toContainText("Draft · revision 1");
+  await expect(edit).toContainText("Draft · not published");
   await edit.getByRole("button", { name: "Publish", exact: true }).click();
   const publishDialog = page.getByRole("dialog", { name: `Publish “${appName}”?` });
   await publishDialog.getByRole("button", { name: "Publish", exact: true }).click();

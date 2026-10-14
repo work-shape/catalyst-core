@@ -140,7 +140,7 @@ if (fragments !== crawled.length)
 
 // A missing page under the base gets the site's own 404 page, and nothing is served at the old root paths.
 const missing = await get(`${BASE}no-such-page/`);
-if (missing.status !== 404 || !missing.body.includes("<title>404"))
+if (missing.status !== 404 || !missing.body.includes("<title>Docs · 404"))
   problems.push("a missing page does not answer with the site's 404 page");
 if (fileFor("/getting-started/overview/"))
   problems.push("pages are also built at the root of the host");

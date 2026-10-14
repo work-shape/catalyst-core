@@ -30,6 +30,13 @@ export function createStructuredDataToolDefinitions(input: {
   return [
     defineTool({
       name: "structured_data.publish",
+      title: { en: "Publish conversation facts", de: "Fakten der Unterhaltung festhalten" },
+      summary: {
+        en: "Records labelled facts with their sources, so people can check and reuse them.",
+        de: "Hält benannte Fakten mit ihren Quellen fest, damit man sie prüfen und weiterverwenden kann."
+      },
+      group: "results",
+      icon: "result",
       effect: "changing",
       // Named, because a changing tool without a mode takes the instance default.
       permission: { mode: "allow" },
@@ -258,6 +265,13 @@ export function createStructuredDataToolDefinitions(input: {
     }),
     defineTool({
       name: "structured_data.read",
+      title: { en: "Read conversation facts", de: "Fakten der Unterhaltung lesen" },
+      summary: {
+        en: "Reads the facts recorded in this conversation.",
+        de: "Liest die Fakten, die in dieser Unterhaltung festgehalten sind."
+      },
+      group: "results",
+      icon: "result",
       effect: "reading",
       description:
         "Read the current structured-data resource for this conversation when the existing facts are useful. Sources are returned as model-visible file ids, filenames, and pages.",
@@ -325,6 +339,13 @@ export function createStructuredDataToolDefinitions(input: {
     }),
     defineTool({
       name: "structured_result.read",
+      title: { en: "Read structured result", de: "Strukturiertes Ergebnis lesen" },
+      summary: {
+        en: "Reads a result published earlier in the conversation, such as a review.",
+        de: "Liest ein Ergebnis, das früher in der Unterhaltung veröffentlicht wurde, etwa eine Prüfung."
+      },
+      group: "results",
+      icon: "result",
       effect: "reading",
       description:
         "Read the current revision of a keyed structured result for this conversation. Use it when continuing or revising an existing domain result.",

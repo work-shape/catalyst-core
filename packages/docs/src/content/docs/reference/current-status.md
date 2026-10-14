@@ -1,5 +1,5 @@
 ---
-title: Current Status
+title: What the release contains
 description: What the current release contains and what it does not contain yet.
 ---
 
