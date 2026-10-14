@@ -3,11 +3,17 @@ import { AppError } from "./errors";
 export type OperationDenial =
   | {
       kind: "forbidden";
-      action: string;
+      /**
+       * The right the caller lacks. Missing where no right opens the call: `user_only` of an
+       * operation that names no single right.
+       */
+      action?: string;
       /**
        * `holder_not_administrable`: the caller may not write a grant row for this holder,
        * whatever right it holds. A service principal writes none, and a service principal's
-       * rows are written by who administers service principals.
+       * rows are written by who administers service principals. `user_only`: the operation is
+       * one a person calls (`auth: "user"`), and the caller is a service principal, whatever
+       * right it holds.
        */
       reason:
         | "no_grant"
@@ -15,6 +21,7 @@ export type OperationDenial =
         | "unknown_action"
         | "holder_inactive"
         | "holder_not_administrable"
+        | "user_only"
         | "outside_key_scope";
       /**
        * What the refusal says, where a rule refused that no right a caller can be granted
@@ -45,7 +52,7 @@ export function operationDenialError(denial: OperationDenial): AppError {
   switch (denial.kind) {
     case "forbidden":
       return new AppError("FORBIDDEN", denial.message ?? forbiddenMessage(denial), {
-        action: denial.action,
+        ...(denial.action === undefined ? {} : { action: denial.action }),
         reason: denial.reason,
         ...(denial.boundBy ? { boundBy: denial.boundBy } : {})
       });
@@ -74,6 +81,7 @@ export function operationDenialError(denial: OperationDenial): AppError {
 }
 
 function forbiddenMessage(denial: Extract<OperationDenial, { kind: "forbidden" }>): string {
+  if (denial.action === undefined) return "The call is not allowed";
   if (denial.boundBy)
     return `The principal '${denial.boundBy.label}' does not hold '${denial.action}'; publishing would fail at this step`;
   return denial.reason === "outside_key_scope"

@@ -303,16 +303,15 @@ export async function callStepOperation(input: {
     case "denied": {
       const refusal = operationDenialError(result.reason);
       if (result.reason.kind === "forbidden") {
-        // The principal does not hold the right, or may not call from a Workflow at all. In a
-        // test run the refusal names the side that lacks it: the tester or the principal.
-        const { code, message } = refused(
-          result.reason.action,
-          result.reason.boundBy !== undefined
-        );
-        throw new OperationStepFailure(code, message, trace, {
-          systemic: true,
-          action: result.reason.action
-        });
+        // The principal does not hold the right, or may not call from a Workflow at all. An
+        // operation only a person calls is refused by a rule no grant to the principal opens.
+        // In a test run the refusal names the side that lacks the right: tester or principal.
+        const { reason, message: ruled, action } = result.reason;
+        if (reason === "user_only" && ruled !== undefined) {
+          throw new OperationStepFailure(refusal.code, ruled, trace, { systemic: true });
+        }
+        const { code, message } = refused(action, result.reason.boundBy !== undefined);
+        throw new OperationStepFailure(code, message, trace, { systemic: true, action });
       }
       if (input.draft && isApprovalUnavailable(result.reason)) {
         throw new OperationStepFailure(
