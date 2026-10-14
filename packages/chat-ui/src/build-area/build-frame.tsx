@@ -545,6 +545,8 @@ function BuildList({
                     key={asset.name}
                     leading={own?.leading ?? <RowMark entry={entry} title={title} />}
                     title={title}
+                    // A kind's own line is a sentence, read whole.
+                    descriptionWraps={!own && RowLine !== undefined ? "always" : false}
                     description={
                       own ? (
                         own.description

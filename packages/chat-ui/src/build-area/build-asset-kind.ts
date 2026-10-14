@@ -87,7 +87,8 @@ interface BuildKindBase {
   rowText?(asset: BuildAssetRow): string | undefined;
   /**
    * The line under a row's title in the kind's own words, in place of the asset's id and
-   * `rowText`: a component, so it may read what the page knows, such as workspace names.
+   * `rowText`, shown whole: a component, so it may read what the page knows, such as
+   * workspace names.
    */
   RowLine?: ComponentType<{ asset: BuildAssetRow }>;
   /** The row's badges, such as the default marker. */
