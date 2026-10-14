@@ -22,11 +22,17 @@ contain breaking changes; a patch version does not.
   discovery; every save and every new key queue one too. `connections.get` answers the tools
   the last discovery read that the Connection does not accept (`discovered`), and the page
   accepts one with its effect, for agents or not, pinned to the fingerprint it showed. A delete
-  is refused with `409 connection_in_use` while an agent carries a tool of the Connection, and
-  removes its key and its runtime state. Both operations need `connection.write`. No
-  migration. **Upgrade:** an instance whose release config names `secretStore.keys` now needs
-  the first key at start even where release config defines no Connection, and stops naming its
-  variable without it. Shared OAuth, the CLI and the platform MCP tools for Connections are not
+  is refused with `409 connection_in_use` while an agent carries a tool of the Connection or an
+  App names it, in its draft or in its published revision, and removes its key and its runtime
+  state. Both operations need `connection.write`. A key is bound to the origin of the
+  Connection's target (protocol, host and port) it was entered for: a save that moves the
+  target to another origin removes it, a new path on the same origin or another Connector type
+  with the same target keeps it, and a key is never handed to a test, discovery or call of
+  another origin (`connection_not_configured`), also where its removal failed. Migration
+  `0072_secret_origin` adds `secrets.origin`. **Upgrade:** an instance whose release config
+  names `secretStore.keys` now needs the first key at start even where release config defines
+  no Connection, and stops naming its variable without it. A secret of release config is bound
+  to its origin by the seed at the next start. Shared OAuth, the CLI and the platform MCP tools for Connections are not
   part of this slice.
 - **Guardrails replace approval checks, and Build lists them:** release config takes
   `guardrails`, keyed by name, each with `on: approval_request.before_create`, an optional

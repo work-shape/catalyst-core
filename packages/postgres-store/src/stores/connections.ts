@@ -20,7 +20,8 @@ function mapSecret(row: SecretRow): StoredSecretRecord {
     keyId: row.keyId,
     nonce: row.nonce,
     ciphertext: row.ciphertext,
-    source: row.source
+    source: row.source,
+    ...(row.origin === null ? {} : { origin: row.origin })
   };
 }
 
@@ -78,7 +79,8 @@ export function createPostgresConnectionsStore(db: PostgresConnection): Connecti
         keyId: record.keyId,
         nonce: record.nonce,
         ciphertext: record.ciphertext,
-        source: record.source
+        source: record.source,
+        origin: record.origin ?? null
       };
       const written = await db
         .insert(secrets)
@@ -91,6 +93,7 @@ export function createPostgresConnectionsStore(db: PostgresConnection): Connecti
             nonce: record.nonce,
             ciphertext: record.ciphertext,
             source: record.source,
+            origin: record.origin ?? null,
             updatedAt: sql`now()`
           },
           // One statement decides: the row is replaced only by the version that follows the

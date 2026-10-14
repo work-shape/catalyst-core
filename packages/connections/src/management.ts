@@ -27,7 +27,7 @@ import {
   type ConnectionOperationSourceDeps,
   type StoredConnection
 } from "./connection-reads";
-import { AUTH_SCHEME_NONE, openConnectorContext } from "./connector-context";
+import { AUTH_SCHEME_NONE, connectionOriginOf, openConnectorContext } from "./connector-context";
 import { createSecretStore, type SecretKeyring } from "./secret-store";
 
 // What the Connection's page and the agent editor read beyond the asset, and the test of a
@@ -211,7 +211,11 @@ export function createConnectionManagement(
       clientInstanceId: deps.clientInstanceId,
       binding: { connectionAssetId: connection.assetId, subject: SHARED_CREDENTIAL_SUBJECT }
     });
-    if (!record) return { state: "not_set" };
+    // A secret set for another address than the Connection's is never sent, and so none.
+    const origin = connection.type
+      ? connectionOriginOf(connection.type, connection.config)
+      : undefined;
+    if (!record || origin === undefined || record.origin !== origin) return { state: "not_set" };
     // Whether the keys open it is what the seed, a test and a call found out and wrote down.
     const unreadable = connection.state?.health === "secret_unreadable";
     return { state: unreadable ? "unreadable" : "set", version: record.version };
@@ -331,6 +335,17 @@ export function createConnectionManagement(
         );
       }
       const binding = { connectionAssetId: connection.assetId, subject: SHARED_CREDENTIAL_SUBJECT };
+      // The secret is for the address the Connection has on this read, and is sent nowhere
+      // else: an address another writer sets meanwhile does not get it.
+      const origin = connection.type
+        ? connectionOriginOf(connection.type, connection.config)
+        : undefined;
+      if (origin === undefined) {
+        throw secretWriteRefusal(
+          CREDENTIAL_REFUSALS.notConfigured,
+          "the Connection's settings name no address its connector type reads. Fix the settings first"
+        );
+      }
       // The version is compared on the read the write follows: a check before it here would
       // let a write that lands in between be replaced unseen.
       const written = await createSecretStore({
@@ -342,7 +357,8 @@ export function createConnectionManagement(
         value,
         source: "runtime",
         handle: config.secretHandle,
-        expectedVersion
+        expectedVersion,
+        origin
       });
       if (written.changed) {
         // What a test found was found with the secret before.

@@ -7,7 +7,8 @@ import {
   type EgressChecker,
   type EgressGrant,
   type EgressProtocol,
-  type EgressTarget
+  type EgressTarget,
+  normalizeEgressHost
 } from "@vivd-catalyst/core";
 import {
   embeddedIpv4AddressesOf,
@@ -122,14 +123,7 @@ function printableHost(host: string): string {
   return /^[a-z0-9.:-]{1,253}$/iu.test(host) ? host.toLowerCase() : "(unreadable host)";
 }
 
-/** Lower case, without the brackets of an IPv6 literal and without a trailing dot. */
-export function normalizeEgressHost(host: string): string {
-  return host
-    .trim()
-    .toLowerCase()
-    .replace(/^\[(.*)\]$/u, "$1")
-    .replace(/\.$/u, "");
-}
+export { normalizeEgressHost };
 
 function isHostName(host: string): boolean {
   return (

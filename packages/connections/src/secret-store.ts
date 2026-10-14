@@ -23,8 +23,8 @@ import {
 
 // The Secret Store: AES-256-GCM over one secret per Connection and subject. A fresh random
 // nonce for every encryption, and associated data that binds a row to its instance, its
-// Connection, its subject and its version, so a row copied under another Connection does not
-// open. Nothing in this file logs, and no error it throws carries a value or key material.
+// Connection, its subject, its version and the origin it was set for, so a row copied under
+// another Connection, or given another origin, does not open. Nothing in this file logs, and no error it throws carries a value or key material.
 
 const CIPHER = "aes-256-gcm";
 /** The length of an AES-256 key. `secretStore.keys` names keys of exactly this length. */
@@ -178,19 +178,22 @@ function createSecretKeyring(
 }
 
 /**
- * The associated data of one row: `instance|connection asset id|subject|secret version`. A
- * part that held the separator could read as another binding, so such a part is refused.
+ * The associated data of one row: `instance|connection asset id|subject|secret version`, and
+ * `|origin` where the secret is bound to one. A part that held the separator could read as
+ * another binding, so such a part is refused.
  */
 export function secretAssociatedData(input: {
   clientInstanceId: string;
   binding: SecretBinding;
   version: number;
+  origin?: string;
 }): string {
   const parts = [
     input.clientInstanceId,
     input.binding.connectionAssetId,
     input.binding.subject,
-    String(input.version)
+    String(input.version),
+    ...(input.origin === undefined ? [] : [input.origin])
   ];
   if (parts.some((part) => part === "" || part.includes("|"))) {
     throw new AppError("INTERNAL", "A secret binding holds a part that cannot be bound");
@@ -218,7 +221,8 @@ function openRecord(
     associatedData: secretAssociatedData({
       clientInstanceId: options.clientInstanceId,
       binding,
-      version: record.version
+      version: record.version,
+      ...(record.origin === undefined ? {} : { origin: record.origin })
     })
   });
 }
@@ -227,7 +231,7 @@ function openRecord(
 export function createSecretStore(options: SecretStoreOptions): SecretStore {
   const { clientInstanceId, keyring, store } = options;
   return {
-    async put({ binding, value, source, handle: firstHandle, expectedVersion }) {
+    async put({ binding, value, source, handle: firstHandle, expectedVersion, origin }) {
       const plaintext = Buffer.from(value, "utf8");
       try {
         if (plaintext.length === 0 || plaintext.length > SECRET_VALUE_MAX_BYTES) {
@@ -236,7 +240,10 @@ export function createSecretStore(options: SecretStoreOptions): SecretStore {
             `A secret is between 1 and ${SECRET_VALUE_MAX_BYTES} bytes (SECRET_VALUE_MAX_BYTES)`
           );
         }
-        const current = await store.findSecret({ clientInstanceId, binding });
+        const stored = await store.findSecret({ clientInstanceId, binding });
+        // A secret set for another origin is none for this one: nobody who enters one for
+        // this origin saw it, and no call of this origin is handed it.
+        const current = stored?.origin === origin ? stored : undefined;
         if (expectedVersion !== undefined && (current?.version ?? null) !== expectedVersion) {
           throw new AppError(
             "CONFLICT",
@@ -245,11 +252,11 @@ export function createSecretStore(options: SecretStoreOptions): SecretStore {
           );
         }
         if (current) {
-          const stored = openRecord(options, current, binding);
+          const opened = openRecord(options, current, binding);
           try {
             if (
-              stored?.length === plaintext.length &&
-              timingSafeEqual(stored, plaintext) &&
+              opened?.length === plaintext.length &&
+              timingSafeEqual(opened, plaintext) &&
               current.keyId === keyring.encryptingKeyId &&
               // Who set a secret decides who may replace it. The same value from another
               // source is a write: it makes the secret the new source's.
@@ -258,15 +265,16 @@ export function createSecretStore(options: SecretStoreOptions): SecretStore {
               return { handle: current.handle, version: current.version, changed: false };
             }
           } finally {
-            stored?.fill(0);
+            opened?.fill(0);
           }
         }
-        // The handle stays with the Connection across versions: its revision names it.
-        const handle = current?.handle ?? firstHandle ?? createConnectionSecretHandle();
-        const version = (current?.version ?? 0) + 1;
+        // The handle stays with the Connection across versions: its revision names it. The
+        // row of another origin is replaced by the version that follows it.
+        const handle = stored?.handle ?? firstHandle ?? createConnectionSecretHandle();
+        const version = (stored?.version ?? 0) + 1;
         const sealed = keyring.seal({
           plaintext,
-          associatedData: secretAssociatedData({ clientInstanceId, binding, version })
+          associatedData: secretAssociatedData({ clientInstanceId, binding, version, origin })
         });
         const written = await store.putSecret({
           handle,
@@ -277,7 +285,8 @@ export function createSecretStore(options: SecretStoreOptions): SecretStore {
           keyId: sealed.keyId,
           nonce: sealed.nonce,
           ciphertext: sealed.ciphertext,
-          source
+          source,
+          ...(origin === undefined ? {} : { origin })
         });
         if (!written) {
           // Another write of this secret landed between the read and the write. Which value
@@ -319,20 +328,31 @@ export function createSecretStore(options: SecretStoreOptions): SecretStore {
 
 /**
  * The connector auth component's way to a value. It reads one row by its handle and opens it
- * for the binding of the call. A handle of another Connection, a copied row and a key that
- * is gone all answer `secret_unreadable`; none of them says more.
+ * for the binding of the call. A secret set for another origin than the call's is not opened
+ * and answers `connection_not_configured`: it is entered again for the origin the Connection
+ * has now. A handle of another Connection, a copied row and a key that is gone all answer
+ * `secret_unreadable`; none of them says more.
  */
 export function createConnectionCredentialResolver(
   options: SecretStoreOptions
 ): ConnectionCredentialResolver {
   const { clientInstanceId, store } = options;
   return {
-    async resolve({ handle, binding }) {
+    async resolve({ handle, binding, origin }) {
       const record = await store.getSecret({ clientInstanceId, handle });
       if (!record) {
         throw new AppError(
           "CONFLICT",
           `${CREDENTIAL_REFUSALS.notConfigured}: the Connection has no stored secret`,
+          { reason: CREDENTIAL_REFUSALS.notConfigured }
+        );
+      }
+      // Fails closed: whatever moved the Connection and left its secret, the secret is not
+      // sent to an origin it was not set for.
+      if (origin !== undefined && record.origin !== origin) {
+        throw new AppError(
+          "CONFLICT",
+          `${CREDENTIAL_REFUSALS.notConfigured}: the stored secret was set for another address of the Connection. Enter it again for this one`,
           { reason: CREDENTIAL_REFUSALS.notConfigured }
         );
       }

@@ -11,6 +11,7 @@ import {
   SHARED_CREDENTIAL_SUBJECT,
   createConnectionSecretHandle,
   defineAssetKind,
+  egressOriginOf,
   findConnectorTypeIssues,
   parseConnectionOperationName,
   type AssetValidationIssue,
@@ -82,13 +83,19 @@ function toolNamesOf(agent: unknown): string[] {
     : [];
 }
 
-/** Where a Connection's type sends its calls, or nothing where that cannot be read. */
+/**
+ * Where a Connection's type sends its calls, read from the settings as a call reads them, or
+ * nothing where that cannot be read.
+ */
 function targetOf(
   options: ConnectionAssetKindOptions,
   connection: ConnectionConfig
 ): EgressTarget | undefined {
+  const type = options.connectorTypes.get(connection.connectorType);
+  const settings = type?.settingsSchema.safeParse(connection.settings);
+  if (!type || !settings?.success) return undefined;
   try {
-    return options.connectorTypes.get(connection.connectorType)?.target(connection.settings);
+    return type.target(settings.data);
   } catch {
     return undefined;
   }
@@ -292,6 +299,9 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
     },
     // A change of where or how the Connection reaches its system makes what a test found
     // stale, and every write asks for a discovery, which stores nothing a write did not accept.
+    // The key of an origin the Connection left is removed here, after the commit. Should that
+    // fail, the key stays bound to the origin it was entered for, and no call resolves it for
+    // another: the removal is cleanup, not the guard.
     async afterWrite({ clientInstanceId, name, previous, config, stores }) {
       const parsed = connectionConfigSchema.safeParse(config);
       if (!parsed.success) return;
@@ -317,7 +327,10 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
             binding: { connectionAssetId, subject: SHARED_CREDENTIAL_SUBJECT }
           })
         : undefined;
-      const configured = !authenticates || secret !== undefined;
+      const target = targetOf(options, connection);
+      const configured =
+        !authenticates ||
+        (secret !== undefined && target !== undefined && secret.origin === egressOriginOf(target));
       if (previous === undefined || reachChanged(previous, connection)) {
         const settingsChanged = !configValuesEqual(
           readDefinitionField(previous, "settings"),

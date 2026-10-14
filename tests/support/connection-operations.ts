@@ -23,6 +23,7 @@ import {
   asToolCallId,
   createAuthorizer,
   createConnectorTypeRegistry,
+  egressOriginOf,
   type AuthenticatedIdentity,
   type Authorizer,
   type CentralPolicySetting,
@@ -418,7 +419,8 @@ export async function fixtureOn<Instance extends AccessInstance>(
       binding: { connectionAssetId: assetId, subject: SHARED_CREDENTIAL_SUBJECT },
       value: secret,
       source: "runtime",
-      handle
+      handle,
+      origin: egressOriginOf(egressTargetOfUrl(URL_OF_HOST))
     });
     return assetId;
   };

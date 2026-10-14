@@ -169,6 +169,23 @@ export interface EgressTarget {
   port: number;
 }
 
+/** A host name as the egress list compares it: lower case, without brackets or a final dot. */
+export function normalizeEgressHost(host: string): string {
+  return host
+    .trim()
+    .toLowerCase()
+    .replace(/^\[(.*)\]$/u, "$1")
+    .replace(/\.$/u, "");
+}
+
+/**
+ * The origin of a target as a Connection's secret is bound to it: `protocol://host:port`. A
+ * secret set for one origin is sent to that origin only.
+ */
+export function egressOriginOf(target: EgressTarget): string {
+  return `${target.protocol}://${normalizeEgressHost(target.host)}:${target.port}`;
+}
+
 /**
  * A target that passed the egress check, with the address that was checked. The connector
  * connects to `address` and nowhere else, and keeps `host` as the TLS and `Host` name.
@@ -240,6 +257,10 @@ export interface SecretStore {
    * keeps the handle it has. `expectedVersion`, where given, is the version the writer saw,
    * `null` for none: a stored version that is another refuses the write with
    * `secret_write_conflict`, decided on the same read the new version follows.
+   *
+   * `origin` is the origin (`egressOriginOf`) the secret is set for: a Connection's secret is
+   * resolved for that origin only. A stored secret of another origin counts as none, and the
+   * write replaces it.
    */
   put(input: {
     binding: SecretBinding;
@@ -247,6 +268,7 @@ export interface SecretStore {
     source: SecretSource;
     handle?: ConnectionSecretHandle;
     expectedVersion?: number | null;
+    origin?: string;
   }): Promise<{ handle: ConnectionSecretHandle; version: number; changed: boolean }>;
   status(binding: SecretBinding): Promise<SecretStatus>;
   delete(binding: SecretBinding): Promise<void>;
@@ -284,10 +306,16 @@ export const CREDENTIAL_REFUSALS = {
  * The connector auth component: the only code that turns a handle into a value. It is called
  * inside one call, after the caller was authorized and the target passed the egress check,
  * for the one binding of that call. It throws `connection_not_configured` where no secret is
- * stored and `secret_unreadable` where the configured keys do not open the stored one.
+ * stored, or where `origin` is named and the stored secret was set for another origin, and
+ * `secret_unreadable` where the configured keys do not open the stored one.
  */
 export interface ConnectionCredentialResolver {
-  resolve(input: { handle: ConnectionSecretHandle; binding: SecretBinding }): Promise<string>;
+  resolve(input: {
+    handle: ConnectionSecretHandle;
+    binding: SecretBinding;
+    /** The origin the call goes to (`egressOriginOf`). A Connection's call always names it. */
+    origin?: string;
+  }): Promise<string>;
 }
 
 export { CONNECTION_HEALTH_STATES, type ConnectionHealth };
@@ -317,6 +345,11 @@ export interface StoredSecretRecord {
   /** The ciphertext followed by the authentication tag. */
   ciphertext: Uint8Array;
   source: SecretSource;
+  /**
+   * The origin the secret was set for (`egressOriginOf`), bound into its associated data.
+   * Absent for a secret of no origin, such as a data store's password.
+   */
+  origin?: string;
 }
 
 /** The rows behind Connections: stored secrets and runtime state. No method returns a value. */

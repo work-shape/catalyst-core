@@ -7,6 +7,7 @@ import { defineClientInstance } from "@vivd-catalyst/client-assembly";
 import { connectionConfigSchema, parseClientInstanceConfig } from "@vivd-catalyst/config-schema";
 import {
   createSecretStore,
+  egressTargetOfUrl,
   loadSecretKeyring,
   openConnectorContext
 } from "@vivd-catalyst/connections";
@@ -14,6 +15,7 @@ import {
   SHARED_CREDENTIAL_SUBJECT,
   asClientInstanceId,
   connectionCallSentence,
+  egressOriginOf,
   type JsonObject
 } from "@vivd-catalyst/core";
 import { required } from "./support/assertions";
@@ -696,7 +698,8 @@ describe("what stops a start, and what a missing or unreadable secret does", () 
     await store.put({
       binding: { connectionAssetId: asset.id, subject: SHARED_CREDENTIAL_SUBJECT },
       value: w.token,
-      source: "runtime"
+      source: "runtime",
+      origin: egressOriginOf(egressTargetOfUrl(`https://${OUTSIDE_HOST}/mcp`))
     });
     await first.close();
     expect(await readSecrets()).toMatchObject([{ version: 2, source: "runtime" }]);
