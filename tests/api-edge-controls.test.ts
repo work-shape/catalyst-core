@@ -1,7 +1,7 @@
 import { request as httpRequest } from "node:http";
 import postgres, { type Sql } from "postgres";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
-import { apiOperations } from "@vivd-catalyst/api-contract";
+import { apiOperations, INVALID_JSON_BODY_REASON } from "@vivd-catalyst/api-contract";
 import {
   CompositeAuthAdapter,
   HmacSessionTokenAuthAdapter,
@@ -24,6 +24,7 @@ import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";
 import { fileTestDatabaseUrl } from "./support/test-database";
 import {
   callTestPath,
+  createTestInstance,
   createTestInstanceWith,
   getTestRuntime,
   listenTestInstance,
@@ -650,5 +651,34 @@ describe("session cookies and tokens", () => {
       );
     expect((await post("https://instance.test")).status).toBe(200);
     expect((await post("http://instance.test")).status).toBe(403);
+  });
+});
+
+describe("a JSON request body the instance does not read", () => {
+  // Before, each of these answered 500: only a body over the size limit was the caller's.
+  it("is refused with 400 and a reason, on a public and on a signed-in operation", async () => {
+    const instance = await createTestInstance();
+    const bodies = [
+      '{"__proto__": {"admin": true}}',
+      '{"config": {"constructor": {"prototype": {"admin": true}}}}',
+      '{"email": ',
+      ""
+    ];
+    for (const payload of bodies) {
+      for (const [operation, params] of [
+        ["authSignIn", {}],
+        ["assets.put", { kind: "skill", name: "poisoned" }]
+      ] as const) {
+        const response = await instance.call(operation, {
+          params,
+          headers: { "content-type": "application/json" },
+          payload
+        });
+        expect(response.statusCode, `${operation} ${payload}`).toBe(400);
+        expect(response.json()).toMatchObject({
+          error: { code: "BAD_REQUEST", details: { reason: INVALID_JSON_BODY_REASON } }
+        });
+      }
+    }
   });
 });

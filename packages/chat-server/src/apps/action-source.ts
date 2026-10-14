@@ -195,6 +195,28 @@ export async function appActionDefinition(
     resource: () => host.resource,
     module: APPS_MODULE,
     timeoutMs: target?.timeoutMs ?? APP_ACTION_DEFAULT_TIMEOUT_MS,
+    // The guardrails of the operation the action calls answer as they would its own call, as
+    // the policy of that operation is the action's floor: a guardrail on a Data Store's insert
+    // holds an App's insert too.
+    async beforeEvents(input, origin) {
+      if ("refusal" in admitted) return [];
+      const { operation } = admitted;
+      const mapped = await operation.inputSchema.safeParseAsync(
+        binding.inputOf(parameters.parse(input))
+      );
+      // The call refuses an input that does not fit; there is nothing to check.
+      if (!mapped.success) return [];
+      return [
+        {
+          name: "operation.before_call",
+          subject: { kind: "operation", name: operation.name },
+          checkable: () => ({
+            input: JSON.stringify(operation.inputWithoutSecrets?.(mapped.data) ?? mapped.data) ?? ""
+          })
+        },
+        ...((await operation.beforeEvents?.(mapped.data, origin)) ?? [])
+      ];
+    },
     async execute(input, context) {
       if ("refusal" in admitted) {
         throw admitted.refusal;

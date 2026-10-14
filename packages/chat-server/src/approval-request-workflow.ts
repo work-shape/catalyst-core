@@ -77,11 +77,9 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
         {
           event: "approval_request.before_create",
           subjectKind: command.kind,
-          content: () => {
+          fields: () => {
             const newContent = handler.checkContent?.(payload);
-            return newContent === undefined
-              ? undefined
-              : JSON.stringify({ summary: command.summary, newContent });
+            return newContent === undefined ? undefined : { summary: command.summary, newContent };
           },
           ...(command.origin ? { origin: command.origin } : {})
         },
