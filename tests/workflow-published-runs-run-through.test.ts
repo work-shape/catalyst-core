@@ -191,14 +191,15 @@ describe("a run of a published Workflow revision", () => {
       }
       throw new Error("The Workflow Run did not end");
     };
-    /** Starts the published revision of the manual Workflow by hand. */
-    const runByHand = async () => {
+    /** Starts the published revision of the manual Workflow by hand, and runs none of it. */
+    const startByHand = async () => {
       const response = await ok("workflows.start", {
         params: { workflow: BY_HAND.id },
         payload: { input: {} }
       });
-      return finish(runSchema.parse(response.json()).id);
+      return runSchema.parse(response.json()).id;
     };
+    const runByHand = async () => finish(await startByHand());
     /**
      * Lets the due time of the schedule come now: the queued job's time is moved to the
      * database's present, as a worker claims a job once the database's clock reached it.
@@ -240,7 +241,18 @@ describe("a run of a published Workflow revision", () => {
           page: { limit: 50 }
         })
       ).reverse();
-    return { api, ok, settings, principal, runByHand, runOnSchedule, rows, insertRuns };
+    return {
+      api,
+      ok,
+      settings,
+      principal,
+      finish,
+      startByHand,
+      runByHand,
+      runOnSchedule,
+      rows,
+      insertRuns
+    };
   }
 
   it("adds rows under the default 'confirm', from a schedule and by hand, and says the publish confirmed it", async () => {
@@ -288,6 +300,30 @@ describe("a run of a published Workflow revision", () => {
     expect(run).toMatchObject({ status: "failed", error: { code: "POLICY_DENIED" } });
     expect(run.error?.message).toBe(`The instance's policy does not allow '${INSERT}' from here`);
     expect(await w.rows()).toEqual([0]);
+  }, 120_000);
+
+  it("refuses a 'confirm' its publish approved once the Workflow is deleted during the run", async () => {
+    const w = await world();
+    const runId = await w.startByHand();
+    const params = { kind: WORKFLOW_ASSET_KIND, name: BY_HAND.id };
+    const asset = await w.api.stores.configAssets.getConfigAsset({ clientInstanceId, ...params });
+    await w.ok("assets.delete", {
+      params,
+      payload: { expectedRevision: required(asset).revision }
+    });
+
+    const run = await w.finish(runId);
+    expect(run).toMatchObject({ status: "failed", error: { code: "POLICY_DENIED" } });
+    expect(run.error?.message).toBe(
+      `The Workflow of this run was deleted, so its publish no longer confirms '${INSERT}'`
+    );
+    expect(await w.rows()).toEqual([0]);
+    const [refused] = await w.insertRuns();
+    expect(refused).toMatchObject({
+      status: "denied",
+      actor: { kind: "service_principal", id: w.principal.id },
+      denial: { kind: "policy", operation: INSERT, reason: "workflow_deleted" }
+    });
   }, 120_000);
 
   /** Writes and publishes an instance guardrail on the insert with the outcome given. */

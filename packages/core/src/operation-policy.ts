@@ -72,6 +72,8 @@ export interface PolicyInput {
    * runs. A floor, a `deny`, an `approval` and a guardrail still hold it.
    */
   publishedRun?: boolean;
+  /** Whether the Workflow of that published run was deleted since: its publish approves nothing. */
+  workflowDeleted?: boolean;
 }
 
 export type PolicySource =
@@ -81,7 +83,9 @@ export type PolicySource =
   | "policy_floor"
   | "central_setting"
   | "guardrail"
-  | "surface_cannot_pause";
+  | "surface_cannot_pause"
+  /** A `confirm` the publish of a Workflow approved, whose Workflow was deleted since. */
+  | "workflow_deleted";
 
 /** The value that applies to a call, where it comes from, and how the call goes on. */
 export type PolicyResolution = { source: PolicySource } & (
@@ -112,7 +116,7 @@ export type PolicyResolution = { source: PolicySource } & (
  * tightens what came of it and never loosens it. A guardrail can only tighten. `confirm` and `approval` are values of changing operations: on a reading operation
  * they do not apply, wherever they come from, so a reading operation resolves to `allow` or
  * `deny`. A step of a run of a published Workflow revision runs a `confirm`: the publish was
- * its confirmation. Any other step of a Workflow Run has nobody to ask and acts for nobody who
+ * its confirmation, until the Workflow is deleted: its run's `confirm` is then refused. Any other step of a Workflow Run has nobody to ask and acts for nobody who
  * could be asked later, so its `confirm` is an `approval`; so is a published run's `confirm`
  * that an operation's floor asks for, which no setting and no publish lowers. A surface that can neither confirm nor pause is
  * refused a call that would have to wait for its own caller's confirmation. A call that needs
@@ -200,6 +204,8 @@ export function resolvePolicy(input: PolicyInput): PolicyResolution {
         input.origin.kind === "workflow" &&
         !holdsForPublishedRun(definition.policyFloor)
       ) {
+        if (input.workflowDeleted)
+          return { value: "deny", next: "refuse", source: "workflow_deleted" };
         return {
           value,
           next: "run",

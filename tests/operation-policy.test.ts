@@ -337,6 +337,19 @@ describe("resolvePolicy: who can confirm and what can wait", () => {
       source: "guardrail"
     });
     expect(resolve({ ...step, guardrailOutcome: "block" })).toMatchObject({ next: "refuse" });
+    // Once its Workflow is deleted, the publish confirms nothing; an `allow` still runs.
+    expect(resolve({ ...step, workflowDeleted: true })).toEqual({
+      value: "deny",
+      next: "refuse",
+      source: "workflow_deleted"
+    });
+    expect(
+      resolve({
+        ...step,
+        workflowDeleted: true,
+        centralSettings: [{ operation: "items.create", value: "allow" }]
+      })
+    ).toMatchObject({ value: "allow", next: "run" });
 
     // A step of a test run is no published run, and an agent's call is none either.
     expect(resolve({ ...step, publishedRun: false })).toMatchObject({ next: "await_approval" });

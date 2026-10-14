@@ -41,6 +41,7 @@ async function policyInputOf(
     callerCanConfirm: callConfirmedByCaller(call),
     // A step of a run of what is published carries no draft; one of a test run always does.
     publishedRun: call.origin.kind === "workflow" && call.draft === undefined,
+    workflowDeleted: call.workflowDeleted === true,
     // No surface can hold a call for its actor's confirmation before OP-3.
     canPause: false
   };
@@ -64,9 +65,8 @@ export async function resolveGuardedPolicy(
 > {
   const { definition } = context;
   const policyInput = await policyInputOf(context);
-  if (resolvePolicy(policyInput).next === "refuse") {
-    return { denial: { kind: "policy", operation: definition.name } };
-  }
+  const before = resolvePolicy(policyInput);
+  if (before.next === "refuse") return { denial: policyDenial(before, definition.name) };
   const answers = await askBeforeEvents(context);
   const guardrailOutcome = strictestOutcome(answers.map((answer) => answer.outcome));
   const policy = resolvePolicy({ ...policyInput, guardrailOutcome });
@@ -78,6 +78,13 @@ export async function resolveGuardedPolicy(
     denial:
       policy.source === "guardrail"
         ? guardrailDenial(answers, definition.events?.before ?? "operation.before_call")
-        : { kind: "policy", operation: definition.name }
+        : policyDenial(policy, definition.name)
   };
+}
+
+/** The refusal of a call the policy itself refused, with why where a reason names it. */
+function policyDenial(policy: PolicyResolution, operation: string): OperationDenial {
+  return policy.source === "workflow_deleted"
+    ? { kind: "policy", operation, reason: "workflow_deleted" }
+    : { kind: "policy", operation };
 }

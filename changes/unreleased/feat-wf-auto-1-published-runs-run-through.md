@@ -18,3 +18,7 @@ section: Changed
 - **Workflows:** a test run no longer marks a step "A published run asks for approval here" for
   a plain `confirm`, since a published run now runs it; the mark stays where the operation's
   floor asks for a confirmation.
+- **Workflows:** a run that is still going when its Workflow is deleted loses the publish's
+  confirmation: a later step whose operation's policy is `confirm` fails with `POLICY_DENIED`,
+  `details.reason: workflow_deleted`, "The Workflow of this run was deleted, so its publish no
+  longer confirms '…'". Its reading steps and the calls its policy allows still run.
