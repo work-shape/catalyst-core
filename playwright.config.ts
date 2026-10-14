@@ -9,7 +9,9 @@ const e2eComposeProject = process.env.E2E_COMPOSE_PROJECT ?? "agent-chat-e2e";
 const e2eApiUrl = process.env.E2E_API_URL ?? `http://${e2eHost}:${e2eApiPort}`;
 const e2eUiUrl = process.env.E2E_UI_URL ?? `http://${e2eHost}:${e2eUiPort}`;
 const e2eConfigPath = process.env.E2E_CONFIG_PATH ?? "tests/fixtures/e2e-app.yaml";
-const e2eDatabaseUrl = `postgres://agent_chat:agent_chat@${e2eHost}:${e2ePostgresPort}/agent_chat`;
+const e2eDatabaseUrl =
+  process.env.E2E_DATABASE_URL ??
+  `postgres://agent_chat:agent_chat@${e2eHost}:${e2ePostgresPort}/agent_chat`;
 const useExternalServers = process.env.E2E_USE_EXTERNAL_SERVERS === "1";
 // The config names this key of the Secret Store. Without the runner a run makes its own, and a
 // second API a spec starts inherits it from here.

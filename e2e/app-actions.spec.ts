@@ -27,7 +27,9 @@ const member = {
 };
 
 const host = process.env.E2E_HOST ?? "127.0.0.1";
-const databaseUrl = `postgres://agent_chat:agent_chat@${host}:${process.env.E2E_POSTGRES_PORT ?? "55433"}/agent_chat`;
+const databaseUrl =
+  process.env.E2E_DATABASE_URL ??
+  `postgres://agent_chat:agent_chat@${host}:${process.env.E2E_POSTGRES_PORT ?? "55433"}/agent_chat`;
 const clientInstanceId = "demo-e2e";
 /** The one address the suite's release config lets a Connection reach. Nothing listens there. */
 const ALLOWED_URL = "https://127.0.0.1:8443/";

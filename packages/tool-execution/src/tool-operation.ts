@@ -314,6 +314,8 @@ export function toolResultFromOperationResult(
           failed("handler_failed", result.error.message);
     case "expired":
     case "pending_confirmation":
+    // An agent's call carries no draft context yet, so it is never simulated.
+    case "dry_run":
       return internalFailure(names.correlationId);
   }
 }
@@ -340,7 +342,8 @@ const forbiddenDetailsSchema = z.object({
     "denied",
     "unknown_action",
     "holder_inactive",
-    "holder_not_administrable"
+    "holder_not_administrable",
+    "outside_key_scope"
   ])
 });
 const issuesSchema = z.object({

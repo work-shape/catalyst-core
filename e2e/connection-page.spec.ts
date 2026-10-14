@@ -88,6 +88,7 @@ async function replaceAnswers(
             status: "pending_approval",
             actor: { kind: "user", id: "e2e-admin", label: "E2E Admin" },
             origin: { kind: "user" },
+            target: "live",
             approvalRequestId: "apr_e2e_held",
             inputHash: "e2e",
             attempt: 1,

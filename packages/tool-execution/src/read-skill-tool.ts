@@ -11,7 +11,7 @@ import {
 const skillNameSchema = z
   .string()
   .min(1)
-  .regex(/^[A-Za-z][A-Za-z0-9_.-]*$/u);
+  .regex(/^[A-Za-z0-9][A-Za-z0-9_.-]*$/u);
 
 const skillResourcePathSchema = z
   .string()

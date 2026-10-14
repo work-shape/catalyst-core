@@ -61,7 +61,7 @@ function page(overrides: Partial<AgentsPageProps> = {}, locale: "en" | "de" = "e
 /** The markup of one agent's card: from its list item to the end of that item. */
 function card(markup: string, displayName: string): string {
   const found = markup
-    .split('<li class="flex min-w-0"><div data-padding')
+    .split('<li class="flex min-w-0"><div data-card="" data-padding')
     .slice(1)
     .find((part) => part.includes(`>${displayName}</h2>`));
   if (found === undefined) {
@@ -151,7 +151,13 @@ describe("the Agents page", () => {
     expect(taxCard).not.toContain("Vorsteuer prüfen");
     expect(taxCard).not.toContain("Reverse Charge");
     expect(markup).not.toContain('aria-label="Suggestions"');
-    expect(taxCard).toMatch(/<button[^>]*aria-describedby="[^"]+"[^>]*>Start chat<\/button>/u);
+    // Start chat is named as a sentence with the agent's name.
+    expect(taxCard).toMatch(
+      /<button[^>]*aria-label="Start chat with Steuer-Assistent"[^>]*>Start chat<\/button>/u
+    );
+    // The whole card starts the chat: Start chat is its one target.
+    expect(taxCard.match(/data-card-target=""/gu)).toHaveLength(1);
+    expect(taxCard).toMatch(/<button[^>]*data-card-target=""[^>]*>Start chat<\/button>/u);
     // Nothing is edited here, and a member is not led to Studio.
     expect(markup).not.toContain("Edit in Studio");
     expect(markup).not.toContain("/build/");
@@ -184,6 +190,8 @@ describe("the Agents page", () => {
     expect(taxCard).toMatch(
       /<a[^>]*href="\/build\/agents\/tax\.vat-helper"[^>]*aria-describedby="[^"]+"[^>]*>Edit in Studio<\/a>/u
     );
+    // It keeps its own way: the card's target stays Start chat.
+    expect(taxCard).not.toMatch(/<a[^>]*data-card-target[^>]*>Edit in Studio/u);
   });
 
   it("offers New agent in the page head to a person who may create one, and to nobody else", () => {
@@ -280,5 +288,7 @@ describe("the Agents page", () => {
       "Die Agenten dieses Arbeitsbereichs. Starte einen Chat mit einem von ihnen."
     );
     expect(page({ agents: [], onOpenStudio: noop }, "de")).toContain(">Studio öffnen</a>");
+    // The card's target is named as one German sentence with the agent's name.
+    expect(page({}, "de")).toContain('aria-label="Chat starten mit Steuer-Assistent"');
   });
 });

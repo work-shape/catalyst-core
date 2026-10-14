@@ -13,6 +13,7 @@ import { createPostgresUsageStore } from "./stores/usage";
 import { createPostgresUsersStore } from "./stores/users";
 import { createPostgresWorkspacesStore } from "./stores/workspaces";
 import { createPostgresApiAccessStore } from "./stores/apiAccess";
+import { createPostgresPersonalApiKeyStore } from "./stores/personalApiKeys";
 import { createPostgresAccessStore } from "./stores/access";
 import { createPostgresConfigAssetsStore } from "./stores/configAssets";
 import { createPostgresApprovalsStore } from "./stores/approvals";
@@ -21,6 +22,7 @@ import { createPostgresExecutionWorkspacesStore } from "./stores/executionWorksp
 import { createPostgresStructuredDataStore } from "./stores/structuredData";
 import { createPostgresJobsStore, notifyJobsEnqueued } from "./jobs/store";
 import { createPostgresOperationRunsStore } from "./stores/operationRuns";
+import { createPostgresLiveOnceSwitchesStore } from "./stores/liveOnceSwitches";
 import { createPostgresInfrastructureChecksStore } from "./stores/infrastructure";
 import { createPostgresPagesStore } from "./stores/pages";
 import { createPostgresConnectionsStore } from "./stores/connections";
@@ -90,6 +92,7 @@ function bindStores(
     users: createPostgresUsersStore(db),
     workspaces: createPostgresWorkspacesStore(db),
     apiAccess: createPostgresApiAccessStore(db),
+    personalApiKeys: createPostgresPersonalApiKeyStore(db),
     access: createPostgresAccessStore(db),
     configAssets: createPostgresConfigAssetsStore(db, inTransaction),
     approvals: createPostgresApprovalsStore(db, transact),
@@ -97,6 +100,7 @@ function bindStores(
     structuredData: createPostgresStructuredDataStore(db),
     jobs: createPostgresJobsStore(db, enqueued),
     operationRuns: createPostgresOperationRunsStore(db),
+    liveOnceSwitches: createPostgresLiveOnceSwitchesStore(db),
     infrastructureChecks: createPostgresInfrastructureChecksStore(db),
     pages: createPostgresPagesStore(db),
     connections: createPostgresConnectionsStore(db),

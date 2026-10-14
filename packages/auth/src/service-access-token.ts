@@ -4,27 +4,40 @@ import {
   asApiCredentialId,
   asClientInstanceId,
   asServicePrincipalId,
+  asUserId,
+  authenticatedUserFromRecord,
   authScopeForPermission,
   hashApiCredentialSecret,
   isPermission,
+  operationScopesOfPersonalApiKey,
   parseApiCredentialSecret,
   permissionForAuthScope,
   resolveEffectivePermissions,
   type ApiAccessStore,
+  type ApiCredentialId,
   type AuthenticatedServicePrincipal,
+  type AuthenticatedUser,
   type AuthScope,
   type ClientInstanceId,
   type ISODateString,
-  type ResolvedApiCredential
+  type PersonalApiKeyStore,
+  type ResolvedApiCredential,
+  type ResolvedPersonalApiKey,
+  type UserStore
 } from "@vivd-catalyst/core";
 import type { AuthAdapter, AuthRequest, AuthRequestHeaders } from "./types";
 
 const SERVICE_ACCESS_TOKEN_TYPE = "catalyst-service-access";
 const SERVICE_ACCESS_TOKEN_AUDIENCE = "catalyst-service-api";
 
+/** How the access token of a personal API key names its subject, the key's owner. */
+const PERSONAL_KEY_AUTH_SOURCE = "personal-api-key";
+
 interface ServiceAccessTokenClaims {
   typ: typeof SERVICE_ACCESS_TOKEN_TYPE;
   aud: typeof SERVICE_ACCESS_TOKEN_AUDIENCE;
+  /** Absent for a service principal's key, which is how tokens before personal keys read. */
+  owner?: "user";
   sub: string;
   credentialId: string;
   clientInstanceId: string;
@@ -40,7 +53,18 @@ export interface ServiceAccessTokenOptions {
   issuer?: string;
   ttlSeconds?: number;
   apiAccessStore: ApiAccessStore;
+  /**
+   * Where personal API keys are read, on an instance that has them. Without it a personal key
+   * is refused: the instance has them turned off.
+   */
+  personalApiKeys?: {
+    store: PersonalApiKeyStore;
+    users: Pick<UserStore, "getUser">;
+  };
 }
+
+/** Who an access token acts as: a service principal, or the owner of a personal key. */
+export type ApiKeyIdentity = AuthenticatedServicePrincipal | AuthenticatedUser;
 
 interface EffectiveServiceGrants {
   scopes: AuthScope[];
@@ -59,46 +83,71 @@ export class ApiKeyAccessTokenExchange {
   async exchange(apiKey: string): Promise<{
     accessToken: string;
     expiresAt: ISODateString;
-    principal: AuthenticatedServicePrincipal;
+    identity: ApiKeyIdentity;
   }> {
     const credentialId = parseApiCredentialSecret(apiKey);
     if (!credentialId) {
       throw new AppError("UNAUTHENTICATED", "Invalid API key");
     }
+    const clientInstanceId = asClientInstanceId(String(this.options.clientInstanceId));
+    const presentedHash = await hashApiCredentialSecret(apiKey);
     const resolved = await this.options.apiAccessStore.resolveApiCredential({
-      clientInstanceId: asClientInstanceId(String(this.options.clientInstanceId)),
+      clientInstanceId,
       credentialId
     });
-    if (!resolved) {
+    if (resolved) {
+      if (!safeEqual(presentedHash, resolved.secretHash)) {
+        throw new AppError("UNAUTHENTICATED", "Invalid API key");
+      }
+      assertCredentialUsable(resolved);
+      const grants = deriveEffectiveServiceGrants(resolved);
+      await this.options.apiAccessStore.updateApiCredentialLastUsed({
+        clientInstanceId: resolved.servicePrincipal.clientInstanceId,
+        credentialId: resolved.credential.id
+      });
+      return this.issue(
+        { sub: resolved.servicePrincipal.id, credentialId: resolved.credential.id },
+        grants.scopes,
+        toAuthenticatedServicePrincipal(resolved, grants)
+      );
+    }
+    const personal = await resolvePersonalKey(this.options, clientInstanceId, credentialId);
+    if (!safeEqual(presentedHash, personal.secretHash)) {
       throw new AppError("UNAUTHENTICATED", "Invalid API key");
     }
-    const presentedHash = await hashApiCredentialSecret(apiKey);
-    if (!safeEqual(presentedHash, resolved.secretHash)) {
-      throw new AppError("UNAUTHENTICATED", "Invalid API key");
-    }
-    assertCredentialUsable(resolved);
-    const grants = deriveEffectiveServiceGrants(resolved);
+    const identity = await personalKeyIdentity(this.options, personal);
+    await this.options.personalApiKeys?.store.markPersonalApiKeyUsed({
+      clientInstanceId,
+      keyId: personal.key.id
+    });
+    return this.issue(
+      { owner: "user", sub: personal.key.ownerUserId, credentialId: personal.key.id },
+      identity.scopes ?? [],
+      identity
+    );
+  }
+
+  private issue(
+    subject: Pick<ServiceAccessTokenClaims, "owner" | "sub" | "credentialId">,
+    scopes: AuthScope[],
+    identity: ApiKeyIdentity
+  ) {
     const issuedAt = Math.floor(Date.now() / 1000);
     const expiresAt = issuedAt + this.options.ttlSeconds;
     const claims: ServiceAccessTokenClaims = {
       typ: SERVICE_ACCESS_TOKEN_TYPE,
       aud: SERVICE_ACCESS_TOKEN_AUDIENCE,
-      sub: resolved.servicePrincipal.id,
-      credentialId: resolved.credential.id,
-      clientInstanceId: String(resolved.servicePrincipal.clientInstanceId),
-      scopes: grants.scopes,
+      ...subject,
+      clientInstanceId: String(this.options.clientInstanceId),
+      scopes,
       iss: this.options.issuer,
       iat: issuedAt,
       exp: expiresAt
     };
-    await this.options.apiAccessStore.updateApiCredentialLastUsed({
-      clientInstanceId: resolved.servicePrincipal.clientInstanceId,
-      credentialId: resolved.credential.id
-    });
     return {
       accessToken: signClaims(claims, this.options.secret),
       expiresAt: new Date(expiresAt * 1000).toISOString(),
-      principal: toAuthenticatedServicePrincipal(resolved, grants)
+      identity
     };
   }
 }
@@ -114,7 +163,7 @@ export class HmacServiceAccessTokenAuthAdapter implements AuthAdapter {
     this.options = withDefaults(options);
   }
 
-  async authenticate(request: AuthRequest): Promise<AuthenticatedServicePrincipal> {
+  async authenticate(request: AuthRequest): Promise<ApiKeyIdentity> {
     const token = extractBearerToken(request.headers);
     if (!token) {
       throw new AppError("UNAUTHENTICATED", "Missing bearer token");
@@ -134,6 +183,24 @@ export class HmacServiceAccessTokenAuthAdapter implements AuthAdapter {
       throw new AppError("UNAUTHENTICATED", "Service access token is expired");
     }
     const credentialId = asApiCredentialId(claims.credentialId);
+    if (claims.owner === "user") {
+      // The key, its owner and the owner's rights are read again on every call: a revoked
+      // key, a disabled owner or a removed grant ends what the token allows at once.
+      const personal = await resolvePersonalKey(
+        this.options,
+        asClientInstanceId(claims.clientInstanceId),
+        credentialId
+      );
+      if (personal.key.ownerUserId !== claims.sub) {
+        throw new AppError("UNAUTHENTICATED", "Service access token is no longer valid");
+      }
+      const identity = await personalKeyIdentity(this.options, personal, request.correlationId);
+      const claimedScopes = new Set(claims.scopes);
+      return {
+        ...identity,
+        scopes: (identity.scopes ?? []).filter((scope) => claimedScopes.has(scope))
+      };
+    }
     const resolved = await this.options.apiAccessStore.resolveApiCredential({
       clientInstanceId: asClientInstanceId(claims.clientInstanceId),
       credentialId
@@ -185,6 +252,62 @@ function deriveEffectiveServiceGrants(resolved: ResolvedApiCredential): Effectiv
       const permission = principalScopes.get(scope);
       return permission === undefined ? [] : [permission];
     })
+  };
+}
+
+/** The personal key of the id, or the refusal a caller reads for a key that is not one. */
+async function resolvePersonalKey(
+  options: ServiceAccessTokenOptions,
+  clientInstanceId: ClientInstanceId,
+  keyId: ApiCredentialId
+): Promise<ResolvedPersonalApiKey> {
+  const personal = options.personalApiKeys
+    ? await options.personalApiKeys.store.resolvePersonalApiKey({ clientInstanceId, keyId })
+    : undefined;
+  if (!personal) {
+    throw new AppError("UNAUTHENTICATED", "Invalid API key");
+  }
+  if (personal.key.revokedAt) {
+    throw new AppError("UNAUTHENTICATED", "API credential is revoked");
+  }
+  if (Date.parse(personal.key.expiresAt) <= Date.now()) {
+    throw new AppError("UNAUTHENTICATED", "API credential is expired");
+  }
+  return personal;
+}
+
+/**
+ * The owner of a personal key as the actor of a call: their record as it is now, the key as
+ * the delegated actor, and the key's scopes, which the authorizer intersects with the owner's
+ * rights. A disabled owner is refused.
+ */
+async function personalKeyIdentity(
+  options: ServiceAccessTokenOptions,
+  personal: ResolvedPersonalApiKey,
+  correlationId?: string
+): Promise<AuthenticatedUser> {
+  const user = await options.personalApiKeys?.users.getUser({
+    clientInstanceId: personal.key.clientInstanceId,
+    userId: asUserId(personal.key.ownerUserId)
+  });
+  if (!user) {
+    throw new AppError("UNAUTHENTICATED", "Invalid API key");
+  }
+  const owner = authenticatedUserFromRecord({
+    user,
+    identity: { authSource: PERSONAL_KEY_AUTH_SOURCE, externalUserId: user.id },
+    correlationId
+  });
+  return {
+    ...owner,
+    delegatedActor: {
+      kind: "api_key",
+      id: personal.key.id,
+      displayLabel: personal.key.name,
+      authSource: PERSONAL_KEY_AUTH_SOURCE
+    },
+    scopes: operationScopesOfPersonalApiKey(personal.key.scopes),
+    keyScopes: personal.key.scopes
   };
 }
 
@@ -271,6 +394,7 @@ function verifyClaims(token: string, secret: string): ServiceAccessTokenClaims {
       Buffer.from(payload, "base64url").toString("utf8")
     ) as ServiceAccessTokenClaims;
     if (
+      (claims.owner !== undefined && claims.owner !== "user") ||
       !claims.sub ||
       !claims.credentialId ||
       !claims.clientInstanceId ||

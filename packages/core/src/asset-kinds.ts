@@ -157,6 +157,12 @@ export interface AssetKindDefinition<Definition, Kind extends string = string> {
   /** Who may own an asset of the kind. The instance alone when left out. */
   owners?: readonly AssetScope["kind"][];
   /**
+   * A draft of the kind calls operations, as an App's actions and a Workflow's steps do, and
+   * a changing call of it is simulated unless "Run live once" is switched on (ADR-0031).
+   * Only a `draft_published` kind has such a draft.
+   */
+  draftCalls?: true;
+  /**
    * Reference and cross-asset checks of this kind's definitions the schema accepted. All of
    * them are handed over at once, so a kind decides the order of its issues across them.
    */
@@ -217,6 +223,8 @@ export interface RegisteredAssetKind<Kind extends string = string> {
   readonly content?: AssetContent;
   readonly manifestFile?: string;
   readonly owners: readonly AssetScope["kind"][];
+  /** Whether a draft of the kind calls operations, which "Run live once" switches live. */
+  readonly draftCalls: boolean;
   /** Reads definitions: the schema first, then the name rule. The checks follow on the reading. */
   read(definitions: readonly unknown[]): AssetKindReading;
   /** Throws `VALIDATION_FAILED` for a definition the schema refuses. */
@@ -263,6 +271,12 @@ export function defineAssetKind<Definition, Kind extends string>(
       `Asset kind '${definition.kind}' holds files and names no manifest file`
     );
   }
+  if (definition.draftCalls && lifecycle !== "draft_published") {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `Asset kind '${definition.kind}' calls operations from a draft and has no draft`
+    );
+  }
   if (definition.content !== undefined && representation !== "files") {
     throw new AppError(
       "VALIDATION_FAILED",
@@ -280,6 +294,7 @@ export function defineAssetKind<Definition, Kind extends string>(
     ...(definition.manifestFile === undefined ? {} : { manifestFile: definition.manifestFile }),
     ...(representation === "files" ? { content: definition.content ?? "file_set" } : {}),
     owners: Object.freeze([...(definition.owners ?? ["instance"])]),
+    draftCalls: definition.draftCalls === true,
     read(inputs: readonly unknown[]): AssetKindReading {
       const accepted: Definition[] = [];
       const refused: RefusedAssetDefinition[] = [];

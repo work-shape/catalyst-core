@@ -156,7 +156,7 @@ export function parsePageManifest(bytes: Uint8Array): ParsedPageManifest {
   } catch {
     return fail("The manifest is not UTF-8 text.");
   }
-  const read = readYamlData(text, PAGE_MANIFEST_FILE);
+  const read = readYamlData(text, PAGE_MANIFEST_FILE, { refuseAliases: true });
   if (!read.ok) {
     return fail(read.issue.message, read.issue.line);
   }

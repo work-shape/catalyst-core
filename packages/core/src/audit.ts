@@ -121,7 +121,9 @@ export function auditActorFromUser(user: AuthenticatedUser): AuditActor {
     principalId: principal.id,
     principalDisplayLabel: principal.displayLabel,
     subjectUserId: getSubjectUserId(user),
-    delegatedActor: user.delegatedActor
+    delegatedActor: user.delegatedActor,
+    // A personal key names itself as the credential, beside its owner as the user.
+    ...(user.delegatedActor?.kind === "api_key" ? { credentialId: user.delegatedActor.id } : {})
   };
 }
 

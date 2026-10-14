@@ -16,6 +16,14 @@
       "class": "decision",
       "reason": "A decision on a held call cannot itself be held."
     },
+    "connect_codes.redeem": {
+      "class": "identity",
+      "reason": "This operation establishes the actor."
+    },
+    "connect_codes.start": {
+      "class": "identity",
+      "reason": "This operation establishes the actor."
+    },
     "conversations.artifacts.retry_preview": {
       "class": "conversation",
       "reason": "The Agent Run is the record for this operation."
@@ -123,6 +131,8 @@
     "branding.get": "public",
     "captured_mail.list": "public",
     "config.get": "own",
+    "connect_codes.redeem": "public",
+    "connect_codes.start": "public",
     "conversations.artifacts.get_content": "conversation_access",
     "conversations.artifacts.get_preview": "conversation_access",
     "conversations.artifacts.retry_preview": "conversation_access",
@@ -150,6 +160,8 @@
     "conversations.thread.get": "conversation_access",
     "docs.get": "own",
     "health.get": "public",
+    "me.api_keys.list": "own",
+    "me.connect_codes.get": "own",
     "me.delete": "own",
     "me.get": "own",
     "me.model_preference.get": "own",

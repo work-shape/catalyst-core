@@ -15,7 +15,9 @@ import { expect, takeTurn, test } from "./test";
 
 const host = process.env.E2E_HOST ?? "127.0.0.1";
 const apiBaseUrl = process.env.E2E_API_URL ?? `http://${host}:4210`;
-const databaseUrl = `postgres://agent_chat:agent_chat@${host}:${process.env.E2E_POSTGRES_PORT ?? "55433"}/agent_chat`;
+const databaseUrl =
+  process.env.E2E_DATABASE_URL ??
+  `postgres://agent_chat:agent_chat@${host}:${process.env.E2E_POSTGRES_PORT ?? "55433"}/agent_chat`;
 const configPath = process.env.E2E_CONFIG_PATH ?? "tests/fixtures/e2e-app.yaml";
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
 /** The API with `resources` off listens beside the suite's own. */
@@ -52,7 +54,7 @@ test("an operator reads the modules of the instance, in English and in German", 
       .getByRole("button", { name: "Modules" })
   ).toBeVisible();
   // Every module the product knows has a row, in the order of the registry.
-  await expect(page.locator("[data-module]")).toHaveCount(9);
+  await expect(page.locator("[data-module]")).toHaveCount(10);
   expect(
     await page
       .locator("[data-module]")
@@ -66,7 +68,8 @@ test("an operator reads the modules of the instance, in English and in German", 
     "connections",
     "workflows",
     "dataStores",
-    "knowledge"
+    "knowledge",
+    "personalApiKeys"
   ]);
 
   const resources = moduleRow(page, "resources");
@@ -75,7 +78,7 @@ test("an operator reads the modules of the instance, in English and in German", 
   await expect(resources).toContainText("Operations: 1");
   await expect(resources).toContainText("modules.resources.enabled");
   await expect(moduleRow(page, "assetManagement")).toContainText("On");
-  await expect(moduleRow(page, "assetManagement")).toContainText("Operations: 8");
+  await expect(moduleRow(page, "assetManagement")).toContainText("Operations: 9");
   // The open platform ships no code for documents, so it cannot be on here.
   const documents = moduleRow(page, "documents");
   await expect(documents).toContainText("Off");

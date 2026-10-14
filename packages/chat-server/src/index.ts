@@ -27,6 +27,7 @@ import { registerOperationRunRoutes } from "./routes/operation-run-routes";
 import { registerJobRoutes } from "./routes/job-routes";
 import { registerInfrastructureRoutes } from "./routes/infrastructure-routes";
 import { registerApiAccessAdministrationRoutes } from "./routes/api-access-administration-routes";
+import { registerPersonalApiKeyRoutes } from "./routes/personal-api-key-routes";
 import { registerAccessRoutes } from "./routes/access-routes";
 import { registerAgentRunRoutes } from "./routes/agent-run-routes";
 import { registerApiReferenceRoutes } from "./routes/api-reference-routes";
@@ -258,6 +259,7 @@ export async function createChatServer(
   registerJobRoutes(route, options);
   registerInfrastructureRoutes(route, options);
   registerApiAccessAdministrationRoutes(route, options);
+  registerPersonalApiKeyRoutes(route, options);
   registerSuperadminRoutes(route, options);
   registerAccessRoutes(route, options);
   for (const register of extensions.routes ?? []) register(route);
