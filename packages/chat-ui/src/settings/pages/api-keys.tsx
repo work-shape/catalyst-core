@@ -35,7 +35,6 @@ import {
 import {
   connectCodeOfSearch,
   formatConnectCode,
-  heldKeyActions,
   initialPersonalKeyDraft,
   instanceUrl,
   isCompleteConnectCode,
@@ -47,10 +46,9 @@ import { useTranslation } from "../../i18n";
 import { apiErrorMessage } from "../../workspace-utils";
 import { useSettingsPage } from "../settings-page-context";
 
-/** What the key fields offer: the actions, the ones checked at first, and the Namespaces. */
+/** What the key fields offer: the actions and the Namespaces. */
 interface KeyOffer {
   actions: string[];
-  held: string[];
   namespaces: string[];
 }
 
@@ -69,10 +67,8 @@ export function ApiKeysPage() {
     heldMessage: t("apiAccessWaitsForApproval")
   });
   const context = contextQuery.data;
-  const actions = personalKeyActionOffer(context);
   const offer: KeyOffer = {
-    actions,
-    held: heldKeyActions(actions, context),
+    actions: personalKeyActionOffer(context),
     namespaces: (context?.namespaces ?? []).map((namespace) => namespace.prefix)
   };
   const [initialCode] = useState(() => connectCodeOfSearch(window.location.search));
@@ -157,7 +153,7 @@ function NewKeyDialog({
   onSubmit(body: CreatePersonalApiKeyRequest): Promise<void>;
 }) {
   const { t } = useTranslation();
-  const [draft, setDraft] = useState(() => initialPersonalKeyDraft(offer.held));
+  const [draft, setDraft] = useState(() => initialPersonalKeyDraft());
   const [error, setError] = useState<string>();
   const request = personalKeyRequest(draft);
   const formId = useId();
@@ -290,7 +286,7 @@ export function ConnectCodeConfirm({
 }) {
   const { t, locale } = useTranslation();
   const [draft, setDraft] = useState<PersonalKeyDraft>(() =>
-    initialPersonalKeyDraft(offer.held, request.clientLabel ?? t("personalApiKeys.cliName"))
+    initialPersonalKeyDraft(request.clientLabel ?? t("personalApiKeys.cliName"))
   );
   const [error, setError] = useState<string>();
   const body = personalKeyRequest(draft);
