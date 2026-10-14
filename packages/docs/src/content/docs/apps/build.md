@@ -115,7 +115,7 @@ A reading statement answers `{ columns, rows, truncated }`: `rows` is a list of 
 
 The App lists its Data Store under `dataStores` in `app.yaml`, by name, with `minSchema` where it needs at least that migration of the store. The `dataStores` module has to be on. The agent cannot create a Data Store or its tables: a person creates it with its migrations (`store.yaml` and `migrations/0001_<name>.sql`, written with `catalyst data-store put` and published), and the statements read and write the tables those migrations made. Ask the person which Data Store to use, or to create one.
 
-An `sql` action runs only in an App: a reading `sql` action in a Page is refused with `data_store_needs_app` (a changing one gets `draft_safe_mode` first). In the App's draft it runs with the viewer's own right to read the store.
+An `sql` action runs only in an App: in a Page a reading `sql` action is refused with `data_store_needs_app`, and a changing one with `draft_safe_mode`. In the App's draft it runs with the viewer's own right on the store: to read it, and for an insert, which the draft simulates, to insert.
 
 ### A `workflow` action
 
@@ -136,13 +136,13 @@ input:
 
 ## Effects, drafts and publishing
 
-A Page and the draft of an App run in safe mode:
+A `reading` action runs live everywhere, with the viewer's rights. A `changing` action is carried out only in the published App; before that it runs in safe mode:
 
-- A `reading` action runs live, with the viewer's rights, as it does in the published App. An `sql` action does so only in the draft of an App, not in a Page.
-- A `changing` `connection` or `sql` action is refused with the code `draft_safe_mode` and the platform's sentence that the App has to be published first. Nothing is called.
-- A `workflow` action starts nothing and answers `{ status: "dry_run", message, result }`: `message` says what it would have started with which input. Show it as it is.
+- In the draft of an App, a `changing` action of each kind is simulated. It changes nothing and answers `{ status: "dry_run", message, result }`: `message` says what the call would have done, and whether live it would wait for another person's approval; `result` is the input it would have done it with. The call goes through the viewer's rights and the policy as a live call would, so a call that would be refused live is refused here too, and it leaves an Operation Run with the target `dry_run`. Show `message` as it is.
+- "Run live once" on the App's Actions list carries out the next call of one changing action of the draft for real. A person who may write the App switches it on for themselves; it covers only their own next call of that action, and every save or discard of the draft clears a switch nobody used, so a `page.save` clears it too. A call it sends live that the policy holds for another person's approval is refused with `approval_unavailable`, since a draft cannot wait. An agent cannot switch it on: when the person wants to try a change for real, tell them where the switch is.
+- In a Page that is not yet an App, a changing `connection` or `sql` action is refused with the code `draft_safe_mode`, and nothing is called. A `workflow` action answers `{ status: "dry_run", message, result }` as in a draft, but leaves no run.
 
-The published App carries out every action. An action may ask for a stricter `policy` than the instance sets (`confirm`, `approval` or `deny`), written in the action file or, for an `sql` action, in its manifest line. A call that waits for another person's approval answers `status: "pending_approval"` without a result.
+A changing call passes `{ idempotencyKey }` in the draft as in the published App. The published App carries out every action. An action may ask for a stricter `policy` than the instance sets (`confirm`, `approval` or `deny`), written in the action file or, for an `sql` action, in its manifest line. A call that waits for another person's approval answers `status: "pending_approval"` without a result.
 
 An agent never publishes. Tell the person to publish the draft: with the Publish button on the App's page, or with `catalyst app publish <name> --revision <n> --workspace <id>`. Publishing needs the right `app.publish`, which administrators hold. It checks again what a save checked, and that each Data Store is published, at `minSchema` or later, readable (for an insert, `data_store.insert`) by the person who publishes, and of the App's workspace; a retired store, or one of another workspace, is refused. Guardrails may answer the publish too.
 
@@ -152,7 +152,7 @@ Saving checks what it can: when a save writes the App's draft, it refuses a Conn
 
 Import `actions` from `@work-shape/catalyst-app-kit`. `actions.call(name, params, options)` calls a named action and answers `{ runId, status, result }`. `result` is what the action answered, as described for each kind above: check its shape before using it. A call that is refused or fails rejects with an `AppCallError`. Show its `message` as it is, since it is the platform's sentence in the viewer's language, and offer no button to try again when `retryable` is false.
 
-A changing call of a published App passes `{ idempotencyKey }`: make the key when the person acts, and send the same key again when the answer was lost.
+A changing call passes `{ idempotencyKey }`: make the key when the person acts, and send the same key again when the answer was lost. In a draft the answer to a changing call is `{ status: "dry_run", message, result }` unless "Run live once" sent it live: show `message`, which says what the published App would have done.
 
 `getContext()` answers the viewer, the locale and, under `can`, what the instance says for each action: `allow`, `confirm`, `approval` or `deny`. The server asks again at every call.
 
@@ -243,6 +243,7 @@ function Dashboard() {
   const [bookings, setBookings] = useState<unknown>();
   const [findings, setFindings] = useState<unknown>();
   const [error, setError] = useState<string>();
+  const [note, setNote] = useState<string>();
   const [runId, setRunId] = useState<string>();
   const { run } = useWorkflowRun(runId);
 
@@ -265,16 +266,20 @@ function Dashboard() {
         { client: CLIENT, title: "Booking without receipt" },
         { idempotencyKey: `add-finding-${Date.now()}` }
       )
-      .then(load)
+      .then((answer) => {
+        // In the App's draft a change is simulated: say what it would have done.
+        if (answer.status === "dry_run") setNote(answer.message);
+        else load();
+      })
       .catch((failure: unknown) => setError(messageOf(failure)));
   };
 
   const startCheck = () => {
     actions
-      .call("run-check", { client: CLIENT })
+      .call("run-check", { client: CLIENT }, { idempotencyKey: `run-check-${Date.now()}` })
       .then((answer) => {
         if (answer.status === "dry_run") {
-          setError(answer.message);
+          setNote(answer.message);
           return;
         }
         const started = answer.result;
@@ -289,6 +294,7 @@ function Dashboard() {
     <main>
       <h1>Client {CLIENT}</h1>
       {error ? <p role="alert">{error}</p> : null}
+      {note ? <p role="status">{note}</p> : null}
       <Button onClick={addFinding}>Add finding</Button>
       <Button onClick={startCheck}>Run the monthly check</Button>
       {run ? <p>Check: {run.status}</p> : null}
